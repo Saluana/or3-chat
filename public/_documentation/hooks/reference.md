@@ -30,7 +30,9 @@ The client plugin installs a cache for utilities outside setup. `useHooks` prefe
 | `currentPriority()` | Current callback priority, or false |
 | `removeAllCallbacks(priority?)` | Broad teardown; avoid removing other extensions' listeners |
 
-The typed wrapper infers filter kind when the name contains `:filter:`. The **raw** engine's `on` defaults to action; pass `{ kind: 'filter' }` for raw filter registration. This distinction also applies to `typedOn(rawEngine)`.
+The typed wrapper infers filter kind when the name contains `:filter:` or ends with `:filter` (for example,
+`db.documents.title:filter`). Custom names without either marker default to action;
+an explicit `kind` takes precedence. The **raw** engine's `on` defaults to action; pass `{ kind: 'filter' }` for raw filter registration. This distinction also applies to `typedOn(rawEngine)`.
 
 Priorities default to 10, lower numbers run first, and ties preserve registration order. Runtime wildcard subscriptions such as `hooks.addAction('ui.pane.*', handler)` observe a family, but the callback must accommodate that family's different payloads. Remove with the same pattern, callback, and priority.
 

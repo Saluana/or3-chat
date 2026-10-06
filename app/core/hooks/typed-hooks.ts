@@ -200,7 +200,9 @@ export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
         // Unified
         on: (name, callback, opts) => {
             const kind = (opts?.kind ??
-                (name.includes(':filter:') ? 'filter' : 'action')) as HookKind;
+                (name.includes(':filter:') || name.endsWith(':filter')
+                    ? 'filter'
+                    : 'action')) as HookKind;
             const merged = { ...opts, kind } as OnOptions;
             return engine.on(name as any, callback as any, merged);
         },

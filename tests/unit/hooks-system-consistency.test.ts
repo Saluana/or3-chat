@@ -139,6 +139,37 @@ describe('Hooks - System consistency', () => {
         });
     });
 
+    it('preserves raw defaults, typedOn forwarding, custom names and explicit action kind', async () => {
+        const { createHookEngine } = await import('../../app/core/hooks/hooks');
+        const { createTypedHookEngine } = await import('../../app/core/hooks/typed-hooks');
+        const { typedOn } = await import('../../app/core/hooks/hook-keys');
+        const raw = createHookEngine();
+        const typed = createTypedHookEngine(raw);
+        const rawCallback = vi.fn(() => 'raw transformed');
+        const helperCallback = vi.fn(() => 'helper transformed');
+        raw.on('raw.value:filter', rawCallback);
+        typedOn(raw).on('ui.chat.message:filter:outgoing', helperCallback);
+
+        expect(await raw.applyFilters('raw.value:filter', 'original')).toBe('original');
+        expect(await raw.applyFilters('ui.chat.message:filter:outgoing', 'original')).toBe('original');
+        await raw.doAction('raw.value:filter', 'original');
+        await raw.doAction('ui.chat.message:filter:outgoing', 'original');
+        expect(rawCallback).toHaveBeenCalledOnce();
+        expect(helperCallback).toHaveBeenCalledOnce();
+
+        const events: string[] = [];
+        const offCustom = typed.on('plugin.custom', () => { events.push('custom'); });
+        const offExplicit = typed.on('plugin.value:filter', () => { events.push('explicit'); }, { kind: 'action' });
+        await typed.doAction('plugin.custom');
+        await raw.doAction('plugin.value:filter');
+        expect(events).toEqual(['custom', 'explicit']);
+        offCustom();
+        offExplicit();
+        await typed.doAction('plugin.custom');
+        await raw.doAction('plugin.value:filter');
+        expect(events).toEqual(['custom', 'explicit']);
+    });
+
     describe('Multiple hook listeners', () => {
         it('should call all registered listeners in order', async () => {
             const { createHookEngine } = await import('../../app/core/hooks/hooks');
