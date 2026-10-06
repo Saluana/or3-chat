@@ -272,11 +272,54 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await page
         .getByRole('option', { name: 'Sidebar test model', exact: true })
         .click();
+    // Wait for the model menu's focus trap to leave before using the keyboard.
+    await expect(
+        page.getByRole('option', {
+            name: 'Sidebar test model',
+            exact: true,
+            includeHidden: true,
+        }),
+    ).toHaveCount(0);
     const createPermission = projects.getByRole('combobox', {
         name: 'Permission for Create document',
         exact: true,
     });
+    const documentTools = projects.getByRole('button', {
+        name: 'Document tools',
+        exact: true,
+    });
+    await expect(createPermission).not.toBeVisible();
+    await documentTools.press('Enter');
+    await expect(createPermission).toBeVisible();
+    const toolSearch = projects.getByRole('textbox', {
+        name: 'Search project tools',
+        exact: true,
+    });
+    await toolSearch.fill('Duplicate');
+    await expect(
+        projects.getByRole('combobox', {
+            name: 'Permission for Duplicate document',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await expect(createPermission).not.toBeVisible();
+    await toolSearch.fill('');
+    await expect(createPermission).not.toBeVisible();
+    await documentTools.press('Enter');
+    const sidebarBounds = (await projects.boundingBox())!;
+    const toolsBounds = (await projects
+        .getByRole('region', { name: 'Project tools', exact: true })
+        .boundingBox())!;
+    expect(toolsBounds.x + toolsBounds.width).toBeLessThanOrEqual(
+        sidebarBounds.x + sidebarBounds.width - 20,
+    );
+    const createHelp = page.getByText(
+        'Make a new document from a title and optional text.',
+        { exact: true },
+    );
+    await expect(createHelp).not.toBeVisible();
     await createPermission.click();
+    await expect(createHelp).toBeVisible();
     await page.getByRole('option', { name: 'Ask first', exact: true }).click();
     await expect(
         projects.getByLabel('Allowed repositories for Create document', {
@@ -307,6 +350,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
             exact: true,
         }),
     ).toBeDisabled();
+    await documentTools.click();
     await projects
         .getByRole('heading', { name: 'Settings', exact: true })
         .scrollIntoViewIfNeeded();
@@ -320,9 +364,21 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         path: info.outputPath('project-settings-sidebar-light.png'),
         animations: 'disabled',
     });
-    await projects
-        .getByRole('button', { name: 'Manage chats', exact: true })
-        .scrollIntoViewIfNeeded();
+    const toolsHeading = projects.getByRole('heading', {
+        name: 'Tools',
+        exact: true,
+    });
+    await toolsHeading.evaluate((heading) =>
+        heading.scrollIntoView({ block: 'start' }),
+    );
+    await navigation.screenshot({
+        path: info.outputPath('project-settings-tools-collapsed-light.png'),
+        animations: 'disabled',
+    });
+    await documentTools.click();
+    await toolsHeading.evaluate((heading) =>
+        heading.scrollIntoView({ block: 'start' }),
+    );
     await navigation.screenshot({
         path: info.outputPath('project-settings-tools-light.png'),
         animations: 'disabled',

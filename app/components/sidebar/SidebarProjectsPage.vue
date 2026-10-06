@@ -189,7 +189,14 @@ const toolGroups = computed(() => {
         group.push(tool);
         groups.set(category, group);
     }
-    return [...groups].map(([label, tools]) => ({ label, tools }));
+    return [...groups].map(([label, tools]) => ({
+        label,
+        tools,
+        allowed: tools.filter(
+            (tool) =>
+                toolModeValue(tool.definition.function.name) !== 'disabled',
+        ).length,
+    }));
 });
 const unavailableTools = computed(() =>
     matchingTools.value.filter((tool) => !toolReady(tool)),
@@ -1017,7 +1024,8 @@ function toolCannotScope(name: string) {
             >
             <div v-else class="flex-1 min-h-0 flex flex-col">
                 <div
-                    class="project-content flex-1 min-h-0 overflow-y-auto sidebar-scroll px-3 pt-2 pb-5 space-y-4 text-sm"
+                    class="project-content flex-1 min-h-0 min-w-0 overflow-y-auto sidebar-scroll px-3 pt-2 pb-5 space-y-4 text-sm"
+                    :class="{ 'project-settings-content': tab === 'Settings' }"
                 >
                     <div
                         v-if="tab !== 'Overview'"
@@ -1903,7 +1911,7 @@ function toolCannotScope(name: string) {
                     <form
                         v-if="tab === 'Settings'"
                         :id="'project-settings-' + id"
-                        class="project-settings space-y-5"
+                        class="project-settings min-w-0 space-y-7"
                         @submit.prevent="run(saveSettings)"
                     >
                         <section
@@ -1963,17 +1971,15 @@ function toolCannotScope(name: string) {
                                 </p>
                             </div>
                         </section>
-                        <section
-                            class="border-t border-[var(--md-outline-variant)] pt-4 space-y-3"
-                            aria-label="Project tools"
-                        >
+                        <section class="space-y-3" aria-label="Project tools">
                             <div class="space-y-1">
                                 <h2 class="font-semibold text-sm">Tools</h2>
                                 <p
                                     class="project-muted text-xs leading-relaxed"
                                 >
-                                    Choose what OR3 can use. Send, publish, and
-                                    delete actions still ask for approval.
+                                    Choose what OR3 can use. Sending,
+                                    publishing, and deleting still require
+                                    approval.
                                 </p>
                             </div>
                             <UInput
@@ -1984,47 +1990,55 @@ function toolCannotScope(name: string) {
                                 size="sm"
                                 color="neutral"
                                 class="w-full"
+                                :ui="{
+                                    base: 'border-0! bg-[var(--md-surface-container-low)]! focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+                                }"
                             />
-                            <div v-for="group in toolGroups" :key="group.label">
-                                <h3
-                                    class="project-muted text-[11px] font-medium py-2"
+                            <details
+                                v-for="group in toolGroups"
+                                :key="group.label"
+                                :open="!!toolQuery.trim()"
+                                class="project-tool-group"
+                            >
+                                <summary
+                                    class="project-tool-summary"
+                                    role="button"
+                                    :aria-label="group.label + ' tools'"
                                 >
-                                    {{ group.label }}
-                                </h3>
+                                    <span class="min-w-0 flex-1 font-medium">{{
+                                        group.label
+                                    }}</span>
+                                    <span class="project-muted text-[11px]">{{
+                                        group.allowed
+                                            ? `${group.allowed} allowed`
+                                            : 'All off'
+                                    }}</span>
+                                    <UIcon
+                                        name="i-lucide-chevron-right"
+                                        class="size-3.5 shrink-0 project-muted project-disclosure-icon"
+                                        aria-hidden="true"
+                                    />
+                                </summary>
                                 <div
                                     v-for="tool in group.tools"
                                     :key="tool.definition.function.name"
                                     class="project-tool-row"
                                 >
-                                    <div class="flex items-start gap-2.5">
+                                    <div class="flex items-center gap-2.5">
                                         <UIcon
                                             :name="
                                                 tool.definition.ui?.icon ||
                                                 tool.definition.icon ||
                                                 'i-lucide-wrench'
                                             "
-                                            class="size-4 mt-0.5 shrink-0 project-muted"
+                                            class="size-4 shrink-0 project-muted"
                                             aria-hidden="true"
                                         />
-                                        <div class="min-w-0 flex-1">
-                                            <p
-                                                class="text-xs font-medium leading-5"
-                                            >
-                                                {{ toolLabel(tool) }}
-                                            </p>
-                                            <p
-                                                v-if="
-                                                    tool.definition.ui
-                                                        ?.descriptionHint
-                                                "
-                                                class="project-muted text-[11px] leading-relaxed mt-0.5"
-                                            >
-                                                {{
-                                                    tool.definition.ui
-                                                        .descriptionHint
-                                                }}
-                                            </p>
-                                        </div>
+                                        <p
+                                            class="min-w-0 flex-1 text-xs font-medium leading-5"
+                                        >
+                                            {{ toolLabel(tool) }}
+                                        </p>
                                         <USelect
                                             :model-value="
                                                 toolModeValue(
@@ -2040,7 +2054,11 @@ function toolCannotScope(name: string) {
                                             "
                                             size="xs"
                                             color="neutral"
+                                            variant="ghost"
                                             class="project-tool-permission shrink-0"
+                                            :ui="{
+                                                base: 'border-0! bg-transparent! shadow-none! min-h-8',
+                                            }"
                                             @update:model-value="
                                                 toolMode(
                                                     tool.definition.function
@@ -2048,7 +2066,31 @@ function toolCannotScope(name: string) {
                                                     $event,
                                                 )
                                             "
-                                        />
+                                        >
+                                            <template #content-top>
+                                                <div
+                                                    class="w-56 max-w-[calc(100vw-2rem)] px-3 py-2"
+                                                >
+                                                    <p
+                                                        class="text-xs font-medium"
+                                                    >
+                                                        {{ toolLabel(tool) }}
+                                                    </p>
+                                                    <p
+                                                        v-if="
+                                                            tool.definition.ui
+                                                                ?.descriptionHint
+                                                        "
+                                                        class="project-muted text-[11px] leading-relaxed mt-1"
+                                                    >
+                                                        {{
+                                                            tool.definition.ui
+                                                                .descriptionHint
+                                                        }}
+                                                    </p>
+                                                </div>
+                                            </template>
+                                        </USelect>
                                     </div>
                                     <details
                                         v-if="supportsRepositories(tool)"
@@ -2136,7 +2178,7 @@ function toolCannotScope(name: string) {
                                         />
                                     </div>
                                 </div>
-                            </div>
+                            </details>
                             <p
                                 v-if="!matchingTools.length"
                                 class="project-muted text-xs py-3"
@@ -2145,20 +2187,24 @@ function toolCannotScope(name: string) {
                             </p>
                             <details
                                 v-if="unavailableTools.length"
-                                class="project-unavailable-tools"
+                                :open="!!toolQuery.trim()"
+                                class="project-unavailable-tools project-tool-group"
                             >
                                 <summary
-                                    class="flex items-center gap-2 cursor-pointer text-xs font-medium py-3"
+                                    class="project-tool-summary text-xs font-medium"
+                                    role="button"
                                 >
+                                    <span class="flex-1"
+                                        >Unavailable tools</span
+                                    >
+                                    <span class="project-muted text-[11px]">{{
+                                        unavailableTools.length
+                                    }}</span>
                                     <UIcon
                                         name="i-lucide-chevron-right"
                                         class="size-3.5 project-disclosure-icon"
                                         aria-hidden="true"
                                     />
-                                    Unavailable tools
-                                    <span class="project-muted ml-auto">{{
-                                        unavailableTools.length
-                                    }}</span>
                                 </summary>
                                 <div
                                     v-for="tool in unavailableTools"
@@ -2196,7 +2242,7 @@ function toolCannotScope(name: string) {
                     </form>
                     <section
                         v-if="tab === 'Settings'"
-                        class="project-chat-settings border-t border-[var(--md-outline-variant)] pt-3"
+                        class="project-chat-settings pt-3"
                     >
                         <button
                             type="button"
@@ -2354,7 +2400,7 @@ function toolCannotScope(name: string) {
                 </div>
                 <footer
                     v-if="tab === 'Settings'"
-                    class="project-settings-footer shrink-0 flex items-center gap-2 px-3 py-3 border-t border-[var(--md-outline-variant)]"
+                    class="project-settings-footer shrink-0 flex items-center gap-2 px-5 py-3"
                 >
                     <p
                         role="status"
@@ -2376,6 +2422,7 @@ function toolCannotScope(name: string) {
                         :form="'project-settings-' + id"
                         type="submit"
                         label="Save changes"
+                        color="neutral"
                         size="xs"
                         class="project-settings-save"
                         :disabled="busy || !dirty"
@@ -2507,34 +2554,47 @@ function toolCannotScope(name: string) {
 .project-content {
     overflow-wrap: anywhere;
 }
-.project-tool-row {
-    padding: 10px 0;
-    border-bottom: 1px solid var(--md-outline-variant);
+.project-content.project-settings-content {
+    padding-inline: 20px;
+    scrollbar-gutter: stable;
 }
-.project-tool-row:last-child {
-    border-bottom: 0;
+.project-tool-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px;
+    cursor: pointer;
+    list-style: none;
+    border-radius: var(--md-border-radius-small, 8px);
+    font-size: 12px;
+}
+.project-tool-summary:hover {
+    background: var(--md-surface-hover);
+}
+.project-tool-summary:focus-visible,
+.project-tool-permission:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+.project-tool-row {
+    padding: 8px 0;
+    margin-inline: 8px;
 }
 .project-tool-permission {
-    width: 88px;
+    width: auto;
+    max-width: 88px;
 }
-.project-unavailable-tools {
-    border-top: 1px solid var(--md-outline-variant);
-}
-.project-unavailable-tools > summary {
-    list-style: none;
-}
-.project-unavailable-tools > summary::-webkit-details-marker {
+.project-tool-summary::-webkit-details-marker {
     display: none;
 }
-.project-unavailable-tools[open] .project-disclosure-icon {
+.project-tool-group[open] > summary .project-disclosure-icon {
     transform: rotate(90deg);
 }
 .project-settings-footer {
     background: var(--md-surface);
 }
 .project-settings-save {
-    background: var(--project-accent);
-    color: var(--md-on-primary, #fff);
     white-space: nowrap;
 }
 .project-settings :deep(button),
