@@ -1035,12 +1035,16 @@ function waitForDurableSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            if (state.status === 'streaming' && state.providerAccepted) {
+            // Saving the outgoing turn accepts the draft; provider latency
+            // must not keep that same message in the composer.
+            if (state.status === 'persisted' || state.status === 'streaming') {
                 finish({
                     status: 'accepted',
                     requestId,
                     userMessageId: state.userMessageId,
-                    assistantMessageId: state.assistantMessageId,
+                    ...(state.status === 'streaming'
+                        ? { assistantMessageId: state.assistantMessageId }
+                        : {}),
                 });
             }
             // Finalization publishes an intermediate terminal projection.

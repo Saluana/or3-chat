@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter or use an existing key, understand model costs, send a message, and verify saved work."
+                    "summary": "Connect OpenRouter, choose a model, send a message, and understand draft clearing and saved work."
                 },
                 {
                     "name": "command-palette.md",

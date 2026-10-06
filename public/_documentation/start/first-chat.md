@@ -14,6 +14,8 @@ On a Cloud instance, sign in if requested. The operator may supply an instance k
 
 Open a chat, select a model from the chat's model selector, and type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
 
+The input clears once your message is saved, without waiting for the model to respond. If sending is blocked before the message is saved, your draft and attachments stay in the input. If the model fails after saving, retry from the saved conversation.
+
 Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
 
 ## 3. Check that your work is saved

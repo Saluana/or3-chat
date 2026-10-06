@@ -422,7 +422,8 @@ test('native context recovery retains saved identities after reload', async ({ p
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect.poll(async () => (await readAttempt()).checkpoints.length).toBe(1);
     await expect.poll(async () => (await readAttempt()).rows.find((row) => row.role === 'assistant')?.pending).toBe(false);
-    await expect(input).toHaveText('journey:context-reject');
+    // The turn is saved even when the provider rejects it; Retry owns recovery.
+    await expect(input).toHaveText('');
     const failed = await readAttempt(); expect(failed.rows.filter((row) => row.role === 'user')).toHaveLength(1);
     const savedUser = failed.rows.find((row) => row.role === 'user')!; const assistant = failed.rows.find((row) => row.role === 'assistant')!;
     expect(assistant.pending).toBe(false); expect(assistant.data.turn_id).toBe(savedUser.id);
@@ -1097,6 +1098,45 @@ test.describe('production chat journey', () => {
         await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
         await expect(page.getByText(/Late response from the old page/)).toHaveCount(0);
     });
+    test('clears a saved message before the provider responds and preserves the next draft', async ({ page }, info) => {
+        await openChat(page);
+        // Hold the fixture transport before it returns response headers. The
+        // real send pipeline must still save the turn and clear its composer.
+        await page.evaluate(() => {
+            const originalFetch = globalThis.fetch.bind(globalThis);
+            const responseGate = new Promise<void>((resolve) => {
+                window.addEventListener('journey:release-provider', () => resolve(), { once: true });
+            });
+            globalThis.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (url.includes('/api/__or3-e2e/chat/completions')) {
+                    await responseGate;
+                }
+                return originalFetch(input, init);
+            };
+        });
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        try {
+            await send(page, 'journey:delayed-provider');
+            await expect(input).toHaveText('');
+            await expect(page.getByRole('button', { name: 'Stop generation' })).toBeVisible();
+            await expect(page.getByText('Hello from deterministic stream.')).toHaveCount(0);
+            const path = info.outputPath('saved-message-cleared-before-response.png');
+            await page.screenshot({ path, animations: 'disabled' });
+            await info.attach('saved-message-cleared-before-response', { path, contentType: 'image/png' });
+            await input.fill('Keep this next draft.');
+        } finally {
+            await page.evaluate(() => window.dispatchEvent(new Event('journey:release-provider')));
+        }
+        await expect(page.getByText('Hello from deterministic stream.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await expect(input).toHaveText('Keep this next draft.');
+        await waitForDurableReply(page, 'Hello from deterministic stream.');
+        await page.reload();
+        await expect(page.locator('.cm-text-user').getByText('journey:delayed-provider', { exact: true })).toBeVisible();
+        await expect(page.getByText('Hello from deterministic stream.')).toBeVisible();
+    });
+
     test('stops an admitted request before its outgoing filter resolves', async ({
         page,
     }) => {
