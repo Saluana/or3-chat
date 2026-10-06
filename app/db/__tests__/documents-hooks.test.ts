@@ -13,52 +13,11 @@ vi.mock('../../utils/errors', () => ({
 
 import type { DocumentRow } from '../documents';
 
-// Minimal HookEngine stub for tests to avoid importing application hook engine
-function createTestHookEngine() {
-    const filters = new Map<string, Function[]>();
-    const actions = new Map<string, Function[]>();
+// Keep the real hook engine and typed registration wrapper at the document emitter.
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
-    return {
-        addFilter(name: string, fn: Function) {
-            const arr = filters.get(name) || [];
-            arr.push(fn);
-            filters.set(name, arr);
-        },
-        addAction(name: string, fn: Function) {
-            const arr = actions.get(name) || [];
-            arr.push(fn);
-            actions.set(name, arr);
-        },
-        async applyFilters<T>(name: string, value: T, ...args: any[]) {
-            const arr = filters.get(name) || [];
-            let v: any = value;
-            for (const f of arr) {
-                // Support sync/async filters
-                const res = await f(v, ...args);
-                if (res !== undefined) v = res;
-            }
-            return v as T;
-        },
-        async doAction(name: string, ...args: any[]) {
-            const arr = actions.get(name) || [];
-            for (const f of arr) {
-                try {
-                    await f(...args);
-                } catch {}
-            }
-        },
-        removeAllCallbacks() {
-            filters.clear();
-            actions.clear();
-        },
-        // diagnostics helpers (minimal)
-        hasFilter() {
-            return false;
-        },
-    } as any;
-}
-
-const hookEngine = createTestHookEngine();
+const hookEngine = createTypedHookEngine(createHookEngine());
 
 // Mock Nuxt app
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
@@ -152,18 +111,23 @@ describe('document hooks integration', () => {
         const events: string[] = [];
         const contexts: any[] = [];
 
-        hookEngine.addFilter(
+        const offTitle = hookEngine.on(
             'db.documents.title:filter',
-            (title: string, ctx: any) => {
+            (title, ctx) => {
                 events.push(`title:${ctx.phase}`);
                 contexts.push({ title, ctx });
                 return title.toUpperCase();
             }
         );
 
+        const offLower = hookEngine.on('db.documents.title:filter', (title, context) => {
+            events.push(`title-lower:${context.phase}`);
+            return title.toLowerCase();
+        }, { priority: 5 });
+
         hookEngine.addFilter(
             'db.documents.create:filter:input',
-            (row: DocumentRow) => {
+            (row) => {
                 events.push('create:filter');
                 expect(row.title).toBe('HELLO WORLD');
                 row.content = JSON.stringify({
@@ -194,6 +158,7 @@ describe('document hooks integration', () => {
         });
 
         expect(events).toEqual([
+            'title-lower:create',
             'title:create',
             'create:filter',
             'create:before',
@@ -210,6 +175,12 @@ describe('document hooks integration', () => {
             type: 'doc',
             content: [{ type: 'paragraph', content: [] }],
         });
+
+        offTitle();
+        offTitle();
+        offLower();
+        const unfiltered = await updateDocument(document.id, { title: 'After disposal' });
+        expect(unfiltered!.title).toBe('After disposal');
     });
 
     it('updateDocument applies title filter and allows content transform', async () => {
@@ -238,7 +209,8 @@ describe('document hooks integration', () => {
 
         hookEngine.addFilter(
             'db.documents.update:filter:input',
-            ({ existing: prev, updated, patch }: any) => {
+            (payload) => {
+                const { existing: prev, updated } = payload;
                 events.push('update:filter');
                 expect(prev.id).toBe('doc-1');
                 expect(updated.title).toBe('PATCHED TITLE!');
@@ -251,7 +223,7 @@ describe('document hooks integration', () => {
                         },
                     ],
                 });
-                return { existing: prev, updated, patch };
+                return payload;
             }
         );
 
