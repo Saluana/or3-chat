@@ -138,7 +138,7 @@ async function buildIndex(
 /**
  * Computes a signature string to detect when the search index needs rebuilding.
  *
- * Uses entity counts and the latest updated_at timestamp to determine if data has changed.
+ * Includes each indexed identity and field so unrelated newer records cannot hide changes.
  *
  * @param threads - Array of thread entities.
  * @param projects - Array of project entities.
@@ -150,15 +150,9 @@ function computeSignature(
     projects: Project[],
     documents: Post[]
 ) {
-    let latest = 0;
-    for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
-    for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
-    for (const d of documents) {
-        const record = d as Record<string, unknown>;
-        const updatedAt = (record.updated_at as number) || 0;
-        if (updatedAt > latest) latest = updatedAt;
-    }
-    return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
+    // Counts plus the maximum timestamp miss replacements and updates to older
+    // imported/synced rows. Compare exactly the fields the index consumes.
+    return JSON.stringify(toDocs(threads, projects, documents));
 }
 
 /**
