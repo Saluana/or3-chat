@@ -4,7 +4,6 @@ import { liveQuery } from 'dexie';
 import { Or3Scroll } from 'or3-scroll';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { createThreadInDb } from '~/db/threads';
-import { prepareProjectWrite } from '~/db/projects';
 import { prepareDocumentCreate } from '~/db/documents';
 import { getWriteTxTableNames } from '~/db/util';
 import {
@@ -56,6 +55,7 @@ const props = defineProps<{
     activeDocumentIds?: string[];
 }>();
 const emit = defineEmits<{
+    (e: 'new-project'): void;
     (
         e:
             | 'rename-thread'
@@ -90,7 +90,6 @@ const editingMemory = ref<{
     text: string;
 } | null>(null);
 const suggestionsReviewed = ref(false);
-const creating = ref(false);
 const tab = ref('Overview');
 const sectionDescriptions: Record<string, string> = {
     Knowledge: 'Sources for this project.',
@@ -98,7 +97,6 @@ const sectionDescriptions: Record<string, string> = {
     Settings: 'Instructions and tools for this project.',
 };
 const query = ref('');
-const name = ref('');
 const projects = ref<Array<{ project: Project; pinned: boolean }>>([]);
 const state = ref<Awaited<ReturnType<typeof readProjectWorkspace>> | null>(
     null,
@@ -418,7 +416,6 @@ async function run(action: () => Promise<unknown>) {
 async function openProject(projectId: string) {
     id.value = projectId;
     returnTo.value = 'projects';
-    creating.value = false;
 }
 function goBack() {
     if (id.value && tab.value !== 'Overview') {
@@ -449,41 +446,6 @@ function cancelBriefEdit() {
     dirty.value =
         JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
     if (!dirty.value) editClock.value = state.value.settingsRow?.clock ?? null;
-}
-async function createProject() {
-    const title = name.value.trim();
-    if (!title) return;
-    const projectId = newId();
-    scope.assertCurrent('write');
-    const captured = scope;
-    const prepared = await prepareProjectWrite(
-        {
-            id: projectId,
-            name: title,
-            description: null,
-            data: [],
-            clock: 0,
-            created_at: nowSec(),
-            updated_at: nowSec(),
-            deleted: false,
-        },
-        'create',
-    );
-    if (prepared.row.id !== projectId || prepared.row.deleted)
-        throw new Error('A project filter changed the creation target.');
-    await captured.db.transaction(
-        'rw',
-        getWriteTxTableNames(captured.db, 'projects'),
-        async () => {
-            captured.assertCurrent('write');
-            await captured.db.projects.add(prepared.row);
-            captured.assertCurrent('write');
-        },
-    );
-    await prepared.afterCommit(prepared.row);
-    captured.assertCurrent();
-    name.value = '';
-    await openProject(projectId);
 }
 async function pin(projectId: string) {
     const current = await readProjectWorkspace(scope.db, projectId);
@@ -771,7 +733,7 @@ function toolCannotScope(name: string) {
                 size="sm"
                 :icon="newProjectIcon"
                 class="bg-[color:var(--md-primary)]/5 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 theme-btn"
-                @click="creating = !creating"
+                @click="emit('new-project')"
                 >New project</UButton
             >
             <UButton
@@ -807,35 +769,6 @@ function toolCannotScope(name: string) {
                     class="project-input"
                 />
             </label>
-            <form
-                v-if="creating"
-                class="px-3 py-2 flex flex-col gap-2"
-                @submit.prevent="run(createProject)"
-            >
-                <UInput
-                    v-model="name"
-                    aria-label="New project name"
-                    placeholder="Project name"
-                    maxlength="200"
-                    required
-                    autofocus
-                />
-                <div class="flex gap-2">
-                    <UButton
-                        type="submit"
-                        size="sm"
-                        :disabled="busy"
-                        label="Create project"
-                    />
-                    <UButton
-                        size="sm"
-                        color="neutral"
-                        variant="ghost"
-                        @click="creating = false"
-                        >Cancel</UButton
-                    >
-                </div>
-            </form>
             <Or3Scroll
                 v-if="filtered.length"
                 :items="projectListItems"
@@ -921,7 +854,7 @@ function toolCannotScope(name: string) {
                         color="neutral"
                         variant="ghost"
                         class="w-fit justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
-                        @click="creating = true"
+                        @click="emit('new-project')"
                         >Create a project</UButton
                     >
                 </template>

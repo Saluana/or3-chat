@@ -18,6 +18,22 @@ async function openProjectSection(page: Page, section: string) {
     if (await overview.isVisible()) await overview.click();
     await projects.getByRole('button', { name: section, exact: true }).click();
 }
+async function createProject(page: Page, title: string) {
+    await page
+        .getByRole('region', { name: 'Projects', exact: true })
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
+    const dialog = page.getByRole('dialog', {
+        name: 'New Project',
+        exact: true,
+    });
+    await dialog.getByPlaceholder('Project title').fill(title);
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+        page.getByRole('heading', { name: title, exact: true }),
+    ).toBeVisible();
+}
 async function openAllProjects(page: Page) {
     const projects = page.getByRole('region', {
         name: 'Projects',
@@ -198,15 +214,47 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await projects
         .getByRole('button', { name: 'New project', exact: true })
         .click();
-    await projects
-        .getByRole('textbox', { name: 'New project name' })
-        .fill('Sidebar project');
-    await projects
-        .getByRole('button', { name: 'Create project', exact: true })
+    const newProjectDialog = page.getByRole('dialog', {
+        name: 'New Project',
+        exact: true,
+    });
+    await expect(newProjectDialog).toBeVisible();
+    await expect(
+        newProjectDialog.getByRole('button', { name: 'Create', exact: true }),
+    ).toBeDisabled();
+    await newProjectDialog.getByPlaceholder('Project title').fill('Cancelled');
+    await newProjectDialog
+        .getByRole('button', { name: 'Cancel', exact: true })
         .click();
+    await expect(newProjectDialog).not.toBeVisible();
+    await expect(
+        projects.getByRole('heading', { name: 'No projects yet' }),
+    ).toBeVisible();
+    await projects
+        .getByRole('button', { name: 'Create a project', exact: true })
+        .click();
+    await expect(
+        newProjectDialog.getByPlaceholder('Project title'),
+    ).toHaveValue('');
+    await newProjectDialog
+        .getByPlaceholder('Project title')
+        .fill('Sidebar project');
+    await newProjectDialog
+        .getByPlaceholder('Optional description')
+        .fill('Created with the shared project modal.');
+    await page.screenshot({ path: info.outputPath('new-project-modal.png') });
+    await newProjectDialog
+        .getByRole('button', { name: 'Create', exact: true })
+        .click();
+    await expect(newProjectDialog).not.toBeVisible();
     await expect(
         projects.getByRole('heading', {
             name: 'Sidebar project',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await expect(
+        projects.getByText('Created with the shared project modal.', {
             exact: true,
         }),
     ).toBeVisible();
@@ -466,7 +514,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .click();
     await expect(
         projects.getByRole('button', {
-            name: 'Add project brief',
+            name: 'Edit project brief',
             exact: true,
         }),
     ).toBeVisible();
@@ -581,21 +629,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     // Native fixture writes bypass Dexie's notifications. A normal project write
     // refreshes the mounted queries through the same path as user-created data.
     await openAllProjects(page);
-    await projects
-        .getByRole('button', { name: 'New project', exact: true })
-        .click();
-    await projects
-        .getByRole('textbox', { name: 'New project name' })
-        .fill('Collection refresh');
-    await projects
-        .getByRole('button', { name: 'Create project', exact: true })
-        .click();
-    await expect(
-        projects.getByRole('heading', {
-            name: 'Collection refresh',
-            exact: true,
-        }),
-    ).toBeVisible();
+    await createProject(page, 'Collection refresh');
     await navigation
         .getByRole('button', { name: 'Home', exact: true })
         .first()
@@ -692,21 +726,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
 }, info) => {
     test.setTimeout(180000);
     await page.goto('/__or3-projects-journey');
-    await page
-        .getByRole('button', { name: 'New project', exact: true })
-        .click();
-    await expect(
-        page.getByRole('heading', { name: 'Projects', exact: true }),
-    ).toBeVisible({ timeout: 60000 });
-    await page
-        .getByRole('textbox', { name: 'New project name' })
-        .fill('Saffron');
-    await page
-        .getByRole('button', { name: 'Create project', exact: true })
-        .click();
-    await expect(
-        page.getByRole('heading', { name: 'Saffron', exact: true }),
-    ).toBeVisible();
+    await createProject(page, 'Saffron');
     await openProjectSection(page, 'Settings');
     await page
         .getByLabel('Instructions', { exact: true })
@@ -825,13 +845,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
         'Prefer concise source-backed answers.',
     );
     await openAllProjects(page);
-    await page
-        .getByRole('button', { name: 'New project', exact: true })
-        .click();
-    await page.getByRole('textbox', { name: 'New project name' }).fill('Basil');
-    await page
-        .getByRole('button', { name: 'Create project', exact: true })
-        .click();
+    await createProject(page, 'Basil');
     await openProjectSection(page, 'Memory');
     await expect(page.getByLabel('Edit saved decision')).toHaveCount(0);
     const path = info.outputPath('project-isolation.png');
@@ -876,15 +890,7 @@ test('project backup restores memories and extracted revision bytes', async ({
         });
     });
     await page.goto('/__or3-projects-journey');
-    await page
-        .getByRole('button', { name: 'New project', exact: true })
-        .click();
-    await page
-        .getByRole('textbox', { name: 'New project name' })
-        .fill('Backup project');
-    await page
-        .getByRole('button', { name: 'Create project', exact: true })
-        .click();
+    await createProject(page, 'Backup project');
     await openProjectSection(page, 'Memory');
     await page.getByRole('button', { name: 'Add memory', exact: true }).click();
     await page

@@ -924,6 +924,8 @@ async function submitCreateProject() {
         // Auto expand the new project
         if (!expandedProjects.value.includes(newId))
             expandedProjects.value.push(newId);
+        if (activePageId.value === 'sidebar-projects-home')
+            await openProjectSidebar(newId, 'projects');
         closeCreateProject();
     } catch (e) {
         console.error('Failed to create project', e);
