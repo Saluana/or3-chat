@@ -631,7 +631,7 @@ for (const kind of ['image', 'pdf'] as const) {
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         const files = page.locator('#main-content').getByRole('region', { name: 'Workspace Files' });
         await files.getByRole('button', { name: `Open ${name}`, exact: true }).click();
-        const preview = page.getByRole('dialog', { name: 'File preview' });
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
         if (kind === 'image') await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
         else await expect(preview.locator('.preview-note')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();

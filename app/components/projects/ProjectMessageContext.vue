@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { computed, ref, watch, onBeforeUnmount, useId } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import {
     getDb,
@@ -10,6 +10,7 @@ import { captureProjectOperation } from '~/utils/projects/context';
 import { resolveChatProject, saveProjectMemory } from '~/db/project-workspace';
 import { addProjectUpload } from '~/utils/projects/source-intake';
 import { getFileBlob } from '~/db/files';
+import AppModal from '~/components/ui/AppModal.vue';
 const props = defineProps<{
     threadId?: string;
     messageId?: string;
@@ -18,6 +19,8 @@ const props = defineProps<{
 }>();
 const remember = ref(false);
 const memory = ref('');
+const memoryProjectName = ref('');
+const memoryFormId = useId();
 const kind = ref<'fact' | 'decision'>('fact');
 const error = ref('');
 const saved = ref(false);
@@ -88,8 +91,15 @@ async function startRemember() {
         const text = props.text ?? '';
         if (!threadId || !messageId) throw new Error('Message unavailable.');
         const projectId = await owningProject(scope, threadId);
+        const project = await scope.db.projects.get(projectId);
+        scope.assertCurrent();
+        if (!project || project.deleted)
+            throw new Error('Project unavailable.');
+        memoryProjectName.value = project.name;
         memoryTarget = { scope, projectId, threadId, messageId };
         memory.value = text.slice(0, 4000);
+        kind.value = 'fact';
+        saved.value = false;
         remember.value = true;
     } catch (cause) {
         error.value =
@@ -177,40 +187,63 @@ async function promote() {
                 @click="promote"
             />
         </div>
-        <UModal
+        <AppModal
             v-model:open="remember"
             title="Save project memory"
             description="Review the text before saving it to this chat’s project."
         >
-            <template #body>
-                <form class="space-y-2" @submit.prevent="save">
-                    <label
-                        >Review memory<textarea
-                            v-model="memory"
-                            maxlength="4000"
-                            required
-                            class="block w-full rounded border border-current/20 p-2 bg-transparent"
-                            rows="4"
-                        /></label
-                    ><select v-model="kind" aria-label="Save as">
-                        <option value="fact">Fact</option>
-                        <option value="decision">Decision</option></select
-                    ><UButton
-                        type="submit"
-                        label="Save memory"
-                        :disabled="busy"
-                    /><UButton
-                        label="Cancel"
-                        color="neutral"
-                        variant="ghost"
-                        @click="remember = false"
+            <form :id="memoryFormId" class="space-y-5" @submit.prevent="save">
+                <p class="text-sm text-[var(--md-on-surface-variant)]">
+                    Save to
+                    <strong class="font-medium text-[var(--md-on-surface)]">{{
+                        memoryProjectName
+                    }}</strong>
+                </p>
+                <UFormField label="Review memory" name="memory">
+                    <UTextarea
+                        v-model="memory"
+                        aria-label="Review memory"
+                        variant="modal"
+                        maxlength="4000"
+                        required
+                        class="w-full"
+                        :rows="5"
                     />
-                    <p v-if="error" role="alert" class="text-red-500">
-                        {{ error }}
-                    </p>
-                </form>
+                </UFormField>
+                <UFormField label="Save as" name="kind">
+                    <USelect
+                        v-model="kind"
+                        aria-label="Save as"
+                        :items="[
+                            { label: 'Fact', value: 'fact' },
+                            { label: 'Decision', value: 'decision' },
+                        ]"
+                        class="w-full"
+                    />
+                </UFormField>
+                <p v-if="error" role="alert" class="text-[var(--md-error)]">
+                    {{ error }}
+                </p>
+            </form>
+            <template #footer>
+                <UButton
+                    label="Cancel"
+                    color="neutral"
+                    variant="ghost"
+                    size="modal"
+                    :disabled="busy"
+                    @click="remember = false"
+                />
+                <UButton
+                    type="submit"
+                    :form="memoryFormId"
+                    label="Save memory"
+                    size="modal"
+                    :loading="busy"
+                    :disabled="busy || !memory.trim()"
+                />
             </template>
-        </UModal>
+        </AppModal>
         <p v-if="saved" role="status">Saved to project.</p>
         <p v-if="error && !remember" role="alert" class="text-red-500">
             {{ error }}

@@ -1231,9 +1231,35 @@ test('project chat keeps captured context and memory actions without an inline i
     await expect(rememberAction).toBeVisible();
     await expect(rememberAction).toHaveText('');
     await rememberAction.click();
+    const memoryDialog = page.getByRole('dialog', {
+        name: 'Save project memory',
+        exact: true,
+    });
+    // Name the owning project even while another project is visible in the sidebar.
+    await expect(memoryDialog).toContainText(
+        'Save to Workspace fixture project',
+    );
     await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
         'Hello from deterministic stream.',
     );
+    await page.getByLabel('Review memory', { exact: true }).fill('   ');
+    await expect(
+        memoryDialog.getByRole('button', { name: 'Save memory', exact: true }),
+    ).toBeDisabled();
+    await page
+        .getByLabel('Review memory', { exact: true })
+        .fill('Hello from deterministic stream.');
+    await memoryDialog
+        .getByRole('combobox', { name: 'Save as', exact: true })
+        .click();
+    await page.getByRole('option', { name: 'Decision', exact: true }).click();
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    const reviewPath = info.outputPath('project-memory-review.png');
+    await page.screenshot({ path: reviewPath, animations: 'disabled' });
+    await info.attach('project-memory-review', {
+        path: reviewPath,
+        contentType: 'image/png',
+    });
     await page
         .getByRole('button', { name: 'Save memory', exact: true })
         .click();
@@ -1246,6 +1272,7 @@ test('project chat keeps captured context and memory actions without an inline i
     );
     expect(savedMemory.title).toBe('workspace-journey-project');
     expect(JSON.parse(savedMemory.content)).toMatchObject({
+        kind: 'decision',
         source_thread_id: 'saffron-project-chat',
         source_message_id: recovered.messages.find(
             (row) => row.role === 'assistant',
@@ -1294,6 +1321,9 @@ test('project chat keeps captured context and memory actions without an inline i
     await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
         'Hello from deterministic stream.',
     );
+    await expect(
+        memoryDialog.getByRole('combobox', { name: 'Save as', exact: true }),
+    ).toHaveText('Fact');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(
         page.getByRole('dialog', { name: 'Save project memory' }),

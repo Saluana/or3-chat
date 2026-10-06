@@ -133,10 +133,10 @@
                                 size="sm"
                                 variant="ghost"
                                 class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
-                                title="Create your first project"
+                                title="Create a project"
                                 @click="emit('new-project')"
                             >
-                                Create your first project
+                                Create a project
                             </UButton>
                             <UButton
                                 size="sm"
