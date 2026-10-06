@@ -1,8 +1,8 @@
 # Work in a project
 
-Open **Projects** in the sidebar to search, pin, create, or return to a workspace. A project has an Overview, Chats, Knowledge, Memory, and Settings. Each chat has one owning project; opening another project does not change a turn already in progress.
+Open **Projects** in the sidebar to search, pin, create, or return to a workspace. Project Home has recent activity and links to Knowledge, Memory, and Settings. Each chat has one owning project; opening another project does not change a turn already in progress.
 
-The project list and Project Home stay in the sidebar, using the same Home/New navigation and empty-state styling as Chats and Documents. Use the sidebar search to filter projects, **New project** to create one, and **Projects** in a project's header to return to the list. Browsing a project does not open a pane or workspace tab. Opening or creating a chat from the project uses the chat pane as usual.
+The project list and Project Home stay in the sidebar, using the same navigation rows and empty-state styling as Chats and Documents. Project Home brings together the brief, links to **Knowledge** and **Memory**, and a time-grouped activity list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. Each section link opens a focused sidebar page; use the project-name back button to return home. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects, **New project** to create one, and **Projects** in a project's header to return to the list. Browsing a project does not open a pane or workspace tab. Opening or creating a chat from the project uses the chat pane as usual.
 
 ## Knowledge
 

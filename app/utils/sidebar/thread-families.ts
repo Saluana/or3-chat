@@ -4,6 +4,7 @@ import type { Thread, Post } from '~/db/schema';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import { getKvByName, tombstoneKvByName } from '~/db/kv';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
+import { PROJECT_POST_TYPES, ProjectSourceSchema } from '~~/shared/projects/workspace';
 
 export const FAMILY_PAGE_SIZE = 50;
 export const familyExpansionPreferenceName = (rootId: string) => 'compaction-family:expanded:' + encodeURIComponent(rootId);
@@ -99,6 +100,15 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         const project = options.filter.projectId === undefined ? undefined : await db.projects.get(options.filter.projectId);
         const projectDocuments = options.filter.projectId === undefined ? undefined : new Set(project && !project.deleted
             ? normalizeProjectData(project.data).filter((entry) => entry.kind === 'doc').map((entry) => entry.id) : []);
+        if (project && !project.deleted && projectDocuments) {
+            const sources = await db.posts.where('[postType+title]')
+                .equals([PROJECT_POST_TYPES.source, project.id]).toArray();
+            for (const row of sources) {
+                if (row.deleted) continue;
+                const source = ProjectSourceSchema.parse(JSON.parse(row.content));
+                if (source.kind === 'document') projectDocuments.add(source.item_id);
+            }
+        }
         let before: [number, number, string] | undefined;
         while (documents.length <= options.limit) {
             const query = before ? db.posts.where('[updated_at+created_at+id]').below(before) : db.posts.orderBy('[updated_at+created_at+id]');

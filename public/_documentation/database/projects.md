@@ -4,6 +4,8 @@ Project metadata stays in the `projects` Dexie table. Persistent workspace polic
 
 Client navigation uses `useProjectSidebar()` from `~/composables/sidebar/useProjectSidebar`. Call it during setup and use `openProjectSidebar(id)` to select the project and activate `sidebar-projects-home`. The returned `projectId` is UI state, resets on workspace changes, and never sets a chat's owning project. Project navigation does not register a pane application or open workspace tabs.
 
+Project activity reuses `SidebarTimeGroupedList` with `type="all"`, `projectId`, and an explicit `query` string. Omitting `query` retains the normal inherited sidebar search. Its optional `header` slot places the project summary in the same virtual scroll container as the activity rows; loading and empty messages stay below that header. Project document filtering includes both document associations and live document sources from Knowledge. Standard selection, rename, delete, and add-to-project events retain their existing sidebar handlers.
+
 ---
 
 ## What does it do?

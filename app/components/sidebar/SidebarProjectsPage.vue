@@ -38,18 +38,45 @@ import type { Project, Thread, Post } from '~/db/schema';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import SidebarEmptyState from './SidebarEmptyState.vue';
+import SidebarPageLink from './SidebarPageLink.vue';
+import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
 
 defineOptions({ name: 'sidebar-projects-home' });
-const props = defineProps<{ sidebarQuery?: string }>();
+const props = defineProps<{
+    sidebarQuery?: string;
+    activeThreadIds?: string[];
+    activeDocumentIds?: string[];
+}>();
+const emit = defineEmits<{
+    (
+        e:
+            | 'rename-thread'
+            | 'delete-thread'
+            | 'add-to-project'
+            | 'rename-document'
+            | 'delete-document'
+            | 'add-document-to-project-from-list',
+        item: UnifiedSidebarItem,
+    ): void;
+}>();
 const { projectId: id } = useProjectSidebar();
 const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
 const newProjectIcon = useIcon('sidebar.new_folder');
 const newChatIcon = useIcon('sidebar.new_chat');
+const knowledgeIcon = useIcon('sidebar.note');
+const settingsIcon = useIcon('ui.settings');
+const editIcon = useIcon('ui.edit');
+const chevronIcon = useIcon('ui.chevron.right');
 const creating = ref(false);
 const tab = ref('Overview');
-const tabs = ['Overview', 'Chats', 'Knowledge', 'Memory', 'Settings'];
+const sectionDescriptions: Record<string, string> = {
+    Knowledge: 'Files, documents, and notes for project context.',
+    Memory: 'Your brief, saved facts, and decisions.',
+    Settings: 'Instructions and tools for this project.',
+};
 const query = ref('');
 const name = ref('');
 const projects = ref<Array<{ project: Project; pinned: boolean }>>([]);
@@ -305,6 +332,15 @@ async function openChat(threadId: string) {
     const result = await getPaletteHostContext()?.openChat(threadId, 'active');
     if (result && !result.ok) throw new Error(result.error.message);
 }
+async function openActivity(item: UnifiedSidebarItem) {
+    scope.assertCurrent();
+    if (item.type === 'thread') return openChat(item.id);
+    const result = await getPaletteHostContext()?.openDocument(
+        item.id,
+        'active',
+    );
+    if (result && !result.ok) throw new Error(result.error.message);
+}
 async function verifySuggestion(summaryId: string) {
     const { projectContinuity } = await import('~/utils/projects/continuity');
     if (
@@ -542,12 +578,14 @@ function toolCannotScope(name: string) {
                 variant="ghost"
                 color="neutral"
                 size="sm"
-                :icon="newChatIcon"
-                class="bg-[color:var(--md-primary)]/5 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 theme-btn"
-                :disabled="busy || !state"
-                @click="run(newChat)"
-                >New chat</UButton
-            >
+                :icon="settingsIcon"
+                aria-label="Settings"
+                title="Project settings"
+                square
+                class="hover:bg-[var(--md-surface-hover)] theme-btn"
+                :disabled="!state"
+                @click="tab = 'Settings'"
+            />
         </header>
         <p
             v-if="error"
@@ -597,7 +635,7 @@ function toolCannotScope(name: string) {
                     >
                 </div>
             </form>
-            <Or3Scroll v-if="filtered.length" class="flex-1 min-h-0">
+            <div v-if="filtered.length" class="flex-1 min-h-0 overflow-y-auto sidebar-scroll">
                 <ul class="px-2 pb-3">
                     <li
                         v-for="(entry, index) in filtered"
@@ -657,7 +695,7 @@ function toolCannotScope(name: string) {
                         </div>
                     </li>
                 </ul>
-            </Or3Scroll>
+            </div>
             <SidebarEmptyState
                 v-else
                 class="flex-1 min-h-0"
@@ -684,140 +722,174 @@ function toolCannotScope(name: string) {
             </SidebarEmptyState>
         </template>
         <template v-else-if="state">
-            <div class="px-3 pt-2 pb-3 shrink-0 min-w-0">
-                <h1 class="text-lg font-semibold break-words">
-                    {{ state.project.name }}
-                </h1>
-                <nav
-                    class="mt-3 grid grid-cols-2 gap-1"
-                    aria-label="Project sections"
-                >
-                    <UButton
-                        v-for="section in tabs"
-                        :key="section"
-                        :label="section"
-                        color="neutral"
-                        size="sm"
-                        class="min-w-0 justify-center px-2!"
-                        :variant="tab === section ? 'solid' : 'ghost'"
-                        :aria-current="tab === section ? 'page' : undefined"
-                        @click="tab = section"
-                    />
-                </nav>
-            </div>
-            <Or3Scroll class="flex-1 min-h-0">
-                <div class="project-content px-3 pb-4 space-y-4 text-sm">
-                    <div v-if="tab === 'Overview'" class="space-y-4">
-                        <h2 class="font-semibold">Project brief</h2>
-                        <p class="whitespace-pre-wrap">
-                            {{
-                                state.settings.brief ||
-                                state.project.description ||
-                                'Add a brief in Memory to describe what matters now.'
-                            }}
-                        </p>
-                        <h2
-                            v-if="chats.some((chat) => chat.pinned)"
-                            class="font-semibold"
-                        >
-                            Pinned chats
-                        </h2>
-                        <button
-                            v-for="chat in chats.filter((chat) => chat.pinned)"
-                            :key="chat.id"
-                            class="block project-link"
-                            @click="run(() => openChat(chat.id))"
-                        >
-                            {{ chat.title || 'Chat' }}
-                        </button>
-                        <h2 class="font-semibold">Where you left off</h2>
-                        <button
-                            v-for="chat in chats.slice(0, 5)"
-                            :key="chat.id"
-                            class="block project-link"
-                            @click="run(() => openChat(chat.id))"
-                        >
-                            {{ chat.title || 'Chat' }}
-                        </button>
-                        <p>
-                            {{ state.sources.length }} knowledge sources ·
-                            {{ state.memories.length }} saved memories
-                        </p>
-                    </div>
-                    <div v-if="tab === 'Chats'" class="space-y-3">
-                        <form
-                            class="flex flex-col gap-2"
-                            @submit.prevent="
-                                run(() =>
-                                    moveChatToProject(
-                                        scope,
-                                        existingChatId,
-                                        id,
-                                    ),
-                                )
-                            "
-                        >
-                            <select
-                                v-model="existingChatId"
-                                required
-                                aria-label="Move existing chat"
-                                class="project-input"
+            <SidebarTimeGroupedList
+                v-if="tab === 'Overview'"
+                role="region"
+                aria-label="Project activity"
+                type="all"
+                :project-id="id"
+                :query="props.sidebarQuery ?? query"
+                :active-ids="[
+                    ...(props.activeThreadIds ?? []),
+                    ...(props.activeDocumentIds ?? []),
+                ]"
+                empty-message="No activity yet"
+                empty-description="Your project chats and documents will appear here."
+                @select="(item) => run(() => openActivity(item))"
+                @rename="
+                    (item) =>
+                        emit(
+                            item.type === 'thread'
+                                ? 'rename-thread'
+                                : 'rename-document',
+                            item,
+                        )
+                "
+                @delete="
+                    (item) =>
+                        emit(
+                            item.type === 'thread'
+                                ? 'delete-thread'
+                                : 'delete-document',
+                            item,
+                        )
+                "
+                @add-to-project="
+                    (item) =>
+                        emit(
+                            item.type === 'thread'
+                                ? 'add-to-project'
+                                : 'add-document-to-project-from-list',
+                            item,
+                        )
+                "
+                ><template #header>
+                    <div class="project-content px-1 pt-2 pb-1 space-y-4">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span
+                                class="project-avatar shrink-0"
+                                aria-hidden="true"
                             >
-                                <option value="">
-                                    Choose a chat to move into this project
-                                </option>
-                                <option
-                                    v-for="chat in allChats"
-                                    :key="chat.id"
-                                    :value="chat.id"
+                                <UIcon :name="projectIcon" class="size-5" />
+                            </span>
+                            <div class="min-w-0">
+                                <h1
+                                    class="text-lg font-semibold leading-snug break-words"
                                 >
-                                    {{ chat.title || chat.id }}
-                                </option></select
-                            ><UButton
-                                type="submit"
-                                label="Move into project"
-                                :disabled="busy"
-                            />
-                        </form>
-                        <p class="text-sm opacity-70">
-                            Excluded chats stay in the project but are not
-                            retrieved as memory. Open a chat and use Continue in
-                            new chat for a clean handoff.
-                        </p>
-                    <div
-                        v-for="chat in chats"
-                        :key="chat.id"
-                        role="group"
-                        :aria-label="chat.title || 'Chat'"
-                        class="flex flex-wrap items-center gap-2"
-                        >
-                            <button
-                                class="project-link min-w-0 basis-full text-left"
-                                @click="run(() => openChat(chat.id))"
-                            >
-                                {{ chat.title || 'Chat' }}</button
-                            ><UButton
-                                color="neutral"
-                                variant="ghost"
-                                :label="
-                                    state.settings.excluded_chat_ids.includes(
-                                        chat.id,
-                                    )
-                                        ? 'Include in memory'
-                                        : 'Exclude from memory'
-                                "
-                                @click="run(() => exclude(chat))"
-                            /><UButton
-                                color="neutral"
-                                variant="ghost"
-                                label="Remove"
-                                @click="
-                                    run(() =>
-                                        moveChatToProject(scope, chat.id, null),
-                                    )
-                                "
-                            />
+                                    {{ state.project.name }}
+                                </h1>
+                                <p class="project-muted text-xs mt-0.5">
+                                    Your project workspace
+                                </p>
+                            </div>
                         </div>
+                        <UButton
+                            :icon="newChatIcon"
+                            label="New chat"
+                            color="neutral"
+                            class="project-start theme-btn"
+                            :disabled="busy"
+                            @click="run(newChat)"
+                        />
+                        <section
+                            class="project-brief"
+                            aria-label="Project brief"
+                        >
+                            <div
+                                class="flex items-center justify-between gap-2"
+                            >
+                                <h2 class="text-xs font-semibold">
+                                    Project brief
+                                </h2>
+                                <UButton
+                                    v-if="
+                                        state.settings.brief ||
+                                        state.project.description
+                                    "
+                                    :icon="editIcon"
+                                    aria-label="Edit project brief"
+                                    square
+                                    size="xs"
+                                    color="neutral"
+                                    variant="ghost"
+                                    @click="tab = 'Memory'"
+                                />
+                            </div>
+                            <p
+                                v-if="
+                                    state.settings.brief ||
+                                    state.project.description
+                                "
+                                class="project-muted mt-2 text-xs leading-relaxed whitespace-pre-wrap line-clamp-3"
+                            >
+                                {{
+                                    state.settings.brief ||
+                                    state.project.description
+                                }}
+                            </p>
+                            <template v-else>
+                                <p
+                                    class="project-muted mt-2 text-xs leading-relaxed"
+                                >
+                                    Keep the important state close at hand.
+                                </p>
+                                <button
+                                    class="project-brief-action mt-2"
+                                    aria-label="Add project brief"
+                                    @click="tab = 'Memory'"
+                                >
+                                    Add a brief
+                                    <UIcon
+                                        :name="chevronIcon"
+                                        class="size-3.5"
+                                    />
+                                </button>
+                            </template>
+                        </section>
+                        <nav aria-label="Project sections" class="space-y-1.5">
+                            <SidebarPageLink
+                                label="Knowledge"
+                                :description="`${state.sources.length} ${state.sources.length === 1 ? 'source' : 'sources'}`"
+                                :icon="knowledgeIcon"
+                                accent="docs"
+                                @select="tab = 'Knowledge'"
+                            />
+                            <SidebarPageLink
+                                label="Memory"
+                                :description="`${state.memories.length} saved ${state.memories.length === 1 ? 'memory' : 'memories'}`"
+                                icon="i-lucide-bookmark"
+                                accent="projects"
+                                @select="tab = 'Memory'"
+                            />
+                        </nav>
+                        <h2
+                            class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!"
+                        >
+                            Recent activity
+                        </h2>
+                    </div></template
+                ></SidebarTimeGroupedList
+            >
+            <div v-else class="flex-1 min-h-0 overflow-y-auto sidebar-scroll">
+                <div class="project-content px-3 pt-2 pb-5 space-y-4 text-sm">
+                    <div
+                        v-if="tab !== 'Overview'"
+                        class="project-section-heading"
+                    >
+                        <UButton
+                            variant="ghost"
+                            color="neutral"
+                            size="sm"
+                            :icon="backIcon"
+                            aria-label="Overview"
+                            class="project-back min-w-0 max-w-full"
+                            @click="tab = 'Overview'"
+                            >{{ state.project.name }}</UButton
+                        >
+                        <h1 class="text-lg font-semibold">{{ tab }}</h1>
+                        <p class="project-muted text-xs leading-relaxed">
+                            {{ sectionDescriptions[tab] }}
+                        </p>
                     </div>
                     <div v-if="tab === 'Knowledge'" class="space-y-4">
                         <p class="text-sm opacity-70">
@@ -1407,8 +1479,87 @@ function toolCannotScope(name: string) {
                         />
                         <p v-if="dirty" class="text-sm">Unsaved changes</p>
                     </form>
+                    <div
+                        v-if="tab === 'Settings'"
+                        class="space-y-3 border-t border-[var(--md-outline-variant)] pt-4"
+                    >
+                        <h2 class="font-semibold">Project chats</h2>
+                        <form
+                            class="flex flex-col gap-2"
+                            @submit.prevent="
+                                run(() =>
+                                    moveChatToProject(
+                                        scope,
+                                        existingChatId,
+                                        id,
+                                    ),
+                                )
+                            "
+                        >
+                            <select
+                                v-model="existingChatId"
+                                required
+                                aria-label="Move existing chat"
+                                class="project-input"
+                            >
+                                <option value="">
+                                    Choose a chat to move into this project
+                                </option>
+                                <option
+                                    v-for="chat in allChats"
+                                    :key="chat.id"
+                                    :value="chat.id"
+                                >
+                                    {{ chat.title || chat.id }}
+                                </option></select
+                            ><UButton
+                                type="submit"
+                                label="Move into project"
+                                :disabled="busy"
+                            />
+                        </form>
+                        <p class="text-sm opacity-70">
+                            Excluded chats stay in the project but are not
+                            retrieved as memory. Open a chat and use Continue in
+                            new chat for a clean handoff.
+                        </p>
+                        <div
+                            v-for="chat in chats"
+                            :key="chat.id"
+                            role="group"
+                            :aria-label="chat.title || 'Chat'"
+                            class="flex flex-wrap items-center gap-2"
+                        >
+                            <button
+                                class="project-link min-w-0 basis-full text-left"
+                                @click="run(() => openChat(chat.id))"
+                            >
+                                {{ chat.title || 'Chat' }}</button
+                            ><UButton
+                                color="neutral"
+                                variant="ghost"
+                                :label="
+                                    state.settings.excluded_chat_ids.includes(
+                                        chat.id,
+                                    )
+                                        ? 'Include in memory'
+                                        : 'Exclude from memory'
+                                "
+                                @click="run(() => exclude(chat))"
+                            /><UButton
+                                color="neutral"
+                                variant="ghost"
+                                label="Remove"
+                                @click="
+                                    run(() =>
+                                        moveChatToProject(scope, chat.id, null),
+                                    )
+                                "
+                            />
+                        </div>
+                    </div>
                 </div>
-            </Or3Scroll>
+            </div>
         </template>
         <p v-else class="p-3 text-sm text-[var(--md-on-surface-variant)]">
             {{
@@ -1420,6 +1571,64 @@ function toolCannotScope(name: string) {
     </section>
 </template>
 <style scoped>
+.sidebar-projects-page {
+    --project-accent: var(--blank-brand-accent, var(--md-primary));
+}
+.project-muted {
+    color: var(--md-on-surface-variant);
+}
+.project-avatar {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--md-border-radius-medium, 12px);
+    background: color-mix(in srgb, var(--project-accent) 12%, transparent);
+    color: var(--project-accent);
+}
+.project-start {
+    width: 100%;
+    min-height: 38px;
+    justify-content: center;
+    background: color-mix(in srgb, var(--project-accent) 80%, #000);
+    color: #fff;
+}
+.project-start:hover {
+    background: color-mix(in srgb, var(--project-accent) 70%, #000);
+}
+.project-brief {
+    padding: 12px;
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-medium, 12px);
+    background: var(--md-surface-container-low);
+}
+.project-brief-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 24px;
+    padding: 2px 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--project-accent);
+}
+.project-section-label {
+    padding: 0 4px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--md-on-surface-variant);
+}
+.project-section-heading {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 20px;
+}
+.project-back {
+    justify-self: start;
+    margin-left: -6px;
+    margin-bottom: 7px;
+    color: var(--md-on-surface-variant);
+}
 .project-input {
     display: block;
     width: 100%;
