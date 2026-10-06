@@ -764,6 +764,7 @@ const orderedPages = computed(() => {
         DEFAULT_PAGE_ID,
         'sidebar-chats',
         'sidebar-docs',
+        'sidebar-projects-home',
     ]);
     return projectedPages.value.filter((page) => !hiddenPages.has(page.id));
 });

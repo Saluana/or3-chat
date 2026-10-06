@@ -133,12 +133,10 @@ import SidebarRenameEntityModal from '~/components/sidebar/SidebarRenameEntityMo
 import SidebarRenameProjectModal from '~/components/sidebar/SidebarRenameProjectModal.vue';
 import type { Project } from '~/db';
 import type {
-    ProjectEntry,
     ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type RenameTarget =
     | UnifiedSidebarItem
     | { id: string; title?: string; kind?: 'chat' | 'doc' }
@@ -167,7 +165,7 @@ const props = defineProps<{
         chats: boolean;
         docs: boolean;
     };
-    projects: SidebarProject[];
+    projects: Project[];
 }>();
 
 const emit = defineEmits<{

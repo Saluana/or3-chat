@@ -183,7 +183,6 @@ import { liveQuery } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { ThreadHasDescendantsError } from '~/db/threads';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
-import { parseFileHashes } from '~/db/files-util';
 import { useRuntimeConfig, useToast } from '#imports';
 import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
@@ -217,7 +216,6 @@ import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
 import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
 import {
     isDocumentPost,
-    type SidebarProject,
     type SidebarRenamePayload,
 } from '~/core/sidebar/sidebar-types';
 import { useResolvedSidebarSections } from '~/core/sidebar/sidebar-section-components';
@@ -268,7 +266,7 @@ interface SideNavContentInstance extends ComponentPublicInstance {
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
 const items = shallowRef<Thread[]>([]);
-const projects = shallowRef<SidebarProject[]>([]);
+const projects = shallowRef<Project[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
@@ -433,36 +431,16 @@ function bindWorkspaceQueries() {
         error: (err) => console.error('liveQuery error', err),
     });
     // Projects subscription (most recently updated first)
-    subProjects = liveQuery(async () => {
-        const currentProjects = await workspaceDb.projects
+    subProjects = liveQuery(() =>
+        workspaceDb.projects
             .orderBy('updated_at')
             .reverse()
             .filter((p: any) => !p.deleted)
-            .toArray();
-        return Promise.all(currentProjects.map(async project => {
-            const entries = normalizeProjectData(project.data);
-            const visible = await Promise.all(entries.map(async entry => {
-                const row = entry.kind === 'chat' ? await workspaceDb.threads.get(entry.id) : await workspaceDb.posts.get(entry.id);
-                if (!row || !isVisibleWorkspaceItem(row)) return null;
-                if (entry.kind !== 'chat') {
-                    if (!('postType' in row) || row.postType !== (entry.kind === 'file' ? 'or3:file' : 'doc')) return null;
-                    if (entry.kind === 'file') {
-                        const hashes = parseFileHashes(row.file_hashes);
-                        const meta = hashes.length === 1 ? await workspaceDb.file_meta.get(hashes[0]!) : undefined;
-                        if (!meta || meta.deleted) return null;
-                    }
-                }
-                return { ...entry, name: entry.name ?? row.title };
-            }));
-            return { ...project, data: visible.filter(entry => entry !== null) };
-        }));
-    }).subscribe({
+            .toArray(),
+    ).subscribe({
         next: (res) => {
             if (generation !== getWorkspaceGeneration()) return;
-            projects.value = res.map((p: Project) => ({
-                ...p,
-                data: normalizeProjectData(p.data),
-            }));
+            projects.value = res;
         },
         error: (err) => console.error('projects liveQuery error', err),
     });

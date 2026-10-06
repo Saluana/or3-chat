@@ -28,8 +28,30 @@ async function openAllProjects(page: Page) {
         exact: true,
     });
     if (await overview.isVisible()) await overview.click();
-    await projects
-        .getByRole('button', { name: 'All projects', exact: true })
+    const allProjects = projects.getByRole('button', {
+        name: 'All projects',
+        exact: true,
+    });
+    if (await allProjects.isVisible()) {
+        await allProjects.click();
+        return;
+    }
+    if (
+        await projects
+            .getByRole('heading', { name: 'Projects', exact: true })
+            .isVisible()
+    )
+        return;
+    const navigation = page.getByRole('complementary', {
+        name: 'Navigation',
+    });
+    await navigation
+        .getByRole('button', { name: 'Home', exact: true })
+        .first()
+        .click();
+    await navigation
+        .getByRole('button', { name: 'Projects', exact: true })
+        .filter({ hasText: 'View your projects' })
         .click();
 }
 async function openNoteComposer(page: Page) {
@@ -147,14 +169,20 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     );
     await page.goto('/chat');
     const welcome = page.getByRole('button', { name: 'Dismiss welcome' });
-    await expect(welcome).toBeVisible();
+    await expect(welcome).toBeVisible({ timeout: 60000 });
     await welcome.click();
-    const navigation = page.getByRole('complementary', { name: 'Navigation' });
-    const tabs = page.getByRole('tablist', { name: 'Open workspace tabs' });
+    const navigation = page.getByRole('complementary', {
+        name: 'Navigation',
+    });
+    const tabs = page.getByRole('tablist', {
+        name: 'Open workspace tabs',
+    });
     const projectsRail = navigation.locator('#btn-page-sidebar-projects-home');
-    await expect(projectsRail).toBeVisible();
+    await expect(projectsRail).toHaveCount(0);
     const originalTabs = await tabs.getByRole('tab').allTextContents();
-    await projectsRail.click();
+    await navigation
+        .getByRole('button', { name: 'Projects', exact: true })
+        .click();
     const projects = navigation.getByRole('region', {
         name: 'Projects',
         exact: true,
@@ -177,7 +205,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .getByRole('button', { name: 'Create project', exact: true })
         .click();
     await expect(
-        projects.getByRole('heading', { name: 'Sidebar project', exact: true }),
+        projects.getByRole('heading', {
+            name: 'Sidebar project',
+            exact: true,
+        }),
     ).toBeVisible();
     await projects
         .getByRole('button', { name: 'Settings', exact: true })
@@ -223,7 +254,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(defaultModel).toContainText('Sidebar test model');
     await expect(createPermission).toContainText('Ask first');
     await expect(
-        projects.getByRole('button', { name: 'Save changes', exact: true }),
+        projects.getByRole('button', {
+            name: 'Save changes',
+            exact: true,
+        }),
     ).toBeDisabled();
     await projects
         .getByRole('heading', { name: 'Settings', exact: true })
@@ -295,7 +329,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     });
     await navigation.getByText('Sidebar project', { exact: true }).click();
     await expect(
-        projects.getByRole('heading', { name: 'Sidebar project', exact: true }),
+        projects.getByRole('heading', {
+            name: 'Sidebar project',
+            exact: true,
+        }),
     ).toBeVisible();
     // Direct Home shortcuts return to Home; the full project list is a separate destination.
     await expect(
@@ -317,7 +354,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     ).toBeVisible();
     await projects.getByRole('button', { name: /Sidebar project/ }).click();
     await expect(
-        projects.getByRole('button', { name: 'All projects', exact: true }),
+        projects.getByRole('button', {
+            name: 'All projects',
+            exact: true,
+        }),
     ).toBeVisible();
     expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
     await expect(
@@ -344,7 +384,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         projects.getByRole('heading', { name: 'Knowledge', exact: true }),
     ).toBeVisible();
     await expect(
-        projects.getByRole('button', { name: 'All projects', exact: true }),
+        projects.getByRole('button', {
+            name: 'All projects',
+            exact: true,
+        }),
     ).toHaveCount(0);
     await expect(
         projects.getByRole('button', { name: 'Overview', exact: true }),
@@ -385,7 +428,9 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .getByRole('button', { name: 'Save memory', exact: true })
         .click();
     await expect(
-        projects.getByText('A saved memory remains editable.', { exact: true }),
+        projects.getByText('A saved memory remains editable.', {
+            exact: true,
+        }),
     ).toBeVisible();
     await projects
         .getByRole('button', { name: 'Edit memory', exact: true })
@@ -481,6 +526,137 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await navigation.screenshot({
         path: info.outputPath('project-settings-sidebar-dark.png'),
         animations: 'disabled',
+    });
+    // A large collection must keep Home and the full list's mounted work bounded.
+    const startedAt = Date.now();
+    await page.evaluate(async () => {
+        for (const database of await indexedDB.databases()) {
+            if (!database.name) continue;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                const request = indexedDB.open(database.name!);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            if (!db.objectStoreNames.contains('projects')) {
+                db.close();
+                continue;
+            }
+            const rows = await new Promise<any[]>((resolve, reject) => {
+                const request = db
+                    .transaction('projects')
+                    .objectStore('projects')
+                    .getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            if (!rows.some((row) => row.name === 'Sidebar project')) {
+                db.close();
+                continue;
+            }
+            await new Promise<void>((resolve, reject) => {
+                const transaction = db.transaction('projects', 'readwrite');
+                const store = transaction.objectStore('projects');
+                for (let i = 0; i < 2000; i++)
+                    store.put({
+                        id: `bulk-project-${i}`,
+                        name: `Bulk project ${i}`,
+                        description: null,
+                        data: Array.from({ length: 20 }, (_, j) => ({
+                            id: `missing-child-${i}-${j}`,
+                            kind: 'chat',
+                        })),
+                        created_at: 1,
+                        updated_at: 2000000000 + i,
+                        clock: 1,
+                        deleted: false,
+                    });
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error);
+            });
+            db.close();
+            return;
+        }
+        throw new Error('Native project database not found');
+    });
+    // Native fixture writes bypass Dexie's notifications. A normal project write
+    // refreshes the mounted queries through the same path as user-created data.
+    await openAllProjects(page);
+    await projects
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
+    await projects
+        .getByRole('textbox', { name: 'New project name' })
+        .fill('Collection refresh');
+    await projects
+        .getByRole('button', { name: 'Create project', exact: true })
+        .click();
+    await expect(
+        projects.getByRole('heading', {
+            name: 'Collection refresh',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await navigation
+        .getByRole('button', { name: 'Home', exact: true })
+        .first()
+        .click();
+    await expect(navigation.locator('[data-project-id]')).toHaveCount(5);
+    await expect(
+        navigation.locator('[data-project-id]').first(),
+    ).toHaveAttribute('data-project-id', 'bulk-project-1999');
+    const homeDurationMs = Date.now() - startedAt;
+    await navigation.screenshot({
+        path: info.outputPath('home-five-projects.png'),
+        animations: 'disabled',
+    });
+    await navigation
+        .getByRole('button', { name: 'Show more', exact: true })
+        .click();
+    await expect(
+        projects.getByRole('heading', { name: 'Projects', exact: true }),
+    ).toBeVisible();
+    await expect(
+        projects.getByRole('button', {
+            name: 'Bulk project 1999',
+            exact: true,
+        }),
+    ).toBeVisible();
+    const mountedProjectRows = await projects
+        .getByRole('button', { name: /^Bulk project / })
+        .count();
+    expect(mountedProjectRows).toBeGreaterThan(0);
+    expect(mountedProjectRows).toBeLessThan(80);
+    await search.fill('Bulk project 0');
+    await projects
+        .getByRole('button', { name: 'Bulk project 0', exact: true })
+        .click();
+    await expect(
+        projects.getByRole('heading', {
+            name: 'Bulk project 0',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await expect(
+        projects.getByRole('button', {
+            name: 'All projects',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await search.clear();
+    const receiptPath = info.outputPath('large-projects-receipt.json');
+    await writeFile(
+        receiptPath,
+        JSON.stringify({
+            projects: 2000,
+            legacyReferences: 40000,
+            homeRows: 5,
+            mountedProjectRows,
+            homeDurationMs,
+        }),
+    );
+    await info.attach('large-projects-receipt', {
+        contentType: 'application/json',
+        path: receiptPath,
     });
 });
 // Observable failures: lost settings on reload; one project leaking another's memories;
@@ -660,7 +836,10 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await expect(page.getByLabel('Edit saved decision')).toHaveCount(0);
     const path = info.outputPath('project-isolation.png');
     await page.screenshot({ path });
-    await info.attach('project-isolation', { path, contentType: 'image/png' });
+    await info.attach('project-isolation', {
+        path,
+        contentType: 'image/png',
+    });
     // Desktop persistence proof does not cover narrow layouts or keyboard inputs.
     await page.setViewportSize({ width: 390, height: 844 });
     await openProjectSection(page, 'Settings');
@@ -807,10 +986,7 @@ test('project A keeps its captured context while project B opens during streamin
     await expect(
         page.getByRole('button', { name: 'Stop generation' }),
     ).toBeVisible();
-    await page
-        .getByRole('button', { name: 'Projects', exact: true })
-        .first()
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: /Basil isolation project/ })
         .last()
@@ -897,7 +1073,9 @@ test('project chat submits only its captured context and persists the inspector'
         .last()
         .click();
     await expect(
-        page.getByText('Hello from deterministic stream.', { exact: true }),
+        page.getByText('Hello from deterministic stream.', {
+            exact: true,
+        }),
     ).toBeVisible({ timeout: 30000 });
     const requests = await page.evaluate(() =>
         JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'),
@@ -964,17 +1142,17 @@ test('project chat submits only its captured context and persists the inspector'
         contentType: 'application/json',
     });
     // Saving a response is an explicit, reviewed operation with real message provenance.
-    await page
-        .getByRole('button', { name: 'Projects', exact: true })
-        .first()
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: /Basil isolation project/ })
         .last()
         .click();
     const rememberAction = page
         .getByRole('group', { name: 'Message actions', exact: true })
-        .getByRole('button', { name: 'Remember for this project', exact: true })
+        .getByRole('button', {
+            name: 'Remember for this project',
+            exact: true,
+        })
         .last();
     await expect(rememberAction).toBeVisible();
     await expect(rememberAction).toHaveText('');
@@ -1006,10 +1184,7 @@ test('project chat submits only its captured context and persists the inspector'
         contentType: 'image/png',
     });
     // Ownership changes update actions without reloading or following sidebar state.
-    await page
-        .getByRole('button', { name: 'Projects', exact: true })
-        .first()
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: /Workspace fixture project/ })
         .last()
@@ -1049,6 +1224,7 @@ test('project chat submits only its captured context and persists the inspector'
     await expect(
         page.getByRole('dialog', { name: 'Save project memory' }),
     ).not.toBeVisible();
+    await expect(indicator).toBeVisible();
     await indicator.click();
     await rememberAction.scrollIntoViewIfNeeded();
     const actionPath = info.outputPath('project-memory-message-action.png');
@@ -1084,10 +1260,7 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
     expect(body).toContain('Saffron saved decision marker');
     expect(body).not.toContain('Basil secret isolation marker');
     expect(body).not.toContain('data:image/png');
-    await page
-        .getByRole('button', { name: 'Projects', exact: true })
-        .first()
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: /Workspace fixture project/ })
         .last()
@@ -1142,7 +1315,10 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
         })
         .click();
     await expect(
-        page.getByRole('button', { name: 'Review as brief', exact: true }),
+        page.getByRole('button', {
+            name: 'Review as brief',
+            exact: true,
+        }),
     ).toHaveCount(0);
     await info.attach('project-handoff-request', {
         body: JSON.stringify(requests, null, 2),

@@ -37,9 +37,27 @@ export async function ensureThreadHistoryLoaded(
         const generation = getWorkspaceGeneration();
         const { messages: visible } = await resolveThreadProjection(targetThreadId, db);
 
+        const storedById = new Map(visible.map((row) => [row.id, row]));
         const nextMessages = projectTranscriptForOpenRouter(
             storedMessagesToCanonicalTranscript(visible)
-        );
+        ).map((message) => {
+            const storedData = message.id ? storedById.get(message.id)?.data : undefined;
+            const data = storedData && typeof storedData === 'object'
+                ? storedData as Record<string, unknown>
+                : undefined;
+            // Provider history omits presentation metadata. Retain the saved
+            // receipt when navigation reloads the same canonical message.
+            return data?.project_context
+                ? {
+                      ...message,
+                      data: {
+                          ...message.data,
+                          project_context: data.project_context,
+                          project_context_iterations: data.project_context_iterations,
+                      },
+                  }
+                : message;
+        });
 
         // The database read can complete after navigation selects another
         // thread. Never commit an older thread's transcript into the new view.

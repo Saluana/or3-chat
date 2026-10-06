@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch, toRaw } from 'vue';
 import { liveQuery } from 'dexie';
+import { Or3Scroll } from 'or3-scroll';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { createThreadInDb } from '~/db/threads';
 import { prepareProjectWrite } from '~/db/projects';
@@ -13,6 +14,7 @@ import {
     deleteProjectRecord,
     saveProjectSource,
     moveChatToProject,
+    projectSettingsId,
 } from '~/db/project-workspace';
 import {
     captureProjectOperation,
@@ -34,6 +36,7 @@ import {
 import { useModelStore } from '~/composables/chat/useModelStore';
 import {
     defaultProjectSettings,
+    ProjectSettingsSchema,
     type ProjectSettings,
     type ProjectSource,
 } from '~~/shared/projects/workspace';
@@ -253,6 +256,17 @@ const filtered = computed(() =>
                 b.project.updated_at - a.project.updated_at,
         ),
 );
+const projectListItems = computed(() =>
+    filtered.value.map((entry, index, entries) => ({
+        ...entry,
+        heading:
+            index === 0 || entries[index - 1]?.pinned !== entry.pinned
+                ? entry.pinned
+                    ? 'Pinned'
+                    : 'Recent'
+                : '',
+    })),
+);
 function releasePreview() {
     if (previewImage.value) URL.revokeObjectURL(previewImage.value);
     previewImage.value = '';
@@ -288,16 +302,32 @@ function connect() {
         const rows = (await captured.db.projects.toArray()).filter(
             (p) => !p.deleted,
         );
-        const list = await Promise.all(
-            rows.map(async (project) => ({
-                project,
-                pinned: (await readProjectWorkspace(captured.db, project.id))
-                    .settings.pinned,
-            })),
+        // The list needs pin metadata, not every project's sources and memory.
+        const settingsRows = await captured.db.posts.bulkGet(
+            rows.map((project) => projectSettingsId(project.id)),
         );
-        const current = id.value
-            ? await readProjectWorkspace(captured.db, id.value)
-            : null;
+        const list = rows.map((project, index) => {
+            const settingsRow = settingsRows[index];
+            return {
+                project,
+                pinned:
+                    settingsRow && !settingsRow.deleted
+                        ? ProjectSettingsSchema.parse(
+                              JSON.parse(settingsRow.content),
+                          ).pinned
+                        : false,
+            };
+        });
+        if (!id.value)
+            return {
+                list,
+                current: null,
+                threads: [],
+                docs: [],
+                all: [],
+                files: [],
+            };
+        const current = await readProjectWorkspace(captured.db, id.value);
         const all = (await captured.db.threads.toArray()).filter(
             (t) => !t.deleted,
         );
@@ -806,23 +836,25 @@ function toolCannotScope(name: string) {
                     >
                 </div>
             </form>
-            <div
+            <Or3Scroll
                 v-if="filtered.length"
-                class="flex-1 min-h-0 overflow-y-auto sidebar-scroll"
+                :items="projectListItems"
+                :item-key="(entry) => entry.project.id"
+                :estimate-height="48"
+                :overscan="240"
+                mutation-mode="arbitrary"
+                :maintain-bottom="false"
+                role="list"
+                aria-label="Project list"
+                class="flex-1 min-h-0 sidebar-scroll px-2 pb-3"
             >
-                <ul class="px-2 pb-3">
-                    <li
-                        v-for="(entry, index) in filtered"
-                        :key="entry.project.id"
-                    >
+                <template #default="{ item: entry }">
+                    <div role="listitem">
                         <p
-                            v-if="
-                                index === 0 ||
-                                filtered[index - 1]?.pinned !== entry.pinned
-                            "
+                            v-if="entry.heading"
                             class="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--md-on-surface-variant)]"
                         >
-                            {{ entry.pinned ? 'Pinned' : 'Recent' }}
+                            {{ entry.heading }}
                         </p>
                         <div
                             class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item"
@@ -867,9 +899,9 @@ function toolCannotScope(name: string) {
                                 @click="run(() => pin(entry.project.id))"
                             />
                         </div>
-                    </li>
-                </ul>
-            </div>
+                    </div>
+                </template>
+            </Or3Scroll>
             <SidebarEmptyState
                 v-else
                 class="flex-1 min-h-0"

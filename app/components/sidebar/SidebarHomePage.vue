@@ -40,14 +40,19 @@
                         :icon="item.icon"
                         :accent="item.accent"
                         :class="item.class"
-                        @select="item.pageId === 'sidebar-projects-home' ? openProjectsSidebar() : setActivePage(item.pageId)"
+                        @select="
+                            item.pageId === 'sidebar-projects-home'
+                                ? openProjectsSidebar()
+                                : setActivePage(item.pageId)
+                        "
                     />
 
                     <!-- Projects Section -->
                     <SidebarProjectsSection
                         v-else-if="item.type === 'projects'"
                         class="pb-4"
-                        :projects="displayProjects"
+                        :projects="homeProjects"
+                        :has-more="displayProjects.length > 5"
                         :collapsed="projectsCollapsed"
                         :expanded-projects="expandedProjects"
                         :active-thread-ids="activeThreadIds"
@@ -56,6 +61,7 @@
                             projectsCollapsed = !projectsCollapsed
                         "
                         @new-project="emit('new-project')"
+                        @show-more="openProjectsSidebar()"
                         @update:expanded-projects="
                             (val) => emit('update:expandedProjects', val)
                         "
@@ -341,6 +347,7 @@ const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Project state
 const projectsCollapsed = ref(false);
+const homeProjects = computed(() => props.displayProjects.slice(0, 5));
 
 // Time grouping state
 const collapsedGroups = reactive(new Set<string>());
@@ -388,6 +395,7 @@ const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
 const iconProjects = useIcon('sidebar.folder');
 const { openProjectsSidebar } = useProjectSidebar();
+const { listSidebarPages } = useSidebarPages();
 
 // All active IDs for highlighting
 const allActiveIds = computed(() => [
@@ -478,21 +486,28 @@ const combinedItems = computed(() => {
     const navigationOrder = isMobile.value
         ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
         : resolvedWorkspaceProfile.value.navigation.items;
+    const pageOrder = [
+        ...navigationOrder.filter((id) => id !== 'sidebar-projects-home'),
+        'sidebar-projects-home',
+    ];
     pageLinks.sort(
         (left, right) =>
-            navigationOrder.indexOf(
-                left.type === 'page-link' ? left.pageId : ''
-            ) -
-            navigationOrder.indexOf(
-                right.type === 'page-link' ? right.pageId : ''
-            )
+            pageOrder.indexOf(left.type === 'page-link' ? left.pageId : '') -
+            pageOrder.indexOf(right.type === 'page-link' ? right.pageId : ''),
     );
     result.push(
         ...pageLinks.filter(
             (item) =>
                 item.type === 'page-link' &&
-                navigationOrder.includes(item.pageId)
-        )
+                (item.pageId === 'sidebar-projects-home'
+                    ? listSidebarPages.value.some(
+                          (page) => page.id === item.pageId,
+                      ) &&
+                      !resolvedWorkspaceProfile.value.navigation.hidden.includes(
+                          item.pageId,
+                      )
+                    : navigationOrder.includes(item.pageId)),
+        ),
     );
 
     // Projects section (single item that renders the whole section)

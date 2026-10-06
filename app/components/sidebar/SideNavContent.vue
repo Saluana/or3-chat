@@ -144,7 +144,7 @@ type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 const props = defineProps<{
     activeThread?: string;
     items: Thread[];
-    projects: SidebarProject[];
+    projects: Project[];
     expandedProjects: string[];
     docs: Post[];
     listHeight: number;
