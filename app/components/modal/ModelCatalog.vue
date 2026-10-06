@@ -319,7 +319,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { useToast } from '#imports';
 import { Or3Scroll } from 'or3-scroll';
@@ -470,25 +470,26 @@ const sortSelectProps = computed(() => {
 // Icons
 // ---------------------------------------------------------------------------
 
-const closeIcon = useIcon('ui.close').value;
-const refreshIcon = useIcon('ui.refresh').value;
-const checkIcon = useIcon('ui.check').value;
-const chevronDownIcon = useIcon('ui.chevron.down').value;
-const sparklesIcon = useIcon('catalog.sparkles').value;
-const searchIconUi = useIcon('ui.search').value;
+const closeIcon = useIcon('ui.close');
+const refreshIcon = useIcon('ui.refresh');
+const checkIcon = useIcon('ui.check');
+const chevronDownIcon = useIcon('ui.chevron.down');
+const sparklesIcon = useIcon('catalog.sparkles');
+const searchIconUi = useIcon('ui.search');
 
-const capabilityIcons: Record<CapabilityFilter, string> = {
+// Reactive maps unwrap the icon refs while retaining theme dependencies.
+const capabilityIcons: Record<CapabilityFilter, string> = reactive({
     all: '',
-    text: useIcon('catalog.text').value,
-    vision: useIcon('catalog.vision').value,
-    tools: useIcon('catalog.tools').value,
-    reasoning: useIcon('catalog.reasoning').value,
-    free: useIcon('catalog.coin').value,
-    embedding: useIcon('catalog.embedding').value,
-    'long-context': useIcon('catalog.context').value,
-    'image-output': useIcon('catalog.image').value,
-    json: useIcon('catalog.json').value,
-};
+    text: useIcon('catalog.text'),
+    vision: useIcon('catalog.vision'),
+    tools: useIcon('catalog.tools'),
+    reasoning: useIcon('catalog.reasoning'),
+    free: useIcon('catalog.coin'),
+    embedding: useIcon('catalog.embedding'),
+    'long-context': useIcon('catalog.context'),
+    'image-output': useIcon('catalog.image'),
+    json: useIcon('catalog.json'),
+});
 
 // ---------------------------------------------------------------------------
 // Data & search
@@ -537,7 +538,7 @@ interface ChipDef {
     icon: string;
 }
 
-const mainChips: ChipDef[] = [
+const mainChips = computed<ChipDef[]>(() => [
     { key: 'all', label: 'All', icon: '' },
     { key: 'text', label: 'Text', icon: capabilityIcons.text },
     { key: 'vision', label: 'Vision', icon: capabilityIcons.vision },
@@ -548,9 +549,9 @@ const mainChips: ChipDef[] = [
         icon: capabilityIcons.reasoning,
     },
     { key: 'free', label: 'Free', icon: capabilityIcons.free },
-];
+]);
 
-const moreChips: ChipDef[] = [
+const moreChips = computed<ChipDef[]>(() => [
     {
         key: 'embedding',
         label: 'Embedding',
@@ -567,7 +568,7 @@ const moreChips: ChipDef[] = [
         icon: capabilityIcons['image-output'],
     },
     { key: 'json', label: 'JSON mode', icon: capabilityIcons.json },
-];
+]);
 
 const sortItems: { label: string; value: CatalogSort }[] = [
     { label: 'Recommended', value: 'recommended' },
@@ -644,11 +645,11 @@ const selectedModel = computed<OpenRouterModel | undefined>(() => {
 });
 
 const isMoreChipActive = computed(() =>
-    moreChips.some((c) => c.key === capability.value)
+    moreChips.value.some((c) => c.key === capability.value)
 );
 
 const moreChipLabel = computed(() => {
-    const active = moreChips.find((c) => c.key === capability.value);
+    const active = moreChips.value.find((c) => c.key === capability.value);
     return active ? active.label : 'More';
 });
 

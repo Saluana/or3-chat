@@ -448,8 +448,8 @@ const copyButtonOverride = useThemeOverrides({
     isNuxtUI: true,
 });
 const copyIcon = useIcon('ui.copy');
-const chevronIcon = useIcon('ui.chevron.right').value;
-const checkIcon = useIcon('ui.check').value;
+const chevronIcon = useIcon('ui.chevron.right');
+const checkIcon = useIcon('ui.check');
 const copyButtonProps = computed(() => {
     return {
         size: 'sm' as const,
