@@ -184,7 +184,7 @@ import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/
 import { ThreadHasDescendantsError } from '~/db/threads';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
-import { useRuntimeConfig } from '#imports';
+import { useRuntimeConfig, useToast } from '#imports';
 import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { getActiveWorkspaceId } from '~/db/client';
@@ -200,6 +200,7 @@ import {
 import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -504,38 +505,20 @@ watch([projects, expandedProjects, sidebarFooterActions], () => {
 // --------------- Command palette project reveal ---------------
 const { open: openCommandPalette } = useCommandPalette();
 
-const REVEAL_CLASS = 'or3-project-revealed';
+const { openProjectSidebar } = useProjectSidebar();
+const projectNavigationToast = useToast();
 let stopRevealSubscription: (() => void) | null = null;
-let revealHighlightTimer: ReturnType<typeof setTimeout> | null = null;
-let revealedElement: HTMLElement | null = null;
-
-function clearRevealHighlight() {
-    if (revealHighlightTimer) clearTimeout(revealHighlightTimer);
-    revealHighlightTimer = null;
-    revealedElement?.classList.remove(REVEAL_CLASS);
-    revealedElement = null;
-}
-
 async function revealProject(projectId: string) {
     if (!projectId) return;
-    const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
-    const host = getPaletteHostContext();
-    if (host) { const result = await host.openPaneApp('or3-projects', projectId, 'active'); if (result.ok) return; }
-    if (!activeSections.value.projects) activeSections.value.projects = true;
-    if (!expandedProjects.value.includes(projectId)) {
-        expandedProjects.value = [...expandedProjects.value, projectId];
+    try {
+        await openProjectSidebar(projectId);
+    } catch (error) {
+        projectNavigationToast.add({
+            title: 'Project unavailable',
+            description: error instanceof Error ? error.message : 'Could not open project.',
+            color: 'error',
+        });
     }
-    await nextTick();
-    clearRevealHighlight();
-    const row = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-project-id]')
-    ).find((element) => element.dataset.projectId === projectId);
-    if (!row) return;
-    row.scrollIntoView({ block: 'nearest' });
-    // Transient highlight: the palette already navigated, this only orients the eye.
-    row.classList.add(REVEAL_CLASS);
-    revealedElement = row;
-    revealHighlightTimer = setTimeout(clearRevealHighlight, 2200);
 }
 
 onMounted(() => {
@@ -554,7 +537,6 @@ onUnmounted(() => {
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();
     stopRevealSubscription?.();
-    clearRevealHighlight();
 });
 
 const emit = defineEmits<{

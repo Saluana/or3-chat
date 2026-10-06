@@ -87,14 +87,23 @@
 </template>
 
 <script setup lang="ts">
-async function openHome() {
-    const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
-    const result = await getPaletteHostContext()?.openPaneApp('or3-projects', props.project.id, 'active');
-    if (result && !result.ok) useToast().add({ title: 'Project unavailable', description: result.error.message, color: 'error' });
-}
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
 import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
+const { openProjectSidebar } = useProjectSidebar();
+const toast = useToast();
+async function openHome() {
+    try {
+        await openProjectSidebar(props.project.id);
+    } catch (error) {
+        toast.add({
+            title: 'Project unavailable',
+            description: error instanceof Error ? error.message : 'Could not open project.',
+            color: 'error',
+        });
+    }
+}
 
 const iconExpand = useIcon('shell.expand');
 const iconCollapse = useIcon('shell.collapse');

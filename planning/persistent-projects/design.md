@@ -20,7 +20,7 @@ flowchart LR
 
 | Component | Responsibility and reuse | Requirements |
 | --- | --- | --- |
-| Project Home | Follow [Files registration](../../app/plugins/workspace-files.client.ts), pane/tab and profile registries; embed a project-scoped Files view. | R1 |
+| Project Home | Register a sidebar page using Chats/Documents navigation, shared search, list and empty-state styles; keep project details in the sidebar and use existing Files intake. Opening a project preserves the active pane and tabs. | R1 |
 | Project Store | Extend [project associations](../../app/utils/chat/workspace-projects.ts); own settings, explicit memories, and knowledge bindings. | R2, R3, R7 |
 | Source Intake | Extend [Files intake](../../app/db/workspace-files.ts), preview, bounded reads, and document history. | R2 |
 | Project Context Builder | Resolve immutable turn inputs before [native admission](../../app/composables/chat/useAi.ts); all project-bound inference paths call it. | R4 |

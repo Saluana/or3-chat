@@ -68,6 +68,128 @@ test.afterEach(async ({ page }, info) => {
         contentType: 'application/json',
     });
 });
+test('Projects stays in the sidebar while browsing, creating, pinning and searching', async ({
+    page,
+}, info) => {
+    await page.route('**openrouter.ai/**', (route) =>
+        route.fulfill({
+            json: { data: [], links: { next: null }, total_count: 0 },
+        }),
+    );
+    await page.goto('/chat');
+    const welcome = page.getByRole('button', { name: 'Dismiss welcome' });
+    await expect(welcome).toBeVisible();
+    await welcome.click();
+    const navigation = page.getByRole('complementary', { name: 'Navigation' });
+    const tabs = page.getByRole('tablist', { name: 'Open workspace tabs' });
+    await expect(
+        navigation.getByRole('button', { name: 'Projects', exact: true }),
+    ).toBeVisible();
+    const originalTabs = await tabs.getByRole('tab').allTextContents();
+    await navigation
+        .getByRole('button', { name: 'Projects', exact: true })
+        .click();
+    const projects = navigation.getByRole('region', {
+        name: 'Projects',
+        exact: true,
+    });
+    await expect(projects).toBeVisible();
+    await expect(
+        projects.getByRole('heading', { name: 'No projects yet' }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('textbox', { name: 'Message input' }),
+    ).toBeVisible();
+    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    await projects
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
+    await projects
+        .getByRole('textbox', { name: 'New project name' })
+        .fill('Sidebar project');
+    await projects
+        .getByRole('button', { name: 'Create project', exact: true })
+        .click();
+    await expect(
+        projects.getByRole('heading', { name: 'Sidebar project', exact: true }),
+    ).toBeVisible();
+    await projects
+        .getByRole('button', { name: 'Settings', exact: true })
+        .click();
+    await projects
+        .getByLabel('Instructions', { exact: true })
+        .fill('Sidebar instructions remain editable.');
+    await projects
+        .getByRole('button', { name: 'Save settings', exact: true })
+        .click();
+    await projects
+        .getByRole('button', { name: 'All projects', exact: true })
+        .click();
+    await projects
+        .getByRole('button', { name: 'Pin project', exact: true })
+        .click();
+    const search = navigation.getByRole('textbox', {
+        name: 'Search chats, documents, and projects',
+    });
+    await search.fill('Sidebar project');
+    await expect(
+        projects.getByRole('button', { name: /Sidebar project/ }),
+    ).toBeVisible();
+    await search.fill('Nothing matches');
+    await expect(
+        projects.getByRole('heading', { name: 'No matching projects' }),
+    ).toBeVisible();
+    await search.clear();
+    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    const bounds = await projects.boundingBox();
+    expect(bounds!.width).toBeLessThan(600);
+    await info.attach('sidebar-projects-receipt', {
+        contentType: 'application/json',
+        body: JSON.stringify({
+            originalTabs,
+            bounds,
+            assertions: [
+                'sidebar containment',
+                'active chat retained',
+                'no project pane/tab',
+                'create/save/pin/search',
+            ],
+        }),
+    });
+    const screenshot = info.outputPath('projects-sidebar.png');
+    await page.screenshot({ path: screenshot });
+    await info.attach('projects-sidebar', {
+        path: screenshot,
+        contentType: 'image/png',
+    });
+    await projects.getByRole('button', { name: 'Home', exact: true }).click();
+    await navigation.getByText('Sidebar project', { exact: true }).click();
+    await expect(
+        projects.getByRole('heading', { name: 'Sidebar project', exact: true }),
+    ).toBeVisible();
+    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    for (const section of [
+        'Overview',
+        'Chats',
+        'Knowledge',
+        'Memory',
+        'Settings',
+    ]) {
+        const control = await projects
+            .getByRole('button', { name: section, exact: true })
+            .boundingBox();
+        expect(control!.x).toBeGreaterThanOrEqual(bounds!.x);
+        expect(control!.x + control!.width).toBeLessThanOrEqual(
+            bounds!.x + bounds!.width,
+        );
+    }
+    const detail = info.outputPath('project-home-sidebar.png');
+    await page.screenshot({ path: detail });
+    await info.attach('project-home-sidebar', {
+        path: detail,
+        contentType: 'image/png',
+    });
+});
 // Observable failures: lost settings on reload; one project leaking another's memories;
 // worker startup, malformed DOCX/PDF handling; failed replacement losing the current source.
 function pdf(text: string) {
@@ -101,6 +223,9 @@ test('persistent projects retain settings, extract files, preserve failed replac
 }, info) => {
     test.setTimeout(180000);
     await page.goto('/__or3-projects-journey');
+    await page
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
     await expect(
         page.getByRole('heading', { name: 'Projects', exact: true }),
     ).toBeVisible({ timeout: 60000 });
@@ -140,9 +265,11 @@ test('persistent projects retain settings, extract files, preserve failed replac
     const source = page.locator('article').filter({ hasText: 'saffron.pdf' });
     await expect(source).toContainText('ready', { timeout: 45000 });
     await source.getByRole('button', { name: 'Preview', exact: true }).click();
-    await expect(page.locator('pre')).toContainText(
-        'Saffron PDF acceptance marker',
-    );
+    await expect(
+        page
+            .getByRole('region', { name: 'Projects', exact: true })
+            .locator('pre'),
+    ).toContainText('Saffron PDF acceptance marker');
     await source.getByRole('button', { name: 'Replace', exact: true }).click();
     await upload.setInputFiles({
         name: 'broken.pdf',
@@ -228,6 +355,9 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await page
         .getByRole('button', { name: 'All projects', exact: true })
         .click();
+    await page
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
     await page.getByRole('textbox', { name: 'New project name' }).fill('Basil');
     await page
         .getByRole('button', { name: 'Create project', exact: true })
@@ -274,6 +404,9 @@ test('project backup restores memories and extracted revision bytes', async ({
     });
     await page.goto('/__or3-projects-journey');
     await page
+        .getByRole('button', { name: 'New project', exact: true })
+        .click();
+    await page
         .getByRole('textbox', { name: 'New project name' })
         .fill('Backup project');
     await page
@@ -316,6 +449,9 @@ test('project backup restores memories and extracted revision bytes', async ({
         .getByRole('button', { name: 'Project workspace', exact: true })
         .click();
     await page
+        .getByRole('button', { name: 'All projects', exact: true })
+        .click();
+    await page
         .getByRole('button', { name: 'Backup project', exact: false })
         .first()
         .click();
@@ -339,6 +475,9 @@ test('project backup restores memories and extracted revision bytes', async ({
         .getByRole('button', { name: 'Project workspace', exact: true })
         .click();
     await page
+        .getByRole('button', { name: 'All projects', exact: true })
+        .click();
+    await page
         .getByRole('button', { name: 'Backup project', exact: false })
         .first()
         .click();
@@ -352,7 +491,11 @@ test('project backup restores memories and extracted revision bytes', async ({
         .filter({ hasText: 'retained.pdf' })
         .getByRole('button', { name: 'Preview', exact: true })
         .click();
-    await expect(page.locator('pre')).toContainText('Backup extraction marker');
+    await expect(
+        page
+            .getByRole('region', { name: 'Projects', exact: true })
+            .locator('pre'),
+    ).toContainText('Backup extraction marker');
 });
 
 test('project A keeps its captured context while project B opens during streaming', async ({
@@ -611,11 +754,9 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
         .getByRole('button', { name: 'Chats', exact: true })
         .last()
         .click();
-    const row = page.locator('div.flex.items-center.gap-3').filter({
-        has: page.getByRole('button', {
-            name: 'Compaction original evidence',
-            exact: true,
-        }),
+    const row = page.getByRole('group', {
+        name: 'Compaction original evidence',
+        exact: true,
     });
     await row
         .getByRole('button', { name: 'Exclude from memory', exact: true })

@@ -2,6 +2,8 @@
 
 Open **Projects** in the sidebar to search, pin, create, or return to a workspace. A project has an Overview, Chats, Knowledge, Memory, and Settings. Each chat has one owning project; opening another project does not change a turn already in progress.
 
+The project list and Project Home stay in the sidebar, using the same Home/New navigation and empty-state styling as Chats and Documents. Use the sidebar search to filter projects, **New project** to create one, and **Projects** in a project's header to return to the list. Browsing a project does not open a pane or workspace tab. Opening or creating a chat from the project uses the chat pane as usual.
+
 ## Knowledge
 
 Upload a PDF, DOCX, UTF-8 text/Markdown/CSV, or image, or add an existing saved file or OR3 document. Notes and saved answers can be saved as OR3 documents and added here. Files uses the same catalog and original bytes as the rest of OR3.

@@ -2,6 +2,8 @@
 
 Project metadata stays in the `projects` Dexie table. Persistent workspace policy reuses versioned internal `posts`; see [Work in a project](/documentation/start/projects).
 
+Client navigation uses `useProjectSidebar()` from `~/composables/sidebar/useProjectSidebar`. Call it during setup and use `openProjectSidebar(id)` to select the project and activate `sidebar-projects-home`. The returned `projectId` is UI state, resets on workspace changes, and never sets a chat's owning project. Project navigation does not register a pane application or open workspace tabs.
+
 ---
 
 ## What does it do?

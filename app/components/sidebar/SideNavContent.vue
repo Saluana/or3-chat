@@ -331,6 +331,9 @@ const activePageProps = computed(() => {
     // For chats/docs pages, pass required IDs
     return {
         ...pageControlProps,
+        ...(activePageId.value === 'sidebar-projects-home'
+            ? { sidebarQuery: props.sidebarQuery }
+            : {}),
         activeThreadIds: props.activeThreadIds,
         activeDocumentIds: props.activeDocumentIds,
     };
