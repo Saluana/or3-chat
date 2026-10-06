@@ -300,21 +300,39 @@ export function getContextLength(m: OpenRouterModel): number {
     return m.top_provider?.context_length ?? m.context_length ?? 0;
 }
 
+function parsePrice(raw: unknown): number | null {
+    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+    if (typeof raw === 'string' && !raw.trim()) return null;
+    const price = Number(raw);
+    return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+function totalPrice(model: OpenRouterModel): number | null {
+    const input = parsePrice(model.pricing?.prompt);
+    const output = parsePrice(model.pricing?.completion);
+    return input !== null && output !== null ? input + output : null;
+}
+
+function comparePrices(a: OpenRouterModel, b: OpenRouterModel, descending: boolean): number {
+    const first = totalPrice(a); const second = totalPrice(b);
+    if (first === null) return second === null ? 0 : 1;
+    if (second === null) return -1;
+    return descending ? second - first : first - second;
+}
+
 export function getInputPrice(m: OpenRouterModel): number {
-    return Number(m.pricing?.prompt ?? 0) || 0;
+    return parsePrice(m.pricing?.prompt) ?? 0;
 }
 
 export function getOutputPrice(m: OpenRouterModel): number {
-    return Number(m.pricing?.completion ?? 0) || 0;
+    return parsePrice(m.pricing?.completion) ?? 0;
 }
 
 export function getCapabilities(m: OpenRouterModel): ModelCapabilities {
     const inputMods = m.architecture?.input_modalities ?? ['text'];
     const outputMods = m.architecture?.output_modalities ?? ['text'];
     const params = m.supported_parameters ?? [];
-    const hasPricing =
-        m.pricing != null &&
-        (m.pricing.prompt != null || m.pricing.completion != null);
+    const hasPricing = totalPrice(m) !== null;
     const promptPrice = getInputPrice(m);
     const completionPrice = getOutputPrice(m);
     const ctx = getContextLength(m);
@@ -475,20 +493,10 @@ export function sortModels(
             );
             break;
         case 'price-asc':
-            copy.sort(
-                (a, b) =>
-                    getInputPrice(a) +
-                    getOutputPrice(a) -
-                    (getInputPrice(b) + getOutputPrice(b))
-            );
+            copy.sort((a, b) => comparePrices(a, b, false));
             break;
         case 'price-desc':
-            copy.sort(
-                (a, b) =>
-                    getInputPrice(b) +
-                    getOutputPrice(b) -
-                    (getInputPrice(a) + getOutputPrice(a))
-            );
+            copy.sort((a, b) => comparePrices(a, b, true));
             break;
         case 'context-desc':
             copy.sort((a, b) => getContextLength(b) - getContextLength(a));
@@ -535,8 +543,10 @@ export function countByProvider(models: OpenRouterModel[]): ProviderCount[] {
  * Accepts numbers or numeric strings. Defaults to USD.
  */
 export function formatPerMillion(raw: unknown, currency = 'USD'): string {
-    const perToken = Number(raw ?? 0) || 0;
+    const perToken = parsePrice(raw);
+    if (perToken === null) return '—';
     const perMillion = perToken * 1_000_000;
+    if (!Number.isFinite(perMillion)) return '—';
     try {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',

@@ -1191,6 +1191,13 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         const submittedLargeTexts = largeTextBlocks.value.slice();
         const submittedTabId = props.tabId; const submittedThreadId = props.threadId;
         const submittedWorkspaceGeneration = getWorkspaceGeneration();
+        const submittedSettings = {
+            model: selectedModel.value,
+            settings: { ...imageSettings.value },
+            modelVariant: modelVariant.value,
+            thinkingEnabled: thinkingEnabled.value && modelSupportsThinking.value,
+            reasoningEffort: thinkingEnabled.value && modelSupportsThinking.value ? reasoningEffort.value ?? null : null,
+        };
         try {
             const json = submittedEditorDoc ? structuredClone(submittedEditorDoc) : undefined;
             // Fire as an action to avoid transforming data; listeners can stash it
@@ -1201,23 +1208,20 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
             // Silently handle editor JSON dispatch failure
         }
 
+        if (componentDisposed || getWorkspaceGeneration() !== submittedWorkspaceGeneration
+            || props.tabId !== submittedTabId || props.threadId !== submittedThreadId) {
+            return { status: 'rejected', reason: 'filtered' };
+        }
+
         const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
         emit('send', {
             ...decision,
+            ...submittedSettings,
             editorDoc: submittedEditorDoc,
-            text: promptText.value,
-            images: attachments.value, // backward compatibility
-            attachments: attachments.value, // new unified field
-            largeTexts: largeTextBlocks.value,
-            model: selectedModel.value,
-            settings: imageSettings.value,
-            modelVariant: modelVariant.value,
-            thinkingEnabled:
-                thinkingEnabled.value && modelSupportsThinking.value,
-            reasoningEffort:
-                thinkingEnabled.value && modelSupportsThinking.value
-                    ? reasoningEffort.value ?? null
-                    : null,
+            text: submittedText,
+            images: submittedAttachments, // backward compatibility
+            attachments: submittedAttachments,
+            largeTexts: submittedLargeTexts,
             registerResult: (result, acceptance = result) => {
                 submission.result = result;
                 submission.acceptance = acceptance;

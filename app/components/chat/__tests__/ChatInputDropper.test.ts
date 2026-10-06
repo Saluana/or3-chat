@@ -92,9 +92,10 @@ vi.mock('~/utils/errors', () => ({
 }));
 
 const attachmentFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((value: unknown) => Promise<unknown>) }));
+const beforeSendAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
-        doAction: vi.fn().mockResolvedValue(undefined),
+        doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); }),
         applyFilters: vi.fn(async (name: string, value: unknown) => name === 'files.attach:filter:input' && attachmentFilter.apply ? attachmentFilter.apply(value) : value),
     }),
 }));
@@ -185,6 +186,7 @@ describe('ChatInputDropper', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         attachmentFilter.apply = undefined;
+        beforeSendAction.apply = undefined;
         vi.mocked(persistAttachment).mockResolvedValue(undefined);
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
@@ -192,6 +194,42 @@ describe('ChatInputDropper', () => {
         useWorkspaceTabDrafts().clear();
     });
 
+    it.each(['tab', 'workspace'] as const)('does not submit into another owner after a held before-send hook and %s transition', async transition => {
+        const client = process.client; process.client = true;
+        const entered = deferred<void>(); const gate = deferred<void>();
+        beforeSendAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId: 'source-tab', threadId: 'source' },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => payload.registerResult(Promise.resolve({ status: 'rejected', reason: 'busy' })) },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            const vm = wrapper.vm as unknown as { setText: (text: string) => void; triggerSend: () => Promise<SendResult> };
+            vm.setText('Source-only draft');
+            const send = vm.triggerSend(); await entered.promise;
+            if (transition === 'tab') await wrapper.setProps({ tabId: 'destination-tab', threadId: 'destination' });
+            else if (transition === 'workspace') setActiveWorkspaceDb(`composer-destination-${crypto.randomUUID()}`);
+            gate.resolve(); await send;
+            expect(wrapper.emitted('send')).toBeUndefined();
+        } finally { gate.resolve(); wrapper.unmount(); setActiveWorkspaceDb(null); process.client = client; }
+    });
+    it('submits the clicked draft while preserving edits made during a held before-send hook', async () => {
+        const client = process.client; process.client = true;
+        const entered = deferred<void>(); const gate = deferred<void>();
+        beforeSendAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, threadId: 'source' },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => payload.registerResult(Promise.resolve({ status: 'accepted', requestId: 'clicked', userMessageId: 'clicked' })) },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            const vm = wrapper.vm as unknown as { setText: (text: string) => void; triggerSend: () => Promise<SendResult> };
+            vm.setText('Clicked draft'); const send = vm.triggerSend(); await entered.promise;
+            vm.setText('Next unsent draft'); gate.resolve(); await send;
+            expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Clicked draft' });
+            beforeSendAction.apply = undefined;
+            await vm.triggerSend();
+            expect(wrapper.emitted('send')?.[1]?.[0]).toMatchObject({ text: 'Next unsent draft' });
+        } finally { gate.resolve(); wrapper.unmount(); process.client = client; }
+    });
     it('captures a fresh source draft when tab navigation overlaps asynchronous composer settings restoration', async () => {
         const settings = deferred<void>();
         mockEnsureAiSettingsLoaded.mockReturnValue(settings.promise);

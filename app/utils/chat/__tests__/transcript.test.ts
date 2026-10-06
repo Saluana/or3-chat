@@ -23,6 +23,21 @@ const row = (input: Partial<Message> & Pick<Message, 'id' | 'role' | 'index'>): 
 });
 
 describe('canonical transcript projections', () => {
+    it('keeps reused tool-call IDs paired with their own assistant across turns and branches', () => {
+        const assistant = (id: string, index: number, result: string) => row({ id, role: 'assistant', index,
+            data: { content: id, tool_calls: [{ id: 'call-0', name: 'lookup', args: '{}', status: 'complete', result }] } });
+        const records = storedMessagesToCanonicalTranscript([
+            assistant('a1', 1, 'First saved result'),
+            row({ id: 't1', role: 'tool', index: 2, data: { parent_assistant_id: 'a1', tool_call_id: 'call-0', tool_name: 'lookup', content: 'First durable result' } }),
+            assistant('a2', 3, 'Second saved result'),
+            { ...row({ id: 't-other', role: 'tool', index: 4, data: { parent_assistant_id: 'a2', tool_call_id: 'call-0', tool_name: 'lookup', content: 'Foreign result' } }), thread_id: 'other-thread' },
+        ]);
+        expect(records[0]?.toolCalls[0]?.result).toBe('First durable result');
+        expect(records[2]?.toolCalls[0]?.result).toBe('Second saved result');
+        const wire = projectTranscriptForOpenRouter(records);
+        expect(wire.find(message => message.id === 'a2:tool-result:call-0')?.content).toBe('Second saved result');
+        expect(projectTranscriptForUi(records).find(message => message.id === 'a2')?.toolResultMessageIds).toBeUndefined();
+    });
     // Background and legacy turns can retain results on the assistant only.
     // Losing those results makes the next provider request invalid; emitting
     // them twice when durable tool rows exist is invalid too.

@@ -395,6 +395,7 @@
                         <UButton
                             v-bind="branchButtonProps"
                             aria-label="Branch conversation"
+                            :disabled="props.message.pending === true || branching"
                             @click="onBranch"
                         ></UButton>
                     </UTooltip>
@@ -1031,7 +1032,7 @@ const branchTitle = ref('');
 const branching = ref(false);
 
 async function onBranch() {
-    if (branching.value) return;
+    if (branching.value || props.message.pending) return;
     branching.value = true;
     const messageId = props.message.id;
     const originThreadId = props.threadId || '';

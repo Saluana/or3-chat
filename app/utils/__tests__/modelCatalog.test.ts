@@ -89,6 +89,11 @@ describe('getCapabilities', () => {
     it('detects free models', () => {
         const m = makeModel({ pricing: { prompt: '0', completion: '0' } });
         expect(getCapabilities(m).free).toBe(true);
+        for (const prompt of [undefined, '', 'invalid', '-1']) {
+            const unknown = makeModel({ pricing: { prompt, completion: '0' } });
+            expect(getCapabilities(unknown).free).toBe(false);
+            expect(getCapabilities(unknown).costEffective).toBe(false);
+        }
     });
 
     it('detects cost effective models', () => {
@@ -169,11 +174,13 @@ describe('sortModels', () => {
     });
 
     it('price ascending', () => {
-        expect(sortModels([a, b], 'price-asc').map((m) => m.name)).toEqual(['Beta', 'Alpha']);
+        const unknown = makeModel({ name: 'Unknown', pricing: { prompt: '-1', completion: '-1' } });
+        expect(sortModels([a, unknown, b], 'price-asc').map((m) => m.name)).toEqual(['Beta', 'Alpha', 'Unknown']);
     });
 
     it('price descending', () => {
-        expect(sortModels([a, b], 'price-desc').map((m) => m.name)).toEqual(['Alpha', 'Beta']);
+        const unknown = makeModel({ name: 'Unknown', pricing: { prompt: '-1', completion: '-1' } });
+        expect(sortModels([a, unknown, b], 'price-desc').map((m) => m.name)).toEqual(['Alpha', 'Beta', 'Unknown']);
     });
 
     it('context descending', () => {
@@ -239,7 +246,9 @@ describe('formatting', () => {
     it('formatPerMillion', () => {
         expect(formatPerMillion('0.000003')).toBe('$3.00');
         expect(formatPerMillion(0)).toBe('$0.00');
-        expect(formatPerMillion(undefined)).toBe('$0.00');
+        for (const unknown of [undefined, null, '', 'invalid', '-1', -1, Infinity, NaN]) {
+            expect(formatPerMillion(unknown)).toBe('—');
+        }
     });
 
     it('formatTokenCount', () => {

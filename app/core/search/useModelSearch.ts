@@ -16,7 +16,7 @@
  * Constraints:
  * - Client-only (`process.client` guard on index build)
  * - Orama is dynamically imported to keep it off the critical path
- * - Module-level singleton index (`currentDb`) is shared across instances
+ * - Each catalog owns its index and pending searches
  * - Index is rebuilt only when `models.value.length` changes
  *
  * Non-goals:
@@ -26,7 +26,7 @@
  * @see core/search/orama for the Orama wrapper utilities
  * @see core/auth/models-service for the model catalog source
  */
-import { ref, watch, type Ref } from 'vue';
+import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import {
     createDb,
@@ -49,13 +49,11 @@ interface ModelDoc {
 
 // Orama instance type (opaque to avoid @orama/orama type dependency)
 type OramaInstance = Record<string, unknown>;
-let currentDb: OramaInstance | null = null;
-let lastQueryToken = 0;
 
 async function buildIndex(
     models: OpenRouterModel[]
 ): Promise<OramaInstance | null> {
-    currentDb = (await createDb({
+    const db = (await createDb({
         id: 'string',
         slug: 'string',
         name: 'string',
@@ -63,7 +61,7 @@ async function buildIndex(
         ctx: 'number',
         modalities: 'string',
     })) as OramaInstance | null;
-    if (!currentDb) return null;
+    if (!db) return null;
     const docs: ModelDoc[] = models.map((m) => ({
         id: m.id,
         slug: m.canonical_slug || m.id,
@@ -75,8 +73,8 @@ async function buildIndex(
             ...(m.architecture?.output_modalities || []),
         ].join(' '),
     }));
-    await buildOramaIndex(currentDb, docs);
-    return currentDb;
+    await buildOramaIndex(db, docs);
+    return db;
 }
 
 /**
@@ -90,42 +88,55 @@ async function buildIndex(
  *
  * Constraints:
  * - Client-only indexing
- * - Index is a module-level singleton shared across composable instances
+ * - Index and search lifetimes belong to the calling catalog
  */
 export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     const query = ref('');
     const results = ref<OpenRouterModel[]>([]);
     const ready = ref(false);
     const busy = ref(false);
-    const lastIndexedCount = ref(0);
-    const idToModel = ref<Record<string, OpenRouterModel>>({});
+    let currentDb: OramaInstance | null = null;
+    let lastIndexedCount = -1;
+    let lastQueryToken = 0;
+    let disposed = false;
+    let indexBuild: Promise<void> | null = null;
+    const idToModel = computed<Record<string, OpenRouterModel>>(() => Object.fromEntries(models.value.map(model => [model.id, model])));
 
     async function ensureIndex() {
-        if (!process.client) return;
-        if (busy.value) return;
-        if (models.value.length === lastIndexedCount.value && currentDb) return;
-        busy.value = true;
-        try {
-            idToModel.value = Object.fromEntries(
-                models.value.map((m) => [m.id, m])
-            );
-            await buildIndex(models.value);
-            lastIndexedCount.value = models.value.length;
-            ready.value = true;
-        } finally {
-            busy.value = false;
-        }
+        if (!process.client || disposed) return;
+        if (indexBuild) return await indexBuild;
+        if (models.value.length === lastIndexedCount) return;
+        indexBuild = (async () => {
+            busy.value = true;
+            try {
+                while (!disposed && models.value.length !== lastIndexedCount) {
+                    const snapshot = models.value.slice();
+                    let db: OramaInstance | null = null;
+                    try { db = await buildIndex(snapshot); }
+                    catch (error) { console.warn('[useModelSearch] Using substring search; index unavailable:', error); }
+                    if (disposed) return;
+                    if (snapshot.length !== models.value.length) continue;
+                    currentDb = db;
+                    lastIndexedCount = snapshot.length;
+                }
+            } finally { busy.value = false; }
+        })();
+        try { await indexBuild; }
+        finally { indexBuild = null; }
     }
 
-    async function runSearch() {
-        if (!currentDb) await ensureIndex();
-        if (!currentDb) return;
+    const fallbackSearch = (raw: string) => {
+        const lower = raw.toLowerCase();
+        return models.value.filter(model => `${model.id}\n${model.canonical_slug ?? ''}\n${model.name}\n${model.description ?? ''}`.toLowerCase().includes(lower)).slice(0, 100);
+    };
+    async function runSearch(token: number) {
+        if (disposed || token !== lastQueryToken) return;
         const raw = query.value.trim();
+        ready.value = true;
         if (!raw) {
             results.value = models.value;
             return;
         }
-        const token = ++lastQueryToken; // race guard
         // Model identifiers use punctuation where display names use spaces.
         // Prefer those literal names/IDs before broad full-text description
         // matches consume the result limit and bury the requested model.
@@ -138,9 +149,12 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
             results.value = named.slice(0, 100);
             return;
         }
+        results.value = fallbackSearch(raw);
+        await ensureIndex();
+        if (disposed || token !== lastQueryToken || !currentDb) return;
         try {
             const r = await searchWithIndex(currentDb, raw, 100);
-            if (token !== lastQueryToken) return; // stale response
+            if (disposed || token !== lastQueryToken) return;
             const hits = (Array.isArray(r.hits) ? r.hits : []) as Array<{
                 document?: { id?: string };
                 id?: string;
@@ -155,26 +169,10 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
                     (m: OpenRouterModel | undefined): m is OpenRouterModel =>
                         !!m
                 );
-            if (!mapped.length) {
-                // Fallback basic substring search (ensures non-blank results if index returns nothing)
-                const ql = raw.toLowerCase();
-                results.value = models.value.filter((m) => {
-                    const hay = `${m.id}\n${m.canonical_slug || ''}\n${
-                        m.name || ''
-                    }\n${m.description || ''}`.toLowerCase();
-                    return hay.includes(ql);
-                });
-            } else {
-                results.value = mapped;
-            }
+            results.value = mapped.length ? mapped : fallbackSearch(raw);
         } catch (err) {
-            const ql = raw.toLowerCase();
-            results.value = models.value.filter((m) => {
-                const hay = `${m.id}\n${m.canonical_slug || ''}\n${
-                    m.name || ''
-                }\n${m.description || ''}`.toLowerCase();
-                return hay.includes(ql);
-            });
+            if (disposed || token !== lastQueryToken) return;
+            results.value = fallbackSearch(raw);
 
             console.warn(
                 '[useModelSearch] Fallback substring search used:',
@@ -183,18 +181,21 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         }
     }
 
-    watch(models, async () => {
-        await ensureIndex();
-        await runSearch();
-    });
+    watch(models, () => {
+        const token = ++lastQueryToken;
+        void ensureIndex();
+        void runSearch(token);
+    }, { immediate: true });
 
     let searchTimeout: ReturnType<typeof setTimeout> | undefined;
     watch(query, () => {
+        const token = ++lastQueryToken;
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            void runSearch();
+            void runSearch(token);
         }, 120);
-    });
+    }, { flush: 'sync' });
+    onScopeDispose(() => { disposed = true; lastQueryToken++; clearTimeout(searchTimeout); });
 
     return { query, results, ready, busy, rebuild: ensureIndex };
 }

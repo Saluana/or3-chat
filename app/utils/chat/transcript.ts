@@ -245,6 +245,10 @@ export function messageToCanonicalTranscript(
     };
 }
 
+function toolResultKey(threadId: string, parentAssistantId: string | undefined, callId: string): string {
+    return JSON.stringify([threadId, parentAssistantId, callId]);
+}
+
 /** Reconciles completed tool rows into their parent assistant call state. */
 export function reconcileTranscriptToolState(
     records: CanonicalTranscriptRecord[]
@@ -252,14 +256,14 @@ export function reconcileTranscriptToolState(
     const resultByCall = new Map(
         records
             .filter((record) => record.kind === 'tool_result' && record.callId)
-            .map((record) => [record.callId!, record])
+            .map((record) => [toolResultKey(record.threadId, record.parentAssistantId, record.callId!), record])
     );
     return records.map((record) => {
         if (record.kind !== 'assistant' || !record.toolCalls.length) return record;
         return {
             ...record,
             toolCalls: record.toolCalls.map((call) => {
-                const result = resultByCall.get(call.callId);
+                const result = resultByCall.get(toolResultKey(record.threadId, record.id, call.callId));
                 if (!result) return call;
                 return {
                     ...call,
@@ -276,7 +280,7 @@ export function projectTranscriptForOpenRouter(
     input: CanonicalTranscriptRecord[]
 ): ChatMessage[] {
     const durableResults = new Set(input.filter((record) => record.kind === 'tool_result' && record.callId)
-        .map((record) => `${record.threadId}\0${record.callId}`));
+        .map((record) => toolResultKey(record.threadId, record.parentAssistantId, record.callId!)));
     return reconcileTranscriptToolState(input).flatMap((record) => {
         const toolCalls: ToolCall[] | undefined = record.toolCalls.length
             ? record.toolCalls.map((call) => ({
@@ -328,7 +332,7 @@ export function projectTranscriptForOpenRouter(
         const embeddedResults: ChatMessage[] = record.kind === 'assistant'
             ? record.toolCalls.filter((call) => typeof call.result === 'string'
                 && (call.status === 'complete' || call.status === 'error')
-                && !durableResults.has(`${record.threadId}\0${call.callId}`))
+                && !durableResults.has(toolResultKey(record.threadId, record.id, call.callId)))
                 .map((call) => ({ id: `${record.id}:tool-result:${call.callId}`, role: 'tool',
                     content: call.result!, name: call.name, tool_call_id: call.callId,
                     data: { parent_assistant_id: record.id, tool_call_id: call.callId, tool_name: call.name } }))

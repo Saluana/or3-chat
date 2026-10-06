@@ -26,6 +26,37 @@ beforeEach(async () => {
 afterEach(async () => { const name = getDb().name; setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(name); setHookEngine(null); });
 
 describe('ordinary forks after compaction', () => {
+    it('copies the complete visible reference history and remaps tool and turn ownership', async () => {
+        const base = { pending: false, deleted: false, created_at: 2, updated_at: 2, clock: 1 };
+        await getDb().messages.bulkPut([
+            { ...base, id: 'question', thread_id: 'root', role: 'user', index: 0, data: { content: 'Remember AMBER.', turn_id: 'question' } },
+            { ...base, id: 'lookup', thread_id: 'root', role: 'assistant', index: 1, data: { content: 'Checking', turn_id: 'question', parent_turn_id: 'question',
+                tool_calls: [{ id: 'call-0', name: 'lookup', args: '{}', status: 'complete', result: 'AMBER', transcript: { parentAssistantId: 'lookup', turnId: 'question' } }] } },
+            { ...base, id: 'receipt', thread_id: 'root', role: 'tool', index: 2, data: { content: 'AMBER', turn_id: 'question', parent_turn_id: 'lookup', parent_assistant_id: 'lookup', tool_call_id: 'call-0', tool_name: 'lookup' } },
+            { ...base, id: 'answer', thread_id: 'root', role: 'assistant', index: 3, data: { content: 'The code is AMBER.', turn_id: 'question', parent_turn_id: 'question' } },
+            { ...base, id: 'deleted', thread_id: 'root', role: 'user', index: 2.5, deleted: true, data: { content: 'Deleted secret' } },
+        ]);
+        const reference = (await anchoredFork({ sourceThreadId: 'root', anchorMessageId: 'answer' })).thread;
+        await getDb().messages.put({ ...base, id: 'followup', thread_id: reference.id, role: 'user', index: 0, data: { content: 'Continue', turn_id: 'followup' } });
+        const copy = (await anchoredFork({ sourceThreadId: reference.id, anchorMessageId: 'followup', mode: 'copy' })).thread;
+        const messages = await getDb().messages.where('thread_id').equals(copy.id).sortBy('index');
+        expect(messages.map(message => (message.data as { content: string }).content)).toEqual(['Remember AMBER.', 'Checking', 'AMBER', 'The code is AMBER.', 'Continue']);
+        const [question, lookup, receipt, answer, followup] = messages;
+        expect(question?.data).toMatchObject({ turn_id: question!.id });
+        expect(lookup?.data).toMatchObject({ turn_id: question!.id, parent_turn_id: question!.id,
+            tool_calls: [{ transcript: { parentAssistantId: lookup!.id, turnId: question!.id } }] });
+        expect(receipt?.data).toMatchObject({ turn_id: question!.id, parent_turn_id: lookup!.id, parent_assistant_id: lookup!.id });
+        expect(answer?.data).toMatchObject({ turn_id: question!.id, parent_turn_id: question!.id });
+        expect(followup?.data).toMatchObject({ turn_id: followup!.id });
+        expect(await getDb().messages.get('receipt')).toMatchObject({ data: { parent_assistant_id: 'lookup' } });
+    });
+    it('rejects copying a streaming turn without creating a stranded branch', async () => {
+        await getDb().messages.put({ id: 'streaming', thread_id: 'root', role: 'assistant', index: 2,
+            data: { content: 'Partial', background_job_id: 'live-job' }, pending: true, deleted: false, created_at: 2, updated_at: 2, clock: 1 });
+        const count = await getDb().threads.count();
+        await expect(anchoredFork({ sourceThreadId: 'root', anchorMessageId: 'streaming', mode: 'copy' })).rejects.toThrow(/finish|streaming|pending/i);
+        expect(await getDb().threads.count()).toBe(count);
+    });
     it.each(['anchored', 'legacy'] as const)('clears summary-only pointers and stamps the real legacy root through %s fork', async (api) => {
         const child = api === 'anchored' ? (await anchoredFork({ sourceThreadId: 'compacted', anchorMessageId: 'own-anchor' })).thread
             : await ordinaryFork('compacted');

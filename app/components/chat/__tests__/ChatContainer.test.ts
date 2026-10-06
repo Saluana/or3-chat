@@ -609,6 +609,9 @@ describe('ChatContainer', () => {
             ).toBe('pending');
 
             instance.streamState.reasoningText = 'Considering options';
+            // Stream handlers clear the empty-response flag on first content;
+            // the rendered generation must remain active until finalization.
+            instance.tailAssistant.value!.pending = false;
             await nextTick();
             await nextTick();
             expect(
@@ -616,7 +619,7 @@ describe('ChatContainer', () => {
             ).toBe('Considering options');
             expect(
                 rowFor(wrapper, 'tail-1').find('.test-pending').text()
-            ).toBe('settled');
+            ).toBe('pending');
 
             instance.streamState.text = 'abcd';
             await nextTick();
@@ -626,7 +629,7 @@ describe('ChatContainer', () => {
             );
             expect(
                 rowFor(wrapper, 'tail-1').find('.test-pending').text()
-            ).toBe('settled');
+            ).toBe('pending');
 
             // Same-length replacement must still refresh the mounted row.
             instance.streamState.text = 'wxyz';

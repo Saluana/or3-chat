@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { effectScope, nextTick, ref, type EffectScope } from 'vue';
+import type { OpenRouterModel } from '~/core/auth/models-service';
 
 // Mock Orama module
 const mockOramaModule = {
@@ -267,5 +269,47 @@ describe('Orama search helpers', () => {
             );
             expect(result).toBe('doc-1');
         });
+    });
+});
+
+describe('model search lifecycle', () => {
+    let scope: EffectScope;
+    const client = process.client;
+    const model = (id: string, description: string) => ({ id, name: id, description }) as OpenRouterModel;
+    beforeEach(() => {
+        vi.resetModules(); vi.resetAllMocks(); vi.useFakeTimers();
+        process.client = true;
+        vi.doMock('@orama/orama', () => mockOramaModule);
+        mockOramaModule.create.mockResolvedValue({});
+        mockOramaModule.insertMultiple.mockResolvedValue(undefined);
+        mockOramaModule.search.mockResolvedValue({ hits: [] });
+        scope = effectScope();
+    });
+    afterEach(() => { scope.stop(); process.client = client; vi.useRealTimers(); });
+    it.each(['unavailable', 'failed'] as const)('lists and searches models when the optional index is %s', async failure => {
+        if (failure === 'unavailable') mockOramaModule.create.mockResolvedValue(null);
+        else mockOramaModule.create.mockRejectedValue(new Error('Index failed to load'));
+        const { useModelSearch } = await import('../useModelSearch');
+        const models = ref([model('first', 'amber capabilities'), model('second', 'cobalt capabilities')]);
+        const search = scope.run(() => useModelSearch(models))!;
+        await expect(search.rebuild()).resolves.toBeUndefined();
+        search.query.value = 'amber'; await nextTick(); await vi.advanceTimersByTimeAsync(120);
+        expect(search.results.value.map(model => model.id)).toEqual(['first']);
+        search.query.value = ''; await nextTick(); await vi.advanceTimersByTimeAsync(120);
+        expect(search.results.value.map(model => model.id)).toEqual(['first', 'second']);
+    });
+    it.each(['resolve', 'reject'] as const)('ignores an older search that %ss after the query is cleared', async completion => {
+        let resolve!: (value: unknown) => void; let reject!: (error: Error) => void;
+        const held = new Promise((res, rej) => { resolve = res; reject = rej; });
+        mockOramaModule.search.mockReturnValue(held);
+        const { useModelSearch } = await import('../useModelSearch');
+        const search = scope.run(() => useModelSearch(ref([model('first', 'amber'), model('second', 'cobalt')])))!;
+        await search.rebuild(); search.query.value = 'amber'; await nextTick(); await vi.advanceTimersByTimeAsync(120);
+        expect(mockOramaModule.search).toHaveBeenCalled();
+        search.query.value = ''; await nextTick(); await vi.advanceTimersByTimeAsync(120);
+        expect(search.results.value).toHaveLength(2);
+        if (completion === 'resolve') resolve({ hits: [{ id: 'first' }] }); else reject(new Error('Index unavailable'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(search.results.value.map(model => model.id)).toEqual(['first', 'second']);
     });
 });

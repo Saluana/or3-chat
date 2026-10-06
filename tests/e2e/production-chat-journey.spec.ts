@@ -1259,10 +1259,12 @@ test.describe('production chat journey', () => {
 
         await expect(page.getByText('Partial response before stop.'))
             .toBeVisible();
+        await expect(page.getByRole('button', { name: 'Branch conversation', exact: true }).last()).toBeDisabled();
         await page.getByRole('button', { name: 'Stop generation' }).click();
         await expect(
             page.getByRole('button', { name: 'Send message' })
         ).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Branch conversation', exact: true }).last()).toBeEnabled();
         await page.waitForTimeout(1_400);
         await expect(page.getByText(/Late response that must be ignored/))
             .toHaveCount(0);

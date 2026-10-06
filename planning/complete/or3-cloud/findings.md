@@ -14,6 +14,14 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- A code-review follow-up now guards composer ownership across asynchronous
+  hooks, keeps active streamed replies pending, copies inherited reference
+  history with remapped turn/tool ownership, scopes reused tool-call results
+  to their parent assistant, and preserves model search fallback/lifetimes.
+  Invalid catalog prices no longer appear negative or qualify as free.
+  The follow-up passed 22 browser journeys and live Chrome branch/tool/reload
+  continuation; evidence and remaining limits are recorded in
+  [the chat reliability report](../or3-cloud-production-readiness/chat-reliability-2026-10-05.md#code-only-review-follow-up).
 - Basic-chat reliability fixes now preserve failed turns, replay embedded tool
   results (including nested failure transcripts), omit empty/invalid-role tool
   calls, refresh expired cached authorization before background client tools,

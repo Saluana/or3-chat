@@ -539,7 +539,9 @@ const streamingMessage = computed<UiChatMessage | null>(() => {
         ...base,
         text,
         reasoning_text: reasoning,
-        pending: base.pending && !(text || reasoning),
+        // First content hides the empty-response loader, but the stream still
+        // owns this row until finalization. Keep parsing and actions pending.
+        pending: true,
         stream_id: streamId.value, // Ensure stream_id is present for keying
     };
 });

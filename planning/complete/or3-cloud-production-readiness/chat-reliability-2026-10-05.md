@@ -102,3 +102,83 @@ attachments are preserved in `final-regression-proof/`.
   personal OpenRouter key; its sidebar now shows the configured instance key.
 - An unrelated dev process was observed on port 3114. It was not stopped or
   modified by this pass; browser regression generation was isolated instead.
+
+## Code-only review follow-up
+
+The subsequent review found and repaired six additional causes:
+
+- Model search could return no results when optional index creation failed,
+  or let an older asynchronous response overwrite a cleared query. Catalogs
+  now own their search lifetime, publish completed indexes, invalidate stale
+  work and retain capped substring results when indexing is unavailable.
+- A held `before_send` hook could submit into a different tab/workspace or
+  send text edited after the click. Submission now checks its original owner
+  after the hook and uses the captured draft and settings. Later unsent edits
+  remain in the composer.
+- Copying a reference branch copied only its physically owned rows, losing
+  inherited history. Copies now use the visible history projection and remap
+  turn and assistant ownership, including nested tool transcripts. Deleted
+  rows stay excluded; in-flight copies are rejected transactionally.
+- Reused provider tool-call IDs could pair results from another assistant or
+  branch, and suppress the correct embedded result. Reconciliation and replay
+  now identify results by thread, parent assistant and call ID together.
+- Invalid catalog pricing, including the live `-1` sentinel, appeared as a
+  negative price or qualified as free. Unknown prices now display `—`, do not
+  qualify as free/cost-effective, and sort after known prices.
+- The rendered reply became settled at the first streamed content, enabling
+  Branch and finalized Markdown parsing while generation continued. Its
+  active stream now controls pending status until completion or Stop; Branch
+  is disabled for pending rows and while branch creation is in progress.
+
+Meaningful new regressions were written and demonstrated failing before the
+corresponding source fixes. They extend existing owner suites. The streaming
+regression was also reproduced in the production UI harness after a partial
+delta; its final repair keeps Branch disabled until Stop finalizes the row.
+
+The final named Chromium harness passed all 22 selected cases, including
+partial-stream Stop, immediate reload, second-tab recovery, tool replay,
+retryable errors, model selection, branch navigation, responsive themes and
+compaction reload:
+
+```sh
+OR3_LOCAL_PROVIDERS=false bun run test:e2e:journeys --grep 'production chat journey|PageShell compaction summary reload'
+```
+
+The six directly affected component, search, Dexie, transcript and catalog
+suites passed 104 checks. Four adjacent admission/compaction/repository suites
+passed another 53 checks with one existing skip. Final SSR type checking,
+changed-file ESLint and `git diff --check` passed.
+
+```sh
+bunx vitest run app/components/chat/__tests__/ChatContainer.test.ts app/components/chat/__tests__/ChatInputDropper.test.ts app/core/search/__tests__/orama.test.ts app/db/__tests__/compaction-fork-lineage.integration.test.ts app/utils/chat/__tests__/transcript.test.ts app/utils/__tests__/modelCatalog.test.ts --reporter=dot --silent=passed-only
+bunx vitest run app/utils/chat/__tests__/history.compaction.integration.test.ts app/composables/chat/__tests__/useAi.context-admission.integration.test.ts app/utils/chat/useAi-internal/__tests__/continue-compaction.integration.test.ts app/utils/chat/__tests__/transcript-repository.test.ts --reporter=dot --silent=passed-only
+OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true OR3_LOCAL_PROVIDERS=false bun run type-check
+```
+
+Live Chrome at `localhost:3000` also verified GPT-4.1 Mini selection, a saved
+synthetic code, text upload, copied history, GPT-4o-mini switching, real
+workspace search/read receipts, another copy and reload, and successful
+continuation from the saved tool-containing conversation. Both
+`REVIEW-AMBER-731` and `REVIEW-FILE-CEDAR-852` survived. Search reopened the
+original two-message conversation without the later branch follow-ups.
+At 390×844, body and document widths remained 390 px. An additional live
+80-line response completed and Branch became available again; a subsequent
+send showed Branch disabled during generation and recovered afterward.
+The harness supplies the repeatable partial-delta/Stop assertion.
+
+Proof is preserved under
+`output/playwright/chat-reliability-2026-10-05/code-review/`:
+`mobile-tool-branch-reload.png`, `regression-proof/test-results/`,
+`regression-proof/playwright-report/index.html`, and the successful SSR
+type-check log/status. The mobile screenshot shows continuation after copying
+and reloading the saved conversation.
+
+This follow-up used the already signed-in account and configured instance
+key. It did not repeat fresh registration or change auth code. One Chrome
+automation connection stalled and was recovered with a fresh test browser
+tab. Existing development ResizeObserver warnings still appeared in the
+harness; the deliberately injected provider errors also log as expected.
+The original selected chat and desktop viewport were restored, and the four
+test workspace tabs were closed. One synthetic root, three intentionally
+created branches and one synthetic uploaded document remain for inspection.
+No commit, deployment or production qualification was performed.

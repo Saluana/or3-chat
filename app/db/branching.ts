@@ -19,7 +19,8 @@ import { getDb } from './client';
 import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
-import { resolveRootThreadId } from '../utils/chat/compaction/history';
+import { resolveRootThreadId, resolveThreadProjection } from '../utils/chat/compaction/history';
+import { isSupersededMessage } from '../utils/chat/transcript';
 import type {
     BranchMode,
     BranchForkOptions,
@@ -182,8 +183,9 @@ export async function forkThread({
         const rootThreadId = await resolveRootThreadId(src.id, db);
 
         const anchor = await db.messages.get(anchorMessageId);
-        if (!anchor || anchor.thread_id !== sourceThreadId)
+        if (!anchor || anchor.deleted || isSupersededMessage(anchor) || anchor.thread_id !== sourceThreadId)
             throw new Error('Invalid anchor message');
+        if (anchor.pending) throw new Error('Wait for this response to finish before branching.');
         // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
 
         const now = nowSec();
@@ -219,24 +221,27 @@ export async function forkThread({
         await db.threads.put(fork);
 
         if (branchMode === 'copy') {
-            const ancestors = await db.messages
-                .where('[thread_id+index]')
-                // includeLower=true, includeUpper=true to include anchor row
-                .between(
-                    [sourceThreadId, Dexie.minKey],
-                    [sourceThreadId, anchor.index],
-                    true,
-                    true
-                )
-                .sortBy('index');
-
-            const messagesToCopy = ancestors.map((m, i) => ({
-                ...m,
-                id: newId(),
-                thread_id: forkId,
-                index: i, // normalize sequential indexes starting at 0
-                clock: nextClock(),
-            }));
+            const { messages: ancestors } = await resolveThreadProjection(sourceThreadId, db, anchorMessageId);
+            if (ancestors.some(message => message.pending)) throw new Error('Wait for streaming responses to finish before copying this conversation.');
+            const copiedIds = new Map(ancestors.map(message => [message.id, newId()]));
+            const remap = (value: unknown) => typeof value === 'string' ? copiedIds.get(value) ?? value : value;
+            const messagesToCopy = ancestors.map((m, i) => {
+                const data: Record<string, unknown> | null = m.data && typeof m.data === 'object' && !Array.isArray(m.data) ? { ...m.data } : null;
+                if (data) {
+                    for (const key of ['turn_id', 'parent_turn_id', 'parent_assistant_id'] as const) {
+                        if (key in data) data[key] = remap(data[key]);
+                    }
+                    if (Array.isArray(data.tool_calls)) data.tool_calls = data.tool_calls.map((value: unknown) => {
+                        if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+                        const call = value as Record<string, unknown>;
+                        if (!call.transcript || typeof call.transcript !== 'object' || Array.isArray(call.transcript)) return value;
+                        const transcript = call.transcript as Record<string, unknown>;
+                        return { ...call, transcript: { ...transcript,
+                            turnId: remap(transcript.turnId), parentAssistantId: remap(transcript.parentAssistantId) } };
+                    });
+                }
+                return { ...m, data: data ?? m.data, id: copiedIds.get(m.id)!, thread_id: forkId, index: i, clock: nextClock() };
+            });
             await db.messages.bulkPut(messagesToCopy);
             await db.threads.put({
                 ...fork,
