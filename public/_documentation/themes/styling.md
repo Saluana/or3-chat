@@ -56,6 +56,12 @@ const sendTheme = useThemeOverrides({
 </template>
 ```
 
+`useButtonOverrides()` and `useInputOverrides()` are typed source helpers for
+these bindings. Button variant/color/size and input variant/size keys follow the installed
+Nuxt UI props and generated host config, including button `workspace`/`touch`/`modal`
+sizes and `on-surface` color, and input `workspace` size and `modal` variant.
+They preserve the same base-props-then-theme-props merge order.
+
 `v-bind` changes Vue props. `v-theme` decorates the rendered DOM with owned
 classes, styles, and annotations; it cannot mutate component props. Keep live
 behavior such as disabled/loading explicit. Automatic directive context detection

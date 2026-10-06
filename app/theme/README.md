@@ -1,7 +1,9 @@
 # Theme System (Refined)
 
 This README describes how the current theme system works in this repo and how
-to integrate it into components and plugins.
+to integrate it into components and plugins. Start with the canonical
+[styling guide](../../public/_documentation/themes/styling.md) and
+[runtime reference](../../public/_documentation/themes/architecture.md).
 
 ## Quick mental model
 
@@ -178,9 +180,13 @@ When a theme becomes active, the theme plugin:
    `applyThemeClasses()` in `app/theme/_shared/css-selector-runtime.ts`.
 7. Applies theme backgrounds and registers icon overrides.
 
-Theme selection is persisted in `localStorage`/cookies (`or3_active_theme`).
-Light/dark mode is tracked separately via the older `theme.set()` API and
-applies classes like `light`/`dark` to `<html>`.
+Theme selection is saved in the active workspace Dexie KV as `theme_selection`
+by `useThemeSelection()`. The `or3_active_theme` cookie supports SSR; browser
+localStorage `activeTheme` is compatibility/cache state. Light/dark mode uses
+browser localStorage `theme` and applies `light`/`dark` classes to `<html>`.
+Personal style overrides are browser-local, separately saved under
+`or3:user-theme-overrides:light` and `:dark`; they are not account preferences
+or cross-device KV. See the [persistence reference](../../public/_documentation/themes/architecture.md#persistence).
 
 ## Component integration
 
@@ -274,8 +280,10 @@ const props = resolveOverrides({
 - `#app-header` or `[data-context="header"]`
 - fallback: `global`
 
-For other contexts (see `app/theme/_shared/contexts.ts`), add a
-`data-context="<name>"` attribute to a wrapper element.
+Only `chat`, `sidebar`, `dashboard`, and `header` are auto-detected; all other
+contexts fall back to `global`. For other known contexts, pass `context`
+explicitly to both `useThemeOverrides()` and `v-theme`. An arbitrary
+`data-context` wrapper does not enable detection.
 
 ## Plugin integration
 
