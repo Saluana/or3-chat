@@ -25,7 +25,7 @@ flowchart LR
 | Source Intake | Extend [Files intake](../../app/db/workspace-files.ts), preview, bounded reads, and document history. | R2 |
 | Project Context Builder | Resolve immutable turn inputs before [native admission](../../app/composables/chat/useAi.ts); all project-bound inference paths call it. | R4 |
 | Project Tool Policy | Narrow existing client/server registries and plugin/workflow authority at execution. | R5 |
-| Context Receipt | Extend [source receipts](../../app/utils/chat/workspace-source-receipts.ts) with evidence from submitted requests. | R4 |
+| Context Receipt | Extend [source receipts](../../app/utils/chat/workspace-source-receipts.ts) with persisted evidence from submitted requests. Keep receipts internal; remove the inline message counter and inspector per user review. | R4 |
 | Project Continuity | Reuse [compaction](../../app/composables/chat/useThreadCompaction.ts) and existing workspace search/read. | R6 |
 
 ```ts

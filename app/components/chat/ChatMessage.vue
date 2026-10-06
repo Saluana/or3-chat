@@ -432,7 +432,7 @@
                 </UFieldGroup>
             </div>
         </template>
-        <ProjectMessageContext ref="projectMessageContext" :receipt="(props.message.data as Record<string, unknown> | undefined)?.project_context" :iterations="(props.message.data as Record<string, unknown> | undefined)?.project_context_iterations" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
+        <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
         <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id" :tool-result-message-ids="props.message.toolResultMessageIds"
             @navigate="emit('view-related-thread', $event)" />
     </div>

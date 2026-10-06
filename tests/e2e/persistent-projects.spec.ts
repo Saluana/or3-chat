@@ -1029,9 +1029,9 @@ test('project A keeps its captured context while project B opens during streamin
 });
 
 // The real native send path owns this contract: request capture must contain the
-// owning project's state and actual vision input, and survive inspector reload.
+// owning project's state and actual vision input, with persisted request evidence.
 // The standalone Home journey cannot detect inference or foreground pane races.
-test('project chat submits only its captured context and persists the inspector', async ({
+test('project chat keeps captured context and memory actions without an inline inspector', async ({
     page,
 }, info) => {
     test.setTimeout(120000);
@@ -1125,24 +1125,36 @@ test('project chat submits only its captured context and persists the inspector'
             ].includes(tool.function.name),
         ),
     ).toBe(false);
-    const indicator = page.getByRole('button', {
-        name: 'Context · 2 sources · 1 saved decisions',
+    const indicator = page.getByRole('button', { name: /^Context ·/ });
+    await expect(indicator).toHaveCount(0);
+    await expect(page.getByText(/· Context used$/)).toHaveCount(0);
+    const receipt = recovered.messages.find((row) => row.role === 'assistant')
+        .data.project_context;
+    expect(receipt).toMatchObject({
+        project_id: 'workspace-journey-project',
+        instructions: 'Saffron instruction marker: preserve evidence.',
     });
-    await expect(indicator).toBeVisible();
-    await indicator.click();
-    await expect(
-        page.getByText('Saffron instruction marker: preserve evidence.', {
-            exact: true,
+    expect(
+        receipt.sources.filter((source: any) => source.state === 'included'),
+    ).toHaveLength(2);
+    expect(receipt.memories).toContainEqual(
+        expect.objectContaining({
+            kind: 'decision',
+            text: 'Saffron saved decision marker: use SQLite.',
         }),
-    ).toBeVisible();
+    );
     await page.reload();
-    await expect(indicator).toBeVisible({ timeout: 60000 });
-    await indicator.click();
     await expect(
-        page.getByText('Saffron instruction marker: preserve evidence.', {
+        page.getByText('Hello from deterministic stream.', {
             exact: true,
         }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 60000 });
+    await expect(indicator).toHaveCount(0);
+    expect(
+        (await projectState(page)).messages.find(
+            (row) => row.role === 'assistant',
+        ).data.project_context,
+    ).toEqual(receipt);
     await info.attach('submitted-project-request', {
         body: JSON.stringify(requests, null, 2),
         contentType: 'application/json',
@@ -1183,9 +1195,9 @@ test('project chat submits only its captured context and persists the inspector'
             (row) => row.role === 'assistant',
         ).id,
     });
-    const path = info.outputPath('project-context-inspector.png');
+    const path = info.outputPath('project-context-response.png');
     await page.screenshot({ path });
-    await info.attach('project-context-inspector', {
+    await info.attach('project-context-response', {
         path,
         contentType: 'image/png',
     });
@@ -1230,8 +1242,7 @@ test('project chat submits only its captured context and persists the inspector'
     await expect(
         page.getByRole('dialog', { name: 'Save project memory' }),
     ).not.toBeVisible();
-    await expect(indicator).toBeVisible();
-    await indicator.click();
+    await expect(indicator).toHaveCount(0);
     await rememberAction.scrollIntoViewIfNeeded();
     const actionPath = info.outputPath('project-memory-message-action.png');
     await page.screenshot({ path: actionPath });

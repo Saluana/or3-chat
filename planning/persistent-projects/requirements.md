@@ -48,14 +48,14 @@ Nested projects, graph databases, autonomous memory agents, new vector infrastru
 
 - R3.AC1: WHEN editing the brief or choosing “Remember for this project” THEN memories SHALL expose text/provenance and edit/delete actions; unaccepted ideas SHALL NOT become decisions. Memory SHALL show readable cards, with add/edit forms opened explicitly and Save/Cancel controls.
 
-### R4: Consistent and inspectable context — Phase 1
+### R4: Consistent and recorded context — Phase 1
 
 **User Story:** I want every turn to use the right project.
 
 **Acceptance Criteria:**
 
 - R4.AC1: WHEN project-bound sends/retries/regenerations/continuations/workflows/plugins run THEN one builder SHALL capture workspace/thread/project/revisions; pane changes SHALL NOT retarget execution.
-- R4.AC2: WHEN inspecting responses THEN available/retrieved/submitted instructions, sources, memories, images, and historical passages SHALL be distinguishable; oversized required context SHALL refuse visibly without silent truncation.
+- R4.AC2: WHEN recording response context THEN available/retrieved/submitted instructions, sources, memories, images, and historical passages SHALL be distinguishable in persisted diagnostics; oversized required context SHALL refuse visibly without silent truncation. Per user review, messages SHALL NOT display an inline context counter or inspector.
 
 ### R5: Enforced restrictions — Phase 1
 

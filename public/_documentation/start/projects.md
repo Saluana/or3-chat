@@ -36,7 +36,7 @@ Settings groups instructions, the searchable default-model picker, and tool perm
 
 Expand **Project chats** to add or remove conversations or switch their inclusion in project memory. Those chat actions save immediately; save or discard other settings first. Saved project context must fit alongside the conversation and completion allowance; OR3 does not silently truncate required instructions or memory.
 
-The response's **Context** control lists the actual submitted instructions, brief, memories, sources, images, and chat summaries. Available, retrieved, and included are different states. The inspector retains bounded previews and per-request iteration state after reload; inclusion does not prove the model relied on a source. Originals remain accessible in Knowledge.
+Project context is recorded with each response for diagnostics, including submitted instructions, brief, memories, sources, images, and chat summaries. Available, retrieved, and included are different states; inclusion does not prove the model relied on a source. The conversation has no inline context counter or inspector. Originals remain accessible in Knowledge.
 
 Tool settings narrow tools already available to you. Unknown plugin tools default to disabled. Global search/open-pane tools that cannot enforce project scope are disabled. Repository restrictions require a concrete `owner`/`repo`, `repository`, or `repo` argument matching the configured allowlist; unsupported argument shapes refuse execution. External tools require approval for each action because OR3 cannot classify arbitrary plugin side effects. Sending, publishing, and destructive host actions also require approval. Project settings never grant workspace permissions.
 

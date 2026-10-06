@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project sidebar navigation, source library, explicit memory, continuity, tools, and inspectable context."
+                    "summary": "Project sidebar navigation, source library, explicit memory, continuity, tools, and recorded context."
                 },
                 {
                     "name": "development-setup.md",
