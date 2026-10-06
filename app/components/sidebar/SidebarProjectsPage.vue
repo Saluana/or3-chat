@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch, toRaw } from 'vue';
 import { liveQuery } from 'dexie';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { createThreadInDb } from '~/db/threads';
@@ -27,7 +27,11 @@ import {
 import { getFileBlob } from '~/db/files';
 import { newId, nowSec } from '~/db/util';
 import { getPaletteHostContext } from '~/composables/search/useCommandPalette';
-import { useToolRegistry } from '~/utils/chat/tool-registry';
+import {
+    useToolRegistry,
+    type RegisteredTool,
+} from '~/utils/chat/tool-registry';
+import { useModelStore } from '~/composables/chat/useModelStore';
 import {
     defaultProjectSettings,
     type ProjectSettings,
@@ -135,6 +139,103 @@ const suggestions = ref<
 const existingChatId = ref('');
 const allChats = ref<Thread[]>([]);
 const tools = useToolRegistry().listTools;
+const { catalog, favoriteModels } = useModelStore();
+const toolQuery = ref('');
+const manageChatsOpen = ref(false);
+const chatDefaultModel = 'or3:chat-default';
+const modelItems = computed(() => {
+    const items = new Map<string, { label: string; value: string }>();
+    items.set(chatDefaultModel, {
+        label: 'Use chat default',
+        value: chatDefaultModel,
+    });
+    for (const model of [...favoriteModels.value, ...catalog.value]) {
+        const value = model.canonical_slug ?? model.id;
+        items.set(value, { label: model.name || value, value });
+    }
+    const current = settings.value.default_model;
+    if (current && !items.has(current))
+        items.set(current, { label: current, value: current });
+    return [...items.values()];
+});
+function toolLabel(tool: RegisteredTool) {
+    return (
+        tool.definition.ui?.label ||
+        tool.definition.function.name
+            .replaceAll('_', ' ')
+            .replace(/^./, (letter) => letter.toUpperCase())
+    );
+}
+function toolReady(tool: RegisteredTool) {
+    return (
+        tool.enabled.value && !toolCannotScope(tool.definition.function.name)
+    );
+}
+const matchingTools = computed(() => {
+    const query = toolQuery.value.trim().toLowerCase();
+    return tools.value.filter((tool) =>
+        `${toolLabel(tool)} ${tool.definition.ui?.category ?? ''} ${tool.definition.function.name}`
+            .toLowerCase()
+            .includes(query),
+    );
+});
+const toolGroups = computed(() => {
+    const groups = new Map<string, RegisteredTool[]>();
+    for (const tool of matchingTools.value.filter(toolReady)) {
+        const category =
+            tool.definition.ui?.category ?? tool.definition.category ?? 'Other';
+        const group = groups.get(category) ?? [];
+        group.push(tool);
+        groups.set(category, group);
+    }
+    return [...groups].map(([label, tools]) => ({ label, tools }));
+});
+const unavailableTools = computed(() =>
+    matchingTools.value.filter((tool) => !toolReady(tool)),
+);
+function toolModeValue(name: string) {
+    return (
+        settings.value.tools[name]?.mode ??
+        (projectToolEnabled(settings.value, name) ? 'enabled' : 'disabled')
+    );
+}
+const toolModes: Array<{
+    label: string;
+    value: 'disabled' | 'ask' | 'enabled';
+}> = [
+    { label: 'Off', value: 'disabled' },
+    { label: 'Ask first', value: 'ask' },
+    { label: 'On', value: 'enabled' },
+];
+function supportsRepositories(tool: RegisteredTool) {
+    const properties = tool.definition.function.parameters.properties;
+    return ['repository', 'repo'].some((key) => {
+        const property = properties?.[key];
+        if (!property || typeof property !== 'object') return false;
+        const type = (property as { type?: unknown }).type;
+        return (
+            type === 'string' ||
+            (Array.isArray(type) && type.includes('string'))
+        );
+    });
+}
+function setToolResources(name: string, value: string) {
+    settings.value.tools[name] = {
+        mode: toolModeValue(name),
+        resources: value
+            .split('\n')
+            .map((value) => value.trim())
+            .filter(Boolean),
+    };
+    dirty.value = true;
+}
+function discardSettings() {
+    if (!state.value) return;
+    settings.value = structuredClone(toRaw(state.value.settings));
+    editClock.value = state.value.settingsRow?.clock ?? null;
+    briefEvidence.value = null;
+    dirty.value = false;
+}
 let controller = new AbortController();
 let scope = captureProjectOperation(controller.signal);
 let subscription: { unsubscribe(): void } | undefined;
@@ -165,6 +266,8 @@ function connect() {
     scope = captureProjectOperation(controller.signal);
     state.value = null;
     dirty.value = false;
+    toolQuery.value = '';
+    manageChatsOpen.value = false;
     suggestions.value = [];
     memory.value = '';
     memoryEvidence.value = null;
@@ -582,12 +685,9 @@ async function exclude(thread: Thread) {
         current.settingsRow?.clock ?? null,
     );
 }
-function toolMode(name: string, event: Event) {
+function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
     settings.value.tools[name] = {
-        mode: (event.target as HTMLSelectElement).value as
-            | 'enabled'
-            | 'disabled'
-            | 'ask',
+        mode,
         resources: settings.value.tools[name]?.resources ?? [],
     };
     dirty.value = true;
@@ -950,8 +1050,10 @@ function toolCannotScope(name: string) {
                     </div></template
                 ></SidebarTimeGroupedList
             >
-            <div v-else class="flex-1 min-h-0 overflow-y-auto sidebar-scroll">
-                <div class="project-content px-3 pt-2 pb-5 space-y-4 text-sm">
+            <div v-else class="flex-1 min-h-0 flex flex-col">
+                <div
+                    class="project-content flex-1 min-h-0 overflow-y-auto sidebar-scroll px-3 pt-2 pb-5 space-y-4 text-sm"
+                >
                     <div
                         v-if="tab !== 'Overview'"
                         class="project-section-heading"
@@ -1774,7 +1876,8 @@ function toolCannotScope(name: string) {
                                 class="project-memory space-y-3"
                             >
                                 <h2 class="font-medium text-xs">
-                                    Handoff from {{ suggestion.thread.title }}
+                                    Handoff from
+                                    {{ suggestion.thread.title }}
                                 </h2>
                                 <div class="flex flex-wrap gap-1">
                                     <UButton
@@ -1834,220 +1937,486 @@ function toolCannotScope(name: string) {
                     </div>
                     <form
                         v-if="tab === 'Settings'"
-                        class="space-y-4"
+                        :id="'project-settings-' + id"
+                        class="project-settings space-y-5"
                         @submit.prevent="run(saveSettings)"
                     >
-                        <label class="block"
-                            >Instructions<textarea
-                                v-model="settings.instructions"
-                                class="project-input"
-                                maxlength="16000"
-                                rows="6"
-                                @input="dirty = true"
-                            /></label
-                        ><label class="block"
-                            >Default model<input
-                                v-model="settings.default_model"
-                                class="project-input"
-                                placeholder="Use chat default"
-                                @input="dirty = true"
-                        /></label>
-                        <h2 class="font-semibold">Tools</h2>
-                        <p class="text-sm opacity-70">
-                            Project rules restrict tools you already have.
-                            Sending, publishing, and deleting require approval.
-                        </p>
-                        <div
-                            v-for="tool in tools"
-                            :key="tool.definition.function.name"
-                            class="space-y-2"
+                        <section
+                            class="space-y-3"
+                            aria-label="Project behaviour"
                         >
-                            <label class="flex items-center gap-3"
-                                ><span class="flex-1">{{
-                                    tool.definition.function.name
-                                }}</span
-                                ><select
-                                    :disabled="
-                                        toolCannotScope(
-                                            tool.definition.function.name,
-                                        )
-                                    "
-                                    :value="
-                                        toolCannotScope(
-                                            tool.definition.function.name,
-                                        )
-                                            ? 'disabled'
-                                            : (settings.tools[
-                                                  tool.definition.function.name
-                                              ]?.mode ??
-                                              (projectToolEnabled(
-                                                  settings,
-                                                  tool.definition.function.name,
-                                              )
-                                                  ? 'enabled'
-                                                  : 'disabled'))
-                                    "
-                                    class="project-input !w-auto"
-                                    @change="
-                                        toolMode(
-                                            tool.definition.function.name,
-                                            $event,
-                                        )
-                                    "
+                            <label class="block">
+                                <span class="font-medium text-sm"
+                                    >Instructions</span
                                 >
-                                    <option value="enabled">Enabled</option>
-                                    <option value="ask">Ask first</option>
-                                    <option value="disabled">Disabled</option>
-                                </select></label
-                            >
-                            <p
-                                v-if="
-                                    toolCannotScope(
-                                        tool.definition.function.name,
-                                    )
-                                "
-                                class="text-sm opacity-70"
-                            >
-                                Unavailable: this tool cannot restrict reads to
-                                the project.
-                            </p>
-                            <p
-                                v-else-if="!tool.enabled.value"
-                                class="text-sm opacity-70"
-                            >
-                                Enable this tool globally before using it here.
-                            </p>
-                            <label
-                                v-if="
-                                    !toolCannotScope(
-                                        tool.definition.function.name,
-                                    )
-                                "
-                                class="block text-sm"
-                                >Allowed repositories (one per line; leave empty
-                                for no project restriction)<textarea
-                                    :value="
-                                        settings.tools[
-                                            tool.definition.function.name
-                                        ]?.resources.join('\n') ?? ''
+                                <span class="project-muted block mt-1 text-xs"
+                                    >How should OR3 work in this project?</span
+                                >
+                                <textarea
+                                    v-model="settings.instructions"
+                                    aria-label="Instructions"
+                                    class="project-input !mt-2"
+                                    placeholder="Tone, goals, or guidelines to keep in mind…"
+                                    maxlength="16000"
+                                    rows="4"
+                                    @input="dirty = true"
+                                />
+                            </label>
+                            <div class="space-y-2">
+                                <label
+                                    class="block font-medium text-sm"
+                                    :for="'project-model-' + id"
+                                    >Default model</label
+                                >
+                                <USelectMenu
+                                    :id="'project-model-' + id"
+                                    :model-value="
+                                        settings.default_model ??
+                                        chatDefaultModel
                                     "
-                                    class="project-input"
-                                    rows="2"
-                                    @change="
-                                        settings.tools[
-                                            tool.definition.function.name
-                                        ] = {
-                                            mode:
-                                                settings.tools[
-                                                    tool.definition.function
-                                                        .name
-                                                ]?.mode ??
-                                                (projectToolEnabled(
-                                                    settings,
-                                                    tool.definition.function
-                                                        .name,
-                                                )
-                                                    ? 'enabled'
-                                                    : 'disabled'),
-                                            resources: (
-                                                $event.target as HTMLTextAreaElement
-                                            ).value
-                                                .split('\n')
-                                                .map((value) => value.trim())
-                                                .filter(Boolean),
-                                        };
+                                    :items="modelItems"
+                                    value-key="value"
+                                    aria-label="Default model"
+                                    :search-input="{
+                                        placeholder: 'Search models…',
+                                    }"
+                                    class="w-full min-w-0"
+                                    size="sm"
+                                    color="neutral"
+                                    @update:model-value="
+                                        settings.default_model =
+                                            $event === chatDefaultModel
+                                                ? null
+                                                : ($event ?? null);
                                         dirty = true;
                                     "
                                 />
-                            </label>
-                        </div>
-                        <UButton
-                            type="submit"
-                            label="Save settings"
-                            :disabled="busy"
-                        />
-                        <p v-if="dirty" class="text-sm">Unsaved changes</p>
-                    </form>
-                    <div
-                        v-if="tab === 'Settings'"
-                        class="space-y-3 border-t border-[var(--md-outline-variant)] pt-4"
-                    >
-                        <h2 class="font-semibold">Project chats</h2>
-                        <form
-                            class="flex flex-col gap-2"
-                            @submit.prevent="
-                                run(() =>
-                                    moveChatToProject(
-                                        scope,
-                                        existingChatId,
-                                        id,
-                                    ),
-                                )
-                            "
-                        >
-                            <select
-                                v-model="existingChatId"
-                                required
-                                aria-label="Move existing chat"
-                                class="project-input"
-                            >
-                                <option value="">
-                                    Choose a chat to move into this project
-                                </option>
-                                <option
-                                    v-for="chat in allChats"
-                                    :key="chat.id"
-                                    :value="chat.id"
+                                <p
+                                    class="project-muted text-[11px] leading-relaxed"
                                 >
-                                    {{ chat.title || chat.id }}
-                                </option></select
-                            ><UButton
-                                type="submit"
-                                label="Move into project"
-                                :disabled="busy"
-                            />
-                        </form>
-                        <p class="text-sm opacity-70">
-                            Excluded chats stay in the project but are not
-                            retrieved as memory. Open a chat and use Continue in
-                            new chat for a clean handoff.
-                        </p>
-                        <div
-                            v-for="chat in chats"
-                            :key="chat.id"
-                            role="group"
-                            :aria-label="chat.title || 'Chat'"
-                            class="flex flex-wrap items-center gap-2"
+                                    Individual chats can choose another model.
+                                </p>
+                            </div>
+                        </section>
+                        <section
+                            class="border-t border-[var(--md-outline-variant)] pt-4 space-y-3"
+                            aria-label="Project tools"
                         >
-                            <button
-                                class="project-link min-w-0 basis-full text-left"
-                                @click="run(() => openChat(chat.id))"
-                            >
-                                {{ chat.title || 'Chat' }}</button
-                            ><UButton
+                            <div class="space-y-1">
+                                <h2 class="font-semibold text-sm">Tools</h2>
+                                <p
+                                    class="project-muted text-xs leading-relaxed"
+                                >
+                                    Choose what OR3 can use. Send, publish, and
+                                    delete actions still ask for approval.
+                                </p>
+                            </div>
+                            <UInput
+                                v-model="toolQuery"
+                                icon="i-lucide-search"
+                                aria-label="Search project tools"
+                                placeholder="Search tools"
+                                size="sm"
                                 color="neutral"
-                                variant="ghost"
-                                :label="
-                                    state.settings.excluded_chat_ids.includes(
-                                        chat.id,
-                                    )
-                                        ? 'Include in memory'
-                                        : 'Exclude from memory'
-                                "
-                                @click="run(() => exclude(chat))"
-                            /><UButton
-                                color="neutral"
-                                variant="ghost"
-                                label="Remove"
-                                @click="
-                                    run(() =>
-                                        moveChatToProject(scope, chat.id, null),
-                                    )
-                                "
+                                class="w-full"
                             />
+                            <div v-for="group in toolGroups" :key="group.label">
+                                <h3
+                                    class="project-muted text-[11px] font-medium py-2"
+                                >
+                                    {{ group.label }}
+                                </h3>
+                                <div
+                                    v-for="tool in group.tools"
+                                    :key="tool.definition.function.name"
+                                    class="project-tool-row"
+                                >
+                                    <div class="flex items-start gap-2.5">
+                                        <UIcon
+                                            :name="
+                                                tool.definition.ui?.icon ||
+                                                tool.definition.icon ||
+                                                'i-lucide-wrench'
+                                            "
+                                            class="size-4 mt-0.5 shrink-0 project-muted"
+                                            aria-hidden="true"
+                                        />
+                                        <div class="min-w-0 flex-1">
+                                            <p
+                                                class="text-xs font-medium leading-5"
+                                            >
+                                                {{ toolLabel(tool) }}
+                                            </p>
+                                            <p
+                                                v-if="
+                                                    tool.definition.ui
+                                                        ?.descriptionHint
+                                                "
+                                                class="project-muted text-[11px] leading-relaxed mt-0.5"
+                                            >
+                                                {{
+                                                    tool.definition.ui
+                                                        .descriptionHint
+                                                }}
+                                            </p>
+                                        </div>
+                                        <USelect
+                                            :model-value="
+                                                toolModeValue(
+                                                    tool.definition.function
+                                                        .name,
+                                                )
+                                            "
+                                            :items="toolModes"
+                                            value-key="value"
+                                            :aria-label="
+                                                'Permission for ' +
+                                                toolLabel(tool)
+                                            "
+                                            size="xs"
+                                            color="neutral"
+                                            class="project-tool-permission shrink-0"
+                                            @update:model-value="
+                                                toolMode(
+                                                    tool.definition.function
+                                                        .name,
+                                                    $event,
+                                                )
+                                            "
+                                        />
+                                    </div>
+                                    <details
+                                        v-if="supportsRepositories(tool)"
+                                        class="project-repository-details mt-2 ml-6.5 text-xs"
+                                    >
+                                        <summary
+                                            class="project-muted cursor-pointer py-1"
+                                        >
+                                            Repository restrictions<span
+                                                v-if="
+                                                    settings.tools[
+                                                        tool.definition.function
+                                                            .name
+                                                    ]?.resources.length
+                                                "
+                                            >
+                                                ·
+                                                {{
+                                                    settings.tools[
+                                                        tool.definition.function
+                                                            .name
+                                                    ]?.resources.length
+                                                }}</span
+                                            >
+                                        </summary>
+                                        <label class="block mt-2">
+                                            <span>Allowed repositories</span>
+                                            <textarea
+                                                :value="
+                                                    settings.tools[
+                                                        tool.definition.function
+                                                            .name
+                                                    ]?.resources.join('\n') ??
+                                                    ''
+                                                "
+                                                :aria-label="
+                                                    'Allowed repositories for ' +
+                                                    toolLabel(tool)
+                                                "
+                                                class="project-input"
+                                                placeholder="owner/repository"
+                                                rows="2"
+                                                @input="
+                                                    setToolResources(
+                                                        tool.definition.function
+                                                            .name,
+                                                        (
+                                                            $event.target as HTMLTextAreaElement
+                                                        ).value,
+                                                    )
+                                                "
+                                            />
+                                        </label>
+                                        <p
+                                            class="project-muted text-[11px] leading-relaxed mt-2"
+                                        >
+                                            One repository per line. Leave empty
+                                            to allow any repository.
+                                        </p>
+                                    </details>
+                                    <div
+                                        v-else-if="
+                                            settings.tools[
+                                                tool.definition.function.name
+                                            ]?.resources.length
+                                        "
+                                        class="mt-2 ml-6.5 text-xs"
+                                    >
+                                        <p class="project-muted">
+                                            Saved repository restrictions cannot
+                                            apply to this tool.
+                                        </p>
+                                        <UButton
+                                            label="Clear restrictions"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="xs"
+                                            @click="
+                                                setToolResources(
+                                                    tool.definition.function
+                                                        .name,
+                                                    '',
+                                                )
+                                            "
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <p
+                                v-if="!matchingTools.length"
+                                class="project-muted text-xs py-3"
+                            >
+                                No matching tools.
+                            </p>
+                            <details
+                                v-if="unavailableTools.length"
+                                class="project-unavailable-tools"
+                            >
+                                <summary
+                                    class="flex items-center gap-2 cursor-pointer text-xs font-medium py-3"
+                                >
+                                    <UIcon
+                                        name="i-lucide-chevron-right"
+                                        class="size-3.5 project-disclosure-icon"
+                                        aria-hidden="true"
+                                    />
+                                    Unavailable tools
+                                    <span class="project-muted ml-auto">{{
+                                        unavailableTools.length
+                                    }}</span>
+                                </summary>
+                                <div
+                                    v-for="tool in unavailableTools"
+                                    :key="tool.definition.function.name"
+                                    class="flex gap-2.5 py-2.5"
+                                >
+                                    <UIcon
+                                        :name="
+                                            tool.definition.ui?.icon ||
+                                            'i-lucide-wrench'
+                                        "
+                                        class="size-4 mt-0.5 shrink-0 project-muted"
+                                        aria-hidden="true"
+                                    />
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-medium">
+                                            {{ toolLabel(tool) }}
+                                        </p>
+                                        <p
+                                            class="project-muted text-[11px] leading-relaxed mt-1"
+                                        >
+                                            {{
+                                                toolCannotScope(
+                                                    tool.definition.function
+                                                        .name,
+                                                )
+                                                    ? 'Cannot limit access to this project.'
+                                                    : 'Turn this tool on in chat settings to use it here.'
+                                            }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </details>
+                        </section>
+                    </form>
+                    <section
+                        v-if="tab === 'Settings'"
+                        class="project-chat-settings border-t border-[var(--md-outline-variant)] pt-3"
+                    >
+                        <button
+                            type="button"
+                            class="flex items-center gap-2 w-full py-2 text-left"
+                            aria-label="Manage chats"
+                            :aria-expanded="manageChatsOpen"
+                            :aria-controls="'project-chats-' + id"
+                            @click="manageChatsOpen = !manageChatsOpen"
+                        >
+                            <UIcon
+                                name="i-lucide-messages-square"
+                                class="size-4 project-muted shrink-0"
+                                aria-hidden="true"
+                            />
+                            <span class="text-sm font-medium flex-1"
+                                >Project chats</span
+                            >
+                            <span class="project-muted text-xs">{{
+                                chats.length
+                            }}</span>
+                            <UIcon
+                                name="i-lucide-chevron-right"
+                                :class="[
+                                    'size-4 project-muted',
+                                    manageChatsOpen && 'rotate-90',
+                                ]"
+                                aria-hidden="true"
+                            />
+                        </button>
+                        <div
+                            v-if="manageChatsOpen"
+                            :id="'project-chats-' + id"
+                            class="space-y-3 pt-2"
+                        >
+                            <p class="project-muted text-xs leading-relaxed">
+                                Choose which chats OR3 can recall. Changes here
+                                save immediately.
+                            </p>
+                            <p v-if="dirty" class="project-muted text-xs">
+                                Save or discard your settings before managing
+                                chats.
+                            </p>
+                            <form
+                                class="flex gap-2 items-center"
+                                @submit.prevent="
+                                    run(() =>
+                                        moveChatToProject(
+                                            scope,
+                                            existingChatId,
+                                            id,
+                                        ),
+                                    )
+                                "
+                            >
+                                <select
+                                    v-model="existingChatId"
+                                    required
+                                    aria-label="Move existing chat"
+                                    class="project-input !mt-0 flex-1"
+                                    :disabled="busy || dirty"
+                                >
+                                    <option value="">
+                                        Add an existing chat…
+                                    </option>
+                                    <option
+                                        v-for="chat in allChats"
+                                        :key="chat.id"
+                                        :value="chat.id"
+                                    >
+                                        {{ chat.title || chat.id }}
+                                    </option>
+                                </select>
+                                <UButton
+                                    type="submit"
+                                    label="Add"
+                                    aria-label="Move into project"
+                                    size="xs"
+                                    color="neutral"
+                                    variant="outline"
+                                    :disabled="busy || dirty || !existingChatId"
+                                />
+                            </form>
+                            <p
+                                v-if="!chats.length"
+                                class="project-muted text-xs py-2"
+                            >
+                                No chats in this project yet.
+                            </p>
+                            <div
+                                v-for="chat in chats"
+                                :key="chat.id"
+                                role="group"
+                                :aria-label="chat.title || 'Chat'"
+                                class="project-tool-row flex items-center gap-2"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <button
+                                        type="button"
+                                        class="block text-left text-xs font-medium truncate max-w-full"
+                                        :disabled="busy || dirty"
+                                        @click="run(() => openChat(chat.id))"
+                                    >
+                                        {{ chat.title || 'Chat' }}
+                                    </button>
+                                    <p class="project-muted text-[11px] mt-1">
+                                        {{
+                                            state.settings.excluded_chat_ids.includes(
+                                                chat.id,
+                                            )
+                                                ? 'Excluded from memory'
+                                                : 'Included in memory'
+                                        }}
+                                    </p>
+                                </div>
+                                <USwitch
+                                    :model-value="
+                                        !state.settings.excluded_chat_ids.includes(
+                                            chat.id,
+                                        )
+                                    "
+                                    :aria-label="
+                                        'Include ' +
+                                        (chat.title || 'chat') +
+                                        ' in memory'
+                                    "
+                                    :disabled="busy || dirty"
+                                    size="xs"
+                                    @update:model-value="
+                                        run(() => exclude(chat))
+                                    "
+                                />
+                                <UTooltip text="Remove from project">
+                                    <UButton
+                                        icon="i-lucide-x"
+                                        aria-label="Remove"
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="xs"
+                                        square
+                                        :disabled="busy || dirty"
+                                        @click="
+                                            run(() =>
+                                                moveChatToProject(
+                                                    scope,
+                                                    chat.id,
+                                                    null,
+                                                ),
+                                            )
+                                        "
+                                    />
+                                </UTooltip>
+                            </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
+                <footer
+                    v-if="tab === 'Settings'"
+                    class="project-settings-footer shrink-0 flex items-center gap-2 px-3 py-3 border-t border-[var(--md-outline-variant)]"
+                >
+                    <p
+                        role="status"
+                        class="project-muted text-[11px] flex-1 min-w-0"
+                    >
+                        {{ dirty ? 'Unsaved changes' : 'All changes saved' }}
+                    </p>
+                    <UButton
+                        v-if="dirty"
+                        label="Discard"
+                        aria-label="Discard changes"
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                        :disabled="busy"
+                        @click="discardSettings"
+                    />
+                    <UButton
+                        :form="'project-settings-' + id"
+                        type="submit"
+                        label="Save changes"
+                        size="xs"
+                        class="project-settings-save"
+                        :disabled="busy || !dirty"
+                        :loading="busy"
+                    />
+                </footer>
             </div>
         </template>
         <p v-else class="p-3 text-sm text-[var(--md-on-surface-variant)]">
@@ -2172,6 +2541,40 @@ function toolCannotScope(name: string) {
 }
 .project-content {
     overflow-wrap: anywhere;
+}
+.project-tool-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--md-outline-variant);
+}
+.project-tool-row:last-child {
+    border-bottom: 0;
+}
+.project-tool-permission {
+    width: 88px;
+}
+.project-unavailable-tools {
+    border-top: 1px solid var(--md-outline-variant);
+}
+.project-unavailable-tools > summary {
+    list-style: none;
+}
+.project-unavailable-tools > summary::-webkit-details-marker {
+    display: none;
+}
+.project-unavailable-tools[open] .project-disclosure-icon {
+    transform: rotate(90deg);
+}
+.project-settings-footer {
+    background: var(--md-surface);
+}
+.project-settings-save {
+    background: var(--project-accent);
+    color: var(--md-on-primary, #fff);
+    white-space: nowrap;
+}
+.project-settings :deep(button),
+.project-settings :deep(input) {
+    font-size: 12px;
 }
 .project-link {
     padding: 8px 0;

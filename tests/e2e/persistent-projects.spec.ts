@@ -112,9 +112,37 @@ test.afterEach(async ({ page }, info) => {
 test('Projects stays in the sidebar while browsing, creating, pinning and searching', async ({
     page,
 }, info) => {
-    await page.route('**openrouter.ai/**', (route) =>
+    await page.route(/\/models(?:\?|$)/, (route) =>
         route.fulfill({
-            json: { data: [], links: { next: null }, total_count: 0 },
+            json: {
+                data: [
+                    {
+                        id: 'fixture/sidebar-model',
+                        canonical_slug: 'fixture/sidebar-model',
+                        name: 'Sidebar test model',
+                        created: 1,
+                        default_parameters: null,
+                        per_request_limits: null,
+                        supported_parameters: ['tools'],
+                        supported_voices: null,
+                        links: { details: '/fixture/sidebar-model' },
+                        top_provider: {
+                            context_length: 32768,
+                            max_completion_tokens: 8192,
+                            is_moderated: false,
+                        },
+                        context_length: 32768,
+                        architecture: {
+                            modality: 'text->text',
+                            input_modalities: ['text'],
+                            output_modalities: ['text'],
+                        },
+                        pricing: { prompt: '0', completion: '0' },
+                    },
+                ],
+                links: { next: null },
+                total_count: 1,
+            },
         }),
     );
     await page.goto('/chat');
@@ -157,9 +185,66 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await projects
         .getByLabel('Instructions', { exact: true })
         .fill('Sidebar instructions remain editable.');
-    await projects
-        .getByRole('button', { name: 'Save settings', exact: true })
+    const defaultModel = projects.getByRole('button', {
+        name: 'Default model',
+        exact: true,
+    });
+    await defaultModel.click();
+    await page
+        .getByRole('option', { name: 'Sidebar test model', exact: true })
         .click();
+    const createPermission = projects.getByRole('combobox', {
+        name: 'Permission for Create document',
+        exact: true,
+    });
+    await createPermission.click();
+    await page.getByRole('option', { name: 'Ask first', exact: true }).click();
+    await expect(
+        projects.getByLabel('Allowed repositories for Create document', {
+            exact: true,
+        }),
+    ).toHaveCount(0);
+    await expect(
+        projects.getByText('Search documents', { exact: true }),
+    ).not.toBeVisible();
+    await projects
+        .getByRole('button', { name: 'Save changes', exact: true })
+        .click();
+    await expect(projects.getByRole('status')).toHaveText('All changes saved');
+    await projects
+        .getByLabel('Instructions', { exact: true })
+        .fill('Discard this draft.');
+    await projects
+        .getByRole('button', { name: 'Discard changes', exact: true })
+        .click();
+    await expect(
+        projects.getByLabel('Instructions', { exact: true }),
+    ).toHaveValue('Sidebar instructions remain editable.');
+    await expect(defaultModel).toContainText('Sidebar test model');
+    await expect(createPermission).toContainText('Ask first');
+    await expect(
+        projects.getByRole('button', { name: 'Save changes', exact: true }),
+    ).toBeDisabled();
+    await projects
+        .getByRole('heading', { name: 'Settings', exact: true })
+        .scrollIntoViewIfNeeded();
+    const settingsPath = info.outputPath('project-settings-redesigned.png');
+    await page.screenshot({ path: settingsPath });
+    await info.attach('project-settings-redesigned', {
+        path: settingsPath,
+        contentType: 'image/png',
+    });
+    await navigation.screenshot({
+        path: info.outputPath('project-settings-sidebar-light.png'),
+        animations: 'disabled',
+    });
+    await projects
+        .getByRole('button', { name: 'Manage chats', exact: true })
+        .scrollIntoViewIfNeeded();
+    await navigation.screenshot({
+        path: info.outputPath('project-settings-tools-light.png'),
+        animations: 'disabled',
+    });
     await projects
         .getByRole('button', { name: 'Overview', exact: true })
         .click();
@@ -380,6 +465,23 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         path: info.outputPath('project-knowledge-sidebar-dark.png'),
         animations: 'disabled',
     });
+    await openProjectSection(page, 'Settings');
+    await defaultModel.click();
+    await page
+        .getByRole('option', { name: 'Use chat default', exact: true })
+        .click();
+    await projects
+        .getByRole('button', { name: 'Save changes', exact: true })
+        .click();
+    await expect(projects.getByRole('status')).toHaveText('All changes saved');
+    await expect(defaultModel).toContainText('Use chat default');
+    await projects
+        .getByRole('heading', { name: 'Settings', exact: true })
+        .scrollIntoViewIfNeeded();
+    await navigation.screenshot({
+        path: info.outputPath('project-settings-sidebar-dark.png'),
+        animations: 'disabled',
+    });
 });
 // Observable failures: lost settings on reload; one project leaking another's memories;
 // worker startup, malformed DOCX/PDF handling; failed replacement losing the current source.
@@ -434,7 +536,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
         .getByLabel('Instructions', { exact: true })
         .fill('Prefer concise source-backed answers.');
     await page
-        .getByRole('button', { name: 'Save settings', exact: true })
+        .getByRole('button', { name: 'Save changes', exact: true })
         .click();
     await openProjectSection(page, 'Memory');
     await page.getByRole('button', { name: 'Add memory', exact: true }).click();
@@ -914,6 +1016,9 @@ test('project chat submits only its captured context and persists the inspector'
         .click();
     await openProjectSection(page, 'Settings');
     await page
+        .getByRole('button', { name: 'Manage chats', exact: true })
+        .click();
+    await page
         .getByRole('group', { name: 'Saffron project chat', exact: true })
         .getByRole('button', { name: 'Remove', exact: true })
         .click();
@@ -941,7 +1046,9 @@ test('project chat submits only its captured context and persists the inspector'
         'Hello from deterministic stream.',
     );
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Save project memory' })).not.toBeVisible();
+    await expect(
+        page.getByRole('dialog', { name: 'Save project memory' }),
+    ).not.toBeVisible();
     await indicator.click();
     await rememberAction.scrollIntoViewIfNeeded();
     const actionPath = info.outputPath('project-memory-message-action.png');
@@ -1014,13 +1121,19 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
         page.getByText(/Saffron saved decision marker/).first(),
     ).toBeVisible();
     await openProjectSection(page, 'Settings');
+    await page
+        .getByRole('button', { name: 'Manage chats', exact: true })
+        .click();
     const row = page.getByRole('group', {
         name: 'Compaction original evidence',
         exact: true,
     });
-    await row
-        .getByRole('button', { name: 'Exclude from memory', exact: true })
-        .click();
+    const includeInMemory = row.getByRole('switch', {
+        name: 'Include Compaction original evidence in memory',
+        exact: true,
+    });
+    await includeInMemory.click();
+    await expect(includeInMemory).not.toBeChecked();
     await openProjectSection(page, 'Memory');
     await page
         .getByRole('button', {

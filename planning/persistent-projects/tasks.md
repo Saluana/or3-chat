@@ -29,7 +29,7 @@ Follow dependency order. Checkboxes target 1–4 hours; split larger discoveries
 
 - [x] 4.1 Register Projects/Home with profiles/tabs. **R1.** Done: search/pin/recent/create/open work on keyboard/mobile.
 - [x] 4.2 Compose Project Home/Knowledge. **R1, R2.** Done: mixed chat/document activity, Home Projects link, entry-aware single back navigation, and compact source intake/history/modes.
-- [x] 4.3 Add Memory/Settings/Remember actions. **R1, R3, R5.** Done: readable brief/fact/decision cards with explicit add/edit forms; project-only message toolbar action with reviewed saving to the chat's owner; model/tool settings reflect availability.
+- [x] 4.3 Add Memory/Settings/Remember actions. **R1, R3, R5.** Done: readable brief/fact/decision cards, a project-only message toolbar action, searchable model/tool settings using registered UI metadata, conditional repository controls, compact chat management, and visible save/discard controls.
 - [x] 4.4 Add Context Receipt inspector. **R4.** Done: available/retrieved/included context and omissions are distinguishable.
 
 ## 5. Phase 1 qualification

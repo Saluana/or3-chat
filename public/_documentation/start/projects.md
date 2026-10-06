@@ -30,7 +30,9 @@ Relevant valid handoff summaries may be retrieved in later turns. Project search
 
 ## Settings and context
 
-Set project instructions and a default model. Explicit chat model choices take precedence. Saved project context must fit alongside the conversation and completion allowance; OR3 does not silently truncate required instructions or memory.
+Settings groups instructions, the searchable default-model picker, and tool permissions. Pick **Use chat default** to inherit the normal chat model; explicit chat model choices take precedence. Tool rows use their registered names, descriptions, and icons, grouped by category. Search tools and choose **Off**, **Ask first**, or **On**. Globally disabled tools and tools that cannot enforce project scope sit under **Unavailable tools**, with an explanation. Repository restrictions expand only for tools with a repository argument; old unsupported restrictions can be cleared explicitly. **Save changes** and **Discard** remain visible while scrolling. Instructions, model, and permission edits take effect only when saved.
+
+Expand **Project chats** to add or remove conversations or switch their inclusion in project memory. Those chat actions save immediately; save or discard other settings first. Saved project context must fit alongside the conversation and completion allowance; OR3 does not silently truncate required instructions or memory.
 
 The response's **Context** control lists the actual submitted instructions, brief, memories, sources, images, and chat summaries. Available, retrieved, and included are different states. The inspector retains bounded previews and per-request iteration state after reload; inclusion does not prove the model relied on a source. Originals remain accessible in Knowledge.
 
