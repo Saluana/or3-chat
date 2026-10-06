@@ -207,6 +207,13 @@ async function executePendingClientTool(
     const dispatch = (async () => {
         const claim = await claimBackgroundClientTool(tracker.jobId, callId);
         if (!claim) return;
+        // The claim route can renew the access cookie while the browser still
+        // holds the previous session expiry. Refresh before a workspace tool
+        // captures authorization, then recheck the originating identity below.
+        const expiresAt = getCachedSessionContext()?.expiresAt;
+        if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
+            await refreshCachedSessionContext();
+        }
         if (
             !canDispatch() ||
             (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||

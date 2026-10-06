@@ -159,7 +159,9 @@ const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
 export default defineNuxtConfig({
     ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
         ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
-        : {}),
+        : process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true'
+            ? { buildDir: resolve(__dirname, '.nuxt-e2e-journeys') }
+            : {}),
     app: {
         head: {
             script: [hostEsmFacadeImportMapScript()],

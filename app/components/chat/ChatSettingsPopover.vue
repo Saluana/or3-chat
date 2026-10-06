@@ -50,10 +50,25 @@
             class="chat-settings-body"
             :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
         >
-            <!-- Current model: shown when the composer is too narrow for its
-                 own picker. Opens the favorites dropdown directly. -->
+            <UButton
+                v-if="(isMobile || !containerWidth || containerWidth <= 400) && !modelItems.length"
+                variant="ghost"
+                color="neutral"
+                aria-label="Current model"
+                class="chat-settings-model-trigger ring-0! w-full"
+                :disabled="loading"
+                @click="emit('open-model-catalog')"
+            >
+                <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="32" :tile="true" />
+                <span class="chat-settings-row-copy min-w-0 text-left">
+                    <span class="chat-settings-row-title truncate">{{ selectedModel || 'Choose a model' }}</span>
+                    <span class="chat-settings-row-description truncate">Browse available models</span>
+                </span>
+                <UIcon :name="iconChevronDown" class="size-4 shrink-0" aria-hidden="true" />
+            </UButton>
+            <!-- Favorites stay one click away; fresh accounts open the catalog. -->
             <USelectMenu
-                v-if="isMobile || !containerWidth || containerWidth <= 400"
+                v-else-if="isMobile || !containerWidth || containerWidth <= 400"
                 v-model="selectedModel"
                 :items="modelItems"
                 value-key="value"

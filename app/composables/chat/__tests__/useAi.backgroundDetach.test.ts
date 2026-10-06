@@ -1004,6 +1004,34 @@ describe('useChat background detach race', () => {
         });
     });
 
+    it('reports one background failure when subscriber and completion both deliver it', async () => {
+        // The transport has two terminal delivery paths. The controller must
+        // report once, settle controls and keep the saved turn recoverable.
+        holdBackgroundCompletion = true;
+        vi.resetModules();
+        const errors = await import('~/utils/errors');
+        const report = vi.spyOn(errors, 'reportError');
+        try {
+            const { useChat } = await import('~/composables/chat/useAi');
+            const chat = useChat([], 'thread-1');
+            const send = chat.sendMessage('hello', { model: 'test-model', files: [], file_hashes: [], context_hashes: [] });
+            await waitForCall(startBackgroundStreamMock);
+            resolveBackgroundStart?.({ jobId: 'job-failed-once' });
+            await waitForCall(subscribeBackgroundJobMock);
+            const status = { id: 'job-failed-once', status: 'error', error: 'Provider failure', content: '', attempt: 1 };
+            const subscriber = latestTracker.subscribers.values().next().value;
+            subscriber.onError({ status, content: '', delta: '' });
+            latestTracker.resolveCompletion(status);
+            await expect(send).resolves.toMatchObject({ status: 'failed' });
+            expect(report).toHaveBeenCalledTimes(1);
+            expect(chat.loading.value).toBe(false);
+            expect(chat.tailAssistant.value).toMatchObject({ pending: false, error: expect.any(String) });
+            subscriber.onError({ status, content: '', delta: '' });
+            await nextTick();
+            expect(report).toHaveBeenCalledTimes(1);
+        } finally { report.mockRestore(); }
+    });
+
     it('keeps server tools in background streaming', async () => {
         enabledToolDefsRef.value = [
             {
@@ -1536,6 +1564,33 @@ describe('useChat background detach race', () => {
             pending: false,
             error: 'stream_interrupted',
         });
+    });
+
+    for (const completesLater of [false, true]) it(`recovers a seeded admission when durable completion arrives ${completesLater ? 'after' : 'before'} attach`, async () => {
+        vi.useFakeTimers();
+        let chat: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
+        try {
+            vi.setSystemTime(100_000);
+            const pending = { id: 'assistant-admission', role: 'assistant', thread_id: 'thread-1',
+                pending: true, error: null, index: 1, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_mode: 'background', background_admission_id: 'admission',
+                    generation_lease_id: 'other-tab', generation_heartbeat_at: Date.now() } };
+            const completed = { ...pending, pending: false, data: { ...pending.data, content: 'Durable completed reply', generation_state: 'complete' } };
+            messageStore.set(pending.id, completesLater ? pending : completed);
+            messagesByThreadMock.mockImplementation(async () => [messageStore.get(pending.id)]);
+            vi.resetModules();
+            const { useChat } = await import('~/composables/chat/useAi');
+            chat = useChat([{ id: pending.id, role: 'assistant', content: '', pending: true }],
+                'thread-1', undefined, { historyAlreadyLoaded: true });
+            await chat.ensureHistorySynced();
+            if (completesLater) {
+                messageStore.set(pending.id, completed);
+                await vi.advanceTimersByTimeAsync(1_000);
+            }
+            expect(chat.messages.value[0]).toMatchObject({ text: 'Durable completed reply', pending: false });
+            expect(chat.rawMessages.value[0]).toMatchObject({ content: 'Durable completed reply', pending: false });
+            expect(messageStore.get(pending.id)).toEqual(completed);
+        } finally { chat?.dispose(); vi.useRealTimers(); }
     });
 
     it('keeps a quiet foreground generation alive when another tab reconciles history', async () => {

@@ -2,6 +2,7 @@
 .output
 .data
 .nuxt
+.nuxt-e2e-journeys
 .nitro
 .cache
 dist

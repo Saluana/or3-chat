@@ -23,6 +23,32 @@ const row = (input: Partial<Message> & Pick<Message, 'id' | 'role' | 'index'>): 
 });
 
 describe('canonical transcript projections', () => {
+    // Background and legacy turns can retain results on the assistant only.
+    // Losing those results makes the next provider request invalid; emitting
+    // them twice when durable tool rows exist is invalid too.
+    it('replays embedded tool results once after reload without changing stored history', async () => {
+        const rows = [row({ id: 'a', role: 'assistant', index: 1, data: {
+            content: 'The file code is FILE-AO-942.', tool_calls: [
+                { id: 'lookup-1', name: 'workspace_search', args: '{}', status: 'complete', result: 'FILE-AO-942' },
+                { id: 'lookup-2', name: 'workspace_search', args: '{}', status: 'error',
+                    transcript: { transcriptVersion: 1, kind: 'tool_result', callId: 'lookup-2', toolName: 'workspace_search',
+                        status: 'error', result: 'File unavailable', error: 'File unavailable' } },
+            ],
+        } }), row({ id: 'u', role: 'user', index: 2, data: { content: 'Recall the file code.' } })];
+        const before = JSON.stringify(rows);
+        const { buildOpenRouterMessages } = await import('~/core/auth/openrouter-build');
+        const wire = await buildOpenRouterMessages(projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(rows)));
+        expect(wire.map((message) => message.role)).toEqual(['assistant', 'tool', 'tool', 'user']);
+        expect(wire[1]).toMatchObject({ tool_call_id: 'lookup-1', content: [{ type: 'text', text: 'FILE-AO-942' }] });
+        expect(wire[2]).toMatchObject({ tool_call_id: 'lookup-2', content: [{ type: 'text', text: 'File unavailable' }] });
+        expect(JSON.stringify(rows)).toBe(before);
+        const withDurableResult = storedMessagesToCanonicalTranscript([rows[0]!, row({ id: 't', role: 'tool', index: 1.5,
+            data: { parent_assistant_id: 'a', tool_call_id: 'lookup-1', tool_name: 'workspace_search', content: 'durable result' } }), rows[1]!]);
+        const replay = projectTranscriptForOpenRouter(withDurableResult);
+        expect(replay.filter((message) => message.role === 'tool' && message.tool_call_id === 'lookup-1')).toHaveLength(1);
+        expect(replay.find((message) => message.id === 't')?.content).toBe('durable result');
+        expect(projectTranscriptForUi(storedMessagesToCanonicalTranscript(rows)).map((message) => message.id)).toEqual(['a', 'u']);
+    });
     it('preserves validated host compaction/usage on reload while sending only summary text on the provider wire', async () => {
         const compaction = { version: 1, compaction_id: 'compact-1', source_thread_id: 'source', anchor_message_id: 'anchor',
             anchor_index: 7, generated_at: 100, model: 'model', message_count: 3, prior_message_count: 0,

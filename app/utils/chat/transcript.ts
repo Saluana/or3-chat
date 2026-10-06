@@ -275,7 +275,9 @@ export function reconcileTranscriptToolState(
 export function projectTranscriptForOpenRouter(
     input: CanonicalTranscriptRecord[]
 ): ChatMessage[] {
-    return reconcileTranscriptToolState(input).map((record) => {
+    const durableResults = new Set(input.filter((record) => record.kind === 'tool_result' && record.callId)
+        .map((record) => `${record.threadId}\0${record.callId}`));
+    return reconcileTranscriptToolState(input).flatMap((record) => {
         const toolCalls: ToolCall[] | undefined = record.toolCalls.length
             ? record.toolCalls.map((call) => ({
                   id: call.callId,
@@ -283,7 +285,7 @@ export function projectTranscriptForOpenRouter(
                   function: { name: call.name, arguments: call.arguments },
               }))
             : undefined;
-        return {
+        const message: ChatMessage = {
             id: record.id,
             role: record.role,
             content: record.content,
@@ -319,6 +321,19 @@ export function projectTranscriptForOpenRouter(
                 })),
             },
         };
+        // Older/background projections keep completed results on the assistant
+        // instead of separate rows. Replay that saved evidence on the wire so
+        // the next request has a closed call/result pair. Never write synthetic
+        // rows or duplicate a result already present in the durable transcript.
+        const embeddedResults: ChatMessage[] = record.kind === 'assistant'
+            ? record.toolCalls.filter((call) => typeof call.result === 'string'
+                && (call.status === 'complete' || call.status === 'error')
+                && !durableResults.has(`${record.threadId}\0${call.callId}`))
+                .map((call) => ({ id: `${record.id}:tool-result:${call.callId}`, role: 'tool',
+                    content: call.result!, name: call.name, tool_call_id: call.callId,
+                    data: { parent_assistant_id: record.id, tool_call_id: call.callId, tool_name: call.name } }))
+            : [];
+        return [message, ...embeddedResults];
     });
 }
 

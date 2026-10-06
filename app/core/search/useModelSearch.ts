@@ -126,6 +126,18 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
             return;
         }
         const token = ++lastQueryToken; // race guard
+        // Model identifiers use punctuation where display names use spaces.
+        // Prefer those literal names/IDs before broad full-text description
+        // matches consume the result limit and bury the requested model.
+        const normalizeName = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+        const nameQuery = normalizeName(raw);
+        const named = nameQuery ? models.value.filter((model) =>
+            [model.id, model.canonical_slug ?? '', model.name]
+                .some((value) => normalizeName(value).includes(nameQuery))) : [];
+        if (named.length) {
+            results.value = named.slice(0, 100);
+            return;
+        }
         try {
             const r = await searchWithIndex(currentDb, raw, 100);
             if (token !== lastQueryToken) return; // stale response

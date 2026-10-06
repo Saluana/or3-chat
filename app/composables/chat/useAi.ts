@@ -1228,6 +1228,9 @@ export function useChat(
                 NonNullable<BackgroundJobSubscriber['onComplete']>
             >[0]
         ) => {
+            // Subscriber delivery and the completion promise can carry the
+            // same terminal status. Claim/report it only once.
+            if (request.finalization) return;
             if (
                 typeof update.status.attempt === 'number' &&
                 typeof request.lastAttempt === 'number' &&
@@ -1477,8 +1480,22 @@ export function useChat(
             | undefined;
         // Stale query results must never touch a newer thread's view.
         if (!ownsReconcileView()) return;
+        const restoreSavedAssistant = (row: StoredMessage) => {
+            if (!ownsReconcileView() || loading.value) return;
+            const restored = projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript([row]))
+                .find((message) => message.id === row.id);
+            if (!restored) return;
+            rawMessages.value = rawMessages.value.map((message) => message.id === row.id ? restored : message);
+            messages.value = messages.value.map((message) => message.id === row.id
+                ? { ...message, ...ensureUiMessage(restored) } : message);
+        };
         for (const row of persisted ?? []) {
             const rowData = row.data as Record<string, unknown> | null;
+            if (row.role === 'assistant' && row.pending !== true) {
+                const visible = messages.value.find((message) => message.id === row.id);
+                if (visible?.pending)
+                    restoreSavedAssistant(row);
+            }
             if (
                 row.role !== 'assistant' ||
                 row.pending !== true ||
@@ -1502,6 +1519,15 @@ export function useChat(
                     // Another tab renewed the lease after this check was
                     // scheduled. Keep watching until it settles or expires.
                     if (!disposed) scheduleCheck(remainingForegroundLeaseMs(latest));
+                    return;
+                }
+                if (!ownsReconcileView()) return;
+                if (latest.pending !== true) {
+                    restoreSavedAssistant(latest);
+                    return;
+                }
+                if (typeof latest.data?.background_job_id === 'string') {
+                    await reattachBackgroundJobs();
                     return;
                 }
                 let finalizedHere = false;
@@ -1572,7 +1598,12 @@ export function useChat(
 
             const scheduleCheck = (delay: number) => {
                 if (!ownsReconcileView()) return;
-                const timer = setTimeout(() => void interrupt(), delay);
+                // Admission can finish on the server after a reload but before
+                // this tab receives its job ID. Check that gap promptly instead
+                // of leaving an empty row for the foreground lease duration.
+                const admissionDelay = rowData?.generation_mode === 'background'
+                    && typeof rowData.background_admission_id === 'string' ? Math.min(delay, 1000) : delay;
+                const timer = setTimeout(() => void interrupt(), admissionDelay);
                 foregroundReconcileTimers.set(row.id, timer);
             };
 
@@ -2664,7 +2695,9 @@ export function useChat(
                         error: visibleError,
                         messageError: 'stream_interrupted',
                         generationState: 'interrupted',
-                        deleteEmpty: true,
+                        // Keep the failed turn visible and retryable after
+                        // the transient toast disappears or the page reloads.
+                        deleteEmpty: false,
                         beforePersist: async () => {
                             if (requestScope.ownsView())
                                 requestScope.accumulator.finalize({
@@ -3417,7 +3450,7 @@ export function useChat(
                         error: visibleError,
                         messageError: terminalResult.reason === 'context_full' ? 'context_full' : 'stream_interrupted',
                         generationState: 'interrupted',
-                        deleteEmpty: terminalResult.reason !== 'context_full',
+                        deleteEmpty: false,
                         beforePersist: async () => {
                             if (requestScope.ownsView())
                                 requestScope.accumulator.finalize({

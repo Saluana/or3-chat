@@ -152,6 +152,10 @@ export function normalizeStreamingMessage(input: {
                   ? fn.name
                   : '';
         if (!id || !name) continue;
+        const transcript = asRecord(call.transcript);
+        const savedResult = transcript?.transcriptVersion === 1 && transcript.kind === 'tool_result'
+            && transcript.callId === id && transcript.toolName === name
+            && (transcript.status === 'complete' || transcript.status === 'error') ? transcript : null;
         const rawStatus = call.status;
         const status: NormalizedStreamingToolCall['status'] =
             rawStatus === 'complete' ||
@@ -170,8 +174,10 @@ export function normalizeStreamingMessage(input: {
                       ? fn.arguments
                       : undefined,
             result:
-                typeof call.result === 'string' ? call.result : undefined,
-            error: typeof call.error === 'string' ? call.error : undefined,
+                typeof call.result === 'string' ? call.result
+                    : typeof savedResult?.result === 'string' ? savedResult.result : undefined,
+            error: typeof call.error === 'string' ? call.error
+                : typeof savedResult?.error === 'string' ? savedResult.error : undefined,
             fingerprint:
                 typeof call.fingerprint === 'string'
                     ? call.fingerprint

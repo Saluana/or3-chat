@@ -832,6 +832,59 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    test('model name and identifier searches keep the exact model visible in a large catalog', async ({ page }, info) => {
+        const models = [
+            { id: 'openai/gpt-4.1-mini', name: 'OpenAI: GPT-4.1 Mini', context_length: 1_000_000 },
+            { id: 'openai/gpt-4.1-mini:batch', name: 'OpenAI: GPT-4.1 Mini (batch)', context_length: 1_000_000 },
+            ...Array.from({ length: 110 }, (_,i) => ({ id: `openai/gpt-other-${i}`, name: `OpenAI: GPT Other ${i}`,
+                description: 'A model for general conversation.', context_length: 128_000 })),
+        ].map((model) => ({ ...model, pricing: { prompt: '0.000001', completion: '0.000001' },
+            architecture: { input_modalities: ['text'], output_modalities: ['text'] }, supported_parameters: ['tools'] }));
+        await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: models, links: { next: null }, total_count: models.length } }));
+        await page.addInitScript((models) => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: models, fetchedAt: Date.now() })), models);
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
+        const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+        const query = catalog.getByRole('textbox', { name: 'Search models by name, provider, or capability…' });
+        for (const text of ['gpt-4.1 mini', 'openai/gpt-4.1-mini']) {
+            await query.fill(text);
+            await expect(catalog.getByRole('option')).toHaveCount(2);
+            await expect(catalog.getByRole('option').filter({ hasText: 'OpenAI: GPT-4.1 Mini' }).first()).toBeVisible();
+        }
+        const path = info.outputPath('exact-model-search.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('exact-model-search', { path, contentType: 'image/png' });
+        // A selection notice must leave the composer usable immediately.
+        await catalog.getByRole('button', { name: 'Use model', exact: true }).click();
+        await expect(page.getByText('Model selected', { exact: true })).toBeVisible();
+        await page.getByRole('textbox', { name: 'Message input' }).fill('journey:model-selection-send');
+        await page.getByRole('button', { name: 'Send message', exact: true }).click({ timeout: 1000 });
+        await expect(page.getByText('Model selected', { exact: true })).toBeVisible();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+    });
+    test('rapid branching opens one saved child and preserves the original tab', async ({ page }, info) => {
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await send(page, 'journey:branch-reliability');
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Send message', exact: true }).waitFor();
+        const sourceTitle = await page.getByRole('tab', { selected: true }).innerText();
+        await page.getByRole('button', { name: 'Branch conversation', exact: true }).last().dblclick();
+        const child = page.getByRole('tab', { name: `${sourceTitle} - fork`, exact: true });
+        await expect(child).toHaveAttribute('aria-selected', 'true');
+        await expect(child).toHaveCount(1);
+        await expect(page.getByRole('tab', { name: sourceTitle, exact: true })).toHaveCount(1);
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toHaveCount(1);
+        await page.reload();
+        await expect(child).toHaveAttribute('aria-selected', 'true');
+        await expect(child).toHaveCount(1);
+        const shot = info.outputPath('single-branch-after-reload.png');
+        await page.screenshot({ path: shot, animations: 'disabled' });
+        await info.attach('single-branch-after-reload', { path: shot, contentType: 'image/png' });
+    });
+
     test('a model without tool support receives no workspace tool definitions', async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [{
@@ -1221,15 +1274,21 @@ test.describe('production chat journey', () => {
             .toHaveCount(0);
     });
 
-    test('surfaces a stream error and retries the persisted user turn', async ({
-        page,
-    }) => {
+    for (const prompt of ['journey:error', 'journey:error-empty']) test(`surfaces ${prompt} after reload and retries the persisted user turn`, async ({ page }, info) => {
         await openChat(page);
-        await send(page, 'journey:error');
+        await send(page, prompt);
 
-        await expect(page.getByText('Partial response before failure.'))
-            .toBeVisible();
-        const retry = page.getByRole('button', { name: 'Retry' }).last();
+        const failedResponse = page.getByRole('alert', { name: 'Response failed', exact: true });
+        await expect(failedResponse).toBeVisible();
+        await expect(failedResponse).not.toContainText('Deterministic provider failure');
+        await expect(page.getByRole('button', { name: 'Stop generation' })).toHaveCount(0);
+        if (prompt === 'journey:error') await expect(page.getByText('Partial response before failure.')).toBeVisible();
+        const shot = info.outputPath('failed-response.png');
+        await page.screenshot({ path: shot, animations: 'disabled' });
+        await info.attach('failed-response', { path: shot, contentType: 'image/png' });
+        await page.reload();
+        await expect(failedResponse).toBeVisible();
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last();
         await expect(retry).toBeVisible();
         await retry.click();
 
@@ -1238,10 +1297,11 @@ test.describe('production chat journey', () => {
         // resurrect the failed partial reply or duplicate its user prompt.
         await expect(page.getByText('Partial response before failure.'))
             .toHaveCount(0);
-        await expect(page.getByText('journey:error', { exact: true })).toHaveCount(1);
+        await expect(page.getByText(prompt, { exact: true })).toHaveCount(1);
+        await expect(failedResponse).toHaveCount(0);
 
         await page.reload();
-        await expect(page.getByText('journey:error', { exact: true })).toHaveCount(1);
+        await expect(page.getByText(prompt, { exact: true })).toHaveCount(1);
         await expect(page.getByText('Recovered after retry.')).toBeVisible();
         await expect(page.getByText('Partial response before failure.'))
             .toHaveCount(0);

@@ -12,7 +12,7 @@ On a Cloud instance, sign in if requested. The operator may supply an instance k
 
 ## 2. Choose a model and send a message
 
-Open a chat, select a model from the chat's model selector, and type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
+Open a chat, open **Settings → Current model** to browse the catalog, and type a short prompt such as “Give me three ideas for a weekend project.” Favorite models also appear in the model selector. Send it using the chat input's send control. The assistant response appears incrementally while it streams.
 
 Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
 
@@ -21,6 +21,8 @@ Choose a model with the capabilities your request needs. For an image or file, u
 After the response completes, reload the page and reopen the chat from the sidebar or [command palette](/documentation/start/command-palette). Your conversation should still be there in the same browser profile and workspace.
 
 Use the stop control to cancel an active response. Server background behavior depends on the instance's configuration; do not assume that closing the browser always stops generation.
+
+A failed response keeps its error in the conversation after reload. Use **Retry message** to retry the saved turn, or continue with a new message. A stopped response keeps any accepted partial text.
 
 ## If something goes wrong
 

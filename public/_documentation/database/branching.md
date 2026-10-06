@@ -2,6 +2,8 @@
 
 Utilities for forking threads, retry-branching assistant replies, and building canonical conversation contexts across Dexie tables.
 
+The chat's **Branch conversation** action opens the saved child in a workspace tab and keeps the source tab available. Navigation checks the originating workspace generation and thread so a completed branch cannot redirect a different conversation after a workspace switch.
+
 ---
 
 ## What does it do?

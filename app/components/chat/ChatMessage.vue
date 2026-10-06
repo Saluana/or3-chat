@@ -173,6 +173,17 @@
                 ]"
                 ref="contentEl"
             >
+                <p
+                    v-if="responseError"
+                    role="alert"
+                    aria-label="Response failed"
+                    class="mb-3 text-sm text-error whitespace-pre-wrap wrap-anywhere"
+                >
+                    {{ responseError }}
+                </p>
+                <p v-else-if="responseStopped" role="status" class="mb-3 text-sm opacity-70">
+                    Response stopped. You can retry or continue the conversation.
+                </p>
                 <!-- Retro loader extracted to component -->
                 <LoadingGenerating
                     v-if="
@@ -435,6 +446,8 @@ import LoadingGenerating from './LoadingGenerating.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
+import { presentError } from '~~/shared/errors';
+import { getWorkspaceGeneration } from '~/db/client';
 import type {
     ToolCallInfo,
     UiChatMessage,
@@ -469,6 +482,12 @@ const props = withDefaults(
     }>(),
     { interactive: true },
 );
+const toast = useToast();
+const responseStopped = computed(() => props.message.role === 'assistant' && !props.message.pending &&
+    ['stopped', 'Background response aborted', 'aborted'].includes(props.message.error ?? ''));
+const responseError = computed(() => props.message.role === 'assistant' && !props.message.pending &&
+    props.message.error && !responseStopped.value
+    ? presentError(props.message.error, { code: 'ERR_STREAM_FAILURE' }).message : null);
 const customMessageRenderer = computed(
     () => resolveMessageRenderer(props.message)?.component ?? null
 );
@@ -479,7 +498,7 @@ const workflowFallbackError = computed(() =>
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
     (e: 'continue', id: string): void;
-    (e: 'branch', id: string): void;
+    (e: 'branch', id: string, source?: { originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'edited', payload: { id: string; content: string }): void;
     (e: 'begin-edit', id: string): void;
     (e: 'cancel-edit', id: string): void;
@@ -973,7 +992,7 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true });
 function copyMessage() {
     copyToClipboard(props.message.text || '')
         .then(() => {
-            useToast().add({
+            toast.add({
                 title: 'Message copied',
                 description:
                     'The message content has been copied to your clipboard.',
@@ -981,7 +1000,7 @@ function copyMessage() {
             });
         })
         .catch(() => {
-            useToast().add({
+            toast.add({
                 title: 'Copy failed',
                 description: 'Could not copy message to clipboard.',
                 color: 'error',
@@ -1015,18 +1034,20 @@ async function onBranch() {
     if (branching.value) return;
     branching.value = true;
     const messageId = props.message.id;
-    if (!messageId) return;
+    const originThreadId = props.threadId || '';
+    const generation = getWorkspaceGeneration();
+    if (!messageId) { branching.value = false; return; }
     try {
         // For assistant messages we now allow direct anchoring (captures assistant content in branch).
         // If "retry" semantics desired, a separate Retry action still uses retryBranch.
         const res = await forkThread({
-            sourceThreadId: props.threadId || '',
+            sourceThreadId: originThreadId,
             anchorMessageId: messageId,
             mode: branchMode.value,
             titleOverride: branchTitle.value || undefined,
         });
-        emit('branch', res.thread.id);
-        useToast().add({
+        emit('branch', res.thread.id, { originThreadId, anchorMessageId: messageId, generation });
+        toast.add({
             title: 'Branched',
             description: `New branch: ${res.thread.title}`,
             color: 'primary',
@@ -1035,7 +1056,7 @@ async function onBranch() {
     } catch (e: unknown) {
         const message =
             e instanceof Error ? e.message : 'Error creating branch';
-        useToast().add({
+        toast.add({
             title: 'Branch failed',
             description: message,
             color: 'error',
@@ -1064,7 +1085,7 @@ async function runExtraAction(action: ChatMessageAction) {
         const description =
             e instanceof Error ? e.message : 'Error running action';
         try {
-            useToast().add({
+            toast.add({
                 title: 'Action failed',
                 description,
                 color: 'error',
@@ -1133,20 +1154,23 @@ const streamMdClasses = [
     bottom: 0;
     left: 50%;
     transform: translate(-50%, 50%);
+    /* Size the desktop strip independently of a short message bubble. */
+    width: max-content;
     min-width: 0;
-    max-width: 100%;
 }
 
 .cm-action-group {
     min-width: 0;
     max-width: 100%;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 @media (width < 768px), (pointer: coarse) {
     .cm-actions {
         position: static;
         transform: none;
+        width: auto;
+        max-width: 100%;
         justify-content: center;
         align-items: center;
         padding-block: 6px;
@@ -1154,6 +1178,7 @@ const streamMdClasses = [
     }
 
     .cm-action-group {
+        flex-wrap: wrap;
         justify-content: center;
         column-gap: 0;
         row-gap: 12px;
@@ -1191,6 +1216,8 @@ const streamMdClasses = [
     .cm-actions {
         position: static;
         transform: none;
+        width: auto;
+        max-width: 100%;
         justify-content: center;
         align-items: center;
         padding-block: 6px;
@@ -1198,6 +1225,7 @@ const streamMdClasses = [
     }
 
     .cm-action-group {
+        flex-wrap: wrap;
         justify-content: center;
         column-gap: 0;
         row-gap: 12px;

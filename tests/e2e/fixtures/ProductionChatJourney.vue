@@ -310,8 +310,13 @@ function installDeterministicFetch(): void {
                     (message as { role?: unknown }).role === 'user'
             );
         const text = messageText(prompt);
-        const attempt = (attemptsByPrompt.get(text) ?? 0) + 1;
+        const errorAttemptKey = `or3:e2e:error-attempt:${text}`;
+        const priorAttempt = text.startsWith('journey:error')
+            ? Number(sessionStorage.getItem(errorAttemptKey) ?? 0)
+            : attemptsByPrompt.get(text) ?? 0;
+        const attempt = priorAttempt + 1;
         attemptsByPrompt.set(text, attempt);
+        if (text.startsWith('journey:error')) sessionStorage.setItem(errorAttemptKey, String(attempt));
         if (contextJourney) {
             const bytes = encoder.encode(JSON.stringify(body));
             const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -459,7 +464,7 @@ function installDeterministicFetch(): void {
                         text.includes('journey:error') &&
                         attempt === 1
                     ) {
-                        enqueue(sseChunk('Partial response before failure.'));
+                        if (!text.includes('journey:error-empty')) enqueue(sseChunk('Partial response before failure.'));
                         await delay(800);
                         enqueue(sseError('Deterministic provider failure'));
                     } else if (text.includes('journey:error')) {

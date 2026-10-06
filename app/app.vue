@@ -1,5 +1,5 @@
 <template>
-    <UApp>
+    <UApp :toaster="{ position: 'top-right' }">
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
         <ErrorRecovery />

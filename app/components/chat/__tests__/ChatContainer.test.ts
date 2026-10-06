@@ -149,6 +149,33 @@ const createThemeMock = () => ({
 });
 
 describe('ChatContainer', () => {
+    // A reload can seed a pending row before background admission has a job ID.
+    // Synced completion must replace it; active generation must retain its
+    // in-memory text, then accept the latest saved projection after settling.
+    it('accepts synced completion for a pending turn without replacing a stream with stale parent history', async () => {
+        const replace = vi.fn();
+        const instance = makeChatInstance({ replaceCanonicalHistory: replace });
+        instance.messages.value = [{ id: 'reply', role: 'assistant', text: '', pending: true }];
+        const wrapper = mountChatInstance(instance);
+        const completed = [{ id: 'reply', role: 'assistant' as const, content: 'Saved reply', pending: false }];
+        await wrapper.setProps({ messageHistory: completed });
+        expect(replace).toHaveBeenCalledWith(completed);
+        replace.mockClear();
+        instance.loading.value = true;
+        await wrapper.setProps({ messageHistory: [{ ...completed[0]!, content: 'Latest saved reply' }] });
+        expect(replace).not.toHaveBeenCalled();
+        instance.loading.value = false;
+        await nextTick();
+        expect(replace).not.toHaveBeenCalled();
+        await wrapper.setProps({ messageHistory: [{ ...completed[0]!, content: 'Latest saved reply' }] });
+        expect(replace).toHaveBeenCalledWith([{ ...completed[0]!, content: 'Latest saved reply' }]);
+        replace.mockClear();
+        instance.loading.value = true;
+        await nextTick();
+        instance.loading.value = false;
+        await nextTick();
+        expect(replace).not.toHaveBeenCalled();
+    });
     const defaultProps = {
         threadId: 'thread-1',
         messageHistory: [],

@@ -427,20 +427,12 @@ watch(
         if (chat.value.loading.value) {
             return;
         }
-        const backgroundMode = backgroundJobMode.value;
-        const backgroundJobIdValue = backgroundJobId.value;
-        const hasPendingBackground = chat.value.messages.value.some(
-            (m) => m.role === 'assistant' && m.pending
-        );
-        if (backgroundJobIdValue && hasPendingBackground) {
-            return;
-        }
-        if (backgroundMode && backgroundMode !== 'none' && hasPendingBackground) {
-            return;
-        }
-        if (hasPendingBackground) {
-            return;
-        }
+        // A reload may see admission before the job ID arrives. That view has
+        // no tracker to settle its placeholder; accept the synced terminal row.
+        // A stale snapshot missing an unfinished reply must never erase it.
+        const saved = new Map((mh || []).map((message) => [message.id, message]));
+        if (chat.value.messages.value.some((message) => message.role === 'assistant' && message.pending
+            && saved.get(message.id)?.pending !== false)) return;
         chat.value.replaceCanonicalHistory?.(mh || []);
     }
 );
@@ -1179,8 +1171,12 @@ function onContinue(messageId: string) {
     nextTick(() => scroller.value?.refreshMeasurements?.());
 }
 
-function onBranch(newThreadId: string) {
-    if (newThreadId) emit('thread-selected', newThreadId);
+function onBranch(newThreadId: string, source?: { originThreadId: string; anchorMessageId: string; generation: number }) {
+    if (!newThreadId) return;
+    const originThreadId = source?.originThreadId ?? currentThreadId.value;
+    const generation = source?.generation ?? getWorkspaceGeneration();
+    if (!originThreadId || originThreadId !== currentThreadId.value || generation !== getWorkspaceGeneration()) return;
+    emit('view-related-thread', { threadId: newThreadId, originThreadId, anchorMessageId: source?.anchorMessageId ?? '', generation });
 }
 
 function onEdited(payload: { id: string; content: string }) {

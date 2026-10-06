@@ -373,6 +373,23 @@ describe('buildOpenRouterMessages attachment hydration', () => {
 });
 
 describe('buildOpenRouterMessages tool history', () => {
+    it('omits empty tool calls and never sends assistant-only fields on other roles', async () => {
+        // Persisted background/copy history can contain empty tool arrays on
+        // every role. Sending them causes otherwise valid follow-ups to fail.
+        const call = { id: 'call-1', type: 'function', function: { name: 'lookup', arguments: '{}' } };
+        const result = await buildOpenRouterMessages([
+            { role: 'user', content: 'Question', tool_calls: [] },
+            { role: 'assistant', content: 'Answer', tool_calls: [] },
+            { role: 'user', content: 'Follow-up', tool_calls: [call] },
+            { role: 'system', content: 'Instructions', tool_calls: [] },
+        ]);
+        for (const message of result) expect(message).not.toHaveProperty('tool_calls');
+        expect(result.map((message) => message.content)).toEqual([
+            [{ type: 'text', text: 'Question' }], [{ type: 'text', text: 'Answer' }],
+            [{ type: 'text', text: 'Follow-up' }], [{ type: 'text', text: 'Instructions' }],
+        ]);
+    });
+
     it('preserves assistant calls and matching tool result metadata', async () => {
         const result = await buildOpenRouterMessages([
             {

@@ -8,6 +8,7 @@ const abortBackgroundJobMock = vi.fn();
 const claimBackgroundClientToolMock = vi.fn();
 const submitBackgroundClientToolResultMock = vi.fn();
 const executeToolMock = vi.fn();
+const refreshCachedSessionContextMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const notificationCreateMock = vi.fn();
 const BackgroundJobPollErrorMock = vi.hoisted(
@@ -116,6 +117,7 @@ vi.mock('~/core/notifications/notification-service', () => ({
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     getCachedSessionContext: () => sessionValue,
+    refreshCachedSessionContext: () => refreshCachedSessionContextMock(),
 }));
 
 describe('backgroundJobs reattach + notifications', () => {
@@ -318,8 +320,15 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
-    it('executes a claimed client tool while the chat UI is detached', async () => {
-        sessionValue = { user: { id: 'user-1' } };
+    it.each([false, true])('executes a claimed client tool while detached with expired session cache=%s', async (expired) => {
+        sessionValue = { user: { id: 'user-1' }, expiresAt: new Date(Date.now() + (expired ? -1000 : 60_000)).toISOString() };
+        refreshCachedSessionContextMock.mockImplementation(async () => {
+            sessionValue = { ...sessionValue, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+        });
+        executeToolMock.mockImplementation(async () => {
+            if (Date.parse(sessionValue.expiresAt) <= Date.now()) return { result: null, error: 'Workspace access changed.', timedOut: false };
+            return { result: 'ok', timedOut: false };
+        });
         let streamParams: { onStatus: (status: any) => void } | null = null;
         subscribeBackgroundJobStreamMock.mockImplementation((params) => {
             streamParams = params;
@@ -387,6 +396,7 @@ describe('backgroundJobs reattach + notifications', () => {
                 definition: expect.objectContaining({ runtime: 'client' }),
             })
         );
+        expect(refreshCachedSessionContextMock).toHaveBeenCalledTimes(expired ? 1 : 0);
 
         mod.stopBackgroundJobTracking(tracker);
         mod.backgroundJobTrackers.clear();

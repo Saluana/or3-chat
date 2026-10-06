@@ -36,7 +36,9 @@ Use the existing chat request flow to send the result. A direct fetch example wo
 
 ## Input and output
 
-Input messages have a role of `user`, `assistant`, `system`, or `tool`, and string content or internal content parts. Text parts become provider text; internal image parts become `image_url`; internal file parts become `file` with `filename` and `file_data`. The result is `ORMessage[]` whose `content` is a part array. `tool_calls`, `tool_call_id`, and `name` are copied when present.
+Input messages have a role of `user`, `assistant`, `system`, or `tool`, and string content or internal content parts. Text parts become provider text; internal image parts become `image_url`; internal file parts become `file` with `filename` and `file_data`. The result is `ORMessage[]` whose `content` is a part array. Nonempty `tool_calls` are copied only for assistant messages; `tool_call_id` and `name` are copied when present.
+
+Canonical history projection restores completed embedded tool results, including validated nested transcript results, as transient tool messages when no durable result row exists. This keeps call/result pairs complete on follow-up requests without modifying saved history or duplicating durable results.
 
 Stored `file_hashes` is a **JSON-serialized array**, not a space-separated or comma-separated string. Use `serializeFileHashes` from `~/db/files-util`, or the [message-file helpers](/documentation/database/message-files), when constructing it. The builder also accepts binary image/file content; views respect their byte offsets.
 

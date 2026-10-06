@@ -14,6 +14,14 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- Basic-chat reliability fixes now preserve failed turns, replay embedded tool
+  results (including nested failure transcripts), omit empty/invalid-role tool
+  calls, refresh expired cached authorization before background client tools,
+  recover completed replies across the reload/admission gap, and open a branch
+  through workspace navigation. Fresh-account model selection, exact model
+  search, notifications over the composer, and empty-search wording were also
+  corrected. Local Chrome evidence and qualification limits are recorded in
+  [the 2026-10-05 chat reliability report](../or3-cloud-production-readiness/chat-reliability-2026-10-05.md).
 - The empty-chat fallback reuses the theme registry's lazy message renderer,
   keeping Markdown/highlighting out of the root preload graph. The offline
   chat journey harness disables Cloud features and mocks catalog startup with

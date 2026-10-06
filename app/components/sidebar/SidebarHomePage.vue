@@ -117,12 +117,12 @@
                     <SidebarEmptyState
                         v-else-if="item.type === 'empty-state'"
                         icon="lucide:ghost"
-                        title="No activity yet"
-                        description="Kick things off with a project, or jump straight into a chat or document."
+                        :title="sidebarQuery.trim() ? 'No matches found' : 'No activity yet'"
+                        :description="sidebarQuery.trim() ? 'Try different search terms or clear the search to see your saved work.' : 'Kick things off with a project, or jump straight into a chat or document.'"
                         actions-layout="column"
                         class="sb-empty-state"
                     >
-                        <template #actions>
+                        <template v-if="!sidebarQuery.trim()" #actions>
                             <UButton
                                 size="sm"
                                 variant="ghost"
