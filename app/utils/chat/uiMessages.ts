@@ -95,6 +95,8 @@ export interface UiChatMessage {
      */
     parts?: UiChatMessagePart[];
     error?: string | null;
+    /** Serialized public error envelope of a failed turn (`data.error_envelope`); `error` stays the sentinel. */
+    errorEnvelope?: string | null;
     /** Validated host summary boundary, preserved through canonical reload. */
     compaction?: CompactionData;
 
@@ -278,6 +280,10 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         pending,
         toolCalls,
         error: errorValue,
+        errorEnvelope:
+            typeof raw.data?.error_envelope === 'string'
+                ? raw.data.error_envelope
+                : null,
         isWorkflow,
         workflowState,
         ...(role === 'system' && raw.data?.kind === 'compaction'

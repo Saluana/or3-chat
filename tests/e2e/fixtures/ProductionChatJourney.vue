@@ -342,6 +342,12 @@ function installDeterministicFetch(): void {
                 if (rejected === 0) return Response.json({ error: { code: 'context_length_exceeded', message: 'Scripted initial context rejection' } }, { status: 400 });
             }
         }
+        // Provider rejects the request before streaming; the body carries upstream
+        // text that no persisted or rendered error may contain.
+        const httpFailure = /journey:http-(401|402|404)/.exec(text);
+        if (httpFailure) return Response.json(
+            { error: { code: Number(httpFailure[1]), message: 'UPSTREAM-DETAIL-MUST-NOT-RENDER' } },
+            { status: Number(httpFailure[1]) });
         const signal =
             init?.signal ?? (input instanceof Request ? input.signal : null);
 

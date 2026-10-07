@@ -1370,6 +1370,65 @@ test.describe('production chat journey', () => {
         await expect(page.getByText('Partial response before failure.'))
             .toHaveCount(0);
     });
+
+    // The toast is transient; the failed turn must keep the same classified text
+    // inline, from the persisted row, without losing the `stream_interrupted`
+    // sentinel that gates Continue/retry.
+    for (const status of [404, 402, 401]) test(`provider ${status} leaves inline failed-turn text matching the toast after reload`, async ({ page }, info) => {
+        const prompt = `journey:http-${status}`;
+        await openChat(page);
+        await send(page, prompt);
+
+        const failedResponse = page.getByRole('alert', { name: 'Response failed', exact: true });
+        await expect(failedResponse).toBeVisible();
+        const toastDescription = page.locator('[data-slot="description"]').first();
+        await expect(toastDescription).toBeVisible();
+        const toastText = (await toastDescription.innerText()).trim();
+        const inlineText = (await failedResponse.innerText()).trim();
+        const genericCopy = 'The AI response could not be completed. Try sending your message again.';
+        expect(toastText.length).toBeGreaterThan(0);
+        expect(toastText).not.toBe(genericCopy);
+        expect(inlineText).toBe(toastText);
+
+        const readFailedRow = () => page.evaluate(async () => {
+            const remembered = localStorage.getItem('or3:e2e:production-chat-thread');
+            for (const { name } of await indexedDB.databases()) {
+                if (!name) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+                if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
+                const rows = await new Promise<Array<{ role: string; pending: boolean; error?: string | null; data?: Record<string, unknown> | null; thread_id: string }>>((resolve, reject) => {
+                    const request = db.transaction('messages', 'readonly').objectStore('messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                }); db.close();
+                const row = rows.filter((candidate) => candidate.thread_id === remembered && candidate.role === 'assistant').at(-1);
+                if (row) return { pending: row.pending, error: row.error ?? null, envelope: typeof row.data?.error_envelope === 'string' ? row.data.error_envelope : null };
+            }
+            return null;
+        });
+        await expect.poll(async () => (await readFailedRow())?.pending).toBe(false);
+        const stored = (await readFailedRow())!;
+        // Sentinel and Continue/retry contract are unchanged; the envelope is additive.
+        expect(stored.error).toBe('stream_interrupted');
+        expect(stored.envelope).toBeTruthy();
+        expect(stored.envelope).not.toContain('UPSTREAM-DETAIL-MUST-NOT-RENDER');
+        const envelope = JSON.parse(stored.envelope!) as { error: { code: string; status?: number } };
+        expect(envelope.error.code).toMatch(/^ERR_/);
+        await expect(page.getByText('UPSTREAM-DETAIL-MUST-NOT-RENDER')).toHaveCount(0);
+
+        await page.reload();
+        await expect(failedResponse).toBeVisible();
+        await expect(failedResponse).toHaveText(toastText);
+        await expect(page.getByRole('button', { name: 'Retry message', exact: true }).last()).toBeVisible();
+        await expect(page.getByText('UPSTREAM-DETAIL-MUST-NOT-RENDER')).toHaveCount(0);
+
+        await info.attach(`provider-${status}-failed-turn`, { contentType: 'application/json', body: JSON.stringify({
+            status, toastText, inlineAfterFailure: inlineText, inlineAfterReload: (await failedResponse.innerText()).trim(),
+            storedError: stored.error, envelopeCode: envelope.error.code, envelopeStatus: envelope.error.status ?? null,
+            assertions: ['inline equals toast', 'not generic copy', 'error stays stream_interrupted', 'envelope has no upstream text', 'inline equals toast after reload'],
+        }, null, 2) });
+        const shot = info.outputPath(`provider-${status}-failed-turn.png`);
+        await page.screenshot({ path: shot, animations: 'disabled' });
+        await info.attach(`provider-${status}-failed-turn-screenshot`, { path: shot, contentType: 'image/png' });
+    });
 });
 
 // Uses the gated route's scripted transport and real controller/writer. The

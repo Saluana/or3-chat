@@ -488,7 +488,7 @@ const responseStopped = computed(() => props.message.role === 'assistant' && !pr
     ['stopped', 'Background response aborted', 'aborted'].includes(props.message.error ?? ''));
 const responseError = computed(() => props.message.role === 'assistant' && !props.message.pending &&
     props.message.error && !responseStopped.value
-    ? presentError(props.message.error, { code: 'ERR_STREAM_FAILURE' }).message : null);
+    ? presentError(props.message.errorEnvelope ?? props.message.error, { code: 'ERR_STREAM_FAILURE' }).message : null);
 const customMessageRenderer = computed(
     () => resolveMessageRenderer(props.message)?.component ?? null
 );
