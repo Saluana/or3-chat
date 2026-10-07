@@ -7,6 +7,7 @@ import { createDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
+import * as nuxtImports from '#imports';
 import { testRuntimeConfig } from '~~/tests/setup';
 
 const session = vi.hoisted(() => ({ payload: null as any }));
@@ -35,6 +36,12 @@ const Content = defineComponent({
     name: 'SidebarContentFixture',
     props: ['docs', 'items', 'projects', 'displayDocuments', 'sidebarQuery'],
     emits: ['update:sidebar-query'],
+    template: '<div />',
+});
+const Modals = defineComponent({
+    name: 'SidebarEntityModals',
+    props: ['showRenameModal', 'renameTitle'],
+    emits: ['saveRename', 'update:renameTitle'],
     template: '<div />',
 });
 let wrapper: VueWrapper | undefined;
@@ -165,5 +172,60 @@ describe('mounted sidebar workspace isolation', () => {
         await vi.waitFor(() => expect(view.props('displayDocuments')).toEqual([]));
         view.vm.$emit('update:sidebar-query', 'Workspace B');
         await vi.waitFor(() => expect(view.props('displayDocuments').map((doc: { title: string }) => doc.title)).toEqual(['Workspace B title']));
+    });
+
+    // A rename supplies no editor snapshot, so an edit that lands while the update
+    // hooks run is rejected rather than overwritten.
+    // Failure cases: the rename overwrites the newer edit; the user is given no
+    // explanation and the typed title is lost; the rejection goes unhandled;
+    // retrying against the current document does not succeed.
+    it('keeps the rename open and explains it when the document changed meanwhile, then saves on retry', async () => {
+        const toastAdd = vi.fn();
+        const toastSpy = vi.spyOn(nuxtImports, 'useToast').mockReturnValue({ add: toastAdd } as never);
+        try {
+            const hooks = createTypedHookEngine(createHookEngine());
+            setHookEngine(hooks);
+            const id = `sidebar-rename-${crypto.randomUUID()}`;
+            const db = setActiveWorkspaceDb(id);
+            workspaces.push({ id, name: db.name });
+            const document = await createDocumentInDb(db, { title: 'Original title' });
+            wrapper = shallowMount(SideBar, { global: { stubs: {
+                SidebarSideNavContent: Content, SidebarSideNavContentCollapsed: true,
+                SidebarSideMobileBottomNav: true, SidebarEntityModals: Modals, UModal: true,
+            } } });
+            const view = wrapper.getComponent(Content);
+            await vi.waitFor(() => expect(view.props('docs')).toHaveLength(1));
+            const modals = wrapper.getComponent(Modals);
+            view.vm.$emit('rename-document', { id: document.id, title: document.title, postType: 'doc' });
+            await vi.waitFor(() => expect(modals.props('showRenameModal')).toBe(true));
+            modals.vm.$emit('update:renameTitle', 'Renamed in sidebar');
+
+            // Hold the rename inside its update hooks while another writer edits the document.
+            let resume!: () => void;
+            let entered!: () => void;
+            const reached = new Promise<void>((resolve) => { entered = resolve; });
+            const gate = new Promise<void>((resolve) => { resume = resolve; });
+            const barrier = async () => { entered(); await gate; };
+            hooks.addAction('db.documents.update:action:before', barrier);
+            modals.vm.$emit('saveRename');
+            await reached;
+            const newerContent = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Newer work' }] }] });
+            await db.posts.update(document.id, { content: newerContent, clock: 99 });
+            resume();
+
+            await vi.waitFor(() => expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'Document: rename not saved' })));
+            expect(modals.props('showRenameModal')).toBe(true);
+            expect(modals.props('renameTitle')).toBe('Renamed in sidebar');
+            expect(await db.posts.get(document.id)).toMatchObject({ title: 'Original title', content: newerContent });
+
+            // Retrying now renames the current document and keeps the newer edit.
+            hooks.removeAction('db.documents.update:action:before', barrier);
+            modals.vm.$emit('saveRename');
+            await vi.waitFor(async () => expect((await db.posts.get(document.id))?.title).toBe('Renamed in sidebar'));
+            expect((await db.posts.get(document.id))?.content).toBe(newerContent);
+            await vi.waitFor(() => expect(modals.props('showRenameModal')).toBe(false));
+        } finally {
+            toastSpy.mockRestore();
+        }
     });
 });

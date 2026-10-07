@@ -108,20 +108,14 @@ function toDocs(
 }
 
 /**
- * Builds an Orama search index from the provided entities.
+ * Builds an Orama search index from normalized documents.
  *
  * Creates the database schema and indexes all documents.
  *
- * @param threads - Array of thread entities to index.
- * @param projects - Array of project entities to index.
- * @param documents - Array of document entities to index.
+ * @param docs - Normalized documents to index.
  * @returns Orama database instance or null if creation failed.
  */
-async function buildIndex(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-) {
+async function buildIndex(docs: IndexDoc[]) {
     const instance = await createDb({
         id: 'string',
         kind: 'string',
@@ -129,7 +123,6 @@ async function buildIndex(
         updated_at: 'number',
     });
     if (!instance) return null;
-    const docs = toDocs(threads, projects, documents);
     if (docs.length) await buildOramaIndex(instance, docs);
 
     return instance;
@@ -138,27 +131,15 @@ async function buildIndex(
 /**
  * Computes a signature string to detect when the search index needs rebuilding.
  *
- * Uses entity counts and the latest updated_at timestamp to determine if data has changed.
+ * Includes each indexed identity and field so unrelated newer records cannot hide changes.
  *
- * @param threads - Array of thread entities.
- * @param projects - Array of project entities.
- * @param documents - Array of document entities.
+ * @param docs - Normalized documents the index is built from.
  * @returns Signature string representing the current data state.
  */
-function computeSignature(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-) {
-    let latest = 0;
-    for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
-    for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
-    for (const d of documents) {
-        const record = d as Record<string, unknown>;
-        const updatedAt = (record.updated_at as number) || 0;
-        if (updatedAt > latest) latest = updatedAt;
-    }
-    return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
+function computeSignature(docs: IndexDoc[]) {
+    // Counts plus the maximum timestamp miss replacements and updates to older
+    // imported/synced rows. Compare exactly the fields the index consumes.
+    return JSON.stringify(docs);
 }
 
 /**
@@ -173,7 +154,7 @@ function computeSignature(
  *
  * Constraints:
  * - Runs on the client where Orama and IndexedDB data are available
- * - Index rebuild is based on size and latest timestamp signature
+ * - Index rebuild is based on a signature of every indexed field
  *
  * Non-Goals:
  * - Does not persist search state across sessions
@@ -224,11 +205,8 @@ export function useSidebarSearch(
     async function ensureIndex() {
         const generation = getWorkspaceGeneration();
         if (busy.value) return;
-        const sig = computeSignature(
-            threads.value,
-            projects.value,
-            documents.value
-        );
+        const docs = toDocs(threads.value, projects.value, documents.value);
+        const sig = computeSignature(docs);
         if (sig === lastIndexedSignature.value && dbInstance) return;
         busy.value = true;
         try {
@@ -241,17 +219,22 @@ export function useSidebarSearch(
             idMaps.doc.value = Object.fromEntries(
                 documents.value.filter(isDocPost).map((d) => [d.id, d])
             );
-            const nextIndex = await buildIndex(
-                threads.value,
-                projects.value,
-                documents.value
-            );
+            const nextIndex = await buildIndex(docs);
             if (generation !== getWorkspaceGeneration()) return;
             dbInstance = nextIndex;
             lastIndexedSignature.value = sig;
             ready.value = true;
         } finally {
             if (generation === getWorkspaceGeneration()) busy.value = false;
+        }
+        // A rebuild requested during this build was skipped as busy. If the data
+        // changed meanwhile, schedule another so the change is not left unindexed.
+        if (
+            computeSignature(
+                toDocs(threads.value, projects.value, documents.value)
+            ) !== sig
+        ) {
+            void debouncedRebuild();
         }
     }
 

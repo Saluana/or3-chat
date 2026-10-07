@@ -7455,7 +7455,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSearch.ts",
-                "line": 182,
+                "line": 163,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
               }
@@ -7464,7 +7464,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSearch.ts",
-              "line": 182,
+              "line": 163,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
             }

@@ -94,21 +94,29 @@ export interface DocumentRecord {
 
 const DOCUMENT_TABLE = 'documents';
 
+/**
+ * Writes a document row in one transaction. When `unchanged` is given it runs
+ * inside that transaction first, so nothing can land between the check and the
+ * put; the row is not written (and false is returned) if it reports a change.
+ */
 async function putDocumentPostRow(
     db: Or3DB,
     row: Post,
-    includeTombstones = false
-): Promise<void> {
-    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+    includeTombstones = false,
+    unchanged?: () => Promise<boolean>
+): Promise<boolean> {
+    const commit = async () => {
+        if (unchanged && !(await unchanged())) return false;
         await db.posts.put(row);
-        return;
+        return true;
+    };
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        return commit();
     }
-    await db.transaction(
+    return db.transaction(
         'rw',
         getWriteTxTableNames(db, 'posts', { includeTombstones }),
-        async () => {
-            await db.posts.put(row);
-        }
+        commit
     );
 }
 
@@ -517,6 +525,31 @@ export interface UpdateDocumentPatch {
 
 /**
  * Purpose:
+ * Signal that a document changed between a caller's read and its write.
+ *
+ * Behavior:
+ * Thrown instead of writing, so a newer edit is never overwritten and a
+ * deleted document is never recreated. Callers may retry against the current row.
+ *
+ * Constraints:
+ * - An expected outcome of concurrent writers, so it is not reported as a
+ *   database failure.
+ *
+ * Non-Goals:
+ * - Does not merge concurrent edits.
+ */
+export class DocumentConflictError extends Error {
+    readonly code = 'document_conflict';
+    constructor(
+        message = 'This document changed while saving. Nothing was overwritten; reload it and try again.'
+    ) {
+        super(message);
+        this.name = 'DocumentConflictError';
+    }
+}
+
+/**
+ * Purpose:
  * Update an existing document record.
  *
  * Behavior:
@@ -524,6 +557,8 @@ export interface UpdateDocumentPatch {
  *
  * Constraints:
  * - Returns undefined if the document does not exist.
+ * - Rejects with `DocumentConflictError`, writing nothing, if the row was
+ *   edited or deleted after it was loaded (including while hooks ran).
  *
  * Non-Goals:
  * - Does not merge concurrent edits.
@@ -550,19 +585,26 @@ export async function updateDocumentInDb(
     if (!isDocumentPost(existing)) return undefined;
     if (expected && (existing.title !== expected.title
         || JSON.stringify(rowToRecord(existing).content) !== JSON.stringify(expected.content))) {
-        throw new Error('This document changed in another tab. Your draft is retained; reconcile it before saving.');
+        throw new DocumentConflictError('This document changed in another tab. Your draft is retained; reconcile it before saving.');
     }
+    const snapshot = JSON.stringify(existing);
     const prepared = await prepareDocumentUpdate(existing, patch);
-    await dbTry(
-        () => expected ? db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
-            if (JSON.stringify(await db.posts.get(id)) !== JSON.stringify(existing)) {
-                throw new Error('This document changed while saving. Your draft is retained; reconcile it before saving.');
-            }
-            await db.posts.put(prepared.row);
-        }) : putDocumentPostRow(db, prepared.row),
+    // The hooks above are asynchronous, so another writer may have edited or
+    // deleted the row since it was read. Callers without an editor snapshot (for
+    // example sidebar rename) must not overwrite a newer row or recreate a
+    // deleted one either. A conflict is returned as `false` rather than thrown
+    // so dbTry does not report an expected race as a database failure.
+    const written = await dbTry(
+        () => putDocumentPostRow(
+            db,
+            prepared.row,
+            false,
+            async () => JSON.stringify(await db.posts.get(id)) === snapshot
+        ),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
+    if (!written) throw new DocumentConflictError();
     await prepared.afterCommit();
     return rowToRecord(prepared.row);
 }
