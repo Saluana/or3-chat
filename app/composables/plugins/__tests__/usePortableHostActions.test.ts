@@ -24,7 +24,14 @@ vi.mock('~/db/client', () => ({
     getWorkspaceDb: (...args: unknown[]) => getWorkspaceDbMock(...args),
 }));
 
+const documentConflict = vi.hoisted(() => ({
+    Error: class DocumentConflictError extends Error {
+        readonly code = 'document_conflict';
+    },
+}));
+
 vi.mock('~/db/documents', () => ({
+    DocumentConflictError: documentConflict.Error,
     createDocumentInDb: (...args: unknown[]) => createDocumentInDbMock(...args),
     getDocumentInDb: (...args: unknown[]) => getDocumentInDbMock(...args),
     updateDocumentInDb: (...args: unknown[]) => updateDocumentInDbMock(...args),
@@ -180,11 +187,33 @@ describe('usePortableHostActions', () => {
         const result = await hostActions.execute(prepared.prepared);
 
         expect(result).toMatchObject({ ok: true, outcome: { status: 'replaced-document' } });
+        // Regression: the recheck above is a separate read, so an edit could still
+        // land before the write and be overwritten. The state the user approved
+        // must reach the guarded update, which re-verifies it as it reads the row.
         expect(updateDocumentInDbMock).toHaveBeenCalledWith(
             db,
             'doc_1',
-            expect.objectContaining({ content: expect.any(Object) })
+            expect.objectContaining({ content: expect.any(Object) }),
+            { title: 'Doc One', content: { type: 'doc', content: [] } }
         );
+    });
+
+    it('reports a stale target when another edit lands after the revision recheck', async () => {
+        getDocumentInDbMock.mockResolvedValue(documentRecord());
+        invokeMock.mockResolvedValue({ ok: true, result: { content: 'new text' } });
+        // The guarded update finds the row changed after the recheck read it.
+        updateDocumentInDbMock.mockRejectedValue(new documentConflict.Error('changed meanwhile'));
+
+        const hostActions = usePortableHostActions();
+        const prepared = await hostActions.prepare({
+            pluginId: 'sample.plugin',
+            action: 'host.document.replace',
+            selectedDocumentId: 'doc_1',
+        });
+        if (!prepared.ok) throw new Error('expected a prepared action');
+        const result = await hostActions.execute(prepared.prepared);
+
+        expect(result).toMatchObject({ ok: false, code: 'stale-target' });
     });
 
     it('continues in chat with both records written to the captured database', async () => {

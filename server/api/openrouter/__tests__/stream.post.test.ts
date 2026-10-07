@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import type { ToolDefinition } from '~/utils/chat/types';
@@ -13,6 +14,7 @@ const startBackgroundStreamMock = vi.fn();
 const monitorForegroundStreamForClientMock = vi.fn((params) => params.stream);
 const backgroundStreamingAvailableMock = vi.fn();
 const catalogBoundary = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0, unreachable: false }));
+const bodyReader = vi.hoisted(() => ({ useActual: false }));
 
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),
@@ -32,6 +34,19 @@ vi.mock('~~/shared/openrouter', async (original) => ({
 }));
 
 vi.mock('#imports', () => ({ useRuntimeConfig: () => runtimeConfig }));
+
+// Most tests feed bodies through `readBodyMock`. Tests that need real stream
+// and size semantics switch to the production bounded reader.
+vi.mock('../../../utils/security/limited-json-body', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../../utils/security/limited-json-body')>();
+    return {
+        ...actual,
+        readLimitedJsonBody: (event: H3Event, maxBytes?: number) =>
+            bodyReader.useActual
+                ? actual.readLimitedJsonBody(event, maxBytes)
+                : readBodyMock(event, maxBytes),
+    };
+});
 
 vi.mock('h3', async (importOriginal) => ({
     ...await importOriginal<typeof import('h3')>(),
@@ -92,7 +107,12 @@ vi.mock('../../../utils/webhooks/foreground-stream-monitor', () => ({
 let handler: (event: H3Event) => Promise<unknown>;
 let runtimeConfig: Record<string, unknown>;
 
-function makeEvent(headers: Record<string, string> = {}): H3Event {
+/** The outgoing response: it, not the already-consumed request, reports a client disconnect. */
+function makeResponse() {
+    return Object.assign(new EventEmitter(), { writableFinished: false, destroyed: false });
+}
+
+function makeEvent(headers: Record<string, string> = {}, res = makeResponse()): H3Event {
     return {
         method: 'POST',
         context: {},
@@ -101,8 +121,18 @@ function makeEvent(headers: Record<string, string> = {}): H3Event {
                 headers: { host: 'chat.test', origin: 'https://chat.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...headers },
                 on: vi.fn(),
             },
+            res,
         },
     } as unknown as H3Event;
+}
+
+/** An event whose request body arrives as a real Node-style chunk stream. */
+function makeStreamedEvent(chunks: Buffer[], headers: Record<string, string> = {}): H3Event {
+    const event = makeEvent({ 'x-or3-openrouter-key': 'caller-key', ...headers });
+    (event.node.req as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = async function* () {
+        for (const chunk of chunks) yield chunk;
+    };
+    return event;
 }
 
 function forbidden(statusCode: number): Error & { statusCode: number } {
@@ -129,6 +159,7 @@ beforeAll(async () => {
 describe('POST /api/openrouter/stream credential authorization', () => {
     beforeEach(() => {
         catalogBoundary.capacity = 1_000_000; catalogBoundary.calls = 0; catalogBoundary.unreachable = false;
+        bodyReader.useActual = false;
         vi.unstubAllGlobals();
         vi.stubGlobal('defineEventHandler', (value: unknown) => value);
         vi.stubGlobal('readBody', readBodyMock);
@@ -491,6 +522,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         requireCanMock.mockImplementation(auth.requireCan);
         if (callerKey) resolveSessionContextMock.mockResolvedValue({ authenticated: false });
         if (trusted) runtimeConfig.security = { proxy: {}, allowedOrigins: [origin] };
+        bodyReader.useActual = true;
         vi.stubGlobal('readBody', h3.readBody);
         vi.stubGlobal('getHeader', h3.getHeader);
         vi.stubGlobal('setResponseStatus', h3.setResponseStatus);
@@ -541,5 +573,203 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(body).not.toHaveProperty('_messageId');
         expect(body).not.toHaveProperty('_toolRuntime');
         expect(body).not.toHaveProperty('_streamedFieldMode');
+    });
+    describe('client disconnect', () => {
+        /** A provider whose response headers have not arrived; resolves only if never aborted. */
+        function stubHeldProvider() {
+            const seen: { signal?: AbortSignal } = {};
+            vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+                seen.signal = init.signal as AbortSignal;
+                seen.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+            })));
+            return seen;
+        }
+
+        // Regression: the route listened for 'close' on the incoming request. Its
+        // body is fully read before the provider is contacted, so that request has
+        // already closed and its event can never report a later disconnect: the
+        // provider request outlived a cancelled client. Failure case: the signal
+        // handed to the provider is never aborted and the handler never settles.
+        it('aborts the provider request when the client disconnects before provider headers arrive', async () => {
+            const provider = stubHeldProvider();
+            const res = makeResponse();
+            const pending = handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res));
+            await vi.waitFor(() => expect(provider.signal).toBeDefined());
+            // The POST body is done, yet the chat request is still live.
+            expect(provider.signal!.aborted).toBe(false);
+
+            res.emit('close');
+
+            await expect(pending).resolves.toBeUndefined();
+            expect(provider.signal!.aborted).toBe(true);
+            expect(sendStreamMock).not.toHaveBeenCalled();
+            expect(res.listenerCount('close')).toBe(0);
+        });
+
+        // Stop and a closed tab are the same transport event: the browser drops
+        // the connection. Failure case: the upstream stream keeps being drained
+        // (and billed) after nobody is listening, or the abort surfaces as an
+        // unhandled error response.
+        it('cancels the upstream stream and settles quietly when the client disconnects mid-stream', async () => {
+            let upstreamCancelled = false;
+            const upstream = new ReadableStream<Uint8Array>({
+                start(controller) { controller.enqueue(new TextEncoder().encode('data: {"partial":true}\n\n')); },
+                pull: () => new Promise<void>(() => {}),
+                cancel() { upstreamCancelled = true; },
+            });
+            vi.stubGlobal('fetch', vi.fn(async () => new Response(upstream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })));
+            let firstChunk!: () => void;
+            const gotFirstChunk = new Promise<void>((resolve) => { firstChunk = resolve; });
+            // h3 resolves sendStream only when the pipe ends; model that pipe.
+            sendStreamMock.mockImplementationOnce((async (_event: unknown, stream: ReadableStream<Uint8Array>) => {
+                const reader = stream.getReader();
+                for (;;) {
+                    const { done } = await reader.read();
+                    firstChunk();
+                    if (done) return;
+                }
+            }) as never);
+            const res = makeResponse();
+            const pending = handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res));
+            await gotFirstChunk;
+
+            res.emit('close');
+
+            await expect(pending).resolves.toBeUndefined();
+            expect(upstreamCancelled).toBe(true);
+            expect(res.listenerCount('close')).toBe(0);
+        });
+
+        it('removes its close listener once the stream settles and never cancels a finished response', async () => {
+            let upstreamCancelled = false;
+            const upstream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+                    controller.close();
+                },
+                cancel() { upstreamCancelled = true; },
+            });
+            vi.stubGlobal('fetch', vi.fn(async () => new Response(upstream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })));
+            sendStreamMock.mockImplementationOnce((async (_event: unknown, stream: ReadableStream<Uint8Array>) => {
+                const reader = stream.getReader();
+                for (;;) {
+                    const { done } = await reader.read();
+                    if (done) return;
+                }
+            }) as never);
+            const res = makeResponse();
+
+            await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res))).resolves.toBeUndefined();
+
+            // Settled: nothing is left attached to the response.
+            expect(res.listenerCount('close')).toBe(0);
+            // Node emits 'close' after 'finish' for every completed response.
+            res.writableFinished = true;
+            res.emit('close');
+            expect(upstreamCancelled).toBe(false);
+        });
+
+        it('treats a client that is already gone before the provider call as a disconnect', async () => {
+            const provider = stubHeldProvider();
+            const res = makeResponse();
+            res.destroyed = true;
+
+            await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res))).resolves.toBeUndefined();
+
+            expect(provider.signal?.aborted ?? true).toBe(true);
+            expect(sendStreamMock).not.toHaveBeenCalled();
+        });
+
+        it('never ties background admission to the foreground response lifetime', async () => {
+            readBodyMock.mockResolvedValue({ model: 'test/model', _background: true, _threadId: 'thread-1', _messageId: 'message-1' });
+            const res = makeResponse();
+
+            await handler(makeEvent({}, res));
+            res.emit('close');
+
+            expect(startBackgroundStreamMock).toHaveBeenCalledTimes(1);
+            expect(res.listenerCount('close')).toBe(0);
+            expect(startBackgroundStreamMock.mock.calls[0]?.[0]).not.toHaveProperty('signal');
+        });
+    });
+
+    describe('request body bounds', () => {
+        const limits = () => vi.importActual<typeof import('../../../utils/security/limited-json-body')>('../../../utils/security/limited-json-body');
+
+        // Regression: the body was parsed by the unbounded framework reader, then
+        // `'tools' in body` ran on whatever came back. Failure cases: any size is
+        // buffered; JSON null or a primitive throws a TypeError (500); an oversized
+        // body is reported as a generic 400, hiding the real reason.
+        it('rejects a body declared above the model-request limit with 413 and reaches no provider', async () => {
+            bodyReader.useActual = true;
+            const { MODEL_REQUEST_BODY_LIMIT_BYTES } = await limits();
+
+            await expect(handler(makeStreamedEvent(
+                [Buffer.from('{"model":"test/model"}')],
+                { 'content-length': String(MODEL_REQUEST_BODY_LIMIT_BYTES + 1) }
+            ))).rejects.toMatchObject({ statusCode: 413 });
+
+            expect(setResponseStatusMock).not.toHaveBeenCalledWith(expect.anything(), 400);
+            expect(fetch).not.toHaveBeenCalled();
+            expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+        });
+
+        it('lets a bounded-reader size rejection through instead of reporting it as a malformed body', async () => {
+            readBodyMock.mockRejectedValue(Object.assign(new Error('The request body is too large.'), { statusCode: 413 }));
+
+            await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))).rejects.toMatchObject({ statusCode: 413 });
+
+            expect(fetch).not.toHaveBeenCalled();
+        });
+
+        it('reads the body with the model-request limit, not a control-message limit', async () => {
+            const { MODEL_REQUEST_BODY_LIMIT_BYTES } = await limits();
+
+            await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
+
+            expect(readBodyMock).toHaveBeenCalledWith(expect.anything(), MODEL_REQUEST_BODY_LIMIT_BYTES);
+            // Chat histories with inline attachments are legitimately far larger than any control message.
+            expect(MODEL_REQUEST_BODY_LIMIT_BYTES).toBeGreaterThanOrEqual(64 * 1024 * 1024);
+        });
+
+        it('accepts a multi-megabyte structured chat history', async () => {
+            bodyReader.useActual = true;
+            const history = JSON.stringify({
+                model: 'test/model', stream: true,
+                messages: [{ role: 'user', content: 'x'.repeat(6 * 1024 * 1024) }],
+            });
+            const bytes = Buffer.from(history);
+            const chunks: Buffer[] = [];
+            for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) chunks.push(bytes.subarray(offset, offset + 64 * 1024));
+
+            await handler(makeStreamedEvent(chunks));
+
+            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(setResponseStatusMock).not.toHaveBeenCalledWith(expect.anything(), 413);
+        });
+
+        it.each([
+            ['JSON null', null],
+            ['a JSON string', 'foo'],
+            ['a JSON number', 123],
+            ['a JSON array', [{ model: 'test/model' }]],
+        ])('answers 400, not a server error, for %s', async (_label, parsed) => {
+            readBodyMock.mockResolvedValue(parsed);
+
+            await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))).resolves.toBe('Invalid request body');
+
+            expect(setResponseStatusMock).toHaveBeenLastCalledWith(expect.anything(), 400);
+            expect(fetch).not.toHaveBeenCalled();
+            expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+        });
+
+        it('answers 400 for malformed JSON and reaches no provider', async () => {
+            bodyReader.useActual = true;
+
+            await expect(handler(makeStreamedEvent([Buffer.from('{"model": ')]))).resolves.toBe('Invalid request body');
+
+            expect(setResponseStatusMock).toHaveBeenLastCalledWith(expect.anything(), 400);
+            expect(fetch).not.toHaveBeenCalled();
+        });
     });
 });

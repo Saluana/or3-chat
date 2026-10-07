@@ -26,6 +26,11 @@ import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
  * - Logs: Never logs API keys.
  */
 import { getRequestIP, setResponseHeader } from 'h3';
+import {
+    isPayloadTooLargeError,
+    MODEL_REQUEST_BODY_LIMIT_BYTES,
+    readLimitedJsonBody,
+} from '../../utils/security/limited-json-body';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { requireCan } from '../../auth/can';
@@ -87,11 +92,22 @@ export default defineEventHandler(async (event) => {
     // 404/405 without it as "route unavailable" (static build or older
     // server); a relayed provider 404 is an ordinary provider error.
     setHeader(event, 'X-OR3-Stream-Route', '1');
-    // Read request body
+    // Read the request body through the bounded reader: a chat request can
+    // legitimately be large, but it must never be buffered without a ceiling,
+    // and nothing below runs for a body that is not a JSON object.
     let body: Record<string, unknown>;
     try {
-        body = await readBody(event);
-    } catch {
+        const parsed: unknown = await readLimitedJsonBody(
+            event,
+            MODEL_REQUEST_BODY_LIMIT_BYTES
+        );
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new TypeError('The request body must be a JSON object.');
+        }
+        body = parsed as Record<string, unknown>;
+    } catch (error) {
+        // An oversized body is a 413, not a malformed one.
+        if (isPayloadTooLargeError(error)) throw error;
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
@@ -465,17 +481,31 @@ export default defineEventHandler(async (event) => {
     // Req 2: Setup abort controller for client disconnect
     const ac = new AbortController();
 
-    // Listen for client disconnect
-    event.node.req.on('close', () => {
+    // The client's lifetime is the outgoing response. The incoming request is
+    // not it: its body was fully read above, so it has already closed and its
+    // 'close' event can never report a later disconnect (before provider
+    // headers or mid-stream). A response that finished normally has nothing
+    // left to cancel. `once` removes the listener when the response closes.
+    const res = event.node.res;
+    const onClientClose = () => {
+        if (res.writableFinished) return;
         logBgStream('api-stream-foreground-client-closed', {});
         ac.abort();
-    });
+    };
+    if (typeof res?.once === 'function') {
+        res.once('close', onClientClose);
+        // The client may already be gone: it can disconnect while the request
+        // is being authorised and rate limited, before this listener exists.
+        if (res.destroyed) onClientClose();
+    }
 
     let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
     try {
         policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
         await admitServerProviderBody(providerBody, policy, ac.signal);
     } catch (error) {
+        // The client disconnected while the model catalog was being consulted.
+        if (ac.signal.aborted) return;
         if (error instanceof ChatContextAdmissionError) {
             setResponseStatus(event, 400);
             return contextAdmissionResponse(error);
@@ -622,5 +652,14 @@ export default defineEventHandler(async (event) => {
         },
     });
 
-    return sendStream(event, clientStream);
+    try {
+        return await sendStream(event, clientStream);
+    } catch (error) {
+        // The client went away mid-stream: the upstream request was aborted
+        // above and there is no one left to send an error response to.
+        if (ac.signal.aborted) return;
+        throw error;
+    } finally {
+        res?.off?.('close', onClientClose);
+    }
 });

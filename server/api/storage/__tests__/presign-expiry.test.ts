@@ -14,6 +14,8 @@ const setHeaderMock = vi.fn();
 vi.mock('h3', async () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: (event: { node?: { req?: { headers?: Record<string, string | undefined> } } }, name: string) =>
+        event.node?.req?.headers?.[name.toLowerCase()],
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {

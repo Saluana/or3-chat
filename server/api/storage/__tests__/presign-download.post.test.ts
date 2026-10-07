@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { STORAGE_CONTROL_BODY_LIMIT_BYTES } from '../../../utils/security/limited-json-body';
 
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
@@ -8,6 +9,8 @@ const setHeaderMock = vi.fn();
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: (event: { node?: { req?: { headers?: Record<string, string | undefined> } } }, name: string) =>
+        event.node?.req?.headers?.[name.toLowerCase()],
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
@@ -385,6 +388,63 @@ describe('POST /api/storage/presign-download', () => {
             method: 'GET',
             headers: { 'x-download': '1' },
             storageId: 'ws-1:sha256:abc',
+        });
+    });
+    // Regression: the body was parsed by the unbounded framework reader before
+    // authentication, so a body of any size was buffered. Failure cases: a large
+    // body is read instead of refused; the refusal is not a 413; the request
+    // still reaches the session or the storage adapter; a hostile shape (JSON
+    // null, a primitive) is not a plain 400.
+    describe('request body bounds', () => {
+        const tooLarge = STORAGE_CONTROL_BODY_LIMIT_BYTES + 1;
+        const load = async () => (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        const streamed = (chunks: Buffer[]) => ({
+            headers: {},
+            async *[Symbol.asyncIterator]() {
+                for (const chunk of chunks) yield chunk;
+            },
+        });
+
+        it('rejects a declared oversized body with 413 before reading it', async () => {
+            const handler = await load();
+            const event = { context: {}, node: { req: { headers: { 'content-length': String(tooLarge) } } } } as unknown as H3Event;
+
+            await expect(handler(event)).rejects.toMatchObject({ statusCode: 413 });
+
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+            expect(presignDownloadMock).not.toHaveBeenCalled();
+        });
+
+        it('rejects an oversized chunked body with 413 as soon as the limit is crossed', async () => {
+            const handler = await load();
+            const request = {
+                headers: {},
+                async *[Symbol.asyncIterator]() {
+                    yield Buffer.alloc(tooLarge - 100, 'a');
+                    yield Buffer.alloc(200, 'b');
+                    throw new Error('the reader continued past the limit');
+                },
+            };
+
+            await expect(handler({ context: {}, node: { req: request } } as unknown as H3Event)).rejects.toMatchObject({ statusCode: 413 });
+
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+            expect(presignDownloadMock).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['JSON null', 'null'],
+            ['a JSON string', '"foo"'],
+            ['a JSON number', '123'],
+            ['malformed JSON', '{"workspace_id": '],
+        ])('answers 400 for %s', async (_label, raw) => {
+            const handler = await load();
+
+            await expect(handler({ context: {}, node: { req: streamed([Buffer.from(raw)]) } } as unknown as H3Event))
+                .rejects.toMatchObject({ statusCode: 400 });
+
+            expect(presignDownloadMock).not.toHaveBeenCalled();
         });
     });
 });

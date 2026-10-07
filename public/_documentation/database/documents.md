@@ -44,8 +44,8 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | `getDocument(id)`           | Loads a single document, applies output filters, returns parsed record.                    |
 | `listDocuments(limit?)`     | Fetches non-deleted docs, sorts by `updated_at` desc, slices to limit, applies filters.    |
 | `listDocumentFileHashes()`  | Unique file hashes referenced by active documents, from index keys only.                   |
-| `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record; rejects with `DocumentConflictError` if the row changed meanwhile. |
-| `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`.                                              |
+| `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record; rejects with `DocumentConflictError` if the row changed meanwhile. `patch.content: null` means no content change: the stored content and its `file_hashes` are both kept. |
+| `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`; rejects with `DocumentConflictError` if the row changed meanwhile.            |
 | `hardDeleteDocument(id)`    | Removes the row entirely.                                                                  |
 
 `listDocumentFileHashes()` is a storage-facts API: it does not return `DocumentRecord`s, does not parse `content`, and does not invoke `db.documents.list:filter:output`. Keep using `listDocuments`/`getDocument` when callers need full records and hook output filters.
@@ -69,7 +69,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
 4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.
 5. **Reference index** — Active document rows receive a sparse `[file_hashes, id]` key at the Dexie write boundary; soft deletion removes it and restore recomputes it. `listDocumentFileHashes` enumerates only those keys and deduplicates with `parseDocumentFileHashes`.
-6. **Concurrent writes** — Updates recheck the captured row inside the write transaction after asynchronous hooks. If another writer edited or deleted it meanwhile, `updateDocument`/`updateDocumentInDb` reject with `DocumentConflictError` and write nothing: newer content is never overwritten and a deleted document is never recreated. This includes callers without an editor snapshot, such as a sidebar rename, which catches the error, keeps its dialog open and asks the user to retry. A conflict is an expected outcome of concurrent writers, so it is not reported as a database failure.
+6. **Concurrent writes** — Updates and soft deletes recheck the captured row inside the write transaction after asynchronous hooks. If another writer edited or deleted it meanwhile, `updateDocument`/`updateDocumentInDb`/`softDeleteDocument`/`softDeleteDocumentInDb` reject with `DocumentConflictError` and write nothing: newer content is never overwritten and a deleted document is never recreated. This includes callers without an editor snapshot, such as a sidebar rename, which catches the error, keeps its dialog open and asks the user to retry. A conflict is an expected outcome of concurrent writers, so it is not reported as a database failure.
 
 ---
 
