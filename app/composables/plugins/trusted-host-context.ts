@@ -1,4 +1,5 @@
-import { defineComponent, h, type Component } from 'vue';
+import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
+import { defineComponent, h, watch, type Component } from 'vue';
 import {
     pluginError,
     pluginOk,
@@ -23,6 +24,12 @@ import type {
     PluginLogger,
 } from '@or3/plugin-sdk';
 import type { PluginSettingsClient, PluginStorageClient, PluginStorageRecord } from '@or3/plugin-sdk';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { createTrustedWorkspaceStorage } from './trusted-workspace-storage';
+import { createTrustedRecords } from './trusted-records';
+import { createTrustedNetworkAccess } from './trusted-network-access';
+import type { createTrustedRuntimeServices } from './trusted-runtime-services';
+import { markChatSendHandled } from '~/utils/chat/send-interception';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import type { PalettePostSourceDefinition } from '~/core/search/command-palette/types';
@@ -52,6 +59,7 @@ import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
  * registry access. SDK context methods still check the grant they need.
  */
 export const TRUSTED_HOST_GRANTS = [
+    'ui.workspace-profile.register', 'ai.provider', 'tools.use', 'jobs.background', 'hooks.emit',
     'ui.dashboard.register',
     'ui.sidebar.register',
     'ui.pane.register',
@@ -138,6 +146,7 @@ export interface TrustedPluginEditorClient {
 
 export interface CreateTrustedHostContextInput {
     readonly pluginId: string;
+    readonly signal?: AbortSignal;
     readonly version: string;
     readonly workspaceId?: string;
     readonly generation?: number;
@@ -152,15 +161,19 @@ export interface CreateTrustedHostContextInput {
         callback: (...args: unknown[]) => unknown,
         options?: { readonly priority?: number; readonly signal?: AbortSignal }
     ) => () => void;
+    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;
+    readonly requestedFeatures?: readonly string[];
+    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;
+    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;
     readonly mediation?: Pick<
         TrustedMediationOptions,
-        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'
+        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'
     >;
 }
 
 export interface TrustedHostContext {
     readonly context: PluginContext;
-    /** Client tools. The SDK context has no tools namespace; this is that surface. */
+    /** Trusted execution-model registrations; SDK tools expose list/execute. */
     readonly tools: TrustedPluginToolsClient;
     readonly editor: TrustedPluginEditorClient;
     readonly posts: ReturnType<typeof createTrustedMediation>['posts'];
@@ -225,179 +238,6 @@ function toPluginHandle(
     };
 }
 
-function requireKey(key: string): void {
-    if (typeof key !== 'string' || key.length === 0 || key.length > 256) {
-        invalid('Storage key must be a string of 1 to 256 characters');
-    }
-}
-
-function jsonSize(value: PluginJsonValue): number {
-    return new TextEncoder().encode(JSON.stringify(value)).byteLength;
-}
-
-function createMemorySettings(
-    granted: ReadonlySet<PluginGrant>,
-    ended: () => boolean
-): MemorySettings {
-    const values = new Map<string, PluginJsonValue>();
-    return {
-        async get(key) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('settings.read')) {
-                return pluginError('permission-denied', 'Grant "settings.read" is required');
-            }
-            requireKey(key);
-            const value = values.get(key);
-            return pluginOk((value ?? null) as never);
-        },
-        async list() {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('settings.read')) {
-                return pluginError('permission-denied', 'Grant "settings.read" is required');
-            }
-            return pluginOk(Object.fromEntries(values));
-        },
-        async set(key, value) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('settings.write')) {
-                return pluginError('permission-denied', 'Grant "settings.write" is required');
-            }
-            requireKey(key);
-            values.set(key, value);
-            return pluginOk(undefined);
-        },
-        async delete(key) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('settings.write')) {
-                return pluginError('permission-denied', 'Grant "settings.write" is required');
-            }
-            requireKey(key);
-            values.delete(key);
-            return pluginOk(undefined);
-        },
-        clear() {
-            values.clear();
-        },
-    };
-}
-
-interface MemorySettings extends PluginSettingsClient {
-    clear(): void;
-}
-
-interface MemoryStorage extends PluginStorageClient {
-    clear(): void;
-}
-
-function createMemoryStorage(
-    granted: ReadonlySet<PluginGrant>,
-    ended: () => boolean
-): MemoryStorage {
-    const values = new Map<string, { value: PluginJsonValue; revision: number; updatedAt: number }>();
-    const read = (method: 'storage.read') => {
-        if (!granted.has(method)) {
-            return pluginError('permission-denied', `Grant "${method}" is required`);
-        }
-        return null;
-    };
-    return {
-        async get(key) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            const blocked = read('storage.read');
-            if (blocked) return blocked;
-            requireKey(key);
-            return pluginOk((values.get(key)?.value ?? null) as never);
-        },
-        async getRecord(key) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            const blocked = read('storage.read');
-            if (blocked) return blocked;
-            requireKey(key);
-            const current = values.get(key);
-            const record: PluginStorageRecord = current
-                ? {
-                      value: current.value,
-                      revision: current.revision,
-                      sizeBytes: jsonSize(current.value),
-                      updatedAt: current.updatedAt,
-                  }
-                : { value: null, revision: 0, sizeBytes: 0, updatedAt: 0 };
-            return pluginOk(record as never);
-        },
-        async set(key, value, options) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('storage.write')) {
-                return pluginError('permission-denied', 'Grant "storage.write" is required');
-            }
-            requireKey(key);
-            const current = values.get(key);
-            if (options?.ifRevision !== undefined) {
-                const actual = current ? current.revision : null;
-                if (actual !== options.ifRevision) {
-                    return pluginError('conflict', 'Storage revision does not match');
-                }
-            }
-            values.set(key, {
-                value,
-                revision: (current?.revision ?? 0) + 1,
-                updatedAt: Date.now(),
-            });
-            return pluginOk(undefined);
-        },
-        async delete(key) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            if (!granted.has('storage.write')) {
-                return pluginError('permission-denied', 'Grant "storage.write" is required');
-            }
-            requireKey(key);
-            values.delete(key);
-            return pluginOk(undefined);
-        },
-        async list(prefix) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            const blocked = read('storage.read');
-            if (blocked) return blocked;
-            return pluginOk(
-                [...values.entries()]
-                    .filter(([key]) => (prefix ? key.startsWith(prefix) : true))
-                    .map(([key, entry]) => ({
-                        key,
-                        sizeBytes: jsonSize(entry.value),
-                        updatedAt: entry.updatedAt,
-                        revision: entry.revision,
-                    }))
-            );
-        },
-        async listPage(options) {
-            if (ended()) return pluginError('stale-context', 'Plugin context has ended');
-            const blocked = read('storage.read');
-            if (blocked) return blocked;
-            const offset = options?.cursor ? Number(options.cursor) : 0;
-            const limit = options?.limit ?? 50;
-            const entries = [...values.entries()]
-                .filter(([key]) => (options?.prefix ? key.startsWith(options.prefix) : true))
-                .slice(offset, offset + limit)
-                .map(([key, entry]) => ({
-                    key,
-                    sizeBytes: jsonSize(entry.value),
-                    updatedAt: entry.updatedAt,
-                    revision: entry.revision,
-                }));
-            const next = offset + entries.length;
-            const total = [...values.keys()].filter((key) =>
-                options?.prefix ? key.startsWith(options.prefix) : true
-            ).length;
-            return pluginOk({
-                entries,
-                ...(next < total ? { nextCursor: String(next) } : {}),
-            });
-        },
-        clear() {
-            values.clear();
-        },
-    };
-}
-
 function createLogger(pluginId: string): PluginLogger {
     const write = (
         level: 'debug' | 'info' | 'warn' | 'error',
@@ -432,13 +272,28 @@ export function createTrustedHostContext(
 ): TrustedHostContext {
     const runtime = createManagedWorkspacePluginRuntime({ pluginId: input.pluginId });
     const controller = new AbortController();
+    const abort = () => controller.abort(input.signal?.reason);
+    input.signal?.addEventListener('abort', abort, { once: true });
+    if (input.signal?.aborted) abort();
+    runtime.api.onCleanup(() => input.signal?.removeEventListener('abort', abort));
     const granted = new Set<PluginGrant>(input.grants ?? []);
     const listeners: ListenerEntry[] = [];
     const activations: Array<() => void | Promise<void>> = [];
     let closed = false;
-    const ended = () => closed || controller.signal.aborted;
-    const settings = createMemorySettings(granted, ended);
-    const storage = createMemoryStorage(granted, ended);
+    const activationDb = getDb();
+    const workspaceGeneration = getWorkspaceGeneration();
+    const ended = () => closed || controller.signal.aborted || getDb() !== activationDb || getWorkspaceGeneration() !== workspaceGeneration;
+    const postTypes = new Set<string>();
+    const messageTypes = new Set<string>();
+    let beforeSendDepth = 0;
+    const cleanup = (callback: () => void) => runtime.api.onCleanup(callback);
+    const services = input.runtimeServices?.({ pluginId: input.pluginId, db: activationDb, allow, current: () => !ended(), cleanup });
+    const { settings, storage } = createTrustedWorkspaceStorage({ pluginId: input.pluginId, db: activationDb, grants: granted, ended, defaults: { ...services?.settingDefaults, ...input.settingDefaults } });
+    const records = createTrustedRecords({ db: activationDb, allow, postTypes, messageTypes, inBeforeSend: () => beforeSendDepth > 0, current: () => !ended(), cleanup });
+    const access = createTrustedNetworkAccess({ pluginId: input.pluginId, db: activationDb, current: () => !ended(), hostOrigin: globalThis.location?.origin ?? 'https://localhost', destinations: input.mediation?.approvedDestinations,
+        confirm: (origins, purpose) => services?.confirmOrigins(origins, purpose) ?? Promise.resolve(false),
+        connectOrigins: async () => { if (!granted.has('workspace.connections.read') || !services) return []; const result = await services.connections.list(); return result.ok ? result.value.flatMap(row => row.baseUrl ? [row.baseUrl] : []) : []; },
+    });
 
     function live(): void {
         if (ended()) {
@@ -503,7 +358,8 @@ export function createTrustedHostContext(
     }): PluginRegistrationHandle {
         allow('ui.pane.register');
         if (!definition.id || !definition.label) invalid('Pane id and label are required');
-        return toPluginHandle(
+        if (definition.postType) postTypes.add(definition.postType);
+        const handle = toPluginHandle(
             runtime.api.registerPaneApp({
                 id: definition.id,
                 label: definition.label,
@@ -515,6 +371,7 @@ export function createTrustedHostContext(
                 component: pluginComponent(definition.component),
             })
         );
+        return { dispose() { handle.dispose(); if (definition.postType) postTypes.delete(definition.postType); } };
     }
 
     function registerCard(definition: {
@@ -681,10 +538,23 @@ export function createTrustedHostContext(
         if (!input.subscribeHook) return trackListener();
         const approved = kind === 'action' ? approvedActionHooks : approvedFilterHooks;
         if (!approved.has(name)) unsupported(`Hook ${name} is not available to plugins`);
-        return trackListener(input.subscribeHook(name, kind, callback, options));
+        const wrapped = (...args: unknown[]) => {
+            live();
+            if (!['ui.chat.editor:action:before_send', 'ai.chat.send:action:before', 'ai.chat.messages:filter:before_send', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit'].includes(name)) return callback(...args);
+            beforeSendDepth += 1;
+            try { const result = callback(...args); if (result instanceof Promise) return result.finally(() => { beforeSendDepth -= 1; }); beforeSendDepth -= 1; return result; }
+            catch (error) { beforeSendDepth -= 1; throw error; }
+        };
+        return trackListener(input.subscribeHook(name, kind, wrapped, options));
     }
 
     const hooks: PluginHooks = {
+        async emitAction(name, payload) {
+            allow('hooks.emit');
+            if (!['workflow.execution:action:start', 'workflow.execution:action:state_update', 'workflow.execution:action:node_complete', 'workflow.execution:action:complete'].includes(name)) return pluginError('permission-denied', 'Hook emission is not approved');
+            if (!input.emitHook) return pluginError('unsupported', 'Host hook emission is unavailable');
+            await input.emitHook(name, payload); return pluginOk(undefined);
+        },
         onAction(name, callback, options) {
             return subscribeHook(name, 'action', callback as unknown as (...args: unknown[]) => unknown, options);
         },
@@ -780,10 +650,18 @@ export function createTrustedHostContext(
         }
     }
 
+    runtime.api.onCleanup(() => records.releaseFiles());
     const mediation = createTrustedMediation({
+        retainFile: records.retainFile,
+        signal: controller.signal,
         fetch: input.mediation?.fetch,
         approvedDestinations: input.mediation?.approvedDestinations,
-        authorizeDestination: input.mediation?.authorizeDestination,
+        authorizeDestination: input.mediation?.authorizeDestination ?? access.authorize,
+        pluginId: input.pluginId,
+        limits: services?.limits ?? input.mediation?.limits,
+        requestAccess: async (value) => { allow('network.http'); return access.requestAccess(value); },
+        revokeAccess: async (value) => { allow('network.http'); return access.revokeAccess(value); },
+        ownOrigin: globalThis.location?.origin,
         secrets: input.mediation?.secrets,
         files: input.mediation?.files,
         posts: input.mediation?.posts,
@@ -808,9 +686,12 @@ export function createTrustedHostContext(
 
     function registerRenderer(definition: MessageRendererDefinition): PluginRegistrationHandle {
         allow('chat.message.renderer');
+        const type = (definition as MessageRendererDefinition & { messageType?: string }).messageType;
+        if (type) messageTypes.add(type);
         const handle = registerMessageRenderer(definition);
         return bindDispose(() => {
             handle.dispose();
+            if (type) messageTypes.delete(type);
         });
     }
 
@@ -853,7 +734,25 @@ export function createTrustedHostContext(
             createClients() {
                 return {
                     ...fallback,
+                    events: {
+                        on(name, listener) {
+                            allow('workspace.connections.read');
+                            if (name !== 'connections.changed') return unsupported('Only connections.changed is supported here');
+                            const callback = (event: Event) => { if (!ended()) void listener((event as CustomEvent).detail); };
+                            window.addEventListener(name, callback);
+                            const dispose = () => window.removeEventListener(name, callback); cleanup(dispose); return { dispose };
+                        },
+                    },
+                    posts: records.posts,
+                    ai: services?.ai ?? fallback.ai,
+                    tools: services?.tools ?? fallback.tools,
+                    jobs: services?.jobs ?? fallback.jobs,
+                    chat: { ...fallback.chat, messages: records.messages, composer: { prefill: services?.prefill ?? fallback.chat.composer.prefill }, send: { markHandled() { allow('chat.editor.extension'); if (!beforeSendDepth) return pluginError('permission-denied', 'markHandled requires an approved before-send callback'); markChatSendHandled(); return pluginOk(undefined); } } },
                     ui: {
+                        ...fallback.ui,
+                        kit: available.has('or3-trusted-ui-kit-v1') && input.requestedFeatures?.includes('or3-trusted-ui-kit-v1') ? services?.kit : undefined,
+                        sidebar: services?.sidebar ?? fallback.ui.sidebar,
+                        registerWorkspaceProfile: services?.registerProfile ?? fallback.ui.registerWorkspaceProfile,
                         registerSidebar,
                         registerPane,
                         registerCard: (definition) => registerCard(definition),
@@ -868,10 +767,7 @@ export function createTrustedHostContext(
                                 null
                             );
                         },
-                        toast: () => {
-                            allow('ui.toast');
-                            return pluginError('unsupported', 'ui.toast is not available on the trusted host context');
-                        },
+                        toast: services?.toast ?? fallback.ui.toast,
                         confirm: async () => {
                             allow('ui.confirm');
                             return pluginError('unsupported', 'ui.confirm is not available on the trusted host context');
@@ -882,6 +778,8 @@ export function createTrustedHostContext(
                         },
                     },
                     panes: {
+                        async list() { allow('panes.open'); const api = getGlobalMultiPaneApi(); if (!api) return pluginError('host-unavailable', 'Workspace panes unavailable'); return pluginOk(api.panes.value.map((pane, index) => ({ id: pane.id, app: pane.mode, recordId: pane.documentId || pane.threadId || undefined, active: index === api.activePaneIndex.value }))); },
+                        onChange(listener) { allow('panes.open'); const api = getGlobalMultiPaneApi(); if (!api) return unsupported('Workspace panes unavailable'); const stop = watch([api.panes, api.activePaneIndex], () => { if (!ended()) listener(api.panes.value.map((pane, index) => ({ id: pane.id, app: pane.mode, recordId: pane.documentId || pane.threadId || undefined, active: index === api.activePaneIndex.value }))); }, { deep: true }); cleanup(stop); return { dispose: stop }; },
                         async open(raw) {
                             allow('panes.open');
                             const validated = validatePluginPaneOpenInput(raw);
@@ -896,7 +794,22 @@ export function createTrustedHostContext(
                             const existing = api.panes.value.findIndex(
                                 (pane) => pane.mode === validated.value.app
                             );
-                            if (target === 'replace-active') {
+                            if (validated.value.app === 'chat' || validated.value.app === 'doc') {
+                                let index = typeof target === 'object' ? api.getPaneIndexById(target.pane) : api.activePaneIndex.value;
+                                if (target === 'new') {
+                                    const navigation = getWorkspaceResourceNavigationApi();
+                                    if (!navigation || !await navigation.openResource(validated.value.app === 'chat' ? { kind: 'chat', threadId: recordId ?? null } : { kind: 'document', documentId: recordId ?? '' }, 'new-tab')) return pluginError('host-unavailable', 'Resource navigation unavailable');
+                                    index = api.activePaneIndex.value;
+                                }
+                                if (index < 0) return pluginError('not-found', 'Target pane not found');
+                                if (validated.value.app === 'chat') { api.updatePane(index, { mode: 'chat', documentId: undefined, messages: [], threadId: '' }); if (recordId) await api.setPaneThread(index, recordId); }
+                                else { if (!recordId) return pluginError('invalid-input', 'Document ID required'); api.updatePane(index, { mode: 'doc', threadId: '', documentId: recordId, messages: [] }); }
+                                api.setActive(index);
+                            } else if (typeof target === 'object') {
+                                const index = api.getPaneIndexById(target.pane);
+                                if (index < 0) return pluginError('not-found', 'Target pane was not found');
+                                await api.setPaneApp(index, validated.value.app, { recordId }); api.setActive(index);
+                            } else if (target === 'replace-active') {
                                 await api.setPaneApp(api.activePaneIndex.value, validated.value.app, { recordId });
                             } else if (target !== 'new' && existing >= 0) {
                                 if (recordId) await api.setPaneApp(existing, validated.value.app, { recordId });
@@ -937,6 +850,7 @@ export function createTrustedHostContext(
                     },
                     workspace: {
                         ...fallback.workspace,
+                        connections: services?.connections ?? fallback.workspace.connections,
                         id: input.workspaceId ?? 'local',
                         onChange(listener) {
                             allow('workspace.read');
@@ -1000,8 +914,6 @@ export function createTrustedHostContext(
                 // Its cleanup runs every handle even when one unsubscribe throws.
                 listeners.length = 0;
                 activations.length = 0;
-                settings.clear();
-                storage.clear();
                 if (!controller.signal.aborted) controller.abort(reason);
             }
             return runtime.dispose(reason);

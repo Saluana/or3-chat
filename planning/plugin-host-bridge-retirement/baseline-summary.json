@@ -1,0 +1,75 @@
+{
+  "startingCommit": "59c39b4ba9558a63b4362ade196e1de4fe3d81f1",
+  "baselinePackages": {
+    "or3-external-agents": {
+      "version": "0.1.1",
+      "packageDigest": "sha256-01d228d42e5854818273e7596b691865a82a971ef2a14b9471aab198a7160266"
+    },
+    "or3-workflows": {
+      "version": "0.1.1",
+      "packageDigest": "sha256-dce5cac37541eef32ccbbf9513e73310305073ce358762e9f8a1baa78ea1a312"
+    }
+  },
+  "baselineInstalledE2E": {
+    "agents": "passed",
+    "workflows": "2 passed"
+  },
+  "parity": {
+    "agents-sidebar": {
+      "bounds": null,
+      "width": 255,
+      "height": 912,
+      "changedPixels": 0,
+      "changedPercent": 0,
+      "baselineSha256": "b47b9442f00cfabfdf8253b979b8f23933bc19e3b8008041b6fd9f7a5262855f",
+      "candidateSha256": "b47b9442f00cfabfdf8253b979b8f23933bc19e3b8008041b6fd9f7a5262855f"
+    },
+    "agents-launcher": {
+      "bounds": {
+        "minX": 712,
+        "maxX": 718,
+        "minY": 931,
+        "maxY": 940
+      },
+      "width": 1440,
+      "height": 960,
+      "changedPixels": 55,
+      "changedPercent": 0.003978587962962963,
+      "baselineSha256": "d6bd96f7e017763a001ce3d4dac71cca987871179c73834de6899604fffa8c0c",
+      "candidateSha256": "c184bdb0bde7435e3aadb0486ec7b68461cc4cf453d6c150112405ebb9c454a5"
+    },
+    "workflows-sidebar": {
+      "bounds": null,
+      "width": 320,
+      "height": 700,
+      "changedPixels": 0,
+      "changedPercent": 0,
+      "baselineSha256": "9372bc86e2d8dfeb5ed547177b2f218ef3f8543302f0e96448402aafd1522e81",
+      "candidateSha256": "9372bc86e2d8dfeb5ed547177b2f218ef3f8543302f0e96448402aafd1522e81"
+    }
+  },
+  "artifacts": {
+    "agents-upgraded.png": "c1a0649d9c60b2e54abfd74e902cd3f90fc8124439d0464c27fe54f41cab7775",
+    "parity.json": "4c4fe1ef78ba1135aea94a646e8e5e27a14cb911885d2d8dbd19e2dbeb5a6593",
+    "upgrade.json": "e54ef46ea62dc53c9814a9555e61a8274e0c06ca90a9f10d3198dd9ed47826c7",
+    "ui-kit.json": "d20552fc18db0ebe84e45fbd6b35ff2fce7a5994ed6ddbd9633f1ea4a0f9daac",
+    "contracts.json": "1bb525d7fe49ac9da1d469c86e01a3aa07b77abf8bd9ce073442d50db1272160",
+    "parity-baseline/agents-sidebar.png": "b47b9442f00cfabfdf8253b979b8f23933bc19e3b8008041b6fd9f7a5262855f",
+    "parity-baseline/agents-launcher.png": "d6bd96f7e017763a001ce3d4dac71cca987871179c73834de6899604fffa8c0c",
+    "parity-baseline/capture.json": "5ce764f46f683244f27e579088de20bc62a99bd9ba2a9d0796aa482e2ec39c33",
+    "parity-baseline/workflows-sidebar.png": "9372bc86e2d8dfeb5ed547177b2f218ef3f8543302f0e96448402aafd1522e81",
+    "parity-candidate/agents-sidebar.png": "b47b9442f00cfabfdf8253b979b8f23933bc19e3b8008041b6fd9f7a5262855f",
+    "parity-candidate/agents-launcher.png": "c184bdb0bde7435e3aadb0486ec7b68461cc4cf453d6c150112405ebb9c454a5",
+    "parity-candidate/capture.json": "268a45ab923d2dcc354355d2d9c6195133d73a661ec988b52b5447195b5cfbbc",
+    "parity-candidate/workflows-sidebar.png": "9372bc86e2d8dfeb5ed547177b2f218ef3f8543302f0e96448402aafd1522e81",
+    "baseline/agents-installed/agents-sidebar-empty.png": "b47b9442f00cfabfdf8253b979b8f23933bc19e3b8008041b6fd9f7a5262855f",
+    "baseline/agents-installed/agents-pane-new.png": "50ae1cbe80e09479ad40f05d4e80c892805adfe9ba79719a7a43ced871799ff2",
+    "baseline/agents-installed/agents-installed-new.png": "48388da2d187c8512ff27fbe1460efbac9305e17e7bdf695cc90876722753144",
+    "baseline/workflows-installed/workflow-slash-menu.png": "7657e5b53e3d53bc12b9bd6154572e9eab5c8db8ea31c0d483df88eea5356ea7",
+    "baseline/workflows-installed/imported-no-model-workflow.png": "120d2acbdc7546ad904ad19d9dcf7178f4f32936dd8a19b5026316165f3e836b",
+    "baseline/workflows-installed/completed-no-model-workflow.png": "fddd0df32ac3388dfadf32dcc1ec24b2aa98344492af80420f61b2eab23fc3e7",
+    "baseline/workflows-installed/installed-sidebar.png": "59383cbcecc0ce29d7931870ded6a07bbceebc0636d8fad8fa304a9bdc097d2b",
+    "baseline/workflows-installed/workflow-editor.png": "37dfa1a76a359e8c1ef355fc77e45b2f601edc40315d7c606f438c51f50ff50b",
+    "baseline/workflows-installed/no-model-smoke-receipt.json": "1ec04eaf29111cdcb5fd0fe82e1c04f6babd0c238a570a2ed077d72f7b82cb05"
+  }
+}

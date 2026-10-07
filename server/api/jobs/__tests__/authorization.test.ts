@@ -5,7 +5,7 @@ import { resetJobProvider } from '../../../utils/background-jobs/store';
 import type { BackgroundJobExecution } from '../../../utils/background-jobs/types';
 import type { RequestUsage } from '../../../../shared/chat/compaction';
 import { emitJobDelta, emitJobStatus, hasJobViewers, resetJobViewersForTests } from '../../../utils/background-jobs/viewers';
-import { createWorkflowServerBridge } from '../../../utils/workflows/plugin-server-bridge';
+import { createTrustedPluginServerServices } from '../../../utils/background-jobs/plugin-server-services';
 import { getScopedAdmissionKey } from '../../../utils/background-jobs/admission-cancels';
 import { registerBackgroundJobProvider, resetBackgroundJobProviders } from '../../../utils/background-jobs/registry';
 import { resetSyncRateLimits } from '../../../utils/sync/rate-limiter';
@@ -283,12 +283,27 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         }
     });
 
+    // Generic server services must never read or mutate jobs from another
+    // workspace, even for the same user or with a forged wildcard identity.
+    it('refuses cross-workspace jobs through trusted package server services', async () => {
+        membership.active = true;
+        const jobId = await createRevokedWorkspaceJob();
+        const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async event => {
+            const provider = await createTrustedPluginServerServices(event, new Set(['jobs.background'])).getJobProvider();
+            await provider.updateJob(jobId, { contentChunk: 'unauthorized mutation' });
+            return { ok: true };
+        })));
+        const response = await send(new Request('http://chat.example.test/plugin-service'));
+        expect(response.status).toBe(403);
+        expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.content).toBe('private workspace content');
+    });
+
     it('preserves authorized status, stream, and stop for a newly admitted workflow', async () => {
         membership.role = 'editor';
         identity.session.workspace.id = 'revoked-workspace';
         // This is the exact createJob payload in the supported workflow plugin.
         const admit = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-            const provider = await createWorkflowServerBridge(event).getJobProvider();
+            const provider = await createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use'])).getJobProvider();
             return { jobId: await provider.createJob({
                 userId: 'former-member', threadId: 'workflow-thread', messageId: 'workflow-message',
                 model: 'workflow', kind: 'workflow',
@@ -427,7 +442,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         const work = new Promise<void>((resolve) => { release = resolve; });
         let entered = 0;
         const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-            const bridge = createWorkflowServerBridge(event);
+            const bridge = createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use']));
             const session = await bridge.authorize(event, rateKey);
             entered++;
             await work;
@@ -448,7 +463,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
     it('does not count a workflow package completion callback twice', async () => {
         vi.stubGlobal('useRuntimeConfig', () => ({ limits: { operationRateLimits: { 'workflow:background': { maxRequests: 2 } } } }));
         const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-            const bridge = createWorkflowServerBridge(event);
+            const bridge = createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use']));
             const session = await bridge.authorize(event, 'workflow:background');
             bridge.recordRequest(session.userId, 'workflow:background');
             return { admitted: true };
@@ -538,7 +553,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         membership.role = role;
         identity.session.workspace.id = 'revoked-workspace';
         const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-            const provider = await createWorkflowServerBridge(event).getJobProvider();
+            const provider = await createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use'])).getJobProvider();
             return provider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'workflow', kind: 'workflow' });
         })));
         expect((await send(new Request('http://chat.example.test/workflow'))).status).toBe(403);
@@ -557,7 +572,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             membership.role = 'editor';
             identity.session.workspace.id = 'revoked-workspace';
             const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-                const scoped = await createWorkflowServerBridge(event).getJobProvider();
+                const scoped = await createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use'])).getJobProvider();
                 return { jobId: await scoped.createJob({ userId: 'former-member', threadId: 't', messageId: 'm',
                     model: 'workflow', kind: 'workflow', historyPhase: 'ready',
                     execution: { version: 1, kind: 'workflow', workspaceId: 'attacker-workspace' } }) };
@@ -620,7 +635,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         membership.role = 'editor';
         identity.session.workspace.id = 'revoked-workspace';
         const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
-            const provider = await createWorkflowServerBridge(event).getJobProvider();
+            const provider = await createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use'])).getJobProvider();
             return { jobId: await provider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'workflow', kind: 'workflow' }) };
         })));
         const { jobId } = await (await send(new Request('http://chat.example.test/workflow'))).json() as { jobId: string };

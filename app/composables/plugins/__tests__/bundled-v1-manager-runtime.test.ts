@@ -26,7 +26,7 @@ const runtimeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../workspace-runtime', () => ({
-    createManagedWorkspacePluginRuntime: () => ({ api: {}, dispose: runtimeMocks.dispose }),
+    createManagedWorkspacePluginRuntime: () => ({ api: { onCleanup: vi.fn() }, dispose: runtimeMocks.dispose }),
     registerWorkspacePluginInstance: runtimeMocks.registerInstance,
     unregisterWorkspacePluginInstance: runtimeMocks.unregisterInstance,
 }));

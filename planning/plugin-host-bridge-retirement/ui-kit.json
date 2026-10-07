@@ -1,0 +1,10 @@
+{
+  "initialTheme": "blank",
+  "mounts": 1,
+  "checks": [
+    "mounted public kit component",
+    "reactive theme switch",
+    "same mount retained",
+    "activation cleanup"
+  ]
+}

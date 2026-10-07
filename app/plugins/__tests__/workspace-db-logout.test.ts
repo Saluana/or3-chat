@@ -110,7 +110,7 @@ describe('workspace logout cleanup plugin', () => {
             expect(logoutCleanup).toHaveBeenCalledTimes(1);
         });
         expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
-            preserveExternalAgentCredentials: true,
+            preservePluginSecrets: true,
         });
     });
 
@@ -122,7 +122,7 @@ describe('workspace logout cleanup plugin', () => {
 
         await vi.waitFor(() => {
             expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
-                preserveExternalAgentCredentials: true,
+                preservePluginSecrets: true,
                 preserveOpenRouterPkce: true,
             });
         });

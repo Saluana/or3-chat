@@ -1535,8 +1535,10 @@ export * from './projects/useProjectsCrud';
 export * from './notifications/useNotifications';
 
 // ---- app/composables/plugins/trusted-host-context.ts ----
-import { type PluginGrant, type PluginRegistrationHandle, type PluginWorkspaceChange } from '@or3/plugin-sdk';
+import { type PluginGrant, type PluginJsonValue, type PluginRegistrationHandle, type PluginWorkspaceChange } from '@or3/plugin-sdk';
 import type { PluginContext } from '@or3/plugin-sdk';
+import { getDb } from '~/db/client';
+import type { createTrustedRuntimeServices } from './trusted-runtime-services';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import { type Or3WorkspacePluginApi } from './workspace-runtime';
 import { createTrustedMediation, type TrustedMediationOptions } from './trusted-mediation';
@@ -1549,7 +1551,7 @@ import type { LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope'
  * this full set because their `register(api)` path already had ungated
  * registry access. SDK context methods still check the grant they need.
  */
-export declare const TRUSTED_HOST_GRANTS: readonly ["ui.dashboard.register", "ui.sidebar.register", "ui.pane.register", "ui.card.register", "ui.action.register", "ui.command-palette.register", "ui.toast", "ui.confirm", "ui.progress", "panes.open", "commands.register", "commands.run.public", "chat.create", "chat.read", "chat.message.write", "chat.message.renderer", "chat.editor.extension", "workspace.read", "workspace.switch", "workspace.connections.read", "workspace.connections.manage", "events.register", "ai.models", "ai.complete", "secrets.read", "secrets.write", "secrets.use", "files.pick", "files.read", "files.write", "network.stream", "activity.register", "documents.read", "documents.write", "tools.register.client", "tools.register.server", "tools.model.register", "posts.read", "posts.write", "hooks.register", "network.http", "storage.read", "storage.write", "settings.read", "settings.write"];
+export declare const TRUSTED_HOST_GRANTS: readonly ["ui.workspace-profile.register", "ai.provider", "tools.use", "jobs.background", "hooks.emit", "ui.dashboard.register", "ui.sidebar.register", "ui.pane.register", "ui.card.register", "ui.action.register", "ui.command-palette.register", "ui.toast", "ui.confirm", "ui.progress", "panes.open", "commands.register", "commands.run.public", "chat.create", "chat.read", "chat.message.write", "chat.message.renderer", "chat.editor.extension", "workspace.read", "workspace.switch", "workspace.connections.read", "workspace.connections.manage", "events.register", "ai.models", "ai.complete", "secrets.read", "secrets.write", "secrets.use", "files.pick", "files.read", "files.write", "network.stream", "activity.register", "documents.read", "documents.write", "tools.register.client", "tools.register.server", "tools.model.register", "posts.read", "posts.write", "hooks.register", "network.http", "storage.read", "storage.write", "settings.read", "settings.write"];
 export interface TrustedPluginToolsClient {
     register(definition: ExtendedToolDefinition, handler: ToolHandler): PluginRegistrationHandle;
     registerModel(input: TrustedModelContribution): PluginRegistrationHandle;
@@ -1561,6 +1563,7 @@ export interface TrustedPluginEditorClient {
 }
 export interface CreateTrustedHostContextInput {
     readonly pluginId: string;
+    readonly signal?: AbortSignal;
     readonly version: string;
     readonly workspaceId?: string;
     readonly generation?: number;
@@ -1571,11 +1574,21 @@ export interface CreateTrustedHostContextInput {
         readonly priority?: number;
         readonly signal?: AbortSignal;
     }) => () => void;
-    readonly mediation?: Pick<TrustedMediationOptions, 'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'>;
+    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;
+    readonly requestedFeatures?: readonly string[];
+    readonly runtimeServices?: (authority: {
+        pluginId: string;
+        db: ReturnType<typeof getDb>;
+        allow(grant: PluginGrant): void;
+        current(): boolean;
+        cleanup(callback: () => void): void;
+    }) => ReturnType<typeof createTrustedRuntimeServices>;
+    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;
+    readonly mediation?: Pick<TrustedMediationOptions, 'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'>;
 }
 export interface TrustedHostContext {
     readonly context: PluginContext;
-    /** Client tools. The SDK context has no tools namespace; this is that surface. */
+    /** Trusted execution-model registrations; SDK tools expose list/execute. */
     readonly tools: TrustedPluginToolsClient;
     readonly editor: TrustedPluginEditorClient;
     readonly posts: ReturnType<typeof createTrustedMediation>['posts'];

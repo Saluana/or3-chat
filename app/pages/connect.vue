@@ -589,7 +589,7 @@ async function monitorComputer() {
 }
 
 async function refreshCloudComputers() {
-    window.dispatchEvent(new CustomEvent('or3:external-agents:refresh-cloud-hosts'));
+    window.dispatchEvent(new CustomEvent('connections.changed'));
 }
 
 function safeError(cause: unknown, fallback: string): string {

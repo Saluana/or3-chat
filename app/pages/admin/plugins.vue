@@ -439,6 +439,7 @@
 </template>
 
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
 import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
@@ -573,7 +574,7 @@ async function reviewSiteRelease(pluginId: string, version?: string) {
         }>(`/api/admin/plugins/site-catalog/${encodeURIComponent(pluginId)}`, { query: { version } });
         const access = [
             `Trust: ${preview.authority?.trust ?? 'unknown'}`,
-            `Grants: ${preview.requestedGrants.join(', ') || 'none'}`,
+            `Grants: ${preview.requestedGrants.map(describePluginGrant).join('\n') || 'none'}`,
             `Destinations: ${preview.authority?.destinations?.length ?? 0}`,
             `Data scopes: ${preview.authority?.dataScopes?.join(', ') || 'none'}`,
             `Connection scopes: ${preview.authority?.connectionScopes?.join(', ') || 'none'}`,
@@ -904,7 +905,7 @@ async function reviewV2Permissions(pluginId: string, target: 'current' | 'candid
         const approved = await confirm({
             title: `Review ${pluginId} ${target === 'current' ? 'selected release' : 'candidate'} permissions`,
             message: review.requestedGrants.length
-                ? `Approve these requested permissions for this workspace: ${review.requestedGrants.join(', ')}?`
+                ? `Approve these requested permissions for this workspace: ${review.requestedGrants.map(describePluginGrant).join('\n')}?`
                 : 'Approve this package authority for this workspace?',
             importantNote: `Package: ${review.packageDigest}. Authority: ${review.authoritySha256}. Trusted-host code runs in the host page.`,
             noteTone: 'warning',

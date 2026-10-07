@@ -1,3 +1,4 @@
+import { LEGACY_PLUGIN_SECRET_KEYS } from '~/composables/plugins/legacy-plugin-data';
 /**
  * @module app/utils/logout-cleanup
  *
@@ -34,10 +35,10 @@ interface NuxtAppWithSync extends NuxtApp {
 
 interface LogoutCleanupOptions {
     /**
-     * Keep device-encrypted agent credentials during startup reconciliation.
+     * Keep device-local plugin secrets during startup reconciliation.
      * An explicit authenticated -> signed-out transition still clears them.
      */
-    preserveExternalAgentCredentials?: boolean;
+    preservePluginSecrets?: boolean;
     /**
      * Keep the short-lived PKCE markers while the OpenRouter callback is
      * exchanging its authorization code. The callback clears them itself.
@@ -115,12 +116,10 @@ export async function logoutCleanup(
                 'openrouter_code_method',
             );
         }
-        if (!options.preserveExternalAgentCredentials) {
-            keys.push('or3.external-agents.credentials.v1');
-        }
+        if (!options.preservePluginSecrets) keys.push(...LEGACY_PLUGIN_SECRET_KEYS);
         for (let index = 0; index < localStorage.length; index += 1) {
             const key = localStorage.key(index);
-            if (key?.startsWith('or3:bg-client-tool:')) keys.push(key);
+            if (key?.startsWith('or3:bg-client-tool:') || (!options.preservePluginSecrets && key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.')))) keys.push(key);
         }
         keys.forEach((key) => localStorage.removeItem(key));
     }

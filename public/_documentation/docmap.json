@@ -902,7 +902,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "Supported methods, required permissions, runtime availability, results, storage, UI actions, contributions, and SDK exports."
+                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, and reviewed grants."
                 },
                 {
                     "name": "plugin-sdk-cli.md",

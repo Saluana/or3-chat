@@ -22,6 +22,8 @@ const localStorageMock = (() => {
         setItem: (key: string, value: string) => {
             store.set(key, String(value));
         },
+        get length() { return store.size; },
+        key: (index: number) => [...store.keys()][index] ?? null,
         removeItem: (key: string) => {
             store.delete(key);
         },
@@ -71,9 +73,12 @@ describe('logoutCleanup', () => {
         localStorage.setItem('openrouter_state', 'state');
         localStorage.setItem('or3.tools.enabled', '{"test":true}');
         localStorage.setItem(
-            'or3.external-agents.credentials.v1',
+            'or3.plugin.fixture.secret.vault',
             'encrypted-vault',
         );
+        localStorage.setItem('or3.plugin.other.secret.vault', 'other');
+        localStorage.setItem('or3.plugin.secret.old', 'legacy');
+        localStorage.setItem('or3.external-agents.credentials.v1', 'unmigrated-vault');
         localStorage.setItem('last_selected_model', 'openai/test');
         sessionStorage.setItem('openrouter_state', 'state');
         const { logoutCleanup } = await import('~/utils/logout-cleanup');
@@ -90,24 +95,27 @@ describe('logoutCleanup', () => {
         expect(localStorage.getItem('openrouter_state')).toBeNull();
         expect(localStorage.getItem('or3.tools.enabled')).toBeNull();
         expect(
-            localStorage.getItem('or3.external-agents.credentials.v1'),
+            localStorage.getItem('or3.plugin.fixture.secret.vault'),
         ).toBeNull();
+        expect(localStorage.getItem('or3.plugin.other.secret.vault')).toBeNull();
+        expect(localStorage.getItem('or3.plugin.secret.old')).toBeNull();
+        expect(localStorage.getItem('or3.external-agents.credentials.v1')).toBeNull();
         expect(localStorage.getItem('last_selected_model')).toBeNull();
         expect(sessionStorage.getItem('openrouter_state')).toBeNull();
     });
 
     it('preserves device-encrypted agent credentials during startup reconciliation', async () => {
         localStorage.setItem(
-            'or3.external-agents.credentials.v1',
+            'or3.plugin.fixture.secret.vault',
             'encrypted-vault',
         );
         const { logoutCleanup } = await import('~/utils/logout-cleanup');
 
         await logoutCleanup(undefined, {
-            preserveExternalAgentCredentials: true,
+            preservePluginSecrets: true,
         });
 
-        expect(localStorage.getItem('or3.external-agents.credentials.v1')).toBe(
+        expect(localStorage.getItem('or3.plugin.fixture.secret.vault')).toBe(
             'encrypted-vault',
         );
     });

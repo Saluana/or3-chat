@@ -10,6 +10,7 @@
  * verification receipt bound to the canary evidence.
  */
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { presentError } from '~~/shared/errors';
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
@@ -325,7 +326,7 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
             <div v-if="blockedReview" class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs" data-testid="dev-candidate-grants">
                 <p class="font-medium">Authority this candidate asks for</p>
                 <ul class="list-disc pl-5">
-                    <li v-for="grant in blockedReview.requestedGrants" :key="grant"><code>{{ grant }}</code></li>
+                    <li v-for="grant in blockedReview.requestedGrants" :key="grant"><code>{{ describePluginGrant(grant) }}</code></li>
                 </ul>
                 <label class="flex items-center gap-2">
                     <input

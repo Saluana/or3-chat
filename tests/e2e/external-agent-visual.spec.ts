@@ -63,6 +63,14 @@ test('installed package registers and renders its sidebar and pane', async ({ pa
     });
     expect(signIn.ok()).toBe(true);
     await page.goto('/chat');
+    const welcome = page.locator('[data-welcome-card]');
+    await expect(welcome).toBeVisible();
+    if (await welcome.isVisible()) {
+        await welcome.getByRole('button', { name: 'Use an existing API key' }).click();
+        await welcome.getByLabel('OpenRouter API key').fill('sk-or-disposable-test-key');
+        await welcome.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(welcome).toBeHidden();
+    }
 
     const manifest = await page.request.get('/api/plugins/runtime-manifest');
     expect(manifest.ok()).toBe(true);

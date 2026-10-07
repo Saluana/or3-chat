@@ -1,6 +1,6 @@
 {
     "name": "@or3/plugin-sdk",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "type": "module",
     "license": "GPL-3.0",
     "engines": {
@@ -83,5 +83,8 @@
     },
     "devDependencies": {
         "typescript": "^5.9.3"
+    },
+    "peerDependencies": {
+        "vue": "^3.5.0"
     }
 }

@@ -1,0 +1,14 @@
+{
+  "approvals": 1,
+  "authenticated": [
+    "/internal/v1/health",
+    "/internal/v1/capabilities",
+    "/internal/v1/chat-runners",
+    "/internal/v1/runner-chat/sessions",
+    "/internal/v1/runner-chat/sessions/legacy-session"
+  ],
+  "legacyDeleted": true,
+  "scoped": "{\"hosts\":[{\"id\":\"legacy-host\",\"name\":\"Legacy Host\",\"baseUrl\":\"https://legacy.example\",\"credentialRef\":\"legacy-host-token\",\"trustedAt\":\"2026-08-01T00:00:00.000Z\",\"lastConnectedAt\":\"2026-10-07T05:32:31.057Z\"}],\"activeHostId\":\"legacy-host\",\"sessionRefs\":[{\"hostId\":\"legacy-host\",\"remoteSessionId\":\"legacy-session\",\"status\":\"running\",\"activeTurnId\":\"legacy-turn\"}]}",
+  "legacyVaultRemoved": true,
+  "vaultPreserved": true
+}

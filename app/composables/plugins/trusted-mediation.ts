@@ -17,6 +17,12 @@ import {
 } from './trusted-production-stores';
 
 export interface TrustedMediationOptions {
+    readonly pluginId?: string;
+    readonly retainFile?: (id: string) => void;
+    readonly ownOrigin?: string;
+    readonly limits?: { maxFilesPerMessage: number; maxFileSizeBytes: number };
+    readonly requestAccess?: PluginNetworkClient['requestAccess'];
+    readonly revokeAccess?: PluginNetworkClient['revokeAccess'];
     readonly fetch?: typeof fetch;
     readonly approvedDestinations?: readonly string[];
     readonly authorizeDestination?: (url: string, destination: string) => boolean | Promise<boolean>;
@@ -24,6 +30,7 @@ export interface TrustedMediationOptions {
     readonly files?: FileStore;
     readonly posts?: PostStore;
     readonly ended?: () => boolean;
+    readonly signal?: AbortSignal;
     readonly allow?: (grant: PluginGrant) => void;
 }
 
@@ -41,8 +48,8 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
         write(input: { readonly postType: string; readonly title: string }): Promise<PluginResult<{ id: string }>>;
     };
 } {
-    const secrets = options.secrets ?? createLocalStorageSecretStore();
-    const files = options.files ?? createWorkspaceFileStore();
+    const secrets = options.secrets ?? createLocalStorageSecretStore(options.pluginId ?? 'host');
+    const files = options.files ?? createWorkspaceFileStore(() => { if (ended()) throw Object.assign(new Error('Activation ended'), { code: 'stale-context' }); });
     const posts = options.posts ?? createWorkspacePostStore();
     const approved = new Set(options.approvedDestinations ?? []);
     const ended = options.ended ?? (() => false);
@@ -56,13 +63,34 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
             return false;
         }
     };
-    const requestBody = (body: PluginHttpBody | undefined): BodyInit | undefined => {
+    const requestBody = async (body: PluginHttpBody | undefined, signal?: AbortSignal): Promise<BodyInit | undefined> => {
         if (body === undefined) return undefined;
         if (body === null) return 'null';
         if (typeof body === 'string') return body;
         if (body instanceof Uint8Array) return new Blob([new Uint8Array(body)]);
         if (typeof body === 'object' && 'kind' in body && body.kind === 'multipart') {
-            throw new Error('Multipart requests require a host file adapter');
+            const form = new FormData();
+            const multipart = body as { fields: Record<string, string>; files: readonly PluginFileRef[]; parts?: readonly { name: string; filename: string; mimeType: string; data: Uint8Array }[] };
+            const limits = options.limits ?? { maxFilesPerMessage: 10, maxFileSizeBytes: 20 * 1024 * 1024 };
+            if (multipart.files.length + (multipart.parts?.length ?? 0) > limits.maxFilesPerMessage) throw new Error('Too many multipart files');
+            let total = 0;
+            for (const [key, value] of Object.entries(multipart.fields)) { total += new TextEncoder().encode(value).byteLength; form.append(key, value); }
+            for (const ref of multipart.files) {
+                allow('files.read');
+                if (signal?.aborted || ended()) throw new Error('Multipart cancelled');
+                const file = await files.get(ref.id); if (!file) throw new Error('Multipart file not found');
+                if (file.bytes.byteLength > limits.maxFileSizeBytes) throw new Error('Multipart file too large');
+                total += file.bytes.byteLength;
+                form.append('file', new Blob([new Uint8Array(file.bytes)], { type: file.mimeType }), file.name);
+            }
+            for (const part of multipart.parts ?? []) {
+                if (part.data.byteLength > limits.maxFileSizeBytes) throw new Error('Multipart part too large');
+                total += part.data.byteLength;
+                form.append(part.name, new Blob([new Uint8Array(part.data)], { type: part.mimeType }), part.filename);
+            }
+            if (total > limits.maxFilesPerMessage * limits.maxFileSizeBytes) throw new Error('Multipart body too large');
+            if (signal?.aborted || ended()) throw new Error('Multipart cancelled');
+            return form;
         }
         return JSON.stringify(body);
     };
@@ -81,8 +109,8 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
             try {
                 const response = await (options.fetch ?? fetch)(input.url, {
                     method: input.method ?? 'GET', headers: input.headers,
-                    body: requestBody(input.body), signal: input.signal,
-                    redirect: 'error', credentials: 'omit', cache: 'no-store',
+                    body: await requestBody(input.body, input.signal), signal: options.signal ? AbortSignal.any([options.signal, ...(input.signal ? [input.signal] : [])]) : input.signal,
+                    redirect: 'error', credentials: options.ownOrigin && new URL(input.url, options.ownOrigin).origin === options.ownOrigin ? 'include' : 'omit', cache: 'no-store',
                 });
                 const limit = 32 * 1024 * 1024;
                 if (Number(response.headers.get('content-length') ?? 0) > limit) {
@@ -123,6 +151,8 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
     };
 
     const network: PluginNetworkClient = {
+        requestAccess: options.requestAccess ?? (async () => pluginError('unsupported', 'Network access prompts unavailable')),
+        revokeAccess: options.revokeAccess ?? (async () => pluginError('unsupported', 'Network revocation unavailable')),
         async stream(input) {
             try {
                 allow('network.stream');
@@ -135,13 +165,13 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                 return pluginError('permission-denied', `Destination "${input.destination}" is not approved`);
             }
             const fetchImpl = options.fetch ?? fetch;
-            const signal = input.signal;
+            const signal = options.signal ? AbortSignal.any([options.signal, ...(input.signal ? [input.signal] : [])]) : input.signal;
             let response: Response;
             try {
                 response = await fetchImpl(input.url, {
                     method: input.method ?? 'GET', headers: input.headers,
-                    body: requestBody(input.body), signal, redirect: 'error',
-                    credentials: 'omit', cache: 'no-store',
+                    body: await requestBody(input.body, signal), signal, redirect: 'error',
+                    credentials: options.ownOrigin && new URL(input.url, options.ownOrigin).origin === options.ownOrigin ? 'include' : 'omit', cache: 'no-store',
                 });
             } catch (error) {
                 if (signal?.aborted) return pluginError('aborted', 'Stream cancelled');
@@ -164,6 +194,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
             const finish = (value: PluginResult<void>) => {
                 if (settled) return;
                 settled = true;
+                signal?.removeEventListener('abort', cancel);
                 settleResult(value);
             };
             const cancel = () => {
@@ -197,6 +228,11 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                                   { retryable: true }
                               )
                     );
+                } finally {
+                    signal?.removeEventListener('abort', cancel);
+                    await reader.cancel().catch(() => undefined);
+                    reader.releaseLock();
+                    finish(pluginError('aborted', 'Stream closed'));
                 }
             }
             const stream: PluginStream = {
@@ -263,6 +299,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
     };
 
     const filesClient: PluginFilesClient = {
+        async limits() { try { allow('files.read'); } catch { return denied('files.read'); } if (ended()) return pluginError('stale-context', 'Activation ended'); return pluginOk(options.limits ?? { maxFilesPerMessage: 10, maxFileSizeBytes: 20 * 1024 * 1024 }); },
         async pick() {
             try {
                 allow('files.pick');
@@ -322,11 +359,17 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                 return denied('files.write');
             }
             const chunks: Uint8Array[] = [];
+            let size = 0;
+            const limit = options.limits?.maxFileSizeBytes ?? 20 * 1024 * 1024;
             for await (const chunk of input.data) {
+                if (ended()) return pluginError('stale-context', 'Activation ended');
+                size += chunk.byteLength;
+                if (size > limit) return pluginError('invalid-input', 'File exceeds configured size limit');
                 if (input.signal?.aborted) return pluginError('aborted', 'File write cancelled');
                 chunks.push(chunk);
             }
-            const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+            if (ended()) return pluginError('stale-context', 'Activation ended');
+            if (input.signal?.aborted) return pluginError('aborted', 'File write cancelled');
             const bytes = new Uint8Array(size);
             let offset = 0;
             for (const chunk of chunks) {
@@ -334,6 +377,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                 offset += chunk.byteLength;
             }
             const stored = await files.put({ name: input.name, mimeType: input.mimeType, bytes });
+            options.retainFile?.(stored.id);
             return pluginOk({
                 id: stored.id,
                 name: input.name,
@@ -344,11 +388,16 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
         },
     };
 
+    const guarded = <T extends object>(client: T): T => Object.fromEntries(Object.entries(client).map(([name, method]) => [name, async (...args: unknown[]) => {
+        if (ended()) return pluginError('stale-context', 'Plugin activation has ended');
+        try { return await method(...args); }
+        catch (error) { const e = error as { code?: string; message?: string }; return pluginError((ended() ? 'stale-context' : e.code || 'host-unavailable') as Parameters<typeof pluginError>[0], e.message || 'Host operation failed'); }
+    }])) as T;
     return {
-        http,
-        network,
-        secrets: secretsClient,
-        files: filesClient,
+        http: guarded(http),
+        network: guarded(network),
+        secrets: guarded(secretsClient),
+        files: guarded(filesClient),
         posts: {
             async read(postType) {
                 try {

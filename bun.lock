@@ -631,7 +631,7 @@
 
     "@openrouter/sdk": ["@openrouter/sdk@1.2.145", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-rTsEQ1pyll7OrPJTF+4aRrpJ/dQt+tQeWS5jm6lFHetcwnTWcXXWKGjMWp640N+Z8ti66eqORxqlH5XWTUy6rQ=="],
 
-    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" } }],
+    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "peerDependencies": { "vue": "^3.5.0" } }],
 
     "@orama/orama": ["@orama/orama@3.1.18", "", {}, "sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA=="],
 

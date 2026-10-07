@@ -1,3 +1,4 @@
+import { buildPluginSettingDefaults } from '../../server/admin/config/plugin-setting-defaults';
 import type { ResolvedOr3Config } from '../../types/or3-config';
 import type { Or3CloudConfig } from '../../types/or3-cloud-config';
 import type { EnvMap } from '../cloud/env-contract';
@@ -463,6 +464,7 @@ export function buildApplicationPlan(input: {
             wizardUi: {
                 enabled: env.OR3_WIZARD_UI_ENABLED === 'true',
             },
+            pluginSettingDefaults: buildPluginSettingDefaults(or3Config.features.workflows),
             // Feature toggles from OR3 config - exposed for client-side gating
             features: {
                 workflows: {

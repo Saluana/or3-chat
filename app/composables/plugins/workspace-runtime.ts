@@ -1,3 +1,4 @@
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
@@ -144,9 +145,17 @@ export function createManagedWorkspacePluginRuntime(options?: {
             const handle = registerPaneApp(
                 attachOwnerPluginId(def, ownerPluginId)
             );
-            const cleanup = toDisposer(handle);
-            scope.onCleanup(cleanup);
-            return handle;
+            let disposed = false;
+            const cleanup = () => {
+                if (disposed) return false;
+                disposed = true;
+                if (!handle.dispose()) return false;
+                const api = getGlobalMultiPaneApi();
+                api?.panes.value.forEach((pane, index) => { if (pane.mode === def.id) api.updatePane(index, { mode: 'chat', threadId: '', documentId: undefined, pendingThreadId: undefined, messages: [], validating: false }); });
+                return true;
+            };
+            scope.onCleanup(() => { cleanup(); });
+            return { id: handle.id, owner: handle.owner, get disposed() { return disposed; }, dispose: cleanup };
         },
         registerMessageAction(action) {
             const handle = registerMessageAction(

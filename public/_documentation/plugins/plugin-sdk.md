@@ -230,3 +230,40 @@ with declared grants and initial settings/storage. The generic `PluginTestHost`
 is useful for trusted definitions. These fakes verify local behavior; they do
 not prove sandbox containment, browser startup, or installed-runtime support.
 Use the real browser lifecycle check before [publishing](/documentation/plugins/publish).
+
+
+## Trusted SDK 2.1 capabilities
+
+Reviewed `trusted-host` packages can require these feature IDs:
+
+- `or3-trusted-ui-kit-v1`: shared Vue components, reactive theme components, icons, responsive state, chat-input props and syntax highlighting.
+- `or3-trusted-host-v2`: persistent storage/settings, scoped secrets, sidebar navigation, pane listing/listeners/targets, Connect, workspace profiles and governed HTTP/multipart/SSE.
+- `or3-trusted-chat-records-v1`: posts/messages, composer prefill, send handling, AI provider/models, tools, jobs and lifecycle events.
+
+Feature requirements are checked before setup. Portable clients return `unsupported` for these trusted-only methods.
+
+`ui.kit.components.ChatMessage` is reactive and follows theme changes. `ui.sidebar.show(id)` reports `not-found` for unknown pages. `panes.open` supports core `chat`/`doc`, registered apps and `target: { pane: id }`; `panes.list/onChange` return snapshots. Removing a pane app resets only its panes to empty chats.
+
+`storage` persists JSON in the activation workspace under `or3.plugin.<id>.storage.<key>`; conditional writes use revisions. Values are limited to 32 KiB and each plugin to 1 MiB/1,000 live keys. Settings resolve persisted values, then defaults in the manifest's settings schema, then `public.pluginSettingDefaults[id]`. Disable retains workspace data. Activation clients return `stale-context` after disposal or a workspace switch.
+
+`secrets` uses device-local `or3.plugin.<id>.secret.<key>` keys. Observed sign-out clears them; stale-session startup preserves them. Secrets are never workspace KV values. An unavailable browser store reports `host-unavailable`.
+
+`network.requestAccess({ origins, purpose })` requests one host-owned approval for previously unapproved origins; `revokeAccess` removes approvals immediately. Only HTTPS or loopback HTTP origins without credentials, paths, queries or fragments are accepted. The host keeps approvals outside plugin storage. A plugin can use its own `/api/plugins/<id>/` routes and current Connect endpoints; other same-host routes are denied. Redirects are refused. Multipart bodies support file references plus `{ name, filename, mimeType, data: Uint8Array }` parts, enforce `files.limits()`, and honor cancellation.
+
+`posts` writes only post types declared by registered panes. `chat.messages` writes only assistant messages with a type declared by a registered message renderer (`messageType`). Updates preserve message clocks; `attachFile` consumes a generated file reference and handles duplicate attachment references. File references issued by `files.write` belong to the activation until attached; unused references are released on disposal. Composer prefill uses `chat.composer.prefill`, while `chat.send.markHandled` is valid within the before-send hook.
+
+Additional reviewed grants:
+
+| Grant | Access |
+| --- | --- |
+| `ui.workspace-profile.register` | Register a workspace layout/navigation profile with host-derived ownership. |
+| `ai.provider` | Receive the configured provider client, headers and **raw API key**. Missing credentials return `not-signed-in`; `ai.requestSignIn` opens sign-in. |
+| `tools.use` | List and execute enabled tools through their existing approval policy and cancellation. |
+| `jobs.background` | Track, inspect and abort workspace background jobs. |
+| `hooks.emit` | Emit `workflow.execution:action:start`, `:complete`, `:state_update` and `:node_complete`. |
+
+`ai.models()` includes favorites and metadata; `ai.onModelsChange` follows catalog/favorite changes. Connect status/list/remove require `workspace.connections.read/manage`; disabled deployments return `unsupported`. Listen to `connections.changed` with the read grant.
+
+Trusted server routes obtain their dispatcher identity and reviewed server services through `getPluginServerContext(event)`. Service methods enforce session and grants; routes remain authorized by the dispatcher.
+
+Storage and settings accept bounded JSON values; non-finite numbers are rejected. Storage values and the persisted settings record are limited to 32 KiB. Plugin storage has a 1 MiB / 1,000 live-key quota, with bounded retained revision history. Record writes remain bound to the activation database across asynchronous hooks.
