@@ -220,7 +220,14 @@ function linkAttributes(tag: string): Record<string, string> {
 }
 
 function inspectRootHtml(publicRoot: string): ResourceHintStats {
-    const htmlPath = resolve(publicRoot, 'index.html');
+    // Server builds render `/` per request; their prerendered root document is
+    // the client-only offline shell.
+    const htmlPath = resolve(
+        publicRoot,
+        existsSync(resolve(publicRoot, 'index.html'))
+            ? 'index.html'
+            : '200.html'
+    );
     const empty = (): ReferencedArtifactStats => ({
         files: 0,
         rawBytes: 0,
@@ -318,7 +325,7 @@ if (import.meta.main) {
         throw new Error('Production build is missing a readable PWA precache manifest');
     }
     if (!stats.rootHtml.present) {
-        throw new Error('Production build is missing public/index.html');
+        throw new Error('Production build is missing public/index.html or 200.html');
     }
 
     const limits = {
