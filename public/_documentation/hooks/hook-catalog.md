@@ -70,10 +70,16 @@ Notes
 | --------------------------- | ------ | --------------------------------------------- | ---------------------------------- |
 | `files.attach:filter:input` | filter | `[payload: FilesAttachInputPayload \| false]` | `FilesAttachInputPayload \| false` |
 | `db.messages.files.validate:filter:hashes` | filter | `[hashes: string[]]` | `string[]` |
+| `workspace.files:filter:policy` | filter | `[allowed: boolean, event: PluginFileLifecycle]` | `boolean` (only `true` permits the change) |
+| `workspace.files:action:before` | action | `[event: PluginFileLifecycle]` | — |
+| `workspace.files:action:after` | action | `[event: PluginFileLifecycle]` | — |
 
 Notes
 
 -   Returning `false` cancels the attachment. See `components/chat/file-upload-utils.ts`.
+-   `app/db/workspace-files.ts` emits catalog events for `import`, `rename`, `trash`, `restore`, `index`, and `remove`. Events carry `workspaceId`, `operation`, and frozen `before`/`after` metadata snapshots. `before` is null for a new entry; `after` is proposed before a write and committed after it. Duplicate intake emits no catalog lifecycle event. Combined title/Trash updates emit both operation events around one atomic write.
+-   Policy and before callbacks run outside the write transaction. Revisions and workspace authority are rechecked before commit; a failed recheck refuses the change. Only the policy filter can refuse a change: callback errors in `before` and `after` actions are logged and never cancel or undo it. SDK plugin policy callbacks that throw or return a non-boolean refuse the change. Source extensions registered directly on the hook engine keep its default error policy (the previous value is kept), so they must return `false` to veto. Removing an entry releases ownership, preserving original shared bytes.
+-   These are browser catalog events, not global cloud webhooks or sync replay events. Trusted-host SDK plugins need `hooks.register` plus `files.catalog.read` for actions or `files.catalog.write` for policy filters. Delivery is restricted to their activation workspace. See [saved file integrations](/documentation/plugins/plugin-sdk#saved-files).
 
 ---
 

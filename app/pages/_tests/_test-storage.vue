@@ -8,6 +8,11 @@
             <output data-testid="storage-ready">{{ ready ? 'true' : 'false' }}</output>
         </header>
         <WorkspaceFilesPane />
+        <section class="space-y-2" aria-label="File plugin fixture">
+            <button data-testid="file-plugin-enable" type="button" :disabled="!ready || !!filePlugin" @click="enableFilePlugin">Enable file plugin</button>
+            <button data-testid="file-plugin-disable" type="button" :disabled="!filePlugin" @click="disableFilePlugin">Disable file plugin</button>
+            <output data-testid="file-plugin-events">{{ JSON.stringify(filePluginEvents) }}</output>
+        </section>
 
         <section class="space-y-3 rounded-lg border p-4">
             <div class="flex flex-wrap gap-2">
@@ -93,11 +98,14 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import WorkspaceFilesPane from '~/components/files/WorkspaceFilesPane.vue';
 import { FileTransferQueue } from '~/core/storage/transfer-queue';
 import type { ObjectStorageProvider } from '~/core/storage/types';
-import { getDb } from '~/db/client';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
+import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
+import { useHooks } from '~/core/hooks/useHooks';
+import type { PluginFileLifecycle } from '@or3/plugin-sdk';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
 import type { FileTransfer } from '~~/shared/storage/types';
@@ -133,6 +141,27 @@ const busy = ref(false);
 const feedback = ref('Ready');
 const transfers = ref<FileTransfer[]>([]);
 const files = ref<FileMeta[]>([]);
+const filePlugin = shallowRef<ReturnType<typeof createTrustedHostContext> | null>(null);
+const filePluginEvents = ref<PluginFileLifecycle[]>([]);
+function enableFilePlugin() {
+    const hooks = useHooks();
+    const plugin = createTrustedHostContext({ pluginId: 'fixture.storage-files', version: '1.0.0',
+        workspaceId: getActiveWorkspaceId() ?? 'local',
+        grants: ['hooks.register', 'files.catalog.read', 'files.catalog.write', 'files.actions.register'],
+        subscribeHook: (name, kind, callback, options) => {
+            const on = hooks.on as (name: string, callback: (...args: unknown[]) => unknown, options: { kind: 'action' | 'filter'; priority?: number }) => () => void;
+            return on(name, callback, { kind, priority: options?.priority });
+        } });
+    plugin.context.hooks.onAction('workspace.files:action:after', event => { filePluginEvents.value.push(event); });
+    plugin.context.hooks.onFilter('workspace.files:filter:policy', (allowed, event) => event.operation === 'trash' ? false : allowed);
+    plugin.context.files.registerAction({ id: 'rename', label: 'Plugin rename', requiresWrite: true,
+        async run(item) {
+            const result = await plugin.context.files.catalog.update(item.id, item.revision, { title: 'Renamed by plugin' });
+            if (!result.ok) throw new Error(result.error.message);
+        } });
+    filePlugin.value = plugin;
+}
+async function disableFilePlugin() { await filePlugin.value?.dispose(); filePlugin.value = null; }
 
 async function refresh(): Promise<void> {
     const [nextTransfers, nextFiles] = await Promise.all([
@@ -202,5 +231,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     queue.dispose();
+    void disableFilePlugin();
 });
 </script>

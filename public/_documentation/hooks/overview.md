@@ -8,6 +8,8 @@ These pages describe the application hook engine for contributors and trusted so
 
 Installable plugins use [the Plugin SDK](/documentation/plugins/plugin-sdk). Its hook registration requires the `hooks.register` permission and is available to trusted-host packages; portable plugins cannot subscribe to arbitrary application hooks. Register through `context.hooks.onAction` / `onFilter`, and dispose the returned registration handle through `context.onCleanup`. Do not copy private `~/core` imports into a portable package.
 
+The trusted host approves specific chat, workflow, and [workspace Files hooks](/documentation/plugins/plugin-sdk#saved-files). File subscriptions also require a catalog read or write grant; other database/storage hooks remain source-extension surfaces.
+
 ## Actions and filters
 
 | | Action | Filter |

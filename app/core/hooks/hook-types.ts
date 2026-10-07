@@ -65,6 +65,7 @@ import type {
     ThreadEntity,
 } from '~~/shared/hooks/hook-domain-types';
 import type { FileKind } from '~~/shared/files/file-kind';
+import type { PluginFileLifecycle } from '@or3/plugin-sdk';
 
 // Keep these names explicit: Nuxt's auto-import scanner does not follow a
 // wildcard type re-export, and V1 plugins rely on these public type imports.
@@ -605,6 +606,9 @@ export type CoreHookPayloadMap = {
     'auth.workspace:action:created': [{ workspaceId: string; userId: string }];
 
     // Storage hooks
+    'workspace.files:action:before': [PluginFileLifecycle];
+    'workspace.files:action:after': [PluginFileLifecycle];
+    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];
     'storage.files.upload:action:before': [StorageFileUploadBeforePayload];
     'storage.files.upload:action:after': [StorageFileUploadAfterPayload];
     'storage.files.download:action:before': [StorageFileDownloadBeforePayload];

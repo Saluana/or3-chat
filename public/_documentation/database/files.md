@@ -93,6 +93,8 @@ blob persistence. Catalog ownership survives removal of an originating message.
 Item removal tombstones the post, releases its ownership edge, and never
 directly deletes shared bytes or unrelated checkpoints.
 
+Catalog mutations emit `workspace.files:filter:policy`, `workspace.files:action:before`, and `workspace.files:action:after` with typed operation and workspace metadata. Async pre-commit callbacks run outside transactions; the write rechecks the observed row and workspace access. Repeated catalog intake emits no additional lifecycle event. The generic `db.posts.upsert:action:after` notification remains available. Installable trusted-host packages use the [scoped SDK catalog and file-menu APIs](/documentation/plugins/plugin-sdk#saved-files).
+
 Sync requests carry `workspaceItemCapability: 'v1'`. The canonical provider
 must reject old-writer omission against incoming **and stored** posts/projects
 before mutation. Old readers receive an explicit update boundary for affected

@@ -1,5 +1,6 @@
 import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
 import type { PluginSettingsClient, PluginStorageClient } from './clients';
+import type { PluginFileLifecycle } from './workspace-files';
 import type {
     PluginPostsClient,
     PluginToolsClient,
@@ -116,11 +117,15 @@ export interface PluginHookOptions {
 
 export interface PluginHooks {
     emitAction(name: string, payload: unknown): Promise<import('./results').PluginResult<void>>;
+    onAction(hookName: 'workspace.files:action:before' | 'workspace.files:action:after',
+        callback: (event: PluginFileLifecycle) => void | Promise<void>, options?: PluginHookOptions): PluginRegistrationHandle;
     onAction<TArgs extends readonly unknown[]>(
         hookName: string,
         callback: (...args: TArgs) => void | Promise<void>,
         options?: PluginHookOptions
     ): PluginRegistrationHandle;
+    onFilter(hookName: 'workspace.files:filter:policy',
+        callback: (allowed: boolean, event: PluginFileLifecycle) => boolean | Promise<boolean>, options?: PluginHookOptions): PluginRegistrationHandle;
     onFilter<TValue, TArgs extends readonly unknown[]>(
         hookName: string,
         callback: (value: TValue, ...args: TArgs) => TValue | Promise<TValue>,

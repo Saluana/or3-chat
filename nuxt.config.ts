@@ -190,6 +190,7 @@ export default defineNuxtConfig({
         },
     },
     alias: {
+        ...pluginSdkSourceAliases,
         types: resolve(__dirname, './types'),
         '~/types': resolve(__dirname, './types'),
         '~~/shared': resolve(__dirname, './shared'),
