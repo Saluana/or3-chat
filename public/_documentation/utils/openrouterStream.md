@@ -56,9 +56,11 @@ loads share the bounded retries but not the deadline.
 
 OpenRouter reserves credit for `max_tokens`. When the reply uses the default
 allowance (no `requested_completion_tokens`) and OpenRouter answers 402 with
-the number of tokens the key can afford, the foreground route retries once at
-that size if it is at least 1024 tokens. An explicit user allowance, a smaller
-affordable size and background jobs keep the credit error.
+the number of tokens the key can afford, the request is sent once more at that
+size if it is at least 1024 tokens (`sendWithAffordableReply` in
+`shared/openrouter/credit-retry.ts`). The server route, background jobs (plain
+and tool loop) and the direct browser path all use it. An explicit allowance or
+a smaller affordable size keeps the credit error.
 
 An explicit provider `context_length_exceeded` or `context_window_exceeded`
 machine code becomes permanent `ERR_CONTEXT_FULL`. Native outcomes report

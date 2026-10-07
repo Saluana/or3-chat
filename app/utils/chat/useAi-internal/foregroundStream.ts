@@ -520,6 +520,9 @@ export async function runForegroundStreamLoop(
 
             if (pendingToolCalls.length > 0) {
                 const toolResultsForNextLoop: ToolResultPayload[] = [];
+                // How much of the row's text existed before these results; a
+                // replay sends later text after them (see messageBuild).
+                const textOffset = current.text.length;
 
                 for (const toolCall of pendingToolCalls) {
                     ctx.abortSignal.throwIfAborted();
@@ -538,6 +541,7 @@ export async function runForegroundStreamLoop(
                             error,
                             fingerprint,
                             completedAt: Date.now(),
+                            text_offset: textOffset,
                         });
                         current.toolCalls = Array.from(ctx.activeToolCalls.values());
                         const projectedError = projectToolResult(error);
@@ -643,6 +647,7 @@ export async function runForegroundStreamLoop(
                             : undefined,
                         fingerprint: decision.fingerprint,
                         completedAt: Date.now(),
+                        text_offset: textOffset,
                     });
                     current.toolCalls = Array.from(
                         ctx.activeToolCalls.values()

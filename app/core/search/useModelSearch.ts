@@ -142,9 +142,23 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         // matches consume the result limit and bury the requested model.
         const normalizeName = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
         const nameQuery = normalizeName(raw);
-        const named = nameQuery ? models.value.filter((model) =>
-            [model.id, model.canonical_slug ?? '', model.name]
-                .some((value) => normalizeName(value).includes(nameQuery))) : [];
+        // Exact names first, then names starting with the query, then the
+        // rest, each in catalog order; "Provider: " and "provider/" prefixes
+        // are optional, so "gpt-6 luna" lists GPT-6 Luna before GPT-6 Luna Pro.
+        const nameRank = (model: OpenRouterModel) => {
+            let rank = 3;
+            for (const value of [model.id, model.canonical_slug ?? '', model.name]) {
+                for (const form of [value, value.slice(value.lastIndexOf('/') + 1), value.slice(value.indexOf(': ') + 1)]) {
+                    const name = normalizeName(form);
+                    if (name === nameQuery) return 0;
+                    if (name.startsWith(nameQuery)) rank = Math.min(rank, 1);
+                    else if (name.includes(nameQuery)) rank = Math.min(rank, 2);
+                }
+            }
+            return rank;
+        };
+        const named = nameQuery ? models.value.map((model) => ({ model, rank: nameRank(model) }))
+            .filter((entry) => entry.rank < 3).sort((a, b) => a.rank - b.rank).map((entry) => entry.model) : [];
         if (named.length) {
             results.value = named.slice(0, 100);
             return;

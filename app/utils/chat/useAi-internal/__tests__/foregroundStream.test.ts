@@ -442,6 +442,11 @@ describe('runForegroundStreamLoop', () => {
                 .filter((message) => message.role === 'assistant')
                 .map((message) => message.content[0].text)
         ).toEqual(['first', 'second']);
+        // The durable row keeps where each call's results arrived, so a later
+        // replay can send "final" after the results instead of before them.
+        const persisted = (ctx.persistAssistant.mock.calls as unknown as Array<[{ toolCalls?: Array<{ id: string; text_offset?: number }> }]>)
+            .at(-1)![0].toolCalls;
+        expect(persisted?.map(({ id, text_offset }) => [id, text_offset])).toEqual([['call-1', 5], ['call-2', 11]]);
     });
 
     it('routes tool-result persistence to the captured origin database', async () => {

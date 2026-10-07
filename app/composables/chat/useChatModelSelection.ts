@@ -120,19 +120,25 @@ export function useChatModelSelection(options: {
     }
 
     watch(options.threadId, applyNewChatDefault);
+    // The effort the user chose (medium until they choose). A model without it
+    // shows a supported fallback, but the choice returns on the next model that
+    // offers it instead of the fallback carrying over to later models.
+    let chosenEffort: string | undefined;
+    let fallbackEffort: string | undefined;
+    watch(reasoningEffort, (effort) => {
+        if (effort !== undefined && effort !== fallbackEffort) chosenEffort = effort;
+    });
     watch(
         [selectedModelMeta, modelReasoningEfforts],
         ([model, efforts]) => {
+            fallbackEffort = undefined;
             if (!modelSupportsReasoning(model)) {
                 reasoningEffort.value = undefined;
                 return;
             }
-            if (
-                reasoningEffort.value &&
-                efforts.includes(
-                    reasoningEffort.value as OpenRouterReasoningEffort
-                )
-            ) {
+            const chosen = chosenEffort ?? 'medium';
+            if (efforts.includes(chosen as OpenRouterReasoningEffort)) {
+                reasoningEffort.value = chosen;
                 return;
             }
             const orderedEfforts = [...efforts].sort(
@@ -140,10 +146,10 @@ export function useChatModelSelection(options: {
                     OPENROUTER_REASONING_EFFORTS.indexOf(a) -
                     OPENROUTER_REASONING_EFFORTS.indexOf(b)
             );
-            reasoningEffort.value = efforts.includes('medium')
-                ? 'medium'
-                : orderedEfforts[Math.floor((orderedEfforts.length - 1) / 2)] ??
-                  getDefaultReasoningEffort(model);
+            fallbackEffort =
+                orderedEfforts[Math.floor((orderedEfforts.length - 1) / 2)] ??
+                getDefaultReasoningEffort(model);
+            reasoningEffort.value = fallbackEffort;
         },
         { immediate: true }
     );

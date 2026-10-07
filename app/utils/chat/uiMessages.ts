@@ -58,6 +58,8 @@ export interface ToolCallInfo {
     runtime?: 'client' | 'server' | 'hybrid';
     fingerprint?: string;
     completedAt?: number;
+    /** Length of the row's text when this call's results arrived (stored as is). */
+    text_offset?: number;
 }
 
 export type UiChatMessagePart =

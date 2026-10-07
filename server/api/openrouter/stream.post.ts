@@ -54,7 +54,8 @@ import {
 import { validateServerToolRequest } from '../../utils/chat/tool-registry';
 import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata, OpenRouterCatalogUnavailableError } from '../../utils/chat/context-admission';
 import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
-import { affordableCompletionTokens, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
+import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
+import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     fetchWithResponseDeadline,
@@ -62,9 +63,6 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
-
-/** Below this, a credit-limited retry would only produce a truncated reply. */
-const MIN_AFFORDABLE_REPLY_TOKENS = 1024;
 
 function logBgStream(
     _stage: string,
@@ -510,21 +508,8 @@ export default defineEventHandler(async (event) => {
             },
             body: JSON.stringify(requestBody),
         }, { signal: ac.signal });
-        upstream = await requestUpstream(providerBody);
-        // OpenRouter reserves credit for max_tokens. The default allowance is
-        // the model's whole output window, which a small balance cannot
-        // reserve even for a one-line reply; retry once at the affordable
-        // size. An explicit user allowance keeps the credit error.
-        if (upstream.status === 402 && policy && policy.requestedCompletionTokens == null
-            && typeof providerBody.max_tokens === 'number') {
-            upstreamErrorText = await readResponseTextWithIdleDeadline(upstream, { signal: ac.signal })
-                .catch(() => '<error-reading-body>');
-            const affordable = affordableCompletionTokens(upstreamErrorText);
-            if (affordable !== undefined && affordable >= MIN_AFFORDABLE_REPLY_TOKENS && affordable < providerBody.max_tokens) {
-                upstream = await requestUpstream({ ...providerBody, max_tokens: affordable });
-                upstreamErrorText = undefined;
-            }
-        }
+        ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
+            { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
         logBgStream('api-stream-foreground-upstream-response', {
             ok: upstream.ok,
             status: upstream.status,

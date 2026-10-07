@@ -771,6 +771,15 @@ export async function buildOpenRouterMessages(
             }
         }
 
+        // A failed or stopped-empty reply is not replayed, so its question can
+        // be followed directly by the next one. Send them as one user turn;
+        // providers expect user and assistant turns to alternate.
+        const previous = orMessages[orMessages.length - 1];
+        if (m.role === 'user' && previous?.role === 'user' && previous.name === m.name
+            && Array.isArray(previous.content)) {
+            previous.content.push(...parts);
+            continue;
+        }
         orMessages.push({
             role: m.role,
             content: parts,

@@ -893,6 +893,48 @@ describe('background usage through terminal history', () => {
         return { job: reloaded, snapshot: delivered[0]! };
     }
 
+    // OpenRouter reserves credit for max_tokens; a small balance refuses the
+    // default allowance with the size it can afford.
+    const creditRefusal = (affordable: number) => new Response(JSON.stringify({ error: { code: 402,
+        message: `This request requires more credits, or fewer max_tokens. You requested up to 4096 tokens, but can only afford ${affordable}.` } }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } });
+    it.each([false, true])('retries a default reply allowance once at the affordable size (tools: %s)', async (withTools) => {
+        const { jobId, context } = await admitted(withTools, { version: 1, user_max_context_tokens: null, requested_completion_tokens: null });
+        const sent: Record<string, unknown>[] = [];
+        const replies = [creditRefusal(2_048), response(100)];
+        vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(JSON.parse(init.body)); return replies.shift()!; }));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        expect(sent.map((body) => body.max_tokens)).toEqual([4_096, 2_048]);
+        const { snapshot } = await terminal(jobId);
+        expect(snapshot.status).toBe('complete'); expect(snapshot.content).toBe('answer');
+    });
+    it.each([
+        ['an explicit reply allowance', 4_096, 2_048],
+        ['an affordable size too small for a useful reply', null, 512],
+    ])('keeps the credit error for %s', async (_label, requested, affordable) => {
+        const { jobId, context } = await admitted(false, { version: 1, user_max_context_tokens: null, requested_completion_tokens: requested });
+        vi.stubGlobal('fetch', vi.fn(async () => creditRefusal(affordable)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toMatchObject({ code: 'ERR_CREDITS', status: 402 });
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+
+    it('records how much text preceded each tool result so a replay keeps the answer after it', async () => {
+        const { jobId, context } = await admitted(true);
+        const replies = [
+            new Response(makeSseStream([
+                { choices: [{ delta: { content: 'Searching.' } }] },
+                { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', function: { name: 'server_echo', arguments: '{"value":"ok"}' } }] },
+                    finish_reason: 'tool_calls' }] },
+            ])),
+            response(undefined),
+        ];
+        vi.stubGlobal('fetch', vi.fn(async () => replies.shift()!));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        expect(snapshot.content).toBe('Searching.answer');
+        expect(snapshot.toolCalls).toEqual([expect.objectContaining({ id: 'call-1', status: 'complete', text_offset: 10 })]);
+    });
+
     it('rejects a restored oversized captured maximum before reopening the provider', async () => {
         const { jobId, context } = await admitted(false, { version: 1, user_max_context_tokens: 20, requested_completion_tokens: null });
         vi.stubGlobal('fetch', vi.fn(async () => response(100)));

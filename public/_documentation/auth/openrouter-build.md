@@ -40,6 +40,10 @@ Input messages have a role of `user`, `assistant`, `system`, or `tool`, and stri
 
 Canonical history projection restores completed embedded tool results, including validated nested transcript results, as transient tool messages when no durable result row exists. This keeps call/result pairs complete on follow-up requests without modifying saved history or duplicating durable results.
 
+A tool-calling assistant row stores all of its text, including what the model wrote after the tool results. Foreground and background tool loops save each call's `text_offset` in `data.tool_calls`: the length of that text when the call's iteration ended. Native sends replay such a row in its original order (text before, the calls, their results, then the later text). Rows without usable offsets, such as older rows or edited text, are sent as one message as before.
+
+Adjacent user messages are sent as one user turn whose content keeps every part in order. A failed or stopped-empty reply is not replayed, so without this the failed question and the next one (or a continuation prompt) would reach the provider as two user turns in a row. Image `messageIndex` values still refer to the input messages.
+
 Stored `file_hashes` is a **JSON-serialized array**, not a space-separated or comma-separated string. Use `serializeFileHashes` from `~/db/files-util`, or the [message-file helpers](/documentation/database/message-files), when constructing it. The builder also accepts binary image/file content; views respect their byte offsets.
 
 ## Image options

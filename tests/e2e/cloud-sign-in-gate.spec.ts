@@ -16,9 +16,10 @@ test.skip(!harnessReady, 'Requires the sign-in gate E2E harness');
 
 async function openComposer(page: Page) {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
     const composer = page.getByLabel('Message input', { exact: true });
     await expect(composer).toBeVisible({ timeout: 30_000 });
+    // The keyless welcome dialog opens after the chat loads and covers the composer.
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
     return composer;
 }
 
@@ -56,6 +57,22 @@ for (const [label, viewport] of [
             expect(page.url()).toBe(urlBeforeSend);
             expect(sent).toEqual([]);
             await info.attach(`signed-out-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+        });
+
+        // Invite links open registration from the account control; on mobile
+        // that control is inside More, so the visitor is told where it is.
+        test('a signed-out visitor on an invite link is told where to create an account', async ({ page }, info) => {
+            await page.goto('/?invite=e2e-invite-token');
+            await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
+            await expect(page.locator('.ProseMirror p.is-editor-empty')).toHaveAttribute('data-placeholder', SIGN_IN_PROMPT, { timeout: 30_000 });
+            const hint = page.getByText('Open the menu, tap More, then Login to create your account.', { exact: true });
+            if (label === 'mobile') await expect(hint).toBeVisible();
+            else await expect(hint).toHaveCount(0);
+            // The token outlives the root → /chat rewrite: a provider that reads
+            // invite links has opened registration, or it is still there to read.
+            await expect.poll(async () => new URL(page.url()).searchParams.get('invite') === 'e2e-invite-token'
+                || await page.getByRole('dialog', { name: 'Create Account' }).isVisible()).toBe(true);
+            await info.attach(`invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         test('signed-in user without a key still gets the OpenRouter connect flow', async ({ page }, info) => {

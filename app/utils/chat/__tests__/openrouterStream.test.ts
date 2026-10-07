@@ -365,6 +365,30 @@ describe('openrouterStream', () => {
         expect(events).toHaveLength(1);
     });
 
+    it.each([
+        ['retries a default reply allowance once at the affordable size', null, ['4096', '2048']],
+        ['keeps the credit error for an explicit reply allowance', 4096, ['4096']],
+    ] as const)('direct OpenRouter %s', async (_label, requested, sizes) => {
+        const refusal = () => createJsonResponse({ error: { code: 402, message:
+            'This request requires more credits, or fewer max_tokens. You requested up to 4096 tokens, but can only afford 2048.' } }, 402);
+        const direct: number[] = [];
+        const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+            if (url === '/api/openrouter/stream') return Promise.resolve(createJsonResponse({ error: 'missing' }, 404));
+            direct.push(JSON.parse(init!.body as string).max_tokens);
+            return Promise.resolve(direct.length === 1 ? refusal() : createStreamResponse());
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const run = (async () => {
+            for await (const _event of openRouterStream({ apiKey: 'key-1', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'],
+                contextPolicy: { model: { context_length: 100_000, top_provider: { max_completion_tokens: 4096 } },
+                    userMaxContextTokens: null, requestedCompletionTokens: requested, source: 'openrouter-live' } })) { /* consume */ }
+        })();
+        if (requested === null) await run;
+        else await expect(run).rejects.toMatchObject({ code: 'ERR_CREDITS', status: 402 });
+        expect(direct.map(String)).toEqual(sizes);
+    });
+
     it('does not fall back on proxy 5xx; error propagates and cache is not poisoned', async () => {
         const fetchMock = vi.fn((url: RequestInfo | URL) => {
             if (url === '/api/openrouter/stream') {

@@ -577,8 +577,9 @@ describe('native context admission at the actual durable boundary', () => {
         await db.messages.bulkAdd(rows);
         expect(await chat(thread.id).sendMessage('Keep all history', { model: 'fixture/model' })).toMatchObject({ status: 'complete' });
         const sent = external.bodies[0]?.messages as Array<{ content: Array<{ text?: string }> | string }>;
-        const texts = sent.map((message) => typeof message.content === 'string' ? message.content
-            : message.content.map((part) => part.text ?? '').join(''));
+        // Adjacent user rows are sent as one turn; each row stays its own part.
+        const texts = sent.flatMap((message) => typeof message.content === 'string' ? [message.content]
+            : message.content.map((part) => part.text ?? ''));
         expect(texts.filter((text) => text === chunk)).toHaveLength(total);
         expect(texts.join('').split('x').length - 1).toBe(bytes);
         expect(external.bodies[0]?.max_tokens).toBe(4096);

@@ -80,9 +80,10 @@ and the catalog/sidebar fixes rendered as intended on desktop and mobile.
 
 ## Remaining follow-ups (not changed here)
 
-- **Invite links do not start registration.** Nothing reads `?invite=`; the
-  Basic Auth register modal labels the token "(optional)" and starts empty.
-  The fix belongs in `or3-provider-basic-auth`.
+- **Invite links did not start registration.** Nothing read `?invite=`; the
+  Basic Auth register modal labelled the token "(optional)" and started
+  empty. Fixed in `or3-provider-basic-auth` plus core (see the second
+  follow-up below); OR3 Chat picks it up with the next provider release.
 - Since fixed on `or3-cloud`: inline copy on failed turns now keeps the
   classified error across reload; signed-out visitors are asked to sign in;
   server builds render `/` per request, so runtime public config applies.
@@ -124,27 +125,46 @@ Repaired in this pass:
 - The real 404 wording ("No endpoints found that support image input") and
   the image-to-text-only switch were confirmed with DeepSeek V4 Flash.
 
-Found, not changed:
+Fixed in a second follow-up (live-checked on the rebuilt host instance):
 
-- **Kimi K2.5 fails mid-thread with tools at its full output window.** A
-  request carrying earlier tool calls and `max_tokens` 235,929 is routed to
-  hosts that answer "Tool use is not supported for this model with the
-  current request" (Novita, after AtlasCloud). At 131,072 or less it routes
-  to Amazon Bedrock and works; fresh requests work at either size. Capping
-  the default reply allowance would avoid this class of routing failure; it
-  is a product decision, so it is left open.
-- The credit retry is in the foreground route only; background jobs (off by
-  default, not exercised here) still return the credit error.
-- After a failed turn, the next send follows the failed user message, so the
-  provider receives two consecutive user turns. All tested providers accepted
-  it.
-- Switching models can change the reasoning effort (medium to high) without
-  the user choosing it.
-- After a tool call, the final text is stored on the assistant row that made
-  the call, so on replay it is sent before the tool result. Providers
-  accepted it, but the order differs from the original exchange.
-- Searching the catalog for "gpt-6 luna" ranks GPT-6 Luna Pro above the exact
-  match.
+- **Default reply allowance capped at 65,536 tokens.** Kimi K2.5 with tool
+  history at its full window (235,929) was routed to hosts that refuse tool
+  use (Novita, after AtlasCloud); at 65,536 and 131,072 it is served. The cap
+  also halves the credit reserved for models such as GPT-6 Luna (128,000).
+  An explicit allowance may still use the whole window. Live: GPT-6 Luna
+  made a workspace search; Kimi K2.5 then continued the thread with that
+  tool history (HTTP 200, `max_tokens` 65,536).
+- **Credit retry everywhere.** The 402 retry at the affordable size is a
+  shared helper used by the server route, both background job loops and the
+  direct browser path (background was not run live; tests cover it).
+- **No consecutive user turns.** Adjacent user messages are sent as one turn,
+  so a failed or stopped-empty reply no longer leaves two user turns in a row
+  (continuation prompts were affected too). Live: a reply stopped before its
+  first token, and the next request carried both questions in one user turn.
+- **Reasoning effort keeps the user's choice.** A model without the chosen
+  effort shows a fallback, and the next model that offers it gets it back.
+  Live: GLM 5.3 Flash and DeepSeek Flash (no `medium`) sent `high`; Claude
+  Haiku and GPT-6 Luna then sent `medium` again.
+- **Tool turns replay in order.** Tool loops save each call's `text_offset`
+  (how much text existed when its results arrived). Sends split the stored
+  row into text before, the calls, the results, then the later text. Older
+  rows without offsets are unchanged. Live: Kimi received "I'll search the
+  workspace…", the call, the result, then "PAPAYA-88 was found…".
+- **Exact model first.** Name matches are ranked exact, then prefix, then
+  contains; "gpt-6 luna" lists GPT-6 Luna before GPT-6 Luna Pro in the real
+  catalog.
+- **Invite links open registration.** Fixed in `or3-provider-basic-auth`
+  (token read once, filled in, registration opened for signed-out visitors),
+  with core keeping `?invite=` through the `/` → `/chat` rewrite (it was
+  dropped before any provider code ran) and telling mobile visitors to open
+  the menu, then More. Checked end to end with the rebuilt provider on the
+  invite-only profile, desktop and mobile; the core part is in
+  `cloud-sign-in-gate.spec.ts`.
+
+Still open:
+
+- `PageShell compaction families…` is flaky on `or3-cloud` too: after reload
+  the sidebar family header is sometimes missing within 5 seconds.
 - The journey spec's Files cases expect a `dialog` named "File preview";
   `WorkspaceFilesPane.vue` renders an `aside`, so seven Files journeys fail on
   `or3-cloud` as well.

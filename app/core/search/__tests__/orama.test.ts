@@ -298,6 +298,21 @@ describe('model search lifecycle', () => {
         search.query.value = ''; await nextTick(); await vi.advanceTimersByTimeAsync(120);
         expect(search.results.value.map(model => model.id)).toEqual(['first', 'second']);
     });
+    // Live catalog: "gpt-6 luna" listed GPT-6 Luna Pro first because named
+    // matches kept catalog order.
+    it('lists the exact model before longer names that contain it', async () => {
+        const { useModelSearch } = await import('../useModelSearch');
+        const named = (id: string, name: string) => ({ id, name, description: '' }) as OpenRouterModel;
+        const search = scope.run(() => useModelSearch(ref([
+            named('openai/gpt-6-luna-pro', 'OpenAI: GPT-6 Luna Pro'),
+            named('vendor/fast-gpt-6-luna', 'Vendor: Fast GPT-6 Luna'),
+            named('openai/gpt-6-luna', 'OpenAI: GPT-6 Luna'),
+            named('openai/gpt-6-luna-mini', 'OpenAI: GPT-6 Luna Mini'),
+        ])))!;
+        search.query.value = 'gpt-6 luna'; await nextTick(); await vi.advanceTimersByTimeAsync(120);
+        expect(search.results.value.map(model => model.id)).toEqual([
+            'openai/gpt-6-luna', 'openai/gpt-6-luna-pro', 'openai/gpt-6-luna-mini', 'vendor/fast-gpt-6-luna']);
+    });
     it.each(['resolve', 'reject'] as const)('ignores an older search that %ss after the query is cleared', async completion => {
         let resolve!: (value: unknown) => void; let reject!: (error: Error) => void;
         const held = new Promise((res, rej) => { resolve = res; reject = rej; });

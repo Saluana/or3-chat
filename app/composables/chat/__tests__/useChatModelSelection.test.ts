@@ -181,6 +181,31 @@ describe('useChatModelSelection', () => {
         expect(selection.reasoningEffort.value).toBe('high');
     });
 
+    // Live: GPT-6 Luna sent medium; GLM (no medium) showed high, and DeepSeek,
+    // Qwen and Claude then inherited high although nobody chose it.
+    it('returns to the chosen effort after a model that cannot use it', async () => {
+        modelStore.favoriteModels!.value = [
+            model({ id: 'provider/standard', reasoning: { supported_efforts: ['low', 'medium', 'high'] } }),
+            model({ id: 'provider/no-medium', reasoning: { supported_efforts: ['low', 'high', 'xhigh'] } }),
+            model({ id: 'provider/wide', reasoning: { supported_efforts: ['low', 'medium', 'high', 'xhigh'] } }),
+        ];
+        const { selection } = mountModelSelection();
+        const select = async (id: string) => { selection.selectedModel.value = id; await nextTick(); await nextTick(); };
+        await select('provider/standard');
+        expect(selection.reasoningEffort.value).toBe('medium');
+        await select('provider/no-medium');
+        expect(selection.reasoningEffort.value).toBe('high');
+        await select('provider/wide');
+        expect(selection.reasoningEffort.value).toBe('medium');
+
+        selection.reasoningEffort.value = 'xhigh';
+        await nextTick();
+        await select('provider/standard');
+        expect(selection.reasoningEffort.value).toBe('medium');
+        await select('provider/wide');
+        expect(selection.reasoningEffort.value).toBe('xhigh');
+    });
+
     it('matches capability metadata by canonical model slug', async () => {
         modelStore.favoriteModels!.value = [
             model({
