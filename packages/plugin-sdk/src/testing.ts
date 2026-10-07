@@ -513,6 +513,7 @@ export class PluginTestHost {
             },
         };
         const hooks: PluginHooks = {
+            emitAction: async () => pluginError('unsupported', 'Hook emission is unavailable'),
             onAction: () => {
                 if (!approved.has('hooks.register')) {
                     throw new Error('Grant hooks.register was not approved');
@@ -782,7 +783,7 @@ export class PluginTestHost {
                 name: K,
                 listener: (payload: PluginEventMap[K]) => void | Promise<void>
             ) => {
-                guard('events.register');
+                guard(name === 'connections.changed' ? 'workspace.connections.read' : 'events.register');
                 let listeners = this.#eventListeners.get(name);
                 if (!listeners) {
                     listeners = new Set();
@@ -1284,14 +1285,14 @@ export class PluginTestHost {
         };
         return {
             ...base,
-            ui,
-            panes,
+            ui: { ...base.ui, ...ui },
+            panes: { ...base.panes, ...panes },
             commands,
-            chat,
+            chat: { ...base.chat, ...chat },
             workspace,
             events,
             secrets,
-            files,
+            files: { ...base.files, ...files },
             activity,
         };
     }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 /**
  * Dashboard > Marketplace > Updates.
  *
@@ -651,7 +652,7 @@ async function activate(entry: {
                 <p class="text-xs text-(--ui-text-muted)">If this plugin was the default for new workspaces, review and enable that default again after the update.</p>
                 <p class="text-xs text-(--ui-text-muted)">
                     Requested authority:
-                    {{ entry.release?.requestedGrants.join(', ') || 'none' }}
+                    {{ entry.release?.requestedGrants.map(describePluginGrant).join('; ') || 'none' }}
                 </p>
                 <div v-if="entry.release?.approvalRequired" class="text-xs">
                     <p class="font-medium">Access requiring deployment approval</p>

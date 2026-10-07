@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 /**
  * Dashboard > Marketplace > Discover.
  *
@@ -1126,7 +1127,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 </p>
                 <ul class="list-disc pl-5 text-sm">
                     <li v-for="grant in requestedGrants" :key="grant">
-                        <code>{{ grant }}</code>
+                        <code>{{ describePluginGrant(grant) }}</code>
                     </li>
                 </ul>
                 <details v-if="selectedRelease?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">

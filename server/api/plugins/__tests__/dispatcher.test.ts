@@ -422,6 +422,7 @@ describe('plugin route dispatcher', () => {
             {
                 catalog: { pluginId: 'plugin.a' },
                 status: 'ready',
+                grants: { approvedGrants: [] },
             },
         ]);
         getEnabledPluginsMock.mockResolvedValue(['plugin.a']);

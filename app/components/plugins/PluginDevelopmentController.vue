@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
@@ -334,7 +335,7 @@ onBeforeUnmount(() => { stopped = true; if (timer) clearTimeout(timer); });
         <div v-if="review" class="mt-3 border-t border-[var(--md-outline-variant)] pt-3">
             <h2 class="font-medium">Approve plugin permissions</h2>
             <p class="text-xs opacity-70">For this package and workspace only.</p>
-            <ul class="my-2 list-disc pl-5 text-sm"><li v-for="grant in review.requestedGrants" :key="grant">{{ grant }}</li></ul>
+            <ul class="my-2 list-disc pl-5 text-sm"><li v-for="grant in review.requestedGrants" :key="grant">{{ describePluginGrant(grant) }}</li></ul>
             <UButton size="sm" @click="approve">Approve these permissions</UButton>
         </div>
         <div v-if="phase === 'needs attention' && !review" class="mt-2 flex gap-2">

@@ -182,3 +182,7 @@ keep this profile separate from production data. Stop the watcher with Ctrl+C.
 
 Continue with [Add features](/documentation/plugins/add-features), or look up a method in the
 [SDK reference](/documentation/plugins/plugin-sdk).
+
+## Trusted UI packages
+
+For reviewed Vue UI packages, use SDK 2.1 and declare the trusted feature IDs and grants described in [SDK reference](/documentation/plugins/plugin-sdk). Build adapters from public clients; keep domain protocols and data interpretation in the package. Register record types before reconciliation, dispose listeners with activation, and handle `stale-context` on workspace changes.

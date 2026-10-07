@@ -1,0 +1,937 @@
+diff --git a/README.md b/README.md
+index 6be6280..94ea0c3 100644
+--- a/README.md
++++ b/README.md
+@@ -16,27 +16,15 @@ The package entry registers `or3-external-agent` (pane),
+ `/api/connect/environments` response. The pane and launcher dispatch
+ `or3:external-agents:open-connections` after selecting the Agents sidebar;
+ the sidebar opens its connection settings and removes that listener on unmount.
+-All registrations, listeners, and the controller are disposed when the plugin
+-is disabled. The host bridge changes open Agent panes into empty chat panes
+-before unregistering the Agent pane, so disabled tabs do not show an unknown
+-pane. The host bridge registers the package's `coding-workspace` profile with
+-the same lifecycle.
++All registrations, listeners, the controller and the coding workspace profile are disposed when the plugin is disabled. The host resets panes when their registered pane app is removed.
+ 
+-Activation requires a host supplied `AgentHostPorts` implementation. The
+-required UI, legacy workspace KV, and vault storage methods are defined in
+-`client.ts` and `src/client/host-ui.ts`. Missing ports fail activation with a
+-clear error. The package transport uses the SDK HTTP and stream clients;
+-its host file grant stages attachments only in the selected Intern workspace.
+-The host authorizes both transports against saved connection URLs, temporarily
+-allowing a new URL while the user verifies it. Redirects and unrelated
+-destinations are rejected. A session pane opens with its selected record ID.
+-Session-only tokens held by the former built-in plugin are not transferred into
+-the installed package's memory vault; those connections need a fresh token.
+-Persisted PIN-encrypted tokens remain readable from the existing browser key.
++Version 0.2.0 requires `@or3/plugin-sdk` 2.1 and the `or3-trusted-ui-kit-v1` and `or3-trusted-host-v2` features. The package builds its UI, navigation, profiles, Connect integration and transport from public SDK clients. Connection data uses plugin-scoped workspace storage (`connections`); encrypted credentials use the device-local `vault` secret. Observed sign-out removes device-local plugin secrets, while stale-session startup preserves them.
++
++The host copies legacy connection and encrypted-vault bytes, verifies the destination and only then removes the original. Setup requests saved host origins in one host-owned approval prompt. New host verification also asks for approval; revocation immediately prevents subsequent requests. HTTPS and loopback HTTP are accepted, redirects and unrelated destinations are refused. Staging multipart uploads and SSE use the governed SDK transports; protocol interpretation lives in this package. Session-only tokens from a former installation still require re-entry.
+ 
+ Run `bun run test` and `bun run typecheck` for source checks. Run
+ `bun ../or3-chat/packages/plugin-sdk/bin/or3-plugin.mjs validate .`, then
+ `build .` and `pack .` for package qualification. The built-host smoke in
+ `src/client/built-smoke.test.ts` loads the built module and mounts its sidebar.
+ 
+-This checkout is pinned at package version `0.1.1`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
++This checkout is pinned at package version `0.2.0`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
+diff --git a/bun.lock b/bun.lock
+index 37db89b..db2f015 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -14,11 +14,11 @@
+         "jsdom": "25.0.1",
+         "typescript": "^5.9.3",
+         "vitest": "4.1.10",
+-        "vue": "3.5.40",
++        "vue": "3.5.43",
+         "vue-tsc": "2.2.12",
+       },
+       "peerDependencies": {
+-        "@or3/plugin-sdk": "^2.0.0",
++        "@or3/plugin-sdk": "^2.1.0",
+         "vue": "^3.5.0",
+       },
+       "optionalPeers": [
+@@ -55,41 +55,41 @@
+ 
+     "@or3/intern-client": ["@or3/intern-client@0.1.3", "", {}, "sha512-+QS3Pfzz+cJMMJfNMcpHVif0KLQUct2yLNShRmEslOPuxyKVBwRNDNnn+wXiSG5jt2RdYlS4r9oaKv+LykP98A=="],
+ 
+-    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
++    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "peerDependencies": { "vue": "^3.5.0" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
+ 
+-    "@oxc-project/types": ["@oxc-project/types@0.151.0", "", {}, "sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA=="],
++    "@oxc-project/types": ["@oxc-project/types@0.152.0", "", {}, "sha512-oM/5rLBm2tPkg0iBgkH/FOeR3PCDpY19GTgAZjMFM8h9WI9VW7cLgzp6nwtarYKmovavIQZ+Fe/RKX/8C8O/Rw=="],
+ 
+     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
+ 
+-    "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.11", "", { "os": "android", "cpu": "arm" }, "sha512-A5kXfGKvKWWZE0TtPrfsvT+q4Y5d1QG8gGUzpYjGydM+fARM9MuX90PrXYXe0XbsDVgyxxNzHo6giCj90bsFNw=="],
++    "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.12", "", { "os": "android", "cpu": "arm" }, "sha512-dB/a1214qKfHMXCpgqR4OZT+jS4kTyEXbQGJPqzobt5EwH5rX080pxE37alt3RzvR1bf1Yz/yGqRfrYAxuPw0A=="],
+ 
+-    "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.2.11", "", { "os": "android", "cpu": "arm64" }, "sha512-z6cTycz+iJ4PVkuL4HHW4DfTfoeU/2nqYYuSOrTmH7yHK5Y0LCOnA03V4ZNxavyVaU1oOqUgIg2klN/s+USGOA=="],
++    "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.2.12", "", { "os": "android", "cpu": "arm64" }, "sha512-7KHFgQ5VJxIHcLlrwrc3Xbds7oTNQT7Pgi9gQCJKrd2VGab/UksIOYp6VD8MzCstGxOKMgNamPwUCfxPdP1OHg=="],
+ 
+-    "@rolldown/binding-darwin-arm64": ["@rolldown/binding-darwin-arm64@1.2.11", "", { "os": "darwin", "cpu": "arm64" }, "sha512-jShvqNtP6vDC6/A5JOAzbVV+DkgHqhl/ScVCJEbt+TUY6QYz7YnXcrg3sLtFBniro0f/Ld50ZwCWA6f7KYD1nQ=="],
++    "@rolldown/binding-darwin-arm64": ["@rolldown/binding-darwin-arm64@1.2.12", "", { "os": "darwin", "cpu": "arm64" }, "sha512-3YIhqHD96nA5SaYNRBR16HnGv4oavZvXfD/ayHM+oYZ0WD/8lBAtf6zQua4kEyAvpqrluKXl0lnOBoiNby7x9w=="],
+ 
+-    "@rolldown/binding-darwin-x64": ["@rolldown/binding-darwin-x64@1.2.11", "", { "os": "darwin", "cpu": "x64" }, "sha512-f2i2xiNWq1Z1l2++q2fuhZRdLAT3aqxD6vRNm1RAxpUoBcdqNB3C0s1Bt+K+PbEx2F5F4gQp6hqKkphCY/xF9w=="],
++    "@rolldown/binding-darwin-x64": ["@rolldown/binding-darwin-x64@1.2.12", "", { "os": "darwin", "cpu": "x64" }, "sha512-UuuJ35MFw4gmFOrE9pEqIV+K3syIKveph+Qc1/ljHZVdoDW4pz/JHR/eMVom+TZGl/5OOvGJOWaOCVt3ZfqhxA=="],
+ 
+-    "@rolldown/binding-freebsd-x64": ["@rolldown/binding-freebsd-x64@1.2.11", "", { "os": "freebsd", "cpu": "x64" }, "sha512-4Ir5FSOKIAMr4r0kExpt1s3bMgzJU3rA45AYOHtQpls0oNeqcYBKrWMlckrYH4KCfGLfkfn1tN1dmZPMVsdXow=="],
++    "@rolldown/binding-freebsd-x64": ["@rolldown/binding-freebsd-x64@1.2.12", "", { "os": "freebsd", "cpu": "x64" }, "sha512-uMvssit0a4W+/7D8CbHUvG719mH3R2jwXAlh/XcPvuHTE0g++LymF88DCGNX0HM2rBOn0xrzgXktIB6fLSJBTQ=="],
+ 
+-    "@rolldown/binding-linux-arm-gnueabihf": ["@rolldown/binding-linux-arm-gnueabihf@1.2.11", "", { "os": "linux", "cpu": "arm" }, "sha512-/gnRDM+39BROzAN/k1OZjDPnDMcZxB/0EUxKjONO5yVkNEvlsoMDrxGNKgZi/ttFriS2gwlDNzB65pvNbFOXIQ=="],
++    "@rolldown/binding-linux-arm-gnueabihf": ["@rolldown/binding-linux-arm-gnueabihf@1.2.12", "", { "os": "linux", "cpu": "arm" }, "sha512-XcFu0R0xWnwzSf4IQgFH1rJIckPN1pLy2R+4r9IDB7Yfu/ys9cVqfa4pBrMHj7a3gl8mIR4nRNPg0e5IvEVs6g=="],
+ 
+-    "@rolldown/binding-linux-arm64-gnu": ["@rolldown/binding-linux-arm64-gnu@1.2.11", "", { "os": "linux", "cpu": "arm64" }, "sha512-PFaK8HwvAHbaKbBcDNQihjMKYvFnA5hiENx/l5tphTDz1E0WFp32l0A7aq7lyUwGsRw/xSrNIy/gIK4thrSCrw=="],
++    "@rolldown/binding-linux-arm64-gnu": ["@rolldown/binding-linux-arm64-gnu@1.2.12", "", { "os": "linux", "cpu": "arm64" }, "sha512-260UrKgn8tz39ak+SMDOirKzr7V04M9dWPw5llW00SwBivCZoWcRBKV1d8cXnRkUmSZA3BdiUmBHWk7734Ulpw=="],
+ 
+-    "@rolldown/binding-linux-arm64-musl": ["@rolldown/binding-linux-arm64-musl@1.2.11", "", { "os": "linux", "cpu": "arm64" }, "sha512-AskzJUIKRLPxkruR1wLKewGbOw+EYfU/9lOrBFj4AFrEA8hPpKFnODWNu2WLaNs0QNkEb9QIJufmVZZIL/bJlg=="],
++    "@rolldown/binding-linux-arm64-musl": ["@rolldown/binding-linux-arm64-musl@1.2.12", "", { "os": "linux", "cpu": "arm64" }, "sha512-5YK1I9SqDkbPgc1IA8BgDl34suqUS2q0KWnBrirm0E51YjOs6eo6dV6jbQfNE/argHRSvd0QUGgtpIoYx+WWpw=="],
+ 
+-    "@rolldown/binding-linux-ppc64-gnu": ["@rolldown/binding-linux-ppc64-gnu@1.2.11", "", { "os": "linux", "cpu": "ppc64" }, "sha512-qlUGAheh2yh8afH7QBgx0PrRHN85hKnNd78x8MeMhXivuevgd8vgf6/CstOzmNKY/lLTHvNTrPy98cLnAugzJw=="],
++    "@rolldown/binding-linux-ppc64-gnu": ["@rolldown/binding-linux-ppc64-gnu@1.2.12", "", { "os": "linux", "cpu": "ppc64" }, "sha512-Rkcrmp7eFRg74yL5fXEU91JEWbdEPLevWwGtXpmhbjlD1StScbWTmO94Bhly+Mo+ketKYkdmM1vNUKeWSlx8cQ=="],
+ 
+-    "@rolldown/binding-linux-s390x-gnu": ["@rolldown/binding-linux-s390x-gnu@1.2.11", "", { "os": "linux", "cpu": "s390x" }, "sha512-secpEad+0vCbSfn8upFySkDskv+bGPk3THSDS9Y89yc4rb4kzqHp8Dmyd9BkQW4SnhNXBZCl/6CrO//hZahNJQ=="],
++    "@rolldown/binding-linux-s390x-gnu": ["@rolldown/binding-linux-s390x-gnu@1.2.12", "", { "os": "linux", "cpu": "s390x" }, "sha512-qvK4DuAsQc2BSjlx+Xr+IzOIvvxbGZqxFwdWfG6F518Erj0GGISyQbJ6pIappnOxlNPzNHvo/L0BwB30GZ+zVw=="],
+ 
+-    "@rolldown/binding-linux-x64-gnu": ["@rolldown/binding-linux-x64-gnu@1.2.11", "", { "os": "linux", "cpu": "x64" }, "sha512-mOVBT3dPpkWm8XBWPmU4bf+U6dYDLeMo/9ojUmis4N0L5uu10qra5vOyngZ7/PSdoE4G9KvRt4bloRxNjLas7A=="],
++    "@rolldown/binding-linux-x64-gnu": ["@rolldown/binding-linux-x64-gnu@1.2.12", "", { "os": "linux", "cpu": "x64" }, "sha512-Q9uLBO53Xd4QIq1WOycVQyPP1O4HhraEV2qqb3uTrnVw6QZih9duY4vNXOivL1xoUS1/z+W8eF4NMfl2a8Sdjw=="],
+ 
+-    "@rolldown/binding-linux-x64-musl": ["@rolldown/binding-linux-x64-musl@1.2.11", "", { "os": "linux", "cpu": "x64" }, "sha512-Is78i9A8Ui4SqcxUwFJ9uMmjDn58IbVTjFWYdQestFEgeuEmHMLGNriXnVJKkwG2YiZjw8cP0zCTyDMdDGtOOg=="],
++    "@rolldown/binding-linux-x64-musl": ["@rolldown/binding-linux-x64-musl@1.2.12", "", { "os": "linux", "cpu": "x64" }, "sha512-3IBxWFMjbOZskDPKv8Lf9BCnahlKuHthWkYnyIxOH/QcJrFcS4EmcenthApkwr/5+nEqZlLzeYbxeMaX7A5u4g=="],
+ 
+-    "@rolldown/binding-openharmony-arm64": ["@rolldown/binding-openharmony-arm64@1.2.11", "", { "os": "none", "cpu": "arm64" }, "sha512-dUCXneZ87INUMyQ0D+C0HrEBNUPNXHaPmU5GTjyKTJEiussw9Kaj5Ln8UztPe4epV/ffvgNBEadksdYhmW6xJA=="],
++    "@rolldown/binding-openharmony-arm64": ["@rolldown/binding-openharmony-arm64@1.2.12", "", { "os": "none", "cpu": "arm64" }, "sha512-xtX61xg4LKPkPWilZU1ynKClz5Gj4bf74LML4r3eVLWumKnGjoEr1OSHQhMdbBDoYTi+yjrujvpZe2pUnqCrrA=="],
+ 
+-    "@rolldown/binding-win32-arm64-msvc": ["@rolldown/binding-win32-arm64-msvc@1.2.11", "", { "os": "win32", "cpu": "arm64" }, "sha512-jByxb6qfd+bH1xUd0qnfFnb17i9sWBPY2tOavJ0l3tdr3OTu+Kvtm8cd/JV5nFt657b1VqGltxg9olOEfofXWw=="],
++    "@rolldown/binding-win32-arm64-msvc": ["@rolldown/binding-win32-arm64-msvc@1.2.12", "", { "os": "win32", "cpu": "arm64" }, "sha512-At7fPB6PCaIjzgIhEZFxuT+BBFqiQibJDT4d3PhiR3f4E7bbMZF4aKblbFfEM3sETRDd1YiQx/+U/g/B/ou5Ew=="],
+ 
+-    "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.11", "", { "os": "win32", "cpu": "x64" }, "sha512-/PzKqzAJ03i19oy2ItPvyvaVjOjBCNnfaJs8yvUdGBKmiESgnrJSQ2awd81QzFbbnAmu7YO9ZnJrDCb9VSJPRA=="],
++    "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.12", "", { "os": "win32", "cpu": "x64" }, "sha512-WIw2haVKwjuYdXkHaoC0mF8Le71TuCBxjrdKqLbJGctbBABj+ClfmNvtbOnzpq3RokNo5+V1qhtSzJyXorsklQ=="],
+ 
+     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+ 
+@@ -101,7 +101,7 @@
+ 
+     "@types/estree": ["@types/estree@1.0.9", "", {}, "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="],
+ 
+-    "@types/node": ["@types/node@24.19.0", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew=="],
++    "@types/node": ["@types/node@24.19.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-aS3/DG0oM05K0RIXXP+hKjinGG5IgSSVGzswZxW3O0sS3pH4/fycXundUC9XsszgKCk4gHXylTEK6hyFxVxnoQ=="],
+ 
+     "@vitest/expect": ["@vitest/expect@4.1.10", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@types/chai": "^5.2.2", "@vitest/spy": "4.1.10", "@vitest/utils": "4.1.10", "chai": "^6.2.2", "tinyrainbow": "^3.1.0" } }, "sha512-YsCn+qAk1GWjQOWFEsEcL2gNQ0zmVmQu3T03qP6UyjhtmdtwtbuI+DASn/7iQB3HGTXkdBwGddzxPlmiql5vlA=="],
+ 
+@@ -123,27 +123,27 @@
+ 
+     "@volar/typescript": ["@volar/typescript@2.4.15", "", { "dependencies": { "@volar/language-core": "2.4.15", "path-browserify": "^1.0.1", "vscode-uri": "^3.0.8" } }, "sha512-2aZ8i0cqPGjXb4BhkMsPYDkkuc2ZQ6yOpqwAuNwUoncELqoy5fRgOQtLR9gB0g902iS0NAkvpIzs27geVyVdPg=="],
+ 
+-    "@vue/compiler-core": ["@vue/compiler-core@3.5.40", "", { "dependencies": { "@babel/parser": "^7.29.7", "@vue/shared": "3.5.40", "entities": "^7.0.1", "estree-walker": "^2.0.2", "source-map-js": "^1.2.1" } }, "sha512-39E8IgOhTbVDnoJFMKc2DvYnypcZwUqgUhQkccva/0m6FUwtIKSGV7n1hpVmYcFaoRAwf9pBcwnKlCEsN63ZEQ=="],
++    "@vue/compiler-core": ["@vue/compiler-core@3.5.43", "", { "dependencies": { "@babel/parser": "^7.29.8", "@vue/shared": "3.5.43", "entities": "^7.0.1", "estree-walker": "^2.0.2", "source-map-js": "^1.2.1" } }, "sha512-zdiLhnbe1QQqgDT8xZMpNmyqZ3qlI+/Q/FHQco57Kwl/b05HhCzN6eVGN9QU9rbga4CrS0H5SYY8VGHZCt/1Hg=="],
+ 
+-    "@vue/compiler-dom": ["@vue/compiler-dom@3.5.40", "", { "dependencies": { "@vue/compiler-core": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-pwkx4vqlqOspFstrcmzwkKLePVMD3PT65imRzLhanU2V1Fj4K13g6OXjanOyzw3aTAuRk84BOmY8f3rEHqPaVA=="],
++    "@vue/compiler-dom": ["@vue/compiler-dom@3.5.43", "", { "dependencies": { "@vue/compiler-core": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-PEZoAk3NQmsn/ejMzSOCyTYqwGqczrWm70PuhBKjjv1+TCoQAaO/zOqNwjV+honlNstT5ILxtc+8r8UUfj+iEQ=="],
+ 
+-    "@vue/compiler-sfc": ["@vue/compiler-sfc@3.5.40", "", { "dependencies": { "@babel/parser": "^7.29.7", "@vue/compiler-core": "3.5.40", "@vue/compiler-dom": "3.5.40", "@vue/compiler-ssr": "3.5.40", "@vue/shared": "3.5.40", "estree-walker": "^2.0.2", "magic-string": "^0.30.21", "postcss": "^8.5.19", "source-map-js": "^1.2.1" } }, "sha512-gIf497P4kpuALcvs5n3AEg1Vdn0pSY4XbjASIfHNYF1/MP3T2Mf2STERTubysBxCRxzJGJYtF/O7vwJrxFB3Vw=="],
++    "@vue/compiler-sfc": ["@vue/compiler-sfc@3.5.43", "", { "dependencies": { "@babel/parser": "^7.29.8", "@vue/compiler-core": "3.5.43", "@vue/compiler-dom": "3.5.43", "@vue/compiler-ssr": "3.5.43", "@vue/shared": "3.5.43", "estree-walker": "^2.0.2", "magic-string": "^0.30.21", "postcss": "^8.5.28", "source-map-js": "^1.2.1" } }, "sha512-FCbrG3XNCRl+js3huuKx4IVHBLTvMkJhVepjbxSPu1gn4yWLaYtGNQdjJGZaMytXB6qb76qQDDmDSLy/vkmleQ=="],
+ 
+-    "@vue/compiler-ssr": ["@vue/compiler-ssr@3.5.40", "", { "dependencies": { "@vue/compiler-dom": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-rrE5xiXG663+vHCHa3J9p2z5OcBRjXmoqenprJxAFQxg5pSshzeBiCE6pu46axapRJ2Adk0YDA2BRZVjiHXnhg=="],
++    "@vue/compiler-ssr": ["@vue/compiler-ssr@3.5.43", "", { "dependencies": { "@vue/compiler-dom": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-GF62orf7KiJX9RqrHNGrYBudsQGD0OhJ5nDs90O8UiDuS40+YMYomiXu6w6EuvtXuRDc3MSNis3EaaSKAVSWpg=="],
+ 
+     "@vue/compiler-vue2": ["@vue/compiler-vue2@2.7.16", "", { "dependencies": { "de-indent": "^1.0.2", "he": "^1.2.0" } }, "sha512-qYC3Psj9S/mfu9uVi5WvNZIzq+xnXMhOwbTFKKDD7b1lhpnn71jXSFdTQ+WsIEk0ONCd7VV2IMm7ONl6tbQ86A=="],
+ 
+     "@vue/language-core": ["@vue/language-core@2.2.12", "", { "dependencies": { "@volar/language-core": "2.4.15", "@vue/compiler-dom": "^3.5.0", "@vue/compiler-vue2": "^2.7.16", "@vue/shared": "^3.5.0", "alien-signals": "^1.0.3", "minimatch": "^9.0.3", "muggle-string": "^0.4.1", "path-browserify": "^1.0.1" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-IsGljWbKGU1MZpBPN+BvPAdr55YPkj2nB/TBNGNC32Vy2qLG25DYu/NBN2vNtZqdRbTRjaoYrahLrToim2NanA=="],
+ 
+-    "@vue/reactivity": ["@vue/reactivity@3.5.40", "", { "dependencies": { "@vue/shared": "3.5.40" } }, "sha512-B7ot9UlUZOi1zbq61/LvE88ZLTV8IlajTdiZTAEiDQgrnIMIZoPr9kGw0Zw46ObW62O9+H/Be3kMbfb7kYPQZA=="],
++    "@vue/reactivity": ["@vue/reactivity@3.5.43", "", { "dependencies": { "@vue/shared": "3.5.43" } }, "sha512-G/c9GyOZNI2jVaaS6OX1EF1SSFSv7H0ERqNTl4+DTFMlZmB5eVAB53aLQNam/7NL2NPtaDD7RdVrzf8uJzMuOA=="],
+ 
+-    "@vue/runtime-core": ["@vue/runtime-core@3.5.40", "", { "dependencies": { "@vue/reactivity": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-KAZLweuZ6uUJPK1PMSQPgBU5gCjgrrfjUhSglmU9NhH+Zjepa8cnwSydPWDWHDwOgY4g3VcZ+PljbiHlURNCbw=="],
++    "@vue/runtime-core": ["@vue/runtime-core@3.5.43", "", { "dependencies": { "@vue/reactivity": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-hU6U6VnVhBGQDpvlnnDlIB8ZGJBiOcgk2lh/0InltHiz3D8oSkluvuvY+do1G2H3+udeKFsmaBlgVYP7gXQzEw=="],
+ 
+-    "@vue/runtime-dom": ["@vue/runtime-dom@3.5.40", "", { "dependencies": { "@vue/reactivity": "3.5.40", "@vue/runtime-core": "3.5.40", "@vue/shared": "3.5.40", "csstype": "^3.2.3" } }, "sha512-ZfrX8ssZQds900L9pr8AuK05ddnMsR4MPMZr8cPN9GoqoPWcXLhjvvbIA2SMv+7a97sJ1vv9pj/zxK0Cq/eEFQ=="],
++    "@vue/runtime-dom": ["@vue/runtime-dom@3.5.43", "", { "dependencies": { "@vue/reactivity": "3.5.43", "@vue/runtime-core": "3.5.43", "@vue/shared": "3.5.43", "csstype": "^3.2.3" } }, "sha512-Bb2Jc0YjjJdMt1SJmb9b2L/IWd3I8lIT9x9eS/xvvP9CiVgna0ffua74xKRmt4/uSJ+0r4iN8ex1jrqkhQGWQw=="],
+ 
+-    "@vue/server-renderer": ["@vue/server-renderer@3.5.40", "", { "dependencies": { "@vue/compiler-ssr": "3.5.40", "@vue/runtime-dom": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-XNJym9WpevhTVt1HuwOrCRJ5Q+9z4BjTMrDtjTrvx74SmUll8spNTw6whWJa9mEkO4PKn5TihI/bm/8ds2QVJw=="],
++    "@vue/server-renderer": ["@vue/server-renderer@3.5.43", "", { "dependencies": { "@vue/compiler-ssr": "3.5.43", "@vue/runtime-dom": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-l2Ygjv9NehV94PSBxNWsAHC0j/eIIKbn92mBuWXAPGLnn6HfJ6MH5ubsd+Nk0YoZ5FRuxWI1P2VSoh+dbPQhCQ=="],
+ 
+-    "@vue/shared": ["@vue/shared@3.5.40", "", {}, "sha512-WxnBtruIqOoV3rA4jeKDWzrYI5h7Cp4+pjwDi8kWGHz+IslhiN+wguLVVhtv2l8VoU02rzDCVfDjgCl1lNpZVg=="],
++    "@vue/shared": ["@vue/shared@3.5.43", "", {}, "sha512-uksS7YGMR5NZyr4JNq0Rp+QyLns0ueaz20KwzIPW9R0LH1Vnt4E+XUM29PNseEbf1www2gOuhuDi5AKOIXag9Q=="],
+ 
+     "@vue/test-utils": ["@vue/test-utils@2.4.11", "", { "dependencies": { "js-beautify": "^1.14.9", "vue-component-type-helpers": "^3.0.0" }, "peerDependencies": { "@vue/compiler-dom": "3.x", "@vue/server-renderer": "3.x", "vue": "3.x" }, "optionalPeers": ["@vue/server-renderer"] }, "sha512-GDqaqZsA6m2E5vNzej0aYiIb6BX8xV9pNSbbbXKOfEYwg7ZNblVX8suyqmUBThq8VIrgAJNxn+z72hVtUeiWHA=="],
+ 
+@@ -153,7 +153,7 @@
+ 
+     "alien-signals": ["alien-signals@1.0.13", "", {}, "sha512-OGj9yyTnJEttvzhTUWuscOvtqxq5vrhF7vL9oS0xJ2mK0ItPYP1/y+vCFebfxoEyAz0++1AIwJ5CMr+Fk3nDmg=="],
+ 
+-    "ansi-regex": ["ansi-regex@6.3.0", "", {}, "sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ=="],
++    "ansi-regex": ["ansi-regex@6.4.0", "", {}, "sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw=="],
+ 
+     "ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
+ 
+@@ -167,7 +167,7 @@
+ 
+     "call-bind-apply-helpers": ["call-bind-apply-helpers@1.0.2", "", { "dependencies": { "es-errors": "^1.3.0", "function-bind": "^1.1.2" } }, "sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ=="],
+ 
+-    "chai": ["chai@6.2.2", "", {}, "sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg=="],
++    "chai": ["chai@6.3.0", "", {}, "sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg=="],
+ 
+     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ=="],
+ 
+@@ -315,7 +315,7 @@
+ 
+     "muggle-string": ["muggle-string@0.4.1", "", {}, "sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ=="],
+ 
+-    "nanoid": ["nanoid@3.3.19", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug=="],
++    "nanoid": ["nanoid@3.3.20", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ=="],
+ 
+     "nopt": ["nopt@7.2.1", "", { "dependencies": { "abbrev": "^2.0.0" }, "bin": { "nopt": "bin/nopt.js" } }, "sha512-taM24ViiimT/XntxbPyJQzCG+p4EKOpgD3mxFwW38mGjVUrfERQOeY4EDHjdnptttfHuHQXFx+lTP08Q+mLa/w=="],
+ 
+@@ -339,13 +339,13 @@
+ 
+     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
+ 
+-    "postcss": ["postcss@8.5.28", "", { "dependencies": { "nanoid": "^3.3.18", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A=="],
++    "postcss": ["postcss@8.5.29", "", { "dependencies": { "nanoid": "^3.3.19", "picocolors": "^1.1.1", "source-map-js": "^1.2.2" } }, "sha512-49cGhUbXj8Qenv0iTMxA1cFBzxXoctpC9Ujd77t1WcbJIr6nF/eI7g/8MgxrYldFRuAXvja7xQRwavoW7kgrxQ=="],
+ 
+     "proto-list": ["proto-list@1.2.4", "", {}, "sha512-vtK/94akxsTMhe0/cbfpR+syPuszcuwhqVjJq26CuNDgFGj682oRBXOP5MJpv2r7JtE8MsiepGIqvvOTBwn2vA=="],
+ 
+     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
+ 
+-    "rolldown": ["rolldown@1.2.11", "", { "dependencies": { "@oxc-project/types": "=0.151.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.11", "@rolldown/binding-android-arm64": "1.2.11", "@rolldown/binding-darwin-arm64": "1.2.11", "@rolldown/binding-darwin-x64": "1.2.11", "@rolldown/binding-freebsd-x64": "1.2.11", "@rolldown/binding-linux-arm-gnueabihf": "1.2.11", "@rolldown/binding-linux-arm64-gnu": "1.2.11", "@rolldown/binding-linux-arm64-musl": "1.2.11", "@rolldown/binding-linux-ppc64-gnu": "1.2.11", "@rolldown/binding-linux-s390x-gnu": "1.2.11", "@rolldown/binding-linux-x64-gnu": "1.2.11", "@rolldown/binding-linux-x64-musl": "1.2.11", "@rolldown/binding-openharmony-arm64": "1.2.11", "@rolldown/binding-win32-arm64-msvc": "1.2.11", "@rolldown/binding-win32-x64-msvc": "1.2.11" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-qpSwIyz0jHQq5qXBTNxFmE6664rJ7O+4TvPFOiOaBSrz8IOHc1koKKSqTM2H6u1UG1+TveuC6vaDHKXFOvb1Kw=="],
++    "rolldown": ["rolldown@1.2.12", "", { "dependencies": { "@oxc-project/types": "=0.152.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.12", "@rolldown/binding-android-arm64": "1.2.12", "@rolldown/binding-darwin-arm64": "1.2.12", "@rolldown/binding-darwin-x64": "1.2.12", "@rolldown/binding-freebsd-x64": "1.2.12", "@rolldown/binding-linux-arm-gnueabihf": "1.2.12", "@rolldown/binding-linux-arm64-gnu": "1.2.12", "@rolldown/binding-linux-arm64-musl": "1.2.12", "@rolldown/binding-linux-ppc64-gnu": "1.2.12", "@rolldown/binding-linux-s390x-gnu": "1.2.12", "@rolldown/binding-linux-x64-gnu": "1.2.12", "@rolldown/binding-linux-x64-musl": "1.2.12", "@rolldown/binding-openharmony-arm64": "1.2.12", "@rolldown/binding-win32-arm64-msvc": "1.2.12", "@rolldown/binding-win32-x64-msvc": "1.2.12" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-8wafseiaG80xmXSfqidUNqZcylTlhmPZZt+za2m+js2sFZ8dTNlhIOV2WcbIPx2hgwPBJpEUGFAMZ9bgBBLTSQ=="],
+ 
+     "rrweb-cssom": ["rrweb-cssom@0.7.1", "", {}, "sha512-TrEMa7JGdVm0UThDJSx7ddw5nVm3UJS9o9CCIZ72B1vSyEZoziDqBYP3XIoi/12lKrJR8rE3jeFHMok2F/Mnsg=="],
+ 
+@@ -363,11 +363,11 @@
+ 
+     "signal-exit": ["signal-exit@4.1.0", "", {}, "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="],
+ 
+-    "source-map-js": ["source-map-js@1.2.1", "", {}, "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="],
++    "source-map-js": ["source-map-js@1.2.2", "", {}, "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw=="],
+ 
+     "stackback": ["stackback@0.0.2", "", {}, "sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw=="],
+ 
+-    "std-env": ["std-env@4.2.0", "", {}, "sha512-oCUKSupKTHX53EyjDtuZQ64pjLJ6yYCtpmEw0goYxtjG9KpbRe8KAsl2tBUGU9DyMcJ0RwJ8GqJAFzMXcXW1Rw=="],
++    "std-env": ["std-env@4.3.0", "", {}, "sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag=="],
+ 
+     "string-width": ["string-width@5.1.2", "", { "dependencies": { "eastasianwidth": "^0.2.0", "emoji-regex": "^9.2.2", "strip-ansi": "^7.0.1" } }, "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA=="],
+ 
+@@ -385,7 +385,7 @@
+ 
+     "tinyglobby": ["tinyglobby@0.2.17", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g=="],
+ 
+-    "tinyrainbow": ["tinyrainbow@3.1.1", "", {}, "sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw=="],
++    "tinyrainbow": ["tinyrainbow@3.2.0", "", {}, "sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A=="],
+ 
+     "tldts": ["tldts@6.1.86", "", { "dependencies": { "tldts-core": "^6.1.86" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-WMi/OQ2axVTf/ykqCQgXiIct+mSQDFdH2fkwhPwgEwvJ1kSzZRiinb0zF2Xb8u4+OqPChmyI6MEu4EezNJz+FQ=="],
+ 
+@@ -399,15 +399,15 @@
+ 
+     "undici-types": ["undici-types@7.24.6", "", {}, "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg=="],
+ 
+-    "vite": ["vite@8.3.1", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.7", "postcss": "^8.5.28", "rolldown": "~1.2.9", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.7.1", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-/bvH9E9tmCXRGp2uXY3WbOldqpTwFkbha/8ANaEQ6VkxhH60KyqLwgZq6lG2y+4uT55x9+9eUHMpQ7uGnOCKjA=="],
++    "vite": ["vite@8.3.3", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.7", "postcss": "^8.5.28", "rolldown": "~1.2.11", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.7.1", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-cTAldKPImjg6c+gk48U19POPn3GCBzZwpdsN8ZMEEcbpes+6/wvfqUd0C2y3qYY4wsj8PwgFwrZ/1jBPVttMSg=="],
+ 
+     "vitest": ["vitest@4.1.10", "", { "dependencies": { "@vitest/expect": "4.1.10", "@vitest/mocker": "4.1.10", "@vitest/pretty-format": "4.1.10", "@vitest/runner": "4.1.10", "@vitest/snapshot": "4.1.10", "@vitest/spy": "4.1.10", "@vitest/utils": "4.1.10", "es-module-lexer": "^2.0.0", "expect-type": "^1.3.0", "magic-string": "^0.30.21", "obug": "^2.1.1", "pathe": "^2.0.3", "picomatch": "^4.0.3", "std-env": "^4.0.0-rc.1", "tinybench": "^2.9.0", "tinyexec": "^1.0.2", "tinyglobby": "^0.2.15", "tinyrainbow": "^3.1.0", "vite": "^6.0.0 || ^7.0.0 || ^8.0.0", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@opentelemetry/api": "^1.9.0", "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0", "@vitest/browser-playwright": "4.1.10", "@vitest/browser-preview": "4.1.10", "@vitest/browser-webdriverio": "4.1.10", "@vitest/coverage-istanbul": "4.1.10", "@vitest/coverage-v8": "4.1.10", "@vitest/ui": "4.1.10", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@opentelemetry/api", "@types/node", "@vitest/browser-playwright", "@vitest/browser-preview", "@vitest/browser-webdriverio", "@vitest/coverage-istanbul", "@vitest/coverage-v8", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "./vitest.mjs" } }, "sha512-R9jUTe5S4Qb0HCd4TNqpC7oGcrMssMRGXLW80ubjWsW9VH5GF8y1Y0SFLY9AbqSk6nt0PnOx4H4WNJYZ13GUPw=="],
+ 
+     "vscode-uri": ["vscode-uri@3.2.0", "", {}, "sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg=="],
+ 
+-    "vue": ["vue@3.5.40", "", { "dependencies": { "@vue/compiler-dom": "3.5.40", "@vue/compiler-sfc": "3.5.40", "@vue/runtime-dom": "3.5.40", "@vue/server-renderer": "3.5.40", "@vue/shared": "3.5.40" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-+8PJ4SJXdn/cHGImF4CKdxlWHIN5Dkt7DoufRREM6h6uVCx2m7QxgcEQmmzyOK8A9mcafg7sFbJFYsdFVubTig=="],
++    "vue": ["vue@3.5.43", "", { "dependencies": { "@vue/compiler-dom": "3.5.43", "@vue/compiler-sfc": "3.5.43", "@vue/runtime-dom": "3.5.43", "@vue/server-renderer": "3.5.43", "@vue/shared": "3.5.43" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-o5qZoksdnjIKvW1srZ3ab7pcDNYAerBjRe54D0LBLfRdCYFrSgBHVXokMas35czQc0//lmx4/tuY4ZNQ+Rf2Ng=="],
+ 
+-    "vue-component-type-helpers": ["vue-component-type-helpers@3.3.11", "", {}, "sha512-LwcxzeliO9fkQcpJG0PoX8X5kmAhKmH9wkpDLxNabwzkQ9Zeib2YVHwFV4pcWmMLfXVfjr/dSV+DaJ3cIPgSNA=="],
++    "vue-component-type-helpers": ["vue-component-type-helpers@3.3.12", "", {}, "sha512-HwCqmgTfLFskQc4P5TRnbduCMyPat2Ezu0elLWOGn0dD/6BKHP15B5bxce6aDi+E4kblPtru8amIBQzu0Di3qQ=="],
+ 
+     "vue-tsc": ["vue-tsc@2.2.12", "", { "dependencies": { "@volar/typescript": "2.4.15", "@vue/language-core": "2.2.12" }, "peerDependencies": { "typescript": ">=5.0.0" }, "bin": { "vue-tsc": "./bin/vue-tsc.js" } }, "sha512-P7OP77b2h/Pmk+lZdJ0YWs+5tJ6J2+uOQPo7tlBnY44QqQSPYvS0qVT4wqDJgwrZaLe47etJLLQRFia71GYITw=="],
+ 
+diff --git a/client.ts b/client.ts
+index c78c7d1..666c3e7 100644
+--- a/client.ts
++++ b/client.ts
+@@ -1,3 +1,4 @@
++import { createAgentSdkAdapter } from './src/client/sdk-adapter';
+ import { defineOr3Plugin, pluginError, pluginOk, type PluginContext, type PluginManifestV2 } from "@or3/plugin-sdk";
+ import manifestJson from "./or3.manifest.json";
+ import ExternalAgentSessionPane from "./src/components/ExternalAgentSessionPane.vue";
+@@ -18,27 +19,11 @@ import { createCloudHostReconciler, createExternalAgentClientFactory, runExterna
+ 
+ export { ExternalAgentSessionPane, ExternalAgentsSidebarPage };
+ 
+-export interface AgentHostPorts {
+-  readonly ui: AgentHostUiPort;
+-  readonly workspaceKv: ExternalAgentWorkspaceKv;
+-  readonly vaultStorage: CredentialStorage | null;
+-  readonly staging: AgentHostStagingPort;
+-  beginHostVerification(baseUrl: string): () => void;
+-  registerCodingProfile(profile: typeof CODING_WORKSPACE_PROFILE): { dispose(): void };
+-}
+-
+-/** The host must bind these restricted public ports before activation. */
+-export function createAgentHostPorts(context: PluginContext): AgentHostPorts {
+-  const ports = (context as PluginContext & { readonly externalAgentHost?: AgentHostPorts }).externalAgentHost;
+-  if (!ports) throw new Error("External Agents requires host UI, workspace KV, vault storage, and staging grants");
+-  return ports;
+-}
+-
+-export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext) => AgentHostPorts) {
++export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext) => ReturnType<typeof createAgentSdkAdapter> = createAgentSdkAdapter) {
+   return defineOr3Plugin({
+     manifest: manifestJson as PluginManifestV2,
+     async setup(context) {
+-      const ports = resolvePorts(context);
++      const ports = await resolvePorts(context);
+       const releaseHostUi = setAgentHostUiPort(ports.ui);
+       const fetch = createMediatedAgentFetch(context);
+       const vault = new BrowserExternalAgentCredentialVault({ storage: ports.vaultStorage });
+@@ -120,11 +105,9 @@ export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext
+         },
+       });
+ 
+-      const hostFetch: typeof fetch = (input, init) =>
+-        fetch(new URL(String(input), globalThis.location.origin), init);
+       const cloudHosts = createCloudHostReconciler({
+         controller,
+-        fetch: hostFetch,
++        connections: context.workspace.connections,
+         getActiveWorkspaceId: () => workspaceId,
+         isEnabled: () => ports.ui.connect.enabled,
+         isDisposed,
+@@ -137,7 +120,7 @@ export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext
+         () => context.logger.warn("Could not refresh agent cloud hosts"), isDisposed);
+       const onConnect = () => refreshInBackground();
+       const onVisible = () => { if (document.visibilityState === "visible") refreshInBackground(); };
+-      window.addEventListener("or3:external-agents:refresh-cloud-hosts", onConnect);
++      const connectionsChanged = context.events.on("connections.changed", onConnect);
+       document.addEventListener("visibilitychange", onVisible);
+       const workspace = context.workspace.onChange(({ id }) => {
+         workspaceId = id;
+@@ -153,9 +136,8 @@ export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext
+         disposed = true;
+         cloudHosts.dispose();
+         workspace.dispose();
+-        window.removeEventListener("or3:external-agents:refresh-cloud-hosts", onConnect);
++        connectionsChanged.dispose();
+         document.removeEventListener("visibilitychange", onVisible);
+-        ports.ui.panes.clearAgentPanes();
+         commands.forEach((handle) => handle.dispose());
+         activity.dispose();
+         codingProfile.dispose();
+@@ -176,4 +158,4 @@ export function createExternalAgentsPlugin(resolvePorts: (context: PluginContext
+   });
+ }
+ 
+-export default createExternalAgentsPlugin(createAgentHostPorts);
++export default createExternalAgentsPlugin();
+diff --git a/or3.manifest.json b/or3.manifest.json
+index 74a37fe..c556147 100644
+--- a/or3.manifest.json
++++ b/or3.manifest.json
+@@ -3,11 +3,18 @@
+   "kind": "plugin",
+   "id": "or3-external-agents",
+   "name": "External Agents",
+-  "version": "0.1.1",
++  "version": "0.2.0",
+   "description": "Sessions, approvals, and trusted host connections for external coding agents.",
+-  "engines": { "or3": "^0.3.0", "pluginApi": "^2.0.0" },
++  "engines": {
++    "or3": "^0.3.0",
++    "pluginApi": "^2.1.0"
++  },
+   "runtime": {
+-    "client": { "entry": "client.mjs", "format": "esm", "isolation": "host" }
++    "client": {
++      "entry": "client.mjs",
++      "format": "esm",
++      "isolation": "host"
++    }
+   },
+   "requestedGrants": [
+     "ui.sidebar.register",
+@@ -25,15 +32,33 @@
+     "files.read",
+     "files.write",
+     "network.http",
+-    "network.stream"
++    "network.stream",
++    "ui.toast",
++    "ui.workspace-profile.register",
++    "workspace.connections.read",
++    "workspace.connections.manage"
+   ],
+-  "features": { "required": [], "optional": [] },
+-  "dependencies": { "required": [], "optional": [] },
++  "features": {
++    "required": [
++      "or3-trusted-ui-kit-v1",
++      "or3-trusted-host-v2"
++    ],
++    "optional": []
++  },
++  "dependencies": {
++    "required": [],
++    "optional": []
++  },
+   "trust": "trusted-host",
+-  "settings": { "version": 1 },
++  "settings": {
++    "version": 1
++  },
+   "stateCompatibility": {
+-    "version": 1,
+-    "reads": { "minimum": 1, "maximum": 1 },
+-    "rollback": "safe"
++    "version": 2,
++    "reads": {
++      "minimum": 2,
++      "maximum": 2
++    },
++    "rollback": "unsupported"
+   }
+ }
+diff --git a/package.json b/package.json
+index 18d049d..ecc441e 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@or3/plugin-external-agents",
+-  "version": "0.1.1",
++  "version": "0.2.0",
+   "private": true,
+   "type": "module",
+   "description": "Trusted external agents plugin for OR3 Chat",
+@@ -8,11 +8,13 @@
+     "@or3/intern-client": "0.1.3"
+   },
+   "peerDependencies": {
+-    "@or3/plugin-sdk": "^2.0.0",
++    "@or3/plugin-sdk": "^2.1.0",
+     "vue": "^3.5.0"
+   },
+   "peerDependenciesMeta": {
+-    "@or3/plugin-sdk": { "optional": true }
++    "@or3/plugin-sdk": {
++      "optional": true
++    }
+   },
+   "devDependencies": {
+     "@or3/plugin-sdk": "file:../or3-chat/packages/plugin-sdk",
+@@ -21,7 +23,7 @@
+     "jsdom": "25.0.1",
+     "typescript": "^5.9.3",
+     "vitest": "4.1.10",
+-    "vue": "3.5.40",
++    "vue": "3.5.43",
+     "vue-tsc": "2.2.12"
+   },
+   "scripts": {
+diff --git a/src/client/built-smoke.test.ts b/src/client/built-smoke.test.ts
+index 576d4a4..e77cfb5 100644
+--- a/src/client/built-smoke.test.ts
++++ b/src/client/built-smoke.test.ts
+@@ -3,7 +3,7 @@ import { computed, defineComponent, h, shallowRef } from "vue";
+ import { flushPromises, mount, shallowMount } from "@vue/test-utils";
+ import { describe, expect, it, vi } from "vitest";
+ import { createPluginTestHost } from "@or3/plugin-sdk/testing";
+-import type { AgentHostPorts } from "../../client";
++import type { createAgentSdkAdapter } from "./sdk-adapter";
+ 
+ describe("ExternalAgents components from the built package", () => {
+   it("renders the registered sidebar and pane, supports navigation, and disposes contributions", async () => {
+@@ -14,10 +14,9 @@ describe("ExternalAgents components from the built package", () => {
+     const kv = new Map<string, string>();
+     let codingProfileActive = false;
+     const openPane = vi.fn(async () => undefined);
+-    const clearAgentPanes = vi.fn();
+     const setActiveSidebarPage = vi.fn();
+     const closeSidebarIfMobile = vi.fn();
+-    const ports: AgentHostPorts = {
++    const ports: Awaited<ReturnType<typeof createAgentSdkAdapter>> = {
+       ui: {
+         components: {
+           chatComposerShell: component,
+@@ -53,7 +52,6 @@ describe("ExternalAgents components from the built package", () => {
+           activeIndex: shallowRef(0),
+           set: async () => undefined,
+           open: openPane,
+-          clearAgentPanes,
+         },
+       },
+       workspaceKv: {
+@@ -69,14 +67,15 @@ describe("ExternalAgents components from the built package", () => {
+         stageFiles: async () => [],
+         releaseStagedFiles: async () => ({ status: "released" }),
+       },
++      beginHostVerification: async () => () => {},
+       registerCodingProfile(profile) {
+-        expect(profile.id).toBe("coding-workspace");
++        expect((profile as { id: string }).id).toBe("coding-workspace");
+         codingProfileActive = true;
+         return { dispose: () => { codingProfileActive = false; } };
+       },
+     };
+     const host = createPluginTestHost({ approvedGrants: built.default.manifest.requestedGrants });
+-    const plugin = built.createExternalAgentsPlugin(() => ports);
++    const plugin = built.createExternalAgentsPlugin(async () => ports);
+     const activated = await host.activate(plugin);
+     expect(activated, JSON.stringify(activated)).toMatchObject({ ok: true });
+     expect(host.ui.registrations()).toEqual(expect.arrayContaining([
+@@ -106,7 +105,6 @@ describe("ExternalAgents components from the built package", () => {
+     pane.unmount();
+     expect(componentWarnings.filter((warning) => warning.includes("Failed to resolve component"))).toEqual([]);
+     await host.deactivate();
+-    expect(clearAgentPanes).toHaveBeenCalledOnce();
+     expect(host.ui.registrations()).toEqual([]);
+     expect(host.activity.sources()).toEqual([]);
+     expect(codingProfileActive).toBe(false);
+diff --git a/src/client/host-ui.ts b/src/client/host-ui.ts
+index bd8d504..95061d9 100644
+--- a/src/client/host-ui.ts
++++ b/src/client/host-ui.ts
+@@ -53,7 +53,6 @@ export interface AgentHostUiPort {
+     readonly activeIndex: Ref<number>;
+     set(index: number, appId: string, recordId: string): Promise<void>;
+     open(appId: string, recordId: string): Promise<void>;
+-    clearAgentPanes(): void;
+   };
+ }
+ 
+diff --git a/src/client/mediated-fetch.test.ts b/src/client/mediated-fetch.test.ts
+index 9f0659a..1419959 100644
+--- a/src/client/mediated-fetch.test.ts
++++ b/src/client/mediated-fetch.test.ts
+@@ -63,11 +63,14 @@ describe("host-mediated agent transport", () => {
+     }));
+   });
+ 
+-  it("fails closed when raw workspace uploads cannot be mediated", async () => {
+-    const fetch = createMediatedAgentFetch(context({}));
+-    await expect(fetch("https://host.test/internal/v1/files/upload", {
+-      method: "POST",
+-      body: new FormData(),
+-    })).rejects.toThrow("staged workspace uploads");
++  it("preserves multipart bytes through the governed HTTP client", async () => {
++    const http = vi.fn(async () => ({ ok: true as const, value: { status: 200, headers: {}, body: '' } }));
++    const fetch = createMediatedAgentFetch(context({ http }));
++    const body = new FormData();
++    body.append('file', new Blob(['content'], { type: 'text/plain' }), 'test.txt');
++    await fetch('https://host.test/internal/v1/files/upload', { method: 'POST', body });
++    expect(http).toHaveBeenCalledWith(expect.objectContaining({ body: expect.objectContaining({
++      kind: 'multipart', parts: [expect.objectContaining({ filename: 'test.txt', mimeType: 'text/plain', data: new TextEncoder().encode('content') })],
++    }) }));
+   });
+ });
+diff --git a/src/client/mediated-fetch.ts b/src/client/mediated-fetch.ts
+index 7a18841..1c2305b 100644
+--- a/src/client/mediated-fetch.ts
++++ b/src/client/mediated-fetch.ts
+@@ -35,12 +35,14 @@ export function createMediatedAgentFetch(context: TransportContext): typeof fetc
+       fail(`unsupported method ${method}`);
+     }
+     const headers = new Headers(init?.headers ?? request?.headers);
+-    const body = init?.body;
++    let body: unknown = init?.body;
+     if (body instanceof FormData) {
+-      fail("staged workspace uploads require a host file adapter");
++      const fields: Record<string, string> = {}; const parts: Array<{ name: string; filename: string; mimeType: string; data: Uint8Array }> = [];
++      for (const [name, entry] of body.entries()) { if (typeof entry === 'string') fields[name] = entry; else parts.push({ name, filename: entry.name, mimeType: entry.type, data: new Uint8Array(await entry.arrayBuffer()) }); }
++      body = { kind: 'multipart', fields, files: [], parts };
+     }
+     if (body !== undefined && body !== null &&
+-      typeof body !== "string" && !(body instanceof Uint8Array)) {
++      typeof body !== "string" && !(body instanceof Uint8Array) && !(typeof body === "object" && "kind" in body)) {
+       fail("unsupported request body");
+     }
+     const fields = Object.fromEntries(headers.entries());
+diff --git a/src/client/sdk-adapter.ts b/src/client/sdk-adapter.ts
+new file mode 100644
+index 0000000..3275c1b
+--- /dev/null
++++ b/src/client/sdk-adapter.ts
+@@ -0,0 +1,53 @@
++import { computed, defineComponent, onMounted, ref, shallowRef } from 'vue';
++import type { PluginContext, PluginResult } from '@or3/plugin-sdk';
++import type { AgentHostUiPort } from './host-ui';
++import { createAgentStagingTransport } from './staging';
++import { createMediatedAgentFetch } from './mediated-fetch';
++
++const ClientOnly = defineComponent({ setup(_props, { slots }) { const mounted = ref(false); onMounted(() => { mounted.value = true; }); return () => mounted.value ? slots.default?.() : slots.fallback?.(); } });
++function value<T>(result: PluginResult<T>): T { if (!result.ok) throw new Error(result.error.message); return result.value; }
++
++export async function createAgentSdkAdapter(context: PluginContext) {
++    context.features.require('or3-trusted-ui-kit-v1'); context.features.require('or3-trusted-host-v2');
++    const kit = context.ui.kit; if (!kit) throw new Error('Trusted UI kit unavailable');
++    const limits = value(await context.files.limits());
++    const status = await context.workspace.connections.status();
++    const panes = shallowRef<readonly { id: string; mode: string; documentId?: string }[]>([]); const activeIndex = ref(0);
++    const applyPanes = (items: readonly { id: string; app: string; recordId?: string; active: boolean }[]) => { panes.value = items.map(item => ({ id: item.id, mode: item.app, documentId: item.recordId })); activeIndex.value = Math.max(0, items.findIndex(item => item.active)); };
++    applyPanes(value(await context.panes.list()));
++    context.panes.onChange(applyPanes);
++    const toast = (input: { title: string; description?: string; color?: string }) => { context.ui.toast({ message: input.title, description: input.description, tone: input.color === 'error' ? 'danger' : input.color === 'warning' ? 'warning' : 'info' }); };
++    let vault = value(await context.secrets.get('vault'));
++    let pending = Promise.resolve();
++    const saveVault = (next: string | null) => { vault = next; pending = pending.then(async () => { const result = next === null ? await context.secrets.delete('vault') : await context.secrets.set('vault', next); if (!result.ok) toast({ title: 'Credential storage failed', description: result.error.message, color: 'error' }); }); };
++    const ui: AgentHostUiPort = {
++        components: { ...kit.components, chatComposerShell: kit.components.ChatComposerShell, chatMessage: kit.components.ChatMessage, scroll: kit.components.Scroll, ClientOnly },
++        activeTheme: kit.theme.active, icon: kit.icon, chatInputTheme: kit.chatInputTheme, limits, toast,
++        connect: { enabled: status.ok && status.value.enabled, publicUrl: status.ok ? status.value.pairingUrl : undefined, async removeEnvironment(id) { const result = await context.workspace.connections.remove(id); return new Response(null, { status: result.ok ? 200 : 400 }); } },
++        setActiveSidebarPage: async id => { value(await context.ui.sidebar.show(id)); }, closeSidebarIfMobile: () => { value(context.ui.sidebar.closeIfMobile()); },
++        panes: { items: panes, activeIndex,
++            async set(index, appId, recordId) { const pane = panes.value[index]; if (!pane) throw new Error('Pane unavailable'); value(await context.panes.open({ app: appId, data: { recordId }, target: { pane: pane.id } })); },
++            async open(appId, recordId) { value(await context.panes.open({ app: appId, data: { recordId }, target: 'new' })); },
++        },
++    };
++    const raw = value(await context.storage.get('connections'));
++    if (typeof raw === 'string') {
++        let data: { hosts?: Array<{ baseUrl: string }> } = {};
++        try { data = JSON.parse(raw); } catch { /* The persistence parser retains corrupt source bytes. */ }
++        const origins = [...new Set((Array.isArray(data?.hosts) ? data.hosts : []).flatMap(host => {
++            try { return [new URL(host.baseUrl).origin]; } catch { return []; }
++        }))];
++        if (origins.length) value(await context.network.requestAccess({ origins, purpose: 'Reconnect your saved agent hosts after upgrading.' }));
++    }
++    return {
++        ui,
++        workspaceKv: {
++            async get(workspaceId: string, _key: string) { if (workspaceId !== context.workspace.id) throw new Error('Workspace changed'); const result = value(await context.storage.get('connections')); return typeof result === 'string' ? result : null; },
++            async set(workspaceId: string, _key: string, data: string) { if (workspaceId !== context.workspace.id) throw new Error('Workspace changed'); value(await context.storage.set('connections', data)); },
++        },
++        vaultStorage: { getItem: () => vault, setItem: (_key: string, data: string) => saveVault(data), removeItem: () => saveVault(null) },
++        staging: createAgentStagingTransport(createMediatedAgentFetch(context)),
++        async beginHostVerification(baseUrl: string) { const origin = new URL(baseUrl).origin; const result = value(await context.network.requestAccess({ origins: [origin], purpose: 'Verify and connect the agent host you selected.' })); if (!result.approved.includes(origin)) throw new Error('Agent host access was declined'); return () => {}; },
++        registerCodingProfile: (profile: unknown) => context.ui.registerWorkspaceProfile(profile),
++    };
++}
+diff --git a/src/client/staging.test.ts b/src/client/staging.test.ts
+new file mode 100644
+index 0000000..1cb0b11
+--- /dev/null
++++ b/src/client/staging.test.ts
+@@ -0,0 +1,52 @@
++import { describe, expect, it, vi } from 'vitest';
++import { createAgentStagingTransport } from './staging';
++
++const host = { id: 'local-intern', baseUrl: 'http://127.0.0.1:9100' };
++const file = { id: 'file-1', kind: 'text' as const, name: 'notes.md', mimeType: 'text/markdown', sizeBytes: 7, data: new Blob(['# notes']) };
++
++describe('External Agent staging bridge', () => {
++    it('uploads into one workspace batch and releases that exact batch', async () => {
++        const requests: Array<{ path: string; init?: RequestInit }> = [];
++        const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
++            const path = new URL(String(input)).pathname;
++            requests.push({ path, init });
++            if (path.endsWith('/roots')) return Response.json({ items: [{ id: 'workspace', writable: true }] });
++            if (path.endsWith('/mkdir')) return Response.json({});
++            if (path.endsWith('/upload')) {
++                const form = init?.body as FormData;
++                expect(form.get('root_id')).toBe('workspace');
++                expect(form.get('file')).toBeInstanceOf(Blob);
++                return Response.json({ root_id: 'workspace', path: `${form.get('path')}/notes.md` });
++            }
++            if (path.endsWith('/release')) return Response.json({});
++            throw new Error(`Unexpected request ${path}`);
++        });
++        const staging = createAgentStagingTransport(fetch);
++        const staged = await staging.stageFiles(host, 'token-1', [file]);
++        expect(staged).toHaveLength(1);
++        expect(staged[0]).toMatchObject({ source: 'workspace_ref', root_id: 'workspace', name: 'notes.md' });
++        expect(staged[0]?.path).toMatch(/^\.or3-upload-[0-9]{10,}-[a-z0-9]{6}\/notes\.md$/);
++        expect(await staging.releaseStagedFiles(host, 'token-1', staged)).toEqual({ status: 'released' });
++        expect(requests.map((request) => request.path)).toEqual([
++            '/internal/v1/files/roots', '/internal/v1/files/mkdir',
++            '/internal/v1/files/upload', '/internal/v1/files/staging/release',
++        ]);
++        expect(requests.every((request) => new Headers(request.init?.headers).get('Authorization') === 'Bearer token-1')).toBe(true);
++    });
++
++    it('rejects a hostile returned path and cleans the created batch', async () => {
++        const paths: string[] = [];
++        const fetch = vi.fn(async (input: RequestInfo | URL) => {
++            const path = new URL(String(input)).pathname;
++            paths.push(path);
++            if (path.endsWith('/roots')) return Response.json({ items: [{ id: 'workspace', writable: true }] });
++            if (path.endsWith('/mkdir')) return Response.json({});
++            if (path.endsWith('/upload')) return Response.json({ root_id: 'workspace', path: '../escape/notes.md' });
++            if (path.endsWith('/release')) return Response.json({});
++            throw new Error(`Unexpected request ${path}`);
++        });
++        const staging = createAgentStagingTransport(fetch);
++        await expect(staging.stageFiles(host, 'token-1', [file])).rejects.toThrow('unsafe attachment path');
++        expect(paths.at(-1)).toBe('/internal/v1/files/staging/release');
++    });
++});
+diff --git a/src/client/staging.ts b/src/client/staging.ts
+new file mode 100644
+index 0000000..980ba67
+--- /dev/null
++++ b/src/client/staging.ts
+@@ -0,0 +1,129 @@
++const STAGING_BATCH = /^\.or3-upload-[0-9]{10,}-[a-z0-9]{6}$/u;
++const CLEANUP_FAILED = 'Temporary attachment cleanup could not be confirmed. The files are retained to protect the runner; remove the generated .or3-upload-* folder from the workspace after the failed turn if needed.';
++const CLEANUP_UNSUPPORTED = 'This host cannot release temporary attachment files yet. The files are retained to protect the runner; remove the generated .or3-upload-* folder from the workspace after the failed turn if needed.';
++
++interface AgentStagingHost { readonly id: string; readonly baseUrl: string }
++interface AgentUpload {
++    readonly id: string;
++    readonly kind: 'file' | 'image' | 'audio' | 'video' | 'text';
++    readonly name: string;
++    readonly mimeType?: string;
++    readonly sizeBytes?: number;
++    readonly data: Blob;
++}
++interface AgentStagedFile {
++    readonly id: string;
++    readonly source: 'workspace_ref' | 'local_artifact' | 'text_block';
++    readonly kind: AgentUpload['kind'];
++    readonly name: string;
++    readonly mime_type?: string;
++    readonly size_bytes?: number;
++    readonly root_id?: string;
++    readonly path?: string;
++    readonly preview?: string;
++}
++type CleanupResult = { readonly status: 'released' | 'unsupported' | 'failed'; readonly warning?: string };
++
++function stagingBaseUrl(host: AgentStagingHost): string {
++    const parsed = new URL(host.baseUrl);
++    const loopback = parsed.hostname === 'localhost' || parsed.hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/u.test(parsed.hostname);
++    if ((parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) ||
++        parsed.username || parsed.password || parsed.search || parsed.hash) {
++        throw new Error('External Agent staging host URL is not trusted');
++    }
++    return parsed.toString().replace(/\/+$/u, '');
++}
++
++function stagingBatchFromPath(path: string): string | null {
++    const [batch, name, ...extra] = path.replaceAll('\\', '/').split('/');
++    return batch && name && !extra.length && name !== '.' && name !== '..' && STAGING_BATCH.test(batch)
++        ? batch : null;
++}
++
++/** File grant implementation limited to Intern's workspace staging endpoints. */
++export function createAgentStagingTransport(fetchImpl: typeof fetch = globalThis.fetch) {
++    const request = async <T>(host: AgentStagingHost, token: string, path: string, init: RequestInit = {}): Promise<T> => {
++        if (!token.trim()) throw new Error('No credential is available for the selected host.');
++        const headers = new Headers(init.headers);
++        headers.set('Authorization', `Bearer ${token.trim()}`);
++        headers.set('Accept', 'application/json');
++        if (host.id.startsWith('or3-connect:')) headers.set('X-Or3-Auth-Method', 'paired-device');
++        const response = await fetchImpl(`${stagingBaseUrl(host)}${path}`, {
++            ...init, headers, cache: 'no-store', redirect: 'error',
++        });
++        if (!response.ok) throw Object.assign(new Error('External Agent staging request failed'), { status: response.status });
++        if (response.status === 204) return undefined as T;
++        return await response.json() as T;
++    };
++    const json = (body: unknown, signal?: AbortSignal): RequestInit => ({
++        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal,
++    });
++    const releaseBatch = async (host: AgentStagingHost, token: string, batch: string): Promise<CleanupResult> => {
++        if (!STAGING_BATCH.test(batch)) return { status: 'failed', warning: CLEANUP_FAILED };
++        try {
++            await request(host, token, '/internal/v1/files/staging/release',
++                json({ root_id: 'workspace', path: batch }, AbortSignal.timeout(3_000)));
++            return { status: 'released' };
++        } catch (error) {
++            const status = (error as { status?: number }).status;
++            return status === 403 || status === 404 || status === 405
++                ? { status: 'unsupported', warning: CLEANUP_UNSUPPORTED }
++                : { status: 'failed', warning: CLEANUP_FAILED };
++        }
++    };
++    return {
++        async stageFiles(host: AgentStagingHost, token: string, attachments: readonly AgentUpload[], signal?: AbortSignal): Promise<readonly AgentStagedFile[]> {
++            if (!attachments.length) return [];
++            const roots = await request<{ items?: Array<{ id: string; writable?: boolean }> }>(
++                host, token, '/internal/v1/files/roots', { signal });
++            const root = roots.items?.find((item) => item.id === 'workspace');
++            if (!root) throw new Error('This host does not expose a workspace for agent attachments.');
++            if (root.writable === false) throw new Error("This host's workspace is read-only, so files cannot be attached.");
++            const batch = `.or3-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
++            await request(host, token, '/internal/v1/files/mkdir', json({ root_id: 'workspace', path: '.', name: batch }, signal));
++            const staged: AgentStagedFile[] = [];
++            try {
++                for (const attachment of attachments) {
++                    const form = new FormData();
++                    form.set('root_id', 'workspace');
++                    form.set('path', batch);
++                    form.set('file', attachment.data, attachment.name);
++                    const uploaded = await request<{ root_id?: string; path?: string }>(host, token, '/internal/v1/files/upload', {
++                        method: 'POST', body: form, signal,
++                    });
++                    if ((uploaded.root_id || 'workspace') !== 'workspace') throw new Error('The host returned an unexpected attachment root.');
++                    const safeName = attachment.name.replaceAll('\\', '/').split('/').pop() || 'attachment';
++                    const path = (uploaded.path || `${batch}/${safeName}`).replaceAll('\\', '/');
++                    if (stagingBatchFromPath(path) !== batch || path.split('/')[1] !== safeName) {
++                        throw new Error('The host returned an unsafe attachment path.');
++                    }
++                    staged.push({
++                        id: `workspace:${path}`, source: 'workspace_ref', kind: attachment.kind,
++                        name: attachment.name, mime_type: attachment.mimeType,
++                        size_bytes: attachment.sizeBytes, root_id: 'workspace', path, preview: path,
++                    });
++                }
++                return staged;
++            } catch (error) {
++                const cleanup = await releaseBatch(host, token, batch);
++                if (cleanup.warning) throw new Error(`${error instanceof Error ? error.message : String(error)} ${cleanup.warning}`, { cause: error });
++                throw error;
++            }
++        },
++        async releaseStagedFiles(host: AgentStagingHost, token: string, attachments: readonly AgentStagedFile[]): Promise<CleanupResult> {
++            const batches = new Set<string>();
++            for (const attachment of attachments) {
++                if (attachment.source !== 'workspace_ref') continue;
++                const batch = attachment.path ? stagingBatchFromPath(attachment.path) : null;
++                if (attachment.root_id !== 'workspace' || !batch) return { status: 'failed', warning: CLEANUP_FAILED };
++                batches.add(batch);
++            }
++            const results = await Promise.all([...batches].map((batch) => releaseBatch(host, token, batch)));
++            const failed = results.find((result) => result.warning);
++            if (!failed) return { status: 'released' };
++            return results.some((result) => result.status === 'failed')
++                ? { status: 'failed', warning: failed.warning }
++                : { status: 'unsupported', warning: failed.warning };
++        },
++    };
++}
+diff --git a/src/client/transport.ts b/src/client/transport.ts
+index 9fc1a07..2f05e6b 100644
+--- a/src/client/transport.ts
++++ b/src/client/transport.ts
+@@ -293,10 +293,7 @@ export function parseCloudHostEnvironments(
+ 
+ export function createCloudHostReconciler(input: {
+   readonly controller: Pick<ExternalAgentController, "reconcileCloudHosts">;
+-  readonly fetch: (
+-    request: Parameters<typeof globalThis.fetch>[0],
+-    init?: Parameters<typeof globalThis.fetch>[1],
+-  ) => Promise<Response>;
++  readonly connections: import('@or3/plugin-sdk').PluginWorkspaceClient['connections'];
+   readonly getActiveWorkspaceId: () => string | null | undefined;
+   readonly isEnabled: () => boolean;
+   readonly isDisposed: () => boolean;
+@@ -328,15 +325,14 @@ export function createCloudHostReconciler(input: {
+     const controller = new AbortController();
+     requestController = controller;
+     try {
+-      const result = await input.fetch("/api/connect/environments", {
+-        credentials: "include",
+-        cache: "no-store",
+-        signal: controller.signal,
+-      });
+-      if (!result.ok) return;
+-      const response = (await result.json()) as {
+-        workspaceId?: string;
+-        environments?: unknown;
++      const result = await input.connections.list();
++      if (!result.ok) {
++        if (result.error.code === 'unsupported') return;
++        throw new Error(result.error.message);
++      }
++      const response = {
++        workspaceId,
++        environments: result.value.map(row => ({ ...row.metadata, id: row.id, name: row.label, baseUrl: row.baseUrl, accessToken: row.credential, driver: row.provider })),
+       };
+       if (
+         controller.signal.aborted ||
+diff --git a/src/core/__tests__/credentials.test.ts b/src/core/__tests__/credentials.test.ts
+index cf3c5bb..74be905 100644
+--- a/src/core/__tests__/credentials.test.ts
++++ b/src/core/__tests__/credentials.test.ts
+@@ -24,12 +24,12 @@ const crypto = webcrypto as unknown as Crypto;
+ describe("BrowserExternalAgentCredentialVault", () => {
+   it("unlocks a vault blob created by the pre-extraction core", async () => {
+     const local = storage();
+-    local.setItem(legacy.key, legacy.value);
++    local.setItem("vault", legacy.value);
+     const vault = new BrowserExternalAgentCredentialVault({ storage: local, crypto });
+     expect(vault.getStatus()).toMatchObject({ configured: true, locked: true });
+     await vault.unlock(legacy.pin);
+     expect(await vault.resolve(legacy.reference)).toBe(legacy.expected);
+-    expect(local.values.has(legacy.key)).toBe(true);
++    expect(local.values.has("vault")).toBe(true);
+   });
+ 
+   it("keeps session-only credentials out of persistent storage", async () => {
+diff --git a/src/core/__tests__/persistence.test.ts b/src/core/__tests__/persistence.test.ts
+index 8bedcae..b6b8db7 100644
+--- a/src/core/__tests__/persistence.test.ts
++++ b/src/core/__tests__/persistence.test.ts
+@@ -12,8 +12,8 @@ const host = {
+ };
+ 
+ describe("external agent persistence", () => {
+-  it("loads the exact legacy workspace KV key and writes it back without migration", async () => {
+-    const values = new Map([[`${legacy.workspaceId}:${legacy.key}`, legacy.value]]);
++  it("loads the unchanged legacy bytes from the scoped connections key", async () => {
++    const values = new Map([[`${legacy.workspaceId}:${"connections"}`, legacy.value]]);
+     const persistence = createWorkspaceExternalAgentPersistence({
+       get: async (workspaceId, key) => values.get(`${workspaceId}:${key}`) ?? null,
+       set: async (workspaceId, key, value) => {
+@@ -30,7 +30,7 @@ describe("external agent persistence", () => {
+       status: "running",
+     });
+     await lease.save(snapshot);
+-    expect(JSON.parse(values.get(`${legacy.workspaceId}:${legacy.key}`)!)).toMatchObject({
++    expect(JSON.parse(values.get(`${legacy.workspaceId}:${"connections"}`)!)).toMatchObject({
+       activeHostId: "legacy-host",
+       sessionRefs: [{ remoteSessionId: "legacy-session" }],
+     });
+diff --git a/src/core/controller.ts b/src/core/controller.ts
+index 3f80fb0..68fe9c0 100644
+--- a/src/core/controller.ts
++++ b/src/core/controller.ts
+@@ -173,7 +173,7 @@ export interface ExternalAgentControllerOptions {
+   readonly createClient: ExternalAgentClientFactory;
+   readonly detectDriver?: ExternalAgentDriverDetector;
+   readonly getWorkspaceScope: () => string | null | undefined;
+-  readonly beginHostVerification?: (baseUrl: string) => () => void;
++  readonly beginHostVerification?: (baseUrl: string) => (() => void) | Promise<() => void>;
+ }
+ 
+ export class ExternalAgentController {
+@@ -182,7 +182,7 @@ export class ExternalAgentController {
+   readonly #createClient: ExternalAgentClientFactory;
+   readonly #detectDriver?: ExternalAgentDriverDetector;
+   readonly #getWorkspaceScope: () => string | null | undefined;
+-  readonly #beginHostVerification?: (baseUrl: string) => () => void;
++  readonly #beginHostVerification?: (baseUrl: string) => (() => void) | Promise<() => void>;
+   readonly #publisher: ExternalAgentSnapshotPublisher;
+   readonly #hostRegistry = new ExternalAgentHostRegistry();
+   readonly #sessions = new ExternalAgentSessionRepository();
+@@ -418,7 +418,7 @@ export class ExternalAgentController {
+     const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
+     const token = input.token.trim();
+     if (!token) throw new Error("An access token is required");
+-    const endVerification = this.#beginHostVerification?.(baseUrl);
++    const endVerification = await this.#beginHostVerification?.(baseUrl);
+     try {
+       const credentialRef = randomId("agent-credential");
+       let temporary: ExternalAgentHost = {
+diff --git a/src/core/credentials.ts b/src/core/credentials.ts
+index 498b7dd..942ae9c 100644
+--- a/src/core/credentials.ts
++++ b/src/core/credentials.ts
+@@ -4,7 +4,7 @@ import type {
+   ExternalAgentPinCredentialVaultStatus,
+ } from "./types";
+ 
+-const STORAGE_KEY = "or3.external-agents.credentials.v1";
++const STORAGE_KEY = "vault";
+ const VAULT_VERSION = 1;
+ const PBKDF2_ITERATIONS = 600_000;
+ const VERIFIER_TEXT = "or3-external-agent-vault-v1";
+diff --git a/src/core/persistence.ts b/src/core/persistence.ts
+index 5cb46fb..5e9dac0 100644
+--- a/src/core/persistence.ts
++++ b/src/core/persistence.ts
+@@ -6,7 +6,7 @@ import type {
+   ExternalAgentSessionRef,
+ } from "./types";
+ 
+-const EXTERNAL_AGENT_CONNECTIONS_KEY = "external-agents.connections.v1";
++const EXTERNAL_AGENT_CONNECTIONS_KEY = "connections";
+ 
+ /** Host grant for the existing workspace KV key, scoped by workspace. */
+ export interface ExternalAgentWorkspaceKv {

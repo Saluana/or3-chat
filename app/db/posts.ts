@@ -12,7 +12,8 @@
  * - Rendering or formatting post content
  * - Handling document or prompt specific logic
  */
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
+
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, parseOrThrow, nextClock, getWriteTxTableNames } from './util';
@@ -23,6 +24,8 @@ import {
     type PostCreate,
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
+
+interface PostWriteScope { readonly db: Or3DB; assertCurrent(): void }
 import { changeRefCount } from './files';
 import { parseFileHashes } from './files-util';
 import { isInternalPostType } from '~~/shared/posts/visibility';
@@ -138,7 +141,9 @@ function normalizeMeta(meta: unknown): string | null | undefined {
  * Non-Goals:
  * - Does not attach files or metadata beyond the post schema.
  */
-export async function createPost(input: PostCreate): Promise<Post> {
+export async function createPost(input: PostCreate, scope?: PostWriteScope): Promise<Post> {
+    const db = scope?.db ?? getDb();
+    scope?.assertCurrent();
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.posts.create:filter:input',
@@ -159,10 +164,10 @@ export async function createPost(input: PostCreate): Promise<Post> {
         entity: toPostEntity(next),
         tableName: 'posts',
     });
-    const db = getDb();
+    scope?.assertCurrent();
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         await dbTry(
-            () => db.posts.put(next),
+            () => { scope?.assertCurrent(); return db.posts.put(next); },
             { op: 'write', entity: 'posts', action: 'create' },
             { rethrow: true }
         );
@@ -171,6 +176,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
         entity: toPostEntity(next),
         tableName: 'posts',
     });
+    scope?.assertCurrent();
     return next;
 }
 
@@ -187,7 +193,9 @@ export async function createPost(input: PostCreate): Promise<Post> {
  * Non-Goals:
  * - Does not merge partial updates.
  */
-export async function upsertPost(value: Post): Promise<void> {
+export async function upsertPost(value: Post, scope?: PostWriteScope): Promise<void> {
+    const db = scope?.db ?? getDb();
+    scope?.assertCurrent();
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.posts.upsert:filter:input',
@@ -200,7 +208,7 @@ export async function upsertPost(value: Post): Promise<void> {
     if (mutable.meta !== undefined) {
         mutable.meta = normalizeMeta(mutable.meta);
     }
-    const db = getDb();
+    scope?.assertCurrent();
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         const validated = parseOrThrow(PostSchema, filtered);
         const existing = await dbTry(() => db.posts.get(validated.id), {
@@ -217,7 +225,7 @@ export async function upsertPost(value: Post): Promise<void> {
             tableName: 'posts',
         });
         await dbTry(
-            () => db.posts.put(next),
+            () => { scope?.assertCurrent(); return db.posts.put(next); },
             { op: 'write', entity: 'posts', action: 'upsert' },
             { rethrow: true }
         );
@@ -321,9 +329,10 @@ export function searchPosts(term: string) {
  * Non-Goals:
  * - Does not remove the row permanently.
  */
-export async function softDeletePost(id: string): Promise<void> {
+export async function softDeletePost(id: string, scope?: PostWriteScope): Promise<void> {
+    const db = scope?.db ?? getDb();
+    scope?.assertCurrent();
     const hooks = useHooks();
-    const db = getDb();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
@@ -340,6 +349,7 @@ export async function softDeletePost(id: string): Promise<void> {
             id: p.id,
             tableName: 'posts',
         });
+        scope?.assertCurrent();
         await db.posts.put({
             ...p,
             deleted: true,

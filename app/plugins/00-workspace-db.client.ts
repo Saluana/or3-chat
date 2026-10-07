@@ -37,9 +37,9 @@ export default defineNuxtPlugin(async () => {
         data.value?.session === initialSession
     ) {
         const cleanupOptions: {
-            preserveExternalAgentCredentials: boolean;
+            preservePluginSecrets: boolean;
             preserveOpenRouterPkce?: boolean;
-        } = { preserveExternalAgentCredentials: true };
+        } = { preservePluginSecrets: true };
         // This page must retain the verifier created before the redirect, even
         // when the workspace session is unauthenticated. It is cleared as soon
         // as the OpenRouter exchange completes.

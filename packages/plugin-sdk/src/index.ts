@@ -11,6 +11,14 @@ export type {
     PluginStoragePage,
 } from './clients';
 export type {
+    PluginTrustedUiKitV1,
+    PluginPostsClient,
+    PluginPost,
+    PluginStoredMessage,
+    PluginMessagesClient,
+    PluginToolsClient,
+    PluginJobsClient,
+    PluginPaneSummary,
     PluginActivityClient,
     PluginActivityAction,
     PluginActivityActionInput,
@@ -172,3 +180,4 @@ export type {
     PortableHostEvent,
     PortableHostResult,
 } from './portable';
+export { getPluginServerContext, type PluginServerContext } from './server';

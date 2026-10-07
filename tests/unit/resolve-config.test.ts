@@ -1,3 +1,4 @@
+import { buildPluginSettingDefaults } from '../../server/admin/config/plugin-setting-defaults';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     buildOr3ConfigFromEnv,
@@ -53,6 +54,7 @@ describe('buildOr3ConfigFromEnv', () => {
             OR3_WORKFLOWS_SLASH_COMMANDS: 'true',
             OR3_WORKFLOWS_EXECUTION: 'true',
         });
+        expect(buildPluginSettingDefaults(config.features.workflows, { workflowSlashCommands: { enabled: false } })['or3-workflows']).toEqual({ enabled: false, editor: true, slashCommands: true, execution: true, workflowSlashEnabled: false });
         expect(config.features.workflows).toEqual({
             enabled: false,
             editor: true,

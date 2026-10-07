@@ -148,7 +148,7 @@ export function validatePluginPaneOpenInput(
             : validIdentifier(raw.instanceKey, 'pane instanceKey', PLUGIN_PANE_INSTANCE_KEY_MAX_LENGTH);
     if (instanceKey && !instanceKey.ok) return instanceKey;
     const target = raw.target ?? 'focus-or-new';
-    if (target !== 'focus-or-new' && target !== 'new' && target !== 'replace-active') {
+    if (target !== 'focus-or-new' && target !== 'new' && target !== 'replace-active' && !(target && typeof target === 'object' && paneId((target as { pane?: unknown }).pane, 'target pane').ok)) {
         return { ok: false, message: 'pane target is invalid' };
     }
     const data = validateJsonValue(raw.data, 0, { count: 0 });
@@ -168,7 +168,7 @@ export function validatePluginPaneOpenInput(
             app: app.value,
             data: data.value,
             ...(instanceKey === undefined ? {} : { instanceKey: instanceKey.value }),
-            target: target as PluginPaneOpenInput['target'],
+            target: typeof target === 'object' ? Object.freeze({ pane: (target as { pane: string }).pane }) : target as PluginPaneOpenInput['target'],
         }),
     };
 }

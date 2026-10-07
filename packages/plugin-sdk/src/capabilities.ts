@@ -1,3 +1,4 @@
+import type { Component, Ref, ComputedRef } from 'vue';
 import type {
     PluginJsonValue,
     PluginSettingsClient,
@@ -37,6 +38,9 @@ export interface PluginConnectionSummary {
     readonly provider: string;
     readonly status: 'configured' | 'missing' | 'locked' | 'unavailable';
     readonly capabilities: readonly string[];
+    readonly baseUrl?: string;
+    readonly credential?: string;
+    readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 export interface PluginEventMap {
@@ -66,6 +70,8 @@ export interface PluginWorkspaceClient {
     ): PluginRegistrationHandle;
     switch(id: string): Promise<PluginResult<{ readonly id: string }>>;
     connections: {
+        status(): Promise<PluginResult<{ enabled: boolean; pairingUrl?: string }>>;
+        remove(id: string): Promise<PluginResult<void>>;
         list(): Promise<PluginResult<readonly PluginConnectionSummary[]>>;
         manage(id: string): Promise<PluginResult<void>>;
     };
@@ -118,6 +124,7 @@ export interface PluginActionDefinition {
 
 export interface PluginToastInput {
     readonly message: string;
+    readonly description?: string;
     readonly tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
     readonly durationMs?: number;
 }
@@ -134,7 +141,18 @@ export interface PluginProgressHandle extends PluginRegistrationHandle {
     update(input: { readonly value?: number; readonly label?: string }): PluginResult<void>;
 }
 
+export interface PluginTrustedUiKitV1 {
+    readonly components: Readonly<Record<'UAlert' | 'UBadge' | 'UButton' | 'UCheckbox' | 'UDropdownMenu' | 'UFieldGroup' | 'UIcon' | 'UInput' | 'UModal' | 'UPopover' | 'USelectMenu' | 'UTabs' | 'UTextarea' | 'UTooltip' | 'ChatComposerShell' | 'MessageAttachmentsGallery' | 'StreamMarkdown' | 'Scroll' | 'SidebarEmptyState' | 'SidebarGroupHeader', Component> & { ChatMessage: ComputedRef<Component> }>;
+    icon(token: string): ComputedRef<string>;
+    readonly theme: { readonly active: Ref<string>; readonly activeComponents: Ref<Record<string, Component>>; getTheme(name: string): { customComponents?: Record<string, string> } | null; overrides(input: { component: string; context: string; identifier: string; isNuxtUI: boolean }): Ref<Record<string, unknown>> };
+    chatInputTheme(closeIcon: Ref<string>): Readonly<Record<'sendButtonProps' | 'stopButtonProps' | 'attachButtonProps' | 'settingsButtonProps' | 'mainContainerProps' | 'dragOverlayProps', Ref<Record<string, unknown>>>>;
+    readonly responsive: { readonly isMobile: Ref<boolean> };
+    highlighter(): Promise<unknown>;
+}
 export interface PluginUiClient {
+    readonly kit?: PluginTrustedUiKitV1;
+    readonly sidebar: { show(pageId: string): Promise<PluginResult<void>>; closeIfMobile(): PluginResult<void> };
+    registerWorkspaceProfile(profile: unknown): PluginRegistrationHandle;
     registerSidebar(definition: PluginSidebarDefinition): PluginRegistrationHandle;
     registerPane(definition: PluginPaneDefinition): PluginRegistrationHandle;
     registerCard(definition: PluginCardDefinition): PluginRegistrationHandle;
@@ -144,7 +162,7 @@ export interface PluginUiClient {
     progress(input: { readonly label: string; readonly max?: number }): PluginResult<PluginProgressHandle>;
 }
 
-export type PluginPaneTarget = 'focus-or-new' | 'new' | 'replace-active';
+export type PluginPaneTarget = 'focus-or-new' | 'new' | 'replace-active' | { readonly pane: string };
 
 export interface PluginPaneOpenInput {
     readonly app: string;
@@ -159,7 +177,10 @@ export interface PluginPaneRef {
     readonly instanceKey: string;
 }
 
+export interface PluginPaneSummary { readonly id: string; readonly app: string; readonly recordId?: string; readonly active: boolean }
 export interface PluginPanesClient {
+    list(): Promise<PluginResult<readonly PluginPaneSummary[]>>;
+    onChange(listener: (panes: readonly PluginPaneSummary[]) => void): PluginRegistrationHandle;
     open(input: PluginPaneOpenInput): Promise<PluginResult<PluginPaneRef>>;
     focus(id: string): Promise<PluginResult<void>>;
     close(id: string): Promise<PluginResult<void>>;
@@ -199,6 +220,8 @@ export interface PluginModelInfo {
     readonly id: string;
     readonly label: string;
     readonly priced: boolean;
+    readonly favorite?: boolean;
+    readonly metadata?: Readonly<Record<string, unknown>>;
     readonly promptPerMillion?: number | null;
     readonly completionPerMillion?: number | null;
 }
@@ -225,6 +248,9 @@ export interface PluginCompletion {
 }
 
 export interface PluginAiClient {
+    provider(): Promise<PluginResult<{ readonly client: unknown; readonly apiKey: string; readonly headers: Readonly<Record<string, string>> }>>;
+    requestSignIn(): PluginResult<void>;
+    onModelsChange(listener: () => void): PluginRegistrationHandle;
     models(): Promise<PluginResult<PluginModelCatalog>>;
     complete(input: {
         readonly model: string;
@@ -271,6 +297,7 @@ export interface PluginFileRead extends AsyncIterable<Uint8Array> {
 }
 
 export interface PluginFilesClient {
+    limits(): Promise<PluginResult<{ maxFilesPerMessage: number; maxFileSizeBytes: number }>>;
     pick(options?: {
         readonly multiple?: boolean;
         readonly accept?: readonly string[];
@@ -290,7 +317,7 @@ export type PluginHttpBody =
     | string
     | Uint8Array
     | PluginJsonValue
-    | { readonly kind: 'multipart'; readonly fields: Readonly<Record<string, string>>; readonly files: readonly PluginFileRef[] };
+    | { readonly kind: 'multipart'; readonly fields: Readonly<Record<string, string>>; readonly files: readonly PluginFileRef[]; readonly parts?: readonly { name: string; filename: string; mimeType: string; data: Uint8Array }[] };
 
 export interface PluginHttpResponse {
     readonly status: number;
@@ -332,6 +359,8 @@ export interface PluginStream {
 }
 
 export interface PluginNetworkClient {
+    requestAccess(input: { readonly origins: readonly string[]; readonly purpose: string }): Promise<PluginResult<{ readonly approved: readonly string[] }>>;
+    revokeAccess(origin: string): Promise<PluginResult<void>>;
     stream(input: {
         readonly url: string;
         readonly destination: string;
@@ -362,6 +391,9 @@ export interface PluginChatRef {
 }
 
 export interface PluginChatClient {
+    readonly messages: PluginMessagesClient;
+    readonly composer: { prefill(text: string, paneId?: string): Promise<PluginResult<void>> };
+    readonly send: { markHandled(): PluginResult<void> };
     create(input?: { readonly title?: string }): Promise<PluginResult<PluginChatRef>>;
     open(id: string): Promise<PluginResult<PluginChatRef>>;
     appendMessage(
@@ -481,7 +513,38 @@ export interface PluginActivityClient {
     registerSource(input: PluginActivitySource): PluginRegistrationHandle;
 }
 
+export interface PluginPost { readonly id: string; readonly postType: string; readonly title: string; readonly content: string; readonly meta?: unknown; readonly created_at: number; readonly updated_at: number }
+export interface PluginPostsClient {
+    get(id: string): Promise<PluginResult<PluginPost | null>>;
+    list(input: { postType: string; limit?: number }): Promise<PluginResult<readonly PluginPost[]>>;
+    create(input: { postType: string; title: string; content?: string; meta?: unknown }): Promise<PluginResult<{ id: string }>>;
+    update(id: string, patch: { title?: string; content?: string; meta?: unknown }): Promise<PluginResult<void>>;
+    delete(id: string): Promise<PluginResult<void>>;
+    onChange(listener: () => void): PluginRegistrationHandle;
+}
+export interface PluginStoredMessage { readonly id: string; readonly threadId: string; readonly streamId: string; readonly role: string; readonly content: string; readonly data: unknown; readonly createdAt: number; readonly updatedAt: number; readonly clock: number; readonly fileIds: readonly string[] }
+export interface PluginMessagesClient {
+    get(id: string): Promise<PluginResult<PluginStoredMessage | null>>;
+    list(input: { type: string }): Promise<PluginResult<readonly PluginStoredMessage[]>>;
+    listByThread(threadId: string, input?: { type?: string }): Promise<PluginResult<readonly PluginStoredMessage[]>>;
+    upsert(input: { id: string; threadId: string; streamId: string; data: unknown; pending: boolean }): Promise<PluginResult<void>>;
+    updateData(updates: readonly { id: string; ifClock: number; ifData: unknown; data: unknown; pending: boolean }[]): Promise<PluginResult<void>>;
+    attachFile(id: string, file: PluginFileRef): Promise<PluginResult<void>>;
+}
+export interface PluginToolsClient {
+    list(): Promise<PluginResult<readonly { definition: unknown; enabled: boolean; workflowPolicy?: unknown }[]>>;
+    execute(name: string, args: unknown, options?: { signal?: AbortSignal }): Promise<PluginResult<string>>;
+}
+export interface PluginJobsClient {
+    available(): Promise<PluginResult<boolean>>;
+    track(input: { jobId: string; threadId: string; messageId: string }): Promise<PluginResult<void>>;
+    abort(jobId: string): Promise<PluginResult<void>>;
+    status(jobId: string): Promise<PluginResult<string>>;
+}
 export interface PluginHostClients {
+    readonly posts: PluginPostsClient;
+    readonly tools: PluginToolsClient;
+    readonly jobs: PluginJobsClient;
     readonly ai: PluginAiClient;
     readonly ui: PluginUiClient;
     readonly panes: PluginPanesClient;
@@ -538,16 +601,23 @@ export function createUnsupportedPluginClients(input: {
         onChange: () => unsupportedHandle('workspace.onChange'),
         switch: async () => unsupported('workspace.switch'),
         connections: {
+            status: async () => unsupported('workspace.connections.status'), remove: async () => unsupported('workspace.connections.remove'),
             list: async () => unsupported('workspace.connections.list'),
             manage: async () => unsupported('workspace.connections.manage'),
         },
     };
     return {
+        posts: { get: async () => unsupported('posts.get'), list: async () => unsupported('posts.list'), create: async () => unsupported('posts.create'), update: async () => unsupported('posts.update'), delete: async () => unsupported('posts.delete'), onChange: () => unsupportedHandle('posts.onChange') },
+        tools: { list: async () => unsupported('tools.list'), execute: async () => unsupported('tools.execute') },
+        jobs: { available: async () => unsupported('jobs.available'), track: async () => unsupported('jobs.track'), abort: async () => unsupported('jobs.abort'), status: async () => unsupported('jobs.status') },
         ai: {
+            provider: async () => unsupported('ai.provider'), requestSignIn: () => unsupported('ai.requestSignIn'), onModelsChange: () => unsupportedHandle('ai.onModelsChange'),
             models: async () => unsupported('ai.models'),
             complete: async () => unsupported('ai.complete'),
         },
         ui: {
+            sidebar: { show: async () => unsupported('ui.sidebar.show'), closeIfMobile: () => unsupported('ui.sidebar.closeIfMobile') },
+            registerWorkspaceProfile: () => unsupportedHandle('ui.registerWorkspaceProfile'),
             registerSidebar: () => unsupportedHandle('ui.registerSidebar'),
             registerPane: () => unsupportedHandle('ui.registerPane'),
             registerCard: () => unsupportedHandle('ui.registerCard'),
@@ -557,6 +627,7 @@ export function createUnsupportedPluginClients(input: {
             progress: () => unsupported('ui.progress'),
         },
         panes: {
+            list: async () => unsupported('panes.list'), onChange: () => unsupportedHandle('panes.onChange'),
             open: async () => unsupported('panes.open'),
             focus: async () => unsupported('panes.focus'),
             close: async () => unsupported('panes.close'),
@@ -566,6 +637,8 @@ export function createUnsupportedPluginClients(input: {
             run: async () => unsupported('commands.run'),
         },
         chat: {
+            messages: { get: async () => unsupported('chat.messages.get'), list: async () => unsupported('chat.messages.list'), listByThread: async () => unsupported('chat.messages.listByThread'), upsert: async () => unsupported('chat.messages.upsert'), updateData: async () => unsupported('chat.messages.updateData'), attachFile: async () => unsupported('chat.messages.attachFile') },
+            composer: { prefill: async () => unsupported('chat.composer.prefill') }, send: { markHandled: () => unsupported('chat.send.markHandled') },
             create: async () => unsupported('chat.create'),
             open: async () => unsupported('chat.open'),
             appendMessage: async () => unsupported('chat.appendMessage'),
@@ -581,6 +654,7 @@ export function createUnsupportedPluginClients(input: {
             unlock: async () => unsupported('secrets.unlock'),
         },
         files: {
+            limits: async () => unsupported('files.limits'),
             pick: async () => unsupported('files.pick'),
             read: async () => unsupported('files.read'),
             write: async () => unsupported('files.write'),
@@ -590,6 +664,7 @@ export function createUnsupportedPluginClients(input: {
             request: async () => unsupported('http.request'),
         },
         network: {
+            requestAccess: async () => unsupported('network.requestAccess'), revokeAccess: async () => unsupported('network.revokeAccess'),
             stream: async () => unsupported('network.stream'),
         },
         activity: {

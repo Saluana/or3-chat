@@ -36,7 +36,7 @@ describe('trusted tier grant qualification', () => {
 
     it('refuses a grant that is still unqualified', () => {
         const result = verifyPluginV2Compatibility({
-            manifest: manifest('trusted-host', ['ui.toast']),
+            manifest: manifest('trusted-host', ['ui.confirm']),
             host: OR3_PLUGIN_V2_HOST_CAPABILITIES,
             dependencies: [],
         });

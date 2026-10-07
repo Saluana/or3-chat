@@ -1,4 +1,5 @@
 export type PluginErrorCode =
+    | 'not-signed-in'
     | 'permission-denied'
     | 'not-found'
     | 'invalid-input'

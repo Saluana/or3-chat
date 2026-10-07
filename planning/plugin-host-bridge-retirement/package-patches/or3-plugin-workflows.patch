@@ -1,0 +1,665 @@
+diff --git a/README.md b/README.md
+index c4b4ea9..9cc5e8e 100644
+--- a/README.md
++++ b/README.md
+@@ -2,12 +2,12 @@
+ 
+ Trusted host plugin for the OR3 workflow editor and chat execution. It keeps the existing `workflow-entry` post type, `workflow-execution` message discriminator, and `or3-workflow-saved`/`or3-workflow-autosave` local-storage keys. No data migration is intended.
+ 
+-The package owns its pane, sidebar, message renderer, editor extensions, send controller, activity source, model sync, image caption decisions, generated-image routing, background execution engine, workflow catalog, run journal, and HITL coordination. The host supplies guarded ports for storage, model and tool access, authentication, sync, background jobs, and notifications. Installed Workflows UI and server routes are served from this package; disabling it removes its UI contributions.
++The package owns its pane, sidebar, message renderer, editor extensions, send controller, activity source, model sync, image caption decisions, generated-image routing, background execution engine, workflow catalog, run journal, and HITL coordination. The public SDK supplies scoped posts and messages, AI provider/model access, enabled tools, background jobs and lifecycle hooks. Installed Workflows UI and server routes are served from this package; disabling it removes its UI contributions.
+ 
+ The host's workflow settings govern package activation, slash commands, and execution. Stop cancels the selected active run. When activated after a reload, the package marks unfinished foreground runs as interrupted so their cards can resume from a checkpoint. Message persistence stays bound to the workspace that activated the plugin.
+ 
+-The package interprets raw, type-scoped host records in `src/core/workflowLoad.ts`: metadata validation, lookup/search, interrupted-run decisions, Activity records, and conversation-history projection. Startup reconciliation uses conditional message clocks so it cannot overwrite a concurrently updated run. Message renderers and editor extensions register through the SDK contribution mechanism. The host retains the older private callbacks for already-installed artifacts; the new client uses `records` instead. Model/tool execution, background jobs, generated-image persistence, and shell UI still use the temporary host bridge.
++The package interprets raw, type-scoped host records in `src/core/workflowLoad.ts`: metadata validation, lookup/search, interrupted-run decisions, Activity records, and conversation-history projection. Startup reconciliation uses conditional message clocks so it cannot overwrite a concurrently updated run. Message renderers and editor extensions register through the SDK contribution mechanism. The SDK adapter supplies raw records; interpretation remains in the package. The pane and renderer register before interrupted-run reconciliation. Shell UI comes from `ui.kit`; generated images use `files.write` and `chat.messages.attachFile`. Version 0.2.0 requires SDK 2.1 and `or3-trusted-ui-kit-v1`, `or3-trusted-host-v2`, and `or3-trusted-chat-records-v1`. The `ai.provider` grant exposes the configured raw API key and must be reviewed accordingly. Server handlers retrieve dispatcher-authorized services through `getPluginServerContext`.
+ 
+-Run `bun run validate`, `bun run typecheck`, `bun run build`, `bun run test:routes`, `bun run test:continuity`, and `bun run pack` from this directory before installing a package artifact. The route test executes the built background and HITL handlers with local host ports and no model request. The continuity fixture loads existing workflow and execution rows to verify stop and retry. To create an installable ZIP, run `bun node_modules/@or3/plugin-sdk/bin/or3-plugin.mjs pack . --archive /absolute/path/workflows.zip` after building. The `.or3-sdk` directory is the pinned source dependency used for clean builds; the plugin archive excludes it.
++Run `bun run validate`, `bun run typecheck`, `bun run build`, `bun run test:routes`, `bun run test:continuity`, and `bun run pack` from this directory before installing a package artifact. The route test executes the built background and HITL handlers with local host ports and no model request. The continuity fixture loads existing workflow and execution rows to verify stop and retry. To create an installable ZIP, run `bun node_modules/@or3/plugin-sdk/bin/or3-plugin.mjs pack . --archive /absolute/path/workflows.zip` after building. Development uses the sibling SDK package; runtime archives use the host SDK external and exclude development dependencies.
+ 
+-This checkout is pinned at package version `0.1.1`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
++This checkout is pinned at package version `0.2.0`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
+diff --git a/bun.lock b/bun.lock
+index d6f957a..8e43977 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -15,15 +15,18 @@
+         "or3-workflow-vue": "0.1.6",
+       },
+       "devDependencies": {
+-        "@or3/plugin-sdk": "file:./.or3-sdk",
++        "@or3/plugin-sdk": "file:../or3-chat/packages/plugin-sdk",
+         "typescript": "5.9.3",
+-        "vue": "3.5.40",
++        "vue": "3.5.43",
+         "vue-tsc": "2.2.12",
+       },
+       "peerDependencies": {
+-        "@or3/plugin-sdk": "^2.0.0",
++        "@or3/plugin-sdk": "^2.1.0",
+         "vue": "^3.5.0",
+       },
++      "optionalPeers": [
++        "@or3/plugin-sdk",
++      ],
+     },
+   },
+   "packages": {
+@@ -45,7 +48,7 @@
+ 
+     "@openrouter/sdk": ["@openrouter/sdk@1.3.32", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-B6Y3KfevGNHdeohV+Qng+SyFcitFMTdWn0sLsCA+yUouyFPUJrgwDVuQFEueXIMgxtqmTAzHi7uL6N25IoHLnw=="],
+ 
+-    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:.or3-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
++    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/plugin-sdk", { "devDependencies": { "@or3/plugin-sdk": "file:../or3-chat/packages/plugin-sdk", "typescript": "^5.9.3" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
+ 
+     "@tiptap/core": ["@tiptap/core@3.31.3", "", { "peerDependencies": { "@tiptap/pm": "3.31.3" } }, "sha512-Cz50pvciQrxdSxgTkHOVz0uD0Yl/8Xt0QatGD6ILm47jW8EzyHR9RkUGs/D5IqzXKuVPntfw1ttaT926vXfiRg=="],
+ 
+@@ -75,27 +78,27 @@
+ 
+     "@vue-flow/minimap": ["@vue-flow/minimap@1.5.4", "", { "dependencies": { "d3-selection": "^3.0.0", "d3-zoom": "^3.0.0" }, "peerDependencies": { "@vue-flow/core": "^1.23.0", "vue": "^3.3.0" } }, "sha512-l4C+XTAXnRxsRpUdN7cAVFBennC1sVRzq4bDSpVK+ag7tdMczAnhFYGgbLkUw3v3sY6gokyWwMl8CDonp8eB2g=="],
+ 
+-    "@vue/compiler-core": ["@vue/compiler-core@3.5.40", "", { "dependencies": { "@babel/parser": "^7.29.7", "@vue/shared": "3.5.40", "entities": "^7.0.1", "estree-walker": "^2.0.2", "source-map-js": "^1.2.1" } }, "sha512-39E8IgOhTbVDnoJFMKc2DvYnypcZwUqgUhQkccva/0m6FUwtIKSGV7n1hpVmYcFaoRAwf9pBcwnKlCEsN63ZEQ=="],
++    "@vue/compiler-core": ["@vue/compiler-core@3.5.43", "", { "dependencies": { "@babel/parser": "^7.29.8", "@vue/shared": "3.5.43", "entities": "^7.0.1", "estree-walker": "^2.0.2", "source-map-js": "^1.2.1" } }, "sha512-zdiLhnbe1QQqgDT8xZMpNmyqZ3qlI+/Q/FHQco57Kwl/b05HhCzN6eVGN9QU9rbga4CrS0H5SYY8VGHZCt/1Hg=="],
+ 
+-    "@vue/compiler-dom": ["@vue/compiler-dom@3.5.40", "", { "dependencies": { "@vue/compiler-core": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-pwkx4vqlqOspFstrcmzwkKLePVMD3PT65imRzLhanU2V1Fj4K13g6OXjanOyzw3aTAuRk84BOmY8f3rEHqPaVA=="],
++    "@vue/compiler-dom": ["@vue/compiler-dom@3.5.43", "", { "dependencies": { "@vue/compiler-core": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-PEZoAk3NQmsn/ejMzSOCyTYqwGqczrWm70PuhBKjjv1+TCoQAaO/zOqNwjV+honlNstT5ILxtc+8r8UUfj+iEQ=="],
+ 
+-    "@vue/compiler-sfc": ["@vue/compiler-sfc@3.5.40", "", { "dependencies": { "@babel/parser": "^7.29.7", "@vue/compiler-core": "3.5.40", "@vue/compiler-dom": "3.5.40", "@vue/compiler-ssr": "3.5.40", "@vue/shared": "3.5.40", "estree-walker": "^2.0.2", "magic-string": "^0.30.21", "postcss": "^8.5.19", "source-map-js": "^1.2.1" } }, "sha512-gIf497P4kpuALcvs5n3AEg1Vdn0pSY4XbjASIfHNYF1/MP3T2Mf2STERTubysBxCRxzJGJYtF/O7vwJrxFB3Vw=="],
++    "@vue/compiler-sfc": ["@vue/compiler-sfc@3.5.43", "", { "dependencies": { "@babel/parser": "^7.29.8", "@vue/compiler-core": "3.5.43", "@vue/compiler-dom": "3.5.43", "@vue/compiler-ssr": "3.5.43", "@vue/shared": "3.5.43", "estree-walker": "^2.0.2", "magic-string": "^0.30.21", "postcss": "^8.5.28", "source-map-js": "^1.2.1" } }, "sha512-FCbrG3XNCRl+js3huuKx4IVHBLTvMkJhVepjbxSPu1gn4yWLaYtGNQdjJGZaMytXB6qb76qQDDmDSLy/vkmleQ=="],
+ 
+-    "@vue/compiler-ssr": ["@vue/compiler-ssr@3.5.40", "", { "dependencies": { "@vue/compiler-dom": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-rrE5xiXG663+vHCHa3J9p2z5OcBRjXmoqenprJxAFQxg5pSshzeBiCE6pu46axapRJ2Adk0YDA2BRZVjiHXnhg=="],
++    "@vue/compiler-ssr": ["@vue/compiler-ssr@3.5.43", "", { "dependencies": { "@vue/compiler-dom": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-GF62orf7KiJX9RqrHNGrYBudsQGD0OhJ5nDs90O8UiDuS40+YMYomiXu6w6EuvtXuRDc3MSNis3EaaSKAVSWpg=="],
+ 
+     "@vue/compiler-vue2": ["@vue/compiler-vue2@2.7.16", "", { "dependencies": { "de-indent": "^1.0.2", "he": "^1.2.0" } }, "sha512-qYC3Psj9S/mfu9uVi5WvNZIzq+xnXMhOwbTFKKDD7b1lhpnn71jXSFdTQ+WsIEk0ONCd7VV2IMm7ONl6tbQ86A=="],
+ 
+     "@vue/language-core": ["@vue/language-core@2.2.12", "", { "dependencies": { "@volar/language-core": "2.4.15", "@vue/compiler-dom": "^3.5.0", "@vue/compiler-vue2": "^2.7.16", "@vue/shared": "^3.5.0", "alien-signals": "^1.0.3", "minimatch": "^9.0.3", "muggle-string": "^0.4.1", "path-browserify": "^1.0.1" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-IsGljWbKGU1MZpBPN+BvPAdr55YPkj2nB/TBNGNC32Vy2qLG25DYu/NBN2vNtZqdRbTRjaoYrahLrToim2NanA=="],
+ 
+-    "@vue/reactivity": ["@vue/reactivity@3.5.40", "", { "dependencies": { "@vue/shared": "3.5.40" } }, "sha512-B7ot9UlUZOi1zbq61/LvE88ZLTV8IlajTdiZTAEiDQgrnIMIZoPr9kGw0Zw46ObW62O9+H/Be3kMbfb7kYPQZA=="],
++    "@vue/reactivity": ["@vue/reactivity@3.5.43", "", { "dependencies": { "@vue/shared": "3.5.43" } }, "sha512-G/c9GyOZNI2jVaaS6OX1EF1SSFSv7H0ERqNTl4+DTFMlZmB5eVAB53aLQNam/7NL2NPtaDD7RdVrzf8uJzMuOA=="],
+ 
+-    "@vue/runtime-core": ["@vue/runtime-core@3.5.40", "", { "dependencies": { "@vue/reactivity": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-KAZLweuZ6uUJPK1PMSQPgBU5gCjgrrfjUhSglmU9NhH+Zjepa8cnwSydPWDWHDwOgY4g3VcZ+PljbiHlURNCbw=="],
++    "@vue/runtime-core": ["@vue/runtime-core@3.5.43", "", { "dependencies": { "@vue/reactivity": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-hU6U6VnVhBGQDpvlnnDlIB8ZGJBiOcgk2lh/0InltHiz3D8oSkluvuvY+do1G2H3+udeKFsmaBlgVYP7gXQzEw=="],
+ 
+-    "@vue/runtime-dom": ["@vue/runtime-dom@3.5.40", "", { "dependencies": { "@vue/reactivity": "3.5.40", "@vue/runtime-core": "3.5.40", "@vue/shared": "3.5.40", "csstype": "^3.2.3" } }, "sha512-ZfrX8ssZQds900L9pr8AuK05ddnMsR4MPMZr8cPN9GoqoPWcXLhjvvbIA2SMv+7a97sJ1vv9pj/zxK0Cq/eEFQ=="],
++    "@vue/runtime-dom": ["@vue/runtime-dom@3.5.43", "", { "dependencies": { "@vue/reactivity": "3.5.43", "@vue/runtime-core": "3.5.43", "@vue/shared": "3.5.43", "csstype": "^3.2.3" } }, "sha512-Bb2Jc0YjjJdMt1SJmb9b2L/IWd3I8lIT9x9eS/xvvP9CiVgna0ffua74xKRmt4/uSJ+0r4iN8ex1jrqkhQGWQw=="],
+ 
+-    "@vue/server-renderer": ["@vue/server-renderer@3.5.40", "", { "dependencies": { "@vue/compiler-ssr": "3.5.40", "@vue/runtime-dom": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-XNJym9WpevhTVt1HuwOrCRJ5Q+9z4BjTMrDtjTrvx74SmUll8spNTw6whWJa9mEkO4PKn5TihI/bm/8ds2QVJw=="],
++    "@vue/server-renderer": ["@vue/server-renderer@3.5.43", "", { "dependencies": { "@vue/compiler-ssr": "3.5.43", "@vue/runtime-dom": "3.5.43", "@vue/shared": "3.5.43" } }, "sha512-l2Ygjv9NehV94PSBxNWsAHC0j/eIIKbn92mBuWXAPGLnn6HfJ6MH5ubsd+Nk0YoZ5FRuxWI1P2VSoh+dbPQhCQ=="],
+ 
+-    "@vue/shared": ["@vue/shared@3.5.40", "", {}, "sha512-WxnBtruIqOoV3rA4jeKDWzrYI5h7Cp4+pjwDi8kWGHz+IslhiN+wguLVVhtv2l8VoU02rzDCVfDjgCl1lNpZVg=="],
++    "@vue/shared": ["@vue/shared@3.5.43", "", {}, "sha512-uksS7YGMR5NZyr4JNq0Rp+QyLns0ueaz20KwzIPW9R0LH1Vnt4E+XUM29PNseEbf1www2gOuhuDi5AKOIXag9Q=="],
+ 
+     "@vueuse/core": ["@vueuse/core@14.3.0", "", { "dependencies": { "@types/web-bluetooth": "^0.0.21", "@vueuse/metadata": "14.3.0", "@vueuse/shared": "14.3.0" }, "peerDependencies": { "vue": "^3.5.0" } }, "sha512-aHfz47g0ZhMtTVHmIzMVpJy8ePhhOy68GY5bv110+5DVtZ+W7BsOx+m61UNQqfrWyPztIHIanWa3E2tib3NFIw=="],
+ 
+@@ -201,7 +204,7 @@
+ 
+     "vscode-uri": ["vscode-uri@3.2.0", "", {}, "sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg=="],
+ 
+-    "vue": ["vue@3.5.40", "", { "dependencies": { "@vue/compiler-dom": "3.5.40", "@vue/compiler-sfc": "3.5.40", "@vue/runtime-dom": "3.5.40", "@vue/server-renderer": "3.5.40", "@vue/shared": "3.5.40" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-+8PJ4SJXdn/cHGImF4CKdxlWHIN5Dkt7DoufRREM6h6uVCx2m7QxgcEQmmzyOK8A9mcafg7sFbJFYsdFVubTig=="],
++    "vue": ["vue@3.5.43", "", { "dependencies": { "@vue/compiler-dom": "3.5.43", "@vue/compiler-sfc": "3.5.43", "@vue/runtime-dom": "3.5.43", "@vue/server-renderer": "3.5.43", "@vue/shared": "3.5.43" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-o5qZoksdnjIKvW1srZ3ab7pcDNYAerBjRe54D0LBLfRdCYFrSgBHVXokMas35czQc0//lmx4/tuY4ZNQ+Rf2Ng=="],
+ 
+     "vue-demi": ["vue-demi@0.14.10", "", { "peerDependencies": { "@vue/composition-api": "^1.0.0-rc.1", "vue": "^3.0.0-0 || ^2.6.0" }, "optionalPeers": ["@vue/composition-api"], "bin": { "vue-demi-fix": "bin/vue-demi-fix.js", "vue-demi-switch": "bin/vue-demi-switch.js" } }, "sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg=="],
+ 
+@@ -211,12 +214,20 @@
+ 
+     "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+ 
++    "@or3/plugin-sdk/@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/or3-chat/packages/plugin-sdk", {}],
++
+     "@vue-flow/core/@vueuse/core": ["@vueuse/core@10.11.1", "", { "dependencies": { "@types/web-bluetooth": "^0.0.20", "@vueuse/metadata": "10.11.1", "@vueuse/shared": "10.11.1", "vue-demi": ">=0.14.8" } }, "sha512-guoy26JQktXPcz+0n3GukWIy/JDNKti9v6VEMu6kV2sYBsWuGiTU8OWdg+ADfUbHg3/3DlqySDe7JmdHrktiww=="],
+ 
++    "@vue/language-core/@vue/compiler-dom": ["@vue/compiler-dom@3.5.40", "", { "dependencies": { "@vue/compiler-core": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-pwkx4vqlqOspFstrcmzwkKLePVMD3PT65imRzLhanU2V1Fj4K13g6OXjanOyzw3aTAuRk84BOmY8f3rEHqPaVA=="],
++
++    "@vue/language-core/@vue/shared": ["@vue/shared@3.5.40", "", {}, "sha512-WxnBtruIqOoV3rA4jeKDWzrYI5h7Cp4+pjwDi8kWGHz+IslhiN+wguLVVhtv2l8VoU02rzDCVfDjgCl1lNpZVg=="],
++
+     "@vue-flow/core/@vueuse/core/@types/web-bluetooth": ["@types/web-bluetooth@0.0.20", "", {}, "sha512-g9gZnnXVq7gM7v3tJCWV/qw7w+KeOlSHAhgF9RytFyifW6AF61hdT2ucrYhPq9hLs5JIryeupHV3qGk95dH9ow=="],
+ 
+     "@vue-flow/core/@vueuse/core/@vueuse/metadata": ["@vueuse/metadata@10.11.1", "", {}, "sha512-IGa5FXd003Ug1qAZmyE8wF3sJ81xGLSqTqtQ6jaVfkeZ4i5kS2mwQF61yhVqojRnenVew5PldLyRgvdl4YYuSw=="],
+ 
+     "@vue-flow/core/@vueuse/core/@vueuse/shared": ["@vueuse/shared@10.11.1", "", { "dependencies": { "vue-demi": ">=0.14.8" } }, "sha512-LHpC8711VFZlDaYUXEBbFBCQ7GS3dVU9mjOhhMhXP6txTV4EhYQg/KGnQuvt/sPAtoUKq7VVUnL6mVtFoL42sA=="],
++
++    "@vue/language-core/@vue/compiler-dom/@vue/compiler-core": ["@vue/compiler-core@3.5.40", "", { "dependencies": { "@babel/parser": "^7.29.7", "@vue/shared": "3.5.40", "entities": "^7.0.1", "estree-walker": "^2.0.2", "source-map-js": "^1.2.1" } }, "sha512-39E8IgOhTbVDnoJFMKc2DvYnypcZwUqgUhQkccva/0m6FUwtIKSGV7n1hpVmYcFaoRAwf9pBcwnKlCEsN63ZEQ=="],
+   }
+ }
+diff --git a/client.mjs b/client.mjs
+index 3a9f87a..e4ef245 100644
+--- a/client.mjs
++++ b/client.mjs
+@@ -1,3 +1,4 @@
++import { createWorkflowSdkAdapter } from './src/client/sdk-adapter.mjs';
+ import { defineOr3Plugin } from '@or3/plugin-sdk';
+ import { nextTick } from 'vue';
+ import manifest from './or3.manifest.json' with { type: 'json' };
+@@ -19,57 +20,13 @@ import '@vue-flow/core/dist/theme-default.css';
+ import 'or3-workflow-vue/style.css';
+ import './src/client/styles/workflow-theme-bridge.css';
+ 
+-function requireHostIntegrations(context) {
+-    const integrations = context.ui?.workflowHostIntegrations;
+-    const sendMethods = [
+-        'getApiKey', 'requestApiKeyLogin', 'upsertWorkflowMessage',
+-        'markChatSendHandled', 'emitWorkflowState', 'emitNodeComplete',
+-        'emitRunStart', 'emitRunComplete', 'canStartBackground', 'getModelCatalog', 'startBackground',
+-        'trackBackground', 'abortBackground', 'backgroundStatus',
+-        'loadModelCatalog', 'completeCaption', 'respondBackgroundHitl',
+-        'reportError', 'notify',
+-    ];
+-    const executionMethods = [
+-        'toolRegistry', 'createOpenRouterClient', 'persistGeneratedImage',
+-    ];
+-    const uiTags = [
+-        'UBadge', 'UButton', 'UDropdownMenu', 'UFieldGroup', 'UIcon',
+-        'UInput', 'UModal', 'UPopover', 'UTabs', 'UTextarea', 'UTooltip',
+-    ];
+-    if (
+-        !integrations ||
+-        !integrations.ports ||
+-        !integrations.ports.uiComponents ||
+-        uiTags.some((name) => !integrations.ports.uiComponents[name]) ||
+-        typeof integrations.ports.getPostsApi !== 'function' ||
+-        typeof integrations.ports.clearWorkflowPanes !== 'function' ||
+-        !integrations.records?.posts ||
+-        !integrations.records?.messages ||
+-        ['get', 'list'].some((name) => typeof integrations.records.posts[name] !== 'function') ||
+-        ['get', 'list', 'listByThread', 'updateData'].some((name) => typeof integrations.records.messages[name] !== 'function') ||
+-        !integrations.workflowFeatures ||
+-        typeof integrations.workflowSlashEnabled !== 'boolean' ||
+-        !integrations.sendPorts ||
+-        sendMethods.some((name) => typeof integrations.sendPorts[name] !== 'function') ||
+-        !integrations.modelSource ||
+-        typeof integrations.modelSource.getFavorites !== 'function' ||
+-        typeof integrations.modelSource.subscribe !== 'function' ||
+-        !integrations.executionPorts ||
+-        executionMethods.some((name) => typeof integrations.executionPorts[name] !== 'function')
+-    ) {
+-        throw new Error('Workflows requires the trusted workflow host contracts');
+-    }
+-    return integrations;
+-}
+-
+ export default defineOr3Plugin({
+     manifest,
+     async setup(context) {
+-        const integrations = requireHostIntegrations(context);
++        const integrations = await createWorkflowSdkAdapter(context);
+         const features = integrations.workflowFeatures;
+         if (!features?.enabled) return;
+         const records = createWorkflowRecordAccess(integrations.records);
+-        await records.reconcileInterruptedRuns();
+         const slashEnabled = features.slashCommands && integrations.workflowSlashEnabled;
+         const controller = registerWorkflowSendHooks(context, {
+             ...integrations.sendPorts,
+@@ -103,7 +60,6 @@ export default defineOr3Plugin({
+         });
+         context.onCleanup(async () => {
+             await controller.dispose();
+-            integrations.ports.clearWorkflowPanes();
+             await nextTick();
+             uninstallExecutionPorts();
+             uninstallPorts();
+@@ -177,10 +133,12 @@ export default defineOr3Plugin({
+             kind: 'chat.message.renderer',
+             id: 'workflow-execution',
+             definition: {
++                messageType: 'workflow-execution',
+                 match: (message) => message.isWorkflow === true,
+                 component: WorkflowChatMessage,
+             },
+         });
++        await records.reconcileInterruptedRuns();
+         const workflowNode = slashEnabled ? context.contributions.register({
+             kind: 'editor.extension',
+             id: 'workflow-node', definition: { extension: WorkflowNode },
+diff --git a/or3.manifest.json b/or3.manifest.json
+index c70523f..d13e27e 100644
+--- a/or3.manifest.json
++++ b/or3.manifest.json
+@@ -3,16 +3,35 @@
+   "kind": "plugin",
+   "id": "or3-workflows",
+   "name": "Workflows",
+-  "version": "0.1.1",
++  "version": "0.2.0",
+   "description": "Visual workflow editor and execution for OR3.",
+   "license": "GPL-3.0",
+-  "engines": { "or3": "^0.3.0", "pluginApi": "^2.0.0" },
++  "engines": {
++    "or3": "^0.3.0",
++    "pluginApi": "^2.1.0"
++  },
+   "runtime": {
+-    "client": { "entry": "client.mjs", "format": "esm", "isolation": "host" },
+-    "server": { "routes": [
+-      { "method": "POST", "path": "workflows/background", "handler": "src/server/background.mjs", "permission": "workspace.write" },
+-      { "method": "POST", "path": "workflows/hitl", "handler": "src/server/hitl.mjs", "permission": "workspace.write" }
+-    ] }
++    "client": {
++      "entry": "client.mjs",
++      "format": "esm",
++      "isolation": "host"
++    },
++    "server": {
++      "routes": [
++        {
++          "method": "POST",
++          "path": "workflows/background",
++          "handler": "src/server/background.mjs",
++          "permission": "workspace.write"
++        },
++        {
++          "method": "POST",
++          "path": "workflows/hitl",
++          "handler": "src/server/hitl.mjs",
++          "permission": "workspace.write"
++        }
++      ]
++    }
+   },
+   "requestedGrants": [
+     "ui.sidebar.register",
+@@ -25,15 +44,46 @@
+     "activity.register",
+     "posts.read",
+     "posts.write",
+-    "hooks.register"
++    "hooks.register",
++    "ui.toast",
++    "panes.open",
++    "storage.read",
++    "storage.write",
++    "settings.read",
++    "settings.write",
++    "chat.read",
++    "chat.message.write",
++    "ai.models",
++    "ai.provider",
++    "tools.use",
++    "jobs.background",
++    "hooks.emit",
++    "network.http",
++    "files.read",
++    "files.write"
+   ],
+-  "features": { "required": [], "optional": [] },
+-  "dependencies": { "required": [], "optional": [] },
++  "features": {
++    "required": [
++      "or3-trusted-ui-kit-v1",
++      "or3-trusted-host-v2",
++      "or3-trusted-chat-records-v1"
++    ],
++    "optional": []
++  },
++  "dependencies": {
++    "required": [],
++    "optional": []
++  },
+   "trust": "trusted-host",
+-  "settings": { "version": 1 },
++  "settings": {
++    "version": 1
++  },
+   "stateCompatibility": {
+     "version": 1,
+-    "reads": { "minimum": 1, "maximum": 1 },
++    "reads": {
++      "minimum": 1,
++      "maximum": 1
++    },
+     "rollback": "safe"
+   }
+ }
+diff --git a/package.json b/package.json
+index e041f81..afdac08 100644
+--- a/package.json
++++ b/package.json
+@@ -1,9 +1,11 @@
+ {
+   "name": "@or3/plugin-workflows",
+-  "version": "0.1.1",
++  "version": "0.2.0",
+   "type": "module",
+   "private": true,
+-  "engines": { "node": ">=24" },
++  "engines": {
++    "node": ">=24"
++  },
+   "scripts": {
+     "validate": "bun node_modules/@or3/plugin-sdk/bin/or3-plugin.mjs validate .",
+     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+@@ -23,13 +25,18 @@
+     "or3-workflow-vue": "0.1.6"
+   },
+   "peerDependencies": {
+-    "@or3/plugin-sdk": "^2.0.0",
++    "@or3/plugin-sdk": "^2.1.0",
+     "vue": "^3.5.0"
+   },
+   "devDependencies": {
+-    "@or3/plugin-sdk": "file:./.or3-sdk",
++    "@or3/plugin-sdk": "file:../or3-chat/packages/plugin-sdk",
+     "typescript": "5.9.3",
+     "vue-tsc": "2.2.12",
+-    "vue": "3.5.40"
++    "vue": "3.5.43"
++  },
++  "peerDependenciesMeta": {
++    "@or3/plugin-sdk": {
++      "optional": true
++    }
+   }
+ }
+diff --git a/src/client/components/WorkflowExecutionStatus.vue b/src/client/components/WorkflowExecutionStatus.vue
+index 1bf3d7d..f9dc90e 100644
+--- a/src/client/components/WorkflowExecutionStatus.vue
++++ b/src/client/components/WorkflowExecutionStatus.vue
+@@ -749,6 +749,7 @@ const pendingHitlStatusText = computed(() => {
+ 
+ const toast = useToast();
+ const seenHitlRequests = new Set<string>();
++const warningIcon = useIcon("ui.warning");
+ 
+ watch(
+   pendingHitlRequests,
+@@ -796,7 +797,6 @@ const runCollapseIcon = useIcon("ui.chevron.up");
+ const timelineCollapseIcon = useIcon("ui.chevron.left");
+ const timelineExpandIcon = useIcon("ui.chevron.right");
+ const followCurrentIcon = "i-heroicons-cursor-arrow-rays-20-solid";
+-const warningIcon = useIcon("ui.warning");
+ const resumeIcon = useIcon("ui.refresh");
+ const cancelledStatusIcon = useIcon("workflow.status.cancelled");
+ const pendingStatusIcon = useIcon("workflow.status.pending");
+diff --git a/src/client/components/WorkflowPane.vue b/src/client/components/WorkflowPane.vue
+index 0de3169..e9e02e3 100644
+--- a/src/client/components/WorkflowPane.vue
++++ b/src/client/components/WorkflowPane.vue
+@@ -550,7 +550,7 @@ function workflowCommand(title: string) {
+ async function prefillChatPane(paneId: string, command: string) {
+     for (let attempt = 0; attempt < 12; attempt++) {
+         await nextTick();
+-        const result = programmaticPrefill(paneId, command);
++        const result = await programmaticPrefill(paneId, command);
+         if (result.status === 'ready') return true;
+         await new Promise((resolve) => setTimeout(resolve, 50));
+     }
+diff --git a/src/client/host-ports.ts b/src/client/host-ports.ts
+index 8c2126a..5a9f5bf 100644
+--- a/src/client/host-ports.ts
++++ b/src/client/host-ports.ts
+@@ -83,11 +83,8 @@ export type TabsItem = { label: string; value: string };
+ 
+ /**
+  * Host services used by the existing Workflows UI. The package never imports
+- * Nuxt composables or private core modules; the host supplies these services
++ * Nuxt composables or private core modules; the package adapts public SDK clients
+  * when the trusted plugin is activated.
+- *
+- * This bridge is intentionally explicit so every missing SDK adapter is
+- * visible while extraction is in progress.
+  */
+ export interface WorkflowHostPorts {
+     readonly uiComponents: {
+@@ -110,7 +107,6 @@ export interface WorkflowHostPorts {
+     useSidebarMultiPane(): WorkflowMultiPane;
+     useSidebarPostsApi(): PanePluginApi | null;
+     getPostsApi(): PanePluginApi | null;
+-    clearWorkflowPanes(): void;
+     useToolRegistry(): { listTools: Ref<Array<{ definition: { function: { name: string; description?: string }; ui?: { label?: string; descriptionHint?: string } } }>> };
+     usePostsList(postType: string, options: { limit?: number; sort: string; sortDir: string }): WorkflowPostList;
+     useActiveSidebarPage(): { setActivePage(id: string): Promise<boolean> };
+@@ -118,7 +114,7 @@ export interface WorkflowHostPorts {
+     getGlobalSidebarLayoutApi(): { isMobile(): boolean; expand(): void } | null;
+     getWorkspaceResourceNavigationApi(): { canOpenInNewTab(): boolean; openResource(resource: { kind: 'chat'; threadId: null }, target: 'new-tab'): Promise<boolean> } | null;
+     closeSidebarIfMobile(): void;
+-    programmaticPrefill(paneId: string, text: string): { status: string };
++    programmaticPrefill(paneId: string, text: string): Promise<{ status: string }>;
+     parseHashes(raw: unknown): string[];
+     useThemeOverrides(input: { component: string; context: string; identifier: string; isNuxtUI: boolean }): Ref<Record<string, unknown>>;
+     readonly theme: WorkflowTheme;
+diff --git a/src/client/sdk-adapter.mjs b/src/client/sdk-adapter.mjs
+new file mode 100644
+index 0000000..55c39d4
+--- /dev/null
++++ b/src/client/sdk-adapter.mjs
+@@ -0,0 +1,125 @@
++import { ref, shallowRef, computed } from 'vue';
++
++function value(result) { if (!result.ok) throw new Error(result.error.message); return result.value; }
++function parseHashes(raw) { try { const data = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(data) ? data.filter(item => typeof item === 'string') : []; } catch { return []; } }
++
++/** Package-owned adapters preserve the existing UI ports using only public clients. */
++export async function createWorkflowSdkAdapter(context) {
++    for (const feature of ['or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1']) context.features.require(feature);
++    const kit = context.ui.kit; if (!kit) throw new Error('Trusted UI kit unavailable');
++    const settings = value(await context.settings.list());
++    const workflowFeatures = { enabled: settings.enabled !== false, editor: settings.editor !== false, execution: settings.execution !== false, slashCommands: settings.slashCommands !== false };
++    const paneItems = shallowRef([]), activeIndex = ref(0);
++    const applyPanes = items => { paneItems.value = items.map(item => ({ id: item.id, mode: item.app, documentId: item.recordId, threadId: item.app === 'chat' ? item.recordId : '', messages: [] })); activeIndex.value = Math.max(0, items.findIndex(item => item.active)); };
++    applyPanes(value(await context.panes.list())); context.panes.onChange(applyPanes);
++    const open = async (app, recordId, target = 'replace-active') => value(await context.panes.open({ app, data: { recordId: recordId ?? null }, target }));
++    const multiPane = {
++        panes: paneItems, activePaneIndex: activeIndex, activePaneId: computed(() => paneItems.value[activeIndex.value]?.id ?? null),
++        switchToApp: (app, options) => open(app, options?.recordId),
++        closePane: async index => value(await context.panes.close(paneItems.value[index].id)),
++        updatePane: (index, patch) => { void open(patch.mode || paneItems.value[index].mode, patch.documentId || patch.threadId, { pane: paneItems.value[index].id }); },
++        setActive: index => { void context.panes.focus(paneItems.value[index].id); },
++        getPaneIndexById: id => paneItems.value.findIndex(pane => pane.id === id),
++    };
++    const postResult = result => result.ok ? { ok: true, ...result.value } : { ok: false, message: result.error.message };
++    const postsApi = { posts: {
++        create: async input => postResult(await context.posts.create(input)),
++        get: async input => { const result = await context.posts.get(input.id); return result.ok && result.value ? { ok: true, post: result.value } : { ok: false, message: result.ok ? 'Post not found' : result.error.message }; },
++        update: async input => postResult(await context.posts.update(input.id, input.patch)),
++        delete: async input => postResult(await context.posts.delete(input.id)),
++        listByType: async input => { const result = await context.posts.list(input); return result.ok ? { ok: true, posts: result.value } : { ok: false, message: result.error.message }; },
++    } };
++    const records = {
++        posts: { get: async id => value(await context.posts.get(id)), list: async () => value(await context.posts.list({ postType: 'workflow-entry' })) },
++        messages: { get: async id => value(await context.chat.messages.get(id)), list: async () => value(await context.chat.messages.list({ type: 'workflow-execution' })), listByThread: async id => value(await context.chat.messages.listByThread(id)), updateData: async updates => value(await context.chat.messages.updateData(updates)) },
++    };
++    const toast = { add: input => { value(context.ui.toast({ message: input.title, description: input.description, tone: input.color === 'error' ? 'danger' : input.color === 'warning' ? 'warning' : 'info' })); } };
++    const toolItems = shallowRef([]);
++    const executeTool = async (name, argumentsJson, options) => {
++        const result = await context.tools.execute(name, JSON.parse(argumentsJson), { signal: options?.abortSignal ?? context.signal });
++        return result.ok ? { result: result.value } : { error: result.error.message };
++    };
++    const refreshTools = async () => {
++        toolItems.value = value(await context.tools.list()).map(tool => ({ ...tool, enabled: ref(tool.enabled), handler: async args => value(await context.tools.execute(tool.definition.function.name, args, { signal: context.signal })) }));
++    };
++    await refreshTools();
++    const toolRegistry = { listTools: toolItems, getTool: name => toolItems.value.find(tool => tool.definition.function.name === name), executeTool };
++    let catalog = [];
++    const loadModels = async () => { const result = value(await context.ai.models()); catalog = result.models.map(model => model.metadata ?? { id: model.id, name: model.label }); return result; };
++    const initial = await loadModels();
++    const favorites = result => result.models.filter(model => model.favorite).map(model => model.metadata ?? { id: model.id, name: model.label });
++    const callRoute = async (route, body) => {
++        const url = new URL(`/api/plugins/${encodeURIComponent(context.pluginId)}/workflows/${route}`, location.origin);
++        const result = value(await context.http.fetch({ url: url.href, destination: url.origin, method: 'POST', headers: { 'Content-Type': 'application/json', ...(body.apiKey ? { 'x-or3-openrouter-key': body.apiKey } : {}) }, body }));
++        if (result.status < 200 || result.status >= 300) throw new Error(`Workflow request failed (${result.status})`);
++        return JSON.parse(typeof result.body === 'string' ? result.body : new TextDecoder().decode(result.body));
++    };
++    return {
++        workflowFeatures, workflowSlashEnabled: settings.workflowSlashEnabled !== false, records,
++        modelSource: { getFavorites: async () => favorites(await loadModels()), subscribe(listener) { const handle = context.ai.onModelsChange(() => { void loadModels().then(result => listener(favorites(result))); }); return () => handle.dispose(); } },
++        ports: {
++            uiComponents: kit.components, useIcon: kit.icon, useToast: () => toast,
++            useOr3Config: () => ({ features: { workflows: workflowFeatures } }), useResponsiveState: () => kit.responsive,
++            useSidebarMultiPane: () => multiPane, getGlobalMultiPaneApi: () => multiPane,
++            useSidebarPostsApi: () => postsApi, getPostsApi: () => postsApi,
++            useToolRegistry: () => toolRegistry,
++            usePostsList(postType, options) {
++                const items = shallowRef([]), loading = ref(false), error = shallowRef(null);
++                const refresh = async () => { loading.value = true; try { const rows = value(await context.posts.list({ postType })); items.value = [...rows].sort((a, b) => options.sortDir === 'asc' ? a.updated_at - b.updated_at : b.updated_at - a.updated_at).slice(0, options.limit ?? rows.length); error.value = null; } catch (e) { error.value = e; } finally { loading.value = false; } };
++                context.posts.onChange(() => { void refresh(); }); void refresh(); return { items, loading, error, refresh };
++            },
++            useActiveSidebarPage: () => ({ setActivePage: async id => (await context.ui.sidebar.show(id)).ok }),
++            getGlobalSidebarLayoutApi: () => ({ isMobile: () => kit.responsive.isMobile.value, expand: () => { void context.ui.sidebar.show('or3-workflows-page'); } }),
++            getWorkspaceResourceNavigationApi: () => ({ canOpenInNewTab: () => true, openResource: async resource => (await context.panes.open({ app: resource.kind === 'document' ? 'doc' : 'chat', data: { recordId: resource.documentId ?? resource.threadId ?? null }, target: 'new' })).ok }),
++            closeSidebarIfMobile: () => context.ui.sidebar.closeIfMobile(),
++            programmaticPrefill: async (paneId, text) => { const result = await context.chat.composer.prefill(text, paneId); return { status: result.ok ? 'ready' : 'unavailable' }; },
++            parseHashes, useThemeOverrides: kit.theme.overrides,
++            theme: { activeTheme: kit.theme.active, activeComponents: kit.theme.activeComponents, get: () => kit.theme.active.value, getTheme: name => kit.theme.getTheme?.(name) ?? null },
++            workflowSlash: null, messageAttachmentsGallery: kit.components.MessageAttachmentsGallery, streamMarkdown: kit.components.StreamMarkdown, useShikiHighlighter: kit.highlighter,
++        },
++        sendPorts: {
++            getApiKey: async () => { const result = await context.ai.provider(); return result.ok ? result.value.apiKey : null; }, requestApiKeyLogin: () => context.ai.requestSignIn(),
++            upsertWorkflowMessage: async input => value(await context.chat.messages.upsert(input)),
++            markChatSendHandled: () => value(context.chat.send.markHandled()),
++            emitWorkflowState: (messageId, state) => { void context.hooks.emitAction('workflow.execution:action:state_update', { messageId, state }); },
++            emitNodeComplete: (messageId, nodeId) => { void context.hooks.emitAction('workflow.execution:action:node_complete', { messageId, nodeId }); },
++            emitRunStart: async (messageId, workflowId) => value(await context.hooks.emitAction('workflow.execution:action:start', { messageId, workflowId })),
++            emitRunComplete: async (messageId, workflowId, finalOutput) => value(await context.hooks.emitAction('workflow.execution:action:complete', { messageId, workflowId, finalOutput })),
++            canStartBackground: async () => value(await context.jobs.available()), getModelCatalog: () => catalog,
++            startBackground: input => callRoute('background', input),
++            trackBackground: (jobId, threadId, messageId) => { void context.jobs.track({ jobId, threadId, messageId }); },
++            abortBackground: async id => (await context.jobs.abort(id)).ok,
++            backgroundStatus: async id => { const result = await context.jobs.status(id); return result.ok ? result.value : 'missing'; },
++            loadModelCatalog: async () => { await loadModels(); return catalog; },
++            async completeCaption(input) {
++                const provider = value(await context.ai.provider());
++                const result = await provider.client.chat.send({ model: input.modelId, messages: [{ role: 'user', content: [{ type: 'text', text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.' }, ...input.imageUrls.map(url => ({ type: 'image_url', imageUrl: { url } }))] }], stream: false });
++                const content = result.choices?.[0]?.message?.content;
++                return typeof content === 'string' ? content : Array.isArray(content) ? content.map(part => part.text ?? '').join('').trim() || null : null;
++            },
++            respondBackgroundHitl: async (requestId, jobId, response) => { try { await callRoute('hitl', { requestId, jobId, ...response }); return true; } catch { return false; } },
++            reportError: (error, message) => { context.logger.error(message, { error: String(error) }); toast.add({ title: message, color: 'error' }); }, notify: (message, kind) => toast.add({ title: message, color: kind }),
++        },
++        executionPorts: {
++            toolRegistry: () => toolRegistry, refreshTools,
++            async createOpenRouterClient() { const provider = value(await context.ai.provider()); return { ...provider, metadata: 'disabled' }; },
++            async persistGeneratedImage(messageId, dataUrl, signal) {
++                if (signal?.aborted) throw new Error('Image cancelled');
++                if (!dataUrl.startsWith('data:image/')) throw new Error('Generated image must be inline raster data');
++                if (dataUrl.length > 28 * 1024 * 1024) throw new Error('Generated image exceeds the file limit');
++                const response = await fetch(dataUrl); const blob = await response.blob();
++                if (!['image/png','image/jpeg','image/webp','image/gif'].includes(blob.type)) throw new Error('Generated output is not a supported raster image');
++                const message = value(await context.chat.messages.get(messageId)); if (!message || message.fileIds.length >= 6) throw new Error('Generated image attachment limit reached');
++                const data = new Uint8Array(await blob.arrayBuffer());
++                const matches = (offset, bytes) => bytes.every((byte, i) => data[offset + i] === byte);
++                const valid = blob.type === 'image/png' ? matches(0, [137,80,78,71,13,10,26,10])
++                    : blob.type === 'image/jpeg' ? matches(0, [255,216,255])
++                    : blob.type === 'image/webp' ? matches(0, [82,73,70,70]) && matches(8, [87,69,66,80])
++                    : matches(0, [71,73,70,56]) && [55,57].includes(data[4]) && data[5] === 97;
++                if (!valid) throw new Error('Generated image bytes do not match the raster MIME type');
++                const file = value(await context.files.write({ name: 'workflow-generated-image', mimeType: blob.type, signal, data: (async function*() { yield data; })() }));
++                value(await context.chat.messages.attachFile(messageId, file)); return file.id;
++            },
++        },
++    };
++}
+diff --git a/src/core/executeWorkflow.ts b/src/core/executeWorkflow.ts
+index b9d7697..f39ff10 100644
+--- a/src/core/executeWorkflow.ts
++++ b/src/core/executeWorkflow.ts
+@@ -723,7 +723,7 @@ export function executeWorkflow(
+         );
+         // Provider-neutral transport and message-owned image persistence are host mediated.
+         let gateway = createWorkflowModelGateway(
+-            workflowExecutionPorts().createOpenRouterClient(apiKey)
++            await workflowExecutionPorts().createOpenRouterClient(apiKey)
+         );
+         if (options.messageId) {
+             gateway = withWorkflowGeneratedImages(
+@@ -739,6 +739,7 @@ export function executeWorkflow(
+             toolFallbackModel
+         );
+         let workflowForExecution = toolModelCheck.workflow;
++        await workflowExecutionPorts().refreshTools?.();
+         preflightToolAvailability(workflowForExecution);
+ 
+         const hasSubflows = workflowForExecution.nodes.some(
+diff --git a/src/core/execution-ports.ts b/src/core/execution-ports.ts
+index e6cfabb..e34ab4d 100644
+--- a/src/core/execution-ports.ts
++++ b/src/core/execution-ports.ts
+@@ -28,9 +28,10 @@ export interface WorkflowToolRegistry {
+ }
+ 
+ export interface WorkflowExecutionPorts {
++    refreshTools?(): Promise<void>;
+     toolRegistry(): WorkflowToolRegistry;
+     listWorkflowsWithMeta(): Promise<Array<{ id: string; title: string; meta: WorkflowData | null }>>;
+-    createOpenRouterClient(apiKey: string): WorkflowModelClientConfig;
++    createOpenRouterClient(apiKey: string): WorkflowModelClientConfig | Promise<WorkflowModelClientConfig>;
+     persistGeneratedImage(messageId: string, dataUrl: string, signal?: AbortSignal): Promise<string>;
+     loadConversationHistory(threadId: string): Promise<ChatMessage[]>;
+ }
+diff --git a/src/core/send-controller.ts b/src/core/send-controller.ts
+index 9ea37cd..ed4cd70 100644
+--- a/src/core/send-controller.ts
++++ b/src/core/send-controller.ts
+@@ -51,7 +51,7 @@ export function createWorkflowSendController(
+         if (!options.executionEnabled) throw new Error('Workflow execution is disabled');
+         const { workflow, assistant, attachments, resumeFrom, resumeStateVersion } = input;
+         if (!workflow.meta) throw new Error('Workflow data is missing');
+-        const apiKey = ports.getApiKey();
++        const apiKey = await ports.getApiKey();
+         if (!apiKey) {
+             ports.requestApiKeyLogin();
+             throw new Error('Please connect your OpenRouter account');
+@@ -174,7 +174,7 @@ export function createWorkflowSendController(
+         await ports.emitRunStart(assistant.id, workflow.id);
+         if (disposed) throw new Error('Workflow plugin has been disabled');
+ 
+-        if (ports.canStartBackground(workflow.meta) &&
++        if (await ports.canStartBackground(workflow.meta) &&
+             !workflowNeedsForegroundImagePersistence(workflow.meta, ports.getModelCatalog())) {
+             try {
+                 const admitted = await ports.startBackground({
+diff --git a/src/core/send-ports.ts b/src/core/send-ports.ts
+index b072843..7cfb415 100644
+--- a/src/core/send-ports.ts
++++ b/src/core/send-ports.ts
+@@ -32,7 +32,7 @@ export interface WorkflowBackgroundStart {
+ }
+ 
+ export interface WorkflowSendPorts {
+-    getApiKey(): string | null;
++    getApiKey(): string | null | Promise<string | null>;
+     requestApiKeyLogin(): void;
+     getWorkflowById(id: string): Promise<WorkflowRecord | null>;
+     getWorkflowByName(name: string): Promise<WorkflowRecord | null>;
+@@ -50,7 +50,7 @@ export interface WorkflowSendPorts {
+     emitNodeComplete(messageId: string, nodeId: string): void;
+     emitRunStart(messageId: string, workflowId: string): Promise<void> | void;
+     emitRunComplete(messageId: string, workflowId: string, output: string): Promise<void> | void;
+-    canStartBackground(workflow: WorkflowData): boolean;
++    canStartBackground(workflow: WorkflowData): boolean | Promise<boolean>;
+     getModelCatalog(): readonly WorkflowCatalogModel[];
+     startBackground(input: WorkflowBackgroundStart): Promise<{ jobId: string }>;
+     trackBackground(jobId: string, threadId: string, messageId: string): void;
+diff --git a/src/server/request.mjs b/src/server/request.mjs
+index 8e7e2fa..efcfe18 100644
+--- a/src/server/request.mjs
++++ b/src/server/request.mjs
+@@ -1,14 +1,14 @@
++import { getPluginServerContext } from '@or3/plugin-sdk';
+ export function workflowError(statusCode, statusMessage) {
+     return Object.assign(new Error(statusMessage), { statusCode, statusMessage });
+ }
+ 
+ export function requireWorkflowBridge(event, routePath, methods) {
+-    const request = event?.context?.or3PluginRequest;
+-    const bridge = event?.context?.or3WorkflowServer;
++    const { request, services: bridge } = getPluginServerContext(event);
+     if (request?.pluginId !== 'or3-workflows' || request.method !== 'POST' ||
+         request.routePath !== routePath || typeof bridge?.setNoStore !== 'function' ||
+         methods.some((name) => typeof bridge[name] !== 'function')) {
+-        throw workflowError(503, 'Workflow server bridge unavailable');
++        throw workflowError(503, 'Workflow server capabilities unavailable');
+     }
+     return bridge;
+ }
+diff --git a/tests/server-route-local.test.mjs b/tests/server-route-local.test.mjs
+index 140d517..7d431e3 100644
+--- a/tests/server-route-local.test.mjs
++++ b/tests/server-route-local.test.mjs
+@@ -70,7 +70,7 @@ test('built background and HITL routes complete against local host ports', async
+     };
+     const event = (routePath) => ({ context: {
+         or3PluginRequest: { pluginId: 'or3-workflows', method: 'POST', routePath },
+-        or3WorkflowServer: bridge,
++        or3PluginServer: bridge,
+     } });
+ 
+     const started = await background(event('workflows/background'));

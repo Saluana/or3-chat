@@ -1,3 +1,4 @@
+import { TRUSTED_PLUGIN_GRANT_DESCRIPTIONS } from '../../../shared/plugins/grant-description';
 import type { PluginV2HostCapabilities } from '../../../shared/plugins/v2-compatibility';
 import {
     PORTABLE_PROFILE_NAME,
@@ -37,6 +38,7 @@ export type Or3PluginV2GrantRegistration =
  */
 export interface Or3PluginV2GrantQualification {
     readonly grant: string;
+    readonly reviewDescription?: string;
     readonly status: 'qualified' | 'unqualified';
     /** The callable method/event or qualification test that substantiates it. */
     readonly registration: Or3PluginV2GrantRegistration;
@@ -137,6 +139,17 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
         ...Object.entries({
             'ui.sidebar.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'ui.pane.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'ui.toast': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'ui.workspace-profile.register': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'ai.provider': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'ai.models': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'tools.use': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'jobs.background': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'hooks.emit': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'chat.read': ['app/composables/plugins/trusted-records.ts', 'createTrustedRecords'],
+            'chat.message.write': ['app/composables/plugins/trusted-records.ts', 'createTrustedRecords'],
+            'workspace.connections.read': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
+            'workspace.connections.manage': ['app/composables/plugins/trusted-runtime-services.ts', 'createTrustedRuntimeServices'],
             'panes.open': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'workspace.read': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'hooks.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
@@ -156,6 +169,7 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'posts.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
         } as const satisfies Record<string, readonly [string, string]>).map(([grant, [module, exportName]]) => ({
             grant,
+            reviewDescription: TRUSTED_PLUGIN_GRANT_DESCRIPTIONS[grant],
             status: 'qualified' as const,
             trustModes: ['trusted-host'] as const,
             registration: { kind: 'adapter' as const, module, exportName },
@@ -165,18 +179,12 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
         ...[
             'ui.card.register',
             'ui.action.register',
-            'ui.toast',
             'ui.confirm',
             'ui.progress',
             'commands.run.public',
             'chat.create',
-            'chat.read',
-            'chat.message.write',
             'workspace.switch',
-            'workspace.connections.read',
-            'workspace.connections.manage',
             'events.register',
-            'ai.models',
             'ai.complete',
         ].map((grant) => ({
             grant,
@@ -219,11 +227,11 @@ const grantTrustModes = Object.fromEntries(
  * None of these grants reaches publisher code as a raw host capability. */
 export const OR3_PLUGIN_V2_HOST_CAPABILITIES: PluginV2HostCapabilities = Object.freeze({
     or3Version: '0.3.0',
-    pluginApiVersion: '2.0.0',
+    pluginApiVersion: '2.1.0',
     supportedTrustModes: Object.freeze(['trusted-host', 'isolated-client'] as const),
     supportedGrants: Object.freeze(qualifiedGrants),
     grantTrustModes: Object.freeze(grantTrustModes),
-    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1']),
+    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1']),
 });
 
 /**

@@ -1,0 +1,78 @@
+{
+  "or3-plugin-external-agents": {
+    "patchSha256": "de1fceffa7531e4856c0e41c54e3439c0e95d0fcc39cf04c0a22883096f447c7",
+    "originalFiles": {
+      "README.md": "b6eb1e5a155b92f1e2515673b4226c166383224ef851eee8a80770cd6f480333",
+      "bun.lock": "8ee44365e53527d44bfd0583a61304ce7dd1ba0c34f789fcad8b33bb76337667",
+      "client.ts": "26b68ba3589322af8dadc7d522e03cae1781081ae48a18e438eda12b71ca8c87",
+      "or3.manifest.json": "d13155e441bfa6caa87616d4503d8b1823f418939ec27aeb0de30896d4ef9db0",
+      "package.json": "edf90d53c4c17c41d17510af86c2695622d8d0900446d7e7d4b6cfa143b05e95",
+      "src/client/built-smoke.test.ts": "6276a54ad82869878d651e2dbe8bb1e1a198209297b56585210991e3700c5035",
+      "src/client/host-ui.ts": "0858309f17282dbab360cda7c3f215236acc115cbb2ec5aeea3346abf0ce3090",
+      "src/client/mediated-fetch.test.ts": "a8da5f957fb3547b210bf15a145d83d992793eae172a278532e7e0974b24a211",
+      "src/client/mediated-fetch.ts": "eaa29ac92446762cd2a9ca2badb45001dcd6444a2853a056251201db0de11670",
+      "src/client/transport.ts": "314b8061daa8fadf2cfdf082b9f59a69e2838c7a375f2c4dc9a5a6b5e48ef775",
+      "src/core/__tests__/credentials.test.ts": "59f60d139d5035edd53b5393fa7afb968093ad54ee1aaef1762724d28bf3288c",
+      "src/core/__tests__/persistence.test.ts": "b99c1095a4f30a857c7f6c421420208ac44953c997a1aed9ade997000e2ad3b4",
+      "src/core/controller.ts": "ab6771b91b0a5e390b8f338d095e1bf48d0c672ab14b5fef2485c31f157357d2",
+      "src/core/credentials.ts": "8d28dbe70c98810722b5452660c16b149c2b7e35525775a44a1c0c88e6091f8a",
+      "src/core/persistence.ts": "c4e099f6e183ca0369b5e8fc72dd41ad4186fbb40e7b55724050f4d752ede4df"
+    },
+    "changedFiles": [
+      "README.md",
+      "bun.lock",
+      "client.ts",
+      "or3.manifest.json",
+      "package.json",
+      "src/client/built-smoke.test.ts",
+      "src/client/host-ui.ts",
+      "src/client/mediated-fetch.test.ts",
+      "src/client/mediated-fetch.ts",
+      "src/client/sdk-adapter.ts",
+      "src/client/staging.test.ts",
+      "src/client/staging.ts",
+      "src/client/transport.ts",
+      "src/core/__tests__/credentials.test.ts",
+      "src/core/__tests__/persistence.test.ts",
+      "src/core/controller.ts",
+      "src/core/credentials.ts",
+      "src/core/persistence.ts"
+    ]
+  },
+  "or3-plugin-workflows": {
+    "patchSha256": "29794b3648c4691319c78046ef60d6f1de909a4c78fbea7095ceed82d588d835",
+    "originalFiles": {
+      "README.md": "032a6929412d5f32f4199d7f1bdac5775992da4391bf6c086995a690546a2bac",
+      "bun.lock": "300fbddfafb594cd9987a6336482f11e3e393a3d8a1117f6ef555672a01f41b5",
+      "client.mjs": "f3c21ab44131349fd3db1c07a759572e02d055872e807ef98c34f3a7a742c9bf",
+      "or3.manifest.json": "8766d5a27b8dd537b712b4f95d8e0d99d8458bb9a3f1b82887a914502fe57f9b",
+      "package.json": "8b85a260d7563187b9a4874b8458d249c8e75d6b882274ce68e749ec67cc6a2b",
+      "src/client/components/WorkflowExecutionStatus.vue": "f6548109aad2b7c98c901e55ad90b26d777c0b229821b9631dc13b451dae48c9",
+      "src/client/components/WorkflowPane.vue": "0f5466d1243fd08840f27ee5f5c3caa4a9b80376cab6b9f930a28106dd9870fe",
+      "src/client/host-ports.ts": "3d869a42ad67d15a3197ba5a1d8f3b8f1e6e366ebf733f5bade82f0d612de827",
+      "src/core/executeWorkflow.ts": "c0dd4606a647d163c7af41b454a71f49190e8b0ff9929bcddd9cba2d4505fe2d",
+      "src/core/execution-ports.ts": "579bf5899402ebb7e8539102cc4770ab48223bc87f0c3260a1422a80a936f455",
+      "src/core/send-controller.ts": "338b79bca4a0f44b1eeeaf841b00403aa66be283fb0501f2aad1479f723fa1e5",
+      "src/core/send-ports.ts": "4520ffb5e524cb30c1d519183d6f040c21689c28def51989e3780c79179f57ff",
+      "src/server/request.mjs": "f95a8a3bc2d9bf4bf4595e8cf413380a91da3a134c6de435db7caca643658d03",
+      "tests/server-route-local.test.mjs": "9b961ce36478c993a3f43109da28e40bfaab5e22aee5da46e99efb9c5649879c"
+    },
+    "changedFiles": [
+      "README.md",
+      "bun.lock",
+      "client.mjs",
+      "or3.manifest.json",
+      "package.json",
+      "src/client/components/WorkflowExecutionStatus.vue",
+      "src/client/components/WorkflowPane.vue",
+      "src/client/host-ports.ts",
+      "src/client/sdk-adapter.mjs",
+      "src/core/executeWorkflow.ts",
+      "src/core/execution-ports.ts",
+      "src/core/send-controller.ts",
+      "src/core/send-ports.ts",
+      "src/server/request.mjs",
+      "tests/server-route-local.test.mjs"
+    ]
+  }
+}

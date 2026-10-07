@@ -28,7 +28,8 @@ test('installed Workflows imports and executes a no-model workflow after slash s
     await page.goto('/chat');
     const welcome = page.locator('[data-welcome-card]');
     await expect(welcome).toBeVisible();
-    await welcome.getByRole('textbox', { name: 'OpenRouter API key' }).fill('sk-or-disposable-test-key');
+    await welcome.getByRole('button', { name: 'Use an existing API key' }).click();
+    await welcome.getByLabel('OpenRouter API key').fill('sk-or-disposable-test-key');
     await welcome.getByRole('button', { name: 'Save', exact: true }).click();
 
     const name = `Disposable workflow ${Date.now()}`;
@@ -36,9 +37,10 @@ test('installed Workflows imports and executes a no-model workflow after slash s
         meta: { version: '2.0.0', name },
         nodes: [
             { id: 'start', type: 'start', position: { x: 0, y: 0 }, data: { label: 'Start' } },
-            { id: 'output', type: 'output', position: { x: 260, y: 0 }, data: { label: 'Output', mode: 'combine', format: 'text', sources: ['start'] } },
+            { id: 'approval', type: 'router', position: { x: 260, y: 0 }, data: { label: 'Approval gate', model: 'openai/gpt-4o-mini', routes: [{ id: 'continue', label: 'Continue', condition: { type: 'contains', value: 'Smoke' } }], hitl: { enabled: true, mode: 'input', message: 'Review disposable workflow input.' } } },
+            { id: 'output', type: 'output', position: { x: 520, y: 0 }, data: { label: 'Output', mode: 'combine', format: 'text', sources: ['start'] } },
         ],
-        edges: [{ id: 'start-output', source: 'start', target: 'output' }],
+        edges: [{ id: 'start-approval', source: 'start', target: 'approval' }, { id: 'approval-output', source: 'approval', sourceHandle: 'continue', target: 'output' }],
     };
     await page.getByRole('button', { name: 'Workflows', exact: true }).click();
     await page.locator('input[type=file][accept=".json"]').setInputFiles({
@@ -67,6 +69,15 @@ test('installed Workflows imports and executes a no-model workflow after slash s
         }
     });
     await composer.press('Enter');
+    const hitl = page.locator('.workflow-run .run-hitl-button');
+    await expect(hitl).toBeVisible({ timeout: 15_000 });
+    await hitl.click();
+    await expect(page.getByText('Input Required', { exact: true })).toBeVisible();
+    const hitlResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/plugins/or3-workflows/workflows/hitl');
+    // Skip the model node through the actual human-input control, so the
+    // installed background/HITL contract needs no paid model execution.
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    expect((await hitlResponse).status()).toBe(200);
     await expect(page.getByText('Result', { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Smoke input', { exact: true }).last()).toBeVisible();
     expect(backgroundResponses).toContain(200);
@@ -83,7 +94,7 @@ test('installed Workflows imports and executes a no-model workflow after slash s
         pluginId: 'or3-workflows',
         packageDigest: manifest.runtime?.['or3-workflows']?.descriptor?.artifact?.packageDigest ?? null,
         workspaceId: session.session?.workspace?.id ?? null,
-        checks: ['JSON imported', 'slash suggestion selected', 'background route 200', 'result completed', 'result persisted after refresh'],
+        checks: ['JSON imported', 'slash suggestion selected', 'background route 200', 'HITL input skip route 200', 'result completed', 'result persisted after refresh'],
         modelExecution: false,
     }, null, 2)}\n`);
 });
@@ -148,7 +159,8 @@ test('installed Workflows editor, slash menu, routes, and disable continuity', a
     if (process.env.OR3_WORKFLOW_NO_MODEL_SMOKE === 'true') {
         const welcome = page.locator('[data-welcome-card]');
         await expect(welcome).toBeVisible();
-        await welcome.getByRole('textbox', { name: 'OpenRouter API key' }).fill('sk-or-disposable-test-key');
+        await welcome.getByRole('button', { name: 'Use an existing API key' }).click();
+        await welcome.getByLabel('OpenRouter API key').fill('sk-or-disposable-test-key');
         await welcome.getByRole('button', { name: 'Save', exact: true }).click();
     }
 

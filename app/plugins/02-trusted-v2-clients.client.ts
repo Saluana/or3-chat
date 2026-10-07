@@ -1,10 +1,13 @@
 import * as Sdk from '@or3/plugin-sdk';
-import type { PluginContext, PluginGrant, Or3PluginDefinition } from '@or3/plugin-sdk';
+import type { PluginJsonValue, PluginGrant, Or3PluginDefinition } from '@or3/plugin-sdk';
 import * as Vue from 'vue';
 import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useHooks } from '~/core/hooks/useHooks';
+import { getDb } from '~/db/client';
+import { migrateLegacyPluginData } from '~/composables/plugins/legacy-plugin-data';
+import { createTrustedRuntimeServices } from '~/composables/plugins/trusted-runtime-services';
 import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
 import { applyTrustedEditorExtensions } from '~/composables/plugins/trusted-editor';
 import {
@@ -15,60 +18,6 @@ import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-p
 import { createProductionModuleV2Loader } from '~~/shared/plugins/host-esm-facade-runtime';
 import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
-
-const AGENT_BRIDGE_GRANTS: readonly PluginGrant[] = [
-    'ui.sidebar.register', 'ui.pane.register', 'ui.command-palette.register',
-    'commands.register', 'panes.open', 'activity.register', 'workspace.read',
-    'storage.read', 'storage.write', 'secrets.read', 'secrets.write', 'secrets.use',
-    'files.read', 'files.write', 'network.http', 'network.stream',
-];
-const WORKFLOW_BRIDGE_GRANTS: readonly PluginGrant[] = [
-    'ui.sidebar.register', 'ui.pane.register', 'ui.command-palette.register',
-    'chat.message.renderer', 'chat.editor.extension', 'tools.register.client',
-    'tools.model.register', 'activity.register', 'posts.read', 'posts.write',
-    'hooks.register',
-];
-
-function requireGrants(descriptor: PackageV2PluginDescriptor, required: readonly PluginGrant[]): void {
-    const granted = new Set(descriptor.effectiveGrants);
-    const missing = required.filter((grant) => !granted.has(grant));
-    if (missing.length) throw new Error(`Approved grants missing: ${missing.join(', ')}`);
-}
-
-async function pluginContext(
-    descriptor: PackageV2PluginDescriptor,
-    base: PluginContext,
-    trusted: ReturnType<typeof createTrustedHostContext>,
-    runWithContext: <T>(callback: () => T) => T | Promise<T>,
-    setDestinationAuthorizer: (authorize: (url: string, destination: string) => Promise<boolean>) => void
-): Promise<PluginContext> {
-    if (descriptor.id === 'or3-external-agents') {
-        requireGrants(descriptor, AGENT_BRIDGE_GRANTS);
-        const { createExternalAgentHostBridge } = await import('~/composables/plugins/external-agent-host-bridge');
-        const bridge = await runWithContext(() => createExternalAgentHostBridge());
-        setDestinationAuthorizer(bridge.authorizeDestination);
-        return Object.freeze({
-            ...base,
-            externalAgentHost: bridge,
-        }) as PluginContext;
-    }
-    if (descriptor.id === 'or3-workflows') {
-        requireGrants(descriptor, WORKFLOW_BRIDGE_GRANTS);
-        const { createWorkflowHostBridge } = await import('~/composables/plugins/workflow-host-bridge');
-        return Object.freeze({
-            ...base,
-            ui: Object.freeze({
-                ...base.ui,
-                workflowHostIntegrations: {
-                    ...(await runWithContext(() => createWorkflowHostBridge(base.signal))),
-                    registerRenderer: trusted.renderers.register,
-                    registerEditor: trusted.editor.register,
-                },
-            }),
-        }) as PluginContext;
-    }
-    return base;
-}
 
 function pluginDefinition(module: unknown, descriptor: PackageV2PluginDescriptor): Or3PluginDefinition {
     const definition = (module as { default?: unknown })?.default as Or3PluginDefinition | undefined;
@@ -160,17 +109,26 @@ export default defineNuxtPlugin((nuxtApp) => {
             const loaded = await resolution.load();
             if (loaded.status !== 'loaded') throw new Error(`Plugin load ${loaded.reason}`);
             const definition = pluginDefinition(loaded.module, descriptor);
-            let authorizeDestination = async (_url: string, _destination: string) => false;
+            const manifestDefaults: Record<string, PluginJsonValue> = {};
+            if (definition.manifest.settings.schema) {
+                const response = await fetch(buildPluginPackageAssetUrl({ pluginId: descriptor.id, packageDigest: descriptor.artifact.packageDigest, entryPath: definition.manifest.settings.schema }), { signal, credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Plugin settings schema unavailable');
+                const schema = await response.json() as { properties?: Record<string, { default?: PluginJsonValue }> };
+                for (const [key, property] of Object.entries(schema.properties ?? {})) {
+                    if (property.default !== undefined) manifestDefaults[key] = property.default;
+                }
+            }
             const trusted = await nuxtApp.runWithContext(() => createTrustedHostContext({
                 pluginId: descriptor.id,
                 version: descriptor.version,
                 workspaceId: descriptor.workspaceId,
-                generation,
-                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1'],
+                generation, signal,
+                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1'],
+                requestedFeatures: definition.manifest.features.required,
+                runtimeServices: createTrustedRuntimeServices,
+                settingDefaults: manifestDefaults,
+                emitHook: (name, payload) => (hostHooks.doAction as unknown as (name: string, payload: unknown) => Promise<void>)(name, payload),
                 grants: descriptor.effectiveGrants as PluginGrant[],
-                mediation: {
-                    authorizeDestination: (url, destination) => authorizeDestination(url, destination),
-                },
                 subscribeWorkspaceChanges(listener) {
                     const stop = watch(
                         () => session.data.value?.session?.workspace?.id,
@@ -198,15 +156,13 @@ export default defineNuxtPlugin((nuxtApp) => {
             }));
             let removeStyles = () => {};
             try {
-                const context = await pluginContext(
-                    descriptor, trusted.context, trusted,
-                    (callback) => nuxtApp.runWithContext(callback),
-                    (authorize) => { authorizeDestination = authorize; }
-                );
+                for (const feature of definition.manifest.features.required) trusted.context.features.require(feature);
+                const activationDb = getDb();
+                await migrateLegacyPluginData({ pluginId: descriptor.id, stateVersion: definition.manifest.stateCompatibility.version, db: activationDb, current: () => isCurrent() && getDb() === activationDb && !signal.aborted });
                 if (!isCurrent()) throw new Error('Plugin activation cancelled');
                 removeStyles = await attachStylesheet(loaded.module, descriptor, signal);
                 if (!isCurrent()) throw new Error('Plugin activation cancelled');
-                await definition.setup(context);
+                await definition.setup(trusted.context);
                 if (!isCurrent()) throw new Error('Plugin activation cancelled');
                 return {
                     async dispose() {

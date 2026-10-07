@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from '#imports';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
@@ -231,7 +232,7 @@ onUnmounted(() => { mounted = false; running.value = false; });
             <p>Future workspace default: {{ operation.includeFutureWorkspaces ? operation.futureDefaultApplied ? 'saved' : 'will change when applied' : 'unchanged' }}.</p>
             <div v-if="release && operation.status === 'preview'" class="rounded bg-[var(--md-surface-container-low)] p-2">
                 <p>Release {{ release.version }} · Trust: {{ release.trust }}.</p>
-                <p>Permissions: {{ release.requestedGrants.join(', ') || 'none' }}.</p>
+                <p>Permissions: {{ release.requestedGrants.map(describePluginGrant).join('; ') || 'none' }}.</p>
                 <p>Network destinations: {{ release.authority?.destinations?.length ?? 0 }}.</p>
                 <ul v-if="release.authority?.destinations?.length" class="ml-4 list-disc space-y-1 break-words">
                     <li v-for="(destination, index) in release.authority.destinations" :key="index">{{ destination.host }} · {{ destination.methods.join(', ') || 'any method' }} · {{ destination.pathPrefixes.join(', ') || 'all paths' }}<span v-if="destination.connection"> · connection {{ destination.connection }}</span></li>

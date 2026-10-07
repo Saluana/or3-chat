@@ -512,6 +512,7 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
         return {
             ...base,
             ai: {
+                ...base.ai,
                 models: async () => {
                     const denied = allowedAi('ai.models') ? null : refusedGrant('ai.models');
                     if (denied) return { ok: false, error: denied };
@@ -554,6 +555,7 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
             available: features,
         };
         const hooks: PluginHooks = {
+            emitAction: async () => pluginError('unsupported', 'Hook emission is unavailable'),
             onAction: () => {
                 throw new Error('The portable profile does not support host hooks yet');
             },

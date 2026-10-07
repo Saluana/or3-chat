@@ -1,6 +1,9 @@
 import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
 import type { PluginSettingsClient, PluginStorageClient } from './clients';
 import type {
+    PluginPostsClient,
+    PluginToolsClient,
+    PluginJobsClient,
     PluginActivityClient,
     PluginAiClient,
     PluginChatClient,
@@ -87,6 +90,8 @@ export interface PluginContribution<TDefinition = unknown> {
 
 /** Reviewed Vue renderer for a host-provided message. Trusted-host only. */
 export interface PluginMessageRendererDefinition<TMessage = unknown> {
+    /** Assistant message type this activation may write. */
+    readonly messageType?: string;
     readonly match: (message: TMessage) => boolean;
     readonly component: unknown;
 }
@@ -110,6 +115,7 @@ export interface PluginHookOptions {
 }
 
 export interface PluginHooks {
+    emitAction(name: string, payload: unknown): Promise<import('./results').PluginResult<void>>;
     onAction<TArgs extends readonly unknown[]>(
         hookName: string,
         callback: (...args: TArgs) => void | Promise<void>,
@@ -139,6 +145,9 @@ export interface PluginContext {
     readonly contributions: PluginContributions;
     readonly settings: PluginSettingsClient;
     readonly storage: PluginStorageClient;
+    readonly posts: PluginPostsClient;
+    readonly tools: PluginToolsClient;
+    readonly jobs: PluginJobsClient;
     readonly ai: PluginAiClient;
     readonly ui: PluginUiClient;
     readonly panes: PluginPanesClient;
