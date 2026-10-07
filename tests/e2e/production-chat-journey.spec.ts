@@ -917,7 +917,7 @@ test.describe('production chat journey', () => {
         await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
         const [continued] = await requests();
         expect(continued?.partTypes).not.toContain('image_url');
-        expect(continued?.text).toContain('What colour is this image?[1 image omitted: the selected model does not accept image input.]');
+        expect(continued?.text).toContain('What colour is this image?[1 image not sent: the current model cannot read images. Earlier replies may have seen it.]');
 
         // A newly attached image is refused before any write, with the draft and image kept.
         const chooser = page.waitForEvent('filechooser');
@@ -925,8 +925,12 @@ test.describe('production chat journey', () => {
         await (await chooser).setFiles(fixturePng);
         await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
         await input.fill('journey:describe the new image');
-        await page.getByRole('button', { name: 'Send message', exact: true }).click();
-        await expect(page.getByText("Plain fixture model can't read images. Choose a model that accepts images, or remove the image to send this message.", { exact: true })).toBeVisible();
+        // Until the image is saved, Send only says files are still uploading; send again as a person would.
+        const guidance = page.getByText("Plain fixture model can't read images. Choose a model that accepts images, or remove the image to send this message.", { exact: true });
+        await expect(async () => {
+            await page.getByRole('button', { name: 'Send message', exact: true }).click();
+            await expect(guidance).toBeVisible({ timeout: 1_000 });
+        }).toPass({ timeout: 15_000 });
         await expect(page.getByRole('button', { name: 'Choose model', exact: true })).toBeVisible();
         await expect(input).toHaveText('journey:describe the new image');
         expect(await requests()).toHaveLength(1);

@@ -380,7 +380,11 @@ Important default behavior when using env:
 - Env: `OR3_AUTH_REGISTRATION_MODE`
 - Purpose: Controls first-time registration for unknown authenticated identities.
   - `open`: allow first-time provisioning
-  - `invite_only`: require valid invite token
+  - `invite_only`: require valid invite token. Opening an invite link
+    (`/?invite=TOKEN`) stores a valid token in the HttpOnly `or3_invite_token`
+    cookie until it expires, so a sign-up in the auth provider's own UI (for
+    example Clerk) is admitted even after a redirect or in another tab. The
+    cookie is cleared when the invite is accepted.
   - `disabled`: deny first-time provisioning
 
 #### `auth.invite.tokenSecret`

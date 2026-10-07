@@ -1,4 +1,5 @@
 import { ref, shallowRef, type Ref } from 'vue';
+import { appendResponseHeader } from 'h3';
 import type { NuxtApp } from '#app';
 import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
@@ -326,10 +327,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    // Persist current default into the response cookies for future comparisons
+    // Persist current default into the response cookies for future comparisons.
+    // Append: replacing Set-Cookie would drop cookies that server middleware
+    // already set on this page response (for example an invite link's token).
     try {
-        nuxtApp.ssrContext?.event.node.res.setHeader(
-            'Set-Cookie',
+        const event = nuxtApp.ssrContext?.event;
+        if (event) appendResponseHeader(
+            event,
+            'set-cookie',
             `${PREVIOUS_DEFAULT_COOKIE}=${encodeURIComponent(
                 DEFAULT_THEME
             )}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax`

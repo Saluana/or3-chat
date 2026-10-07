@@ -94,6 +94,7 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import {
     parseChatGenerationAdmissionEnvelope,
     type CanonicalHistoryRecord,
@@ -1074,7 +1075,15 @@ export async function consumeBackgroundStreamWithTools(params: {
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
         runtime?: 'client' | 'server' | 'hybrid';
+        text_offset?: number;
     }>();
+    // How much of the row's text existed before each call's results; a replay
+    // sends later text after them. Kept across state replacements.
+    const textOffsets = new Map<string, number>();
+    const setToolState = (id: string, state: Parameters<typeof toolStates.set>[1]) => {
+        const textOffset = textOffsets.get(id);
+        toolStates.set(id, textOffset === undefined ? state : { ...state, text_offset: textOffset });
+    };
     const toolLedger = new Map<string, ToolLedgerEntry>();
     let pendingProviderContent = '';
     let pendingProviderReasoning = '';
@@ -1092,6 +1101,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             : call.status === 'error' || call.status === 'skipped' ? 'failed'
             : call.status === 'loading' ? 'running' : 'pending';
         toolStates.set(call.id, { ...call, argument_fingerprint: fingerprint });
+        if (typeof call.text_offset === 'number') textOffsets.set(call.id, call.text_offset);
         toolLedger.set(call.id, {
             callId: call.id, name: call.name, argumentFingerprint: fingerprint,
             state, result: call.result, error: call.error,
@@ -1232,7 +1242,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 admittedDefinition &&
                 decision.action === 'execute'
             ) {
-                toolStates.set(toolCall.id, {
+                setToolState(toolCall.id, {
                     id: toolCall.id,
                     name: toolCall.function.name,
                     status: 'pending',
@@ -1283,7 +1293,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     argumentFingerprint: decision.fingerprint,
                     state: 'running',
                 });
-                toolStates.set(toolCall.id, {
+                setToolState(toolCall.id, {
                     id: toolCall.id,
                     name: toolCall.function.name,
                     status: 'loading',
@@ -1341,7 +1351,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 result: status === 'complete' ? projectedResult.durable : undefined,
                 error: status === 'complete' ? undefined : errorMessage,
             });
-            toolStates.set(toolCall.id, {
+            setToolState(toolCall.id, {
                 id: toolCall.id,
                 name: toolCall.function.name,
                 status,
@@ -1447,7 +1457,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
             const usageRequestId = crypto.randomUUID();
 
-            const upstream = await fetchWithResponseDeadline(openRouterUrl, {
+            const { response: upstream, errorText: refusedText } = await sendWithAffordableReply((body) => fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${params.apiKey}`,
@@ -1456,8 +1466,11 @@ export async function consumeBackgroundStreamWithTools(params: {
                     'HTTP-Referer': params.referer,
                     'X-Title': 'or3.chat',
                 },
-                body: JSON.stringify(requestBody),
-            }, { signal: params.abortSignal });
+                body: JSON.stringify(body),
+            }, { signal: params.abortSignal }), requestBody, {
+                defaultAllowance: !!params.contextPolicy && params.contextPolicy.requestedCompletionTokens == null,
+                signal: params.abortSignal,
+            });
             logBgStream('server-consume-tools-upstream-response', {
                 jobId: params.jobId,
                 iteration: loopIteration,
@@ -1467,7 +1480,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             });
 
             if (!upstream.ok || !upstream.body) {
-                const errorText = await readResponseTextWithIdleDeadline(upstream, {
+                const errorText = refusedText ?? await readResponseTextWithIdleDeadline(upstream, {
                     signal: params.abortSignal,
                 }).catch(() => '<no body>');
                 logBackgroundEvent('warn', 'background.tools.upstream_rejected', {
@@ -1549,7 +1562,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                             toolCall.function.name,
                             toolCall.function.arguments
                         );
-                        toolStates.set(toolCall.id, {
+                        setToolState(toolCall.id, {
                             id: toolCall.id,
                             name: toolCall.function.name,
                             status: 'pending',
@@ -1589,6 +1602,11 @@ export async function consumeBackgroundStreamWithTools(params: {
                     },
                 })),
             });
+            for (const toolCall of pendingToolCalls) {
+                textOffsets.set(toolCall.id, fullContent.length);
+                const state = toolStates.get(toolCall.id);
+                if (state) setToolState(toolCall.id, state);
+            }
             const parked = await processToolQueue(pendingToolCalls);
             if (parked) return;
             await flushProviderProgress(true);
@@ -1925,9 +1943,10 @@ export async function executeBackgroundJob(
     }
 
     const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
-    await admitServerProviderBody(cleanBody, await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal), signal);
+    const contextPolicy = await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal);
+    await admitServerProviderBody(cleanBody, contextPolicy, signal);
     const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
-    const upstream = await fetchWithResponseDeadline(openRouterUrl, {
+    const { response: upstream, errorText: refusedText } = await sendWithAffordableReply((body) => fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${params.apiKey}`,
@@ -1936,8 +1955,11 @@ export async function executeBackgroundJob(
             'HTTP-Referer': params.referer,
             'X-Title': 'or3.chat',
         },
-        body: JSON.stringify(cleanBody),
-    }, { signal });
+        body: JSON.stringify(body),
+    }, { signal }), cleanBody, {
+        defaultAllowance: !!contextPolicy && contextPolicy.requestedCompletionTokens == null,
+        signal,
+    });
     logBgStream('server-stream-in-background-upstream-response', {
         jobId,
         status: upstream.status,
@@ -1946,7 +1968,7 @@ export async function executeBackgroundJob(
     });
 
     if (!upstream.ok || !upstream.body) {
-        const errorText = await readResponseTextWithIdleDeadline(upstream, {
+        const errorText = refusedText ?? await readResponseTextWithIdleDeadline(upstream, {
             signal,
         }).catch(() => '<no body>');
         warnBgStream('server-stream-in-background-upstream-failed', {

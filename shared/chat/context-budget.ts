@@ -38,6 +38,14 @@ export type ContextAdmission =
     | { ok: false; code: 'context_full' | 'invalid_output_limit' | 'invalid_context_limit'; budget: ContextBudget; estimate: ContextEstimate }
     | { ok: false; code: 'model_metadata_unavailable' };
 
+/**
+ * Reply allowance when the caller names none. A model's whole output window
+ * reserves credit for all of it and narrows routing to hosts that advertise
+ * that size, some of which then refuse tool histories (Kimi K2.5 at 235,929
+ * tokens). An explicit allowance may still use the whole window.
+ */
+export const DEFAULT_REPLY_ALLOWANCE_TOKENS = 65_536;
+
 function positiveInteger(value: unknown): number | null {
     return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
@@ -68,7 +76,8 @@ export function admitChatContext(input: {
         model_context_tokens: modelContext, model_max_completion_tokens: outputMaximum,
         user_max_context_tokens: userMaximum, effective_context_tokens: effectiveContext,
         requested_completion_tokens: requested,
-        available_completion_tokens: Math.min(remaining, outputMaximum ?? remaining),
+        available_completion_tokens: Math.min(remaining, outputMaximum ?? remaining,
+            requested === null ? DEFAULT_REPLY_ALLOWANCE_TOKENS : remaining),
         source: input.source ?? 'openrouter-cache',
         limited_by: userMaximum !== null && userMaximum === effectiveContext && userMaximum < modelContext ? 'user'
             : routeContext !== null && routeContext === effectiveContext && routeContext < modelContext ? 'provider' : 'model',

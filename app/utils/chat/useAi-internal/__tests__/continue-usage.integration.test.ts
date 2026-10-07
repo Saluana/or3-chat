@@ -50,7 +50,7 @@ it.each([false, true])('persists measured continuation usage through canonical r
     await continueMessageImpl(ctx, 'assistant');
     const stored = (await db.messages.get('assistant'))!; const canonical = storedMessagesToCanonicalTranscript([stored])[0]!;
     expect(canonical.content).toBe('Hello world');
-    expect(canonical.usage).toMatchObject({ prompt_tokens: 456, completion_tokens: 12, request_id: 'continued-request', iteration: 1, prefix_message_count: 3 });
+    expect(canonical.usage).toMatchObject({ prompt_tokens: 456, completion_tokens: 12, request_id: 'continued-request', iteration: 1, prefix_message_count: 2 });
     expect(stored.data).toMatchObject({ plugin_owned: 'preserve' }); expect(stored.pending).toBe(false);
     expect(provider).toHaveBeenCalledOnce(); expect((await db.messages.toArray()).map((row) => row.id).sort()).toEqual(['assistant', 'user']);
     expect(request.phase.value).toBe('terminal');

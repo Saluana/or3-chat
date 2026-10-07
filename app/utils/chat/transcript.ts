@@ -60,6 +60,8 @@ export interface CanonicalToolCall {
     result?: string;
     error?: string;
     completedAt?: number;
+    /** Length of the assistant text when this call's results arrived; stored as `text_offset`. */
+    textOffset?: number;
 }
 
 export interface CanonicalGeneration {
@@ -186,6 +188,7 @@ export function messageToCanonicalTranscript(
             status: call.status,
             result: call.result,
             error: call.error,
+            textOffset: call.text_offset,
         }));
     const generationId =
         typeof data.generation_id === 'string' ? data.generation_id : null;
@@ -327,6 +330,7 @@ export function projectTranscriptForOpenRouter(
                     result: call.result,
                     error: call.error,
                     fingerprint: call.fingerprint,
+                    ...(call.textOffset === undefined ? {} : { text_offset: call.textOffset }),
                 })),
             },
         };

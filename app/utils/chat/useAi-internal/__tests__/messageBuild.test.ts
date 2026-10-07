@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '~/utils/chat/types';
 import { reactive } from 'vue';
-import { admitChatContext, estimateChatRequest, type CountableChatMessage } from '~~/shared/chat/context-budget';
+import { admitChatContext, DEFAULT_REPLY_ALLOWANCE_TOKENS, estimateChatRequest, type CountableChatMessage } from '~~/shared/chat/context-budget';
 
 const getMaxMessageFileHashesSpy = vi.fn();
 const hashToContentPartSpy = vi.fn();
@@ -212,7 +212,7 @@ describe('buildOpenRouterMessagesForSend', () => {
                 expect(admission.ok).toBe(true);
                 if (!admission.ok) throw new Error('Unexpected rejection');
                 expect(admission.budget.effective_context_tokens).toBe(1_000_000);
-                expect(admission.budget.available_completion_tokens).toBe(1_000_000 - estimate.input_tokens);
+                expect(admission.budget.available_completion_tokens).toBe(Math.min(1_000_000 - estimate.input_tokens, DEFAULT_REPLY_ALLOWANCE_TOKENS));
                 expect(admission.budget.available_completion_tokens).toBeGreaterThan(0);
                 const explicit = admitChatContext({ model: { context_length: 1_000_000 }, inputTokens: estimate.input_tokens, requestedCompletionTokens: 1, estimate });
                 expect(explicit).toMatchObject({ ok: true, budget: { requested_completion_tokens: 1 } });
@@ -343,6 +343,55 @@ describe('buildOpenRouterMessagesForSend', () => {
             role: 'system',
             id: 's-1',
             content: 'system',
+        });
+    });
+
+    // A tool-calling row stores all of its text, including the answer written
+    // after the results. Replaying it as one message put that answer before
+    // the evidence it was based on.
+    describe('replayed tool turns', () => {
+        const call = (id: string) => ({ id, type: 'function' as const, function: { name: 'lookup', arguments: '{}' } });
+        const stored = (id: string, text_offset?: number) => ({ id, name: 'lookup', args: '{}', status: 'complete',
+            ...(text_offset === undefined ? {} : { text_offset }) });
+        const result = (id: string) => ({ id: `r-${id}`, role: 'tool' as const, content: `result ${id}`, tool_call_id: id, name: 'lookup' });
+        const sent = async (effectiveMessages: ChatMessage[]) => {
+            await buildOpenRouterMessagesForSend({ effectiveMessages, assistantHashes: [], contextHashes: [], fileHashes: [] });
+            return (buildOpenRouterMessagesSpy.mock.calls[0] as [Array<Record<string, unknown>>])[0]
+                .map(({ role, content, tool_calls, tool_call_id }) => ({ role, content,
+                    calls: (tool_calls as Array<{ id: string }> | undefined)?.map((entry) => entry.id), tool_call_id }));
+        };
+
+        it('sends text written after the results after them, iteration by iteration', async () => {
+            expect(await sent([
+                { id: 'u', role: 'user', content: 'Find both' },
+                { id: 'a', role: 'assistant', content: 'Searching.Found one, checking more.Both found.', tool_calls: [call('c1'), call('c2')],
+                    file_hashes: '["gen-image"]', data: { tool_calls: [stored('c1', 10), stored('c2', 35)] } },
+                result('c1'), result('c2'),
+                { id: 'u2', role: 'user', content: 'Thanks' },
+            ])).toEqual([
+                { role: 'user', content: 'Find both' },
+                { role: 'assistant', content: 'Searching.', calls: ['c1'] },
+                { role: 'tool', content: 'result c1', tool_call_id: 'c1' },
+                { role: 'assistant', content: 'Found one, checking more.', calls: ['c2'] },
+                { role: 'tool', content: 'result c2', tool_call_id: 'c2' },
+                { role: 'assistant', content: 'Both found.' },
+                { role: 'user', content: 'Thanks' },
+            ]);
+            const passed = (buildOpenRouterMessagesSpy.mock.calls[0] as [Array<Record<string, unknown>>])[0];
+            expect(passed.filter((message) => message.file_hashes).map((message) => message.content)).toEqual(['Both found.']);
+        });
+
+        it('keeps a row without saved offsets, or with an offset its edited text no longer has, as one message', async () => {
+            for (const offsets of [[undefined], [999]]) {
+                buildOpenRouterMessagesSpy.mockClear();
+                expect(await sent([
+                    { id: 'a', role: 'assistant', content: 'Answer', tool_calls: [call('c1')], data: { tool_calls: [stored('c1', offsets[0])] } },
+                    result('c1'),
+                ])).toEqual([
+                    { role: 'assistant', content: 'Answer', calls: ['c1'] },
+                    { role: 'tool', content: 'result c1', tool_call_id: 'c1' },
+                ]);
+            }
         });
     });
 

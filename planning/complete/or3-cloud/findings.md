@@ -14,6 +14,16 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- Real models switched mid-thread (eight providers, shared tool history)
+  worked. A low key balance no longer fails every default-allowance send (one
+  retry at the affordable size), an unreachable catalog fails within seconds
+  as a provider outage instead of "Model capacity unavailable", and the image
+  omission note no longer implies earlier replies were blind. A follow-up
+  caps the default reply allowance (65,536), retries credit refusals on every
+  transport, merges adjacent user turns, keeps the chosen reasoning effort,
+  replays tool turns in order, ranks exact model names first and keeps invite
+  links through the root rewrite; see
+  [the 2026-10-07 report](../or3-cloud-production-readiness/chat-reliability-2026-10-07.md#real-models-switched-mid-thread-follow-up-pass).
 - A managed-install chat pass found that relayed provider 404s cached the
   stream route as missing, that image history broke every send after
   switching to a text-only model, that carried images were sent twice and

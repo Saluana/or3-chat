@@ -34,6 +34,7 @@ import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
 import {
     evaluateUnknownUserRegistration,
+    INVITE_TOKEN_COOKIE,
     resolveRegistrationMode,
 } from './registration';
 import { emitWebhookSystemHook } from '../utils/webhooks/runtime';
@@ -420,7 +421,7 @@ async function resolveSessionContextAttempt(
                     });
                 }
 
-                deleteCookie(event, 'or3_invite_token', {
+                deleteCookie(event, INVITE_TOKEN_COOKIE, {
                     path: '/',
                 });
             } else {

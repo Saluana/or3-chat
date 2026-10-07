@@ -137,6 +137,8 @@ export interface BackgroundJob {
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
         runtime?: 'client' | 'server' | 'hybrid';
+        /** Length of the assistant text when this call's results arrived. */
+        text_offset?: number;
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;

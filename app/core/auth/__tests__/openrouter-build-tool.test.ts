@@ -390,6 +390,21 @@ describe('buildOpenRouterMessages tool history', () => {
         ]);
     });
 
+    // A failed or stopped-empty reply is not replayed, which left the failed
+    // question and the next one as two user turns in a row.
+    it('sends adjacent user messages as one user turn, keeping every part in order', async () => {
+        const result = await buildOpenRouterMessages([
+            { role: 'system', content: 'Instructions' },
+            { role: 'user', content: 'First question' },
+            { role: 'assistant', content: 'First answer' },
+            { role: 'user', content: 'Question whose reply failed' },
+            { role: 'user', content: [{ type: 'text', text: 'Next question' }, { type: 'text', text: 'with context' }] },
+        ]);
+        expect(result.map((message) => message.role)).toEqual(['system', 'user', 'assistant', 'user']);
+        expect(result[3]!.content).toEqual([{ type: 'text', text: 'Question whose reply failed' },
+            { type: 'text', text: 'Next question' }, { type: 'text', text: 'with context' }]);
+    });
+
     it('preserves assistant calls and matching tool result metadata', async () => {
         const result = await buildOpenRouterMessages([
             {
@@ -430,11 +445,13 @@ describe('buildOpenRouterMessages image selection', () => {
         messages.map((message) => message.content.flatMap((part) => part.type === 'image_url' ? [part.image_url.url] : []));
 
     it('keeps the newest attachments when history exceeds the image cap', async () => {
-        const history = Array.from({ length: 6 }, (_, n) => ({
-            role: 'user' as const, content: `turn ${n}`, file_hashes: JSON.stringify([image(n)]),
-        }));
+        const history = Array.from({ length: 6 }, (_, n) => [
+            { role: 'user' as const, content: `turn ${n}`, file_hashes: JSON.stringify([image(n)]) },
+            { role: 'assistant' as const, content: `reply ${n}` },
+        ]).flat();
         const result = await buildOpenRouterMessages(history, { maxImageInputs: 5 });
-        expect(imageUrls(result)).toEqual([[], [image(1)], [image(2)], [image(3)], [image(4)], [image(5)]]);
+        expect(imageUrls(result.filter((message) => message.role === 'user')))
+            .toEqual([[], [image(1)], [image(2)], [image(3)], [image(4)], [image(5)]]);
     });
 
     it('sends a repeated image once, where it was first attached', async () => {
@@ -455,7 +472,7 @@ describe('buildOpenRouterMessages image selection', () => {
         expect(imageUrls(result)).toEqual([[], [], []]);
         expect(result[0]?.content).toEqual([
             { type: 'text', text: 'what colour?' },
-            { type: 'text', text: '[2 images omitted: the selected model does not accept image input.]' },
+            { type: 'text', text: '[2 images not sent: the current model cannot read images. Earlier replies may have seen them.]' },
         ]);
         expect(result[2]?.content).toEqual([{ type: 'text', text: 'summarize' }]);
         expect(getFileBlob).not.toHaveBeenCalled();

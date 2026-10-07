@@ -44,6 +44,7 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import { getDeviceId } from '~/core/sync/hlc';
 import type { ORContentPart, ORMessage as BuiltMessage } from '~/core/auth/openrouter-build';
 
@@ -408,8 +409,9 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     delete fallbackBody._context;
 
     let resp: Response;
+    let refusedText: string | undefined;
     try {
-        resp = await fetchWithResponseDeadline(openRouterChatUrl, {
+        ({ response: resp, errorText: refusedText } = await sendWithAffordableReply((requestBody) => fetchWithResponseDeadline(openRouterChatUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -420,8 +422,12 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 'X-Title': 'or3.chat',
                 Accept: 'text/event-stream',
             },
-            body: JSON.stringify(fallbackBody),
-        }, { signal, timeoutMs: params.responseTimeoutMs });
+            body: JSON.stringify(requestBody),
+        }, { signal, timeoutMs: params.responseTimeoutMs }), fallbackBody, {
+            defaultAllowance: !!params.contextPolicy
+                && (params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens) == null,
+            signal,
+        }));
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         if (error instanceof OpenRouterStreamError) throw error;
@@ -433,8 +439,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
 
     if (!resp.ok || !resp.body) {
         // Read response text for diagnostics
-        let respText = '<no-body>';
-        try {
+        let respText = refusedText ?? '<no-body>';
+        if (refusedText === undefined) try {
             respText = await readResponseTextWithIdleDeadline(resp, {
                 signal,
                 timeoutMs: params.idleTimeoutMs,
@@ -633,6 +639,8 @@ export interface BackgroundJobStatus {
         result?: string;
         error?: string;
         runtime?: 'client' | 'server' | 'hybrid';
+        /** Length of the assistant text when this call's results arrived. */
+        text_offset?: number;
     }>;
     workflow_state?: WorkflowMessageData;
 }

@@ -51,6 +51,7 @@ try {
                 OR3_GUEST_ACCESS_ENABLED: 'false',
                 OR3_AUTH_REGISTRATION_MODE: 'invite_only',
                 OR3_AUTH_AUTO_PROVISION: 'false',
+                OR3_AUTH_INVITE_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
                 OR3_SYNC_ENABLED: 'true',
                 OR3_CLOUD_SYNC_ENABLED: 'true',
                 OR3_SYNC_PROVIDER: 'sqlite',

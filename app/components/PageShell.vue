@@ -1556,7 +1556,11 @@ function updateUrl(force = false) {
     const params = new URLSearchParams(window.location.search);
     const dashboardQuery = parseDashboardDeepLink(Object.fromEntries(params))
         ? window.location.search : '';
-    window.history.replaceState(window.history.state, '', `${newPath}${dashboardQuery}`);
+    // An invite link (`/?invite=`) is read by the auth provider's account
+    // control after it mounts, so the token also survives this rewrite.
+    const invite = params.get('invite');
+    const query = dashboardQuery || (invite ? `?${new URLSearchParams({ invite })}` : '');
+    window.history.replaceState(window.history.state, '', `${newPath}${query}`);
 }
 
 watch(

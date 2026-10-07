@@ -33,7 +33,7 @@ import {
 import { getDefaultPromptId } from '~/composables/chat/useDefaultPrompt';
 import { trimOrMessagesByTokenBudget } from '~/utils/chat/messages';
 import { countTokensApprox } from '~/utils/chat/tokens';
-import type { ChatMessage, ContentPart } from '~/utils/chat/types';
+import type { ChatMessage, ContentPart, ToolCall } from '~/utils/chat/types';
 import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
 import { hashToContentPart } from './files';
@@ -191,6 +191,57 @@ export async function enforceOpenRouterMessageTokenBudget(
 }
 
 /**
+ * A stored tool-calling assistant row keeps all of its text, including what was
+ * written after the tool results. Each call's saved `text_offset` marks how much
+ * of that text existed when its iteration ended, so replay text before, the
+ * calls, their results, then the later text. Rows without usable offsets (older
+ * rows, edited text) are sent as one message, as before.
+ */
+function splitReplayedToolTurns(source: readonly ChatMessage[], messages: ModelInputMessage[]): ModelInputMessage[] {
+    const out: ModelInputMessage[] = [];
+    for (let i = 0; i < messages.length; i += 1) {
+        const message = messages[i]!;
+        const text = message.content;
+        const calls = message.tool_calls ?? [];
+        const offsets = new Map<string, number>();
+        for (const saved of Array.isArray(source[i]?.data?.tool_calls) ? source[i]!.data!.tool_calls as unknown[] : []) {
+            const entry = saved && typeof saved === 'object' ? saved as { id?: unknown; text_offset?: unknown } : {};
+            if (typeof entry.id === 'string' && Number.isSafeInteger(entry.text_offset)) offsets.set(entry.id, entry.text_offset as number);
+        }
+        const usable = message.role === 'assistant' && typeof text === 'string' && calls.length > 0 && offsets.size > 0
+            && [...offsets.values()].every((offset) => offset >= 0 && offset <= text.length);
+        if (!usable) { out.push(message); continue; }
+        let end = i + 1;
+        while (messages[end]?.role === 'tool') end += 1;
+        const results = messages.slice(i + 1, end);
+        const groups = new Map<number, ToolCall[]>();
+        for (const call of calls) {
+            const offset = offsets.get(call.id) ?? text.length;
+            groups.set(offset, [...groups.get(offset) ?? [], call]);
+        }
+        let start = 0;
+        const sent = new Set<ModelInputMessage>();
+        for (const offset of [...groups.keys()].sort((a, b) => a - b)) {
+            const group = groups.get(offset)!;
+            out.push({ ...message, content: text.slice(start, offset), tool_calls: group, file_hashes: null });
+            for (const row of results) {
+                if (group.some((call) => call.id === row.tool_call_id)) { out.push(row); sent.add(row); }
+            }
+            start = offset;
+        }
+        out.push(...results.filter((row) => !sent.has(row)));
+        const later = text.slice(start);
+        if (later.trim()) out.push({ ...message, content: later, tool_calls: undefined });
+        else {
+            const last = [...out].reverse().find((row) => row.role === 'assistant' && row.id === message.id);
+            if (last) last.file_hashes = message.file_hashes;
+        }
+        i = end - 1;
+    }
+    return out;
+}
+
+/**
  * `buildOpenRouterMessagesForSend`
  *
  * Purpose:
@@ -251,6 +302,9 @@ export async function buildOpenRouterMessagesForSend(
         }
     );
 
+    const replayed = splitReplayedToolTurns(params.effectiveMessages, modelInputMessages);
+    modelInputMessages.splice(0, modelInputMessages.length, ...replayed);
+
     let lastUserIdx = -1;
     for (let i = modelInputMessages.length - 1; i >= 0; i -= 1) {
         if (modelInputMessages[i]?.role === 'user') {
@@ -260,10 +314,10 @@ export async function buildOpenRouterMessagesForSend(
     }
 
     if (params.assistantHashes.length && params.prevAssistantId) {
-        const target = modelInputMessages.find(
-            (m) => m.id === params.prevAssistantId
-        );
-        if (target) target.file_hashes = null;
+        // A replayed tool turn can span several messages with this id.
+        for (const target of modelInputMessages) {
+            if (target.id === params.prevAssistantId) target.file_hashes = null;
+        }
     }
 
     const maxMessageFileHashes = getMaxMessageFileHashes();

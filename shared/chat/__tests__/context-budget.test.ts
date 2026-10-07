@@ -25,6 +25,18 @@ describe('provider context admission', () => {
         expect(admitChatContext({ model, inputTokens: 100, requestedCompletionTokens: 40_000 })).toMatchObject({ ok: true,
             budget: { requested_completion_tokens: 40_000, available_completion_tokens: 65_536 } });
     });
+    // Live: Kimi K2.5 with tool history at max_tokens 235,929 was routed to
+    // hosts that refuse tool use; at 65,536 it was served. The full window
+    // also reserved credit a small balance could not cover.
+    it('defaults the reply allowance below a very large output window, while an explicit allowance may use it', () => {
+        const wide = { context_length: 262_144, top_provider: { context_length: 262_144, max_completion_tokens: 235_929 } };
+        expect(admitChatContext({ model: wide, inputTokens: 20_000 })).toMatchObject({ ok: true,
+            budget: { model_max_completion_tokens: 235_929, available_completion_tokens: 65_536 } });
+        expect(admitChatContext({ model: wide, inputTokens: 20_000, requestedCompletionTokens: 200_000 })).toMatchObject({ ok: true,
+            budget: { requested_completion_tokens: 200_000, available_completion_tokens: 235_929 } });
+        expect(admitChatContext({ model: wide, inputTokens: 250_000 })).toMatchObject({ ok: true,
+            budget: { available_completion_tokens: 12_144 } });
+    });
     it('intersects a verified selected-route limit and separate input/output ceilings', () => {
         expect(admitChatContext({ model, inputTokens: 9_000,
             routeLimits: { contextTokens: 64_000, inputTokens: 8_192, outputTokens: 4_096 } })).toMatchObject({ ok: false, code: 'context_full' });

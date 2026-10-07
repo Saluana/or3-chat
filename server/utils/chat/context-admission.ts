@@ -5,6 +5,20 @@ import { admitProviderRequest, ChatContextAdmissionError, type ContextRequestPol
 import { countTokensApprox } from '~/utils/chat/tokens';
 import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 
+/** The send waits on this lookup; a provider that never answers must not hold it open. */
+const CATALOG_DEADLINE_MS = 15_000;
+
+/** Normalizes as a retry-later provider failure (`ERR_PROVIDER`), never as missing model metadata. */
+export class OpenRouterCatalogUnavailableError extends Error {
+    readonly status = 502;
+    readonly source = 'provider' as const;
+    readonly retryable = false;
+    constructor(cause: unknown) {
+        super('The OpenRouter model catalog could not be reached.', { cause });
+        this.name = 'OpenRouterCatalogUnavailableError';
+    }
+}
+
 /** New native requests carry only user choices. Legacy payloads retain their existing boundary. */
 export async function resolveServerContextPolicy(body: Record<string, unknown>, apiKey: string,
     serverURL?: string, signal?: AbortSignal): Promise<ContextRequestPolicy | undefined> {
@@ -20,10 +34,13 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
     const requestedCompletion = envelope.requested_completion_tokens === null ? null
         : typeof envelope.requested_completion_tokens === 'number' ? envelope.requested_completion_tokens : NaN;
     let catalog;
-    try { catalog = await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal); }
+    try { catalog = await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal,
+        { deadlineMs: CATALOG_DEADLINE_MS }); }
     catch (error) {
         if (signal?.aborted) throw error;
-        throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+        // The catalog itself could not be read: that is a provider outage or
+        // egress problem, not something the user fixes by changing models.
+        throw new OpenRouterCatalogUnavailableError(error);
     }
     const withoutThinking = selectedModel.endsWith(':thinking') ? selectedModel.slice(0, -':thinking'.length) : selectedModel;
     const lookupId = stripModelVariantSuffix(withoutThinking);

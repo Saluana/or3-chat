@@ -80,17 +80,96 @@ and the catalog/sidebar fixes rendered as intended on desktop and mobile.
 
 ## Remaining follow-ups (not changed here)
 
-- **Invite links do not start registration.** Nothing reads `?invite=`; the
-  Basic Auth register modal labels the token "(optional)" and starts empty.
-  The fix belongs in `or3-provider-basic-auth`.
-- **Inline error copy on failed turns.** Foreground failures persist the
-  generic `stream_interrupted`, so the reply area says "Try sending your
-  message again" even when the toast correctly says to choose another model.
-- **Signed-out visitors** on an invite-only instance see the full chat shell;
-  sending says "Connect to OpenRouter" rather than "Sign in", and mobile has no
-  visible sign-in cue outside More.
-- **Prerendered `/`** carries build-time public runtime config, so runtime
-  overrides such as `NUXT_PUBLIC_OPEN_ROUTER_BASE_URL` apply on SSR routes
-  (`/chat`) but not on the first `/` load.
-- Real-model behavior (actual OpenRouter 404 wording, vision support of the
-  default alias) was not exercised because `openrouter.ai` is blocked here.
+- **Invite links did not start registration.** Nothing read `?invite=`; the
+  Basic Auth register modal labelled the token "(optional)" and started
+  empty. Fixed in `or3-provider-basic-auth` plus core (see the second
+  follow-up below); OR3 Chat picks it up with the next provider release.
+- Since fixed on `or3-cloud`: inline copy on failed turns now keeps the
+  classified error across reload; signed-out visitors are asked to sign in;
+  server builds render `/` per request, so runtime public config applies.
+
+## Real models, switched mid-thread (follow-up pass)
+
+The same commit was then run directly on the host (Basic Auth + SQLite +
+filesystem, production build), so the server reached the real OpenRouter
+through the session proxy, with a $1 test key that never entered the
+repository or logs. One conversation was built up with a workspace tool call
+and continued turn by turn on a different provider each time: GPT-6 Luna,
+GLM 5.3 Flash, DeepSeek Flash, Qwen 3.7 Flash, Claude Haiku, Gemini Flash,
+Mistral Nemo and Grok Build all accepted the other providers' tool-call
+history, reasoning settings and messages, and replied. Retry on a different
+model, branching and continuing on another provider, and compaction followed
+by a continuation also worked. Total spend was about $0.10.
+
+Repaired in this pass:
+
+- **A small balance broke every send.** The default reply allowance is the
+  model's whole output window (128,000 tokens for GPT-6 Luna), and OpenRouter
+  reserves credit for all of it. With about $0.90 left, a one-line reply
+  failed with 402 "can only afford 78766". When the allowance is the default,
+  the server route now retries once at the affordable size (if at least 1,024
+  tokens); an explicit user allowance keeps the credit error. Verified live
+  with Claude Sonnet.
+- **An unreachable provider left replies "generating" for up to an hour.**
+  The SDK retries connection errors for an hour by default, and every native
+  send waits on the catalog lookup. Retries are now bounded to about 10
+  seconds (browser and server), and the server lookup to 15 seconds.
+- **That outage was reported as "Model capacity unavailable — choose a
+  model with known capacity".** An unreachable catalog is now a provider
+  failure (HTTP 502, `ERR_PROVIDER`), not something fixed by changing models.
+- **The image omission note misled a model.** With "[1 image omitted: the
+  selected model does not accept image input]", DeepSeek reasoned that the
+  earlier answer ("Blue", written by a vision model) had been given without
+  seeing the image. The note now says the current model cannot read the image
+  and that earlier replies may have seen it.
+- The real 404 wording ("No endpoints found that support image input") and
+  the image-to-text-only switch were confirmed with DeepSeek V4 Flash.
+
+Fixed in a second follow-up (live-checked on the rebuilt host instance):
+
+- **Default reply allowance capped at 65,536 tokens.** Kimi K2.5 with tool
+  history at its full window (235,929) was routed to hosts that refuse tool
+  use (Novita, after AtlasCloud); at 65,536 and 131,072 it is served. The cap
+  also halves the credit reserved for models such as GPT-6 Luna (128,000).
+  An explicit allowance may still use the whole window. Live: GPT-6 Luna
+  made a workspace search; Kimi K2.5 then continued the thread with that
+  tool history (HTTP 200, `max_tokens` 65,536).
+- **Credit retry everywhere.** The 402 retry at the affordable size is a
+  shared helper used by the server route, both background job loops and the
+  direct browser path (background was not run live; tests cover it).
+- **No consecutive user turns.** Adjacent user messages are sent as one turn,
+  so a failed or stopped-empty reply no longer leaves two user turns in a row
+  (continuation prompts were affected too). Live: a reply stopped before its
+  first token, and the next request carried both questions in one user turn.
+- **Reasoning effort keeps the user's choice.** A model without the chosen
+  effort shows a fallback, and the next model that offers it gets it back.
+  Live: GLM 5.3 Flash and DeepSeek Flash (no `medium`) sent `high`; Claude
+  Haiku and GPT-6 Luna then sent `medium` again.
+- **Tool turns replay in order.** Tool loops save each call's `text_offset`
+  (how much text existed when its results arrived). Sends split the stored
+  row into text before, the calls, the results, then the later text. Older
+  rows without offsets are unchanged. Live: Kimi received "I'll search the
+  workspace…", the call, the result, then "PAPAYA-88 was found…".
+- **Exact model first.** Name matches are ranked exact, then prefix, then
+  contains; "gpt-6 luna" lists GPT-6 Luna before GPT-6 Luna Pro in the real
+  catalog.
+- **Invite links open registration.** Fixed in `or3-provider-basic-auth`
+  (token read once, filled in, registration opened for signed-out visitors),
+  with core keeping `?invite=` through the `/` → `/chat` rewrite (it was
+  dropped before any provider code ran) and telling mobile visitors to open
+  the menu, then More. Checked end to end with the rebuilt provider on the
+  invite-only profile, desktop and mobile; the core part is in
+  `cloud-sign-in-gate.spec.ts`. Providers that sign people up in their own
+  UI (Clerk) never see the token, so the server now keeps a valid invite in
+  the `or3_invite_token` cookie that session resolution already reads. That
+  cookie was also being dropped from page responses: the theme plugin
+  replaced every `Set-Cookie` header; it now appends. Clerk itself was not
+  exercised (no Clerk keys here).
+
+Still open:
+
+- `PageShell compaction families…` is flaky on `or3-cloud` too: after reload
+  the sidebar family header is sometimes missing within 5 seconds.
+- The journey spec's Files cases expect a `dialog` named "File preview";
+  `WorkspaceFilesPane.vue` renders an `aside`, so seven Files journeys fail on
+  `or3-cloud` as well.

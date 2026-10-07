@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { createInviteToken } from '../../server/auth/invite-token';
 
 // Needs the invite-only Basic Auth profile with a disposable bootstrap user:
 // run it with `bun run test:e2e:sign-in-gate`.
@@ -16,9 +17,10 @@ test.skip(!harnessReady, 'Requires the sign-in gate E2E harness');
 
 async function openComposer(page: Page) {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
     const composer = page.getByLabel('Message input', { exact: true });
     await expect(composer).toBeVisible({ timeout: 30_000 });
+    // The keyless welcome dialog opens after the chat loads and covers the composer.
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
     return composer;
 }
 
@@ -28,6 +30,32 @@ async function typeAndSend(page: Page, composer: ReturnType<Page['getByLabel']>,
     // Mobile never sends on Enter, so use the visible Send button on both.
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
+
+// Providers that sign people up in their own UI (Clerk) never see the token,
+// and the session request after sign-up may come after a redirect or from
+// another tab. The server keeps a valid invite in a cookie for that request.
+test('an invite link keeps a valid token for a later sign-up, and ignores a forged one', async ({ page, context }) => {
+    const secret = process.env.OR3_AUTH_INVITE_TOKEN_SECRET ?? '';
+    expect(secret).not.toBe('');
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const payload = { workspaceId: 'e2e-workspace', email: 'e2e-invitee@example.test', exp };
+    const stored = async () => (await context.cookies()).find((cookie) => cookie.name === 'or3_invite_token');
+
+    await page.goto(`/?invite=${encodeURIComponent(createInviteToken(payload, 'not-the-instance-secret'))}`);
+    expect(await stored()).toBeUndefined();
+
+    const invite = createInviteToken(payload, secret);
+    await page.goto(`/?invite=${encodeURIComponent(invite)}`);
+    const cookie = await stored();
+    expect(cookie).toMatchObject({ value: invite, httpOnly: true, sameSite: 'Lax', path: '/' });
+    expect(Math.abs(cookie!.expires - exp)).toBeLessThan(5);
+
+    // A page opened later without the query still sends it.
+    const later = await context.newPage();
+    const request = later.waitForRequest((sent) => new URL(sent.url()).pathname === '/chat');
+    await later.goto('/chat');
+    expect((await (await request).allHeaders()).cookie).toContain('or3_invite_token=');
+});
 
 for (const [label, viewport] of [
     ['desktop', { width: 1440, height: 900 }],
@@ -56,6 +84,22 @@ for (const [label, viewport] of [
             expect(page.url()).toBe(urlBeforeSend);
             expect(sent).toEqual([]);
             await info.attach(`signed-out-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+        });
+
+        // Invite links open registration from the account control; on mobile
+        // that control is inside More, so the visitor is told where it is.
+        test('a signed-out visitor on an invite link is told where to create an account', async ({ page }, info) => {
+            await page.goto('/?invite=e2e-invite-token');
+            await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
+            await expect(page.locator('.ProseMirror p.is-editor-empty')).toHaveAttribute('data-placeholder', SIGN_IN_PROMPT, { timeout: 30_000 });
+            const hint = page.getByText('Open the menu, tap More, then Login to create your account.', { exact: true });
+            if (label === 'mobile') await expect(hint).toBeVisible();
+            else await expect(hint).toHaveCount(0);
+            // The token outlives the root → /chat rewrite: a provider that reads
+            // invite links has opened registration, or it is still there to read.
+            await expect.poll(async () => new URL(page.url()).searchParams.get('invite') === 'e2e-invite-token'
+                || await page.getByRole('dialog', { name: 'Create Account' }).isVisible()).toBe(true);
+            await info.attach(`invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         test('signed-in user without a key still gets the OpenRouter connect flow', async ({ page }, info) => {

@@ -41,6 +41,16 @@ describe('canonical transcript projections', () => {
     // Background and legacy turns can retain results on the assistant only.
     // Losing those results makes the next provider request invalid; emitting
     // them twice when durable tool rows exist is invalid too.
+    it('carries where each call\'s results arrived in the text through reload to the provider projection', () => {
+        const [assistant] = projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript([row({ id: 'a1', role: 'assistant', index: 1,
+            data: { content: 'Searching.Answer.', tool_calls: [
+                { id: 'call-1', name: 'lookup', args: '{}', status: 'complete', result: 'r', text_offset: 10 },
+                { id: 'call-2', name: 'lookup', args: '{}', status: 'complete', result: 'r', text_offset: -1 },
+            ] } })]));
+        expect((assistant!.data as { tool_calls: Array<{ id: string; text_offset?: number }> }).tool_calls
+            .map(({ id, text_offset }) => [id, text_offset])).toEqual([['call-1', 10], ['call-2', undefined]]);
+    });
+
     it('replays embedded tool results once after reload without changing stored history', async () => {
         const rows = [row({ id: 'a', role: 'assistant', index: 1, data: {
             content: 'The file code is FILE-AO-942.', tool_calls: [

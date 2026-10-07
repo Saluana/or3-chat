@@ -71,7 +71,11 @@ tool definitions and configuration. Initial native rejection precedes thread,
 user and assistant writes; refused retry/continuation preserves existing rows.
 There is no automatic context trimming, guessed capacity or fixed reply
 reserve. An explicit reply allowance must fit the remaining window and model
-output maximum. Otherwise output uses the actual remainder up to that maximum.
+output maximum. Otherwise output uses the actual remainder up to that maximum,
+capped at 65,536 tokens (`DEFAULT_REPLY_ALLOWANCE_TOKENS`). The cap only sizes
+`max_tokens`; it never reserves input space. Requesting a whole very large
+output window reserves credit for all of it and narrows OpenRouter routing to
+hosts that advertise that size, some of which refuse tool histories.
 Counts remain estimates, particularly for images and files.
 
 Each foreground tool request checks the complete accumulated body with the

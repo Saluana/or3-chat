@@ -52,9 +52,10 @@ import {
     monitorForegroundStreamForClient,
 } from '../../utils/webhooks/foreground-stream-monitor';
 import { validateServerToolRequest } from '../../utils/chat/tool-registry';
-import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata } from '../../utils/chat/context-admission';
+import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata, OpenRouterCatalogUnavailableError } from '../../utils/chat/context-admission';
 import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
 import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
+import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     fetchWithResponseDeadline,
@@ -375,6 +376,10 @@ export default defineEventHandler(async (event) => {
                 setResponseStatus(event, 400);
                 return contextAdmissionResponse(err);
             }
+            if (err instanceof OpenRouterCatalogUnavailableError) {
+                setResponseStatus(event, 502);
+                return publicErrorEnvelope(err);
+            }
             warnBgStream('api-stream-background-start-failed', {
                 userId,
                 workspaceId,
@@ -466,19 +471,25 @@ export default defineEventHandler(async (event) => {
         ac.abort();
     });
 
+    let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
     try {
-        const policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
+        policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
         await admitServerProviderBody(providerBody, policy, ac.signal);
     } catch (error) {
         if (error instanceof ChatContextAdmissionError) {
             setResponseStatus(event, 400);
             return contextAdmissionResponse(error);
         }
+        if (error instanceof OpenRouterCatalogUnavailableError) {
+            setResponseStatus(event, 502);
+            return publicErrorEnvelope(error);
+        }
         throw error;
     }
 
     // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
     let upstream: Response;
+    let upstreamErrorText: string | undefined;
     try {
         const host = getHeader(event, 'host') || 'localhost';
         const proto = getProxyRequestProtocol(
@@ -486,7 +497,7 @@ export default defineEventHandler(async (event) => {
             normalizeProxyTrustConfig(config.security.proxy),
         ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
-        upstream = await fetchWithResponseDeadline(openRouterUrl, {
+        const requestUpstream = (requestBody: Record<string, unknown>) => fetchWithResponseDeadline(openRouterUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -495,8 +506,10 @@ export default defineEventHandler(async (event) => {
                 'HTTP-Referer': `${proto}://${host}`,
                 'X-Title': 'or3.chat',
             },
-            body: JSON.stringify(providerBody),
+            body: JSON.stringify(requestBody),
         }, { signal: ac.signal });
+        ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
+            { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
         logBgStream('api-stream-foreground-upstream-response', {
             ok: upstream.ok,
             status: upstream.status,
@@ -527,8 +540,8 @@ export default defineEventHandler(async (event) => {
 
     // Handle upstream non-OK responses
     if (!upstream.ok || !upstream.body) {
-        let respText = '<no-body>';
-        try {
+        let respText = upstreamErrorText ?? '<no-body>';
+        if (upstreamErrorText === undefined) try {
             respText = await readResponseTextWithIdleDeadline(upstream, {
                 signal: ac.signal,
             });

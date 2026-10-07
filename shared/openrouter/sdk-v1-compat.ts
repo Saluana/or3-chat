@@ -84,10 +84,28 @@ export async function collectModelsFromListPages(
     return models;
 }
 
-/** Use the existing SDK pagination and normalization in both browser and server paths. */
-export async function fetchOpenRouterCatalog(client: Pick<OpenRouter, 'models'>, signal?: AbortSignal): Promise<OpenRouterModel[]> {
+/**
+ * The SDK default retries connection errors for an hour. Senders wait on this
+ * catalog (capacity preparation) and the browser falls back to its cached copy
+ * only after it fails, so an unreachable provider must fail within seconds.
+ */
+const CATALOG_RETRIES = {
+    strategy: 'backoff',
+    backoff: { initialInterval: 500, maxInterval: 4_000, exponent: 1.5, maxElapsedTime: 10_000 },
+    retryConnectionErrors: true,
+} as const;
+
+/**
+ * Use the existing SDK pagination and normalization in both browser and server
+ * paths. `deadlineMs` bounds the whole lookup, including a connection that
+ * never answers; the SDK ignores its own `timeoutMs` when a signal is passed.
+ */
+export async function fetchOpenRouterCatalog(client: Pick<OpenRouter, 'models'>, signal?: AbortSignal,
+    { deadlineMs }: { deadlineMs?: number } = {}): Promise<OpenRouterModel[]> {
     if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
-    const pages = await client.models.list({}, getRequestOptions(signal));
+    const deadline = deadlineMs === undefined ? undefined : AbortSignal.timeout(deadlineMs);
+    const bounded = signal && deadline ? AbortSignal.any([signal, deadline]) : signal ?? deadline;
+    const pages = await client.models.list({}, { ...getRequestOptions(bounded), retries: CATALOG_RETRIES });
     const records = await collectModelsFromListPages(pages);
     if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
     return records.map(sdkModelToLocal);

@@ -96,6 +96,8 @@ export type NormalizedStreamingToolCall = {
     result?: string;
     error?: string;
     fingerprint?: string;
+    /** Length of the row's text when this call's results arrived. */
+    text_offset?: number;
 };
 
 export type NormalizedStreamingMessage = {
@@ -181,6 +183,10 @@ export function normalizeStreamingMessage(input: {
             fingerprint:
                 typeof call.fingerprint === 'string'
                     ? call.fingerprint
+                    : undefined,
+            text_offset:
+                Number.isSafeInteger(call.text_offset) && (call.text_offset as number) >= 0
+                    ? call.text_offset as number
                     : undefined,
         });
     }

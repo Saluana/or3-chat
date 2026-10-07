@@ -650,7 +650,9 @@ export async function buildOpenRouterMessages(
             for (const img of byMessageIndex.get(i) || []) {
                 if (await isImageCandidate(img.hash, inlineImageCandidates)) omitted += 1;
             }
-            if (omitted) parts.push({ type: 'text', text: `[${omitted} image${omitted === 1 ? '' : 's'} omitted: the selected model does not accept image input.]` });
+            // Say it is the current model that cannot see it: earlier replies
+            // in the transcript may have been written by a model that could.
+            if (omitted) parts.push({ type: 'text', text: `[${omitted} image${omitted === 1 ? '' : 's'} not sent: the current model cannot read images. Earlier replies may have seen ${omitted === 1 ? 'it' : 'them'}.]` });
         }
         const imgs = acceptsImages ? byMessageIndex.get(i) || [] : [];
         for (const img of imgs) {
@@ -769,6 +771,15 @@ export async function buildOpenRouterMessages(
             }
         }
 
+        // A failed or stopped-empty reply is not replayed, so its question can
+        // be followed directly by the next one. Send them as one user turn;
+        // providers expect user and assistant turns to alternate.
+        const previous = orMessages[orMessages.length - 1];
+        if (m.role === 'user' && previous?.role === 'user' && previous.name === m.name
+            && Array.isArray(previous.content)) {
+            previous.content.push(...parts);
+            continue;
+        }
         orMessages.push({
             role: m.role,
             content: parts,

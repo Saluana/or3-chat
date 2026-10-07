@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     collectModelsFromListPages,
+    fetchOpenRouterCatalog,
     wrapLegacyChatSendArgs,
     wrapLegacyOAuthExchangeArgs,
 } from '../sdk-v1-compat';
@@ -8,6 +9,31 @@ import { sdkModelToLocal } from '../types';
 import { normalizeSDKError } from '../errors';
 
 describe('openrouter sdk v1 compat helpers', () => {
+    // The SDK default retries connection errors for an hour; senders wait on
+    // this catalog, so an unreachable provider must fail within seconds.
+    it('bounds catalog retries, and the whole lookup only when a deadline is given', async () => {
+        let options: { retries?: { backoff?: { maxElapsedTime?: number } }; fetchOptions?: { signal?: AbortSignal } } = {};
+        const client = { models: { list: async (_request: unknown, requestOptions: typeof options) => {
+            options = requestOptions;
+            return { async *[Symbol.asyncIterator]() { yield { result: { data: [] } }; } };
+        } } };
+        const caller = new AbortController();
+        // Browser loads keep the caller's signal so a slow link can finish the download.
+        await fetchOpenRouterCatalog(client as never, caller.signal);
+        expect(options.retries?.backoff?.maxElapsedTime).toBeLessThanOrEqual(10_000);
+        expect(options.fetchOptions?.signal).toBe(caller.signal);
+
+        await fetchOpenRouterCatalog(client as never, caller.signal, { deadlineMs: 15_000 });
+        expect(options.retries?.backoff?.maxElapsedTime).toBeLessThanOrEqual(10_000);
+        expect(options.fetchOptions?.signal).not.toBe(caller.signal);
+        caller.abort();
+        expect(options.fetchOptions?.signal?.aborted).toBe(true);
+
+        await fetchOpenRouterCatalog(client as never, undefined, { deadlineMs: 0 });
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(options.fetchOptions?.signal?.aborted).toBe(true);
+    });
+
     it('wraps flat chat.send args into chatRequest', () => {
         expect(
             wrapLegacyChatSendArgs({
