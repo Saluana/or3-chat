@@ -39,7 +39,7 @@ const hooks = vi.hoisted(() => {
             }
             return value;
         },
-        async doAction() {},
+        doAction: vi.fn(async (_name: string) => {}),
     };
 });
 
@@ -101,6 +101,8 @@ async function storedHashes(messageId: string): Promise<string[]> {
 beforeEach(async () => {
     vi.stubGlobal('Blob', NativeBlob);
     hooks.clear();
+    hooks.doAction.mockReset();
+    hooks.doAction.mockImplementation(async () => {});
     computeFileHashMock.mockReset();
     computeFileHashMock.mockResolvedValue(TEST_HASH);
     workspaceId = `file-ref-count-${crypto.randomUUID()}`;
@@ -117,6 +119,44 @@ afterEach(async () => {
 });
 
 describe('message file ref_count integrity', () => {
+    // Failure inventory: timed hooks expire catalog/message/batch transactions;
+    // failed notifications cannot undo committed ownership or invite a retry.
+    it.each(['new-file', 'duplicate', 'attach', 'detach', 'catalog', 'remove', 'batch'] as const)('commits %s before asynchronous file notifications', async path => {
+        const db = getDb();
+        const scope = { db, workspaceId, generation: 0, subject: null,
+            signal: new AbortController().signal, writable: true, assertCurrent: () => {} };
+        if (path !== 'new-file') await db.file_meta.put(fileMeta(TEST_HASH, path === 'detach' || path === 'remove' ? 1 : 0));
+        await db.messages.put(message('notify-message', path === 'detach' ? [TEST_HASH] : []));
+        const observed: boolean[] = [];
+        hooks.doAction.mockImplementation(async name => {
+            if (!name.startsWith('db.files.')) return;
+            await new Promise(resolve => setTimeout(resolve, 10));
+            observed.push(Boolean(Dexie.currentTransaction));
+            if (name.endsWith(':after')) throw new Error('Notification failed');
+        });
+        const { catalogWorkspaceFile, removeWorkspaceFile } = await import('../workspace-files');
+        const { commitPreparedPostBatch } = await import('../posts');
+        const { workspaceRevision } = await import('~/utils/chat/workspace-items');
+        const { mergeWorkspaceItemMetadata } = await import('~~/shared/posts/workspace-item');
+        if (path === 'new-file' || path === 'duplicate') await createOrRefFile(new Blob(['test'], { type: 'text/plain' }), 'test.txt');
+        else if (path === 'attach') await addFilesToMessage('notify-message', [{ type: 'hash', hash: TEST_HASH }]);
+        else if (path === 'detach') await removeFileFromMessage('notify-message', TEST_HASH);
+        else if (path === 'catalog') await catalogWorkspaceFile(scope, TEST_HASH);
+        else {
+            const row = { id: 'notify-post', title: 'File', postType: 'doc', content: '',
+                file_hashes: JSON.stringify([TEST_HASH]), deleted: false, clock: 1, created_at: 1, updated_at: 1,
+                meta: mergeWorkspaceItemMetadata(undefined, { version: 1, trashed_at: 1 }) };
+            if (path === 'remove') {
+                await db.posts.put(row);
+                await removeWorkspaceFile(scope, row.id, await workspaceRevision(row));
+            } else await commitPreparedPostBatch({ db, assertCurrent: () => {}, expected: { id: row.id, content: null }, posts: [row], immutableIds: [] });
+        }
+        expect(observed.length).toBeGreaterThan(0);
+        expect(observed.every(transaction => !transaction)).toBe(true);
+        expect((await db.file_meta.get(TEST_HASH))?.ref_count).toBe(path === 'detach' || path === 'remove' ? 0 : 1);
+        if (path === 'attach') expect(await storedHashes('notify-message')).toEqual([TEST_HASH]);
+        if (path === 'detach') expect(await storedHashes('notify-message')).toEqual([]);
+    });
     it.each([false, true])('restores supplied local bytes on duplicate intake (Trash: %s)', async trashed => {
         const { importWorkspaceFile, updateWorkspaceFile } = await import('../workspace-files');
         const { workspaceRevision } = await import('~/utils/chat/workspace-items');

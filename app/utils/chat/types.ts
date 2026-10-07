@@ -134,6 +134,8 @@ export type ToolRuntime = 'hybrid' | 'client' | 'server';
 
 /** Request-scoped authority and cancellation passed to every tool handler. */
 export interface ToolExecutionContext {
+    /** Recheck captured registry/project authority inside a host mutation transaction. */
+    assertToolAuthorized?: () => Promise<void>;
     projectId?: string | null;
     subject: string | null;
     workspaceId: string | null;

@@ -417,7 +417,6 @@ export async function startBackgroundStream(
     }
     assertBackgroundHistoryProvider(syncProviderId);
     const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
-    await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) });
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
@@ -511,6 +510,16 @@ export async function startBackgroundStream(
         if (historyResult === 'blocked') {
             error.name = 'BackgroundHistoryAdmissionError';
         }
+        throw error;
+    }
+    // First-turn ownership exists canonically only after admission. Refusing
+    // execution must also leave the admitted job terminal rather than stranded.
+    try {
+        await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) });
+    } catch (error) {
+        await persistTerminalGenerationSnapshot(provider, jobId, { status: 'error',
+            content: execution.contentBase ?? '', reasoning: execution.reasoningBase ?? '',
+            error: error instanceof Error ? error.message : String(error), completedAt: Date.now() });
         throw error;
     }
     logBackgroundEvent('info', 'background.chat.started', {
@@ -1448,7 +1457,10 @@ export async function consumeBackgroundStreamWithTools(params: {
                 measuredUsage: normalizedState.requestUsage } : undefined, params.abortSignal);
             const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
             const usageRequestId = crypto.randomUUID();
-
+            const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+            await assertServerProjectExecutionSupported({ subject: params.context.userId,
+                workspaceId: params.context.workspaceId, threadId: params.context.threadId,
+                abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) });
             const upstream = await fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
@@ -1929,6 +1941,9 @@ export async function executeBackgroundJob(
     const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
     await admitServerProviderBody(cleanBody, await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal), signal);
     const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
+    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+    await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId,
+        threadId: params.threadId, abortSignal: signal });
     const upstream = await fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {

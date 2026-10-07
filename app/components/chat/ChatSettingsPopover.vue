@@ -100,6 +100,17 @@
                 </template>
             </USelectMenu>
 
+            <UButton
+                v-if="threadId && modelInherited === false"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                class="justify-start"
+                :disabled="loading || streaming"
+                :label="projectModelDefault ? 'Use project default' : 'Use default model'"
+                @click="emit('use-default-model')"
+            />
+
             <USelectMenu
                 :model-value="promptSelection"
                 :items="promptItems"
@@ -452,6 +463,8 @@ const props = defineProps<{
     /** Model's default effort, so the picker matches the request. */
     reasoningDefaultEffort?: string;
     threadId?: string;
+    modelInherited?: boolean;
+    projectModelDefault?: boolean;
     paneId?: string;
     promptSelectionRevision?: number;
     contextState?: ReturnType<typeof import('~/composables/chat/useContextPreview').useContextPreview>['state']['value'];
@@ -461,6 +474,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'close'): void;
+    (e: 'use-default-model'): void;
     (e: 'compact' | 'cancel-compaction'): void;
     (e: 'open-system-prompts'): void;
     (e: 'open-model-catalog'): void;

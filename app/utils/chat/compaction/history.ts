@@ -3,6 +3,8 @@ import type { Message, Thread } from '~/db/schema';
 import { compareMessageOrder } from '~/db/messages';
 import { withoutSupersededMessages } from '../transcript';
 import { readCompactionData } from '~~/shared/chat/compaction';
+import { resolveChatProject, projectSettingsId } from '~/db/project-workspace';
+import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 
 export class CompactionHistoryError extends Error {
     constructor(readonly code: 'scope_incomplete' | 'invalid_anchor' | 'cyclic_lineage' | 'summary_pending', message: string) {
@@ -28,7 +30,45 @@ export function assertCompactedSummary(thread: Thread, rows: readonly Message[])
 
 /** One read snapshot, iterative lineage, ID anchors and no arbitrary depth/conversation cutoff. */
 export async function resolveThreadProjection(threadId: string, db: Or3DB = getDb(), throughMessageId?: string): Promise<ThreadProjection> {
-    return db.transaction('r', ['threads', 'messages'], async () => {
+    return db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => {
+        const source = await db.threads.get(threadId);
+        if (!source || source.deleted) throw new CompactionHistoryError('scope_incomplete', 'Conversation source is unavailable.');
+        const owner = await resolveChatProject(db, threadId);
+        const settings = owner ? await db.posts.get(projectSettingsId(owner)) : undefined;
+        const excluded = new Set(settings && !settings.deleted
+            ? ProjectSettingsSchema.parse(JSON.parse(settings.content)).excluded_chat_ids : []);
+        const permitted = new Set<string>([threadId]);
+        const assertPermitted = async (id: string) => {
+            if (permitted.has(id)) return;
+            // Retained summaries survive source deletion, but never an owner
+            // change or explicit exclusion. Tombstones retain their ownership.
+            const provenanceOwner = await resolveChatProject(db, id, { includeDeleted: true }).catch(() => {
+                throw new CompactionHistoryError('scope_incomplete', 'Conversation project provenance is unavailable.');
+            });
+            if (excluded.has(id) || provenanceOwner !== owner)
+                throw new CompactionHistoryError('scope_incomplete', 'Conversation provenance is outside the permitted project. Move or copy its history explicitly before continuing.');
+            permitted.add(id);
+        };
+        const assertSummaryProvenance = async (summary: Message) => {
+            const seen = new Set<string>();
+            let current: Message | undefined = summary;
+            while (current) {
+                if (seen.has(current.id)) throw new CompactionHistoryError('cyclic_lineage', 'Summary provenance is cyclic.');
+                seen.add(current.id);
+                const data = current.data as Record<string, unknown> | undefined;
+                const metadata = readCompactionData(data?.compaction);
+                if (current.role !== 'system' || current.pending || data?.kind !== 'compaction' || !metadata)
+                    throw new CompactionHistoryError('scope_incomplete', 'Summary provenance is unavailable.');
+                const ids = new Set([current.thread_id, metadata.source_thread_id,
+                    ...metadata.history_scope.segments.map(segment => segment.thread_id),
+                    ...metadata.landmarks.map(landmark => landmark.thread_id)]);
+                for (const provenanceId of ids) if (!permitted.has(provenanceId)) await assertPermitted(provenanceId);
+                const inherited = metadata.history_scope.inherited_scope_message_id;
+                if (!inherited) break;
+                current = await db.messages.get(inherited);
+                if (!current) throw new CompactionHistoryError('scope_incomplete', 'Inherited summary provenance is unavailable.');
+            }
+        };
         const visited = new Set<string>();
         const reverse: ThreadProjectionSegment[] = [];
         let id = threadId;
@@ -44,6 +84,7 @@ export async function resolveThreadProjection(threadId: string, db: Or3DB = getD
             visited.add(id);
             const thread = await db.threads.get(id);
             if (!thread || thread.deleted) throw new CompactionHistoryError('scope_incomplete', 'Conversation source is unavailable.');
+            if (!permitted.has(id)) await assertPermitted(id);
             const rows = (await db.messages.where('thread_id').equals(id).toArray()).sort(compareMessageOrder);
             if (cutoff && (!rows.some((row) => row.id === cutoff!.id && !row.deleted) || cutoff.thread_id !== id)) {
                 throw new CompactionHistoryError('invalid_anchor', 'The reference anchor is unavailable.');
@@ -51,6 +92,7 @@ export async function resolveThreadProjection(threadId: string, db: Or3DB = getD
             let visible = withoutSupersededMessages(rows.filter((row) => !row.deleted && (!cutoff || compareMessageOrder(row, cutoff) <= 0)));
             if (thread.branch_mode === 'compacted') {
                 const summary = assertCompactedSummary(thread, rows);
+                await assertSummaryProvenance(summary);
                 visible = [summary, ...visible.filter((row) => row.id !== summary.id)];
             }
             reverse.push({ thread, rows, visible });

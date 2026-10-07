@@ -6,6 +6,15 @@ import {
     watch,
     type Ref,
 } from 'vue';
+import {
+    getDb,
+    getWorkspaceGeneration,
+    subscribeActiveWorkspaceDb,
+} from '~/db/client';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
+import { liveQuery, type Subscription } from 'dexie';
+import { resolveChatProject, projectSettingsId } from '~/db/project-workspace';
+import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 import { useLocalStorage } from '@vueuse/core';
 import { useAiSettings } from './useAiSettings';
 import { useModelStore } from './useModelStore';
@@ -20,6 +29,7 @@ import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     DEFAULT_MODEL_VARIANT,
     appendModelVariant,
+    sanitizeModelVariant,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
 
@@ -43,20 +53,23 @@ export function useChatModelSelection(options: {
     modelReasoningEfforts: Readonly<Ref<OpenRouterReasoningEffort[]>>;
     modelDefaultReasoningEffort: Readonly<Ref<OpenRouterReasoningEffort>>;
     modelSupportsThinking: Readonly<Ref<boolean>>;
+    modelInherited: Readonly<Ref<boolean>>;
+    useInheritedModel: () => Promise<void>;
+    restoreDraftModel: (model: string | undefined, variant: OpenRouterModelVariant) => void;
 } {
-    const {
-        favoriteModels,
-        getFavoriteModels,
-        catalog,
-        fetchModels,
-    } = useModelStore();
+    const { favoriteModels, getFavoriteModels, catalog, fetchModels } =
+        useModelStore();
     const { settings } = useAiSettings();
     const selectedModel = ref(DEFAULT_MODEL);
     const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
     const thinkingEnabled = ref(true);
     const reasoningEffort = ref<string>();
     const persistedModel = useLocalStorage(LAST_MODEL_KEY, DEFAULT_MODEL);
-    const suppressNextPersist = ref(false);
+    const modelInherited = ref(true);
+    let inheritedProjectModel: string | null = null;
+    let policySubscription: Subscription | undefined;
+    let applyingSelection = false;
+    let persistence = Promise.resolve();
 
     const selectedModelMeta = computed<OpenRouterModel | undefined>(() => {
         const modelId = stripThinkingSuffix(selectedModel.value);
@@ -68,73 +81,156 @@ export function useChatModelSelection(options: {
         );
     });
     const modelReasoningEfforts = computed(() =>
-        getSupportedReasoningEfforts(selectedModelMeta.value)
+        getSupportedReasoningEfforts(selectedModelMeta.value),
     );
     const modelDefaultReasoningEffort = computed(() =>
-        getDefaultReasoningEffort(selectedModelMeta.value)
+        getDefaultReasoningEffort(selectedModelMeta.value),
     );
     const modelSupportsThinking = computed(() =>
-        modelSupportsReasoning(selectedModelMeta.value)
+        modelSupportsReasoning(selectedModelMeta.value),
     );
 
-    function applyNewChatDefault(): void {
-        if (options.threadId()) return;
-        const modelId =
-            settings.value.defaultModelMode === 'fixed'
-                ? settings.value.fixedModelId
-                : null;
-        if (!modelId) return;
-        suppressNextPersist.value = true;
-        selectedModel.value = modelId;
-    }
-
-    let selectionRevision = 0;
-    async function applyProjectDefault() {
-        const revision = ++selectionRevision; const id = options.threadId(); const initialModel = selectedModel.value; if (!id) return;
-        const { getDb } = await import('~/db/client'); const db = getDb();
-        const { resolveChatProject, readProjectWorkspace } = await import('~/db/project-workspace');
+    function applySelection(
+        model: string,
+        variant: OpenRouterModelVariant = DEFAULT_MODEL_VARIANT,
+    ) {
+        applyingSelection = true;
         try {
-            const owner = await resolveChatProject(db, id);
-            if (!owner || await db.messages.where('thread_id').equals(id).count()) return;
-            const state = await readProjectWorkspace(db, owner);
-            if (!disposed && revision === selectionRevision && id === options.threadId() && selectedModel.value === initialModel && db === getDb() && state.settings.default_model) {
-                suppressNextPersist.value = true; selectedModel.value = state.settings.default_model;
+            selectedModel.value = model;
+            modelVariant.value = variant;
+        } finally {
+            applyingSelection = false;
+        }
+    }
+    function chatDefault() {
+        return settings.value.defaultModelMode === 'fixed' &&
+            settings.value.fixedModelId
+            ? settings.value.fixedModelId
+            : persistedModel.value || DEFAULT_MODEL;
+    }
+    const defaultVariant = () => sanitizeModelVariant(settings.value.defaultModelVariant);
+    function stopPolicySubscription() {
+        policySubscription?.unsubscribe();
+        policySubscription = undefined;
+    }
+    let selectionRevision = 0;
+    async function applyChatDefault() {
+        const revision = ++selectionRevision;
+        stopPolicySubscription();
+        inheritedProjectModel = null;
+        modelInherited.value = true;
+        const id = options.threadId();
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        applySelection(chatDefault(), defaultVariant());
+        if (!id) return;
+        const current = () =>
+            !disposed &&
+            revision === selectionRevision &&
+            id === options.threadId() &&
+            db === getDb() &&
+            generation === getWorkspaceGeneration();
+        try {
+            await persistence;
+            const { row } = await getKvRecordByName('chat-model:' + id, db);
+            if (!current()) return;
+            if (row?.value) {
+                let saved: { model?: unknown; variant?: unknown } | null = null;
+                try { saved = JSON.parse(row.value); } catch { /* Invalid preferences inherit the current default. */ }
+                if (
+                    saved &&
+                    typeof saved.model === 'string' &&
+                    saved.model.trim()
+                ) {
+                    modelInherited.value = false;
+                    applySelection(
+                        saved.model,
+                        sanitizeModelVariant(saved.variant),
+                    );
+                    return;
+                }
             }
-        } catch { /* Invalid project state is surfaced by request admission. */ }
+            policySubscription = liveQuery(async () => {
+                const owner = await resolveChatProject(db, id);
+                const row = owner ? await db.posts.get(projectSettingsId(owner)) : undefined;
+                return row && !row.deleted
+                    ? ProjectSettingsSchema.parse(JSON.parse(row.content)).default_model
+                    : null;
+            }).subscribe({ next(model) {
+                if (!current() || !modelInherited.value) return;
+                inheritedProjectModel = model;
+                applySelection(model ?? chatDefault(), defaultVariant());
+            }, error() { /* Invalid project policy is surfaced by request admission. */ } });
+        } catch {
+            /* Invalid project state is surfaced by request admission. */
+        }
+    }
+    async function useInheritedModel() {
+        const id = options.threadId();
+        if (!id) { await applyChatDefault(); return; }
+        const revision = ++selectionRevision;
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        // Clear through the existing guarded KV writer, serialized with earlier
+        // explicit choices. A later user choice must win over this reset.
+        const reset = persistence.then(() => setKvByName('chat-model:' + id, 'null', db, {
+            isValid: () => !disposed && db === getDb() && generation === getWorkspaceGeneration(),
+        }));
+        persistence = reset.then(() => undefined, () => undefined);
+        await reset;
+        if (!disposed && revision === selectionRevision && id === options.threadId()
+            && db === getDb() && generation === getWorkspaceGeneration()) await applyChatDefault();
+    }
+    function restoreDraftModel(model: string | undefined, variant: OpenRouterModelVariant) {
+        // Existing chats hydrate their durable override or project policy;
+        // only unsent, pre-chat drafts own a cached model selection.
+        if (options.threadId()) return;
+        if (model !== undefined) {
+            selectionRevision++;
+            modelInherited.value = false;
+            stopPolicySubscription();
+        }
+        applySelection(model ?? selectedModel.value, variant);
     }
     let disposed = false;
     onMounted(async () => {
+        const revision = selectionRevision;
         const catalogHydration = fetchModels().catch(() => undefined);
         await getFavoriteModels();
         if (!process.client || disposed) return;
-        if (persistedModel.value) {
-            selectedModel.value = persistedModel.value;
-        }
-        applyNewChatDefault();
-        await applyProjectDefault();
+        if (revision === selectionRevision) await applyChatDefault();
         window.addEventListener('or3:model-selected', onCatalogModelSelected);
         await catalogHydration;
     });
+    const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+        void applyChatDefault();
+    });
     onBeforeUnmount(() => {
         disposed = true;
+        stopPolicySubscription();
+        stopWorkspace();
         if (process.client) {
             window.removeEventListener(
                 'or3:model-selected',
-                onCatalogModelSelected
+                onCatalogModelSelected,
             );
         }
     });
 
     function onCatalogModelSelected(event: Event): void {
-        const modelId = (
-            event as CustomEvent<{ modelId?: string }>
-        ).detail.modelId;
+        const modelId = (event as CustomEvent<{ modelId?: string }>).detail
+            .modelId;
         if (modelId && modelId !== selectedModel.value) {
             selectedModel.value = modelId;
         }
     }
 
-    watch(options.threadId, () => { applyNewChatDefault(); void applyProjectDefault(); });
+    watch(options.threadId, () => {
+        void applyChatDefault();
+    });
+    watch([chatDefault, defaultVariant], () => {
+        if (modelInherited.value) applySelection(inheritedProjectModel ?? chatDefault(), defaultVariant());
+    });
     watch(
         [selectedModelMeta, modelReasoningEfforts],
         ([model, efforts]) => {
@@ -145,7 +241,7 @@ export function useChatModelSelection(options: {
             if (
                 reasoningEffort.value &&
                 efforts.includes(
-                    reasoningEffort.value as OpenRouterReasoningEffort
+                    reasoningEffort.value as OpenRouterReasoningEffort,
                 )
             ) {
                 return;
@@ -153,26 +249,57 @@ export function useChatModelSelection(options: {
             const orderedEfforts = [...efforts].sort(
                 (a, b) =>
                     OPENROUTER_REASONING_EFFORTS.indexOf(a) -
-                    OPENROUTER_REASONING_EFFORTS.indexOf(b)
+                    OPENROUTER_REASONING_EFFORTS.indexOf(b),
             );
             reasoningEffort.value = efforts.includes('medium')
                 ? 'medium'
-                : orderedEfforts[Math.floor((orderedEfforts.length - 1) / 2)] ??
-                  getDefaultReasoningEffort(model);
+                : (orderedEfforts[
+                      Math.floor((orderedEfforts.length - 1) / 2)
+                  ] ?? getDefaultReasoningEffort(model));
         },
-        { immediate: true }
+        { immediate: true },
     );
-    watch([selectedModel, modelVariant], ([modelId, variant]) => {
-        options.onChange(appendModelVariant(stripThinkingSuffix(modelId), variant));
-    }, { immediate: true });
-    watch(selectedModel, (modelId) => {
-        if (!process.client) return;
-        if (suppressNextPersist.value) {
-            suppressNextPersist.value = false;
-            return;
-        }
-        persistedModel.value = modelId;
-    });
+    watch(
+        [selectedModel, modelVariant],
+        ([modelId, variant]) => {
+            options.onChange(
+                appendModelVariant(stripThinkingSuffix(modelId), variant),
+            );
+        },
+        { immediate: true },
+    );
+    watch(
+        [selectedModel, modelVariant],
+        ([modelId, variant]) => {
+            if (!process.client || applyingSelection) return;
+            selectionRevision++;
+            modelInherited.value = false;
+            stopPolicySubscription();
+            persistedModel.value = modelId;
+            const id = options.threadId();
+            if (!id) return;
+            const db = getDb();
+            const generation = getWorkspaceGeneration();
+            const value = JSON.stringify({ model: modelId, variant });
+            // Serialize explicit choices so an earlier asynchronous hook cannot
+            // overwrite a newer choice. Navigation doesn't cancel captured intent.
+            persistence = persistence
+                .then(async () => {
+                    await setKvByName('chat-model:' + id, value, db, {
+                        isValid: () =>
+                            db === getDb() &&
+                            generation === getWorkspaceGeneration(),
+                    });
+                })
+                .catch((error) => {
+                    console.warn(
+                        '[chat] Model preference could not be saved',
+                        error,
+                    );
+                });
+        },
+        { flush: 'sync' },
+    );
 
     return {
         selectedModel,
@@ -182,5 +309,8 @@ export function useChatModelSelection(options: {
         modelReasoningEfforts,
         modelDefaultReasoningEffort,
         modelSupportsThinking,
+        modelInherited,
+        useInheritedModel,
+        restoreDraftModel,
     };
 }

@@ -57,7 +57,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 
 ## Implementation notes
 
-1. **Transactions** — Delete/fork flows run inside Dexie transactions touching both `threads` and `messages` to stay consistent.
+1. **Transactions** — Fork preparation hooks run before the atomic thread/message/project write. The write rechecks source ownership, lineage and source state; membership notifications and fork after-hooks run after commit. Failed notifications do not fail a durable fork. Delete flows also coordinate threads and messages.
 2. **Forking** — New thread IDs generated via `newId()`. When copying messages the helper duplicates rows and optionally updates thread metadata timestamps.
 3. **Search** — Title search uses Dexie filter; pair with Orama-based composables for better ranking when needed.
 4. **Limits** — On the client, `createThread` enforces the `maxConversations` limit from runtime config (when enabled) before writing.

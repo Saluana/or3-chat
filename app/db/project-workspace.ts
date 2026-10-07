@@ -1,7 +1,9 @@
 import type { Or3DB } from './client';
+import Dexie from 'dexie';
 import { PostSchema, type Post, type Thread, type Project } from './schema';
 import { getWriteTxTableNames, newId, nextClock, nowSec } from './util';
-import { changeRefCount } from './files';
+import { changeFileRefRows } from './files';
+import type { CoreHookPayloadMap } from '~/core/hooks/hook-types';
 import { parseDocumentFileHashes } from '~/utils/documents/document-content';
 import { isValidHash } from '~/utils/hash';
 import {
@@ -27,12 +29,15 @@ import {
 
 export const projectSettingsId = (projectId: string) =>
     `project-settings-${projectId}`;
+// Extraction itself has a 30-second deadline; allow a short persistence grace.
+export const PROJECT_INTAKE_TIMEOUT_SECONDS = 45;
 export interface ProjectRecord<T> {
     row: Post;
     value: T;
 }
 
-export async function readProjectWorkspace(db: Or3DB, projectId: string) {
+/** Read only fresh ownership/settings for execution authorization boundaries. */
+export async function readProjectPolicy(db: Or3DB, projectId: string) {
     const project = await db.projects.get(projectId);
     if (!project || project.deleted)
         throw new Error('This project is unavailable.');
@@ -41,6 +46,11 @@ export async function readProjectWorkspace(db: Or3DB, projectId: string) {
         settingsRow && !settingsRow.deleted
             ? ProjectSettingsSchema.parse(JSON.parse(settingsRow.content))
             : defaultProjectSettings();
+    return { project, settings, settingsRow: settingsRow && !settingsRow.deleted ? settingsRow : undefined };
+}
+
+export async function readProjectWorkspace(db: Or3DB, projectId: string) {
+    const policy = await readProjectPolicy(db, projectId);
     const read = async <T>(
         type: string,
         parse: (value: unknown) => T,
@@ -54,16 +64,17 @@ export async function readProjectWorkspace(db: Or3DB, projectId: string) {
             .map((row) => ({ row, value: parse(JSON.parse(row.content)) }));
     };
     return {
-        project,
-        settings,
-        settingsRow:
-            settingsRow && !settingsRow.deleted ? settingsRow : undefined,
+        ...policy,
         memories: await read(PROJECT_POST_TYPES.memory, (value) =>
             ProjectMemorySchema.parse(value),
         ),
-        sources: await read(PROJECT_POST_TYPES.source, (value) =>
-            ProjectSourceSchema.parse(value),
-        ),
+        sources: await read(PROJECT_POST_TYPES.source, (value) => {
+            const source = ProjectSourceSchema.parse(value);
+            return { ...source, revisions: source.revisions.map(revision =>
+                revision.status === 'processing' && nowSec() >= (revision.processing_started_at ?? revision.created_at) + PROJECT_INTAKE_TIMEOUT_SECONDS
+                    ? { ...revision, status: 'failed' as const, coverage: 'none' as const, error: 'Processing was interrupted. Retry this revision.' }
+                    : revision) };
+        }),
     };
 }
 
@@ -77,6 +88,7 @@ async function save(
     expectedClock: number | null,
     hashes: string[] = [],
     deleted = false,
+    newDocument?: Post,
 ): Promise<Post> {
     scope.assertCurrent('write');
     const hooks = useHooks();
@@ -120,6 +132,7 @@ async function save(
         tableName: 'posts',
     });
     let row = filtered;
+    const referenceChanges: CoreHookPayloadMap['db.files.refchange:action:after'][0][] = [];
     await scope.db.transaction(
         'rw',
         getWriteTxTableNames(
@@ -142,10 +155,30 @@ async function save(
                 throw new Error(
                     'This project record changed. Reload before saving.',
                 );
+            if (newDocument) {
+                const source = ProjectSourceSchema.parse(content);
+                if (type !== PROJECT_POST_TYPES.source || source.kind !== 'document' || source.item_id !== newDocument.id
+                    || newDocument.postType !== 'doc' || newDocument.deleted)
+                    throw new Error('Invalid project note binding.');
+                for (const hash of new Set(parseDocumentFileHashes(newDocument.file_hashes))) {
+                    const meta = await scope.db.file_meta.get(hash);
+                    if (!meta || meta.deleted) throw new Error('A note attachment is unavailable.');
+                    const changed = await changeFileRefRows(hash, 1, scope.db);
+                    if (changed) referenceChanges.push(changed.notification);
+                }
+                await scope.db.posts.add(newDocument);
+            }
             if (type === PROJECT_POST_TYPES.memory && !deleted) {
                 const memory = ProjectMemorySchema.parse(content);
+                const prior =
+                    previous && !previous.deleted
+                        ? ProjectMemorySchema.parse(
+                              JSON.parse(previous.content),
+                          )
+                        : undefined;
                 if (
                     memory.source_thread_id &&
+                    memory.source_thread_id !== prior?.source_thread_id &&
                     (await resolveChatProject(
                         scope.db,
                         memory.source_thread_id,
@@ -154,7 +187,10 @@ async function save(
                     throw new Error(
                         'Memory evidence moved to another project.',
                     );
-                if (memory.source_message_id) {
+                if (
+                    memory.source_message_id &&
+                    memory.source_message_id !== prior?.source_message_id
+                ) {
                     const message = await scope.db.messages.get(
                         memory.source_message_id,
                     );
@@ -171,14 +207,43 @@ async function save(
             }
             if (type === PROJECT_POST_TYPES.source && !deleted) {
                 const source = ProjectSourceSchema.parse(content);
+                const prior =
+                    previous && !previous.deleted
+                        ? ProjectSourceSchema.parse(
+                              JSON.parse(previous.content),
+                          )
+                        : undefined;
+                const disabling =
+                    prior &&
+                    source.mode === 'off' &&
+                    JSON.stringify(source) ===
+                        JSON.stringify({ ...prior, mode: 'off' });
+                const bindings = await scope.db.posts
+                    .where('[postType+title]')
+                    .equals([PROJECT_POST_TYPES.source, projectId])
+                    .toArray();
+                if (
+                    bindings.some(
+                        (binding) =>
+                            binding.id !== id &&
+                            !binding.deleted &&
+                            ProjectSourceSchema.parse(
+                                JSON.parse(binding.content),
+                            ).item_id === source.item_id,
+                    )
+                )
+                    throw new Error(
+                        'This item is already project knowledge. Choose its existing source instead.',
+                    );
                 const item = await scope.db.posts.get(source.item_id);
                 if (
-                    !item ||
-                    !isVisibleWorkspaceItem(item) ||
-                    item.postType !==
-                        (source.kind === 'file'
-                            ? FILE_CATALOG_POST_TYPE
-                            : 'doc')
+                    !disabling &&
+                    (!item ||
+                        !isVisibleWorkspaceItem(item) ||
+                        item.postType !==
+                            (source.kind === 'file'
+                                ? FILE_CATALOG_POST_TYPE
+                                : 'doc'))
                 )
                     throw new Error('This source item is unavailable.');
                 const current = source.revisions.find(
@@ -186,18 +251,16 @@ async function save(
                 )!;
                 if (
                     source.kind === 'file' &&
+                    !disabling &&
                     (!current.original_hash ||
-                        !parseDocumentFileHashes(item.file_hashes).includes(
+                        !parseDocumentFileHashes(item!.file_hashes).includes(
                             current.original_hash,
                         ))
                 )
                     throw new Error('Source original changed.');
                 if (previous && !previous.deleted) {
-                    const prior = ProjectSourceSchema.parse(
-                        JSON.parse(previous.content),
-                    );
                     if (
-                        prior.revisions.some(
+                        prior!.revisions.some(
                             (old) =>
                                 !source.revisions.some(
                                     (next) =>
@@ -240,11 +303,14 @@ async function save(
                     const meta = await scope.db.file_meta.get(hash);
                     if (!meta || meta.deleted)
                         throw new Error('A source original is unavailable.');
-                    await changeRefCount(hash, 1, scope.db);
+                    const changed = await changeFileRefRows(hash, 1, scope.db);
+                    if (changed) referenceChanges.push(changed.notification);
                 }
             for (const hash of oldHashes)
-                if (!newHashes.has(hash))
-                    await changeRefCount(hash, -1, scope.db);
+                if (!newHashes.has(hash)) {
+                    const changed = await changeFileRefRows(hash, -1, scope.db);
+                    if (changed) referenceChanges.push(changed.notification);
+                }
             scope.assertCurrent('write');
             row = {
                 ...filtered,
@@ -255,6 +321,13 @@ async function save(
             scope.assertCurrent('write');
         },
     );
+    for (const change of referenceChanges) {
+        try {
+            await hooks.doAction('db.files.refchange:action:after', change);
+        } catch (error) {
+            console.warn('[projects] Source saved; reference notification failed', error);
+        }
+    }
     try {
         await hooks.doAction('db.posts.upsert:action:after', {
             entity: row,
@@ -289,25 +362,6 @@ export async function saveProjectMemory(
     expectedClock: number | null = null,
 ) {
     const value = ProjectMemorySchema.parse(input);
-    // Provenance must belong to the same owning project, never a caller's invented cross-project ID.
-    if (
-        value.source_thread_id &&
-        (await resolveChatProject(scope.db, value.source_thread_id)) !==
-            projectId
-    )
-        throw new Error('That memory source belongs to another project.');
-    if (value.source_message_id) {
-        const message = await scope.db.messages.get(value.source_message_id);
-        if (
-            !message ||
-            message.deleted ||
-            (await resolveChatProject(scope.db, message.thread_id)) !==
-                projectId
-        )
-            throw new Error(
-                'That memory source is unavailable in this project.',
-            );
-    }
     return {
         row: await save(
             scope,
@@ -333,40 +387,6 @@ export async function saveProjectSource(
     );
     if (hashes.some((hash) => !isValidHash(hash)))
         throw new Error('Invalid source file identity.');
-    const item = await scope.db.posts.get(value.item_id);
-    if (
-        !item ||
-        !isVisibleWorkspaceItem(item) ||
-        item.postType !==
-            (value.kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc')
-    )
-        throw new Error('This source item is unavailable.');
-    const current = value.revisions.find(
-        (r) => r.id === value.current_revision_id,
-    )!;
-    if (
-        value.kind === 'file' &&
-        (!current.original_hash ||
-            !parseDocumentFileHashes(item.file_hashes).includes(
-                current.original_hash,
-            ))
-    )
-        throw new Error('The original does not match this saved file.');
-    const previous = await scope.db.posts.get(id);
-    if (previous && !previous.deleted) {
-        const prior = ProjectSourceSchema.parse(JSON.parse(previous.content));
-        if (
-            prior.revisions.some(
-                (old) =>
-                    !value.revisions.some(
-                        (next) =>
-                            next.id === old.id &&
-                            next.original_hash === old.original_hash,
-                    ),
-            )
-        )
-            throw new Error('Source history must be preserved.');
-    }
     return {
         row: await save(
             scope,
@@ -379,6 +399,23 @@ export async function saveProjectSource(
         ),
         value,
     };
+}
+
+/** A note and its knowledge binding have one commit and one failure outcome. */
+export async function saveProjectNote(scope: WorkspaceOperationScope, projectId: string, input: { title: string; text: string }) {
+    scope.assertCurrent('write');
+    const { prepareDocumentCreate } = await import('./documents');
+    const { workspaceRevision } = await import('~/utils/chat/workspace-items');
+    const prepared = await prepareDocumentCreate({ title: input.title.trim(), content: {
+        type: 'doc', content: input.text.split('\n').map(text => ({ type: 'paragraph', content: text ? [{ type: 'text', text }] : [] })),
+    } });
+    const revision = await workspaceRevision(prepared.row);
+    const value = ProjectSourceSchema.parse({ item_id: prepared.row.id, kind: 'document', title: prepared.row.title, mode: 'relevant',
+        current_revision_id: revision, revisions: [{ id: revision, status: 'ready', coverage: 'full', created_at: nowSec() }] });
+    const row = await save(scope, projectId, PROJECT_POST_TYPES.source, value, newId(), null, [], false, PostSchema.parse(prepared.row));
+    try { await prepared.afterCommit(); }
+    catch (error) { console.warn('[projects] Note committed; notification failed', error); }
+    return { row, value };
 }
 export async function deleteProjectRecord(
     scope: WorkspaceOperationScope,
@@ -406,9 +443,10 @@ export async function deleteProjectRecord(
 export async function resolveChatProject(
     db: Or3DB,
     threadId: string,
+    options: { includeDeleted?: boolean } = {},
 ): Promise<string | null> {
     const thread = await db.threads.get(threadId);
-    if (!thread || thread.deleted) throw new Error('This chat is unavailable.');
+    if (!thread || (thread.deleted && !options.includeDeleted)) throw new Error('This chat is unavailable.');
     if (thread.project_id) {
         const owner = await db.projects.get(thread.project_id);
         if (!owner || owner.deleted)
@@ -417,7 +455,7 @@ export async function resolveChatProject(
             );
         return owner.id;
     }
-    const owners = (await db.projects.toArray()).filter(
+    const owners = (await db.projects.where('chat_ids').equals(threadId).toArray()).filter(
         (p) =>
             !p.deleted &&
             preservedProjectEntries(p.data).some(
@@ -436,69 +474,104 @@ export async function moveChatToProject(
     threadId: string,
     projectId: string | null,
 ) {
+    const changed = await scope.db.transaction('rw',
+        getWriteTxTableNames(scope.db, ['threads', 'projects']),
+        () => moveChatProjectRows(scope, threadId, projectId));
+    await notifyChatProjectMove(changed);
+}
+
+/** Hook-free membership mutation for callers already owning an atomic write. */
+export async function moveChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null) {
     scope.assertCurrent('write');
+    const transaction = Dexie.currentTransaction;
+    if (!transaction || transaction.db !== scope.db || transaction.mode !== 'readwrite')
+        throw new Error('Chat membership requires its captured write transaction.');
     const changed: Project[] = [];
     let saved: Thread | undefined;
-    await scope.db.transaction(
-        'rw',
-        getWriteTxTableNames(scope.db, ['threads', 'projects']),
-        async () => {
-            scope.assertCurrent('write');
-            const thread = await scope.db.threads.get(threadId);
-            const target = projectId
-                ? await scope.db.projects.get(projectId)
-                : undefined;
-            if (
-                !thread ||
-                thread.deleted ||
-                (projectId && (!target || target.deleted))
-            )
-                throw new Error('Chat or project is unavailable.');
-            for (const project of await scope.db.projects.toArray()) {
-                if (project.deleted) continue;
-                const old = preservedProjectEntries(project.data);
-                const entries = old.filter(
-                    (entry) =>
-                        projectEntryIdentity(entry) !== `chat:${threadId}`,
-                );
-                if (project.id === projectId)
-                    entries.push({
-                        kind: 'chat',
-                        id: threadId,
-                        name: thread.title ?? 'Chat',
-                    });
-                if (JSON.stringify(entries) !== JSON.stringify(old)) {
-                    const next = {
-                        ...project,
-                        data: entries,
-                        clock: nextClock(project.clock),
-                        updated_at: nowSec(),
-                    };
-                    await scope.db.projects.put(next);
-                    changed.push(next);
-                }
-            }
-            saved = {
-                ...thread,
-                project_id: projectId,
-                clock: nextClock(thread.clock),
+    const thread = await scope.db.threads.get(threadId);
+    const target = projectId
+        ? await scope.db.projects.get(projectId)
+        : undefined;
+    if (
+        !thread ||
+        thread.deleted ||
+        (projectId && (!target || target.deleted))
+    )
+        throw new Error('Chat or project is unavailable.');
+    const projects = await scope.db.projects.toArray();
+    const matchingEntries = projects
+        .filter((project) => !project.deleted)
+        .flatMap((project) => preservedProjectEntries(project.data))
+        .filter(
+            (entry) =>
+                projectEntryIdentity(entry) === `chat:${threadId}` &&
+                typeof entry === 'object',
+        );
+    const retained = Object.assign(
+        {},
+        ...matchingEntries,
+        ...(target
+            ? preservedProjectEntries(target.data).filter(
+                  (entry) =>
+                      projectEntryIdentity(entry) ===
+                          `chat:${threadId}` &&
+                      typeof entry === 'object',
+              )
+            : []),
+    );
+    for (const project of projects) {
+        if (project.deleted) continue;
+        const old = preservedProjectEntries(project.data);
+        const entries = old.filter(
+            (entry) =>
+                projectEntryIdentity(entry) !== `chat:${threadId}`,
+        );
+        if (project.id === projectId)
+            entries.push({
+                ...retained,
+                kind: 'chat',
+                id: threadId,
+                name: thread.title ?? 'Chat',
+            });
+        if (JSON.stringify(entries) !== JSON.stringify(old)) {
+            const next = {
+                ...project,
+                data: entries,
+                clock: nextClock(project.clock),
                 updated_at: nowSec(),
             };
-            await scope.db.threads.put(saved);
-            scope.assertCurrent('write');
-        },
-    );
+            await scope.db.projects.put(next);
+            changed.push(next);
+        }
+    }
+    if ((thread.project_id ?? null) !== projectId) {
+        saved = {
+            ...thread,
+            project_id: projectId,
+            clock: nextClock(thread.clock),
+            updated_at: nowSec(),
+        };
+        await scope.db.threads.put(saved);
+    }
+    scope.assertCurrent('write');
+    return { projects: changed, thread: saved };
+}
+
+/** Notifications run after the outer transaction; failures cannot undo a move. */
+export async function notifyChatProjectMove(changed: Awaited<ReturnType<typeof moveChatProjectRows>>) {
     const hooks = useHooks();
-    for (const entity of changed)
-        await hooks.doAction('db.projects.upsert:action:after', {
-            entity,
-            tableName: 'projects',
-        });
-    if (saved)
-        await hooks.doAction('db.threads.upsert:action:after', {
-            entity: saved,
-            tableName: 'threads',
-        });
+    try {
+        for (const entity of changed.projects)
+            await hooks.doAction('db.projects.upsert:action:after', {
+                entity,
+                tableName: 'projects',
+            });
+        if (changed.thread)
+            await hooks.doAction('db.threads.upsert:action:after', {
+                entity: changed.thread,
+                tableName: 'threads',
+            });
+    } catch (error) { console.warn('Chat membership saved; after-move hook failed.', error); }
 }
 
 /** Removing a workspace releases internal owners, while its underlying chats/files/documents remain usable. */
@@ -524,6 +597,7 @@ export async function deleteProjectWorkspace(
         { entity: project, id: projectId, tableName: 'projects' },
     );
     const detached: Thread[] = [];
+    const referenceChanges: CoreHookPayloadMap['db.files.refchange:action:after'][0][] = [];
     const deletedProject = {
         ...project,
         deleted: true,
@@ -554,8 +628,10 @@ export async function deleteProjectWorkspace(
                     if (!record.deleted)
                         for (const hash of new Set(
                             parseDocumentFileHashes(record.file_hashes),
-                        ))
-                            await changeRefCount(hash, -1, scope.db);
+                        )) {
+                            const changed = await changeFileRefRows(hash, -1, scope.db);
+                            if (changed) referenceChanges.push(changed.notification);
+                        }
                     if (hard) await scope.db.posts.delete(record.id);
                     else if (!record.deleted)
                         await scope.db.posts.put({
@@ -584,6 +660,13 @@ export async function deleteProjectWorkspace(
             scope.assertCurrent('write');
         },
     );
+    for (const change of referenceChanges) {
+        try {
+            await hooks.doAction('db.files.refchange:action:after', change);
+        } catch (error) {
+            console.warn('[projects] Project deleted; reference notification failed', error);
+        }
+    }
     for (const entity of detached)
         await hooks.doAction('db.threads.upsert:action:after', {
             entity,

@@ -744,7 +744,8 @@ export async function buildOpenRouterMessages(
         orMessages.push({
             role: m.role,
             content: parts,
-            ...(Array.isArray(m.tool_calls) ? { tool_calls: m.tool_calls } : {}),
+            ...(Array.isArray(m.tool_calls) && m.tool_calls.length
+                ? { tool_calls: m.tool_calls } : {}),
             ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
             ...(m.name ? { name: m.name } : {}),
         });

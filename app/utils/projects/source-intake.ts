@@ -137,12 +137,19 @@ export async function processProjectSource(
     source: ProjectRecord<ProjectSource>,
     revisionId = source.value.current_revision_id,
 ): Promise<ProjectRecord<ProjectSource>> {
-    const current = source.value.revisions.find((r) => r.id === revisionId)!;
+    let current = source.value.revisions.find((r) => r.id === revisionId)!;
     if (!current.original_hash)
         throw new Error('Source original is unavailable.');
+    const originalHash = current.original_hash;
     scope.assertCurrent('write');
-    const meta = await scope.db.file_meta.get(current.original_hash);
-    const blob = await getFileBlob(current.original_hash, scope.db);
+    // A fresh clock fences older worker completions and refreshes the bounded
+    // Processing lease on retries, including retained historical revisions.
+    current = { ...current, status: 'processing', processing_started_at: nowSec() };
+    source = await saveProjectSource(scope, projectId, { ...source.value,
+        revisions: source.value.revisions.map(revision => revision.id === revisionId ? current : revision),
+    }, source.row.id, source.row.clock);
+    const meta = await scope.db.file_meta.get(originalHash);
+    const blob = await getFileBlob(originalHash, scope.db);
     scope.assertCurrent('write');
     let result: Extraction =
         !meta || !blob
@@ -165,6 +172,7 @@ export async function processProjectSource(
         const next: SourceRevision = result.ok
             ? {
                   ...current,
+                  processing_started_at: undefined,
                   text_hash: textHash,
                   status: result.partial ? 'partial' : 'ready',
                   error: undefined,
@@ -173,6 +181,7 @@ export async function processProjectSource(
               }
             : {
                   ...current,
+                  processing_started_at: undefined,
                   status: 'failed',
                   coverage: 'none',
                   error: result.error.slice(0, 500),
@@ -182,7 +191,9 @@ export async function processProjectSource(
             projectId,
             {
                 ...source.value,
-                ...(result.ok
+                ...(result.ok &&
+                (current.id === source.value.current_revision_id ||
+                    current.id === source.value.revisions.at(-1)?.id)
                     ? {
                           current_revision_id: current.id,
                           item_id: current.item_id ?? source.value.item_id,
@@ -201,7 +212,7 @@ export async function processProjectSource(
             );
             if (catalog && !catalog.deleted)
                 try {
-                    await catalogWorkspaceFile(scope, current.original_hash, {
+                    await catalogWorkspaceFile(scope, originalHash, {
                         expected: catalog,
                         text: {
                             text: result.text.slice(0, 16000),

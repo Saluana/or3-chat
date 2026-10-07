@@ -198,7 +198,22 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
  * Purpose:
  * Streams OpenRouter responses as SSE events.
  */
+async function assertDispatchOwner(params: {
+    expectedProjectId?: string | null;
+    threadId?: string;
+    signal?: AbortSignal;
+}) {
+    if (params.expectedProjectId === undefined || !params.threadId) return;
+    const { captureProjectOperation } = await import('~/utils/projects/context');
+    const { resolveChatProject } = await import('~/db/project-workspace');
+    const scope = captureProjectOperation(params.signal, params.threadId);
+    if (await resolveChatProject(scope.db, params.threadId) !== params.expectedProjectId)
+        throw new Error('This chat changed projects before dispatch. Start a new turn.');
+    scope.assertCurrent();
+}
+
 export type OpenRouterStreamParams = {
+    expectedProjectId?: string | null;
     onProjectContext?: (receipt: import('~~/shared/projects/workspace').ProjectContextReceipt, iterations: unknown[]) => void;
     projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
@@ -312,6 +327,9 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     // before asynchronous provenance work so later view/tool mutations cannot
     // change the sent prefix after its fingerprint was captured.
     const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+    const usageRequestId = crypto.randomUUID();
+    let recordRequestState: ((state: 'dispatched' | 'accepted' | 'failed') => Promise<void>) | undefined;
+    await assertDispatchOwner(params);
     if (params.projectContext && params.threadId && !params.messageId) {
         const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
         const { resolveChatProject } = await import('~/db/project-workspace');
@@ -327,7 +345,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         const scope = captureProjectOperation(signal, params.threadId);
         if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId)
             throw new Error('This chat changed workspace or project. Start a new turn.');
-        const receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages);
+        let receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages);
         const previous = await scope.db.messages.get(params.messageId);
         const prior = (previous?.data as Record<string, unknown> | undefined)?.project_context_iterations;
         const iterations = Array.isArray(prior) ? prior : [];
@@ -341,26 +359,57 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             for (const source of parsed.data.source_changes) previousSources.set(source.id, source);
             for (const chat of parsed.data.chat_changes) previousChats.set(chat.id, chat.state);
         }
-        const iteration = { project_id: receipt.project_id, instructions: Boolean(receipt.instructions), brief: Boolean(receipt.brief), memory_count: receipt.memories.length,
+        const iteration = { project_id: receipt.project_id, request_id: usageRequestId, request_state: 'prepared' as const,
+            instructions: receipt.instructions_included ?? Boolean(receipt.instructions), brief: receipt.brief_included ?? Boolean(receipt.brief), memory_count: receipt.memories.length,
             source_changes: receipt.sources.filter(source => {
                 const previous = previousSources.get(source.id);
                 return previous ? previous.revision !== source.revision || previous.state !== source.state : source.state !== 'available';
             }).map(source => ({ id: source.id, revision: source.revision, state: source.state })),
             chat_changes: (receipt.chats ?? []).filter(chat => previousChats.get(chat.message_id) !== chat.state).map(chat => ({ id: chat.message_id, state: chat.state })) };
-        const metadata = { project_context: receipt, project_context_iterations: [...iterations, iteration] };
-        if (new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 128 * 1024)
-            throw new Error('Project context receipts reached their storage limit. Continue in a new chat.');
+        const history = [...iterations, iteration];
+        receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages,
+            new TextEncoder().encode(JSON.stringify(history)).byteLength);
+        const metadata = { project_context: receipt, project_context_iterations: history };
         await patchMessageInDb(scope.db, params.messageId, { data: metadata }, undefined, message => {
             scope.assertCurrent('write'); return Boolean(message && !message.deleted && message.thread_id === params.threadId);
         });
         scope.assertCurrent();
         params.onProjectContext?.(receipt, metadata.project_context_iterations);
+        recordRequestState = async request_state => {
+            scope.assertCurrent('write');
+            if (await resolveChatProject(scope.db, params.threadId!) !== receipt.project_id)
+                throw new Error('Project changed before recording dispatch.');
+            const message = await scope.db.messages.get(params.messageId!);
+            const current = (message?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+            if (!Array.isArray(current) || current.at(-1)?.request_id !== usageRequestId)
+                throw new Error('The project request was replaced.');
+            const next = [...current.slice(0, -1), { ...current.at(-1), request_state }];
+            await patchMessageInDb(scope.db, params.messageId!, { data: { project_context_iterations: next } }, undefined, row => {
+                scope.assertCurrent('write');
+                return Boolean(row && !row.deleted && row.thread_id === params.threadId
+                    && JSON.stringify((row.data as Record<string, unknown>).project_context_iterations) === JSON.stringify(current));
+            });
+            scope.assertCurrent();
+            params.onProjectContext?.(receipt, next);
+        };
     }
     const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, _context: _context, ...providerConfiguration } = requestSnapshot;
     const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
         tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
         countText: countTokensApprox }).catch(() => undefined);
-    const usageRequestId = crypto.randomUUID();
+    const recordFailure = async () => {
+        try { await recordRequestState?.('failed'); }
+        catch (error) { console.warn('[projects] Could not record failed dispatch', error); }
+    };
+    const dispatchRequest = async (url: string, init: RequestInit) => {
+        await recordRequestState?.('dispatched');
+        await assertDispatchOwner(params);
+        try {
+            const response = await fetchWithResponseDeadline(url, init, { signal, timeoutMs: params.responseTimeoutMs });
+            await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed');
+            return response;
+        } catch (error) { await recordFailure(); throw error; }
+    };
     let providerAccepted = false;
     const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
         if (!providerAccepted && !signal?.aborted) { providerAccepted = true; params.onProviderAccepted?.(); }
@@ -376,6 +425,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         let serverResp: Response | undefined;
         let networkError: Error | undefined;
 
+        await assertDispatchOwner(params);
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
@@ -384,11 +434,11 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
-            serverResp = await fetchWithResponseDeadline('/api/openrouter/stream', {
+            serverResp = await dispatchRequest('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(requestSnapshot),
-            }, { signal, timeoutMs: params.responseTimeoutMs });
+            });
         } catch (e) {
             if (
                 signal?.aborted ||
@@ -414,6 +464,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                     yield measuredEvent(evt);
                 }
                 } catch (error) {
+                    await recordFailure();
                     if (error instanceof OpenRouterStreamError) error.credentialSource = serverResp.headers.get('x-or3-credential-source') === 'server' ? 'server' : hasApiKey ? 'personal' : undefined;
                     throw error;
                 }
@@ -467,8 +518,9 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     delete fallbackBody._context;
 
     let resp: Response;
+    await assertDispatchOwner(params);
     try {
-        resp = await fetchWithResponseDeadline(openRouterChatUrl, {
+        resp = await dispatchRequest(openRouterChatUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -480,7 +532,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 Accept: 'text/event-stream',
             },
             body: JSON.stringify(fallbackBody),
-        }, { signal, timeoutMs: params.responseTimeoutMs });
+        });
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         if (error instanceof OpenRouterStreamError) throw error;
@@ -530,6 +582,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         yield measuredEvent(evt);
     }
     } catch (error) {
+        await recordFailure();
         if (error instanceof OpenRouterStreamError) error.credentialSource = 'personal';
         throw error;
     }
@@ -816,6 +869,7 @@ function setBackgroundStreamingAvailable(available: boolean): void {
  * Starts a background streaming job and returns its job ID.
  */
 export async function startBackgroundStream(params: {
+    expectedProjectId?: string | null;
     projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
@@ -878,6 +932,7 @@ export async function startBackgroundStream(params: {
     let result: BackgroundStreamResult | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+        await assertDispatchOwner(params);
         try {
             const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
                 method: 'POST',

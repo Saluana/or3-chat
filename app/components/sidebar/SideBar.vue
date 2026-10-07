@@ -408,6 +408,19 @@ if (topHeaderHeightInjected) {
     watch(topHeaderHeightInjected, recomputeListHeight);
 }
 
+function bindProjectQuery() {
+    subProjects?.unsubscribe();
+    const workspaceDb = getDb(); const generation = getWorkspaceGeneration();
+    const fullCatalog = Boolean(sidebarQuery.value.trim() || showAddToProjectModal.value);
+    subProjects = liveQuery(() => {
+        const rows = workspaceDb.projects.orderBy("updated_at").reverse().filter(p => !p.deleted);
+        return (fullCatalog ? rows : rows.limit(6)).toArray();
+    }).subscribe({
+        next: rows => { if (generation === getWorkspaceGeneration()) projects.value = rows; },
+        error: err => console.error("projects liveQuery error", err),
+    });
+}
+
 function bindWorkspaceQueries() {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
@@ -430,20 +443,7 @@ function bindWorkspaceQueries() {
         },
         error: (err) => console.error('liveQuery error', err),
     });
-    // Projects subscription (most recently updated first)
-    subProjects = liveQuery(() =>
-        workspaceDb.projects
-            .orderBy('updated_at')
-            .reverse()
-            .filter((p: any) => !p.deleted)
-            .toArray(),
-    ).subscribe({
-        next: (res) => {
-            if (generation !== getWorkspaceGeneration()) return;
-            projects.value = res;
-        },
-        error: (err) => console.error('projects liveQuery error', err),
-    });
+    bindProjectQuery();
     if (documentsEnabled.value) {
         // Documents subscription (docs only, excluding deleted)
         subDocs = liveQuery(() =>
@@ -953,6 +953,8 @@ const addToProjectModalProps = createSidebarModalProps(
         ui: { footer: 'justify-end' },
     }
 );
+
+watch(() => Boolean(sidebarQuery.value.trim() || showAddToProjectModal.value), bindProjectQuery);
 
 const projectSelectOptions = computed(() =>
     projects.value.map((p) => ({ label: p.name, value: p.id }))

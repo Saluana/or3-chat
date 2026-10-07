@@ -21,8 +21,8 @@ Follow dependency order. Checkboxes target 1–4 hours; split larger discoveries
 - [x] 3.1 Implement captured Context Builder. **R4.** Done: owner/revisions/context resolve independently of focused pane.
 - [x] 3.2 Integrate send/retry/regeneration/continuation. **R4.** Done: oversized required context refuses while drafts survive.
 - [x] 3.3 Enforce Project Tool Policy. **R5.** Done: forbidden IDs/resources and missing approvals refuse, including legacy reads.
-- [x] 3.4 Integrate background admission/recovery. **R4, R5.** Done: scope persists and revocation blocks execution.
-- [x] 3.5 Adapt workflow/plugin inference bridges. **R4, R5.** Done: project calls use the shared boundary or refuse.
+- [ ] 3.4 Integrate background admission/recovery. **R4, R5.** Admission ordering and resumed/iterative dispatch guards implemented and tested; exact installed provider ownership contract remains a release dependency.
+- [ ] 3.5 Adapt workflow/plugin inference bridges. **R4, R5.** Host writes and every foreground/caption/server transport fetch enforce captured identity and authorization. The isolated Workflows candidate supplies the origin and passes controller/route, typecheck, build and archive qualification. The installed artifact still needs replacement; older artifacts refuse safely.
 - [x] 3.6 Persist Context Receipts. **R4.** Done: every provider iteration distinguishes retrieval/submission after reload.
 
 ## 4. Project Home
@@ -34,10 +34,10 @@ Follow dependency order. Checkboxes target 1–4 hours; split larger discoveries
 
 ## 5. Phase 1 qualification
 
-- [x] 5.1 Qualify providers/backups. **R7.** Done: SQLite/Convex round trips preserve project state/references; unsupported providers cannot silently discard them.
-- [x] 5.2 Qualify context/security journeys. **R4, R5.** Done: A streams while B opens; alternate execution paths remain isolated.
+- [ ] 5.1 Qualify providers/backups. **R7.** Exact installed SQLite 0.0.14 + filesystem 0.0.9 profile passes two Chrome cloud journeys. New ownership-capable provider artifacts, installed Convex coverage and the separate clean release gate remain required.
+- [x] 5.2 Qualify context/security journeys. **R4, R5.** Six final Chrome journeys and 92 connected alternate-path/authorization cases pass. Unsupported server project execution remains refused until the required provider artifacts ship.
 - [x] 5.3 Qualify source/lifecycle journeys. **R1–R3, R7.** Done: failure/retry, Trash/restore, replacement, shared bytes, memory deletion, and reload pass.
-- [x] 5.4 Simplify/document/verify. **R1–R5, R7.** Done: public docs/docmap/provider READMEs updated; relevant tests, typecheck, and builds pass.
+- [x] 5.4 Simplify/document/verify. **R1–R5, R7.** Bulk repairs, final connected/browser/cloud smoke, configured typecheck, mapped documentation checks, fixed-profile production build and changed-diff review pass. Release and installation dependencies remain explicitly open above; see review-fixes.md for exact evidence and limitations.
 
 ## 6. Phase 2 continuity
 
@@ -48,7 +48,7 @@ Follow dependency order. Checkboxes target 1–4 hours; split larger discoveries
 
 ## Review qualification
 
-Phases 1–2 are implemented in the isolated review branches. See [validation](validation.md) for exact checks, artifacts, and execution limitations. Worker cancellation was inspected and revoked writes are covered at the store boundary; the browser journey covers failed-source retry. Phase 3's new sharing, connections, larger retrieval, and project bundles remain separately scoped in [permission and preservation contracts](phase-3-contracts.md).
+The review's local code repairs and final Chrome journeys are complete in the isolated review branches; provider release and installed Workflows replacement remain explicit dependencies. See [review fixes](review-fixes.md) for current findings and batch evidence, and [validation](validation.md) for earlier checks, artifacts, and execution limitations. Phase 3's new sharing, connections, larger retrieval, and project bundles remain separately scoped contracts in [permission and preservation contracts](phase-3-contracts.md), not delivered features.
 
 ## Traceability Matrix
 

@@ -136,6 +136,9 @@
                                         :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
                                         v-model:model-variant="modelVariant"
+                                        :model-inherited="modelInherited"
+                                        :project-model-default="Boolean(attachmentProject)"
+                                        @use-default-model="resetModel"
                                         v-model:thinking-enabled="
                                             thinkingEnabled
                                         "
@@ -383,6 +386,7 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
+import { reportError } from '~/utils/errors';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     computed,
@@ -440,6 +444,7 @@ import type {
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
+import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
 import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
 import {
@@ -784,21 +789,22 @@ const {
     modelReasoningEfforts,
     modelDefaultReasoningEffort,
     modelSupportsThinking,
+    modelInherited,
+    useInheritedModel,
+    restoreDraftModel,
 } = useChatModelSelection({
     threadId: () => props.threadId,
     onChange: (modelId) => emit('model-change', modelId),
 });
 
 const attachmentDestination = ref<'chat'|'project'>('chat');
-const attachmentProject = ref<string | null>(null);
-let attachmentProjectRevision = 0;
-watch(() => props.threadId, async id => {
-    const revision = ++attachmentProjectRevision; attachmentProject.value = null; attachmentDestination.value = 'chat';
-    if (!id) return;
-    const { getDb } = await import('~/db/client'); const db = getDb();
-    const { resolveChatProject } = await import('~/db/project-workspace');
-    const owner = await resolveChatProject(db, id).catch(() => null);
-    if (revision === attachmentProjectRevision && props.threadId === id && db === getDb()) attachmentProject.value = owner;
+async function resetModel() {
+    try { await useInheritedModel(); }
+    catch (error) { reportError(error, { message: 'Could not restore the default model.', toast: true }); }
+}
+const attachmentProject = useChatProjectOwner(() => props.threadId);
+watch([() => props.threadId, attachmentProject], () => {
+    attachmentDestination.value = 'chat';
 }, { immediate: true });
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
@@ -990,14 +996,13 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             { emitUpdate: false }
         );
         if (draft?.composer) {
-            selectedModel.value = draft.composer.model;
             // Migrate legacy drafts that stored the web-search toggle.
-            modelVariant.value = sanitizeModelVariant(
+            restoreDraftModel(draft.composer.model, sanitizeModelVariant(
                 draft.composer.modelVariant ??
                     (draft.composer.webSearchEnabled === true
                         ? 'online'
                         : undefined)
-            );
+            ));
             thinkingEnabled.value = draft.composer.thinkingEnabled;
             reasoningEffort.value = draft.composer.reasoningEffort;
             imageSettings.value = { ...draft.composer.imageSettings };
@@ -1011,9 +1016,9 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
                 revision !== draftRestoreRevision ||
                 props.tabId !== tabId
             ) return;
-            modelVariant.value = sanitizeModelVariant(
+            restoreDraftModel(undefined, sanitizeModelVariant(
                 aiSettings.value?.defaultModelVariant
-            );
+            ));
         }
     } finally {
         await nextTick();

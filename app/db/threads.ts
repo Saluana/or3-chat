@@ -422,46 +422,64 @@ export async function forkThread(
     overrides: Partial<ThreadCreate> = {},
     options: { copyMessages?: boolean } = {}
 ): Promise<Thread> {
+    overrides = structuredClone(overrides);
+    options = { ...options };
     const hooks = useHooks();
     const db = getDb();
-    return db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'threads', { include: ['messages'] }),
-        async () => {
-        const src = await dbTry(
-            () => db.threads.get(sourceThreadId),
-            { op: 'read', entity: 'threads', action: 'get' },
-            { rethrow: true }
-        );
-        if (!src || src.deleted) throw new Error('Source thread not found');
-        if (overrides.branch_mode === 'compacted') throw new Error('Compacted forks require the validated atomic writer.');
-        const rootThreadId = await resolveRootThreadId(src.id, db);
-        const now = nowSec();
-        const forkId = newId();
-        const fork = parseOrThrow(ThreadSchema, {
-            ...src,
-            id: forkId,
-            forked: true,
-            created_at: now,
-            updated_at: now,
-            last_message_at: null,
-            clock: nextClock(),
-            ...overrides,
-            parent_thread_id: src.id,
-            root_thread_id: rootThreadId,
-            summary_message_id: null,
-            fork_reason: 'manual',
-            branch_mode: options.copyMessages ? 'copy' : overrides.branch_mode ?? null,
-            anchor_message_id: overrides.anchor_message_id ?? null,
-            anchor_index: overrides.anchor_index ?? null,
-        });
-        await hooks.doAction('db.threads.fork:action:before', {
-            source: src,
-            fork,
-        });
+    const { resolveChatProject, moveChatProjectRows, notifyChatProjectMove } = await import('./project-workspace');
+    const { captureProjectOperation } = await import('~/utils/projects/context');
+    const scope = captureProjectOperation(undefined, sourceThreadId);
+    if (scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
+    const src = await dbTry(
+        () => db.threads.get(sourceThreadId),
+        { op: 'read', entity: 'threads', action: 'get' },
+        { rethrow: true }
+    );
+    if (!src || src.deleted) throw new Error('Source thread not found');
+    const projectId = await resolveChatProject(db, src.id);
+    if (overrides.project_id !== undefined && overrides.project_id !== projectId)
+        throw new Error('Ordinary forks must retain the source project. Move the new chat explicitly instead.');
+    if (overrides.branch_mode === 'compacted') throw new Error('Compacted forks require the validated atomic writer.');
+    const rootThreadId = await resolveRootThreadId(src.id, db);
+    const now = nowSec();
+    const forkId = overrides.id ?? newId();
+    let fork = parseOrThrow(ThreadSchema, {
+        ...src,
+        id: forkId,
+        forked: true,
+        created_at: now,
+        updated_at: now,
+        last_message_at: null,
+        clock: nextClock(),
+        ...overrides,
+        project_id: projectId,
+        parent_thread_id: src.id,
+        root_thread_id: rootThreadId,
+        summary_message_id: null,
+        fork_reason: 'manual',
+        branch_mode: options.copyMessages ? 'copy' : overrides.branch_mode ?? null,
+        anchor_message_id: overrides.anchor_message_id ?? null,
+        anchor_index: overrides.anchor_index ?? null,
+    });
+    await hooks.doAction('db.threads.fork:action:before', {
+        source: structuredClone(src),
+        fork,
+    });
+    fork = parseOrThrow(ThreadSchema, fork);
+    if (fork.id !== forkId) throw new Error('Invalid ordinary fork identity.');
+    let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
+    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects']), async () => {
+        scope.assertCurrent('write');
+        const current = await db.threads.get(src.id);
+        if (JSON.stringify(current) !== JSON.stringify(src)
+            || await resolveChatProject(db, src.id) !== projectId
+            || await resolveRootThreadId(src.id, db) !== rootThreadId)
+            throw new Error('The source chat changed while preparing its fork. Try again.');
         rejectGenericCompactionTransition(fork);
-        rejectGenericCompactionTransition(fork, await db.threads.get(fork.id));
-        if (fork.parent_thread_id !== src.id || fork.root_thread_id !== rootThreadId || fork.summary_message_id != null
+        const existingFork = await db.threads.get(fork.id);
+        rejectGenericCompactionTransition(fork, existingFork);
+        if (existingFork) throw new Error('The fork identity already exists.');
+        if (fork.project_id !== projectId || fork.parent_thread_id !== src.id || fork.root_thread_id !== rootThreadId || fork.summary_message_id != null
             || fork.fork_reason !== 'manual') throw new Error('Invalid ordinary fork lineage.');
         if (fork.branch_mode === 'reference') {
             const anchor = fork.anchor_message_id ? await db.messages.get(fork.anchor_message_id) : undefined;
@@ -472,6 +490,7 @@ export async function forkThread(
             { op: 'write', entity: 'threads', action: 'fork' },
             { rethrow: true }
         );
+        membership = await moveChatProjectRows(scope, fork.id, projectId);
 
         if (options.copyMessages) {
             const msgs =
@@ -520,9 +539,13 @@ export async function forkThread(
                 );
             }
         }
-        await hooks.doAction('db.threads.fork:action:after', fork);
+        scope.assertCurrent('write');
         return fork;
     });
+    await notifyChatProjectMove(membership);
+    try { await hooks.doAction('db.threads.fork:action:after', result); }
+    catch (error) { console.warn('[threads] Fork committed; notification failed', error); }
+    return result;
 }
 
 /**

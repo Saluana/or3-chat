@@ -1,5 +1,6 @@
 /** Host services for the trusted Workflows package, bound by the V2 client loader. */
 import { watch } from 'vue';
+import { HTTPClient } from '@openrouter/sdk';
 import { useNuxtApp } from '#app';
 import { useAppConfig, useHooks, useRuntimeConfig, useToast } from '#imports';
 import UBadge from '@nuxt/ui/components/Badge.vue';
@@ -29,7 +30,9 @@ import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavi
 import { programmaticPrefill } from '~/composables/chat/useChatInputBridge';
 import { parseHashes } from '~/utils/files/attachments';
 import { useModelStore } from '~/composables/chat/useModelStore';
-import { getDb } from '~/db/client';
+import { getDb, getActiveWorkspaceId, getWorkspaceGeneration } from '~/db/client';
+import { resolveChatProject } from '~/db/project-workspace';
+import { captureWorkspaceOperation, type WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { createOpenRouterClient, DEFAULT_HEADERS, wrapLegacyChatSendArgs } from '~~/shared/openrouter';
 import { createOrRefFile, changeRefCount } from '~/db/files';
 import { dataUrlToBlob } from '~/utils/chat/files';
@@ -49,17 +52,15 @@ import { isWorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { Message } from '~/db/schema';
 
+interface WorkflowRequestOrigin { threadId: string; messageId: string; streamId: string }
+
 function getPostsApi(): PanePluginApi | null {
     return (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi ?? null;
 }
 
-async function persistGeneratedImage(messageId: string, dataUrl: string, signal?: AbortSignal): Promise<string> {
-    const db = getDb();
-    const assertCurrent = () => {
-        if (getDb() !== db || signal?.aborted) {
-            throw new Error('Generated image cancelled because its session is no longer active.');
-        }
-    };
+async function persistGeneratedImage(scope: WorkspaceOperationScope, original: Message, dataUrl: string): Promise<string> {
+    const db = scope.db;
+    const assertCurrent = () => scope.assertCurrent('write');
     assertCurrent();
     if (dataUrl.length > 28 * 1024 * 1024) throw new Error('Generated image exceeds the file limit.');
     const blob = dataUrlToBlob(dataUrl);
@@ -67,12 +68,17 @@ async function persistGeneratedImage(messageId: string, dataUrl: string, signal?
         throw new Error('Generated output is not a supported raster image.');
     }
     assertCurrent();
-    const file = await createOrRefFile(blob, 'workflow-generated-image');
+    const file = await createOrRefFile(blob, 'workflow-generated-image', { assertCurrent });
     try {
-        await db.transaction('rw', getWriteTxTableNames(db, ['messages', 'file_meta']), async () => {
+        await db.transaction('rw', getWriteTxTableNames(db, ['messages', 'file_meta', 'threads', 'projects']), async () => {
             assertCurrent();
-            const message = await db.messages.get(messageId);
-            if (!message || message.deleted) throw new Error('The workflow message is no longer available.');
+            const message = await db.messages.get(original.id);
+            if (!message || message.deleted || message.thread_id !== original.thread_id
+                || message.stream_id !== original.stream_id || !isWorkflowMessageData(message.data))
+                throw new Error('The workflow message is no longer available.');
+            if (await resolveChatProject(db, original.thread_id))
+                throw new Error('This workflow cannot capture project context. Use a normal project chat.');
+            assertCurrent();
             const hashes = parseHashes(message.file_hashes);
             if (hashes.includes(file.hash)) {
                 await changeRefCount(file.hash, -1, db);
@@ -103,14 +109,67 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
     const { apiKey } = useUserApiKey();
     const toast = useToast();
     const activationDb = getDb();
+    const activationGeneration = getWorkspaceGeneration();
     const workflowFeatures = useOr3Config().features.workflows;
     const appConfig = useAppConfig() as { workflowSlashCommands?: { enabled?: boolean } };
     const assertOriginWorkspace = () => {
-        if (getDb() !== activationDb || signal?.aborted) throw new Error('Workflow workspace changed');
+        if (getDb() !== activationDb || getWorkspaceGeneration() !== activationGeneration || signal?.aborted)
+            throw new Error('Workflow workspace changed');
     };
-    const records = createScopedRecordStore(activationDb, {
+    const captureWrite = (threadId: string, operationSignal?: AbortSignal) => {
+        assertOriginWorkspace();
+        const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+            threadId, messageId: null, requestId: crypto.randomUUID(), callId: crypto.randomUUID(),
+            abortSignal: signal && operationSignal ? AbortSignal.any([signal, operationSignal])
+                : operationSignal ?? signal ?? new AbortController().signal });
+        scope.assertCurrent('write');
+        return scope;
+    };
+    const workflowClient = (key: string, input?: WorkflowRequestOrigin) => {
+        // Old installed artifacts lack an origin. They fail closed until their
+        // adapter supplies the immutable run identity, never the active pane.
+        const origin = input && { ...input };
+        const scope = origin?.threadId ? captureWrite(origin.threadId) : null;
+        const httpClient = new HTTPClient({ fetcher: async (request, init) => {
+            if (!origin?.messageId || !scope) throw new Error('Workflow request origin is required. Update the Workflows package.');
+            await scope.db.transaction('r', ['messages', 'threads', 'projects'], async () => {
+                scope.assertCurrent('write');
+                const [row, thread] = await Promise.all([scope.db.messages.get(origin.messageId), scope.db.threads.get(origin.threadId)]);
+                if (!row || row.deleted || !isWorkflowMessageData(row.data) || row.thread_id !== origin.threadId
+                    || row.stream_id !== origin.streamId || !thread || thread.deleted)
+                    throw new Error('The originating workflow message is no longer available.');
+                if (await resolveChatProject(scope.db, origin.threadId))
+                    throw new Error('This workflow cannot capture project context. Use a normal project chat.');
+                scope.assertCurrent('write');
+            });
+            scope.assertCurrent('write');
+            return fetch(request, init);
+        } });
+        return createOpenRouterClient({ apiKey: key, httpClient });
+    };
+    const scopedRecords = createScopedRecordStore(activationDb, {
         postType: 'workflow-entry', messageType: 'workflow-execution',
     }, assertOriginWorkspace);
+    const records = { ...scopedRecords, messages: {
+        ...scopedRecords.messages,
+        async updateData(input: Parameters<typeof scopedRecords.messages.updateData>[0]) {
+            const updates = structuredClone(input);
+            const scope = captureWrite('workflow-records');
+            await activationDb.transaction('rw', getWriteTxTableNames(activationDb, ['messages', 'threads', 'projects']), async () => {
+                scope.assertCurrent('write');
+                for (const update of updates) {
+                    const row = await activationDb.messages.get(update.id);
+                    if (!row || row.deleted || !isWorkflowMessageData(row.data) || row.clock !== update.ifClock
+                        || JSON.stringify(row.data) !== JSON.stringify(update.ifData)) continue;
+                    if (await resolveChatProject(activationDb, row.thread_id))
+                        throw new Error('This workflow cannot capture project context. Use a normal project chat.');
+                }
+                scope.assertCurrent('write');
+                await scopedRecords.messages.updateData(updates);
+                scope.assertCurrent('write');
+            });
+        },
+    } };
     const legacyRecords = createLegacyWorkflowRecordAccess(records);
 
     return {
@@ -175,13 +234,19 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
             async upsertWorkflowMessage(input: {
                 id: string; threadId: string; streamId: string; data: unknown; pending: boolean;
             }) {
-                assertOriginWorkspace();
-                const db = activationDb;
-                const { resolveChatProject } = await import('~/db/project-workspace');
-                if (await resolveChatProject(db, input.threadId)) throw new Error('This workflow cannot capture project context. Use a normal project chat.');
-                await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
-                    assertOriginWorkspace();
+                input = { ...input, data: structuredClone(input.data) };
+                if (!isWorkflowMessageData(input.data)) throw new Error('Invalid workflow message data.');
+                const scope = captureWrite(input.threadId);
+                const db = scope.db;
+                await db.transaction('rw', getWriteTxTableNames(db, ['messages', 'threads', 'projects']), async () => {
+                    scope.assertCurrent('write');
+                    if (await resolveChatProject(db, input.threadId))
+                        throw new Error('This workflow cannot capture project context. Use a normal project chat.');
                     const previous = await db.messages.get(input.id);
+                    if (previous && (previous.deleted || previous.thread_id !== input.threadId
+                        || previous.stream_id !== input.streamId || !isWorkflowMessageData(previous.data)))
+                        throw new Error('The workflow message identity changed.');
+                    scope.assertCurrent('write');
                     const timestamp = nowSec();
                     await db.messages.put(previous ? {
                         ...previous,
@@ -204,6 +269,7 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
                         stream_id: input.streamId,
                         file_hashes: null,
                     });
+                    scope.assertCurrent('write');
                 });
             },
             markChatSendHandled,
@@ -258,8 +324,8 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
                 try { return await modelStore.fetchModels({ ttlMs: 60 * 60 * 1000 }); }
                 catch { return []; }
             },
-            async completeCaption(input: { modelId: string; apiKey: string; imageUrls: string[] }) {
-                const result = await createOpenRouterClient({ apiKey: input.apiKey }).chat.send(
+            async completeCaption(input: { modelId: string; apiKey: string; imageUrls: string[]; origin?: WorkflowRequestOrigin }) {
+                const result = await workflowClient(input.apiKey, input.origin).chat.send(
                     wrapLegacyChatSendArgs({
                         model: input.modelId,
                         messages: [{
@@ -308,15 +374,23 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
                 return legacyRecords.loadConversationHistory(...args);
             },
             toolRegistry: useToolRegistry,
-            createOpenRouterClient: (apiKey: string) => ({
-                client: createOpenRouterClient({ apiKey }),
+            createOpenRouterClient: (apiKey: string, origin?: WorkflowRequestOrigin) => ({
+                client: workflowClient(apiKey, origin),
                 headers: DEFAULT_HEADERS,
                 apiKey,
                 metadata: 'disabled' as const,
             }),
-            persistGeneratedImage: (messageId: string, dataUrl: string, signal?: AbortSignal) => {
+            persistGeneratedImage: async (messageId: string, dataUrl: string, operationSignal?: AbortSignal) => {
                 assertOriginWorkspace();
-                return persistGeneratedImage(messageId, dataUrl, signal);
+                const original = await activationDb.messages.get(messageId);
+                assertOriginWorkspace();
+                if (!original || original.deleted || !isWorkflowMessageData(original.data))
+                    throw new Error('The workflow message is no longer available.');
+                const scope = captureWrite(original.thread_id, operationSignal);
+                if (await resolveChatProject(scope.db, original.thread_id))
+                    throw new Error('This workflow cannot capture project context. Use a normal project chat.');
+                scope.assertCurrent('write');
+                return persistGeneratedImage(scope, original, dataUrl);
             },
         },
     };

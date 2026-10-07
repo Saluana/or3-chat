@@ -66,7 +66,8 @@ vi.mock('../../../utils/net/request-identity', async (importOriginal) => ({
     normalizeProxyTrustConfig: vi.fn(() => ({ trustProxy: false })),
 }));
 
-vi.mock('~~/shared/openrouter/url', () => ({
+vi.mock('~~/shared/openrouter/url', async (original) => ({
+    ...await original<typeof import('~~/shared/openrouter/url')>(),
     getOpenRouterChatCompletionsUrl: vi.fn(
         () => 'https://openrouter.test/api/v1/chat/completions'
     ),
@@ -99,6 +100,7 @@ function makeEvent(headers: Record<string, string> = {}): H3Event {
             req: {
                 headers: { host: 'chat.test', origin: 'https://chat.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...headers },
                 on: vi.fn(),
+                off: vi.fn(),
             },
         },
     } as unknown as H3Event;
@@ -487,5 +489,55 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(body).not.toHaveProperty('_messageId');
         expect(body).not.toHaveProperty('_toolRuntime');
         expect(body).not.toHaveProperty('_streamedFieldMode');
+    });
+});
+
+// Failure inventory: caller-controlled model/questions, oversized state,
+// unauthenticated/viewer/cross-workspace billing, missing/forbidden personal key.
+// This route owns auth/key/limits; Dexie tests own stale classification commits.
+describe('project memory classification proxy admission', () => {
+    let classify: (event: H3Event) => Promise<unknown>;
+    beforeAll(async () => { classify = (await import('../classify-memory.post')).default as typeof classify; });
+    beforeEach(() => {
+        runtimeConfig = { auth: { enabled: true }, security: { proxy: {}, allowedOrigins: [] },
+            openrouterApiKey: 'managed-fixture', openrouterAllowUserOverride: true, openrouterRequireUserKey: false,
+            limits: { enabled: false } };
+        vi.stubGlobal('useRuntimeConfig', () => runtimeConfig);
+        readBodyMock.mockReset().mockResolvedValue({ workspaceId: 'workspace-1', state: { memory: 'We chose SQLite.', messages: [] } });
+        getHeaderMock.mockImplementation((event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()]);
+        requireCanMock.mockReset();
+        resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'user-1' }, workspace: { id: 'workspace-1' }, role: 'editor' });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+            answers: { memory_kind: { type: 'choice', choice: 'decision', probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } } },
+            usage: { input_tokens: 30, output_tokens: 0 } }), { headers: { 'Content-Type': 'application/json' } })));
+    });
+    const requestEvent = () => makeEvent({ host: 'chat.test', origin: 'https://chat.test',
+        'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' });
+    it('uses a fixed classifier and hides provider failures and keys', async () => {
+        expect(await classify(requestEvent())).toMatchObject({ kind: 'decision' });
+        const fetcher = vi.mocked(fetch); const req = fetcher.mock.calls[0]![0] as Request;
+        expect(req.url).toBe('https://openrouter.ai/api/alpha/decisions');
+        expect((await req.json()).model).toBe('typesafe/jev-1.13');
+        fetcher.mockRejectedValueOnce(new Error('secret upstream failure'));
+        expect(await classify(requestEvent())).toMatchObject({ kind: 'fact' });
+    });
+    it('refuses a workspace mismatch before provider dispatch', async () => {
+        readBodyMock.mockResolvedValue({ workspaceId: 'foreign', state: { memory: 'We chose SQLite.', messages: [] } });
+        await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+    it('enforces write admission before dispatch', async () => {
+        requireCanMock.mockImplementation(() => { throw forbidden(403); });
+        await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+    it.each([
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: [] }, model: 'attacker/model' },
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: Array(7).fill({ role: 'user', text: 'text' }) } },
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: [{ role: 'user', text: 'x'.repeat(17000) }] } },
+    ])('rejects unbounded or caller-configured input %#', async body => {
+        readBodyMock.mockResolvedValue(body);
+        await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 400 });
+        expect(fetch).not.toHaveBeenCalled();
     });
 });

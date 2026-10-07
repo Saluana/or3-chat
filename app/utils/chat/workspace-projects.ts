@@ -128,6 +128,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     let saved = prepared.row;
     await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta'] }), async () => {
         scope.assertCurrent('write');
+        await context.assertToolAuthorized?.();
         const current = await scope.db.projects.get(proposed.id);
         scope.assertCurrent('write');
         if (base) assertProjectUnchanged(current, base);

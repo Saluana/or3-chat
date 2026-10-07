@@ -165,7 +165,7 @@ export async function inspectCompactionSource(sourceThreadId: string): Promise<v
 }
 async function inspectCompactionRevision(sourceThreadId: string, captureRevision = true): Promise<string> {
     const db = getDb(); const generation = getWorkspaceGeneration();
-    const revision = await db.transaction('r', ['threads', 'messages'], async () => {
+    const revision = await db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => {
         const projection = await resolveThreadProjection(sourceThreadId, db);
         const anchor = projection.segments.at(-1)?.visible.at(-1);
         if (!anchor) throw new CompactionError('not_eligible', 'This conversation has no local persisted anchor.');
@@ -220,7 +220,7 @@ export async function captureCompaction(options: CaptureOptions): Promise<Compac
     const db = options.db ?? getDb(); const generation = getWorkspaceGeneration();
     const ownership = { db, generation, options: { ...options } }; requireCurrent(ownership);
     if (!options.model.trim()) throw new CompactionError('invalid_capture', 'Compaction requires its captured chat model.');
-    const state = await db.transaction('r', ['threads', 'messages'], () => readCapture(options, db));
+    const state = await db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => await readCapture(options, db));
     requireCurrent(ownership);
     const capture: CompactionCapture = freeze({ operationId: newId(), childThreadId: newId(), summaryMessageId: newId(),
         sourceThreadId: options.sourceThreadId, anchorMessageId: options.anchorMessageId, model: options.model,
@@ -329,7 +329,7 @@ export async function createCompactedFork(input: { capture: CompactionCapture; s
         });
         requireCurrent(state, input.signal ?? state.options.signal);
     }
-    const result = await state.db.transaction('rw', getWriteTxTableNames(state.db, ['threads', 'messages', 'projects']), async () => {
+    const result = await state.db.transaction('rw', getWriteTxTableNames(state.db, ['threads', 'messages', 'projects', 'posts']), async () => {
         const existing = await state.db.threads.get(capture.childThreadId);
         if (existing) {
             const summary = await state.db.messages.get(capture.summaryMessageId);

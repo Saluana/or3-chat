@@ -44,6 +44,8 @@ The max size cap defaults to 20 MB and is configurable via `or3.limits.maxFileSi
 | `hardDeleteMany(hashes)`           | Removes metadata and blob entries entirely.                                             |
 | `derefFile(hash)`                  | Decrements ref count (never below zero).                                                |
 | `changeRefCount(hash, delta)`      | Internal helper exported for testing/hooks (invokes `db.files.refchange`).              |
+| `changeFileRefRows(hash, delta, db)` | Hook-free reference update within an existing captured write transaction; returns the updated row and notification payload. |
+| `notifyFileRefChanges(changes)` | Delivers reference notifications after the outer commit; reports notification failures without failing durable writes. |
 | `fileDeleteError(message, cause?)` | Convenience error factory with tags for delete flows.                                   |
 
 ---
@@ -57,6 +59,16 @@ The max size cap defaults to 20 MB and is configurable via `or3.limits.maxFileSi
 -   `db.files.restore:action:(before|after)`
 
 These make it easy to inject custom validation, analytics, or audit trails around file lifecycle events.
+
+Atomic project source saves and project deletion use `changeFileRefRows()` and
+emit the returned reference notifications only after the outer transaction
+commits. A rolled-back operation emits none. Notification failures are reported
+without undoing or misreporting committed source ownership. The row helper
+requires an existing read/write transaction in the supplied database; it does
+not create a transaction or emit hooks itself. Catalog, prepared post batch and
+message attachment callers use this same boundary. `changeRefCount` owns a
+standalone transaction and delivers its notification afterward. File creation
+also prepares hooks before writing metadata/blob rows and notifies after commit.
 
 ---
 

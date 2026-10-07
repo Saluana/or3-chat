@@ -47,8 +47,8 @@
                             collapsingGroups.has(item.groupKey) && 'is-exiting'
                         ]"
                         @select="() => emit('select', item.item)"
-                        @rename="() => emit('rename', item.item)"
-                        @delete="() => emit('delete', item.item)"
+                        @rename="emit('rename', $event)"
+                        @delete="emit('delete', $event)"
                         @add-to-project="() => emit('add-to-project', item.item)"
                         @toggle-family="toggleFamily"
                         @load-more-members="loadMoreMembers"

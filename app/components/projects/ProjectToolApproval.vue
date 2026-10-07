@@ -13,9 +13,10 @@ const emit = defineEmits<{ close: [approved: boolean] }>();
         "
     >
         <template #body>
-            <pre class="whitespace-pre-wrap break-words text-sm">{{
-                argumentsText
-            }}</pre>
+            <pre
+                class="max-h-[50dvh] overflow-auto whitespace-pre-wrap break-words text-sm"
+                >{{ argumentsText }}</pre
+            >
         </template>
         <template #footer
             ><UButton

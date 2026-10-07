@@ -66,6 +66,12 @@ job lifecycle, and browser bridge are documented in [Background execution](/docu
 
 ## Host source boundary
 
+The shared SDK client accepts its native `httpClient` option for host-owned
+transport guards. Workflow model/caption fetches use it to check the captured
+run rather than the visible pane. Server workflow fetches additionally verify
+the persisted job/message, fresh write membership and canonical nullable owner.
+These guards also run on SDK transport retries.
+
 The import path `~/utils/chat/openrouterStream` resolves within OR3's `app/`
 tree and is not part of the portable plugin SDK. Portable model and tool work
 must use the currently supported, permission-scoped SDK surface. See the

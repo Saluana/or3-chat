@@ -242,6 +242,7 @@ export async function continueMessageImpl(
     try {
         const { resolveChatProject } = await import('~/db/project-workspace');
         const initialProjectId = await resolveChatProject(originDb, originThreadId);
+        request.expectedProjectId = initialProjectId;
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
         if (!ownsThread()) return;
         if (
@@ -421,17 +422,18 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         if (!ownsThread()) return;
+        const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
+        if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
         const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
-        const { useModelStore } = await import('~/composables/chat/useModelStore');
-        const meta = useModelStore().catalog.value.find(model => model.id === modelId);
+        const prompt = [...all].sort(compareMessageOrder).filter(message =>
+            message.role === 'user' && compareMessageOrder(message, target) < 0).at(-1);
+        const retrievalQuery = prompt ? normalizeStreamingMessage(prompt).text : existingText;
         const projectContext = initialProjectId ? await buildProjectContext(captureProjectOperation(continuationAbortController.signal, originThreadId), originThreadId,
-            typeof target.content === 'string' ? target.content : '', meta?.architecture?.input_modalities?.includes('image') === true, initialProjectId) : null;
+            retrievalQuery, resolvedPolicy.model.architecture?.input_modalities?.includes('image') === true, initialProjectId) : null;
         if (projectContext) {
             const projectMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: projectContext.messages, assistantHashes: [], contextHashes: [], fileHashes: [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
             orMessages = [...orMessages.slice(0, -1), ...projectMessages, ...orMessages.slice(-1)];
         }
-        const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
-        if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
         const contextPolicy = { ...resolvedPolicy, measuredUsage: target.data && typeof target.data === 'object'
             ? (target.data as Record<string, unknown>).usage : undefined };
         // Last setup gate: never publish stream state into a new chat.
@@ -447,7 +449,7 @@ export async function continueMessageImpl(
             modalities.length === 1 &&
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
-        await prepareOpenRouterRequest({ model: modelId, orMessages,
+        await prepareOpenRouterRequest({ projectContext, model: modelId, orMessages,
             modalities, contextPolicy, signal: continuationAbortController.signal });
         if (!ownsThread()) return;
 
@@ -560,6 +562,7 @@ export async function continueMessageImpl(
                 throw new Error('Unable to capture continuation history');
             }
             const result = await startBackgroundStream({
+                expectedProjectId: initialProjectId,
                 apiKey: ctx.effectiveApiKey.value,
                 model: modelId,
                 orMessages: orMessages as Parameters<typeof startBackgroundStream>[0]['orMessages'],
@@ -657,6 +660,7 @@ export async function continueMessageImpl(
         const stream = openRouterStreamWithRetry({
             apiKey: ctx.effectiveApiKey.value,
             projectContext,
+            expectedProjectId: initialProjectId,
             onProjectContext: (receipt, iterations) => {
                 if (ctx.tailAssistant.value?.id === target.id) ctx.tailAssistant.value.data = { ...ctx.tailAssistant.value.data,
                     project_context: receipt, project_context_iterations: iterations };

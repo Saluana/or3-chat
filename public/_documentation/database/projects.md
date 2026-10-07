@@ -6,6 +6,14 @@ Client navigation uses `useProjectSidebar()` from `~/composables/sidebar/useProj
 
 Project activity reuses `SidebarTimeGroupedList` with `type="all"`, `projectId`, and an explicit `query` string. Omitting `query` retains the normal inherited sidebar search. Its optional `header` slot places the project summary in the same virtual scroll container as the activity rows; loading and empty messages stay below that header. Project document filtering includes both document associations and live document sources from Knowledge. Standard selection, rename, delete, and add-to-project events retain their existing sidebar handlers.
 
+Kept-alive activity views unsubscribe when hidden and refresh when activated.
+Home's project query loads six live rows (five shortcuts and a Show more sentinel);
+the complete catalog loads only for search or the project picker. Project activity
+uses indexed owning chats and direct legacy/document membership lookups instead
+of scanning unrelated workspace rows, including expanded conversation families.
+
+Project family headers use an original chat's title and actions only when that original belongs to the selected project. The activity list forwards the family row's rename/delete target unchanged to the sidebar handlers. When only a branch belongs to the project, its header keeps the branch title and rename/delete target and does not offer navigation to the foreign original. Search and pinned filters do not change the title of a permitted family original.
+
 ---
 
 ## What does it do?
@@ -60,11 +68,101 @@ Project activity reuses `SidebarTimeGroupedList` with `type="all"`, `projectId`,
 
 `or3:project-settings`, `or3:project-memory`, and `or3:project-source` are hidden from ordinary document/search surfaces. Their title is the project ID; `[postType+title]` selects the project records. The singleton settings ID is `project-settings-<id>`. Content is strict version-1 JSON, with a 128 KiB record bound. The existing `or3.workspace-item` metadata capability marker protects these records from older sync clients.
 
+Response diagnostics are separate from that internal-post bound. Receipt text
+previews share at most 32 KiB and also fit the 128 KiB diagnostic target after
+accounting for JSON escaping, identity metadata and iteration history. Evidence
+IDs/revisions are retained even when their identity-only manifest exceeds this
+target; diagnostic size never rejects otherwise admissible inference.
+`instructions_included` and `brief_included` retain inclusion when text previews
+are omitted. Each iteration has `request_id` and `request_state` (prepared,
+dispatched, accepted, failed). Acceptance means the transport returned a successful
+response body; later stream failures change it to failed. Old iterations without
+these fields have unknown dispatch state. Updates fence the current request and
+message, so a replaced execution cannot overwrite its successor's diagnostics.
+
 `readProjectWorkspace(db, id)` validates settings, memories, and bindings. `saveProjectSettings`, `saveProjectMemory`, and `saveProjectSource` accept a captured `WorkspaceOperationScope` and expected clock. Stale writes, revoked access, invalid source identity, and foreign memory provenance refuse. Source `file_hashes` retains every original/extraction revision using existing reference accounting.
+
+`readProjectPolicy(db, id)` reads only the live project and singleton settings row.
+Tool admission, approval rechecks and execution/delivery guards use it without
+hydrating memories or unrelated members. Targeted reads still validate live
+membership, knowledge mode and file availability.
+
+Automatic relevant-file search decodes at most 8 MiB of extraction per turn,
+prioritizing title matches. Sources beyond that budget remain unselected; required
+Always include sources keep their complete-input admission contract. Retrieval
+validates at most twelve candidate summaries for the normal three-result request,
+with a separate 1,000-operation provenance budget including inherited scopes.
+An incomplete validation rejects the candidate rather than accepting partial evidence.
+
+`saveProjectNote(scope, projectId, { title, text })` prepares the normal document
+hooks and commits the document, knowledge binding, membership and references
+together. A refused binding leaves the note draft intact and saves no orphan.
+Document/source notifications run after commit and cannot fail a durable save.
+
+Processing revisions may carry `processing_started_at`. Each extraction retry
+refreshes this timestamp and advances the source clock before starting its
+worker; a superseded worker cannot commit over that attempt. After
+`PROJECT_INTAKE_TIMEOUT_SECONDS` (45 seconds), workspace reads expose an
+interrupted, retryable failure without changing the stored row. Read-only callers
+see the same state; reads never write through a revoked scope. This prevents an indefinite
+Processing label. The visible sidebar schedules one refresh at the nearest
+deadline and cancels it when hidden.
+
+Knowledge upload and revision controls are disabled while the page completes an
+intake operation, including its catalog update. A Ready revision can be visible
+before that update finishes; wait for the controls to become available before
+starting another upload. Empty saved-memory drafts cannot be submitted.
+
+Source saves and project deletion update reference counts with hook-free row
+operations inside their atomic write. File-reference notifications run after
+the outer commit, so asynchronous extension hooks cannot split ownership from
+its source record. Rollbacks emit no reference notifications; notification
+failure after a successful commit is reported without failing the save.
+
+Normal history and workspace chat reads share the canonical thread projection.
+Every reference ancestor and compacted-summary provenance thread must retain the
+same nullable project owner as the requested chat. Project exclusions also apply
+to inherited provenance, while the current chat remains readable. Inherited
+summary chains are checked recursively and cyclic/missing provenance refuses.
+Moving only a branch does not implicitly authorize its former project's history.
+`resolveChatProject(db, id, { includeDeleted: true })` is reserved for retained
+summary provenance: deleted thread tombstones still prove ownership. Default
+calls continue to reject deleted chats; this option grants no mutation authority.
 
 `resolveChatProject(db, threadId)` prefers `threads.project_id`, otherwise resolves a single legacy membership. Ambiguous ownership refuses. `moveChatToProject(scope, threadId, projectId | null)` updates the pointer and memberships atomically, retaining extension entries. `createThreadInDb` accepts an optional `assertCurrent` guard for captured callers.
 
-The shared Project Context Builder captures ownership and project state before native admission. Tool execution and result delivery recheck scope; context receipts reside in assistant message metadata. `validateCompactionSummary` accepts an optional validated project receipt, which the fork writer preserves alongside the handoff.
+`moveChatProjectRows(scope, threadId, projectId)` is the hook-free write used by
+atomic membership editors. It requires a read/write transaction on the captured
+database with projects/threads included, and returns changed project/thread rows.
+Call `notifyChatProjectMove(changes)` only after the outer transaction commits.
+Preparation hooks and notifications must not be awaited inside that transaction.
+The ordinary `moveChatToProject` wrapper owns its transaction and notification.
+
+`useProjectsCrud` captures write access for create, rename, new chat/document,
+membership edits and entry-title synchronization. Rename applies a narrow name
+change to a fresh row and rejects concurrent name edits while preserving unrelated
+membership. New project documents and their association commit together; project
+changes during association preparation refuse without saving an orphan. Member
+edits prepare hooks before opening the transaction and emit notifications after
+the entire batch commits. Entry-title synchronization reads and writes fresh rows
+in the same transaction and advances their clocks.
+
+Source writes reject a second active binding to the same item within one project,
+including replacement collisions. An existing unavailable source can still be
+switched to **Do not use** without changing its identity or history. Existing
+explicit memories retain historical provenance when edited; new or changed
+provenance must be available within the owning project. Saving a project brief
+updates only the brief, independently of pending Settings edits.
+
+The shared Project Context Builder captures ownership and project state before native admission. Normal sends select sources after outgoing prompt filters and final model readiness, using the captured state via the optional final `buildProjectContext` argument. Image inclusion uses the final model’s input modalities. Normal sends, initial recovery, and continuation carry the captured nullable owner through foreground and background dispatch; a change requires a fresh turn. Persisted receipts list selected source evidence and an `available_source_count` aggregate rather than duplicating unused knowledge inventory. Tool execution and result delivery recheck scope; context receipts reside in assistant message metadata. `validateCompactionSummary` accepts an optional validated project receipt, which the fork writer preserves alongside the handoff.
+
+Initial native recovery checkpoints retain `project_query`, the effective outgoing
+prompt and detached paste used for admitted retrieval. Recovery rebuilds context
+with that query without rerunning outgoing filters; owner, policy and evidence
+fingerprints must still match. A project checkpoint without its admitted query
+requires a fresh request rather than guessing from the original draft. Auxiliary
+compaction inference also passes its source chat and captured nullable owner to
+the shared dispatch fence, including for ordinary chats.
 
 Core membership entries support `chat`, `doc`, and `file`; legacy string entries
 remain chat references. Known-entry edits preserve unrelated extension entries
@@ -73,3 +171,117 @@ its observed revision, validate current item visibility, and recheck inside the
 write transaction. File members also require live original metadata. Logical
 Trash hides memberships without removing the association, so Restore returns
 the same grouping. Removing an association never deletes the underlying item.
+
+Ordinary reference/copy forks resolve legacy ownership and persist a same-project
+membership in their atomic write. Membership edits apply only chat additions and
+removals, retaining unchanged deleted associations, and roll back together on
+failure. Project activity includes unambiguous legacy members before pointer
+backfill and hides ambiguous legacy ownership.
+
+`provideChatProjectOwner(threadIdGetter)` gives a chat container one reactive
+ownership subscription. Descendants use `useChatProjectOwner(threadIdGetter)`;
+standalone consumers create their own subscription. Both refresh on ownership
+and workspace changes. This is display state only: request and mutation
+boundaries still authorize against the captured database.
+
+Continuation derives source relevance from the preceding normalized user prompt
+and passes the project snapshot through the same request admission as dispatch.
+Model readiness snapshots include `architecture.input_modalities` alongside
+capacity so continuation uses capabilities from the resolved selected route.
+
+The kept-alive Projects sidebar unsubscribes while hidden. A selected project
+reads its own workspace records; document/file pickers and chat management
+load their catalogs only while open. Async review and save actions retain their
+starting project and draft, and completion does not overwrite another project
+or a newer draft.
+
+Model selection inherits the project default even for populated chats. An
+explicit chat model and routing variant are saved as a `chat-model:<threadId>`
+preference through the existing workspace KV helpers, surviving navigation and
+reload without changing the project default.
+Inherited selections follow saved project-default changes and chat moves. The
+model controls expose **Use project default** (or **Use default model** outside
+a project) to clear an explicit chat override and resume inheritance. Changing
+the routing variant is also an explicit chat choice. Restoring a tab draft
+restores its text and attachments without changing an existing chat's durable
+model selection. Only unsent, pre-chat drafts restore a cached model/variant.
+
+`useChatModelSelection` exposes `modelInherited`, `useInheritedModel()` and
+`restoreDraftModel(model, variant)`. The reset uses the guarded workspace KV
+writer; restoration is programmatic and ignores model data for existing chats.
+Inherited policy observation reads the owning project's singleton settings
+record, without loading its memories or source histories.
+
+Normal-turn continuity uses captured project state, indexed project threads and
+legacy members. It checks summary relevance before validating source evidence,
+ranks candidates by distinct matched query terms with recency as a tie-breaker,
+then validates evidence until it has at most three valid matches. Each selected
+summary contributes its strongest bounded 4,000-character passage, including
+matches beyond the prefix; the receipt records that actual excerpt. Empty queries
+skip history retrieval. Explicit suggestion review still validates every
+displayed suggestion and retains its newest-first order.
+
+Relevant file discovery searches completed extracted text with the existing
+lexical chunker, including passages beyond the catalog preview. It reads one
+source at a time and retains bounded passages, without embeddings. Retrying a
+historical revision repairs its extraction without promoting it over a newer
+current version; successful current or latest replacement processing can still
+advance the current source.
+
+The registry supplies `ToolExecutionContext.assertToolAuthorized()` for host
+mutations. Native and legacy document creation/duplication, read/proposal receipt
+writes, project updates and send-to-thread invoke it inside their captured write
+transactions after preparation. Every registry call with an originating chat
+captures its resolved owner, including `null` when older plugin callers omit
+`projectId`; handlers receive that owner and result delivery rechecks it. A chat
+moving into a project requires a fresh execution. The execution
+gate's final `approved` argument is for trusted reauthorization after the
+registry's approval gate: it preserves normalized arguments and never requests
+approval inside a transaction. Model-supplied fields cannot set it.
+
+## Qualification profiles
+
+`bun scripts/test/run-workspace-cloud-e2e.ts` defaults to the exact installed
+SQLite and filesystem provider pins. The profile copies those provider bytes,
+disables development aliases, rejects source-linked or mismatched packages and
+records their versions in a separate installed receipt. Other installed runtime
+dependencies are shared; this smoke is not the clean production release gate.
+Use `--development-providers` explicitly for sibling source qualification.
+Development results never count as installed-artifact acceptance.
+
+The Convex sandbox launcher uses the installed provider template by default too.
+Pass the same development flag to both launchers when using source templates;
+the application refuses a sandbox with a different qualification mode.
+Published SQLite 0.0.14 and Convex 0.0.11 lack the new canonical ownership
+marker. Ordinary browser chat remains usable; server execution refuses until a
+qualified provider release supplies that contract. Source checks alone do not
+close this dependency gap.
+
+## Internal memory classification
+
+User-facing saves and edits use `saveClassifiedProjectMemory` in `app/utils/projects/memory.ts`.
+It persists through `saveProjectMemory` first, with the existing reference (fact) default.
+The form does not await inference. Existing records retain their kinds until explicitly edited;
+there is no migration, backfill, automatic harvesting or additional memory store.
+
+One OpenRouter Decisions choice question classifies a saved reference. The pinned model is
+`typesafe/jev-1.13`, with a 0.9 decision threshold. It passed a real OpenRouter comparison
+on 40 labeled examples and a separate 50-case verification including ten held-out examples;
+none promoted an unapproved choice. Luna failed the clear-adoption acceptance bar.
+The fixtures, text-free results and comparison command are under
+`planning/project-memory-classification/`. This finite evaluation does not guarantee classification accuracy on every memory.
+Canonical model IDs and their dated provider snapshots are accepted; other models are rejected.
+State contains only the saved text and at most six preceding messages from the source's
+owning chat, with a 16 KiB UTF-8 bound. Oversized evidence skips classification rather than losing caveats through clipping. Attachments and other chats are never sent.
+
+Static/BYOK uses the installed SDK directly with the root OpenRouter base. Authenticated SSR
+uses `POST /api/openrouter/classify-memory`, requiring mutation intent, workspace write access,
+matching active workspace, normal key precedence and LLM rate limits. The endpoint accepts
+only bounded state, fixes the model/question, and cannot mutate memories or invoke tools.
+
+A three-second total deadline and disabled retries bound classification. Missing credentials,
+network failures, malformed probabilities and uncertainty leave the saved reference intact.
+Only kind metadata can change, in an expected-clock transaction after fresh workspace,
+project, thread and evidence checks. Sidebar navigation does not cancel the operation;
+edits, deletion, moves, exclusion and revoked access invalidate it. Diagnostic metadata
+includes model, probabilities, latency and cost, never memory text or credentials.

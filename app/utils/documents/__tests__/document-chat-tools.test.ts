@@ -24,6 +24,8 @@ beforeEach(async () => {
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb('workspace-a').open();
+    await getDb().threads.put({ id: 'thread-a', title: 'Tool origin', project_id: null,
+        created_at: 1, updated_at: 1, deleted: false, clock: 0, forked: false, status: 'active', pinned: false });
 });
 afterEach(async () => {
     testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;
@@ -37,6 +39,50 @@ afterEach(async () => {
 });
 
 describe('chat document tools', () => {
+    // Registered reads must page the admitted extraction, never binary upload
+    // offsets, and reject an old cursor after its extraction revision changes.
+    // Existing document paging does not exercise file bytes or project bindings.
+    it('pages project extraction bytes and refuses replaced extraction cursors', async () => {
+        const { createOrRefFile } = await import('~/db/files');
+        const { catalogWorkspaceFile } = await import('~/db/workspace-files');
+        const { captureWorkspaceOperation } = await import('~/utils/chat/workspace-access');
+        const { saveProjectSource } = await import('~/db/project-workspace');
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            callId: 'extraction-read', requestId: 'extraction-request', abortSignal: new AbortController().signal };
+        const scope = captureWorkspaceOperation(context);
+        const original = await createOrRefFile(new Blob([new Uint8Array([0, 255, 0, 255])]), 'report.pdf');
+        const text = 'Launch evidence 🌟 café.\n'.repeat(300) + 'FINAL EXTRACTION PASSAGE';
+        const extraction = await createOrRefFile(new Blob([text]), 'report.extracted.txt');
+        const saved = await catalogWorkspaceFile(scope, original.hash, { text: { text: text.slice(0, 3000), coverage: 'prefix', indexed_bytes: new TextEncoder().encode(text.slice(0, 3000)).length } });
+        await getDb().projects.put({ id: 'extraction-project', name: 'Evidence', data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await getDb().threads.update('thread-a', { project_id: 'extraction-project' });
+        const binding = await saveProjectSource(scope, 'extraction-project', { item_id: saved.post.id, kind: 'file', title: 'Report', mode: 'relevant', current_revision_id: 'extracted-v1',
+            revisions: [{ id: 'extracted-v1', original_hash: original.hash, text_hash: extraction.hash, created_at: 1, status: 'ready', coverage: 'full' }] });
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const definition = registry.getTool('workspace_read')!.definition;
+        const read = async (continuation?: string) => {
+            const result = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'file', id: saved.post.id }, continuation }), context, { definition });
+            expect(result.error, JSON.stringify(result)).toBeUndefined();
+            return JSON.parse(result.result!);
+        };
+        const first = await read();
+        expect(first.continuation).toBeTruthy();
+        let combined = first.content;
+        let page = first;
+        for (let count = 0; page.continuation && count < 20; count++) {
+            page = await read(page.continuation);
+            combined += page.content;
+        }
+        expect(page.continuation).toBeNull();
+        expect(page.coverage).toBe('complete');
+        expect(combined).toBe(text);
+        const replacement = await createOrRefFile(new Blob(['New extraction']), 'report.extracted.txt');
+        await saveProjectSource(scope, 'extraction-project', { ...binding.value, revisions: [{ ...binding.value.revisions[0]!, text_hash: replacement.hash }] }, binding.row.id, binding.row.clock);
+        const stale = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'file', id: saved.post.id }, continuation: first.continuation }), context, { definition });
+        expect(stale.error).toMatch(/changed|revision/i);
+    });
+
     it('searches project-scoped catalog excerpts and hides unavailable or trashed file memberships', async () => {
         const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
         const { createFilePaletteSource } = await import('~/core/search/command-palette/sources/file-source');

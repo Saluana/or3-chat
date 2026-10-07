@@ -10,15 +10,20 @@ import { buildContext } from '~/db/branching';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
+import { testRuntimeConfig } from '~~/tests/setup';
 
 let workspace: string;
+let originalSsrAuth: boolean;
 const databases = new Map<string, string>();
 beforeEach(async () => {
+    originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
     workspace = `compaction-history-${crypto.randomUUID()}`;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     const db = setActiveWorkspaceDb(workspace); await db.open(); databases.set(workspace, db.name);
 });
 afterEach(async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;
     setActiveWorkspaceDb(null);
     for (const [id, name] of databases) { evictWorkspaceDb(id); await Dexie.delete(name); }
     databases.clear(); setHookEngine(null);
@@ -43,6 +48,32 @@ async function loaded(id: string) {
 }
 
 describe('canonical lineage history and summary readiness', () => {
+    // Moving a reference or compacted branch must revoke foreign ancestry at
+    // both normal context and workspace-read boundaries. Existing
+    // lineage cases are all ordinary chats and cannot detect project leakage.
+    it.each(['reference', 'compacted', 'inherited-summary'] as const)('refuses foreign project provenance in %s history', async mode => {
+        const db = getDb();
+        await db.projects.bulkPut(['a', 'b'].map(id => ({ id, name: id, data: [], created_at: 1, updated_at: 1, deleted: false, clock: 1 })));
+        await thread('source', { project_id: 'a' }); await message('anchor', 'source', 0);
+        await thread('child', { project_id: 'a', parent_thread_id: 'source', branch_mode: mode === 'reference' ? 'reference' : 'compacted', anchor_message_id: 'anchor', summary_message_id: mode === 'reference' ? null : 'summary' });
+        if (mode !== 'reference') await message('summary', 'child', 0, { role: 'system', data: summaryData('source', 'anchor') });
+        await message('child-local', 'child', 1);
+        expect((await buildContext({ threadId: 'child' })).map(row => row.id)).toContain('child-local');
+        if (mode === 'inherited-summary') {
+            await thread('foreign', { project_id: 'b' });
+            await message('foreign-anchor', 'foreign', 0);
+            await message('inherited', 'source', 0, { role: 'system', data: summaryData('foreign', 'foreign-anchor') });
+            const data = summaryData('source', 'anchor');
+            await db.messages.update('summary', { data: { ...data, compaction: { ...data.compaction, history_scope: { ...data.compaction.history_scope, inherited_scope_message_id: 'inherited' } } } });
+        } else await db.threads.update('source', { project_id: 'b' });
+        const { workspaceRead } = await import('../workspace-items');
+        const { captureWorkspaceOperation } = await import('../workspace-access');
+        const context = { workspaceId: workspace, threadId: 'child', subject: null, messageId: null, callId: 'read', requestId: 'read', abortSignal: new AbortController().signal };
+        const results = await Promise.allSettled([buildContext({ threadId: 'child' }),
+            workspaceRead(captureWorkspaceOperation(context), { kind: 'chat', id: 'child' }, undefined, context)]);
+        expect(results.map(result => result.status)).toEqual(['rejected', 'rejected']);
+        for (const result of results) if (result.status === 'rejected') expect(String(result.reason)).toMatch(/project|permitted|provenance/i);
+    });
     it('hydrates separate canonical tool evidence through the production pane seed without rewriting stored history', async () => {
         await thread('original');
         await message('assistant', 'original', 0, { role: 'assistant', data: {

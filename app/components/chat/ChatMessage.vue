@@ -1152,7 +1152,15 @@ const streamMdClasses = [
     left: 50%;
     transform: translate(-50%, 50%);
     min-width: 0;
-    max-width: 100%;
+    width: max-content;
+    max-width: calc(100cqw - 2rem);
+}
+
+/* Short user bubbles must not constrain the toolbar or push it past the pane. */
+.cm-actions-user {
+    left: auto;
+    right: 0;
+    transform: translateY(50%);
 }
 
 .cm-action-group {
@@ -1169,6 +1177,7 @@ const streamMdClasses = [
         align-items: center;
         padding-block: 6px;
         margin-top: 0.75rem;
+        margin-inline: auto;
     }
 
     .cm-action-group {
@@ -1213,6 +1222,7 @@ const streamMdClasses = [
         align-items: center;
         padding-block: 6px;
         margin-top: 0.75rem;
+        margin-inline: auto;
     }
 
     .cm-action-group {

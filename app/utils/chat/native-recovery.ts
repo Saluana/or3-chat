@@ -1,4 +1,5 @@
 import type { Or3DB } from '~/db/client';
+import Dexie from 'dexie';
 import type { SendMessageParams, ToolDefinition } from './types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import { resolveThreadProjection } from './compaction/history';
@@ -16,9 +17,12 @@ export interface NativeRecoveryCheckpoint {
     messages: Array<ORMessage | { role: 'tool'; [key: string]: unknown }>;
     tools: ToolDefinition[];
     project_fingerprint?: string;
+    /** Effective outgoing prompt/paste used for the admitted project retrieval. */
+    project_query?: string;
 }
 async function fingerprint(value: unknown): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
+    const pending = crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
+    const digest = await (Dexie.currentTransaction ? Dexie.waitFor(pending) : pending);
     return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 export function recoveryProjectFingerprint(context: import('~/utils/projects/types').ProjectContextSnapshot): Promise<string> {

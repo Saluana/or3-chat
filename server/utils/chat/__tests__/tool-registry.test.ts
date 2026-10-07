@@ -358,6 +358,35 @@ describe('registered canonical history authorization', () => {
         const saved = await memoryJobProvider.getJob(accepted.jobId, 'owner');
         expect(getChatJobExecution(saved!)?.body._toolRuntime).toEqual({ get_message: 'client', search_parent: 'client' });
     });
+    it.each([null, 'project'])('checks new chat ownership after canonical admission (%s)', async projectId => {
+        // A first turn has no canonical thread until admission. Its admitted
+        // owner, rather than a caller-supplied policy, must gate dispatch.
+        adapter.capabilities = { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' };
+        const admit = vi.fn(async () => {
+            records.set('new-chat', { id: 'new-chat', clock: 1, project_id: projectId });
+            return { status: 'admitted' as const, replayed: false, serverVersion: 1 };
+        });
+        adapter.admitChatGeneration = admit;
+        adapter.finalizeChatGeneration = async () => ({ status: 'committed', replayed: false, serverVersion: 2 });
+        const fetch = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
+        vi.stubGlobal('fetch', fetch);
+        const create = vi.spyOn(memoryJobProvider, 'createJob');
+        const params = { userId: 'owner', workspaceId: 'workspace', threadId: 'new-chat', messageId: 'new-assistant', apiKey: 'fixture-key', referer: 'http://localhost',
+            body: { model: 'model', messages: [{ role: 'user', content: 'First turn' }],
+                _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'new-chat', messageId: 'new-assistant',
+                    thread: { id: 'new-chat', clock: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'new-chat', role: 'user' },
+                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'new-chat', role: 'assistant', data: { content: '' } } } } };
+        if (projectId) {
+            await expect(startBackgroundStream(params)).rejects.toThrow(/project/i);
+            expect(fetch).not.toHaveBeenCalled();
+            expect(await memoryJobProvider.getJob(await create.mock.results[0]!.value, 'owner')).toMatchObject({ status: 'error' });
+        } else {
+            const result = await startBackgroundStream(params);
+            await vi.waitFor(async () => expect(await memoryJobProvider.getJob(result.jobId, 'owner')).toMatchObject({ status: 'complete', content: 'Done' }));
+            expect(fetch).toHaveBeenCalledOnce();
+        }
+        expect(admit).toHaveBeenCalledOnce();
+    });
     it('preserves an existing historical tool and cleans a partially registered sibling on collision', () => {
         dispose();
         const existing = registerServerTool(historyToolDefinitions[1]!, () => 'existing owner', { runtime: 'hybrid' });

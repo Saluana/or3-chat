@@ -17,6 +17,7 @@
 import type { Or3DB } from './client';
 import type { FileMeta } from './schema';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
+import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 
 export type GalleryState = 'active' | 'trash';
 
@@ -36,6 +37,12 @@ export function isTrustedRasterMeta(
 }
 
 type Row = Record<string, unknown>;
+
+/** Local multi-entry lookup; never trust a supplied membership projection. */
+export function computeProjectChatIds(row: Row): string[] {
+    return row.deleted === true ? [] : [...new Set(normalizeProjectData(row.data)
+        .filter(entry => entry.kind === 'chat').map(entry => entry.id))];
+}
 
 function toRow(value: unknown): Row {
     return value && typeof value === 'object' ? (value as Row) : {};
@@ -141,6 +148,14 @@ const installed = new WeakSet<object>();
 export function installDerivedIndexHooks(db: Or3DB): void {
     if (installed.has(db)) return;
     installed.add(db);
+
+    const projects = db.table('projects') as unknown as DexieHookTable;
+    projects.hook('creating', ((_pk: unknown, obj: unknown) => {
+        toRow(obj).chat_ids = computeProjectChatIds(toRow(obj));
+    }) as (...args: never[]) => unknown);
+    projects.hook('updating', ((modifications: unknown, _pk: unknown, obj: unknown) => ({
+        chat_ids: computeProjectChatIds(mergeEffectiveRow(toRow(obj), modifications)),
+    })) as (...args: never[]) => unknown);
 
     const posts = db.table('posts') as unknown as DexieHookTable;
     posts.hook('creating', ((_pk: unknown, obj: unknown) => {

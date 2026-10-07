@@ -54,6 +54,7 @@ export const SourceRevisionSchema = z
         coverage: z.enum(['full', 'prefix', 'none']),
         error: z.string().max(500).optional(),
         created_at: z.number().int().nonnegative(),
+        processing_started_at: z.number().int().nonnegative().optional(),
         locations: z
             .array(
                 z
@@ -103,8 +104,11 @@ export const ProjectContextReceiptSchema = z.object({
     version: z.literal(1),
     project_id: z.string(),
     project_name: z.string(),
+    available_source_count: z.number().int().nonnegative().optional(),
     instructions: z.string(),
     brief: z.string(),
+    instructions_included: z.boolean().optional(),
+    brief_included: z.boolean().optional(),
     chats: z
         .array(
             z.object({
@@ -134,6 +138,8 @@ export const ProjectContextReceiptSchema = z.object({
 });
 export const ProjectContextIterationSchema = z.object({
     project_id: z.string(),
+    request_id: z.string().optional(),
+    request_state: z.enum(['prepared', 'dispatched', 'accepted', 'failed']).optional(),
     instructions: z.boolean(),
     brief: z.boolean(),
     memory_count: z.number().int().nonnegative(),

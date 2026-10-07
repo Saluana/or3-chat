@@ -6,6 +6,14 @@ test.skip(
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
     'Requires the production journey harness',
 );
+// Keep project journeys deterministic and prevent paid auxiliary inference.
+test.beforeEach(async ({ page }) => {
+    await page.route('https://openrouter.ai/api/alpha/decisions', route => route.fulfill({
+        json: { model: 'typesafe/jev-1.13',
+            answers: { memory_kind: { type: 'choice', choice: 'uncertain', probabilities: { fact: 0.01, decision: 0.01, uncertain: 0.98 } } },
+            usage: { input_tokens: 20, output_tokens: 0 } },
+    }));
+});
 async function openProjectSection(page: Page, section: string) {
     const projects = page.getByRole('region', {
         name: 'Projects',
@@ -537,10 +545,13 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         }),
     ).toBeVisible();
     await projects
-        .getByRole('button', { name: 'Edit memory', exact: true })
+        .getByRole('button', { name: 'Memory actions', exact: true })
+        .click();
+    await page
+        .getByRole('menuitem', { name: 'Edit memory', exact: true })
         .click();
     await projects
-        .getByLabel('Edit saved fact')
+        .getByLabel('Edit saved memory')
         .fill('An edited memory persists.');
     await projects
         .getByRole('button', { name: 'Save changes', exact: true })
@@ -548,6 +559,43 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         projects.getByText('An edited memory persists.', { exact: true }),
     ).toBeVisible();
+    for (const text of [
+        'Keep the interface calm: clear labels and consistent spacing.',
+        'Temporary chat attachments stay in their conversation unless explicitly added to project knowledge.',
+        'Reuse the existing Files library for project knowledge.',
+        'Test the complete flow before calling a change finished.',
+        'Disposable memory to check keyboard actions.',
+    ]) {
+        await projects
+            .getByRole('button', { name: 'Add memory', exact: true })
+            .click();
+        await projects
+            .getByRole('textbox', { name: 'New project memory' })
+            .fill(text);
+        await projects
+            .getByRole('button', { name: 'Save memory', exact: true })
+            .click();
+        await expect(projects.getByText(text, { exact: true })).toBeVisible();
+    }
+    const disposableMemory = projects.getByRole('article').filter({
+        hasText: 'Disposable memory to check keyboard actions.',
+    });
+    await disposableMemory
+        .getByRole('button', { name: 'Memory actions', exact: true })
+        .press('Enter');
+    await page
+        .getByRole('menuitem', { name: 'Delete memory', exact: true })
+        .press('Enter');
+    await expect(disposableMemory).toHaveCount(0);
+    await expect(
+        projects.getByRole('heading', {
+            name: 'Saved memories 5',
+            exact: true,
+        }),
+    ).toBeVisible();
+    await projects
+        .getByRole('heading', { name: 'Memory', exact: true })
+        .scrollIntoViewIfNeeded();
     await page.screenshot({
         path: info.outputPath('project-memory-sidebar.png'),
         animations: 'disabled',
@@ -795,9 +843,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await page
         .getByRole('textbox', { name: 'New project memory' })
         .fill('Use saffron deployment.');
-    await page
-        .getByRole('combobox', { name: 'Memory kind' })
-        .selectOption('decision');
+    await expect(page.getByRole('combobox', { name: 'Memory kind' })).toHaveCount(0);
     await page
         .getByRole('button', { name: 'Save memory', exact: true })
         .click();
@@ -850,6 +896,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
             '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Saffron DOCX acceptance marker</w:t></w:r></w:p></w:body></w:document>',
         ),
     });
+    await expect(upload).toBeEnabled();
     await upload.setInputFiles({
         name: 'saffron.docx',
         mimeType:
@@ -859,6 +906,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await expect(
         page.locator('article').filter({ hasText: 'saffron.docx' }),
     ).toContainText('ready', { timeout: 45000 });
+    await expect(upload).toBeEnabled();
     await upload.setInputFiles({
         name: 'scanned.pdf',
         mimeType: 'application/pdf',
@@ -867,6 +915,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await expect(
         page.locator('article').filter({ hasText: 'scanned.pdf' }),
     ).toContainText('OCR', { timeout: 45000 });
+    await expect(upload).toBeEnabled();
     await upload.setInputFiles({
         name: 'oversized.txt',
         mimeType: 'text/plain',
@@ -903,7 +952,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await openAllProjects(page);
     await createProject(page, 'Basil');
     await openProjectSection(page, 'Memory');
-    await expect(page.getByLabel('Edit saved decision')).toHaveCount(0);
+    await expect(page.getByLabel('Edit saved memory')).toHaveCount(0);
     const path = info.outputPath('project-isolation.png');
     await page.screenshot({ path });
     await info.attach('project-isolation', {
@@ -991,9 +1040,12 @@ test('project backup restores memories and extracted revision bytes', async ({
         .click();
     await openProjectSection(page, 'Memory');
     await page
-        .getByRole('button', { name: 'Delete memory', exact: true })
+        .getByRole('button', { name: 'Memory actions', exact: true })
         .click();
-    await expect(page.getByLabel('Edit saved fact')).toHaveCount(0);
+    await page
+        .getByRole('menuitem', { name: 'Delete memory', exact: true })
+        .click();
+    await expect(page.getByLabel('Edit saved memory')).toHaveCount(0);
     await page
         .getByRole('button', { name: 'Backup and restore', exact: true })
         .click();
@@ -1236,30 +1288,17 @@ test('project chat keeps captured context and memory actions without an inline i
         exact: true,
     });
     // Name the owning project even while another project is visible in the sidebar.
-    await expect(memoryDialog).toContainText(
-        'Save to Workspace fixture project',
-    );
+    await expect(memoryDialog).toContainText('Save to Workspace fixture project');
     await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
         'Hello from deterministic stream.',
     );
     await page.getByLabel('Review memory', { exact: true }).fill('   ');
-    await expect(
-        memoryDialog.getByRole('button', { name: 'Save memory', exact: true }),
-    ).toBeDisabled();
-    await page
-        .getByLabel('Review memory', { exact: true })
-        .fill('Hello from deterministic stream.');
-    await memoryDialog
-        .getByRole('combobox', { name: 'Save as', exact: true })
-        .click();
-    await page.getByRole('option', { name: 'Decision', exact: true }).click();
-    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await expect(memoryDialog.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
+    await page.getByLabel('Review memory', { exact: true }).fill('Hello from deterministic stream.');
+    await expect(memoryDialog.getByRole('combobox')).toHaveCount(0);
     const reviewPath = info.outputPath('project-memory-review.png');
-    await page.screenshot({ path: reviewPath, animations: 'disabled' });
-    await info.attach('project-memory-review', {
-        path: reviewPath,
-        contentType: 'image/png',
-    });
+    await page.screenshot({ path: reviewPath });
+    await info.attach('project-memory-review', { path: reviewPath, contentType: 'image/png' });
     await page
         .getByRole('button', { name: 'Save memory', exact: true })
         .click();
@@ -1272,7 +1311,7 @@ test('project chat keeps captured context and memory actions without an inline i
     );
     expect(savedMemory.title).toBe('workspace-journey-project');
     expect(JSON.parse(savedMemory.content)).toMatchObject({
-        kind: 'decision',
+        kind: 'fact',
         source_thread_id: 'saffron-project-chat',
         source_message_id: recovered.messages.find(
             (row) => row.role === 'assistant',
@@ -1321,9 +1360,6 @@ test('project chat keeps captured context and memory actions without an inline i
     await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
         'Hello from deterministic stream.',
     );
-    await expect(
-        memoryDialog.getByRole('combobox', { name: 'Save as', exact: true }),
-    ).toHaveText('Fact');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(
         page.getByRole('dialog', { name: 'Save project memory' }),

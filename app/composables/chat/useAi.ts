@@ -1880,28 +1880,16 @@ export function useChat(
         const ownsPreparation = () => !isRequestCancelled(requestScope) && !preparationSignal.aborted
             && requestScope.ownsView() && getDb() === requestScope.originDb
             && getWorkspaceGeneration() === workspaceGeneration;
-        const { resolveChatProject } = await import('~/db/project-workspace');
+        const { resolveChatProject, readProjectWorkspace, moveChatToProject } = await import('~/db/project-workspace');
         const initialProjectId = requestScope.threadId ? await resolveChatProject(requestScope.originDb, requestScope.threadId) : null;
-        if (sendMessagesParams.knowledge_project_id && !sendMessagesParams.inspectLossyRequest) {
-            if (!requestScope.threadId || initialProjectId !== sendMessagesParams.knowledge_project_id)
-                return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
-            const { captureProjectOperation } = await import('~/utils/projects/context');
-            const { addProjectUpload } = await import('~/utils/projects/source-intake');
-            const { getFileBlob } = await import('~/db/files');
-            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
-            for (const hash of sendMessagesParams.file_hashes ?? []) {
-                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
-                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
-                await addProjectUpload(scope, sendMessagesParams.knowledge_project_id, new File([blob], meta.name, { type: meta.mime_type }));
-            }
-        }
+        requestScope.expectedProjectId = initialProjectId;
         if (requestScope.threadId && initialProjectId) {
-            const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
-            const { catalog: projectCatalog, favoriteModels: projectFavorites } = useModelStore();
-            const model = projectCatalog.value.find(entry => entry.id === (sendMessagesParams.model || DEFAULT_AI_MODEL)) ?? projectFavorites.value.find(entry => entry.id === (sendMessagesParams.model || DEFAULT_AI_MODEL));
-            requestScope.projectContext = await buildProjectContext(captureProjectOperation(preparationSignal, requestScope.threadId),
-                requestScope.threadId, content, model?.architecture?.input_modalities?.includes('image') === true, initialProjectId);
+            const { captureProjectOperation } = await import('~/utils/projects/context');
+            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
+            if (scope.writable && !(await scope.db.threads.get(requestScope.threadId))?.project_id)
+                await moveChatToProject(scope, requestScope.threadId, initialProjectId);
         }
+        const projectState = initialProjectId ? await readProjectWorkspace(requestScope.originDb, initialProjectId) : undefined;
         const capturedPreference = await useAiSettings().captureContextPreference();
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
@@ -2091,7 +2079,7 @@ export function useChat(
 
         requestScope.accumulator.reset();
         let { files, model, file_hashes } = sendMessagesParams;
-        model ||= requestScope.projectContext?.settings.default_model ?? undefined;
+        model ||= projectState?.settings.default_model ?? undefined;
         const {
             extraTextParts,
             online,
@@ -2206,6 +2194,13 @@ export function useChat(
         const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
         const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
         if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
+        if (requestScope.threadId && initialProjectId) {
+            const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
+            requestScope.projectContext = await buildProjectContext(
+                captureProjectOperation(preparationSignal, requestScope.threadId), requestScope.threadId,
+                persistedUserText, readiness.metadata.architecture?.input_modalities?.includes('image') === true,
+                initialProjectId, 'turn', projectState);
+        }
         const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
             userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
             requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
@@ -2274,6 +2269,8 @@ export function useChat(
                 reviewedLossyMessages = JSON.stringify(orMessages);
             }
         } else if (!prepared.delegation) await prepareOpenRouterRequest(providerPreparation);
+        if (requestScope.threadId && await resolveChatProject(requestScope.originDb, requestScope.threadId) !== initialProjectId)
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'This chat changed projects during preparation. Retry the request.' };
         if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
@@ -2284,6 +2281,19 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
+        if (sendMessagesParams.knowledge_project_id && !sendMessagesParams.inspectLossyRequest) {
+            if (!requestScope.threadId || initialProjectId !== sendMessagesParams.knowledge_project_id)
+                return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
+            const { captureProjectOperation } = await import('~/utils/projects/context');
+            const { addProjectUpload } = await import('~/utils/projects/source-intake');
+            const { getFileBlob } = await import('~/db/files');
+            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
+            for (const hash of sendMessagesParams.file_hashes ?? []) {
+                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
+                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
+                await addProjectUpload(scope, sendMessagesParams.knowledge_project_id, new File([blob], meta.name, { type: meta.mime_type }));
+            }
+        }
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2595,7 +2605,7 @@ export function useChat(
                 };
             }
 
-            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, advertisedToolDefs });
+            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs });
         } catch (err) {
             stopForegroundHeartbeat?.();
             if (err instanceof Error && err.name === 'AbortError') {
@@ -2757,6 +2767,7 @@ export function useChat(
             return unavailable('The saved conversation changed. Edit the draft to prepare a new request.');
         const { resolveChatProject } = await import('~/db/project-workspace');
         const projectId = await resolveChatProject(db, checkpoint.thread_id);
+        requestScope.expectedProjectId = projectId;
         const { projectToolEnabled } = await import('~/utils/projects/context');
         const store = useModelStore(); const preference = await useAiSettings().captureContextPreference();
         const modelId = appendModelVariant(stripThinkingSuffix(params.model || DEFAULT_AI_MODEL), params.modelVariant ?? (params.online ? 'online' : 'off'));
@@ -2767,9 +2778,12 @@ export function useChat(
         const reasoning = params.thinking || params.model?.endsWith(THINKING_SUFFIX)
             ? resolveReasoningConfig({ model: metadata, enabled: true, effort: params.reasoningEffort }) : undefined;
         if (projectId) {
+            if (typeof checkpoint.project_query !== 'string')
+                return unavailable('The saved attempt lacks its admitted project query. Edit the draft to prepare a fresh request.');
             const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
             const snapshot = await buildProjectContext(captureProjectOperation(signal, checkpoint.thread_id), checkpoint.thread_id,
-                checkpoint.input.content, metadata?.architecture?.input_modalities?.includes('image') === true, projectId);
+                checkpoint.project_query,
+                readiness.metadata.architecture?.input_modalities?.includes('image') === true, projectId);
             if (!snapshot || !checkpoint.project_fingerprint || await recoveryProjectFingerprint(snapshot) !== checkpoint.project_fingerprint)
                 return unavailable('Project context changed. Edit the draft to prepare a fresh request.');
             requestScope.projectContext = snapshot;
@@ -2801,10 +2815,9 @@ export function useChat(
             : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }))))
             return unavailable('Tool selection changed during recovery. Retry the saved attempt again.');
         const newStreamId = newId();
-        const Dexie = (await import('dexie')).default;
-        const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'chat_request_recoveries'])], async () => {
+        const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'projects', 'posts', 'chat_request_recoveries'])], async () => {
             if (!owns() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt || activePromptContent.value !== taskPrompt
-                || checkpoint.source_fingerprint !== await Dexie.waitFor(recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt))) return false;
+                || checkpoint.source_fingerprint !== await recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt)) return false;
             const current = await db.messages.get(savedAssistant.id);
             if (!current || current.clock !== savedAssistant.clock || current.pending || current.deleted) return false;
             await updateMessageRecord(db, savedAssistant.id, { pending: true, error: null, stream_id: newStreamId,
@@ -2825,7 +2838,7 @@ export function useChat(
         publishRequest(requestScope, { status: 'streaming', requestId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id });
         return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy,
             enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt: Date.now(),
-            recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, advertisedToolDefs });
+            recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, projectQuery: checkpoint.project_query, advertisedToolDefs });
     }
 
     const nativeRecoveryCandidates = new WeakMap<ChatRequestScope, { checkpoint: NativeRecoveryCheckpoint; providerAccepted: boolean }>();
@@ -2835,11 +2848,11 @@ export function useChat(
         reasoning: ReturnType<typeof resolveReasoningConfig>; contextPolicy: ContextRequestPolicy;
         enabledToolDefs: import('~/utils/chat/types').ToolDefinition[]; foregroundToolDefs: import('~/utils/chat/types').ToolDefinition[];
         allowBackgroundStreaming: boolean; startedAt: number; reviewedLossyMessages?: string;
-        recoveryInput: SendMessageParams & { content: string }; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
+        recoveryInput: SendMessageParams & { content: string }; projectQuery?: string; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
     };
     /** One native foreground/background owner, shared by new turns and explicit unsent recovery. */
     async function runPreparedNative(input: NativeExecutionInput): Promise<SendResult> {
-        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, advertisedToolDefs } = input;
+        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, projectQuery, advertisedToolDefs } = input;
         const requestId = requestScope.requestId; const requestThreadId = requestScope.threadId!;
         const preparationSignal = requestScope.abortController!.signal;
         const toolRegistry = useToolRegistry(); const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2860,7 +2873,7 @@ export function useChat(
                 input: structuredClone(savedInput), input_fingerprint: await recoveryInputFingerprint(savedInput.content, savedInput),
                 source_fingerprint: await recoverySourceFingerprint(requestScope.originDb, requestThreadId, assistantDbMsg.id, useAiSettings().settings.value.masterSystemPrompt, activePromptContent.value),
                 messages: structuredClone(orMessages), tools: structuredClone(advertisedToolDefs),
-                ...(requestScope.projectContext ? { project_fingerprint: await recoveryProjectFingerprint(requestScope.projectContext) } : {}),
+                ...(requestScope.projectContext ? { project_fingerprint: await recoveryProjectFingerprint(requestScope.projectContext), project_query: projectQuery } : {}),
             };
             // Durable before inference: a crash after rejection cannot append a
             // duplicate user turn. The row/lease gate excludes accepted output.
@@ -2970,6 +2983,7 @@ export function useChat(
                     }
 
                     const result = await startBackgroundStream({
+                        expectedProjectId: requestScope.expectedProjectId,
                         apiKey: effectiveApiKey.value,
                         model: modelId,
                         orMessages: orMessages as Parameters<
@@ -3235,6 +3249,7 @@ export function useChat(
                 streamId: newStreamId,
                 threadId: requestThreadId,
                 projectContext: requestScope.projectContext,
+                expectedProjectId: requestScope.expectedProjectId,
                 originDb: requestScope.originDb,
                 streamAcc: requestScope.accumulator,
                 workspaceId: requestScope.workspaceId,

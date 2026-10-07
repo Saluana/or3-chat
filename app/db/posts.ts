@@ -23,7 +23,7 @@ import {
     type PostCreate,
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
-import { changeRefCount } from './files';
+import { changeFileRefRows, notifyFileRefChanges, type FileRefNotification } from './files';
 import { parseFileHashes } from './files-util';
 import { isInternalPostType } from '~~/shared/posts/visibility';
 export { INTERNAL_POST_TYPES } from '~~/shared/posts/visibility';
@@ -56,6 +56,7 @@ export async function commitPreparedPostBatch(input: {
         await hooks.doAction('db.posts.upsert:action:before', { entity: toPostEntity(value), tableName: 'posts' });
     }
     const immutable = new Set(input.immutableIds);
+    const referenceChanges: FileRefNotification[] = [];
     await input.db.transaction('rw', getWriteTxTableNames(input.db, ['posts', 'file_meta']), async () => {
         input.assertCurrent();
         for (const expected of [input.expected, ...(input.expectedRecords ?? [])]) {
@@ -70,13 +71,18 @@ export async function commitPreparedPostBatch(input: {
             for (const hash of newHashes) if (!oldHashes.has(hash)) {
                 const meta = await input.db.file_meta.get(hash);
                 if (!meta || meta.deleted) throw new Error(`MISSING_FILE: ${hash}`);
-                await changeRefCount(hash, 1, input.db);
+                const changed = await changeFileRefRows(hash, 1, input.db);
+                if (changed) referenceChanges.push(changed.notification);
             }
-            for (const hash of oldHashes) if (!newHashes.has(hash)) await changeRefCount(hash, -1, input.db);
+            for (const hash of oldHashes) if (!newHashes.has(hash)) {
+                const changed = await changeFileRefRows(hash, -1, input.db);
+                if (changed) referenceChanges.push(changed.notification);
+            }
             await input.db.posts.put({ ...value, clock: nextClock(previous?.clock ?? value.clock) });
         }
         input.assertCurrent();
     });
+    await notifyFileRefChanges(referenceChanges);
     // A notification failure cannot turn a committed transaction into a failed save.
     for (const post of prepared) {
         try { await hooks.doAction('db.posts.upsert:action:after', { entity: toPostEntity(post), tableName: 'posts' }); }

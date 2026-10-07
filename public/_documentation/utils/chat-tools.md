@@ -72,6 +72,13 @@ Source content is reference material and does not authorize actions. Reads and
 writes check the originating workspace and current permissions. Changed sources
 must be read again, and conflicting editor drafts prevent a proposal from silently
 overwriting them. Saved files use catalog identities, never model-supplied URLs.
+In project chats, file pages read the binding's current ready/partial extraction
+blob and bind continuations to that extraction revision. Replacing extraction
+invalidates old cursors. Pages use extracted-text lengths, never PDF/DOCX upload
+offsets. Partial extraction remains labeled partial even at its last readable
+page. Outside that binding, binary files expose only their indexed text prefix;
+plain-text files can page their original UTF-8 bytes. Missing extraction bytes
+require reconnecting instead of silently falling back to the binary upload.
 When a pending proposal becomes stale, **Update proposal** adds the current
 document reference and a fresh-read request to the originating chat draft.
 It preserves your draft and waits for you to send it. If a later edit makes

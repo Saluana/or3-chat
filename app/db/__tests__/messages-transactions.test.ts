@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message, Thread } from '../schema';
+import Dexie from 'dexie';
 
 const testState = vi.hoisted(() => ({
     db: null as import('../client').Or3DB | null,
@@ -391,11 +392,32 @@ describe('message transaction and ordering contracts', () => {
         expect(await db.messages.get(initial.id)).toEqual(latest);
     });
 
-    it('rolls back both message and thread writes when an in-transaction hook fails', async () => {
+    // Failure inventory: asynchronous before-hooks must finish before the write;
+    // after-hook failures must not turn an already committed append into retry.
+    it('appends atomically around asynchronous preparation and failed notification', async () => {
+        vi.useRealTimers();
+        const db = testState.db!;
+        await db.threads.put(makeThread('thread-1'));
+        const observations: boolean[] = [];
+        testState.doAction.mockImplementation(async (name: string) => {
+            if (!name.startsWith('db.messages.append:')) return;
+            await new Promise(resolve => setTimeout(resolve, 10));
+            observations.push(Boolean(Dexie.currentTransaction));
+            if (name.endsWith(':after')) {
+                expect(await db.messages.get('committed')).toBeDefined();
+                throw new Error('Notification failed');
+            }
+        });
+        await expect(appendMessage({ id: 'committed', thread_id: 'thread-1', role: 'user' })).resolves.toMatchObject({ id: 'committed' });
+        expect(observations).toEqual([false, false]);
+        expect((await db.threads.get('thread-1'))?.clock).toBeGreaterThan(0);
+    });
+
+    it('does not write a message or thread when preparation fails', async () => {
         const db = testState.db!;
         await db.threads.put(makeThread('thread-1', { clock: 8 }));
         testState.doAction.mockImplementation(async (name: string) => {
-            if (name === 'db.messages.append:action:after') {
+            if (name === 'db.messages.append:action:before') {
                 throw new Error('forced hook failure');
             }
         });

@@ -1,5 +1,5 @@
 import type { Message, Post, Project, Thread } from '~/db/schema';
-import { projectWorkspaceConversation } from './workspace-conversation';
+import { resolveThreadProjection } from './compaction/history';
 import { normalizeMessageContent, tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { settleWorkspaceDocumentEditors } from '~/composables/documents/useDocumentEditorSessions';
 import type { WorkspaceOperationScope } from './workspace-access';
@@ -74,31 +74,13 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
     if ((item as { kind?: string }).kind === 'chat') {
         const thread = await scope.db.threads.get(item.id);
         if (!thread || thread.deleted) throw new Error('That chat is unavailable.');
-        const threads = new Map<string, Thread>();
-        const messages = new Map<string, Message[]>();
-        let current: Thread = thread;
-        for (;;) {
-            if (threads.has(current.id)) throw new Error('Conversation lineage is incomplete.');
-            threads.set(current.id, current);
-            messages.set(current.id, await scope.db.messages.where('thread_id').equals(current.id).toArray());
-            scope.assertCurrent();
-            if (current.branch_mode !== 'reference' || !current.parent_thread_id) break;
-            const parent = await scope.db.threads.get(current.parent_thread_id);
-            scope.assertCurrent();
-            if (!parent || parent.deleted) throw new Error('Conversation source is unavailable.');
-            current = parent;
-        }
-        const rows = projectWorkspaceConversation(item.id, threads, messages);
+        const projection = await resolveThreadProjection(item.id, scope.db);
+        scope.assertCurrent();
+        const rows = projection.messages.filter(row => row.role === 'user' || row.role === 'assistant');
         const content = rows.map((row) => `[${row.id} ${row.role}] ${normalizeMessageContent(row)}`).join('\n');
         const revision = await workspaceRevision({ thread, rows });
-        await scope.db.transaction('r', ['threads', 'messages'], async () => {
-            for (const [id, ancestor] of threads) {
-                if (JSON.stringify(await scope.db.threads.get(id)) !== JSON.stringify(ancestor)
-                    || JSON.stringify(await scope.db.messages.where('thread_id').equals(id).toArray()) !== JSON.stringify(messages.get(id))) {
-                    throw new Error('This source changed. Read it again.');
-                }
-            }
-        });
+        const current = await resolveThreadProjection(item.id, scope.db);
+        if (JSON.stringify(current) !== JSON.stringify(projection)) throw new Error('This source changed. Read it again.');
         scope.assertCurrent();
         return { source: { ...item, title: thread.title?.trim() || 'Untitled chat', revision }, content, row: thread, messages: rows };
     }
@@ -110,7 +92,7 @@ export async function workspaceRead(scope: WorkspaceOperationScope, item: Worksp
     const loaded = await readWorkspaceItem(scope, item);
     if (item.kind === 'file') {
         const { readWorkspaceFilePage } = await import('./workspace-file-read');
-        return readWorkspaceFilePage(scope, loaded.row as Post, loaded.source, continuation);
+        return readWorkspaceFilePage(scope, loaded.row as Post, loaded.source, continuation, context);
     }
     if (item.kind === 'document') {
         const { readWorkspaceDocumentPage } = await import('./workspace-document-read');

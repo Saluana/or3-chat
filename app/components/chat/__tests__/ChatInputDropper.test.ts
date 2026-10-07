@@ -192,6 +192,49 @@ describe('ChatInputDropper', () => {
         useWorkspaceTabDrafts().clear();
     });
 
+    // Real composer restoration must not turn a cached inherited choice into
+    // durable user intent or replace a choice already saved for this chat.
+    it.each(['inherited', 'explicit'] as const)('restores text without replacing the %s chat model from a stale tab draft', async (choice) => {
+        vi.stubGlobal('process', { ...process, client: true });
+        localStorage.clear();
+        const workspace = `model-draft-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open();
+        const { createThreadInDb } = await import('~/db/threads');
+        const { saveProjectSettings } = await import('~/db/project-workspace');
+        const { captureProjectOperation } = await import('~/utils/projects/context');
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        const { setKvByName } = await import('~/db/kv');
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await saveProjectSettings(captureProjectOperation(), 'project',
+            { ...defaultProjectSettings(), default_model: 'fixture/current-default' }, null);
+        const thread = await createThreadInDb(db, { title: 'Draft', project_id: 'project' });
+        if (choice === 'explicit') await setKvByName('chat-model:' + thread.id,
+            JSON.stringify({ model: 'fixture/explicit', variant: 'nitro' }), db);
+        useWorkspaceTabDrafts().write('model-tab', { version: 1, text: 'Keep this draft', attachments: [], largeTextBlocks: [],
+            composer: { model: 'fixture/stale-default', modelVariant: 'online', thinkingEnabled: false,
+                imageSettings: { quality: 'medium', numResults: 1, size: '1024x1024' } }, updatedAt: Date.now() });
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, tabId: 'model-tab', threadId: thread.id },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => {
+                payload.registerResult(Promise.resolve({ status: 'rejected', reason: 'unavailable' }));
+            } },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await vi.waitFor(() => expect(wrapper.emitted('model-change')?.at(-1)?.[0])
+                .toBe(choice === 'explicit' ? 'fixture/explicit:nitro' : 'fixture/current-default'));
+            await (wrapper.vm as unknown as { triggerSend: () => Promise<SendResult> }).triggerSend();
+            expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Keep this draft',
+                model: choice === 'explicit' ? 'fixture/explicit' : 'fixture/current-default',
+                modelVariant: choice === 'explicit' ? 'nitro' : 'off' });
+            const preference = await db.kv.where('name').equals('chat-model:' + thread.id).first();
+            expect(preference?.value).toBe(choice === 'explicit' ? JSON.stringify({ model: 'fixture/explicit', variant: 'nitro' }) : undefined);
+        } finally {
+            wrapper.unmount(); await flushPromises(); vi.unstubAllGlobals();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+        }
+    });
+
     it('captures a fresh source draft when tab navigation overlaps asynchronous composer settings restoration', async () => {
         const settings = deferred<void>();
         mockEnsureAiSettingsLoaded.mockReturnValue(settings.promise);
@@ -219,7 +262,7 @@ describe('ChatInputDropper', () => {
         }
     });
 
-    it('keeps the destination tab variant when an earlier settings restoration finishes', async () => {
+    it('keeps the destination unsent tab variant when an earlier settings restoration finishes', async () => {
         const settings = deferred<void>();
         mockEnsureAiSettingsLoaded.mockReturnValue(settings.promise);
         useWorkspaceTabDrafts().write('child-tab', {
@@ -245,7 +288,7 @@ describe('ChatInputDropper', () => {
         try {
             await wrapper.setProps({ tabId: 'source-tab' });
             expect(mockEnsureAiSettingsLoaded).toHaveBeenCalled();
-            await wrapper.setProps({ tabId: 'child-tab', threadId: 'child' });
+            await wrapper.setProps({ tabId: 'child-tab', threadId: undefined });
             settings.resolve();
             await settings.promise;
             await wrapper.vm.$nextTick();

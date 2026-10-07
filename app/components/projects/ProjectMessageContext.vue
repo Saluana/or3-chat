@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount, useId } from 'vue';
-import { liveQuery, type Subscription } from 'dexie';
-import {
-    getDb,
-    getWorkspaceGeneration,
-    subscribeActiveWorkspaceDb,
-} from '~/db/client';
+import { computed, ref, watch, useId } from 'vue';
+import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { captureProjectOperation } from '~/utils/projects/context';
-import { resolveChatProject, saveProjectMemory } from '~/db/project-workspace';
+import { resolveChatProject } from '~/db/project-workspace';
+import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
 import { addProjectUpload } from '~/utils/projects/source-intake';
 import { getFileBlob } from '~/db/files';
 import AppModal from '~/components/ui/AppModal.vue';
@@ -21,7 +17,6 @@ const remember = ref(false);
 const memory = ref('');
 const memoryProjectName = ref('');
 const memoryFormId = useId();
-const kind = ref<'fact' | 'decision'>('fact');
 const error = ref('');
 const saved = ref(false);
 let memoryTarget:
@@ -33,42 +28,20 @@ let memoryTarget:
       }
     | undefined;
 const busy = ref(false);
-const projectId = ref<string | null>(null);
+const projectId = useChatProjectOwner(() => props.threadId);
 const canRemember = computed(() =>
     Boolean(projectId.value && props.messageId && props.text),
 );
-let ownerSubscription: Subscription | undefined;
-let ownerRevision = 0;
-function bindOwner() {
-    ownerSubscription?.unsubscribe();
-    projectId.value = null;
-    remember.value = false;
-    memoryTarget = undefined;
-    saved.value = false;
-    error.value = '';
-    const revision = ++ownerRevision;
-    const db = getDb();
-    const generation = getWorkspaceGeneration();
-    const threadId = props.threadId;
-    if (!threadId) return;
-    ownerSubscription = liveQuery(() =>
-        resolveChatProject(db, threadId).catch(() => null),
-    ).subscribe((owner) => {
-        if (
-            revision === ownerRevision &&
-            db === getDb() &&
-            generation === getWorkspaceGeneration()
-        )
-            projectId.value = owner;
-    });
-}
-watch(() => props.threadId, bindOwner, { immediate: true });
-const stopWorkspace = subscribeActiveWorkspaceDb(bindOwner);
-onBeforeUnmount(() => {
-    ownerRevision++;
-    ownerSubscription?.unsubscribe();
-    stopWorkspace();
-});
+watch(
+    [() => props.threadId, projectId],
+    () => {
+        remember.value = false;
+        memoryTarget = undefined;
+        saved.value = false;
+        error.value = '';
+    },
+    { immediate: true },
+);
 defineExpose({ canRemember, startRemember });
 async function owningProject(
     scope: ReturnType<typeof captureProjectOperation>,
@@ -98,7 +71,6 @@ async function startRemember() {
         memoryProjectName.value = project.name;
         memoryTarget = { scope, projectId, threadId, messageId };
         memory.value = text.slice(0, 4000);
-        kind.value = 'fact';
         saved.value = false;
         remember.value = true;
     } catch (cause) {
@@ -125,9 +97,8 @@ async function save() {
             throw new Error(
                 'This chat changed projects. Review the memory again.',
             );
-        await saveProjectMemory(target.scope, target.projectId, {
+        await saveClassifiedProjectMemory(target.scope, target.projectId, {
             text: memory.value,
-            kind: kind.value,
             source_thread_id: target.threadId,
             source_message_id: target.messageId,
         });
@@ -208,17 +179,6 @@ async function promote() {
                         required
                         class="w-full"
                         :rows="5"
-                    />
-                </UFormField>
-                <UFormField label="Save as" name="kind">
-                    <USelect
-                        v-model="kind"
-                        aria-label="Save as"
-                        :items="[
-                            { label: 'Fact', value: 'fact' },
-                            { label: 'Decision', value: 'decision' },
-                        ]"
-                        class="w-full"
                     />
                 </UFormField>
                 <p v-if="error" role="alert" class="text-[var(--md-error)]">

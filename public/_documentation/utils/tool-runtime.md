@@ -91,7 +91,11 @@ tool is still enabled, is not server-only, and still matches the admitted
 definition. Server execution also checks the admitted definition and rejects
 client-only registrations. Callers handling model output must use this admitted
 path: the legacy direct client `executeTool(name, args)` call does not enforce
-runtime placement by itself. The server route validates the submitted
+runtime placement by itself. Both admitted and legacy calls enforce global
+enablement before execution and at guarded commit boundaries. Trusted Document
+AI execution explicitly sets `ignoreGlobalEnabled` because it uses its own
+run-specific `enabledTools`; omitting admission does not grant that override.
+The server route validates the submitted
 definitions and binds server/hybrid calls to the registered definition before
 execution.
 

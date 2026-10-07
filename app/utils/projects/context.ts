@@ -2,16 +2,21 @@ import { useOverlay } from '@nuxt/ui/composables/useOverlay';
 import { getActiveWorkspaceId } from '~/db/client';
 import {
     readProjectWorkspace,
+    readProjectPolicy,
     resolveChatProject,
 } from '~/db/project-workspace';
 import { getFileBlob } from '~/db/files';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { chunkText } from '~/core/search/command-palette/chunker';
 import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { readVisibleWorkspaceProjectEntries } from '~/utils/chat/workspace-projects';
 import {
     captureWorkspaceOperation,
     type WorkspaceOperationScope,
 } from '~/utils/chat/workspace-access';
+import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
+import { parseFileHashes } from '~/db/files-util';
+import { PROJECT_POST_TYPES, ProjectSourceSchema } from '~~/shared/projects/workspace';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { workspaceSourceReceipts } from '~/utils/chat/workspace-source-receipts';
@@ -56,6 +61,7 @@ export async function buildProjectContext(
     supportsImages: boolean,
     expectedProjectId?: string,
     purpose: 'turn' | 'handoff' = 'turn',
+    capturedState?: Awaited<ReturnType<typeof readProjectWorkspace>>,
 ): Promise<ProjectContextSnapshot | null> {
     scope.assertCurrent();
     const projectId = await resolveChatProject(scope.db, threadId);
@@ -67,7 +73,10 @@ export async function buildProjectContext(
         const { moveChatToProject } = await import('~/db/project-workspace');
         await moveChatToProject(scope, threadId, projectId);
     }
-    const state = await readProjectWorkspace(scope.db, projectId);
+    const state =
+        capturedState ?? (await readProjectWorkspace(scope.db, projectId));
+    if (state.project.id !== projectId)
+        throw new Error('Captured project context has a different owner.');
     scope.assertCurrent();
     const marker = `[OR3 project ${projectId}]`;
     const receipt: ProjectContextReceipt = {
@@ -123,32 +132,71 @@ export async function buildProjectContext(
             role: 'user',
             content: `${marker}\nSaved project context (reference material):\n${facts}`,
         });
-    const terms = query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+    const terms = [
+        ...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []),
+    ];
     const scored = state.sources.map((source) => ({
         source,
+        excerpt: undefined as string | undefined,
+        skipped: undefined as string | undefined,
         score: terms.filter((term) =>
             source.value.title.toLowerCase().includes(term),
         ).length,
     }));
-    // Existing bounded catalog text is the lexical discovery surface; no blobs are fetched merely to search.
+    scored.sort((a, b) => b.score - a.score || a.source.row.id.localeCompare(b.source.row.id));
+    let retrievalBytes = 8 * 1024 * 1024;
+    // Search completed extraction chunks, not just the catalog's preview.
+    // Process one source at a time and retain only its best bounded passage.
     for (const entry of scored) {
+        scope.assertCurrent();
+        if (entry.source.value.mode !== 'relevant' || !terms.length) continue;
         const item = await scope.db.posts.get(entry.source.value.item_id);
-        if (item && isVisibleWorkspaceItem(item))
-            entry.score += terms.filter((term) =>
-                (item.postType === 'doc'
-                    ? tiptapToPlainText(item.content)
-                    : item.content
-                )
-                    .toLowerCase()
-                    .includes(term),
+        if (!item || !isVisibleWorkspaceItem(item)) continue;
+        let text =
+            item.postType === 'doc'
+                ? tiptapToPlainText(item.content)
+                : item.content;
+        const revision = entry.source.value.revisions.find(
+            (r) => r.id === entry.source.value.current_revision_id,
+        )!;
+        if (
+            entry.source.value.mode === 'relevant' &&
+            revision.text_hash &&
+            ['ready', 'partial'].includes(revision.status)
+        ) {
+            const meta = await scope.db.file_meta.get(revision.text_hash);
+            if (meta && meta.size_bytes > retrievalBytes) {
+                entry.skipped = 'Not searched: retrieval byte budget reached';
+                continue;
+            }
+            const blob = await getFileBlob(revision.text_hash, scope.db);
+            scope.assertCurrent();
+            if (blob && blob.size > retrievalBytes) {
+                entry.skipped = 'Not searched: retrieval byte budget reached';
+                continue;
+            }
+            if (blob) { retrievalBytes -= blob.size; text = await blob.text(); }
+        }
+        let bestScore = 0;
+        for (const passage of chunkText(text, { size: 8000, overlap: 500 })) {
+            scope.assertCurrent();
+            const normalized = passage.toLowerCase();
+            const score = terms.filter((term) =>
+                normalized.includes(term),
             ).length;
+            if (score > bestScore) {
+                bestScore = score;
+                entry.excerpt = passage;
+            }
+        }
+        entry.score += bestScore;
     }
     scored.sort(
         (a, b) =>
             b.score - a.score || a.source.row.id.localeCompare(b.source.row.id),
     );
     let relevant = 0;
-    for (const { source, score } of scored) {
+    for (const { source, score, excerpt, skipped } of scored) {
         scope.assertCurrent();
         const revision = source.value.revisions.find(
             (r) => r.id === source.value.current_revision_id,
@@ -167,6 +215,7 @@ export async function buildProjectContext(
             sourceReceipt.reason = 'Do not use';
             continue;
         }
+        if (!required && skipped) { sourceReceipt.reason = skipped; continue; }
         if (!required && (!score || relevant >= 5)) {
             sourceReceipt.reason = 'Not selected for this turn';
             continue;
@@ -224,7 +273,9 @@ export async function buildProjectContext(
                 source.value.kind === 'document'
                     ? tiptapToPlainText(item.content)
                     : item.content;
-            if (revision.text_hash) {
+            if (!required && excerpt !== undefined) {
+                text = excerpt;
+            } else if (revision.text_hash) {
                 const blob = await getFileBlob(revision.text_hash, scope.db);
                 scope.assertCurrent();
                 if (!blob) {
@@ -265,18 +316,24 @@ export async function buildProjectContext(
     }
     const { projectContinuity } = await import('./continuity');
     receipt.chats = [];
-    for (const summary of await projectContinuity(scope, projectId)) {
-        if (receipt.chats.length >= 3) break;
-        if (
-            summary.thread.id === threadId ||
-            !terms.some((term) =>
-                (summary.thread.title + ' ' + summary.data.summary_markdown)
-                    .toLowerCase()
-                    .includes(term),
-            )
-        )
-            continue;
-        const text = summary.data.summary_markdown.slice(0, 4000);
+    for (const summary of await projectContinuity(scope, projectId, {
+        state,
+        terms,
+        threadId,
+        limit: 3,
+    })) {
+        // Include the strongest bounded passage, not an unrelated prefix of a
+        // long summary whose matching discussion occurs later.
+        let text = summary.data.summary_markdown.slice(0, 4000);
+        let bestScore = 0;
+        for (const passage of chunkText(summary.data.summary_markdown, { size: 4000, overlap: 500 })) {
+            const normalized = passage.toLowerCase();
+            const score = terms.filter(term => normalized.includes(term)).length;
+            if (score > bestScore) {
+                bestScore = score;
+                text = passage;
+            }
+        }
         receipt.chats.push({
             thread_id: summary.thread.id,
             message_id: summary.row.id,
@@ -379,6 +436,7 @@ export function assertProjectContextIncluded(
 export function finalizeProjectReceipt(
     snapshot: ProjectContextSnapshot,
     messages: unknown[],
+    reservedMetadataBytes = 0,
 ): ProjectContextReceipt {
     const texts = requestTexts(messages);
     const serialized = texts.join('\n');
@@ -395,6 +453,8 @@ export function finalizeProjectReceipt(
     )
         receipt.instructions = '';
     if (!includes(snapshot.receipt.brief)) receipt.brief = '';
+    receipt.instructions_included = Boolean(receipt.instructions);
+    receipt.brief_included = Boolean(receipt.brief);
     receipt.memories = receipt.memories.filter(
         (memory) => includes(memory.id) && includes(memory.text),
     );
@@ -522,6 +582,36 @@ export function finalizeProjectReceipt(
         ...chat,
         text: chat.text.slice(0, 512),
     }));
+    // Availability is inventory, not request evidence. Keep an aggregate rather
+    // than duplicating the entire project catalog in every assistant message.
+    receipt.available_source_count = receipt.sources.filter(
+        (source) => source.state === 'available',
+    ).length;
+    receipt.sources = receipt.sources.filter(
+        (source) => source.state !== 'available',
+    );
+    // Keep every evidence identity/revision. Only diagnostic text is optional;
+    // its total budget includes JSON escaping and the accompanying request history.
+    const previews: Array<{ text: string; set(value: string): void }> = [
+        { text: receipt.instructions, set: value => { receipt.instructions = value; } },
+        { text: receipt.brief, set: value => { receipt.brief = value; } },
+        ...receipt.memories.map(memory => ({ text: memory.text, set: (value: string) => { memory.text = value; } })),
+        ...receipt.sources.filter(source => source.excerpt !== undefined).map(source => ({ text: source.excerpt!, set: (value: string) => { source.excerpt = value; } })),
+        ...(receipt.chats ?? []).map(chat => ({ text: chat.text, set: (value: string) => { chat.text = value; } })),
+    ];
+    previews.forEach(preview => preview.set(''));
+    const encode = new TextEncoder();
+    let budget = Math.max(0, Math.min(32 * 1024, 128 * 1024 - reservedMetadataBytes - 4096 - encode.encode(JSON.stringify(receipt)).byteLength));
+    for (const preview of previews) {
+        let lo = 0; let hi = Math.min(preview.text.length, budget);
+        while (lo < hi) {
+            const mid = Math.ceil((lo + hi) / 2);
+            if (encode.encode(JSON.stringify(preview.text.slice(0, mid))).byteLength - 2 <= budget) lo = mid;
+            else hi = mid - 1;
+        }
+        const text = preview.text.slice(0, lo);
+        preview.set(text); budget -= encode.encode(JSON.stringify(text)).byteLength - 2;
+    }
     return receipt;
 }
 
@@ -560,6 +650,27 @@ export async function assertProjectToolAllowed(
     args: Record<string, unknown>,
     approve?: () => Promise<boolean>,
     expectedProjectId?: string | null,
+    approved = false,
+) {
+    return authorizeProjectTool(
+        scope,
+        threadId,
+        name,
+        args,
+        approve,
+        expectedProjectId,
+        approved,
+    );
+}
+
+async function authorizeProjectTool(
+    scope: WorkspaceOperationScope,
+    threadId: string,
+    name: string,
+    args: Record<string, unknown>,
+    approve: (() => Promise<boolean>) | undefined,
+    expectedProjectId: string | null | undefined,
+    approved: boolean,
 ) {
     scope.assertCurrent();
     const thread = await scope.db.threads.get(threadId);
@@ -571,7 +682,7 @@ export async function assertProjectToolAllowed(
     if (expectedProjectId !== undefined && projectId !== expectedProjectId)
         throw new Error('This chat changed projects. Start a new turn.');
     if (!projectId) return;
-    const state = await readProjectWorkspace(scope.db, projectId);
+    const state = await readProjectPolicy(scope.db, projectId);
     if (!projectToolEnabled(state.settings, name))
         throw new Error(
             'This tool is disabled for this project. Use project-scoped workspace search.',
@@ -588,20 +699,6 @@ export async function assertProjectToolAllowed(
                 'This tool resource is outside the project allowlist.',
             );
     }
-    const members = await readVisibleWorkspaceProjectEntries(
-        scope,
-        state.project,
-    );
-    const knowledge = new Set(
-        state.sources
-            .filter((s) => s.value.mode !== 'off')
-            .map((s) => s.value.item_id),
-    );
-    const blocked = new Set(
-        state.sources
-            .filter((s) => s.value.mode === 'off')
-            .map((s) => s.value.item_id),
-    );
     const item =
         args.item && typeof args.item === 'object'
             ? (args.item as { id?: unknown; kind?: unknown })
@@ -613,12 +710,28 @@ export async function assertProjectToolAllowed(
           ? 'chat'
           : item?.kind;
     if (typeof target === 'string') {
+        const bindings = kind === 'document' || kind === 'file'
+            ? await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray() : [];
+        const source = bindings.filter(row => !row.deleted)
+            .map(row => ProjectSourceSchema.parse(JSON.parse(row.content)))
+            .find(value => value.item_id === target);
+        const targetRow = kind === 'chat' ? await scope.db.threads.get(target)
+            : kind === 'document' || kind === 'file' ? await scope.db.posts.get(target) : undefined;
+        const member = targetRow && isVisibleWorkspaceItem(targetRow) && (
+            kind === 'chat' ? await resolveChatProject(scope.db, target) === projectId
+                : 'postType' in targetRow && targetRow.postType === (kind === 'file' ? 'or3:file' : 'doc')
+                    && normalizeProjectData(state.project.data).some(entry => entry.id === target && entry.kind === (kind === 'document' ? 'doc' : kind))
+        );
+        const hash = kind === 'file' && targetRow && 'file_hashes' in targetRow
+            ? parseFileHashes(targetRow.file_hashes)[0] : undefined;
+        const meta = hash ? await scope.db.file_meta.get(hash) : undefined;
         if (
-            blocked.has(target) ||
+            source?.mode === 'off' ||
             ((kind === 'document' || kind === 'file') &&
-                !knowledge.has(target)) ||
+                !source) ||
             (!(kind === 'project' && target === projectId) &&
-                !members.some((m) => m.id === target && m.kind === kind)) ||
+                !member) ||
+            (kind === 'file' && (!meta || meta.deleted)) ||
             (kind === 'chat' &&
                 state.settings.excluded_chat_ids.includes(target) &&
                 target !== threadId)
@@ -636,16 +749,21 @@ export async function assertProjectToolAllowed(
     if (name === 'workspace_search') {
         if (args.projectId && args.projectId !== projectId)
             throw new Error('Search is restricted to the owning project.');
-        args.projectId = projectId;
+        if (!approved) args.projectId = projectId;
+        else if (args.projectId !== projectId)
+            throw new Error('The authorized search project changed.');
     }
     if (name === 'workspace_create_document') {
         const target = args.project as { id?: string } | undefined;
         if (target?.id && target.id !== projectId)
             throw new Error('Cannot create a document in another project.');
-        args.project = {
-            id: projectId,
-            revision: await workspaceRevision(state.project),
-        };
+        if (!approved)
+            args.project = {
+                id: projectId,
+                revision: await workspaceRevision(state.project),
+            };
+        else if (target?.id !== projectId)
+            throw new Error('The authorized document project changed.');
     }
     if (
         name === 'workspace_update_project' &&
@@ -653,24 +771,34 @@ export async function assertProjectToolAllowed(
     )
         throw new Error('This project cannot change another project.');
     if (
+        !approved &&
         // External tools have no host-owned read/write classification. Their
         // names and model arguments cannot authorize a publishing action.
-        !SCOPED_TOOLS.has(name) ||
-        rule?.mode === 'ask' ||
-        /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(
-            name,
-        ) ||
-        (name === 'workspace_update_project' &&
-            args.operation === 'remove_item')
+        (!SCOPED_TOOLS.has(name) ||
+            rule?.mode === 'ask' ||
+            /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(
+                name,
+            ) ||
+            (name === 'workspace_update_project' &&
+                args.operation === 'remove_item'))
     ) {
         if (!approve || !(await approve()))
             throw new Error('This action requires your approval.');
         scope.assertCurrent();
-        const latest = await readProjectWorkspace(scope.db, projectId);
+        const latest = await readProjectPolicy(scope.db, projectId);
         if (
             JSON.stringify(latest.settings.tools[name]) !== JSON.stringify(rule)
         )
             throw new Error('Tool policy changed while awaiting approval.');
+        await authorizeProjectTool(
+            scope,
+            threadId,
+            name,
+            args,
+            undefined,
+            projectId,
+            true,
+        );
     }
     scope.assertCurrent();
 }
@@ -686,23 +814,25 @@ export async function filterProjectToolResult(
     scope.assertCurrent();
     if ((await resolveChatProject(scope.db, threadId)) !== projectId)
         throw new Error('This chat changed projects during tool execution.');
-    const state = await readProjectWorkspace(scope.db, projectId);
+    const state = await readProjectPolicy(scope.db, projectId);
     if (!projectToolEnabled(state.settings, name))
         throw new Error('Project tool policy changed during execution.');
+    let sources: ReturnType<typeof ProjectSourceSchema.parse>[] | undefined;
     const permitted = async (kind: string, id: string) => {
         if (kind === 'project') return id === projectId;
         if (kind === 'chat')
             return (
-                !state.settings.excluded_chat_ids.includes(id) &&
+                (id === threadId ||
+                    !state.settings.excluded_chat_ids.includes(id)) &&
                 (await resolveChatProject(scope.db, id).catch(() => null)) ===
                     projectId
             );
         const item = await scope.db.posts.get(id);
         if (!item || !isVisibleWorkspaceItem(item)) return false;
-        const source = state.sources.find(
-            (source) => source.value.item_id === id,
-        );
-        if (source) return source.value.mode !== 'off';
+        sources ??= (await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray())
+            .filter(row => !row.deleted).map(row => ProjectSourceSchema.parse(JSON.parse(row.content)));
+        const source = sources.find(source => source.item_id === id);
+        if (source) return source.mode !== 'off';
         // A newly created document's durable receipt is still visible to its creator.
         return (
             name === 'workspace_create_document' &&
@@ -761,7 +891,7 @@ export async function requestProjectToolApproval(
         return (
             (await overlay.open({
                 toolName: name,
-                argumentsText: JSON.stringify(args, null, 2).slice(0, 4000),
+                argumentsText: JSON.stringify(args, null, 2),
             }).result) === true
         );
     } finally {

@@ -244,6 +244,8 @@ function jsonEqual(left: unknown, right: unknown): boolean {
  * - No-op when the row does not exist and no fallback is supplied.
  * - An optional synchronous `ifCurrent` guard checks the stored row inside
  *   the write transaction; false skips the write, including fallback creation.
+ * - `commitGuard` adds authorization tables and runs transaction-safe checks
+ *   after hooks and before the fresh-row write. It must not await external work.
  *
  * Non-Goals:
  * - Does not replace `upsertMessageInDb` for full-row replaces.
@@ -255,7 +257,8 @@ export async function patchMessageInDb(
         data?: Record<string, unknown> | null;
     },
     fallback?: Message | null,
-    ifCurrent?: (message: Message | undefined) => boolean
+    ifCurrent?: (message: Message | undefined) => boolean,
+    commitGuard?: { tables: string[]; assertCurrent: () => void | Promise<void> },
 ): Promise<void> {
     const hooks = useHooks();
     // Preparation hooks run outside the write transaction (see upsertMessageInDb:
@@ -329,8 +332,9 @@ export async function patchMessageInDb(
 
     const next = await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'messages'),
+        getWriteTxTableNames(db, 'messages', { include: commitGuard?.tables }),
         async () => {
+            await commitGuard?.assertCurrent();
             const stored = await dbTry(() => db.messages.get(id), {
                 op: 'read',
                 entity: 'messages',
@@ -577,48 +581,67 @@ export async function appendMessageToDb(
     db: Or3DB,
     input: MessageCreate
 ): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction(
+    const prepared = await prepareMessageAppend(input);
+    const message = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
-        async () => {
-        // Handle file_hashes array serialization
-        const processedInput = { ...input };
-        if (hasFileHashesArray(processedInput)) {
-            (processedInput as { file_hashes: string | string[] }).file_hashes =
-                serializeFileHashes(processedInput.file_hashes);
-        }
-        const value = parseOrThrow(MessageCreateSchema, processedInput);
-        await hooks.doAction('db.messages.append:action:before', value);
-        // If index not set, compute next sparse index in thread
-        if (value.index === undefined) {
-            const last = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [value.thread_id, Dexie.minKey],
-                    [value.thread_id, Dexie.maxKey]
-                )
-                .last();
-            value.index = last ? last.index + 1000 : 1000;
-        }
-        const finalized = parseOrThrow(MessageSchema, {
-            ...value,
-            clock: nextClock(value.clock),
-        });
-        await db.messages.put(finalized);
-        const t = await db.threads.get(value.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-                clock: nextClock(t.clock),
-            });
-        }
-        await hooks.doAction('db.messages.append:action:after', finalized);
-        return finalized;
+        () => appendMessageRows(db, prepared.value)
+    );
+    await prepared.afterCommit(message);
+    return message;
+}
+
+/** Prepare hooks outside the caller's write transaction. */
+export async function prepareMessageAppend(input: MessageCreate) {
+    const hooks = useHooks();
+    const processedInput = structuredClone(input);
+    if (hasFileHashesArray(processedInput)) {
+        (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(processedInput.file_hashes);
+    }
+    const value = parseOrThrow(MessageCreateSchema, processedInput);
+    await hooks.doAction('db.messages.append:action:before', value);
+    return {
+        value: parseOrThrow(MessageCreateSchema, value),
+        async afterCommit(message: Message) {
+            try { await hooks.doAction('db.messages.append:action:after', message); }
+            catch (error) { console.warn('[messages] Append committed; notification failed', error); }
+        },
+    };
+}
+
+/** Hook-free append for guarded callers sharing their atomic write. */
+export async function appendMessageRows(db: Or3DB, input: MessageCreate): Promise<Message> {
+    const transaction = Dexie.currentTransaction;
+    if (!transaction || transaction.db !== db || transaction.mode !== 'readwrite')
+        throw new Error('Message append requires its captured write transaction.');
+    const value = parseOrThrow(MessageCreateSchema, input);
+    // If index not set, compute next sparse index in thread
+    if (value.index === undefined) {
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between(
+                [value.thread_id, Dexie.minKey],
+                [value.thread_id, Dexie.maxKey]
+            )
+            .last();
+        value.index = last ? last.index + 1000 : 1000;
+    }
+    const finalized = parseOrThrow(MessageSchema, {
+        ...value,
+        clock: nextClock(value.clock),
     });
+    await db.messages.put(finalized);
+    const t = await db.threads.get(value.thread_id);
+    if (t) {
+        const now = nowSec();
+        await db.threads.put({
+            ...t,
+            last_message_at: now,
+            updated_at: now,
+            clock: nextClock(t.clock),
+        });
+    }
+    return finalized;
 }
 
 /**

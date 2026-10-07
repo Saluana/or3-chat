@@ -71,8 +71,10 @@ self.onmessage = async (
             // Raw-text extraction does not need embedded media or external targets.
             let expanded = 0;
             let entries = 0;
+            let hasMedia = false;
             const xml = unzipSync(new Uint8Array(bytes), {
                 filter(file) {
+                    if (/^word\/media\//i.test(file.name)) hasMedia = true;
                     if (++entries > 1000)
                         throw new Error(
                             'This document contains too many archive entries.',
@@ -102,7 +104,8 @@ self.onmessage = async (
                     bounded.byteOffset + bounded.byteLength,
                 ) as ArrayBuffer,
             });
-            partial = result.messages.some(
+            if (!result.value.trim()) throw new Error('No readable text. This DOCX may contain images or require OCR.');
+            partial = hasMedia || result.messages.some(
                 (message) =>
                     message.type === 'warning' || message.type === 'error',
             );

@@ -56,6 +56,7 @@ export type RequestFinalization = {
 
 /** One owner per admitted generation; attachment and save state are independent. */
 export type ChatRequest = {
+    expectedProjectId?: string | null;
     readonly requestId: string;
     readonly originDb: Or3DB;
     readonly workspaceId: string;

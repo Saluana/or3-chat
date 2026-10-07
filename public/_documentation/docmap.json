@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project sidebar navigation, source library, reviewed memory, continuity, tools, and recorded request context."
+                    "summary": "Project sidebar navigation, compact inline brief editing and project chat/document creation, source library, simple memory saves, continuity, tools, and recorded request context."
                 },
                 {
                     "name": "development-setup.md",
@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD and revision-aware chat/document/file associations that preserve extension entries."
+                    "summary": "Project CRUD, revision-aware associations, captured execution boundaries and distinct installed/development provider qualification."
                 },
                 {
                     "name": "posts.md",
@@ -365,7 +365,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Translate internal content, select images, hydrate files, and handle attachment failures."
+                    "summary": "Translate internal content, preserve valid tool calls, omit empty call arrays, select images, hydrate files, and handle attachment failures."
                 }
             ]
         },

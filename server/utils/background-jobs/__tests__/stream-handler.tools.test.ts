@@ -913,6 +913,34 @@ describe('background usage through terminal history', () => {
         return { job: reloaded, snapshot: delivered[0]! };
     }
 
+    it.each([false, true])('refuses resumed inference after ownership changes (tools: %s)', async withTools => {
+        const { jobId, context } = await admitted(withTools);
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+            readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 2, project_id: 'project' } }),
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize,
+        }) as unknown as SyncGatewayAdapter });
+        vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow(/project/i);
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('rechecks ownership between tool-loop model requests', async () => {
+        let projectId: string | null = null;
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+            readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: projectId } }),
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize,
+        }) as unknown as SyncGatewayAdapter });
+        const { jobId, context } = await admitted(true);
+        registerServerTool(toolDef, () => { projectId = 'project'; return 'accepted result'; }, { override: true });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(100, true)).mockResolvedValueOnce(response(200)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow(/project/i);
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+
     it('rejects a restored oversized captured maximum before reopening the provider', async () => {
         const { jobId, context } = await admitted(false, { version: 1, user_max_context_tokens: 20, requested_completion_tokens: null });
         vi.stubGlobal('fetch', vi.fn(async () => response(100)));

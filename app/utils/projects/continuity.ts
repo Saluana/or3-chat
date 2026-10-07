@@ -1,3 +1,4 @@
+import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { readCompactionData } from '~~/shared/chat/compaction';
 import {
@@ -9,15 +10,41 @@ import {
 export async function projectContinuity(
     scope: WorkspaceOperationScope,
     projectId: string,
+    selection?: {
+        state: Awaited<ReturnType<typeof readProjectWorkspace>>;
+        terms: readonly string[];
+        threadId: string;
+        limit: number;
+    },
 ) {
-    const { settings } = await readProjectWorkspace(scope.db, projectId);
+    scope.assertCurrent();
+    if (selection && !selection.terms.length) return [];
+    const state =
+        selection?.state ?? (await readProjectWorkspace(scope.db, projectId));
+    const { settings } = state;
     const excluded = new Set(settings.excluded_chat_ids);
-    const threads = (await scope.db.threads.toArray()).filter(
-        (row) =>
-            !row.deleted && row.summary_message_id && !excluded.has(row.id),
+    const owned = await scope.db.threads
+        .where('project_id')
+        .equals(projectId)
+        .toArray();
+    const legacyIds = normalizeProjectData(state.project.data)
+        .filter((entry) => entry.kind === 'chat')
+        .map((entry) => entry.id);
+    const legacy = (await scope.db.threads.bulkGet(legacyIds)).filter(
+        (row): row is NonNullable<typeof row> =>
+            Boolean(row && !row.project_id),
     );
-    const summaries = [];
+    const threads = [...owned, ...legacy]
+        .filter(
+            (row) =>
+                !row.deleted &&
+                row.summary_message_id &&
+                !excluded.has(row.id) &&
+                row.id !== selection?.threadId,
+        );
+    const candidates = [];
     for (const thread of threads) {
+        scope.assertCurrent();
         if (
             (await resolveChatProject(scope.db, thread.id).catch(
                 () => null,
@@ -30,6 +57,25 @@ export async function projectContinuity(
         );
         if (!row || row.deleted || !data || excluded.has(data.source_thread_id))
             continue;
+        // Discover relevance from small summaries before validating their often
+        // large source history. Only selected candidates pay that cost.
+        const searchable = (thread.title + ' ' + data.summary_markdown).toLowerCase();
+        const score = selection?.terms.filter(term => searchable.includes(term)).length ?? 0;
+        if (selection && !score) continue;
+        candidates.push({ thread, row, data, score });
+    }
+    if (selection) candidates.sort((a, b) => b.score - a.score
+        || b.thread.updated_at - a.thread.updated_at || a.thread.id.localeCompare(b.thread.id));
+    const summaries = [];
+    // Result count alone does not bound invalid candidates or inherited evidence.
+    const attemptLimit = selection ? Math.min(24, Math.max(1, selection.limit) * 4) : 100;
+    let attempts = 0;
+    let evidenceBudget = selection ? 1000 : 10000;
+    for (const { thread, row, data } of candidates) {
+        scope.assertCurrent();
+        if (selection && summaries.length >= selection.limit) break;
+        if (attempts++ >= attemptLimit || evidenceBudget <= 0) break;
+        if (await resolveChatProject(scope.db, thread.id).catch(() => null) !== projectId) continue;
         let valid =
             row.thread_id === thread.id &&
             row.role === 'system' &&
@@ -37,6 +83,8 @@ export async function projectContinuity(
         const visited = new Set<string>();
         let current = data;
         for (;;) {
+            scope.assertCurrent();
+            if (evidenceBudget-- <= 0) { valid = false; break; }
             if (
                 excluded.has(current.source_thread_id) ||
                 (await resolveChatProject(
@@ -48,6 +96,7 @@ export async function projectContinuity(
                 break;
             }
             for (const segment of current.history_scope.segments) {
+                if (evidenceBudget-- <= 0) { valid = false; break; }
                 if (
                     excluded.has(segment.thread_id) ||
                     (await resolveChatProject(
@@ -59,6 +108,8 @@ export async function projectContinuity(
                     break;
                 }
                 for (const evidence of segment.messages) {
+                    scope.assertCurrent();
+                    if (evidenceBudget-- <= 0) { valid = false; break; }
                     const message = await scope.db.messages.get(
                         evidence.message_id,
                     );
@@ -83,6 +134,7 @@ export async function projectContinuity(
                 break;
             }
             visited.add(inheritedId);
+            if (evidenceBudget-- <= 0) { valid = false; break; }
             const inherited = await scope.db.messages.get(inheritedId);
             const metadata = readCompactionData(
                 (inherited?.data as Record<string, unknown> | undefined)
@@ -106,5 +158,5 @@ export async function projectContinuity(
         if (valid) summaries.push({ thread, row, data });
     }
     scope.assertCurrent();
-    return summaries.sort((a, b) => b.data.generated_at - a.data.generated_at);
+    return selection ? summaries : summaries.sort((a, b) => b.data.generated_at - a.data.generated_at);
 }

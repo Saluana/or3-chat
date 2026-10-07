@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch, toRaw } from 'vue';
+import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
+import {
+    computed,
+    onBeforeUnmount,
+    onActivated,
+    onDeactivated,
+    nextTick,
+    ref,
+    watch,
+    toRaw,
+} from 'vue';
 import { liveQuery } from 'dexie';
 import { Or3Scroll } from 'or3-scroll';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { createThreadInDb } from '~/db/threads';
-import { prepareDocumentCreate } from '~/db/documents';
 import { getWriteTxTableNames } from '~/db/util';
 import {
     readProjectWorkspace,
     saveProjectSettings,
-    saveProjectMemory,
     deleteProjectRecord,
     saveProjectSource,
+    saveProjectNote,
+    PROJECT_INTAKE_TIMEOUT_SECONDS,
     moveChatToProject,
     projectSettingsId,
 } from '~/db/project-workspace';
@@ -43,6 +53,7 @@ import type { ProjectRecord } from '~/db/project-workspace';
 import type { Project, Thread, Post } from '~/db/schema';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useOr3Config } from '~/composables/useOr3Config';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
@@ -56,6 +67,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'new-project'): void;
+    (e: 'add-document-to-project-root', projectId: string): void;
     (
         e:
             | 'rename-thread'
@@ -73,15 +85,20 @@ const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
 const newProjectIcon = useIcon('sidebar.new_folder');
 const newChatIcon = useIcon('sidebar.new_chat');
+const newDocumentIcon = useIcon('sidebar.new_note');
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const knowledgeIcon = useIcon('sidebar.note');
 const settingsIcon = useIcon('ui.settings');
 const editIcon = useIcon('ui.edit');
 const chevronIcon = useIcon('ui.chevron.right');
 const plusIcon = useIcon('ui.plus');
 const trashIcon = useIcon('ui.trash');
+const moreIcon = useIcon('ui.more');
 const sourceInput = ref<'' | 'note' | 'document' | 'file'>('');
 const sourceMenuOpen = ref(false);
 const briefEditing = ref(false);
+const inlineBriefEditor = ref<HTMLTextAreaElement | null>(null);
 const creatingMemory = ref(false);
 const editingMemory = ref<{
     record: NonNullable<
@@ -107,7 +124,6 @@ const settings = ref<ProjectSettings>(defaultProjectSettings());
 const dirty = ref(false);
 const editClock = ref<number | null>(null);
 const memory = ref('');
-const memoryKind = ref<'fact' | 'decision'>('fact');
 const documentId = ref('');
 const fileId = ref('');
 const files = ref<Post[]>([]);
@@ -124,7 +140,6 @@ const memoryEvidence = ref<{
     source_message_id: string;
     summary_id: string;
 } | null>(null);
-const reviewedDecisions = ref(false);
 const noteTitle = ref('');
 const noteText = ref('');
 const briefEvidence = ref<string | null>(null);
@@ -169,7 +184,7 @@ function toolLabel(tool: RegisteredTool) {
 }
 function toolReady(tool: RegisteredTool) {
     return (
-        tool.enabled.value && !toolCannotScope(tool.definition.function.name)
+        tool.runtime !== 'server' && tool.enabled.value && !toolCannotScope(tool.definition.function.name)
     );
 }
 const matchingTools = computed(() => {
@@ -248,6 +263,9 @@ let controller = new AbortController();
 let scope = captureProjectOperation(controller.signal);
 let subscription: { unsubscribe(): void } | undefined;
 let disposed = false;
+let active = true;
+let readRevision = 0;
+let intakeRefresh: ReturnType<typeof setTimeout> | undefined;
 const filtered = computed(() =>
     projects.value
         .filter((p) =>
@@ -284,6 +302,8 @@ function connect() {
     controller = new AbortController();
     scope = captureProjectOperation(controller.signal);
     state.value = null;
+    busy.value = false;
+    error.value = '';
     dirty.value = false;
     toolQuery.value = '';
     manageChatsOpen.value = false;
@@ -302,12 +322,22 @@ function connect() {
     editingMemory.value = null;
     suggestionsReviewed.value = false;
     releasePreview();
+    subscribePage();
+}
+function subscribePage() {
+    clearTimeout(intakeRefresh);
+    subscription?.unsubscribe();
+    const revision = ++readRevision;
+    if (!active || disposed) return;
     const captured = scope;
+    const projectId = id.value;
+    const section = tab.value;
+    const picker = sourceInput.value;
+    const manage = manageChatsOpen.value;
     subscription = liveQuery(async () => {
-        const rows = (await captured.db.projects.toArray()).filter(
-            (p) => !p.deleted,
-        );
-        // The list needs pin metadata, not every project's sources and memory.
+        const rows = projectId
+            ? []
+            : (await captured.db.projects.toArray()).filter((p) => !p.deleted);
         const settingsRows = await captured.db.posts.bulkGet(
             rows.map((project) => projectSettingsId(project.id)),
         );
@@ -323,52 +353,82 @@ function connect() {
                         : false,
             };
         });
-        if (!id.value)
-            return {
-                list,
-                current: null,
-                threads: [],
-                docs: [],
-                all: [],
-                files: [],
-            };
-        const current = await readProjectWorkspace(captured.db, id.value);
-        const all = (await captured.db.threads.toArray()).filter(
-            (t) => !t.deleted,
-        );
-        const threads = current
-            ? all.filter(
-                  (t) =>
-                      !t.deleted &&
-                      (t.project_id === current.project.id ||
-                          (!t.project_id &&
-                              Array.isArray(current.project.data) &&
-                              current.project.data.some((e: any) =>
-                                  typeof e === 'string'
-                                      ? e === t.id
-                                      : e?.id === t.id &&
-                                        (!e.kind || e.kind === 'chat'),
-                              ))),
-              )
-            : [];
+        const current = projectId
+            ? await readProjectWorkspace(captured.db, projectId)
+            : null;
+        const all =
+            projectId && section === 'Settings' && manage
+                ? (await captured.db.threads.toArray()).filter(
+                      (t) => !t.deleted,
+                  )
+                : [];
+        let threads: Thread[] = [];
+        if (current && section === 'Settings') {
+            const owned = (
+                await captured.db.threads
+                    .where('project_id')
+                    .equals(projectId)
+                    .toArray()
+            ).filter((t) => !t.deleted);
+            const { preservedProjectEntries, projectEntryIdentity } =
+                await import('~/utils/projects/normalizeProjectData');
+            const legacyIds = preservedProjectEntries(current.project.data)
+                .map(projectEntryIdentity)
+                .filter((key): key is string =>
+                    Boolean(key?.startsWith('chat:')),
+                )
+                .map((key) => key.slice(5));
+            const legacy = (
+                await captured.db.threads.bulkGet(legacyIds)
+            ).filter((t): t is Thread =>
+                Boolean(t && !t.deleted && !t.project_id),
+            );
+            threads = [...owned, ...legacy];
+        }
         const { isVisibleWorkspaceItem } =
             await import('~~/shared/posts/workspace-item');
-        const docs = (
-            await captured.db.posts.where('postType').equals('doc').toArray()
-        ).filter(isVisibleWorkspaceItem);
-        const files = (
-            await captured.db.posts
-                .where('postType')
-                .equals('or3:file')
-                .toArray()
-        ).filter(isVisibleWorkspaceItem);
+        const docs =
+            projectId && section === 'Knowledge' && picker === 'document'
+                ? (
+                      await captured.db.posts
+                          .where('postType')
+                          .equals('doc')
+                          .toArray()
+                  ).filter(isVisibleWorkspaceItem)
+                : [];
+        const files =
+            projectId && section === 'Knowledge' && picker === 'file'
+                ? (
+                      await captured.db.posts
+                          .where('postType')
+                          .equals('or3:file')
+                          .toArray()
+                  ).filter(isVisibleWorkspaceItem)
+                : [];
+        captured.assertCurrent();
         return { list, current, threads, docs, all, files };
     }).subscribe({
         next(value) {
-            if (disposed || captured !== scope) return;
+            if (
+                disposed ||
+                !active ||
+                captured !== scope ||
+                revision !== readRevision
+            )
+                return;
+            clearTimeout(intakeRefresh);
             allChats.value = value.all;
             projects.value = value.list;
             state.value = value.current;
+            const processing = value.current?.sources.flatMap(source => source.value.revisions)
+                .filter(revision => revision.status === 'processing') ?? [];
+            if (processing.length) {
+                const deadline = Math.min(...processing.map(revision =>
+                    (revision.processing_started_at ?? revision.created_at) + PROJECT_INTAKE_TIMEOUT_SECONDS));
+                intakeRefresh = setTimeout(() => {
+                    if (active && !disposed && captured === scope && revision === readRevision) subscribePage();
+                }, Math.max(1, deadline * 1000 - Date.now()));
+            }
             chats.value = value.threads.sort(
                 (a, b) =>
                     (b.last_message_at ?? b.updated_at) -
@@ -382,6 +442,8 @@ function connect() {
             }
         },
         error(cause) {
+            if (!active || captured !== scope || revision !== readRevision)
+                return;
             error.value =
                 cause instanceof Error
                     ? cause.message
@@ -389,6 +451,23 @@ function connect() {
         },
     });
 }
+watch([tab, sourceInput, manageChatsOpen], subscribePage);
+onDeactivated(() => {
+    clearTimeout(intakeRefresh);
+    active = false;
+    readRevision++;
+    subscription?.unsubscribe();
+    controller.abort();
+    releasePreview();
+});
+onActivated(() => {
+    if (active) return;
+    active = true;
+    controller = new AbortController();
+    scope = captureProjectOperation(controller.signal);
+    busy.value = false;
+    subscribePage();
+});
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
     id.value = '';
     connect();
@@ -399,6 +478,7 @@ watch(id, () => {
 });
 connect();
 onBeforeUnmount(() => {
+    clearTimeout(intakeRefresh);
     disposed = true;
     subscription?.unsubscribe();
     stopWorkspace();
@@ -407,17 +487,19 @@ onBeforeUnmount(() => {
 });
 async function run(action: () => Promise<unknown>) {
     if (busy.value) return;
+    const captured = scope;
     busy.value = true;
     error.value = '';
     try {
         await action();
     } catch (cause) {
+        if (captured !== scope || captured.signal.aborted) return;
         error.value =
             cause instanceof Error
                 ? cause.message
                 : 'Project operation failed.';
     } finally {
-        busy.value = false;
+        if (captured === scope) busy.value = false;
     }
 }
 async function openProject(projectId: string) {
@@ -454,10 +536,20 @@ function cancelBriefEdit() {
         JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
     if (!dirty.value) editClock.value = state.value.settingsRow?.clock ?? null;
 }
+async function editInlineBrief() {
+    if (!state.value || busy.value) return;
+    settings.value.brief = state.value.settings.brief || state.value.project.description || '';
+    briefEvidence.value = null;
+    dirty.value = JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
+    briefEditing.value = true;
+    await nextTick();
+    inlineBriefEditor.value?.focus();
+}
 async function pin(projectId: string) {
-    const current = await readProjectWorkspace(scope.db, projectId);
+    const captured = scope;
+    const current = await readProjectWorkspace(captured.db, projectId);
     await saveProjectSettings(
-        scope,
+        captured,
         projectId,
         { ...current.settings, pinned: !current.settings.pinned },
         current.settingsRow?.clock ?? null,
@@ -497,10 +589,14 @@ async function openActivity(item: UnifiedSidebarItem) {
     );
     if (result && !result.ok) throw new Error(result.error.message);
 }
-async function verifySuggestion(summaryId: string) {
+async function verifySuggestion(
+    captured: ReturnType<typeof captureProjectOperation>,
+    projectId: string,
+    summaryId: string,
+) {
     const { projectContinuity } = await import('~/utils/projects/continuity');
     if (
-        !(await projectContinuity(scope, id.value)).some(
+        !(await projectContinuity(captured, projectId)).some(
             (item) => item.row.id === summaryId,
         )
     )
@@ -508,81 +604,130 @@ async function verifySuggestion(summaryId: string) {
             'This suggestion is stale or excluded. Review a current handoff.',
         );
 }
+async function reviewSuggestions() {
+    const captured = scope;
+    const projectId = id.value;
+    const { projectContinuity } = await import('~/utils/projects/continuity');
+    const next = await projectContinuity(captured, projectId);
+    captured.assertCurrent();
+    if (captured !== scope || projectId !== id.value) return;
+    suggestions.value = next;
+    suggestionsReviewed.value = true;
+}
 async function reviewMemory(
     suggestion: (typeof suggestions.value)[number],
     landmark: (typeof suggestion.data.landmarks)[number],
 ) {
-    await verifySuggestion(suggestion.row.id);
+    const captured = scope;
+    const projectId = id.value;
+    await verifySuggestion(captured, projectId, suggestion.row.id);
+    captured.assertCurrent();
+    if (captured !== scope || projectId !== id.value) return;
     memory.value = landmark.summary;
-    memoryKind.value = landmark.kind === 'decision' ? 'decision' : 'fact';
     memoryEvidence.value = {
         summary_id: suggestion.row.id,
         source_thread_id: landmark.thread_id,
         source_message_id: landmark.message_id,
     };
-    reviewedDecisions.value = false;
     creatingMemory.value = true;
 }
 async function addNote() {
     const captured = scope;
     const projectId = id.value;
-    const prepared = await prepareDocumentCreate({
-        title: noteTitle.value.trim(),
-        content: {
-            type: 'doc',
-            content: noteText.value.split('\n').map((text) => ({
-                type: 'paragraph',
-                content: text ? [{ type: 'text', text }] : [],
-            })),
-        },
-    });
-    captured.assertCurrent('write');
-    await captured.db.transaction(
-        'rw',
-        getWriteTxTableNames(captured.db, 'posts'),
-        async () => {
-            captured.assertCurrent('write');
-            await captured.db.posts.add(prepared.row);
-            captured.assertCurrent('write');
-        },
-    );
-    await prepared.afterCommit();
-    captured.assertCurrent('write');
-    await addProjectDocument(captured, projectId, prepared.row.id);
+    const title = noteTitle.value;
+    const text = noteText.value;
+    await saveProjectNote(captured, projectId, { title, text });
+    if (captured !== scope || projectId !== id.value || sourceInput.value !== 'note'
+        || noteTitle.value !== title || noteText.value !== text) return;
     noteTitle.value = '';
     noteText.value = '';
     sourceInput.value = '';
 }
+async function addSelectedDocument() {
+    const captured = scope;
+    const projectId = id.value;
+    const selected = documentId.value;
+    await addProjectDocument(captured, projectId, selected);
+    if (captured === scope && projectId === id.value && sourceInput.value === 'document' && documentId.value === selected)
+        sourceInput.value = '';
+}
+async function addSelectedFile() {
+    const captured = scope;
+    const projectId = id.value;
+    const selected = fileId.value;
+    await addExistingProjectFile(captureIntakeScope(), projectId, selected);
+    if (captured === scope && projectId === id.value && sourceInput.value === 'file' && fileId.value === selected)
+        sourceInput.value = '';
+}
+
 async function reviewBrief(suggestion: (typeof suggestions.value)[number]) {
-    await verifySuggestion(suggestion.row.id);
+    const captured = scope;
+    const projectId = id.value;
+    await verifySuggestion(captured, projectId, suggestion.row.id);
+    captured.assertCurrent();
+    if (captured !== scope || projectId !== id.value) return;
     settings.value.brief = suggestion.data.summary_markdown.slice(0, 8000);
     briefEvidence.value = suggestion.row.id;
     dirty.value = true;
     briefEditing.value = true;
 }
 async function saveSettings() {
-    if (briefEvidence.value) await verifySuggestion(briefEvidence.value);
-    const saved = await saveProjectSettings(
-        scope,
-        id.value,
-        settings.value,
-        editClock.value,
-    );
+    const captured = scope;
+    const projectId = id.value;
+    const draft = ProjectSettingsSchema.parse(settings.value);
+    const clock = editClock.value;
+    const evidence = briefEvidence.value;
+    if (evidence) await verifySuggestion(captured, projectId, evidence);
+    captured.assertCurrent('write');
+    const saved = await saveProjectSettings(captured, projectId, draft, clock);
+    if (captured !== scope || projectId !== id.value) return;
     editClock.value = saved.clock;
-    dirty.value = false;
-    briefEvidence.value = null;
+    dirty.value = JSON.stringify(settings.value) !== JSON.stringify(draft);
+    if (briefEvidence.value === evidence) briefEvidence.value = null;
+}
+async function saveBrief() {
+    const captured = scope;
+    const projectId = id.value;
+    const brief = settings.value.brief;
+    const clock = editClock.value;
+    const evidence = briefEvidence.value;
+    if (evidence) await verifySuggestion(captured, projectId, evidence);
+    captured.assertCurrent('write');
+    const current = await readProjectWorkspace(captured.db, projectId);
+    if ((current.settingsRow?.clock ?? null) !== clock)
+        throw new Error(
+            'Project settings changed. Reload before saving your brief.',
+        );
+    const next = { ...current.settings, brief };
+    const saved = await saveProjectSettings(
+        captured,
+        projectId,
+        next,
+        current.settingsRow?.clock ?? null,
+    );
+    if (captured !== scope || projectId !== id.value) return;
+    editClock.value = saved.clock;
+    dirty.value = JSON.stringify(settings.value) !== JSON.stringify(next);
+    if (briefEvidence.value === evidence) briefEvidence.value = null;
+    if (settings.value.brief === brief) briefEditing.value = false;
 }
 async function uploadFiles(event: Event) {
     const files = Array.from((event.target as HTMLInputElement).files ?? []);
     (event.target as HTMLInputElement).value = '';
-    const captured = scope;
     const projectId = id.value;
     const replacement = replace.value;
     replace.value = undefined;
     await run(async () => {
+        const captured = captureIntakeScope();
         for (const file of files)
             await addProjectUpload(captured, projectId, file, replacement);
     });
+}
+function captureIntakeScope() {
+    scope.assertCurrent('write');
+    // An admitted extraction belongs to its captured workspace/project, not
+    // the sidebar view. Workspace and permission changes still fence writes.
+    return captureProjectOperation();
 }
 async function showRevision(
     source: ProjectRecord<ProjectSource>,
@@ -607,7 +752,11 @@ async function showRevision(
     if (revision.text_hash) {
         const blob = await getFileBlob(revision.text_hash, captured.db);
         captured.assertCurrent();
-        if (blob) previewText.value = await blob.text();
+        if (blob) {
+            const text = await blob.text();
+            captured.assertCurrent();
+            if (captured === scope) previewText.value = text;
+        }
     } else if (revision.original_hash) {
         const blob = await getFileBlob(revision.original_hash, captured.db);
         captured.assertCurrent();
@@ -621,6 +770,7 @@ async function download(hash: string) {
     captured.assertCurrent();
     if (!blob) throw new Error('Original unavailable offline.');
     const meta = await captured.db.file_meta.get(hash);
+    captured.assertCurrent();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -629,22 +779,15 @@ async function download(hash: string) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 async function addMemory() {
+    const captured = scope;
+    const projectId = id.value;
+    const text = memory.value;
     const evidence = memoryEvidence.value;
-    if (evidence) await verifySuggestion(evidence.summary_id);
-    if (
-        evidence &&
-        memoryKind.value === 'decision' &&
-        state.value?.memories.some(
-            (record) => record.value.kind === 'decision',
-        ) &&
-        !reviewedDecisions.value
-    )
-        throw new Error(
-            'Review this suggestion against saved decisions before saving.',
-        );
-    await saveProjectMemory(scope, id.value, {
-        text: memory.value,
-        kind: memoryKind.value,
+    if (evidence)
+        await verifySuggestion(captured, projectId, evidence.summary_id);
+    captured.assertCurrent('write');
+    await saveClassifiedProjectMemory(captured, projectId, {
+        text,
         ...(evidence
             ? {
                   source_thread_id: evidence.source_thread_id,
@@ -652,6 +795,13 @@ async function addMemory() {
               }
             : {}),
     });
+    if (
+        captured !== scope ||
+        projectId !== id.value ||
+        memory.value !== text ||
+        memoryEvidence.value !== evidence
+    )
+        return;
     memory.value = '';
     memoryEvidence.value = null;
     creatingMemory.value = false;
@@ -659,27 +809,39 @@ async function addMemory() {
 async function saveMemoryEdit() {
     const edit = editingMemory.value;
     if (!edit) return;
+    const captured = scope;
+    const projectId = id.value;
     const record = edit.record;
-    await saveProjectMemory(
-        scope,
-        id.value,
-        { ...record.value, text: edit.text },
+    const text = edit.text;
+    await saveClassifiedProjectMemory(
+        captured,
+        projectId,
+        { ...record.value, text },
         record.row.id,
         record.row.clock,
     );
-    editingMemory.value = null;
+    if (
+        captured === scope &&
+        projectId === id.value &&
+        editingMemory.value === edit &&
+        edit.text === text
+    )
+        editingMemory.value = null;
 }
 async function exclude(thread: Thread) {
-    const current = await readProjectWorkspace(scope.db, id.value);
+    const captured = scope;
+    const projectId = id.value;
+    const threadId = thread.id;
+    const current = await readProjectWorkspace(captured.db, projectId);
     const exclusions = current.settings.excluded_chat_ids;
     await saveProjectSettings(
-        scope,
-        id.value,
+        captured,
+        projectId,
         {
             ...current.settings,
-            excluded_chat_ids: exclusions.includes(thread.id)
-                ? exclusions.filter((value) => value !== thread.id)
-                : [...exclusions, thread.id],
+            excluded_chat_ids: exclusions.includes(threadId)
+                ? exclusions.filter((value) => value !== threadId)
+                : [...exclusions, threadId],
         },
         current.settingsRow?.clock ?? null,
     );
@@ -918,86 +1080,90 @@ function toolCannotScope(name: string) {
                             >
                                 <UIcon :name="projectIcon" class="size-5" />
                             </span>
-                            <div class="min-w-0">
+                            <div class="min-w-0 flex-1">
                                 <h1
                                     class="text-lg font-semibold leading-snug break-words"
                                 >
                                     {{ state.project.name }}
                                 </h1>
-                                <p class="project-muted text-xs mt-0.5">
-                                    Your project workspace
-                                </p>
+                                <div v-if="!briefEditing" class="flex items-center gap-1 mt-0.5">
+                                    <p
+                                        class="project-muted min-w-0 text-xs leading-relaxed whitespace-pre-wrap line-clamp-2"
+                                        aria-label="Project brief"
+                                    >
+                                        {{ state.settings.brief || state.project.description || 'Add a project brief' }}
+                                    </p>
+                                    <UButton
+                                        :icon="editIcon"
+                                        :aria-label="state.settings.brief || state.project.description ? 'Edit project brief' : 'Add project brief'"
+                                        square
+                                        size="xs"
+                                        color="neutral"
+                                        variant="ghost"
+                                        class="project-brief-edit shrink-0"
+                                        @click="editInlineBrief"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <UButton
-                            :icon="newChatIcon"
-                            label="New chat"
-                            color="neutral"
-                            class="project-start theme-btn"
-                            :disabled="busy"
-                            @click="run(newChat)"
-                        />
-                        <section
-                            class="project-brief"
-                            aria-label="Project brief"
+                        <form
+                            v-if="briefEditing"
+                            class="project-inline-brief space-y-2"
+                            aria-label="Edit project brief"
+                            @submit.prevent="run(saveBrief)"
                         >
-                            <div
-                                class="flex items-center justify-between gap-2"
-                            >
-                                <h2 class="text-xs font-semibold">
-                                    Project brief
-                                </h2>
+                            <label class="sr-only" for="project-inline-brief-editor">Project brief</label>
+                            <textarea
+                                id="project-inline-brief-editor"
+                                ref="inlineBriefEditor"
+                                v-model="settings.brief"
+                                class="project-input !mt-0"
+                                rows="3"
+                                maxlength="8000"
+                                placeholder="Describe the current state and next steps…"
+                                :disabled="busy"
+                                @input="dirty = true"
+                                @keydown.esc.stop.prevent="cancelBriefEdit"
+                            />
+                            <div class="flex justify-end items-center gap-2">
                                 <UButton
-                                    v-if="
-                                        state.settings.brief ||
-                                        state.project.description
-                                    "
-                                    :icon="editIcon"
-                                    aria-label="Edit project brief"
-                                    square
-                                    size="xs"
+                                    label="Cancel"
                                     color="neutral"
                                     variant="ghost"
-                                    @click="
-                                        tab = 'Memory';
-                                        briefEditing = true;
-                                    "
+                                    size="xs"
+                                    :disabled="busy"
+                                    @click="cancelBriefEdit"
+                                />
+                                <UButton
+                                    type="submit"
+                                    label="Save brief"
+                                    color="neutral"
+                                    size="xs"
+                                    :loading="busy"
+                                    :disabled="busy"
                                 />
                             </div>
-                            <p
-                                v-if="
-                                    state.settings.brief ||
-                                    state.project.description
-                                "
-                                class="project-muted mt-2 text-xs leading-relaxed whitespace-pre-wrap line-clamp-3"
-                            >
-                                {{
-                                    state.settings.brief ||
-                                    state.project.description
-                                }}
-                            </p>
-                            <template v-else>
-                                <p
-                                    class="project-muted mt-2 text-xs leading-relaxed"
-                                >
-                                    Keep the important state close at hand.
-                                </p>
-                                <button
-                                    class="project-brief-action mt-2"
-                                    aria-label="Add project brief"
-                                    @click="
-                                        tab = 'Memory';
-                                        briefEditing = true;
-                                    "
-                                >
-                                    Add a brief
-                                    <UIcon
-                                        :name="chevronIcon"
-                                        class="size-3.5"
-                                    />
-                                </button>
-                            </template>
-                        </section>
+                        </form>
+                        <div class="project-create-actions">
+                            <UButton
+                                :icon="newChatIcon"
+                                label="New chat"
+                                color="neutral"
+                                class="project-start theme-btn"
+                                :disabled="busy"
+                                @click="run(newChat)"
+                            />
+                            <UButton
+                                v-if="documentsEnabled"
+                                :icon="newDocumentIcon"
+                                label="New document"
+                                color="neutral"
+                                variant="ghost"
+                                class="project-new-document theme-btn"
+                                :disabled="busy"
+                                @click="emit('add-document-to-project-root', id)"
+                            />
+                        </div>
                         <nav aria-label="Project sections" class="space-y-1.5">
                             <SidebarPageLink
                                 label="Knowledge"
@@ -1042,6 +1208,7 @@ function toolCannotScope(name: string) {
                             type="file"
                             class="sr-only"
                             :multiple="!replace"
+                            :disabled="busy"
                             accept=".pdf,.docx,.txt,.md,.csv,image/png,image/jpeg,image/webp,image/gif"
                             aria-label="Upload project knowledge"
                             @change="uploadFiles"
@@ -1066,6 +1233,7 @@ function toolCannotScope(name: string) {
                                     <UButton
                                         icon="i-lucide-upload"
                                         label="Upload files"
+                                        :disabled="busy"
                                         color="neutral"
                                         variant="ghost"
                                         class="w-full justify-start"
@@ -1141,16 +1309,7 @@ function toolCannotScope(name: string) {
                         <form
                             v-if="sourceInput === 'document'"
                             class="project-editor space-y-3"
-                            @submit.prevent="
-                                run(async () => {
-                                    await addProjectDocument(
-                                        scope,
-                                        id,
-                                        documentId,
-                                    );
-                                    sourceInput = '';
-                                })
-                            "
+                            @submit.prevent="run(addSelectedDocument)"
                         >
                             <h2 class="font-semibold text-xs">
                                 Add an OR3 document
@@ -1186,16 +1345,7 @@ function toolCannotScope(name: string) {
                         <form
                             v-if="sourceInput === 'file'"
                             class="project-editor space-y-3"
-                            @submit.prevent="
-                                run(async () => {
-                                    await addExistingProjectFile(
-                                        scope,
-                                        id,
-                                        fileId,
-                                    );
-                                    sourceInput = '';
-                                })
-                            "
+                            @submit.prevent="run(addSelectedFile)"
                         >
                             <h2 class="font-semibold text-xs">
                                 Add a saved file
@@ -1306,7 +1456,11 @@ function toolCannotScope(name: string) {
                                 role="status"
                             >
                                 {{
-                                    source.value.current_revision_id
+                                    source.value.revisions.at(-1)?.id !==
+                                        source.value.current_revision_id &&
+                                    ['ready', 'partial'].includes(
+                                        currentRevision(source)!.status,
+                                    )
                                         ? 'Last update failed. The current version is still available.'
                                         : 'Processing failed.'
                                 }}
@@ -1315,6 +1469,7 @@ function toolCannotScope(name: string) {
                             <label
                                 class="flex items-center gap-2 text-xs project-muted"
                                 >Context<select
+                                    :disabled="busy"
                                     :value="source.value.mode"
                                     class="project-input flex-1!"
                                     @change="
@@ -1412,12 +1567,13 @@ function toolCannotScope(name: string) {
                                                 ].includes(revision.status)
                                             "
                                             label="Retry"
+                                            :disabled="busy"
                                             color="neutral"
                                             variant="ghost"
                                             @click="
                                                 run(() =>
                                                     processProjectSource(
-                                                        scope,
+                                                        captureIntakeScope(),
                                                         id,
                                                         source,
                                                         revision.id,
@@ -1435,6 +1591,7 @@ function toolCannotScope(name: string) {
                                     <UButton
                                         v-if="source.value.kind === 'file'"
                                         label="Replace"
+                                        :disabled="busy"
                                         color="neutral"
                                         variant="outline"
                                         @click="
@@ -1485,7 +1642,10 @@ function toolCannotScope(name: string) {
                             >
                         </div>
                     </div>
-                    <div v-if="tab === 'Memory'" class="space-y-5">
+                    <div
+                        v-if="tab === 'Memory'"
+                        class="project-memory-view space-y-5"
+                    >
                         <section
                             class="project-brief space-y-3"
                             aria-label="Project brief"
@@ -1535,8 +1695,7 @@ function toolCannotScope(name: string) {
                                         :disabled="busy"
                                         @click="
                                             run(async () => {
-                                                await saveSettings();
-                                                briefEditing = false;
+                                                await saveBrief();
                                             })
                                         "
                                     />
@@ -1569,7 +1728,10 @@ function toolCannotScope(name: string) {
                                 </template>
                             </template>
                         </section>
-                        <section class="space-y-3" aria-label="Saved memories">
+                        <section
+                            class="project-saved-memories"
+                            aria-label="Saved memories"
+                        >
                             <div
                                 class="flex items-center justify-between gap-2"
                             >
@@ -1598,60 +1760,15 @@ function toolCannotScope(name: string) {
                                 <h3 class="font-semibold text-xs">
                                     New memory
                                 </h3>
-                                <select
-                                    v-model="memoryKind"
-                                    class="project-input"
-                                    aria-label="Memory kind"
-                                >
-                                    <option value="fact">Fact</option>
-                                    <option value="decision">Decision</option>
-                                </select>
                                 <textarea
                                     v-model="memory"
                                     class="project-input"
                                     rows="4"
                                     maxlength="4000"
                                     aria-label="New project memory"
-                                    placeholder="Save a fact or decision…"
+                                    placeholder="What should OR3 remember?"
                                     required
                                 />
-                                <div
-                                    v-if="
-                                        memoryEvidence &&
-                                        memoryKind === 'decision' &&
-                                        state.memories.some(
-                                            (record) =>
-                                                record.value.kind ===
-                                                'decision',
-                                        )
-                                    "
-                                    class="space-y-2 text-xs"
-                                >
-                                    <p>
-                                        Compare this suggestion with your saved
-                                        decisions. Keep conflicting alternatives
-                                        separate until you decide.
-                                    </p>
-                                    <blockquote
-                                        v-for="decision in state.memories.filter(
-                                            (record) =>
-                                                record.value.kind ===
-                                                'decision',
-                                        )"
-                                        :key="decision.row.id"
-                                        class="border-l-2 pl-3"
-                                    >
-                                        {{ decision.value.text }}
-                                    </blockquote>
-                                    <label
-                                        ><input
-                                            v-model="reviewedDecisions"
-                                            type="checkbox"
-                                        />
-                                        I reviewed this against saved
-                                        decisions</label
-                                    >
-                                </div>
                                 <div class="flex justify-end gap-2">
                                     <UButton
                                         label="Cancel"
@@ -1666,17 +1783,7 @@ function toolCannotScope(name: string) {
                                     <UButton
                                         type="submit"
                                         label="Save memory"
-                                        :disabled="
-                                            busy ||
-                                            (!!memoryEvidence &&
-                                                memoryKind === 'decision' &&
-                                                state.memories.some(
-                                                    (record) =>
-                                                        record.value.kind ===
-                                                        'decision',
-                                                ) &&
-                                                !reviewedDecisions)
-                                        "
+                                        :disabled="busy || !memory.trim()"
                                     />
                                 </div>
                             </form>
@@ -1694,68 +1801,63 @@ function toolCannotScope(name: string) {
                                 <p
                                     class="project-muted text-xs mt-1 leading-relaxed"
                                 >
-                                    Save facts and decisions you want OR3 to
-                                    remember.
+                                    Save what you want OR3 to remember.
                                 </p>
                             </div>
                             <article
                                 v-for="record in state.memories"
                                 :key="record.row.id"
-                                class="project-memory space-y-2"
+                                class="project-saved-memory"
+                                :class="{
+                                    'is-editing':
+                                        editingMemory?.record.row.id ===
+                                        record.row.id,
+                                }"
                             >
-                                <div
-                                    class="flex items-center justify-between gap-2"
-                                >
-                                    <span
-                                        class="project-memory-kind"
-                                        :class="
-                                            record.value.kind === 'decision'
-                                                ? 'text-[var(--md-primary)]'
-                                                : 'text-[var(--md-success)]'
-                                        "
-                                        >{{ record.value.kind }}</span
-                                    >
-                                    <div class="flex items-center gap-1">
-                                        <UButton
-                                            v-if="
-                                                editingMemory?.record.row.id !==
-                                                record.row.id
-                                            "
-                                            :icon="editIcon"
-                                            aria-label="Edit memory"
-                                            title="Edit memory"
-                                            square
-                                            size="xs"
-                                            color="neutral"
-                                            variant="ghost"
-                                            @click="
+                                <UDropdownMenu
+                                    v-if="
+                                        editingMemory?.record.row.id !==
+                                        record.row.id
+                                    "
+                                    :content="{ align: 'end', sideOffset: 4 }"
+                                    :items="[
+                                        {
+                                            label: 'Edit memory',
+                                            icon: editIcon,
+                                            onSelect: () => {
                                                 editingMemory = {
                                                     record,
                                                     text: record.value.text,
-                                                }
-                                            "
-                                        />
-                                        <UButton
-                                            :icon="trashIcon"
-                                            aria-label="Delete memory"
-                                            title="Delete memory"
-                                            square
-                                            size="xs"
-                                            color="neutral"
-                                            variant="ghost"
-                                            :disabled="busy"
-                                            @click="
+                                                };
+                                            },
+                                        },
+                                        {
+                                            label: 'Delete memory',
+                                            icon: trashIcon,
+                                            color: 'error',
+                                            disabled: busy,
+                                            onSelect: () =>
                                                 run(() =>
                                                     deleteProjectRecord(
                                                         scope,
                                                         id,
                                                         record.row,
                                                     ),
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                </div>
+                                                ),
+                                        },
+                                    ]"
+                                >
+                                    <UButton
+                                        :icon="moreIcon"
+                                        aria-label="Memory actions"
+                                        title="Memory actions"
+                                        class="project-memory-actions"
+                                        square
+                                        size="xs"
+                                        color="neutral"
+                                        variant="ghost"
+                                    />
+                                </UDropdownMenu>
                                 <form
                                     v-if="
                                         editingMemory?.record.row.id ===
@@ -1766,9 +1868,7 @@ function toolCannotScope(name: string) {
                                 >
                                     <textarea
                                         v-model="editingMemory.text"
-                                        :aria-label="
-                                            'Edit saved ' + record.value.kind
-                                        "
+                                        aria-label="Edit saved memory"
                                         class="project-input"
                                         rows="4"
                                         maxlength="4000"
@@ -1788,15 +1888,13 @@ function toolCannotScope(name: string) {
                                         />
                                     </div>
                                 </form>
-                                <p
-                                    v-else
-                                    class="text-xs leading-relaxed whitespace-pre-wrap break-words"
-                                >
+                                <p v-else class="project-memory-text">
                                     {{ record.value.text }}
                                 </p>
                                 <UButton
                                     v-if="record.value.source_thread_id"
                                     label="Open evidence"
+                                    class="project-memory-evidence"
                                     size="xs"
                                     variant="ghost"
                                     color="neutral"
@@ -1822,17 +1920,7 @@ function toolCannotScope(name: string) {
                                 variant="ghost"
                                 class="w-full justify-start"
                                 :disabled="busy"
-                                @click="
-                                    run(async () => {
-                                        const { projectContinuity } =
-                                            await import('~/utils/projects/continuity');
-                                        suggestions = await projectContinuity(
-                                            scope,
-                                            id,
-                                        );
-                                        suggestionsReviewed = true;
-                                    })
-                                "
+                                @click="run(reviewSuggestions)"
                             />
                             <p
                                 v-if="
@@ -2227,7 +2315,9 @@ function toolCannotScope(name: string) {
                                             class="project-muted text-[11px] leading-relaxed mt-1"
                                         >
                                             {{
-                                                toolCannotScope(
+                                                tool.runtime === 'server'
+                                                    ? 'Server-owned tools cannot run in browser project chats.'
+                                                    : toolCannotScope(
                                                     tool.definition.function
                                                         .name,
                                                 )
@@ -2447,6 +2537,14 @@ function toolCannotScope(name: string) {
 .project-muted {
     color: var(--md-on-surface-variant);
 }
+.project-brief-edit {
+    color: var(--md-on-surface-variant);
+    background: transparent;
+}
+.project-brief-edit:hover {
+    color: var(--md-on-surface);
+    background: transparent;
+}
 .project-avatar {
     display: grid;
     place-items: center;
@@ -2463,6 +2561,27 @@ function toolCannotScope(name: string) {
     background: color-mix(in srgb, var(--project-accent) 80%, #000);
     color: #fff;
 }
+.project-create-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.project-create-actions > button {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding-inline: 10px !important;
+    white-space: nowrap;
+    justify-content: center;
+    min-height: 38px;
+}
+.project-new-document {
+    background: var(--md-surface-hover);
+    color: var(--md-on-surface);
+}
+.project-new-document:hover {
+    background: var(--md-surface-container-high);
+}
 .project-start:hover {
     background: color-mix(in srgb, var(--project-accent) 70%, #000);
 }
@@ -2471,6 +2590,42 @@ function toolCannotScope(name: string) {
     border: 1px solid var(--md-outline-variant);
     border-radius: var(--md-border-radius-medium, 12px);
     background: var(--md-surface-container-low);
+}
+.project-memory-view .project-brief {
+    border-color: transparent;
+}
+.project-saved-memories > .project-editor,
+.project-saved-memories > .project-empty {
+    margin-top: 12px;
+}
+.project-saved-memory {
+    position: relative;
+    padding: 16px 34px 16px 4px;
+}
+.project-saved-memory + .project-saved-memory {
+    border-top: 1px solid
+        color-mix(in srgb, var(--md-outline-variant) 45%, transparent);
+}
+.project-saved-memory.is-editing {
+    padding-right: 4px;
+}
+.project-memory-text {
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.project-memory-actions {
+    position: absolute;
+    top: 10px;
+    right: 0;
+    min-width: 28px;
+    min-height: 28px;
+    color: var(--md-on-surface-variant);
+}
+.project-memory-evidence {
+    margin-top: 8px;
+    font-size: 11px;
 }
 .project-brief-action {
     display: inline-flex;
@@ -2520,12 +2675,6 @@ function toolCannotScope(name: string) {
     border-radius: var(--md-border-radius-small, 8px);
     background: color-mix(in srgb, var(--md-success) 10%, transparent);
     color: var(--md-success);
-}
-.project-memory-kind {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 }
 .project-source-details :deep(button) {
     font-size: 11px;

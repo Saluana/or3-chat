@@ -197,6 +197,7 @@ import { kv } from '~/db';
 import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { liveQuery, type Subscription } from 'dexie';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
+import { provideChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -533,6 +534,7 @@ const tailDisplay = computed(() => streamState.value?.text || '');
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value?.threadId?.value);
+provideChatProjectOwner(() => props.threadId ?? currentThreadId.value);
 // Tail active means stream not finalized
 const streamActive = computed(() => !(streamState.value?.finalized ?? false));
 // Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
