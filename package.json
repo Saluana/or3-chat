@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.77",
+    "version": "0.1.78",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"
@@ -168,7 +168,7 @@
         "katex": "^0.16.47",
         "lru-cache": "^11.5.2",
         "nuxt": "4.5.2",
-        "or3-provider-basic-auth": "0.0.10",
+        "or3-provider-basic-auth": "0.0.11",
         "or3-provider-clerk": "0.0.8",
         "or3-provider-convex": "0.0.11",
         "or3-provider-fs": "0.0.9",

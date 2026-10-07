@@ -126,7 +126,7 @@ in `packages/create-or3-chat/first-party-versions.json` are already available
 on npm:
 
 ```bash
-npm view or3-provider-basic-auth@0.0.10 version
+npm view or3-provider-basic-auth@0.0.11 version
 npm view or3-provider-sqlite@0.0.11 version
 npm view or3-provider-fs@0.0.9 version
 ```

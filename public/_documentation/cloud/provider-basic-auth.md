@@ -91,6 +91,7 @@ Source contributors can exercise that complete journey with
 The harness uses disposable accounts, databases and storage and saves browser
 traces, screenshots and a signup receipt. Release evidence must use the exact
 published provider version; rebuilt local provider output is pre-release proof.
+Invite-link handoff requires `or3-provider-basic-auth@0.0.11` or later.
 
 ## Related
 
