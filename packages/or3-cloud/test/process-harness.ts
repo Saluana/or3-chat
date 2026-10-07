@@ -9,6 +9,7 @@ import { copyAssets } from '../src/deployment/assets';
 import { buildEnv, serializeEnv, withoutProvisioningCredentials } from '../src/deployment/env';
 import { stateFromEnv } from '../src/deployment/state-store';
 import type { ManagedState } from '../src/deployment/contracts';
+import { PACKAGE_VERSION } from '../src/package-info';
 
 export const CLI_ENTRY = join(import.meta.dir, '../src/cli.ts');
 /** Set to a built dist/cli.mjs to qualify the shipped bundle under Node instead of the TypeScript entry. */
@@ -236,7 +237,7 @@ export async function createSandbox(options: { version?: string; mode?: 'local' 
     running: true,
     healthy: true,
     runningImage: image,
-    digests: { default: OLD_DIGEST, [`${REPOSITORY}:0.1.75`]: NEW_DIGEST },
+    digests: { default: OLD_DIGEST, [`${REPOSITORY}:${PACKAGE_VERSION}`]: NEW_DIGEST },
   };
   const volumeLabels = {
     'com.docker.compose.project': env.OR3_COMPOSE_PROJECT,
