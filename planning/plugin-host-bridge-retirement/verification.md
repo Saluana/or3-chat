@@ -47,6 +47,7 @@ Artifacts are produced under `output/playwright/`. `baseline-summary.json`, `con
 
 ## Repairs caught by verification
 
+- PR compatibility CI exposed a bundled V1 test runtime missing its `onCleanup` method. The registration fixture now implements that method; all 31 compatibility files / 183 tests pass without weakening activation cleanup.
 - Background job access now checks user, workspace, job kind and current membership before reads or mutation; authorization regressions failed before this repair.
 - Sign-out removes both scoped secrets and leftover legacy vault bytes; the failing legacy-key regression passed after repair.
 - Stale activation disposal releases unconsumed file references; the browser ref-count check failed before the repair.
