@@ -72,6 +72,13 @@ vi.mock('#imports', () => ({
     useIcon: (name: string) => ref(name),
 }));
 
+// SSR auth is off in these tests, so the sign-in gate never needs a session.
+// Keep the module's other exports: workspace file access reads the cached session.
+vi.mock('~/composables/auth/useSessionContext', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~/composables/auth/useSessionContext')>()),
+    useSessionContext: () => ({ data: ref(null) }),
+}));
+
 vi.mock('~/composables/useThemeResolver', () => ({
     useThemeOverrides: () => ref({})
 }));

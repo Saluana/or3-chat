@@ -6,6 +6,8 @@ Cloud login verifies who you are; workspace membership and permissions decide wh
 
 Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account, then invite people through the workspace/admin invitation flow. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
 
+When SSR auth is on and guest access is off, the chat composer shows "Sign in to start chatting" to a signed-out visitor, and sending shows the same prompt instead of asking for an OpenRouter key. Nothing is sent. Static and local builds, and deployments with guest access on, keep the OpenRouter connect flow. The prompt points to Login (sidebar, or More on mobile) because auth providers do not yet expose a way for the app to open their sign-in UI directly.
+
 A user can belong to multiple workspaces. Each request resolves one active workspace and its membership role. Switching workspaces refreshes the session and switches the browser's Dexie database to `or3-db-${workspaceId}`. It does not merge or delete the old workspace data.
 
 The store honors `users.active_workspace_id`. Workspace switches are coordinated across tabs using a monotonic revision, so a late response cannot commit an older selection. If data looks empty after login or switching, check the resolved workspace before resetting local storage.
