@@ -1,7 +1,0 @@
-{
-  "key": "or3.external-agents.credentials.v1",
-  "value": "{\"version\":1,\"kdf\":\"PBKDF2-SHA-256\",\"iterations\":600000,\"salt\":\"CT0TQfL8rpFhrFKdyadz1w==\",\"verifier\":{\"iv\":\"DecCWpx9QTJvdtCx\",\"ciphertext\":\"TXTQIHohxGDOo95n/K1QhUbuZq6cm0EattvsxgE4BMRgNjQsrhQVWRTJhA==\"},\"entries\":{\"legacy-host-token\":{\"iv\":\"POF8JR9xIdz+XaVj\",\"ciphertext\":\"yDY3QouGBVJsAnuDCAkDIThs1XDMU63d20SZP7hjDKfJeKYJ\"}}}",
-  "pin": "638214",
-  "reference": "legacy-host-token",
-  "expected": "legacy-fixture-token"
-}

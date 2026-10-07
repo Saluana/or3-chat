@@ -1,5 +1,0 @@
-{
-  "workspaceId": "workspace-legacy",
-  "key": "external-agents.connections.v1",
-  "value": "{\"hosts\":[{\"id\":\"legacy-host\",\"name\":\"Legacy Host\",\"baseUrl\":\"https://legacy.example\",\"credentialRef\":\"legacy-host-token\",\"trustedAt\":\"2026-08-01T00:00:00.000Z\"}],\"activeHostId\":\"legacy-host\",\"sessionRefs\":[{\"hostId\":\"legacy-host\",\"remoteSessionId\":\"legacy-session\",\"status\":\"running\",\"activeTurnId\":\"legacy-turn\"}]}"
-}

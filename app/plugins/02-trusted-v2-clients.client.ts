@@ -5,8 +5,6 @@ import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useHooks } from '~/core/hooks/useHooks';
-import { getDb } from '~/db/client';
-import { migrateLegacyPluginData } from '~/composables/plugins/legacy-plugin-data';
 import { createTrustedRuntimeServices } from '~/composables/plugins/trusted-runtime-services';
 import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
 import { applyTrustedEditorExtensions } from '~/composables/plugins/trusted-editor';
@@ -157,8 +155,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             let removeStyles = () => {};
             try {
                 for (const feature of definition.manifest.features.required) trusted.context.features.require(feature);
-                const activationDb = getDb();
-                await migrateLegacyPluginData({ pluginId: descriptor.id, stateVersion: definition.manifest.stateCompatibility.version, db: activationDb, current: () => isCurrent() && getDb() === activationDb && !signal.aborted });
                 if (!isCurrent()) throw new Error('Plugin activation cancelled');
                 removeStyles = await attachStylesheet(loaded.module, descriptor, signal);
                 if (!isCurrent()) throw new Error('Plugin activation cancelled');

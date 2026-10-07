@@ -1,5 +1,7 @@
 # Implementation verification
 
+This is the historical cutover receipt. The separate prepared retirement is recorded in `migration-retirement.md`; once retired, its upgrade spec and fixtures are no longer part of the current test command.
+
 Implemented on `feat/plugin-host-bridge-retirement`. Both sibling package directories were edited directly; their reviewable source patches, original-file hashes and application instructions are in `package-patches/`.
 
 ## Results

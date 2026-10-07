@@ -18,8 +18,6 @@ function loadHostPlugin(hooks: ReturnType<typeof createTypedHookEngine>, dispose
     }).outputText;
     const modules: Record<string, unknown> = {
         '@or3/plugin-sdk': {},
-        '~/db/client': { getDb: () => null },
-        '~/composables/plugins/legacy-plugin-data': { migrateLegacyPluginData: async () => {} },
         '~/composables/plugins/trusted-runtime-services': { createTrustedRuntimeServices: () => ({}) },
         vue: Vue,
         '#imports': { useRuntimeConfig: () => ({ public: { ssrAuthEnabled: true, admin: { pluginRuntimeV2Enabled: true } } }) },

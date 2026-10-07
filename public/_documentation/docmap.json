@@ -902,7 +902,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, and reviewed grants."
+                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, reviewed grants, and cutover requirements."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
