@@ -1,6 +1,6 @@
 # Migration retirement preparation
 
-Prepared separately from the Cloud 0.1.77 cutover, on `feat/remove-retired-plugin-migration`. This change must remain unmerged until the cutover is published and known installations are confirmed upgraded. No such installation confirmation has been received yet.
+Prepared separately from the [published Cloud 0.1.77 cutover](https://github.com/Saluana/or3-chat/releases/tag/v0.1.77), on `feat/remove-retired-plugin-migration` in [draft PR #217](https://github.com/Saluana/or3-chat/pull/217). This change must remain unmerged until known installations are confirmed upgraded. No such installation confirmation has been received yet.
 
 The change deletes the data-only table, activation call, derived legacy-secret cleanup, gate exception, and migration-only tests/fixtures. Generic scoped storage, secrets, records, grants, activation fencing and state-version rollback checks stay intact. Public docs direct any installation with 0.1.1 data through Cloud 0.1.77 and External Agents 0.2.0 before using a host where migration is retired.
 

@@ -208,7 +208,7 @@ Work happens in `or3-chat`, `../or3-plugin-external-agents` and `../or3-plugin-w
       Components: all. Requirements: R1.AC4, R9.AC1.
       Done when: the verification commands below pass once with both plugins installed and once with both absent. Results are recorded in `verification.md` in this folder. Pre-existing failures, such as the repository-wide lint debt noted in the unified extraction receipts, are listed separately from failures this change introduced.
 
-- [ ] 4.4 Release in order.
+- [x] 4.4 Release in order.
       Components: C10. Requirements: R9.AC2.
       Done when:
       - The steps in `docs/releasing.md` are followed from a clean worktree.
