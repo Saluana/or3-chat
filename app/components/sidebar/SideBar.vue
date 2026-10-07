@@ -184,7 +184,7 @@ import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/
 import { ThreadHasDescendantsError } from '~/db/threads';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
-import { useRuntimeConfig } from '#imports';
+import { useRuntimeConfig, useToast } from '#imports';
 import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { getActiveWorkspaceId } from '~/db/client';
@@ -198,7 +198,7 @@ import {
     type Thread,
 } from '~/db'; // Dexie + barrel helpers
 import { nowSec } from '~/db/util';
-import { updateDocument } from '~/db/documents';
+import { DocumentConflictError, updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useIcon } from '~/composables/useIcon';
@@ -563,6 +563,7 @@ const emit = defineEmits<{
 }>();
 
 const hooks = useHooks();
+const toast = useToast();
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);
@@ -664,7 +665,20 @@ async function saveRename() {
     const now = nowSec();
     if (isDocumentPost(maybeDoc)) {
         // Update doc title via documents API (fires hooks for sidebar refresh)
-        await updateDocument(renameId.value, { title: renameTitle.value });
+        try {
+            await updateDocument(renameId.value, { title: renameTitle.value });
+        } catch (error) {
+            if (!(error instanceof DocumentConflictError)) throw error;
+            // The document changed while the rename was prepared; nothing was
+            // overwritten. Keep the modal and typed title so the user can retry.
+            toast.add({
+                color: 'warning',
+                title: 'Document: rename not saved',
+                description:
+                    'This document changed while you were renaming it. Nothing was overwritten; try again.',
+            });
+            return;
+        }
         // Refresh open document state if loaded in editor
         try {
             await loadDocument(renameId.value);

@@ -1,13 +1,20 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     evictWorkspaceDb,
     setActiveWorkspaceDb,
     type Or3DB,
 } from '~/db/client';
 import type { Post } from '../schema';
-import { listDocumentFileHashes, updateDocument } from '../documents';
+import { reportError } from '~/utils/errors';
+import {
+    DocumentConflictError,
+    getDocumentInDb,
+    listDocumentFileHashes,
+    updateDocument,
+    updateDocumentInDb,
+} from '../documents';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -40,6 +47,8 @@ describe('document storage integrity and reference reads', () => {
     beforeEach(async () => {
         hooks = createTypedHookEngine(createHookEngine());
         setHookEngine(hooks);
+        // tests/setup.ts replaces reportError with a spy; dbTry reports failures through it.
+        vi.mocked(reportError).mockClear();
         workspaceId = `doc-refs-${crypto.randomUUID()}`;
         db = setActiveWorkspaceDb(workspaceId);
         await db.open();
@@ -57,11 +66,22 @@ describe('document storage integrity and reference reads', () => {
         await Dexie.delete(db.name);
     });
 
-    // A sidebar rename calls updateDocument without an expected editor snapshot.
-    // Another writer can delete or edit the row while its async hooks prepare it.
-    // Exercise the real public helper, hook barrier, and Dexie write boundary.
-    it.each(['delete', 'edit'] as const)('does not overwrite a concurrent %s during document preparation', async (change) => {
+    // A sidebar rename calls updateDocument without an expected editor snapshot;
+    // the editor supplies one. Another writer can delete or edit the row while
+    // the async hooks prepare the update.
+    // Failure cases: the stale write overwrites or recreates the row; the
+    // rejection is untyped so callers cannot tell a conflict from a failure; a
+    // routine conflict is reported as a database failure; an uncontended update
+    // is rejected by a false-positive compare; a genuine write failure goes
+    // unreported. Exercise the real public helpers, hook barrier and Dexie.
+    it.each([
+        ['delete', false],
+        ['edit', false],
+        ['delete', true],
+        ['edit', true],
+    ] as const)('rejects a concurrent %s with a conflict and writes nothing (editor snapshot: %s)', async (change, withSnapshot) => {
         await db.posts.put(doc('racing-doc'));
+        const current = await getDocumentInDb(db, 'racing-doc');
         let resume!: () => void;
         let entered!: () => void;
         const reached = new Promise<void>((resolve) => { entered = resolve; });
@@ -70,7 +90,10 @@ describe('document storage integrity and reference reads', () => {
             entered();
             await gate;
         });
-        const pending = updateDocument('racing-doc', { title: 'Late rename' });
+        const patch = { title: 'Late rename' };
+        const pending = withSnapshot
+            ? updateDocumentInDb(db, 'racing-doc', patch, { title: current!.title, content: current!.content })
+            : updateDocument('racing-doc', patch);
         const outcome = pending.then(value => ({ value, error: undefined as unknown }), error => ({ value: undefined, error }));
         await reached;
         if (change === 'delete') await db.posts.delete('racing-doc');
@@ -78,8 +101,31 @@ describe('document storage integrity and reference reads', () => {
         const beforeResume = await db.posts.get('racing-doc');
         resume();
         const result = await outcome;
-        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error).toBeInstanceOf(DocumentConflictError);
         expect(await db.posts.get('racing-doc')).toEqual(beforeResume);
+        // A routine conflict is not a database failure and must not be reported as one.
+        expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it('persists an uncontended update that supplies no editor snapshot', async () => {
+        await db.posts.put(doc('plain-doc'));
+        const updated = await updateDocument('plain-doc', { title: 'Renamed' });
+        expect(updated?.title).toBe('Renamed');
+        const stored = await db.posts.get('plain-doc');
+        expect(stored).toMatchObject({ title: 'Renamed', content: doc('plain-doc').content });
+        expect(stored!.clock).toBeGreaterThan(1);
+        expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it('still reports a genuine write failure as a database error', async () => {
+        await db.posts.put(doc('failing-doc'));
+        vi.spyOn(db.posts, 'put').mockRejectedValueOnce(new Error('disk exploded'));
+        await expect(updateDocument('failing-doc', { title: 'Never saved' })).rejects.toThrow('disk exploded');
+        expect(reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: 'ERR_DB_WRITE_FAILED' }),
+            expect.anything()
+        );
+        expect((await db.posts.get('failing-doc'))?.title).toBe('failing-doc');
     });
 
     it('deduplicates active document references with zero post value reads', async () => {

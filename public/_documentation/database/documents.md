@@ -44,7 +44,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | `getDocument(id)`           | Loads a single document, applies output filters, returns parsed record.                    |
 | `listDocuments(limit?)`     | Fetches non-deleted docs, sorts by `updated_at` desc, slices to limit, applies filters.    |
 | `listDocumentFileHashes()`  | Unique file hashes referenced by active documents, from index keys only.                   |
-| `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record. |
+| `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record; rejects with `DocumentConflictError` if the row changed meanwhile. |
 | `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`.                                              |
 | `hardDeleteDocument(id)`    | Removes the row entirely.                                                                  |
 
@@ -69,7 +69,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
 4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.
 5. **Reference index** — Active document rows receive a sparse `[file_hashes, id]` key at the Dexie write boundary; soft deletion removes it and restore recomputes it. `listDocumentFileHashes` enumerates only those keys and deduplicates with `parseDocumentFileHashes`.
-6. **Concurrent writes** — Updates recheck the captured row inside the write transaction after asynchronous hooks. A concurrent edit or deletion rejects the stale write, including sidebar renames without an editor snapshot; it does not recreate a deleted document or overwrite newer content.
+6. **Concurrent writes** — Updates recheck the captured row inside the write transaction after asynchronous hooks. If another writer edited or deleted it meanwhile, `updateDocument`/`updateDocumentInDb` reject with `DocumentConflictError` and write nothing: newer content is never overwritten and a deleted document is never recreated. This includes callers without an editor snapshot, such as a sidebar rename, which catches the error, keeps its dialog open and asks the user to retry. A conflict is an expected outcome of concurrent writers, so it is not reported as a database failure.
 
 ---
 
@@ -78,6 +78,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 -   Use `listDocuments()` for sidebar listings; it already caps results and filters deleted rows.
 -   Use `listDocumentFileHashes()` for “used in docs” membership or other reference facts where document content must stay unloaded.
 -   Call `updateDocument` with partial patches—passing `content` as TipTap JSON automatically serializes to string.
+-   Catch `DocumentConflictError` (from `~/db/documents`) when the editor, sync or another plugin may write the same document; retry against the current row.
 -   Write hook extensions to auto-tag docs or enforce title casing.
 
 ## Live editor content and autosave
