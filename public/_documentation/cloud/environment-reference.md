@@ -74,6 +74,15 @@ Nuxt also supports runtime overrides such as `NUXT_OPENROUTER_BASE_URL`,
 OR3/provider variables for source configuration so the resolver, wizard, and
 doctor see the same values.
 
+Server builds render every route, including `/`, `/documentation`, and
+`/openrouter-callback`, on each request, so public runtime values such as
+`NUXT_PUBLIC_OPEN_ROUTER_BASE_URL` apply identically whichever URL a session
+starts on. Only static builds (`bun run generate:static`) prerender those routes
+and bake public values in at build time. Server builds precache only a
+client-only offline shell (`/200.html`). The service worker uses it when a
+navigation fails because the network is unavailable, so the installed app still
+opens offline on any route. It is not used while the server answers navigations.
+
 ## Base application settings
 
 These values are read by `config.or3.ts` and work in static and SSR builds.

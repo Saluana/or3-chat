@@ -152,6 +152,9 @@ const effectiveStorageEnabled = applicationPlan.features.storage.enabled;
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
+// Server builds never serve prerendered HTML online; this shell is precached
+// and used only when a navigation fails because the network is unavailable.
+const pwaOfflineShell = '/200.html';
 const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     ? '/openrouter-callback/index.html'
     : undefined;
@@ -298,7 +301,14 @@ export default defineNuxtConfig({
         },
         prerender: {
             crawlLinks: false,
-            routes: ['/', '/openrouter-callback', '/documentation'],
+            // Prerendered HTML embeds the build-time public runtimeConfig, so
+            // only static generation prerenders real routes. Server builds
+            // render them per request (honouring NUXT_PUBLIC_* overrides) and
+            // prerender just the client-only shell the service worker serves
+            // when the network is down.
+            routes: isStaticGenerateBuild
+                ? ['/', '/openrouter-callback', '/documentation']
+                : [pwaOfflineShell],
         },
         routeRules: {
             // Hashed Nuxt chunks - immutable forever
@@ -473,6 +483,13 @@ export default defineNuxtConfig({
                             maxAgeSeconds: 24 * 60 * 60, // 1 day
                         },
                         networkTimeoutSeconds: 3, // Fast timeout, then fallback to cache
+                        ...(isStaticGenerateBuild
+                            ? {}
+                            : {
+                                  precacheFallback: {
+                                      fallbackURL: pwaOfflineShell,
+                                  },
+                              }),
                     },
                 },
                 // Nuxt chunks
