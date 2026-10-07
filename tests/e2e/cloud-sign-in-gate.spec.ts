@@ -102,6 +102,79 @@ for (const [label, viewport] of [
             await info.attach(`invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
+        // Complete the invite journey through the installed provider's UI,
+        // registration endpoint and real SQLite membership provisioning.
+        // A cookie or a mocked registration response alone cannot prove this.
+        test('completes invite-only sign-up from an invite link', async ({ page, browser }, info) => {
+            const origin = new URL(info.project.use.baseURL!).origin;
+            const owner = await browser.newContext({ baseURL: origin });
+            const email = `invite-${label}-${crypto.randomUUID()}@example.test`;
+            let workspaceId: string;
+            let inviteUrl: string;
+            try {
+                const signedIn = await owner.request.post('/api/basic-auth/sign-in', {
+                    headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+                    data: credentials,
+                });
+                expect(signedIn.ok(), await signedIn.text()).toBe(true);
+                const sessionResponse = await owner.request.get('/api/auth/session');
+                expect(sessionResponse.ok()).toBe(true);
+                workspaceId = (await sessionResponse.json()).session.workspace.id;
+                const admin = await owner.request.post('/api/admin/auth/login', {
+                    headers: { origin, 'x-or3-admin-intent': 'admin' },
+                    data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+                });
+                expect(admin.ok(), await admin.text()).toBe(true);
+                const created = await owner.request.post('/api/admin/workspace/invites/create', {
+                    headers: { origin, 'x-or3-admin-intent': 'admin' },
+                    data: { workspaceId, email, role: 'viewer' },
+                });
+                expect(created.ok(), await created.text()).toBe(true);
+                inviteUrl = (await created.json()).invite.inviteUrl;
+            } finally {
+                await owner.close();
+            }
+
+            await page.goto(inviteUrl);
+            await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 5_000 }).catch(() => undefined);
+            if (label === 'mobile') {
+                await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+                await page.getByRole('button', { name: 'More options', exact: true }).click();
+            }
+            const form = page.getByRole('dialog', { name: 'Create Account', exact: true });
+            await expect(form).toBeVisible({ timeout: 30_000 });
+            await expect(form.getByRole('textbox', { name: 'Invite token (from your invite link)', exact: true })).not.toHaveValue('');
+            await form.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+            await form.getByLabel('Password', { exact: true }).fill('DisposableInvitee!123');
+            await form.getByLabel('Confirm password', { exact: true }).fill('DisposableInvitee!123');
+            const registration = page.waitForResponse(response =>
+                new URL(response.url()).pathname === '/api/basic-auth/register' && response.request().method() === 'POST');
+            await form.getByRole('button', { name: 'Create account', exact: true }).click();
+            const registered = await registration;
+            expect(registered.ok(), await registered.text()).toBe(true);
+            await expect(form).not.toBeVisible();
+
+            const verifySession = async () => {
+                const response = await page.request.get('/api/auth/session');
+                expect(response.ok()).toBe(true);
+                const payload = await response.json();
+                expect(payload.appAccessAllowed).toBe(true);
+                expect(payload.session).toMatchObject({
+                    authenticated: true, provider: 'basic-auth', role: 'viewer',
+                    user: { email }, workspace: { id: workspaceId },
+                });
+            };
+            await verifySession();
+            await page.reload();
+            await verifySession();
+            await expect(page.locator('.ProseMirror p.is-editor-empty')).not.toHaveAttribute('data-placeholder', SIGN_IN_PROMPT);
+            await info.attach(`completed-invite-${label}`, {
+                body: JSON.stringify({ email, workspaceId, registrationStatus: registered.status(), sessionAfterReload: true }),
+                contentType: 'application/json',
+            });
+            await info.attach(`completed-invite-${label}-screen`, { body: await page.screenshot(), contentType: 'image/png' });
+        });
+
         test('signed-in user without a key still gets the OpenRouter connect flow', async ({ page }, info) => {
             const origin = new URL(info.project.use.baseURL!).origin;
             const signIn = await page.request.post('/api/basic-auth/sign-in', {

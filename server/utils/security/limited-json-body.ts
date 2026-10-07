@@ -8,6 +8,30 @@ import {
 export const CONNECT_PUBLIC_BODY_LIMIT_BYTES = 8 * 1024;
 
 /**
+ * Storage presign requests are small control messages: a workspace id, a hash,
+ * a MIME type and a few numbers. The largest valid one is well under 2 KiB.
+ */
+export const STORAGE_CONTROL_BODY_LIMIT_BYTES = 16 * 1024;
+
+/**
+ * Model requests carry the whole conversation, including inline attachments
+ * (base64 grows a 20 MiB file to about 27 MiB), so they need a far larger
+ * ceiling than control messages. This bounds buffering only; it is not a
+ * context or token limit, which are enforced after parsing by context
+ * admission.
+ */
+export const MODEL_REQUEST_BODY_LIMIT_BYTES = 128 * 1024 * 1024;
+
+/** True for the error `readLimitedJsonBody` throws when a body exceeds its limit. */
+export function isPayloadTooLargeError(error: unknown): boolean {
+    return (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { statusCode?: unknown }).statusCode === 413
+    );
+}
+
+/**
  * Reads a small anonymous JSON request without allowing the framework's
  * general-purpose parser to buffer an unbounded body first.
  */
@@ -27,6 +51,16 @@ export async function readLimitedJsonBody<T>(
         }
     }
 
+    // Events created by h3's web adapter carry the body as a web stream while
+    // their Node request is only a shim that cannot be iterated, so a web
+    // stream takes precedence. A real Node request never has one.
+    const webEvent = (
+        event as unknown as {
+            web?: { request?: { body?: ReadableStream<Uint8Array> | null } };
+            request?: { body?: ReadableStream<Uint8Array> | null };
+        }
+    );
+    const webStream = webEvent.web?.request?.body ?? webEvent.request?.body;
     const nodeRequest = (
         event as unknown as {
             node?: {
@@ -35,6 +69,7 @@ export async function readLimitedJsonBody<T>(
         }
     ).node?.req;
     if (
+        !webStream?.getReader &&
         nodeRequest &&
         typeof nodeRequest[Symbol.asyncIterator] === 'function'
     ) {
@@ -52,13 +87,8 @@ export async function readLimitedJsonBody<T>(
     }
 
     // Web-runtime requests expose a bounded ReadableStream instead.
-    const webBody = (
-        event as unknown as {
-            request?: { body?: ReadableStream<Uint8Array> | null };
-        }
-    ).request?.body;
-    if (webBody?.getReader) {
-        const reader = webBody.getReader();
+    if (webStream?.getReader) {
+        const reader = webStream.getReader();
         const chunks: Uint8Array[] = [];
         let length = 0;
         try {

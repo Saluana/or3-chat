@@ -26,6 +26,11 @@ import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
  * - Logs: Never logs API keys.
  */
 import { getRequestIP, setResponseHeader } from 'h3';
+import {
+    isPayloadTooLargeError,
+    MODEL_REQUEST_BODY_LIMIT_BYTES,
+    readLimitedJsonBody,
+} from '../../utils/security/limited-json-body';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { requireCan } from '../../auth/can';
@@ -87,11 +92,22 @@ export default defineEventHandler(async (event) => {
     // 404/405 without it as "route unavailable" (static build or older
     // server); a relayed provider 404 is an ordinary provider error.
     setHeader(event, 'X-OR3-Stream-Route', '1');
-    // Read request body
+    // Read the request body through the bounded reader: a chat request can
+    // legitimately be large, but it must never be buffered without a ceiling,
+    // and nothing below runs for a body that is not a JSON object.
     let body: Record<string, unknown>;
     try {
-        body = await readBody(event);
-    } catch {
+        const parsed: unknown = await readLimitedJsonBody(
+            event,
+            MODEL_REQUEST_BODY_LIMIT_BYTES
+        );
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new TypeError('The request body must be a JSON object.');
+        }
+        body = parsed as Record<string, unknown>;
+    } catch (error) {
+        // An oversized body is a 413, not a malformed one.
+        if (isPayloadTooLargeError(error)) throw error;
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
@@ -465,162 +481,187 @@ export default defineEventHandler(async (event) => {
     // Req 2: Setup abort controller for client disconnect
     const ac = new AbortController();
 
-    // Listen for client disconnect
-    event.node.req.on('close', () => {
+    // The client's lifetime is the outgoing response. The incoming request is
+    // not it: its body was fully read above, so it has already closed and its
+    // 'close' event can never report a later disconnect (before provider
+    // headers or mid-stream). A response that finished normally has nothing
+    // left to cancel. `once` removes the listener when the response closes.
+    const res = event.node.res;
+    const onClientClose = () => {
+        if (res.writableFinished) return;
         logBgStream('api-stream-foreground-client-closed', {});
         ac.abort();
-    });
+    };
+    if (typeof res?.once === 'function') {
+        res.once('close', onClientClose);
+        // The client may already be gone: it can disconnect while the request
+        // is being authorised and rate limited, before this listener exists.
+        if (res.destroyed) onClientClose();
+    }
 
-    let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
     try {
-        policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
-        await admitServerProviderBody(providerBody, policy, ac.signal);
-    } catch (error) {
-        if (error instanceof ChatContextAdmissionError) {
-            setResponseStatus(event, 400);
-            return contextAdmissionResponse(error);
+        let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
+        try {
+            policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
+            await admitServerProviderBody(providerBody, policy, ac.signal);
+        } catch (error) {
+            // The client disconnected while the model catalog was being consulted.
+            if (ac.signal.aborted) return;
+            if (error instanceof ChatContextAdmissionError) {
+                setResponseStatus(event, 400);
+                return contextAdmissionResponse(error);
+            }
+            if (error instanceof OpenRouterCatalogUnavailableError) {
+                setResponseStatus(event, 502);
+                return publicErrorEnvelope(error);
+            }
+            throw error;
         }
-        if (error instanceof OpenRouterCatalogUnavailableError) {
+
+        // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
+        let upstream: Response;
+        let upstreamErrorText: string | undefined;
+        try {
+            const host = getHeader(event, 'host') || 'localhost';
+            const proto = getProxyRequestProtocol(
+                event,
+                normalizeProxyTrustConfig(config.security.proxy),
+            ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
+
+            const requestUpstream = (requestBody: Record<string, unknown>) => fetchWithResponseDeadline(openRouterUrl, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'text/event-stream',
+                    'HTTP-Referer': `${proto}://${host}`,
+                    'X-Title': 'or3.chat',
+                },
+                body: JSON.stringify(requestBody),
+            }, { signal: ac.signal });
+            ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
+                { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
+            logBgStream('api-stream-foreground-upstream-response', {
+                ok: upstream.ok,
+                status: upstream.status,
+                hasBody: Boolean(upstream.body),
+            });
+        } catch (e: unknown) {
+            // Handle abort or network error
+            if (e instanceof Error && e.name === 'AbortError') {
+                // Client disconnected
+                logBgStream('api-stream-foreground-upstream-aborted', {});
+                return;
+            }
+            if (e instanceof OpenRouterTimeoutError) {
+                warnBgStream('api-stream-foreground-upstream-timeout', {
+                    phase: e.phase,
+                    timeoutMs: e.timeoutMs,
+                });
+                setResponseStatus(event, 504);
+                return e.message;
+            }
+            // Other network error
+            warnBgStream('api-stream-foreground-upstream-network-failed', {
+                error: e instanceof Error ? e.message : String(e),
+            });
             setResponseStatus(event, 502);
-            return publicErrorEnvelope(error);
+            return publicErrorEnvelope({ status: 502, source: 'provider', retryable: true });
         }
-        throw error;
-    }
 
-    // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
-    let upstream: Response;
-    let upstreamErrorText: string | undefined;
-    try {
-        const host = getHeader(event, 'host') || 'localhost';
-        const proto = getProxyRequestProtocol(
-            event,
-            normalizeProxyTrustConfig(config.security.proxy),
-        ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
+        // Handle upstream non-OK responses
+        if (!upstream.ok || !upstream.body) {
+            let respText = upstreamErrorText ?? '<no-body>';
+            if (upstreamErrorText === undefined) try {
+                respText = await readResponseTextWithIdleDeadline(upstream, {
+                    signal: ac.signal,
+                });
+            } catch {
+                respText = '<error-reading-body>';
+            }
+            warnBgStream('api-stream-foreground-upstream-non-ok', {
+                status: upstream.status,
+                hasBody: Boolean(upstream.body),
+                responseMetadata: sensitiveValueMetadata(respText),
+            });
+            setResponseStatus(event, upstream.status);
+            const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
+            if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
+            return publicErrorEnvelope({ ...normalizeProviderResponseError(respText, upstream.status, {
+                credentialSource: selectedClientKey ? 'personal' : 'server' }), retryAfterMs });
+        }
 
-        const requestUpstream = (requestBody: Record<string, unknown>) => fetchWithResponseDeadline(openRouterUrl, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                Accept: 'text/event-stream',
-                'HTTP-Referer': `${proto}://${host}`,
-                'X-Title': 'or3.chat',
+        setHeader(event, 'X-OR3-Credential-Source', selectedClientKey ? 'personal' : 'server');
+        // Req 6: Set SSE headers
+        setHeader(event, 'Content-Type', 'text/event-stream');
+        setHeader(event, 'Cache-Control', 'no-cache, no-transform');
+        setHeader(event, 'Connection', 'keep-alive');
+
+        // Per-minute rate limit already recorded atomically in checkAndRecordLlmRequest
+        // Add rate limit headers for successful requests
+        if (minuteConfig && minuteResult) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(minuteConfig.maxRequests));
+            setResponseHeader(
+                event,
+                'X-RateLimit-Remaining',
+                String(minuteResult.remaining)
+            );
+        }
+
+        // Daily limit already recorded atomically in checkAndRecord
+        // Add daily limit headers for successful requests
+        if (dailyConfig && dailyLimitResult) {
+            setResponseHeader(
+                event,
+                'X-DailyLimit-Limit',
+                String(dailyConfig.maxRequests)
+            );
+            setResponseHeader(
+                event,
+                'X-DailyLimit-Remaining',
+                String(dailyLimitResult.remaining)
+            );
+        }
+
+        // Just pipe the upstream SSE directly to client - no need to parse and re-encode
+        // The client will parse it with the shared parser
+        logBgStream('api-stream-foreground-pipe-start', {
+            status: upstream.status,
+        });
+        const session = await getSession();
+        const workspaceId =
+            session?.authenticated && session.workspace?.id ? session.workspace.id : null;
+        const threadId = getOptionalBodyString(body, '_threadId');
+        const messageId = getOptionalBodyString(body, '_messageId');
+        const modelId = getOptionalBodyString(body, 'model');
+        const guardedUpstream = withIdleWatchdog(upstream.body, {
+            signal: ac.signal,
+        });
+        const clientStream = monitorForegroundStreamForClient({
+            stream: guardedUpstream,
+            workspaceId,
+            threadId,
+            messageId,
+            modelId,
+            onError(error) {
+                warnBgStream('api-stream-foreground-hook-monitor-failed', {
+                    workspaceId,
+                    error: error instanceof Error ? error.message : String(error),
+                    threadId,
+                    messageId,
+                });
             },
-            body: JSON.stringify(requestBody),
-        }, { signal: ac.signal });
-        ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
-            { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
-        logBgStream('api-stream-foreground-upstream-response', {
-            ok: upstream.ok,
-            status: upstream.status,
-            hasBody: Boolean(upstream.body),
         });
-    } catch (e: unknown) {
-        // Handle abort or network error
-        if (e instanceof Error && e.name === 'AbortError') {
-            // Client disconnected
-            logBgStream('api-stream-foreground-upstream-aborted', {});
-            return;
+
+        try {
+            return await sendStream(event, clientStream);
+        } catch (error) {
+            // The client went away mid-stream: the upstream request was aborted
+            // above and there is no one left to send an error response to.
+            if (ac.signal.aborted) return;
+            throw error;
         }
-        if (e instanceof OpenRouterTimeoutError) {
-            warnBgStream('api-stream-foreground-upstream-timeout', {
-                phase: e.phase,
-                timeoutMs: e.timeoutMs,
-            });
-            setResponseStatus(event, 504);
-            return e.message;
-        }
-        // Other network error
-        warnBgStream('api-stream-foreground-upstream-network-failed', {
-            error: e instanceof Error ? e.message : String(e),
-        });
-        setResponseStatus(event, 502);
-        return publicErrorEnvelope({ status: 502, source: 'provider', retryable: true });
+    } finally {
+        res?.off?.('close', onClientClose);
     }
-
-    // Handle upstream non-OK responses
-    if (!upstream.ok || !upstream.body) {
-        let respText = upstreamErrorText ?? '<no-body>';
-        if (upstreamErrorText === undefined) try {
-            respText = await readResponseTextWithIdleDeadline(upstream, {
-                signal: ac.signal,
-            });
-        } catch {
-            respText = '<error-reading-body>';
-        }
-        warnBgStream('api-stream-foreground-upstream-non-ok', {
-            status: upstream.status,
-            hasBody: Boolean(upstream.body),
-            responseMetadata: sensitiveValueMetadata(respText),
-        });
-        setResponseStatus(event, upstream.status);
-        const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
-        if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
-        return publicErrorEnvelope({ ...normalizeProviderResponseError(respText, upstream.status, {
-            credentialSource: selectedClientKey ? 'personal' : 'server' }), retryAfterMs });
-    }
-
-    setHeader(event, 'X-OR3-Credential-Source', selectedClientKey ? 'personal' : 'server');
-    // Req 6: Set SSE headers
-    setHeader(event, 'Content-Type', 'text/event-stream');
-    setHeader(event, 'Cache-Control', 'no-cache, no-transform');
-    setHeader(event, 'Connection', 'keep-alive');
-
-    // Per-minute rate limit already recorded atomically in checkAndRecordLlmRequest
-    // Add rate limit headers for successful requests
-    if (minuteConfig && minuteResult) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(minuteConfig.maxRequests));
-        setResponseHeader(
-            event,
-            'X-RateLimit-Remaining',
-            String(minuteResult.remaining)
-        );
-    }
-
-    // Daily limit already recorded atomically in checkAndRecord
-    // Add daily limit headers for successful requests
-    if (dailyConfig && dailyLimitResult) {
-        setResponseHeader(
-            event,
-            'X-DailyLimit-Limit',
-            String(dailyConfig.maxRequests)
-        );
-        setResponseHeader(
-            event,
-            'X-DailyLimit-Remaining',
-            String(dailyLimitResult.remaining)
-        );
-    }
-
-    // Just pipe the upstream SSE directly to client - no need to parse and re-encode
-    // The client will parse it with the shared parser
-    logBgStream('api-stream-foreground-pipe-start', {
-        status: upstream.status,
-    });
-    const session = await getSession();
-    const workspaceId =
-        session?.authenticated && session.workspace?.id ? session.workspace.id : null;
-    const threadId = getOptionalBodyString(body, '_threadId');
-    const messageId = getOptionalBodyString(body, '_messageId');
-    const modelId = getOptionalBodyString(body, 'model');
-    const guardedUpstream = withIdleWatchdog(upstream.body, {
-        signal: ac.signal,
-    });
-    const clientStream = monitorForegroundStreamForClient({
-        stream: guardedUpstream,
-        workspaceId,
-        threadId,
-        messageId,
-        modelId,
-        onError(error) {
-            warnBgStream('api-stream-foreground-hook-monitor-failed', {
-                workspaceId,
-                error: error instanceof Error ? error.message : String(error),
-                threadId,
-                messageId,
-            });
-        },
-    });
-
-    return sendStream(event, clientStream);
 });

@@ -42,6 +42,7 @@ import {
 } from '~/composables/plugins/portable-client-runtime'
 import {
     createDocumentInDb,
+    DocumentConflictError,
     getDocumentInDb,
     updateDocumentInDb,
     type CreateDocumentInput,
@@ -206,10 +207,14 @@ export function usePortableHostActions() {
                         'The document changed while this result was being prepared; nothing was written.'
                     )
                 }
+                // The recheck above is a separate read, so another edit can still
+                // land before the write. The row just verified is exactly the one the
+                // user approved; pass it so the guarded update re-verifies it as it
+                // reads the row and writes against that same snapshot.
                 const updated = await updateDocumentInDb(db, prepared.plan.documentId, {
                     // Content-only: an approved replace never renames the document.
                     content: markdownToTipTapDoc(prepared.plan.content) as CreateDocumentInput['content'],
-                })
+                }, { title: existing.title, content: existing.content })
                 if (!updated) {
                     return failure(
                         'stale-target',
@@ -245,6 +250,12 @@ export function usePortableHostActions() {
                 outcome: { status: 'created-document', documentId: document.id },
             }
         } catch (error) {
+            if (error instanceof DocumentConflictError) {
+                return failure(
+                    'stale-target',
+                    'The document changed while this result was being prepared; nothing was written.'
+                )
+            }
             return failure(
                 'write-failed',
                 error instanceof Error ? error.message : 'The result could not be written.'

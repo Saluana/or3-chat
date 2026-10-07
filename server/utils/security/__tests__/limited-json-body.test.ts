@@ -60,4 +60,38 @@ describe('bounded anonymous JSON body reader', () => {
             )
         ).resolves.toEqual({ deviceCode: 'safe' });
     });
+    // Events built by h3's web adapter carry the body as a web stream; their
+    // Node request is a shim whose iterator throws. Failure case: the reader
+    // iterates the shim and every such request fails.
+    it('reads the body stream of a web-adapter event instead of its Node shim', async () => {
+        const shim = {
+            async *[Symbol.asyncIterator]() {
+                throw new Error('the Node request shim must not be iterated');
+            },
+        };
+        const web = new Request('https://chat.test/', {
+            method: 'POST',
+            body: JSON.stringify({ deviceCode: 'safe' }),
+        });
+        await expect(
+            readLimitedJsonBody(
+                { node: { req: shim }, web: { request: web } } as never,
+                8192
+            )
+        ).resolves.toEqual({ deviceCode: 'safe' });
+    });
+
+    it('stops a web-adapter body as soon as the cap is crossed', async () => {
+        const web = new Request('https://chat.test/', {
+            method: 'POST',
+            body: Buffer.alloc(9_000, 'a'),
+        });
+        await expect(
+            readLimitedJsonBody(
+                { node: { req: {} }, web: { request: web } } as never,
+                8192
+            )
+        ).rejects.toMatchObject({ statusCode: 413 });
+        expect(readBodyMock).not.toHaveBeenCalled();
+    });
 });

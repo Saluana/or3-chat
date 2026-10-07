@@ -12,6 +12,7 @@ import {
     DocumentConflictError,
     getDocumentInDb,
     listDocumentFileHashes,
+    softDeleteDocumentInDb,
     updateDocument,
     updateDocumentInDb,
 } from '../documents';
@@ -104,6 +105,106 @@ describe('document storage integrity and reference reads', () => {
         expect(result.error).toBeInstanceOf(DocumentConflictError);
         expect(await db.posts.get('racing-doc')).toEqual(beforeResume);
         // A routine conflict is not a database failure and must not be reported as one.
+        expect(reportError).not.toHaveBeenCalled();
+    });
+
+    // `content: null` means "no content change": the stored content is kept.
+    // Failure cases: file references are recomputed from `null` and cleared while
+    // the kept content still shows the image, so a reference-based storage sweep
+    // would treat a live attachment as unreferenced; or replacing content stops
+    // recomputing references.
+    describe('file references follow the content that is persisted', () => {
+        const hash = `sha256:${'a'.repeat(64)}`;
+        const withImage = JSON.stringify({
+            type: 'doc',
+            content: [{ type: 'paragraph' }, { type: 'image', attrs: { hash } }],
+        });
+
+        it('keeps content and references together when an update passes null content', async () => {
+            await db.posts.put(doc('image-doc', { content: withImage, file_hashes: JSON.stringify([hash]) }));
+
+            const updated = await updateDocumentInDb(db, 'image-doc', { title: 'Renamed', content: null });
+
+            expect(updated?.title).toBe('Renamed');
+            const stored = await db.posts.get('image-doc');
+            expect(stored?.content).toBe(withImage);
+            expect(stored?.file_hashes).toBe(JSON.stringify([hash]));
+            expect(await listDocumentFileHashes()).toEqual([hash]);
+        });
+
+        it('still recomputes references when the content is replaced', async () => {
+            await db.posts.put(doc('image-doc', { content: withImage, file_hashes: JSON.stringify([hash]) }));
+
+            await updateDocumentInDb(db, 'image-doc', { content: { type: 'doc', content: [{ type: 'paragraph' }] } });
+
+            expect((await db.posts.get('image-doc'))?.file_hashes).toBeNull();
+            expect(await listDocumentFileHashes()).toEqual([]);
+        });
+    });
+
+    // The editor snapshot (and a plugin replace's approved state) is captured
+    // before the write; an edit that lands after it was captured but before the
+    // update reads the row must be refused, not overwritten.
+    it('rejects an update whose approved snapshot was edited after it was captured', async () => {
+        await db.posts.put(doc('approved-doc'));
+        const approved = await getDocumentInDb(db, 'approved-doc');
+        await db.posts.update('approved-doc', {
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Newer work' }] }] }),
+            clock: 2,
+        });
+        const beforeUpdate = await db.posts.get('approved-doc');
+
+        await expect(
+            updateDocumentInDb(db, 'approved-doc', { title: 'Late replace' }, { title: approved!.title, content: approved!.content })
+        ).rejects.toBeInstanceOf(DocumentConflictError);
+
+        expect(await db.posts.get('approved-doc')).toEqual(beforeUpdate);
+        expect(reportError).not.toHaveBeenCalled();
+    });
+
+    // Soft delete reads the row, awaits asynchronous before-delete hooks, then
+    // writes. Failure cases: the stale snapshot overwrites a newer edit; a row
+    // that was hard-deleted meanwhile is recreated as a tombstone; the race is
+    // reported as a database failure; an uncontended delete is refused.
+    it.each(['edit', 'hard delete'] as const)('refuses a soft delete that races a concurrent %s and writes nothing', async (change) => {
+        await db.posts.put(doc('deleting-doc'));
+        let resume!: () => void;
+        let entered!: () => void;
+        const reached = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { resume = resolve; });
+        hooks.addAction('db.documents.delete:action:soft:before', async () => {
+            entered();
+            await gate;
+        });
+        const outcome = softDeleteDocumentInDb(db, 'deleting-doc').then(
+            () => ({ error: undefined as unknown }),
+            (error) => ({ error })
+        );
+        await reached;
+        if (change === 'hard delete') await db.posts.delete('deleting-doc');
+        else await db.posts.update('deleting-doc', {
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Newer work' }] }] }),
+            clock: 2,
+        });
+        const beforeResume = await db.posts.get('deleting-doc');
+        resume();
+
+        const result = await outcome;
+
+        expect(result.error).toBeInstanceOf(DocumentConflictError);
+        // The edit survives untouched; a hard-deleted row stays deleted, not recreated as a tombstone.
+        expect(await db.posts.get('deleting-doc')).toEqual(beforeResume);
+        expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it('soft-deletes an uncontended document and keeps the rest of the row it read', async () => {
+        await db.posts.put(doc('plain-delete', { meta: '{"pinned":true}' }));
+
+        await softDeleteDocumentInDb(db, 'plain-delete');
+
+        const stored = await db.posts.get('plain-delete');
+        expect(stored).toMatchObject({ deleted: true, title: 'plain-delete', meta: '{"pinned":true}' });
+        expect(stored!.clock).toBeGreaterThan(1);
         expect(reportError).not.toHaveBeenCalled();
     });
 

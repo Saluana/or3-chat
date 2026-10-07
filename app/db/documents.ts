@@ -626,6 +626,10 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
         clock: existing.clock,
         file_hashes: existing.file_hashes,
     };
+    // `null` is "no content change": the stored content is kept, so the file
+    // references derived from content must be kept with it. Deriving them from
+    // `null` instead would strip the references of content that still has them.
+    const replacesContent = patch.content !== undefined && patch.content !== null;
     const updatedRow: DocumentRow = {
         id: existingRow.id,
         title: patch.title !== undefined
@@ -636,7 +640,7 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
                   existing: toDocumentEntity(existingRow),
               })
             : existingRow.title,
-        content: patch.content !== undefined && patch.content !== null
+        content: replacesContent
             ? JSON.stringify(patch.content)
             : existingRow.content,
         postType: 'doc',
@@ -644,10 +648,9 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
         updated_at: nowSec(),
         deleted: existingRow.deleted,
         clock: nextClock(existingRow.clock),
-        file_hashes:
-            patch.content !== undefined
-                ? serializeDocumentFileHashes(patch.content)
-                : existingRow.file_hashes,
+        file_hashes: replacesContent
+            ? serializeDocumentFileHashes(patch.content)
+            : existingRow.file_hashes,
     };
 
     const basePayload = buildDocumentUpdatePayload(
@@ -718,6 +721,7 @@ export async function softDeleteDocumentInDb(db: Or3DB, id: string): Promise<voi
     });
     if (!isDocumentPost(existing)) return;
     if (existing.deleted) return;
+    const snapshot = JSON.stringify(existing);
     const existingRow: DocumentRow = {
         id: existing.id,
         title: existing.title,
@@ -741,24 +745,35 @@ export async function softDeleteDocumentInDb(db: Or3DB, id: string): Promise<voi
         updated_at: nowSec(),
         clock: nextClock(existingRow.clock),
     };
-    // Convert to Post type for getDb().posts.put
+    // The tombstone is the row that was read plus the deletion fields, so
+    // nothing else the row carries (such as `meta`) is rewritten.
     const postRow: Post = {
-        id: updatedRow.id,
-        title: updatedRow.title,
-        content: updatedRow.content,
-        postType: updatedRow.postType,
-        created_at: updatedRow.created_at,
+        ...existing,
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
-        meta: '',
         clock: updatedRow.clock,
-        file_hashes: updatedRow.file_hashes,
     };
-    await dbTry(
-        () => putDocumentPostRow(db, postRow, true),
+    // The before-delete hooks are asynchronous, so another writer may have edited
+    // or hard-deleted the row since it was read. Writing the stale snapshot would
+    // overwrite the newer edit, or recreate a deleted row as a tombstone. As in
+    // `updateDocumentInDb`, the check runs inside the write transaction and a
+    // conflict is returned rather than thrown so dbTry does not report an
+    // expected race as a database failure.
+    const written = await dbTry(
+        () => putDocumentPostRow(
+            db,
+            postRow,
+            true,
+            async () => JSON.stringify(await db.posts.get(id)) === snapshot
+        ),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
+    if (!written) {
+        throw new DocumentConflictError(
+            'This document changed while it was being deleted. Nothing was deleted; reload it and try again.'
+        );
+    }
     await hooks.doAction('db.documents.delete:action:soft:after', payload);
 }
 

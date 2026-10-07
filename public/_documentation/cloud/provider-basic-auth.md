@@ -81,9 +81,17 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 - `GET /api/auth/session` returns an authenticated user after login.
 - `POST /api/basic-auth/register` creates an account when registration mode allows it.
 - Garbage, expired, consumed, revoked, and wrong-email invites are rejected without leaving an account or session behind.
+- An invite link must lead to completed registration on desktop and mobile, with the invited workspace and role still present after reload. The host's invite cookie alone does not prove this: Basic Auth registration requires the token in the request body.
 - Access token expiry triggers refresh and does not silently break background/sync routes.
 - Logout invalidates local session state.
 - Workspace-scoped routes still require `can()` authorization.
+
+Source contributors can exercise that complete journey with
+`bun run test:e2e:sign-in-gate -- --grep 'completes invite-only sign-up'`.
+The harness uses disposable accounts, databases and storage and saves browser
+traces, screenshots and a signup receipt. Release evidence must use the exact
+published provider version; rebuilt local provider output is pre-release proof.
+Invite-link handoff requires `or3-provider-basic-auth@0.0.11` or later.
 
 ## Related
 

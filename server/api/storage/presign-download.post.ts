@@ -10,10 +10,14 @@
  * - Enforces rate limits (`storage:download`).
  * - Computes expiration time.
  */
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import type { H3Event } from 'h3';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
+import {
+    readLimitedJsonBody,
+    STORAGE_CONTROL_BODY_LIMIT_BYTES,
+} from '../../utils/security/limited-json-body';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
@@ -134,7 +138,11 @@ export default defineEventHandler(async (event) => {
     // Prevent caching of sensitive storage presign URLs
     setNoCacheHeaders(event);
 
-    const body = BodySchema.safeParse(await readBody(event));
+    // A presign request is a small control message; bound it before parsing,
+    // ahead of authentication, so an oversized body is a 413 and never buffered.
+    const body = BodySchema.safeParse(
+        await readLimitedJsonBody(event, STORAGE_CONTROL_BODY_LIMIT_BYTES)
+    );
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
