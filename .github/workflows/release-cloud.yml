@@ -48,7 +48,7 @@ jobs:
           version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
           root_version="$(node -p 'require("./package.json").version')"
           lock_version="$(node -p 'require("./package-lock.json").version')"
-          cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/cli.ts)"
+          cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/package-info.ts)"
           source="$(git rev-parse HEAD)"
           test "$GITHUB_REF_NAME" = "v$version"
           test "$root_version" = "$version"

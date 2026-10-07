@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { consumeRateLimit, provenanceStatement, validDashboardUpdateJob, validReleaseCheck, validStartInput } from '../assets/dashboard-operator.mjs';
 
@@ -8,7 +8,7 @@ const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const DOCKERIGNORE = resolve(import.meta.dir, '../../../.dockerignore');
-const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
+const CLOUD_SOURCE_DIR = resolve(import.meta.dir, '../src');
 const DASHBOARD_OPERATOR = resolve(ASSET_ROOT, 'dashboard-operator.mjs');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
 const DEVELOPMENT_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/tests.yml');
@@ -22,6 +22,21 @@ const DASHBOARD_UPDATE_CARD = resolve(import.meta.dir, '../../../app/components/
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
+}
+
+/** All CLI modules in path order: contracts are about the shipped code, not its file layout. */
+function cloudCliSource(): string {
+  const read = (directory: string): string[] =>
+    readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .flatMap((entry) => (entry.isDirectory()
+        ? read(resolve(directory, entry.name))
+        : entry.name.endsWith('.ts') ? [readFileSync(resolve(directory, entry.name), 'utf8')] : []));
+  return read(CLOUD_SOURCE_DIR).join('\n');
+}
+
+function cloudModule(relativePath: string): string {
+  return readFileSync(resolve(CLOUD_SOURCE_DIR, relativePath), 'utf8');
 }
 
 test('Caddyfile sets the full security header set inside the site block', () => {
@@ -72,12 +87,12 @@ test('dashboard updates isolate Docker access to the operator sidecar', () => {
   expect(operator).toContain('cap_drop:');
   expect(operator).toContain('- ALL');
   expect(operator).toContain('host-root-equivalent');
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain('await chmod(ipc, 0o710);');
 });
 
 test('dashboard updates hand operator recreation to a separate helper container', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(cli).toContain("'run', '--detach', '--rm', '--network', 'none', '--read-only'");
   expect(cli).toContain("'--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL'");
@@ -286,7 +301,7 @@ test('compose.yaml deep health treats degraded as unhealthy', () => {
 });
 
 test('container-side CLI probes support current and legacy explicit Node paths', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain("const CONTAINER_NODE = '/nodejs/bin/node';");
   expect(cli).toContain("const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';");
   expect(cli).toContain("'sh', '-c', CONTAINER_NODE_SHELL, 'or3-node', script");
@@ -295,8 +310,8 @@ test('container-side CLI probes support current and legacy explicit Node paths',
 });
 
 test('public verification syncs canonical file metadata before downloading the storage probe', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
-  const verify = cli.slice(cli.indexOf('async function verifyPublicApplication'), cli.indexOf('function responseCookie'));
+  const verification = cloudModule('runtime/verification.ts');
+  const verify = verification.slice(verification.indexOf('async function verifyPublicApplication'));
   expect(verify).toContain("'/api/storage/commit'");
   expect(verify).toContain("'/api/sync/push'");
   expect(verify).toContain("tableName: 'file_meta'");
@@ -308,12 +323,13 @@ test('public verification syncs canonical file metadata before downloading the s
 });
 
 test('updates rebuild legacy-owned data from the checksummed backup without recursive chown', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain('const MANAGED_RUNTIME_UID = 65532;');
   expect(cli).toContain("'--network', 'none', '--read-only', '--user', '0:0'");
   expect(cli).toContain("'--cap-drop', 'ALL', '--cap-add', 'CHOWN'");
   expect(cli).not.toContain('chown -R');
-  const update = cli.slice(cli.indexOf('async function updateCommand'), cli.indexOf('async function resolveBackup'));
+  const updateModule = cloudModule('commands/update.ts');
+  const update = updateModule.slice(updateModule.indexOf('async function updateCommand'));
   expect(update).toContain('await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, {');
   expect(update).toContain('await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);');
   expect(update).toContain('await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, previousRootOwnership);');
@@ -321,7 +337,7 @@ test('updates rebuild legacy-owned data from the checksummed backup without recu
 });
 
 test('credential reset keeps plaintext passwords out of Docker arguments', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain("'-e', 'OR3_RESET_OWNER_PASSWORD'");
   expect(cli).toContain("'-e', 'OR3_RESET_ADMIN_PASSWORD'");
   expect(cli).not.toContain('`OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`');
@@ -329,7 +345,7 @@ test('credential reset keeps plaintext passwords out of Docker arguments', () =>
 });
 
 test('lifecycle commands are deadline-bound and power-loss durable', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(cli).toContain('timeout: COMMAND_TIMEOUT_MS');
   expect(cli).toContain('detached: process.platform');
@@ -342,7 +358,7 @@ test('lifecycle commands are deadline-bound and power-loss durable', () => {
 });
 
 test('updates and recovery use journaled snapshots rather than resuming a partial target', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');
   expect(cli).toContain('await copyAssets(loaded.directory, state.mode);');
   expect(cli).toContain('async function restorePreMutationSnapshot(');
@@ -355,7 +371,7 @@ test('updates and recovery use journaled snapshots rather than resuming a partia
 });
 
 test('restore and adoption stream private archives into the managed volume', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain('pipeline(createReadStream(source), child.stdin)');
   expect(cli).toContain("'find /data -mindepth 1 -delete'");
   expect(cli).toContain("'tar xzf - -C /data'");
@@ -367,7 +383,7 @@ test('restore and adoption stream private archives into the managed volume', () 
 });
 
 test('compose failures capture redacted state before cleanup', () => {
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(cli).toContain("['compose ps', ['ps', '-a']]");
   expect(cli).toContain("['compose logs', ['logs', '--tail=200']]");
   expect(cli).toContain("['inspect', '--format', '{{json .State}}', container]");
@@ -511,7 +527,7 @@ test('candidate evidence is source-qualified and cannot publish a release', () =
 test('authenticated cloud package binds updates to the qualified image digest', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
   const receipt = readFileSync(CANDIDATE_RECEIPT, 'utf8');
-  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const cli = cloudCliSource();
   expect(candidate).toContain('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
   expect(candidate).toContain('npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"');
   expect(candidate).toContain('npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"');

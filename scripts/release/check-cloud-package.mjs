@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 const root = process.cwd();
 const rootManifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const cloudManifest = JSON.parse(await readFile(resolve(root, 'packages/or3-cloud/package.json'), 'utf8'));
-const source = await readFile(resolve(root, 'packages/or3-cloud/src/cli.ts'), 'utf8');
+const source = await readFile(resolve(root, 'packages/or3-cloud/src/package-info.ts'), 'utf8');
 const versionMatch = source.match(/PACKAGE_VERSION\s*=\s*'([^']+)'/);
 const verifyRegistry = process.argv.includes('--registry');
 const qualifiedVersions = JSON.parse(await readFile(resolve(root, 'packages/create-or3-chat/first-party-versions.json'), 'utf8'));

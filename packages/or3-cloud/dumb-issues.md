@@ -11,9 +11,15 @@ The package tests and typecheck pass. That does not make this releasable. Severa
 > end-to-end scenario described in their original finding. Their original
 > descriptions are retained as the audit record; unmarked items remain open.
 
+> **Source locations (2026-10-06):** the audit originally cited line ranges in the
+> single-file `src/cli.ts` (3,454 lines at commit 96dab6eb). That file has since
+> been split into modules, so each `Location` now names the module and functions
+> that held the audited code. Functions renamed since the audit are listed under
+> their current names.
+
 ## 1. [DONE — BLOCKER] The base Compose file is invalid when dashboard updates are unsupported
 
-**Location:** `packages/or3-cloud/assets/compose.yaml:24-27,74-91`; `packages/or3-cloud/src/cli.ts:926-950`
+**Location:** `packages/or3-cloud/assets/compose.yaml:24-27,74-91`; `packages/or3-cloud/src/runtime/dashboard-operator.ts` (`dashboardOperatorEnv`)
 
 The profiled operator service is embedded in the base file, and Compose interpolates profiled services even when their profile is inactive. On macOS, remote Docker, or any Linux host where `dashboardOperatorEnv()` returns `undefined`, `.env` has no `OR3_OPERATOR_*` values. `docker compose config` then fails on `${OR3_DOCKER_SOCKET}:/var/run/docker.sock:rw` with `invalid spec: ::rw: empty section between colons`. The app IPC bind is also present unconditionally.
 
@@ -23,7 +29,7 @@ The profiled operator service is embedded in the base file, and Compose interpol
 
 ## 2. [DONE — BLOCKER] `adopt` is broken on every platform
 
-**Location:** `packages/or3-cloud/src/cli.ts:2828-2857`
+**Location:** `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 `adopt` copies the new base Compose asset but never calls `dashboardOperatorEnv()` or `prepareDashboardOperatorIpc()`, and it calls `buildEnv()` without `dashboardOperator`. It therefore always writes an environment with none of the variables required by the operator service embedded in the base file.
 
@@ -33,7 +39,7 @@ The profiled operator service is embedded in the base file, and Compose interpol
 
 ## 3. [DONE — CRITICAL] Exported shell variables can redirect lifecycle commands to arbitrary images, projects, and volumes
 
-**Location:** `packages/or3-cloud/src/cli.ts:370-378,543-557,653-657,1379-1393`
+**Location:** `packages/or3-cloud/src/runtime/command-runner.ts` (`run`); `packages/or3-cloud/src/runtime/compose.ts` (`composeArgs`, `assertSafeComposeBinding`); `packages/or3-cloud/src/deployment/identity.ts` (`assertDeploymentIdentity`)
 
 Every Docker invocation inherits `process.env`. Compose gives the caller's exported environment higher interpolation precedence than `--env-file`, so exported `OR3_IMAGE`, `OR3_VOLUME_NAME`, `OR3_COMPOSE_PROJECT`, `COMPOSE_PROJECT_NAME`, `COMPOSE_PROFILES`, and operator path variables override the validated deployment file. The code validates `.env`, then asks Compose to resolve a different configuration.
 
@@ -43,7 +49,7 @@ Every Docker invocation inherits `process.env`. Compose gives the caller's expor
 
 ## 4. [DONE — CRITICAL] A tampered backup is a host-code-execution package
 
-**Location:** `packages/or3-cloud/src/cli.ts:1660-1679,1709-1728,2296-2334`
+**Location:** `packages/or3-cloud/src/backup/manifests.ts` (`readManifest`, `resolveBackup`); `packages/or3-cloud/src/backup/restore.ts` (`restoreBackupData`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`)
 
 Restore trusts the backup's self-declared image, digest, full `.env`, and executable Compose/Caddy assets. The hashes are stored in the same unauthenticated manifest as the files they allegedly authenticate. An attacker can alter the assets and simply update the hashes while preserving the handful of deployment-identity values. A hostile extra Compose service can then mount the Docker socket or host filesystem; the current safety check only reasons about the `or3` port.
 
@@ -53,7 +59,7 @@ Restore trusts the backup's self-declared image, digest, full `.env`, and execut
 
 ## 5. [DONE — CRITICAL] The lifecycle journal is not a lock
 
-**Location:** `packages/or3-cloud/src/cli.ts:1189-1217,2060-2068,2193-2218,2302-2331,2348-2378,3160-3188,3374-3382`
+**Location:** `packages/or3-cloud/src/deployment/state-store.ts` (`markPending`, `updatePending`, `removeOperationRecord`, `clearPending`); `packages/or3-cloud/src/commands/backup.ts` (`backupCreateCommand`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`); `packages/or3-cloud/src/commands/rollback.ts` (`rollbackCommand`); `packages/or3-cloud/src/commands/credentials.ts` (`credentialsResetCommand`); `packages/or3-cloud/src/commands/remove.ts` (`removeCommand`)
 
 Every command separately reads `incompleteOperation`, sees no work, and later writes a pending record. Two CLI processes, or the dashboard operator and a CLI process, can both pass the check and overwrite each other's JSON. `remove --purge-data` does not journal itself at all.
 
@@ -63,7 +69,7 @@ Every command separately reads `incompleteOperation`, sees no work, and later wr
 
 ## 6. [DONE — HIGH] Update reopens the app after its rollback snapshot
 
-**Location:** `packages/or3-cloud/src/cli.ts:1597-1657,2220-2235`
+**Location:** `packages/or3-cloud/src/backup/create.ts` (`createBackup`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 `createBackup()` stops the app, archives the volume, and unconditionally restarts the app in `finally`. `updateCommand()` then does more work before stopping it again. Writes accepted in that interval are not present in the rollback snapshot.
 
@@ -73,7 +79,7 @@ Every command separately reads `incompleteOperation`, sees no work, and later wr
 
 ## 7. [DONE — HIGH] Recovery can bless a partially erased volume as healthy
 
-**Location:** `packages/or3-cloud/src/cli.ts:1581-1594,1895-1975,2252-2269`
+**Location:** `packages/or3-cloud/src/backup/archive.ts` (`restoreVolumeArchive`); `packages/or3-cloud/src/commands/recover.ts` (`recoverCommand`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 Failed-update restoration first rewrites the old `.env`, then destructively clears and extracts `/data`. If extraction is interrupted, recovery sees the old environment, starts the old image, and may clear the pending operation without replaying the backup. Deep health only proves that the remaining databases/providers answer; it does not prove every archived file was restored.
 
@@ -83,7 +89,7 @@ Failed-update restoration first rewrites the old `.env`, then destructively clea
 
 ## 8. [DONE — HIGH] Restore and rollback destroy the only live state before proving the replacement
 
-**Location:** `packages/or3-cloud/src/cli.ts:1581-1594,1709-1744,2302-2390`
+**Location:** `packages/or3-cloud/src/backup/archive.ts` (`restoreVolumeArchive`); `packages/or3-cloud/src/backup/restore.ts` (`restoreBackupData`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`); `packages/or3-cloud/src/commands/rollback.ts` (`rollbackCommand`)
 
 Both operations overwrite `.env` and assets, delete `/data`, and extract in place. They do not take a pre-restore snapshot or prepare a new volume. On failure, the catch block merely tries to start whatever partial target is left.
 
@@ -93,7 +99,7 @@ Both operations overwrite `.env` and assets, delete `/data`, and extract in plac
 
 ## 9. [DONE — HIGH] Legacy ownership migration fails on ordinary nested root-owned data
 
-**Location:** `packages/or3-cloud/src/cli.ts:713-739,1581-1594,2232-2249`
+**Location:** `packages/or3-cloud/src/runtime/volumes.ts` (`managedVolumeRootOwnership`, `setManagedVolumeRootOwnership`); `packages/or3-cloud/src/backup/archive.ts` (`restoreVolumeArchive`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 Migration changes only the `/data` directory's UID/GID. The subsequent `find /data -delete` and extraction run as UID 65532. Nested directories still owned by root and mode `0755` cannot be emptied by that user. Checking only the mount root also misses a mixed-ownership volume whose root already looks correct.
 
@@ -103,7 +109,7 @@ Migration changes only the `/data` directory's UID/GID. The subsequent `find /da
 
 ## 10. [DONE — HIGH] The ownership migration phase is absent from the recovery journal
 
-**Location:** `packages/or3-cloud/src/cli.ts:2209-2217,2232-2248`; recovery at `packages/or3-cloud/src/cli.ts:1895-1975`
+**Location:** `packages/or3-cloud/src/commands/update.ts` (`updateCommand`); recovery at `packages/or3-cloud/src/commands/recover.ts` (`recoverCommand`)
 
 The previous UID/GID and whether migration started exist only in process memory. The pending record stores target version/image/digest, not the old ownership or migration phase.
 
@@ -113,7 +119,7 @@ The previous UID/GID and whether migration started exist only in process memory.
 
 ## 11. [DONE — HIGH] Recovery forgets where an external restore came from
 
-**Location:** `packages/or3-cloud/src/cli.ts:1895-1935,2296-2329`
+**Location:** `packages/or3-cloud/src/commands/recover.ts` (`recoverCommand`); `packages/or3-cloud/src/backup/manifests.ts` (`resolveBackup`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`)
 
 Restore accepts an absolute backup path, but the pending operation records only `manifest.backupId`. Recovery resolves that ID under the deployment's local backup directory instead of using the external source, and it does not record immutable archive/config hashes.
 
@@ -123,7 +129,7 @@ Restore accepts an absolute backup path, but the pending operation records only 
 
 ## 12. [DONE — HIGH] A crafted backup ID can overwrite managed state
 
-**Location:** `packages/or3-cloud/src/cli.ts:1660-1679,2109-2152`
+**Location:** `packages/or3-cloud/src/backup/manifests.ts` (`readManifest`); `packages/or3-cloud/src/backup/export.ts` (`exportBackup`)
 
 `readManifest()` accepts any truthy `backupId`. Export interpolates that value into `.or3-cloud/exports/${backupId}.json` without enforcing the generated backup-ID grammar. `backupId: "../state"` resolves to `.or3-cloud/state.json`.
 
@@ -133,7 +139,7 @@ Restore accepts an absolute backup path, but the pending operation records only 
 
 ## 13. [DONE — HIGH] Purge can delete the backup it says will remain
 
-**Location:** `packages/or3-cloud/src/cli.ts:2113-2165,3350-3406`
+**Location:** `packages/or3-cloud/src/backup/export.ts` (`exportBackup`, `assertPurgeHasVerifiedExport`); `packages/or3-cloud/src/commands/remove.ts` (`removeCommand`)
 
 Export rejects a destination inside the source backup, but not a destination inside the wider deployment or `.or3-cloud`. Purge accepts a different filesystem device, then recursively removes `.or3-cloud`. A mounted backup disk below that directory passes the device test and is traversed by recursive deletion.
 
@@ -143,7 +149,7 @@ Export rejects a destination inside the source backup, but not a destination ins
 
 ## 14. [DONE — HIGH] Most destructive commands do not verify the deployment directory
 
-**Location:** `packages/or3-cloud/src/cli.ts:1396-1420,1895-1975,2060-2077,2193-2294,2302-2390`
+**Location:** `packages/or3-cloud/src/deployment/identity.ts` (`assertDeploymentIdentity`, `assertDeploymentDirectoryIdentity`); `packages/or3-cloud/src/commands/recover.ts` (`recoverCommand`); `packages/or3-cloud/src/commands/backup.ts` (`backupCreateCommand`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`); `packages/or3-cloud/src/commands/rollback.ts` (`rollbackCommand`)
 
 Recover, backup, update, restore, rollback, and doctor load managed state but do not call `assertDeploymentDirectoryIdentity()`. Even that helper derives identity from the basename, so a copy under another parent with the same basename can pass.
 
@@ -153,7 +159,7 @@ Recover, backup, update, restore, rollback, and doctor load managed state but do
 
 ## 15. [DONE — HIGH] Image integrity is checked on a mutable tag, not the running container
 
-**Location:** `packages/or3-cloud/src/cli.ts:788-853,963-1027,1223-1227,2271-2284`
+**Location:** `packages/or3-cloud/src/runtime/images.ts` (`pullImage`, `requireImageDigest`, `pullAndRequireImage`, `imageDigest`); `packages/or3-cloud/src/deployment/identity.ts` (`imageRepository`); `packages/or3-cloud/src/deployment/env.ts` (`buildEnv`); `packages/or3-cloud/src/runtime/project.ts` (`startProject`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 Compose receives `repository:version`, while digest checks inspect whatever local image that tag names at check time. The code never binds Compose to `repository@sha256:...` and does not inspect the image ID/digest of the actual running `or3` container after startup.
 
@@ -163,9 +169,9 @@ Compose receives `repository:version`, while digest checks inspect whatever loca
 
 ## 16. [DONE — HIGH] Historical adoption silently loses authenticated image identity
 
-**Location:** `packages/or3-cloud/src/cli.ts:761-813,1570-1578,2793-2835`
+**Location:** `packages/or3-cloud/src/package-info.ts` (`expectedImageDigest`); `packages/or3-cloud/src/runtime/images.ts` (`pullImage`); `packages/or3-cloud/src/backup/archive.ts` (`archiveExternalVolume`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
-`packagedImageDigest()` returns `undefined` when the requested version differs from the current CLI package. Adoption explicitly supports reading an older source release, so it can accept any pre-existing local tag for that historical version. The source archive helper then runs that image as root with the source data mounted and without the hardening used elsewhere.
+`packagedReleaseValue()` returns `undefined` when the requested version differs from the current CLI package. Adoption explicitly supports reading an older source release, so it can accept any pre-existing local tag for that historical version. The source archive helper then runs that image as root with the source data mounted and without the hardening used elsewhere.
 
 **Consequence:** an unverified local image can read the legacy data volume and participate in adoption.
 
@@ -173,7 +179,7 @@ Compose receives `repository:version`, while digest checks inspect whatever loca
 
 ## 17. [DONE — HIGH] Adoption mixes one release's image with another release's assets
 
-**Location:** `packages/or3-cloud/src/cli.ts:2793-2835`
+**Location:** `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 The source `or3-release.json` selects the old application image, but `copyAssets()` always installs Compose/Caddy/operator files from the currently executing CLI. There is no `release.or3Version === PACKAGE_VERSION` check.
 
@@ -183,7 +189,7 @@ The source `or3-release.json` selects the old application image, but `copyAssets
 
 ## 18. [DONE — HIGH] Adoption can preserve public self-registration
 
-**Location:** `packages/or3-cloud/src/cli.ts:2710-2755,2832-2846`
+**Location:** `packages/or3-cloud/src/deployment/adoption-source.ts` (`sourceMode`, `sourceComposeArgs`, `restartSource`, `assertSupportedSource`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 The source validator rejects guest access but does not enforce `OR3_AUTH_REGISTRATION_MODE=invite_only` or `OR3_AUTH_AUTO_PROVISION=false`. The code builds safe defaults and then overwrites them from the broad allowed-key list.
 
@@ -193,7 +199,7 @@ The source validator rejects guest access but does not enforce `OR3_AUTH_REGISTR
 
 ## 19. [DONE — HIGH] Restoring a pre-operator backup leaves the privileged sidecar running
 
-**Location:** `packages/or3-cloud/src/cli.ts:1168-1175,1219-1226,1709-1744`; `packages/or3-cloud/assets/compose.yaml:74-100`
+**Location:** `packages/or3-cloud/src/deployment/assets.ts` (`restoreManagedAssets`); `packages/or3-cloud/src/runtime/project.ts` (`stopProject`, `startProject`); `packages/or3-cloud/src/backup/restore.ts` (`restoreBackupData`); `packages/or3-cloud/assets/compose.yaml:74-100`
 
 `stopProject()` stops only `or3`. A restore to a pre-dashboard backup removes operator configuration/assets and starts Compose without the profile, but Compose does not automatically remove a previously running profiled service. A host-CLI restore has no operator `finish()` path to make that process exit.
 
@@ -213,7 +219,7 @@ The operator uses `${OR3_OPERATOR_IMAGE}`, which is the normal OR3 app image. Th
 
 ## 21. [DONE — HIGH] Operator enablement is based on `stat()`, not proof that the bridge works
 
-**Location:** `packages/or3-cloud/src/cli.ts:926-960`
+**Location:** `packages/or3-cloud/src/runtime/dashboard-operator.ts` (`dashboardOperatorEnv`, `prepareDashboardOperatorIpc`)
 
 The probe checks platform, path shape, and host socket metadata only. It does not resolve the active Docker context, prove the daemon can bind the same host path, prove the recorded UID/GID can create host-owned files, or prove Docker access from the proposed container/group mapping.
 
@@ -253,7 +259,7 @@ Package metadata contains only `dashboardUpdateProtocol: 1`. It does not publish
 
 ## 25. [DONE — BLOCKER] The extended lifecycle workflow is deterministically red
 
-**Location:** `.github/workflows/extended-validation.yml:131-168`; `packages/or3-cloud/src/cli.ts:2199-2203`
+**Location:** `.github/workflows/extended-validation.yml:131-168`; `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 The workflow computes `next_version` and runs the current CLI with `update --to "$next_version"`. The CLI explicitly rejects every target not equal to its own `PACKAGE_VERSION`, before either the normal-update or unhealthy-rollback scenario runs.
 
@@ -284,7 +290,7 @@ this remains partial.
 
 ## 27. [DONE — HIGH] Restore refuses backups that would fit after replacing current data
 
-**Location:** `packages/or3-cloud/src/cli.ts:433-460,1696-1707`
+**Location:** `packages/or3-cloud/src/util/fs.ts` (`readText`); `packages/or3-cloud/src/backup/archive.ts` (`requiredArchiveSpace`, `assertEnoughFreeSpace`, `assertFreeSpaceForArchive`); `packages/or3-cloud/src/backup/restore.ts` (`assertRestoreFreeSpace`)
 
 Free space is measured before deletion, then required to exceed the full uncompressed backup plus 50% or 64 MiB. The actual extraction deletes the current data first. A same-sized restore on a filesystem more than roughly two-thirds full is rejected even when replacing the current volume would leave ample room.
 
@@ -294,9 +300,9 @@ Free space is measured before deletion, then required to exceed the full uncompr
 
 ## 28. [DONE — HIGH] Export regressed support for pre-operator backups
 
-**Location:** `packages/or3-cloud/src/cli.ts:1137-1165,2109-2157`
+**Location:** `packages/or3-cloud/src/deployment/assets.ts` (`verifiedManagedAssetContents`); `packages/or3-cloud/src/backup/export.ts` (`exportBackup`)
 
-`readManifest()` intentionally supports managed-asset inventory v1 without `dashboard-operator.mjs`. `backupExportCommand()` ignores that inventory and loops over current `managedAssetNames()`, which always includes the operator file.
+`readManifest()` intentionally supports managed-asset inventory v1 without `dashboard-operator.mjs`. `exportBackup()` ignores that inventory and loops over current `managedAssetNames()`, which always includes the operator file.
 
 **Consequence:** valid legacy backups can be read/restored but cannot be exported off-host, blocking the safety prerequisite for purge.
 
@@ -304,7 +310,7 @@ Free space is measured before deletion, then required to exceed the full uncompr
 
 ## 29. [DONE — HIGH] Retention trusts corrupt metadata and can delete the wrong backup
 
-**Location:** `packages/or3-cloud/src/cli.ts:1288-1375,1635-1655`
+**Location:** `packages/or3-cloud/src/deployment/contracts.ts` (`BackupListing`); `packages/or3-cloud/src/backup/manifests.ts` (`inspectBackupEntry`, `enumerateBackups`); `packages/or3-cloud/src/backup/retention.ts` (`selectPruneTargets`, `pruneBackups`); `packages/or3-cloud/src/commands/backup.ts` (`parseKeep`); `packages/or3-cloud/src/backup/create.ts` (`createBackup`)
 
 Enumeration validates only schema/id/date, never checks checksums, and does not require directory name to match `manifest.backupId`. Pruning recomputes a path from that ID rather than deleting the validated enumerated path. Corrupt new backups count toward `keep`, and automatic pruning happens before app restart/deep health succeeds.
 
@@ -314,7 +320,7 @@ Enumeration validates only schema/id/date, never checks checksums, and does not 
 
 ## 30. [DONE — MEDIUM] The operator image is accidentally frozen at the first enabling release
 
-**Location:** `packages/or3-cloud/src/cli.ts:2222-2231`
+**Location:** `packages/or3-cloud/src/commands/update.ts` (`updateCommand`)
 
 Once `OR3_DASHBOARD_UPDATES_ENABLED=true`, update skips `dashboardOperatorEnv()` and carries the old `OR3_OPERATOR_IMAGE` forward. That avoids self-recreation only by leaving the operator on an arbitrary old app image forever.
 
@@ -354,7 +360,7 @@ The Unix operator returns 202, but the Nuxt client discards that status and the 
 
 ## 34. [DONE — MEDIUM] The app mounts operator IPC even when the operator is disabled
 
-**Location:** `packages/or3-cloud/assets/compose.yaml:22-27`; `packages/or3-cloud/src/cli.ts:953-960`
+**Location:** `packages/or3-cloud/assets/compose.yaml:22-27`; `packages/or3-cloud/src/runtime/dashboard-operator.ts` (`prepareDashboardOperatorIpc`)
 
 The base app service always bind-mounts `.or3-cloud/operator-ipc`, while the CLI creates it only when enablement succeeds. Rootful Docker may auto-create the missing source as root.
 
@@ -364,7 +370,7 @@ The base app service always bind-mounts `.or3-cloud/operator-ipc`, while the CLI
 
 ## 35. [DONE — MEDIUM] Adoption backups cannot be pruned
 
-**Location:** `packages/or3-cloud/src/cli.ts:41,1256-1277,2884`
+**Location:** `packages/or3-cloud/src/backup/manifests.ts` (`BACKUP_ID_PATTERN`); `packages/or3-cloud/src/runtime/volumes.ts` (`dataVolumeSize`); `packages/or3-cloud/src/backup/retention.ts` (`assertRemovableArtifactName`, `removeNamedBackupArtifact`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 Cleanup accepts only `backup-*`, while adoption creates `adopt-source-*`. Once retention selects that artifact, removal throws and the pruning loop stops.
 
@@ -374,7 +380,7 @@ Cleanup accepts only `backup-*`, while adoption creates `adopt-source-*`. Once r
 
 ## 36. [DONE — MEDIUM] Backup can report success for state it cannot restore
 
-**Location:** `packages/or3-cloud/src/cli.ts:1379-1393,1877-1882,2060-2077`
+**Location:** `packages/or3-cloud/src/deployment/identity.ts` (`assertDeploymentIdentity`); `packages/or3-cloud/src/deployment/state-store.ts` (`loadManaged`); `packages/or3-cloud/src/commands/backup.ts` (`backupCreateCommand`)
 
 `loadManaged()` validates resource identity but not `OR3_VERSION`/`OR3_IMAGE` against managed state. The manifest records state version/image while `config.env` is copied from live `.env`; restore later requires them to match.
 
@@ -384,7 +390,7 @@ Cleanup accepts only `backup-*`, while adoption creates `adopt-source-*`. Once r
 
 ## 37. [DONE — MEDIUM] Backup and recovery do not preserve intentional stopped state
 
-**Location:** `packages/or3-cloud/src/cli.ts:1597-1657,1895-1975,2876-2920`
+**Location:** `packages/or3-cloud/src/backup/create.ts` (`createBackup`); `packages/or3-cloud/src/commands/recover.ts` (`recoverCommand`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 Backup unconditionally starts OR3 after any stop attempt. Generic recovery also starts it. Failed adoption restarts the source without recording whether it was initially stopped.
 
@@ -394,7 +400,7 @@ Backup unconditionally starts OR3 after any stop attempt. Generic recovery also 
 
 ## 38. [DONE — MEDIUM] Crash leftovers are invisible and unbounded
 
-**Location:** `packages/or3-cloud/src/cli.ts:1482-1509,1597-1647,2064-2070,2220-2222,2884-2895`
+**Location:** `packages/or3-cloud/src/runtime/command-runner.ts` (`streamCommandToFile`); `packages/or3-cloud/src/backup/create.ts` (`createBackup`); `packages/or3-cloud/src/commands/backup.ts` (`backupCreateCommand`); `packages/or3-cloud/src/commands/update.ts` (`updateCommand`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 Backup IDs are allocated inside the worker and are not journaled until after completion (or never, for standalone backup). A hard crash can leave manifest-less directories and `.partial` archives that enumeration and recovery ignore.
 
@@ -404,7 +410,7 @@ Backup IDs are allocated inside the worker and are not journaled until after com
 
 ## 39. [DONE — MEDIUM] Docker API failures are treated as proof that volumes do not exist
 
-**Location:** `packages/or3-cloud/src/cli.ts:1830-1833,2852-2856`
+**Location:** `packages/or3-cloud/src/commands/init.ts` (`initCommand`); `packages/or3-cloud/src/commands/adopt.ts` (`adoptCommand`)
 
 Init/adopt proceed whenever `docker volume inspect` is not `ok`. They do not distinguish `no such volume` from permission errors, daemon failures, context errors, or timeouts.
 
@@ -414,7 +420,7 @@ Init/adopt proceed whenever `docker volume inspect` is not `ok`. They do not dis
 
 ## 40. [DONE — MEDIUM] Redaction leaks secrets containing whitespace
 
-**Location:** `packages/or3-cloud/src/cli.ts:240-247,370-395,583-590,1243-1253`
+**Location:** `packages/or3-cloud/src/util/primitives.ts` (`redact`); `packages/or3-cloud/src/runtime/command-runner.ts` (`run`); `packages/or3-cloud/src/runtime/compose.ts` (`compose`); `packages/or3-cloud/src/runtime/volumes.ts` (`dataVolumeSize`)
 
 `run()` applies token-only regex redaction before callers can replace exact known secret values. For `OR3_ADMIN_PASSWORD=A secret with spaces 123`, the first pass leaves `secret with spaces 123`; the later exact replacement no longer matches the altered string. Some volume errors do not pass known secrets at all.
 
@@ -424,7 +430,7 @@ Init/adopt proceed whenever `docker volume inspect` is not `ok`. They do not dis
 
 ## 41. [DONE — MEDIUM] Verification can send the authenticated cookie off-origin
 
-**Location:** `packages/or3-cloud/src/cli.ts:2585-2637`
+**Location:** `packages/or3-cloud/src/runtime/verification.ts` (`verifyPublicApplication`)
 
 Presigned upload/download URLs may be absolute, and the CLI attaches the session cookie without requiring `url.origin === baseUrl.origin`. The fixed filesystem profile should never need a cross-origin grant. It also permits an upload before proving `storageId` is non-empty.
 
@@ -434,7 +440,7 @@ Presigned upload/download URLs may be absolute, and the CLI attaches the session
 
 ## 42. [DONE — MEDIUM] `verify` breaks after the owner changes their password normally
 
-**Location:** `packages/or3-cloud/src/cli.ts:2552-2565,2642-2665`
+**Location:** `packages/or3-cloud/src/runtime/verification.ts` (`verifyPublicApplication`); `packages/or3-cloud/src/commands/verify.ts` (`verifyCommand`)
 
 Verification always signs in with `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` from `.env`. A normal in-app password change updates the account database, not this bootstrap environment value.
 
@@ -444,7 +450,7 @@ Verification always signs in with `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` from `.env
 
 ## 43. [DONE — MEDIUM] Every successful verification leaks another live session
 
-**Location:** `packages/or3-cloud/src/cli.ts:2556-2639`
+**Location:** `packages/or3-cloud/src/runtime/verification.ts` (`verifyPublicApplication`)
 
 The command signs in and never logs out or revokes the resulting session in `finally`.
 
@@ -454,7 +460,7 @@ The command signs in and never logs out or revokes the resulting session in `fin
 
 ## 44. [PARTIAL — MEDIUM] Bootstrap and admin passwords are permanent deployment metadata
 
-**Location:** `packages/or3-cloud/src/cli.ts:963-1027,1847-1854,1613-1625`
+**Location:** `packages/or3-cloud/src/deployment/env.ts` (`buildEnv`); `packages/or3-cloud/src/commands/init.ts` (`initCommand`); `packages/or3-cloud/src/backup/create.ts` (`createBackup`)
 
 The initial owner and admin passwords remain in `.env`, are injected into containers, copied into every backup, and are retained partly because `verify` depends on the bootstrap password. The separate initial-credentials file duplicates them until manually deleted.
 
@@ -473,7 +479,7 @@ partial.
 
 ## 45. [DONE — MEDIUM] Interactive credential reset echoes passwords
 
-**Location:** `packages/or3-cloud/src/cli.ts:2940-2995`
+**Location:** `packages/or3-cloud/src/credentials/inputs.ts` (`resolveResetPasswords`); `packages/or3-cloud/src/credentials/reset-script.ts` (`buildCredentialsResetScript`, `path`, `candidates`, `resolveModule`)
 
 Password prompts use ordinary `readline.question`, which displays input. Unlike init, reset has no password-file options for safe automation.
 
@@ -483,7 +489,7 @@ Password prompts use ordinary `readline.question`, which displays input. Unlike 
 
 ## 46. [DONE — MEDIUM] Credential reset puts plaintext passwords in process arguments
 
-**Location:** `packages/or3-cloud/src/cli.ts:3100-3130`
+**Location:** `packages/or3-cloud/src/credentials/reset-script.ts` (`request`); `packages/or3-cloud/src/credentials/reset.ts` (`runCredentialsResetScript`, `verifyCredentialsInsideContainer`)
 
 The CLI invokes `docker compose exec -e OR3_RESET_*_PASSWORD=<value>`. Those secrets are visible in the host `docker` process argument vector while the command runs; flag-based input also lands in shell history.
 
@@ -493,7 +499,7 @@ The CLI invokes `docker compose exec -e OR3_RESET_*_PASSWORD=<value>`. Those sec
 
 ## 47. [DONE — MEDIUM] Credential reset's admin-file update is not crash-safe
 
-**Location:** `packages/or3-cloud/src/cli.ts:3025-3070,3133-3156`
+**Location:** `packages/or3-cloud/src/credentials/reset-script.ts` (`adminPassword`, `ownerHash`, `adminHash`, `now`, `db`, `account`, `adminCredentialsPath`, `previousCredentials`, `credentials`); `packages/or3-cloud/src/credentials/reset.ts` (`applyCredentialReset`)
 
 The in-container script directly truncates/writes `admin-credentials.json`. A crash can leave malformed JSON; replay then rejects the corrupt file even though the journal contains the intended values.
 
@@ -503,7 +509,7 @@ The in-container script directly truncates/writes `admin-credentials.json`. A cr
 
 ## 48. [DONE — MEDIUM] `doctor` ignores the new privileged boundary and can pass a dead public deployment
 
-**Location:** `packages/or3-cloud/src/cli.ts:2394-2491`; `planning/admin-dashboard-updates/tasks.md:71-73`
+**Location:** `packages/or3-cloud/src/commands/doctor.ts` (`doctorCommand`); `planning/admin-dashboard-updates/tasks.md:71-73`
 
 Doctor does not validate operator enablement state, runtime digest, container identity, socket ownership/mode, Docker-socket/deployment mounts, or orphaned operator services. In public mode, free ports 80/443 produce warnings rather than failures, so internal deep health plus a running-but-unpublished Caddy container can still pass.
 
@@ -513,7 +519,7 @@ Doctor does not validate operator enablement state, runtime digest, container id
 
 ## 49. [DONE — MEDIUM] Docker commands can hang forever despite advertised deadlines
 
-**Location:** `packages/or3-cloud/src/cli.ts:370-395,691-703,1223-1227,1482-1543`
+**Location:** `packages/or3-cloud/src/runtime/command-runner.ts` (`run`, `streamCommandToFile`, `streamFileToCommand`); `packages/or3-cloud/src/runtime/health.ts` (`waitForDeepHealthWithArgs`); `packages/or3-cloud/src/runtime/project.ts` (`startProject`)
 
 The generic `execFile` wrapper and streaming helpers have no timeout or abort handling. Even `waitForDeepHealth()` has only an outer clock; one hung `docker compose exec` prevents the loop from reaching its deadline.
 
@@ -523,7 +529,7 @@ The generic `execFile` wrapper and streaming helpers have no timeout or abort ha
 
 ## 50. [DONE — MEDIUM] Remote-Docker checks inspect the client machine
 
-**Location:** `packages/or3-cloud/src/cli.ts:741-747,880-908`
+**Location:** `packages/or3-cloud/src/runtime/docker.ts` (`portAvailable`); `packages/or3-cloud/src/runtime/images.ts` (`dockerDaemonArchitecture`, `assertSupportedHostArchitecture`)
 
 Port availability and host architecture come from the Node client, not the daemon selected by `DOCKER_HOST`. The code explicitly allows remote/TCP Docker for CLI-only operation.
 
@@ -533,7 +539,7 @@ Port availability and host architecture come from the Node client, not the daemo
 
 ## 51. [DONE — MEDIUM] Dangerous commands silently ignore positional arguments
 
-**Location:** `packages/or3-cloud/src/cli.ts:250-270,2302-2308,3418-3454`
+**Location:** `packages/or3-cloud/src/cli/args.ts` (`parseFlags`); `packages/or3-cloud/src/commands/restore.ts` (`restoreCommand`); `packages/or3-cloud/src/cli.ts` (`main`, `invokedAsCli`)
 
 Dispatch accepts extra positionals for update, rollback, doctor, recover, remove, init/adopt, and others. `or3 remove ./staging --purge-data --yes` purges the current working deployment, not `./staging`; restore ignores values after the first.
 
@@ -543,7 +549,7 @@ Dispatch accepts extra positionals for update, rollback, doctor, recover, remove
 
 ## 52. [DONE — MEDIUM] "Atomic" lifecycle files are not durable across power loss
 
-**Location:** `packages/or3-cloud/src/cli.ts:405-412,1189-1217,1482-1504`; `packages/or3-cloud/assets/dashboard-operator.mjs:40-58`
+**Location:** `packages/or3-cloud/src/util/fs.ts` (`writeSecure`); `packages/or3-cloud/src/deployment/state-store.ts` (`markPending`, `updatePending`, `removeOperationRecord`, `clearPending`); `packages/or3-cloud/src/runtime/command-runner.ts` (`streamCommandToFile`); `packages/or3-cloud/assets/dashboard-operator.mjs:40-58`
 
 State, journal, job, and archive commits rename temporary files without syncing the file and parent directory. Rename atomicity does not guarantee persistence after power loss.
 
@@ -553,7 +559,7 @@ State, journal, job, and archive commits rename temporary files without syncing 
 
 ## 53. [DONE — MEDIUM] Old backups without asset hashes restore under today's assets
 
-**Location:** `packages/or3-cloud/src/cli.ts:1137-1175`
+**Location:** `packages/or3-cloud/src/deployment/assets.ts` (`verifiedManagedAssetContents`, `restoreManagedAssets`)
 
 When `managedAssetSha256` is absent, `restoreManagedAssets()` silently returns false. Restore still switches to the backup's older image/config while leaving current Compose/Caddy files in place.
 
@@ -563,7 +569,7 @@ When `managedAssetSha256` is absent, `restoreManagedAssets()` silently returns f
 
 ## 54. [DONE — MEDIUM] Invalid password-file input leaves a poisoned partial init
 
-**Location:** `packages/or3-cloud/src/cli.ts:230-233,480-489,1040-1060,1804-1861`
+**Location:** `packages/or3-cloud/src/credentials/inputs.ts` (`validatePassword`, `readPassword`); `packages/or3-cloud/src/deployment/env.ts` (`serializeEnvValue`, `serializeCredentialValue`); `packages/or3-cloud/src/commands/init.ts` (`initCommand`)
 
 Password validation permits NUL/internal newline characters, while environment serialization rejects them later. Init performs network/image work and creates/copies managed files before that rejection and before journaling the init operation.
 
@@ -573,7 +579,7 @@ Password validation permits NUL/internal newline characters, while environment s
 
 ## 55. [DONE — MEDIUM] Failed asset rollback deletes its own remaining recovery copies
 
-**Location:** `packages/or3-cloud/src/cli.ts:1070-1110`
+**Location:** `packages/or3-cloud/src/deployment/assets.ts` (`installManagedAssets`)
 
 If restoring one `.previous-*` file fails, the rollback loop aborts. The outer `finally` then deletes every remaining rollback copy anyway.
 
@@ -583,7 +589,7 @@ If restoring one `.previous-*` file fails, the rollback loop aborts. The outer `
 
 ## 56. [DONE — LOW] Purge leaves the operator executable behind
 
-**Location:** `packages/or3-cloud/src/cli.ts:3393-3406`
+**Location:** `packages/or3-cloud/src/commands/remove.ts` (`removeCommand`)
 
 The purge file list omits `dashboard-operator.mjs`, even though `copyAssets()` always installs it.
 
@@ -622,7 +628,7 @@ recovery and browser-driven dashboard update coverage are still missing.
 
 ## 59. [LOW] The CLI is a 3,454-line blast radius
 
-**Location:** `packages/or3-cloud/src/cli.ts:1-3454`
+**Location:** `packages/or3-cloud/src/**` (the whole CLI)
 
 Argument parsing, secret handling, Compose resolution, image trust, archive streaming, backup formats, recovery state machines, adoption, verification HTTP, credential SQL, diagnostics, and destructive removal live in one file. The operator separately reimplements environment/state/version/process logic.
 
@@ -642,7 +648,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 ## 61. [DONE — LOW] Backup enumeration hides real I/O failures as "no backups"
 
-**Location:** `packages/or3-cloud/src/cli.ts:1288-1331`
+**Location:** `packages/or3-cloud/src/deployment/contracts.ts` (`BackupListing`); `packages/or3-cloud/src/backup/manifests.ts` (`inspectBackupEntry`, `enumerateBackups`)
 
 `enumerateBackups()` catches every `readdir` failure and returns an empty list. It similarly turns file-stat failures into a zero-byte entry.
 
@@ -652,7 +658,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 ## 62. [DONE — LOW] Backup restart errors erase the original failure
 
-**Location:** `packages/or3-cloud/src/cli.ts:1643-1656`
+**Location:** `packages/or3-cloud/src/backup/create.ts` (`createBackup`)
 
 `createBackup()` throws again from `finally` when restart fails. JavaScript replaces the original archive/checksum/cleanup exception with the `finally` exception.
 
@@ -672,7 +678,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 ## 64. [DONE — HIGH] An operator-driven update can recreate the container running the updater
 
-**Location:** `packages/or3-cloud/src/cli.ts:1223-1227`; `packages/or3-cloud/assets/compose.yaml:74-100`
+**Location:** `packages/or3-cloud/src/runtime/project.ts` (`startProject`); `packages/or3-cloud/assets/compose.yaml:74-100`
 
 The operator launches the CLI inside its own container. The CLI installs new Compose assets and runs `docker compose up` for the whole project. Any release that changes the operator image, environment, mounts, command, or service definition lets Compose recreate the container that is still running the update before state commit. The stale-operator-image bug masks only some cases.
 

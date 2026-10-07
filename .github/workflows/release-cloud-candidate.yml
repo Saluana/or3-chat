@@ -58,7 +58,7 @@ jobs:
           lock_version="$(node -p 'require("./package-lock.json").version')"
           lock_root_version="$(node -p 'require("./package-lock.json").packages[""].version')"
           cloud_version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
-          cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/cli.ts)"
+          cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/package-info.ts)"
           test "$VERSION" = "$root_version"
           test "$VERSION" = "$lock_version"
           test "$VERSION" = "$lock_root_version"

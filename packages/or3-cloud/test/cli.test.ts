@@ -4,60 +4,37 @@ import { createHash, createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { assertEnoughFreeSpace, requiredArchiveSpace } from '../src/backup/archive';
+import { assertPurgeBackupFreshness } from '../src/backup/export';
+import { assertBackupMatchesDeployment, enumerateBackups, inventoryBackups, recordedBackupPath } from '../src/backup/manifests';
+import { assertRemovableArtifactName, planRetention, selectPruneTargets } from '../src/backup/retention';
+import { assertCommandFlags, assertCommandPositionals, verifyIsReadOnly, parseFlags } from '../src/cli/args';
+import { purgeVolumesFromState } from '../src/commands/remove';
+import { assessUpdate } from '../src/commands/update';
+import { validatePassword } from '../src/credentials/inputs';
+import { buildCredentialsResetScript } from '../src/credentials/reset-script';
+import { assertSupportedSource, assertSupportedSourceCompose } from '../src/deployment/adoption-source';
+import { copyAssets, restoreManagedAssets, snapshotManagedAssets } from '../src/deployment/assets';
+import { STATE_SCHEMA_COMPATIBILITY, assertKnownStateSchema } from '../src/deployment/contracts';
 import {
-  STATE_SCHEMA_COMPATIBILITY,
-  assertCommandFlags,
-  assertCommandPositionals,
-  assertDashboardOperatorMounts,
-  assertEnoughFreeSpace,
-  assertImageReleaseLabels,
-  assertKnownStateSchema,
-  assertPurgeBackupFreshness,
-  assertRemovableArtifactName,
-  assertSupportedSource,
-  assertSupportedSourceCompose,
-  assertBackupMatchesDeployment,
-  assertPhaseAllowsCommand,
-  assertStateSchemaWritable,
-  assertSupportedArchitecture,
-  assertVerificationGrant,
-  assessUpdate,
-  publicStateProjection,
-  writeStateSchema,
-  buildCredentialsResetScript,
   buildEnv,
-  checkResolvedLoopbackBinding,
-  copyAssets,
-  decideRecoveryAction,
-  stateFingerprint,
-  verifyIsReadOnly,
-  dashboardOperatorHandoffArgs,
-  enumerateBackups,
-  inventoryBackups,
-  isVersion,
-  lifecycleFaults,
   parseEnv,
-  parseFlags,
-  planRetention,
-  purgeVolumesFromState,
-  redact,
-  recordedBackupPath,
-  requiredArchiveSpace,
-  restoreManagedAssets,
-  restoreRequiresVolumeRecreation,
-  selectPruneTargets,
-  sameOriginVerificationUrl,
   serializeInitialCredentials,
   serializeEnv,
-  snapshotManagedAssets,
-  stateFromEnv,
-  supportedImageArchitectures,
-  updateRequiresVolumeRecreation,
-  validateVerificationHealth,
-  validatePassword,
   withoutProvisioningCredentials,
-} from '../src/cli';
-import type { ManagedState } from '../src/cli';
+} from '../src/deployment/env';
+import { isVersion } from '../src/deployment/identity';
+import { publicStateProjection, stateFingerprint } from '../src/deployment/observation';
+import { decideRecoveryAction } from '../src/deployment/recovery';
+import { assertPhaseAllowsCommand, assertStateSchemaWritable, writeStateSchema, stateFromEnv } from '../src/deployment/state-store';
+import { lifecycleFaults } from '../src/lifecycle-faults';
+import { checkResolvedLoopbackBinding } from '../src/runtime/compose';
+import { assertDashboardOperatorMounts, dashboardOperatorHandoffArgs } from '../src/runtime/dashboard-operator';
+import { assertImageReleaseLabels, assertSupportedArchitecture, supportedImageArchitectures } from '../src/runtime/images';
+import { assertVerificationGrant, sameOriginVerificationUrl, validateVerificationHealth } from '../src/runtime/verification';
+import { restoreRequiresVolumeRecreation, updateRequiresVolumeRecreation } from '../src/runtime/volumes';
+import { redact } from '../src/util/primitives';
+import type { ManagedState } from '../src/deployment/contracts';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
 
@@ -763,6 +740,13 @@ test('parses exact flags and accepts only complete release versions', () => {
     positionals: ['target'],
     flags: { local: true, port: '3100', 'admin-email': 'admin@example.com' },
   });
+  expect(parseFlags(['--yes', 'backup-id', '--local', 'target'])).toEqual({
+    positionals: ['backup-id', 'target'],
+    flags: { yes: true, local: true },
+  });
+  // Only the first `=` splits, so values (passwords) may contain `=`.
+  expect(parseFlags(['--admin-password=pa=ss']).flags).toEqual({ 'admin-password': 'pa=ss' });
+  expect(() => parseFlags(['--dry-run=true'])).toThrow('--dry-run is a switch and does not take a value');
   expect(isVersion('0.1.12')).toBe(true);
   expect(isVersion('0.1')).toBe(false);
   expect(isVersion('latest')).toBe(false);

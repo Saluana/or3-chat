@@ -11,7 +11,7 @@ version must match in:
 - `package.json` at the repository root;
 - root version metadata in `package-lock.json`;
 - `packages/or3-cloud/package.json`;
-- `packages/or3-cloud/src/cli.ts` (`PACKAGE_VERSION`);
+- `packages/or3-cloud/src/package-info.ts` (`PACKAGE_VERSION`);
 - `ghcr.io/saluana/or3-chat:<version>` and
   `ghcr.io/saluana/or3-chat:<version>-operator`; and
 - the tag `v<version>`.
