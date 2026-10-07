@@ -93,6 +93,8 @@ export interface CanonicalTranscriptRecord {
     compaction?: CompactionData;
     usage?: RequestUsage;
     error?: string | null;
+    /** Serialized public error envelope of a failed turn (`data.error_envelope`). */
+    errorEnvelope?: string;
 }
 
 type StoredTranscriptMessage = Message & {
@@ -242,6 +244,8 @@ export function messageToCanonicalTranscript(
         error:
             message.error ??
             (typeof data.tool_error === 'string' ? data.tool_error : null),
+        errorEnvelope:
+            typeof data.error_envelope === 'string' ? data.error_envelope : undefined,
     };
 }
 
@@ -309,6 +313,7 @@ export function projectTranscriptForOpenRouter(
             data: {
                 ...(record.compaction ? { kind: 'compaction', compaction: record.compaction } : {}),
                 ...(record.usage ? { usage: record.usage } : {}),
+                ...(record.errorEnvelope ? { error_envelope: record.errorEnvelope } : {}),
                 transcript_version: TRANSCRIPT_VERSION,
                 transcript_kind: record.kind,
                 turn_id: record.turnId,

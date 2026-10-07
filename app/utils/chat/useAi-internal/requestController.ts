@@ -14,6 +14,22 @@ import type { AssistantPersister, StoredMessage } from './types';
 import { updateMessageRecord } from './persistence';
 import { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
 import { isStaleForegroundGeneration } from '~/utils/chat/generation-lease';
+import { serializeError } from '~~/shared/errors';
+
+/**
+ * The classified public error of a failed foreground turn, kept beside the
+ * `stream_interrupted` sentinel so the inline text still matches the toast
+ * after a reload. `serializeError` carries metadata only, never upstream text.
+ * Tracker/canonical persistence owns its own `error` string and is excluded.
+ */
+function terminalErrorEnvelope(terminal: RequestTerminal): string | null {
+    return terminal.outcome === 'failed' &&
+        terminal.error &&
+        terminal.persistence !== 'tracker' &&
+        terminal.persistence !== 'canonical'
+        ? serializeError(terminal.error)
+        : null;
+}
 
 type Accumulator = {
     reset: () => void;
@@ -187,12 +203,16 @@ export function projectTerminalMessages(
     target.error =
         terminal.messageError ??
         (result.persistenceError ? 'stream_interrupted' : null);
+    const envelope = terminalErrorEnvelope(terminal);
+    target.errorEnvelope = envelope;
     const raw = view.rawMessages.value.find((message) => message.id === id);
     if (raw) {
         raw.content = target.text;
         raw.reasoning_text = terminal.reasoning ?? null;
         raw.error = target.error;
         raw.pending = false;
+        if (envelope || raw.data?.error_envelope)
+            raw.data = { ...raw.data, error_envelope: envelope };
     }
     if (
         terminal.outcome === 'aborted' &&
@@ -352,6 +372,11 @@ export function finalizeRequest(
                                     : terminal.outcome,
                             ifCurrent,
                         });
+                        // Written only on failure, or to clear a stale envelope
+                        // once a retry/continue ends differently.
+                        const envelope = terminalErrorEnvelope(terminal);
+                        const staleEnvelope =
+                            typeof (latest?.data as Record<string, unknown> | null | undefined)?.error_envelope === 'string';
                         // These helpers prepare hooks outside their own write
                         // transactions, then check ownership on the fresh row.
                         if (!result.superseded)
@@ -367,6 +392,9 @@ export function finalizeRequest(
                                         tool_calls: terminal.toolCalls,
                                         generation_state: generationState,
                                         error: terminal.messageError ?? null,
+                                        ...(envelope || staleEnvelope
+                                            ? { error_envelope: envelope }
+                                            : {}),
                                         ...(request.backgroundAdmissionId
                                             ? {
                                                   background_job_status:

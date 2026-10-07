@@ -92,6 +92,20 @@ needed. `dbTry` adds `rw` and `entity` context for database failures.
 Do not include document content, credentials, or large objects. Tags help local
 diagnostics and domain hook routing; they are not automatically safe UI details.
 
+## Failed chat turns keep their classification
+
+A failed foreground turn is saved with `error: 'stream_interrupted'` (or
+`context_full`). That string is a sentinel, not copy: Continue, retry, and
+background recovery key off it, so it does not change. The classified error is
+saved beside it as `data.error_envelope`, the `serializeError` string (code,
+status, source, credential source; never upstream text). `finalizeRequest`
+writes it and clears it when a later retry or Continue ends differently.
+`ensureUiMessage` exposes it as `UiChatMessage.errorEnvelope`, and
+`ChatMessage.vue` renders `presentError(errorEnvelope ?? error)` inline, so the
+text matches the toast after a reload or sync. Rows without an envelope (for
+example a background job confirmed missing) keep the generic stream-failure
+copy.
+
 ## Retry only when safe
 
 `simpleRetry(fn, attempts = 2, delayMs = 400)` runs the function up to
