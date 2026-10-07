@@ -62,6 +62,11 @@ npx @or3/cloud stop
 npx @or3/cloud restart
 ```
 
+Switches (`--dry-run`, `--read-only`, `--json`, `--yes`, `--force`, `--finish`,
+`--restore`, `--local`, `--public`, `--purge-data`) take no value. A form such as
+`--dry-run=true` is rejected before anything runs, and the word after a switch is
+read as an ordinary argument (`restore --yes <backup-id>`).
+
 The canonical procedure for both development and managed deployments is
 [Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
 This package is the managed path: it accepts only published stable releases and

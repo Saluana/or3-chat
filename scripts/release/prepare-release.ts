@@ -63,7 +63,7 @@ const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8
     version?: string;
     packages?: Record<string, { version?: string }>;
 };
-const cli = await readFile(resolve(root, 'packages/or3-cloud/src/cli.ts'), 'utf8');
+const cli = await readFile(resolve(root, 'packages/or3-cloud/src/package-info.ts'), 'utf8');
 const cliVersion = cli.match(/PACKAGE_VERSION\s*=\s*'([^']+)'/)?.[1];
 const version = requested ?? cloudPackage.version;
 assertReleaseVersionContract({

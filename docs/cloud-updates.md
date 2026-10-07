@@ -370,7 +370,7 @@ ceremony is [Releasing OR3 Cloud](releasing.md); the short version is:
 
 1. **Prepare the version** in a clean worktree. The same version must appear in
    the root `package.json`, root lock metadata, `packages/or3-cloud/package.json`,
-   and `packages/or3-cloud/src/cli.ts`.
+   and `packages/or3-cloud/src/package-info.ts`.
 
 2. **Qualify the candidate** with **Qualify OR3 Cloud Candidate** on the exact
    commit (`workflow_dispatch`). It rejects used versions, builds both
