@@ -19,7 +19,9 @@ export const OLD_VERSION = '0.1.74';
 export const OLD_DIGEST = `sha256:${'a'.repeat(64)}`;
 // The candidate lane binds the manifest before running this real CLI fixture.
 // Docker must serve those input identities, rather than a conflicting fake digest.
-const releaseMetadata = JSON.parse(await readFile(join(import.meta.dir, '../package.json'), 'utf8')).or3Cloud;
+const releaseMetadata = (JSON.parse(await readFile(join(import.meta.dir, '../package.json'), 'utf8')) as {
+  or3Cloud?: { imageDigest?: string; sourceRevision?: string };
+}).or3Cloud;
 export const NEW_DIGEST = releaseMetadata?.imageDigest ?? `sha256:${'b'.repeat(64)}`;
 export const REPOSITORY = 'ghcr.io/saluana/or3-chat';
 
