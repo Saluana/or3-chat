@@ -12,13 +12,14 @@ const requireCanMock = vi.fn();
 const startBackgroundStreamMock = vi.fn();
 const monitorForegroundStreamForClientMock = vi.fn((params) => params.stream);
 const backgroundStreamingAvailableMock = vi.fn();
-const catalogBoundary = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0 }));
+const catalogBoundary = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0, unreachable: false }));
 
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),
     createOpenRouterClient: () => ({ models: { list: async () => ({
         async *[Symbol.asyncIterator]() {
             catalogBoundary.calls++;
+            if (catalogBoundary.unreachable) throw Object.assign(new Error('Unable to make request'), { name: 'ConnectionError' });
             // The selected record is on a later SDK page.
             for (const id of ['unrelated/model', 'test/model']) yield { result: { data: [{
                 id, name: id, canonicalSlug: id, contextLength: catalogBoundary.capacity,
@@ -127,7 +128,7 @@ beforeAll(async () => {
 
 describe('POST /api/openrouter/stream credential authorization', () => {
     beforeEach(() => {
-        catalogBoundary.capacity = 1_000_000; catalogBoundary.calls = 0;
+        catalogBoundary.capacity = 1_000_000; catalogBoundary.calls = 0; catalogBoundary.unreachable = false;
         vi.unstubAllGlobals();
         vi.stubGlobal('defineEventHandler', (value: unknown) => value);
         vi.stubGlobal('readBody', readBodyMock);
@@ -203,6 +204,15 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(fetch).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
     });
 
+    it('reports an unreachable model catalog as a provider outage, not a model choice problem', async () => {
+        catalogBoundary.unreachable = true;
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: 'Draft' }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } });
+        expect(await handler(makeEvent())).toMatchObject({ error: { code: 'ERR_PROVIDER', status: 502, source: 'provider' } });
+        expect(setResponseStatusMock).toHaveBeenLastCalledWith(expect.anything(), 502);
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('strips the native context envelope while preserving full provider messages and default reply capacity', async () => {
         const text = 'Source text '.repeat(50_000);
         readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: text }],
@@ -213,6 +223,38 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(body.model).toBe('test/model'); expect(body.max_tokens).toBe(4096);
         expect(body.messages).toHaveLength(1); expect(body.messages[0].content === text).toBe(true);
         expect(body).not.toHaveProperty('_context'); expect(catalogBoundary.calls).toBe(1);
+    });
+
+    // OpenRouter reserves credit for max_tokens. The default allowance is the
+    // model's whole output window, which a small balance cannot reserve.
+    const creditRefusal = (affordable: number) => new Response(JSON.stringify({ error: { code: 402, message:
+        `This request requires more credits, or fewer max_tokens. You requested up to 4096 tokens, but can only afford ${affordable}. To increase, visit https://openrouter.ai/settings/keys` } }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } });
+    const stream = () => new Response('data: [DONE]\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+
+    it('retries a default reply allowance once at the size the key can afford', async () => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: 'Say hi' }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(creditRefusal(2048)).mockResolvedValueOnce(stream()));
+        await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string).max_tokens).toBe(4096);
+        expect(JSON.parse(vi.mocked(fetch).mock.calls[1]![1]!.body as string).max_tokens).toBe(2048);
+        expect(sendStreamMock).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        ['an explicit reply allowance', 4096, 2048],
+        ['a balance below a useful reply', null, 100],
+    ] as const)('keeps the credit error for %s', async (_label, requested, affordable) => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: 'Say hi' }],
+            ...(requested ? { max_tokens: requested } : {}),
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: requested } });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(creditRefusal(affordable)).mockResolvedValueOnce(stream()));
+        await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))).resolves.toMatchObject({
+            error: { code: 'ERR_CREDITS', status: 402, retryable: false } });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(sendStreamMock).not.toHaveBeenCalled();
     });
 
     it('rejects background context overflow before durable job admission', async () => {

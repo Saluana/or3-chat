@@ -83,14 +83,68 @@ and the catalog/sidebar fixes rendered as intended on desktop and mobile.
 - **Invite links do not start registration.** Nothing reads `?invite=`; the
   Basic Auth register modal labels the token "(optional)" and starts empty.
   The fix belongs in `or3-provider-basic-auth`.
-- **Inline error copy on failed turns.** Foreground failures persist the
-  generic `stream_interrupted`, so the reply area says "Try sending your
-  message again" even when the toast correctly says to choose another model.
-- **Signed-out visitors** on an invite-only instance see the full chat shell;
-  sending says "Connect to OpenRouter" rather than "Sign in", and mobile has no
-  visible sign-in cue outside More.
-- **Prerendered `/`** carries build-time public runtime config, so runtime
-  overrides such as `NUXT_PUBLIC_OPEN_ROUTER_BASE_URL` apply on SSR routes
-  (`/chat`) but not on the first `/` load.
-- Real-model behavior (actual OpenRouter 404 wording, vision support of the
-  default alias) was not exercised because `openrouter.ai` is blocked here.
+- Since fixed on `or3-cloud`: inline copy on failed turns now keeps the
+  classified error across reload; signed-out visitors are asked to sign in;
+  server builds render `/` per request, so runtime public config applies.
+
+## Real models, switched mid-thread (follow-up pass)
+
+The same commit was then run directly on the host (Basic Auth + SQLite +
+filesystem, production build), so the server reached the real OpenRouter
+through the session proxy, with a $1 test key that never entered the
+repository or logs. One conversation was built up with a workspace tool call
+and continued turn by turn on a different provider each time: GPT-6 Luna,
+GLM 5.3 Flash, DeepSeek Flash, Qwen 3.7 Flash, Claude Haiku, Gemini Flash,
+Mistral Nemo and Grok Build all accepted the other providers' tool-call
+history, reasoning settings and messages, and replied. Retry on a different
+model, branching and continuing on another provider, and compaction followed
+by a continuation also worked. Total spend was about $0.10.
+
+Repaired in this pass:
+
+- **A small balance broke every send.** The default reply allowance is the
+  model's whole output window (128,000 tokens for GPT-6 Luna), and OpenRouter
+  reserves credit for all of it. With about $0.90 left, a one-line reply
+  failed with 402 "can only afford 78766". When the allowance is the default,
+  the server route now retries once at the affordable size (if at least 1,024
+  tokens); an explicit user allowance keeps the credit error. Verified live
+  with Claude Sonnet.
+- **An unreachable provider left replies "generating" for up to an hour.**
+  The SDK retries connection errors for an hour by default, and every native
+  send waits on the catalog lookup. Retries are now bounded to about 10
+  seconds (browser and server), and the server lookup to 15 seconds.
+- **That outage was reported as "Model capacity unavailable — choose a
+  model with known capacity".** An unreachable catalog is now a provider
+  failure (HTTP 502, `ERR_PROVIDER`), not something fixed by changing models.
+- **The image omission note misled a model.** With "[1 image omitted: the
+  selected model does not accept image input]", DeepSeek reasoned that the
+  earlier answer ("Blue", written by a vision model) had been given without
+  seeing the image. The note now says the current model cannot read the image
+  and that earlier replies may have seen it.
+- The real 404 wording ("No endpoints found that support image input") and
+  the image-to-text-only switch were confirmed with DeepSeek V4 Flash.
+
+Found, not changed:
+
+- **Kimi K2.5 fails mid-thread with tools at its full output window.** A
+  request carrying earlier tool calls and `max_tokens` 235,929 is routed to
+  hosts that answer "Tool use is not supported for this model with the
+  current request" (Novita, after AtlasCloud). At 131,072 or less it routes
+  to Amazon Bedrock and works; fresh requests work at either size. Capping
+  the default reply allowance would avoid this class of routing failure; it
+  is a product decision, so it is left open.
+- The credit retry is in the foreground route only; background jobs (off by
+  default, not exercised here) still return the credit error.
+- After a failed turn, the next send follows the failed user message, so the
+  provider receives two consecutive user turns. All tested providers accepted
+  it.
+- Switching models can change the reasoning effort (medium to high) without
+  the user choosing it.
+- After a tool call, the final text is stored on the assistant row that made
+  the call, so on replay it is sent before the tool result. Providers
+  accepted it, but the order differs from the original exchange.
+- Searching the catalog for "gpt-6 luna" ranks GPT-6 Luna Pro above the exact
+  match.
+- The journey spec's Files cases expect a `dialog` named "File preview";
+  `WorkspaceFilesPane.vue` renders an `aside`, so seven Files journeys fail on
+  `or3-cloud` as well.

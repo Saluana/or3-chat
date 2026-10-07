@@ -130,6 +130,21 @@ export class OpenRouterProviderError extends OpenRouterStreamError {
     }
 }
 
+/**
+ * OpenRouter refuses a request whose `max_tokens` would cost more than the
+ * key's remaining credit ("…or fewer max_tokens… can only afford N"). Returns
+ * N; only that number is read from the provider text, never shown as copy.
+ */
+export function affordableCompletionTokens(text: string): number | undefined {
+    let message = text;
+    try {
+        const parsed = JSON.parse(text) as { error?: { message?: unknown } } | null;
+        if (typeof parsed?.error?.message === 'string') message = parsed.error.message;
+    } catch { /* plain-text body */ }
+    const value = Number(/fewer max_tokens[\s\S]*?can only afford (\d+)/i.exec(message)?.[1]);
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
 /** Recognize explicit provider machine codes; upstream text is never UI copy. */
 export function normalizeProviderResponseError(text: string, status: number, context: ErrorContext = {}) {
     let data: unknown;

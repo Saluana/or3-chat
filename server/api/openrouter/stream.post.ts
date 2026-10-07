@@ -52,9 +52,9 @@ import {
     monitorForegroundStreamForClient,
 } from '../../utils/webhooks/foreground-stream-monitor';
 import { validateServerToolRequest } from '../../utils/chat/tool-registry';
-import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata } from '../../utils/chat/context-admission';
+import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata, OpenRouterCatalogUnavailableError } from '../../utils/chat/context-admission';
 import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
-import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
+import { affordableCompletionTokens, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     fetchWithResponseDeadline,
@@ -62,6 +62,9 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+
+/** Below this, a credit-limited retry would only produce a truncated reply. */
+const MIN_AFFORDABLE_REPLY_TOKENS = 1024;
 
 function logBgStream(
     _stage: string,
@@ -375,6 +378,10 @@ export default defineEventHandler(async (event) => {
                 setResponseStatus(event, 400);
                 return contextAdmissionResponse(err);
             }
+            if (err instanceof OpenRouterCatalogUnavailableError) {
+                setResponseStatus(event, 502);
+                return publicErrorEnvelope(err);
+            }
             warnBgStream('api-stream-background-start-failed', {
                 userId,
                 workspaceId,
@@ -466,19 +473,25 @@ export default defineEventHandler(async (event) => {
         ac.abort();
     });
 
+    let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
     try {
-        const policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
+        policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
         await admitServerProviderBody(providerBody, policy, ac.signal);
     } catch (error) {
         if (error instanceof ChatContextAdmissionError) {
             setResponseStatus(event, 400);
             return contextAdmissionResponse(error);
         }
+        if (error instanceof OpenRouterCatalogUnavailableError) {
+            setResponseStatus(event, 502);
+            return publicErrorEnvelope(error);
+        }
         throw error;
     }
 
     // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
     let upstream: Response;
+    let upstreamErrorText: string | undefined;
     try {
         const host = getHeader(event, 'host') || 'localhost';
         const proto = getProxyRequestProtocol(
@@ -486,7 +499,7 @@ export default defineEventHandler(async (event) => {
             normalizeProxyTrustConfig(config.security.proxy),
         ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
-        upstream = await fetchWithResponseDeadline(openRouterUrl, {
+        const requestUpstream = (requestBody: Record<string, unknown>) => fetchWithResponseDeadline(openRouterUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -495,8 +508,23 @@ export default defineEventHandler(async (event) => {
                 'HTTP-Referer': `${proto}://${host}`,
                 'X-Title': 'or3.chat',
             },
-            body: JSON.stringify(providerBody),
+            body: JSON.stringify(requestBody),
         }, { signal: ac.signal });
+        upstream = await requestUpstream(providerBody);
+        // OpenRouter reserves credit for max_tokens. The default allowance is
+        // the model's whole output window, which a small balance cannot
+        // reserve even for a one-line reply; retry once at the affordable
+        // size. An explicit user allowance keeps the credit error.
+        if (upstream.status === 402 && policy && policy.requestedCompletionTokens == null
+            && typeof providerBody.max_tokens === 'number') {
+            upstreamErrorText = await readResponseTextWithIdleDeadline(upstream, { signal: ac.signal })
+                .catch(() => '<error-reading-body>');
+            const affordable = affordableCompletionTokens(upstreamErrorText);
+            if (affordable !== undefined && affordable >= MIN_AFFORDABLE_REPLY_TOKENS && affordable < providerBody.max_tokens) {
+                upstream = await requestUpstream({ ...providerBody, max_tokens: affordable });
+                upstreamErrorText = undefined;
+            }
+        }
         logBgStream('api-stream-foreground-upstream-response', {
             ok: upstream.ok,
             status: upstream.status,
@@ -527,8 +555,8 @@ export default defineEventHandler(async (event) => {
 
     // Handle upstream non-OK responses
     if (!upstream.ok || !upstream.body) {
-        let respText = '<no-body>';
-        try {
+        let respText = upstreamErrorText ?? '<no-body>';
+        if (upstreamErrorText === undefined) try {
             respText = await readResponseTextWithIdleDeadline(upstream, {
                 signal: ac.signal,
             });

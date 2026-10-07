@@ -49,6 +49,17 @@ provider dispatch or durable job admission. Direct OpenRouter requests omit
 the envelope. Callers without a captured policy retain their legacy contract;
 the unbound native continuation helper rejects missing policy explicitly.
 
+That catalog lookup retries connection errors for at most about 10 seconds and
+is abandoned after 15 seconds. An unreachable catalog is a provider outage
+(`ERR_PROVIDER`, HTTP 502), not `model_metadata_unavailable`. Browser catalog
+loads share the bounded retries but not the deadline.
+
+OpenRouter reserves credit for `max_tokens`. When the reply uses the default
+allowance (no `requested_completion_tokens`) and OpenRouter answers 402 with
+the number of tokens the key can afford, the foreground route retries once at
+that size if it is at least 1024 tokens. An explicit user allowance, a smaller
+affordable size and background jobs keep the credit error.
+
 An explicit provider `context_length_exceeded` or `context_window_exceeded`
 machine code becomes permanent `ERR_CONTEXT_FULL`. Native outcomes report
 `context_full`; recovery copy suggests compaction, editing, or a larger supported

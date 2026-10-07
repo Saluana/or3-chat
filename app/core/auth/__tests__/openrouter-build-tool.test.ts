@@ -455,7 +455,7 @@ describe('buildOpenRouterMessages image selection', () => {
         expect(imageUrls(result)).toEqual([[], [], []]);
         expect(result[0]?.content).toEqual([
             { type: 'text', text: 'what colour?' },
-            { type: 'text', text: '[2 images omitted: the selected model does not accept image input.]' },
+            { type: 'text', text: '[2 images not sent: the current model cannot read images. Earlier replies may have seen them.]' },
         ]);
         expect(result[2]?.content).toEqual([{ type: 'text', text: 'summarize' }]);
         expect(getFileBlob).not.toHaveBeenCalled();
