@@ -53,13 +53,16 @@ function isBootstrapOwner(input: {
     return input.email.trim().toLowerCase() === bootstrap;
 }
 
+/** Holds an invite link's token between opening the link and signing up. */
+export const INVITE_TOKEN_COOKIE = 'or3_invite_token';
+
 export function getInviteTokenFromEvent(event: H3Event): string | null {
     const headerToken = getHeader(event, 'x-or3-invite-token');
     if (headerToken && headerToken.trim()) {
         return headerToken.trim();
     }
 
-    const cookieToken = getCookie(event, 'or3_invite_token');
+    const cookieToken = getCookie(event, INVITE_TOKEN_COOKIE);
     if (cookieToken && cookieToken.trim()) {
         return cookieToken.trim();
     }

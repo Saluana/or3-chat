@@ -159,7 +159,12 @@ Fixed in a second follow-up (live-checked on the rebuilt host instance):
   dropped before any provider code ran) and telling mobile visitors to open
   the menu, then More. Checked end to end with the rebuilt provider on the
   invite-only profile, desktop and mobile; the core part is in
-  `cloud-sign-in-gate.spec.ts`.
+  `cloud-sign-in-gate.spec.ts`. Providers that sign people up in their own
+  UI (Clerk) never see the token, so the server now keeps a valid invite in
+  the `or3_invite_token` cookie that session resolution already reads. That
+  cookie was also being dropped from page responses: the theme plugin
+  replaced every `Set-Cookie` header; it now appends. Clerk itself was not
+  exercised (no Clerk keys here).
 
 Still open:
 

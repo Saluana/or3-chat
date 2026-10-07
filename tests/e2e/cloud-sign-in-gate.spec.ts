@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { createInviteToken } from '../../server/auth/invite-token';
 
 // Needs the invite-only Basic Auth profile with a disposable bootstrap user:
 // run it with `bun run test:e2e:sign-in-gate`.
@@ -29,6 +30,32 @@ async function typeAndSend(page: Page, composer: ReturnType<Page['getByLabel']>,
     // Mobile never sends on Enter, so use the visible Send button on both.
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
+
+// Providers that sign people up in their own UI (Clerk) never see the token,
+// and the session request after sign-up may come after a redirect or from
+// another tab. The server keeps a valid invite in a cookie for that request.
+test('an invite link keeps a valid token for a later sign-up, and ignores a forged one', async ({ page, context }) => {
+    const secret = process.env.OR3_AUTH_INVITE_TOKEN_SECRET ?? '';
+    expect(secret).not.toBe('');
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const payload = { workspaceId: 'e2e-workspace', email: 'e2e-invitee@example.test', exp };
+    const stored = async () => (await context.cookies()).find((cookie) => cookie.name === 'or3_invite_token');
+
+    await page.goto(`/?invite=${encodeURIComponent(createInviteToken(payload, 'not-the-instance-secret'))}`);
+    expect(await stored()).toBeUndefined();
+
+    const invite = createInviteToken(payload, secret);
+    await page.goto(`/?invite=${encodeURIComponent(invite)}`);
+    const cookie = await stored();
+    expect(cookie).toMatchObject({ value: invite, httpOnly: true, sameSite: 'Lax', path: '/' });
+    expect(Math.abs(cookie!.expires - exp)).toBeLessThan(5);
+
+    // A page opened later without the query still sends it.
+    const later = await context.newPage();
+    const request = later.waitForRequest((sent) => new URL(sent.url()).pathname === '/chat');
+    await later.goto('/chat');
+    expect((await (await request).allHeaders()).cookie).toContain('or3_invite_token=');
+});
 
 for (const [label, viewport] of [
     ['desktop', { width: 1440, height: 900 }],
