@@ -61,6 +61,18 @@
         "./portable-runtime": {
             "types": "./src/portable-runtime.ts",
             "import": "./src/portable-runtime.ts"
+        },
+        "./cards": {
+            "types": "./src/cards.ts",
+            "import": "./src/cards.ts"
+        },
+        "./cards/vue": {
+            "types": "./src/cards-vue.ts",
+            "import": "./src/cards-vue.ts"
+        },
+        "./cards/react": {
+            "types": "./src/cards-react.ts",
+            "import": "./src/cards-react.ts"
         }
     },
     "files": [
@@ -82,9 +94,23 @@
         "postpack": "node scripts/publish-manifest.mjs --restore"
     },
     "devDependencies": {
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0"
     },
     "peerDependencies": {
-        "vue": "^3.5.0"
+        "vue": "^3.5.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
+    "peerDependenciesMeta": {
+        "react": {
+            "optional": true
+        },
+        "react-dom": {
+            "optional": true
+        }
     }
 }

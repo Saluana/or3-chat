@@ -70,15 +70,27 @@ export async function registerPortableTools(pluginId: string): Promise<() => voi
     if (!stillCurrent()) return () => {};
     const handles: { dispose(): unknown }[] = [];
     try {
-        for (const definition of definitions) handles.push(useToolRegistry().registerTool(
-            { ...definition, runtime: 'client', ui: {label: definition.function.name.slice(prefix.length).replaceAll('_', ' '), category: source.descriptor.name, defaultEnabled: false} },
-            async (args) => {
+        for (const definition of definitions)
+            handles.push(
+                useToolRegistry().registerTool(
+                    { ...definition, runtime: 'client', ui: {label: definition.function.name.slice(prefix.length).replaceAll('_', ' '), category: source.descriptor.name, defaultEnabled: false} },
+                    async (args) => {
                 if (!stillCurrent()) throw new Error('The plugin workspace or version changed.');
                 const result = await invokePortableToolRequest(pluginId, 'runtime.tool', {name:definition.function.name,args});
                 return JSON.stringify(result);
             },
-            {runtime:'client', available: () => stillCurrent()},
-        ));
-    } catch (error) { for (const handle of handles) handle.dispose(); throw error; }
-    return () => { for (const handle of handles) handle.dispose(); };
+                    {
+                        runtime: 'client',
+                        ownerPluginId: pluginId,
+                        available: () => stillCurrent(),
+                    }
+                )
+            );
+    } catch (error) {
+        for (const handle of handles) handle.dispose();
+        throw error;
+    }
+    return () => {
+        for (const handle of handles) handle.dispose();
+    };
 }

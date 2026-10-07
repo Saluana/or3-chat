@@ -79,6 +79,7 @@ export interface RegisteredTool {
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
     available?: (context: ToolAvailabilityContext) => boolean;
+    ownerPluginId?: string;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
@@ -87,7 +88,8 @@ export interface RegisteredTool {
 }
 
 export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }
-interface RegisterOptions {
+export interface RegisterOptions {
+    ownerPluginId?: string;
     override?: boolean; // allow replacing an existing tool
     enabled?: boolean; // explicit initial enabled state
     runtime?: ToolRuntime;
@@ -257,7 +259,9 @@ export function useToolRegistry() {
     /**
      * Register a new tool with metadata and handler.
      */
-    function registerTool<TArgs extends Record<string, unknown> = Record<string, unknown>>(
+    function registerTool<
+        TArgs extends Record<string, unknown> = Record<string, unknown>,
+    >(
         definition: TypedToolDefinition<TArgs>,
         handler: ToolHandler<TArgs>,
         opts: RegisterOptions = {}
@@ -302,6 +306,7 @@ export function useToolRegistry() {
             lastError: ref(null),
             runtime,
             available: opts.available,
+            ownerPluginId: opts.ownerPluginId,
             workflowPolicy: opts.workflowPolicy,
             _owner: owner,
             _stopWatcher: () => undefined,
@@ -509,6 +514,7 @@ export function useToolRegistry() {
         unregisterTool,
         listTools,
         getTool,
+        ownerOf: (name: string) => getTool(name)?.ownerPluginId,
         setEnabled,
         hydrate,
         getEnabledDefinitions,

@@ -36,6 +36,8 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
  * - Keep this list stable; add only after a hook name is widely adopted
  */
 export type KnownHookKey =
+    | 'ui.chat.tool-card:action:mounted'
+    | 'ui.chat.tool-card:action:failed'
     | 'ui.chat.message:filter:outgoing'
     | 'ui.chat.message:filter:incoming'
     | 'ai.chat.model:filter:select'

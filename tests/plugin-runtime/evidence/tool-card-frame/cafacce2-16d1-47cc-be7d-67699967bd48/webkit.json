@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "runId": "cafacce2-16d1-47cc-be7d-67699967bd48",
+  "project": "webkit",
+  "profile": "or3-contained-view-v1",
+  "feature": "or3-tool-card-frame-v1",
+  "sourceCommit": "1eb07b34c9280d8288fa895b7ae8c80daec40981",
+  "dirty": true,
+  "hostCommit": "1eb07b34c9280d8288fa895b7ae8c80daec40981",
+  "runtimeVersion": "or3-contained-view-v1",
+  "runtimeSha256": "535334852171c8f8ddb4aa57e35e0636fedf5631a206644e64d37e807d17e823",
+  "policy": "default-src 'none'; script-src 'sha256-U1M0hSFxyPjdtKpX414GNv7fVjGiBmROZNN+gH0X6CM=' blob:; style-src 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; media-src blob: data:; frame-src 'none'; connect-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts",
+  "probeTreeSha256": "sha256-1c68746204568d5b84fd9f35d8781be5423edaee174dc20d6999ecd10b11dd8c",
+  "archiveSha256": "sha256-44e67746d8b5e5399b710c30e1a2df37f482819a65e0722abdbdb33197859696",
+  "archivePath": "/Users/brendon/.codex/worktrees/chat-tool-cards/or3-chat/test-results/tool-card-containment/cafacce2-16d1-47cc-be7d-67699967bd48/webkit/probes.zip",
+  "packageTreeDigest": "sha256-36301f58884cc469947676a0f3d45a7e5cf0986283b1ba1101e39b53fa1e5c4c",
+  "runtimeFiles": {
+    "shared/plugins/isolation/contained-view-document.ts": "sha256-cad9a709edfe9a24e5074f2d94beab2637b004b1cad9fea629269d0c6dc57121",
+    "shared/plugins/isolation/contained-view-policy.ts": "sha256-02983669af0dfb1a65c0a6ba3076bad8421a872908b39c1edc9baa43c9134082",
+    "shared/plugins/isolation/tool-card-protocol.ts": "sha256-25e8fbeba743f6044f25888c6fa632ec60a8579f58f3407e76262d119a0c5876",
+    "app/components/chat/tool-cards/ToolCardFrameHost.vue": "sha256-7d675e2492ccd853fc90e3a923509f21552f82d4accc40a773f248ada1553642",
+    "app/components/chat/tool-cards/ToolCardSlot.vue": "sha256-c844554f0240082b330ff6bbead0c99968c758de07f73d9a2e38b44840985265"
+  },
+  "browser": "webkit",
+  "browserVersion": "26.6",
+  "device": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "deviceScaleFactor": 2,
+    "isMobile": false,
+    "hasTouch": false
+  },
+  "platform": "darwin",
+  "command": "bun run plugin-runtime:containment:qualify --target tool-card-frame --engine webkit --grep 'parent.access'",
+  "timestamp": "2026-10-07T23:17:14.922Z",
+  "qualification": "blocked",
+  "probeSelection": {
+    "expected": 29,
+    "grep": "parent.access"
+  },
+  "bindingGaps": [
+    "The exact packed adversarial archive is bound, but it is injected through the development fixture rather than production admission. Card grants remain unqualified.",
+    "DNS hints require observable DNS evidence; HTTP request absence alone is inconclusive."
+  ],
+  "probes": [
+    {
+      "runId": "cafacce2-16d1-47cc-be7d-67699967bd48",
+      "project": "webkit",
+      "browser": "webkit",
+      "channel": "parent.access",
+      "control": "reachable",
+      "outcome": "blocked",
+      "output": "{\"attempted\":true,\"resolved\":false,\"error\":\"SecurityError\"}",
+      "context": "production ToolCardFrameHost with the exact contained-view document",
+      "outputPath": "/Users/brendon/.codex/worktrees/chat-tool-cards/or3-chat/test-results/tool-card-containment/cafacce2-16d1-47cc-be7d-67699967bd48/browser/tool-card-containment-parent-access-webkit/probe.json",
+      "targetHits": 0,
+      "udpHits": 0
+    }
+  ]
+}

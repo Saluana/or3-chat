@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
     checkV2PackageConformance,
@@ -10,6 +10,7 @@ export interface ValidateCommandResult {
     readonly root: string;
     readonly result: V2ConformanceResult;
     readonly exitCode: number;
+    readonly warnings?: readonly {file:string;message:string}[];
 }
 
 /**
@@ -47,8 +48,17 @@ export async function validateV2Package(packageRoot: string): Promise<ValidateCo
     } finally {
         rmSync(packRoot, { recursive: true, force: true });
     }
+    const warnings: {file:string;message:string}[] = [];
+    if (result.status === 'conformant') {
+        const manifest = JSON.parse(readFileSync(resolve(root, 'or3.manifest.json'), 'utf8')) as {toolCards?: {entry:string}[]};
+        for (const card of manifest.toolCards ?? []) {
+            const path = resolve(root, card.entry);
+            if (existsSync(path) && /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|RTCPeerConnection)\b/.test(readFileSync(path, 'utf8'))) warnings.push({file:card.entry,message:'Network APIs in cards are denied by containment; perform requests in the tool through network.http.'});
+        }
+    }
     return {
         root,
+        ...(warnings.length ? {warnings} : {}),
         result,
         exitCode: result.status === 'nonconformant' ? 1 : 0,
     };
@@ -66,5 +76,6 @@ export function formatValidationReport(report: ValidateCommandResult): string {
             );
         }
     }
+    for (const warning of report.warnings ?? []) lines.push(`[warning:card-network-api] ${warning.file}: ${warning.message}`);
     return `${lines.join('\n')}\n`;
 }

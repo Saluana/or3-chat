@@ -267,3 +267,5 @@ Additional reviewed grants:
 Trusted server routes obtain their dispatcher identity and reviewed server services through `getPluginServerContext(event)`. Service methods enforce session and grants; routes remain authorized by the dispatcher.
 
 Storage and settings accept bounded JSON values; non-finite numbers are rejected. Storage values and the persisted settings record are limited to 32 KiB. Plugin storage has a 1 MiB / 1,000 live-key quota, with bounded retained revision history. Record writes remain bound to the activation database across asynchronous hooks.
+
+See [Interactive tool cards](/documentation/plugins/tool-cards) for cards attached to tool calls, state, chat actions, embeds and browser qualification.

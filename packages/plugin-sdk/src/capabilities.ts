@@ -1,3 +1,4 @@
+import type { PluginToolCardDefinition } from './cards';
 import type { Component, Ref, ComputedRef } from 'vue';
 import type {
     PluginJsonValue,
@@ -391,6 +392,9 @@ export interface PluginChatRef {
 }
 
 export interface PluginChatClient {
+    registerToolCard(
+        definition: PluginToolCardDefinition
+    ): PluginRegistrationHandle;
     readonly messages: PluginMessagesClient;
     readonly composer: { prefill(text: string, paneId?: string): Promise<PluginResult<void>> };
     readonly send: { markHandled(): PluginResult<void> };
@@ -637,8 +641,15 @@ export function createUnsupportedPluginClients(input: {
             run: async () => unsupported('commands.run'),
         },
         chat: {
+            registerToolCard: () =>
+                unsupportedHandle(
+                    'Declare portable tool cards in or3.manifest.json toolCards.'
+                ),
             messages: { get: async () => unsupported('chat.messages.get'), list: async () => unsupported('chat.messages.list'), listByThread: async () => unsupported('chat.messages.listByThread'), upsert: async () => unsupported('chat.messages.upsert'), updateData: async () => unsupported('chat.messages.updateData'), attachFile: async () => unsupported('chat.messages.attachFile') },
-            composer: { prefill: async () => unsupported('chat.composer.prefill') }, send: { markHandled: () => unsupported('chat.send.markHandled') },
+            composer: {
+                prefill: async () => unsupported('chat.composer.prefill'),
+            },
+            send: { markHandled: () => unsupported('chat.send.markHandled') },
             create: async () => unsupported('chat.create'),
             open: async () => unsupported('chat.open'),
             appendMessage: async () => unsupported('chat.appendMessage'),

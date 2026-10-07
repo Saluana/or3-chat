@@ -1,0 +1,9 @@
+{
+  "name": "@or3/trusted-card-fixture",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.1.0",
+    "vue": "^3.5.0"
+  }
+}

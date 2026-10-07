@@ -188,12 +188,13 @@ function collectV2ModuleGraph(
         return [];
     }
     return files
-        .filter((file) => CODE_FILE.test(file))
+        .filter((file) => CODE_FILE.test(file) || file.endsWith('.css'))
         .map((file) => {
             const source = readFileSync(file, 'utf8');
             const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
             return {
                 path: posix(relative(root, file)),
+                source,
                 specifiers: moduleSpecifiers(sourceFile),
                 autoImportUses: autoImportUses(sourceFile, banned),
             };

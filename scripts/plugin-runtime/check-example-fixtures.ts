@@ -1,104 +1,114 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
-import { checkV2PackageConformance } from './check-v2-package-conformance';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
+import { checkV2PackageConformance } from "./check-v2-package-conformance";
+import { buildV2Package } from "../../packages/plugin-sdk/src/cli/build";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const projectArg = process.argv.find((arg) => arg.endsWith('.json'));
-const project = projectArg ?? 'tests/plugin-runtime/v1-examples/tsconfig.json';
-const command = [
-    'bunx',
-    'vue-tsc',
-    '--noEmit',
-    '-p',
-    project,
-];
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const projectArg = process.argv.find((arg) => arg.endsWith(".json"));
+const project = projectArg ?? "tests/plugin-runtime/v1-examples/tsconfig.json";
+const command = ["bunx", "vue-tsc", "--noEmit", "-p", project];
 
 function posixPath(path: string): string {
-    return path.split(sep).join('/');
+  return path.split(sep).join("/");
 }
 
 function checkV1ExampleInventory(): void {
-    const examplesDir = resolve(repoRoot, 'app/plugins/examples');
-    const fixturePath = resolve(repoRoot, 'tests/plugin-runtime/v1-examples/examples.compile.ts');
-    const expected = readdirSync(examplesDir)
-        .filter((name) => name.endsWith('.client.ts'))
-        .sort();
-    const fixture = ts.createSourceFile(
-        fixturePath,
-        readFileSync(fixturePath, 'utf8'),
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS
-    );
-    const actual = fixture.statements
-        .filter(ts.isImportDeclaration)
-        .map((statement) => statement.moduleSpecifier)
-        .filter(ts.isStringLiteral)
-        .map((specifier) => resolve(dirname(fixturePath), `${specifier.text}.ts`))
-        .filter((path) => dirname(path) === examplesDir)
-        .map((path) => basename(path))
-        .sort();
+  const examplesDir = resolve(repoRoot, "app/plugins/examples");
+  const fixturePath = resolve(
+    repoRoot,
+    "tests/plugin-runtime/v1-examples/examples.compile.ts",
+  );
+  const expected = readdirSync(examplesDir)
+    .filter((name) => name.endsWith(".client.ts"))
+    .sort();
+  const fixture = ts.createSourceFile(
+    fixturePath,
+    readFileSync(fixturePath, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const actual = fixture.statements
+    .filter(ts.isImportDeclaration)
+    .map((statement) => statement.moduleSpecifier)
+    .filter(ts.isStringLiteral)
+    .map((specifier) => resolve(dirname(fixturePath), `${specifier.text}.ts`))
+    .filter((path) => dirname(path) === examplesDir)
+    .map((path) => basename(path))
+    .sort();
 
-    if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
-        throw new Error(
-            `[example-fixtures] V1 fixture imports differ from example plugins\n` +
-            `Expected: ${expected.join(', ')}\nActual: ${actual.join(', ')}`
-        );
-    }
+  if (
+    actual.length !== expected.length ||
+    actual.some((name, index) => name !== expected[index])
+  ) {
+    throw new Error(
+      `[example-fixtures] V1 fixture imports differ from example plugins\n` +
+        `Expected: ${expected.join(", ")}\nActual: ${actual.join(", ")}`,
+    );
+  }
 }
 
 function checkV1Examples(): void {
-    if (!projectArg) checkV1ExampleInventory();
-    const result = Bun.spawnSync(command, {
-        cwd: repoRoot,
-        stdout: 'pipe',
-        stderr: 'pipe',
-    });
-    const output = `${result.stdout.toString()}${result.stderr.toString()}`;
+  if (!projectArg) checkV1ExampleInventory();
+  const result = Bun.spawnSync(command, {
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = `${result.stdout.toString()}${result.stderr.toString()}`;
 
-    if (result.exitCode === 0) {
-        console.log(`[example-fixtures] ${project} compiles in the Nuxt project context`);
-        return;
-    }
-
-    const diagnosticPattern = /^([^\n(]+)\(\d+,\d+\): error TS\d+:/gm;
-    const diagnostics = [...output.matchAll(diagnosticPattern)].map(
-        (match, index, matches) => {
-            const start = match.index ?? 0;
-            const end = matches[index + 1]?.index ?? output.length;
-            const rawFile = match[1]!.trim();
-            const absoluteFile = resolve(repoRoot, rawFile);
-            return {
-                file: posixPath(relative(repoRoot, absoluteFile)),
-                text: output.slice(start, end).trimEnd(),
-            };
-        }
-    );
-
-    if (!diagnostics.length) {
-        console.error(output);
-        throw new Error(
-            `[example-fixtures] vue-tsc failed with exit code ${result.exitCode} without parseable diagnostics`
-        );
-    }
-
-    const relevant = diagnostics.filter(
-        ({ file }) =>
-            file.startsWith('app/plugins/examples/') ||
-            file.startsWith('tests/plugin-runtime/')
-    );
-    if (relevant.length) {
-        console.error(relevant.map(({ text }) => text).join('\n'));
-        throw new Error(
-            `[example-fixtures] ${relevant.length} V1 example diagnostic(s) failed compatibility compilation`
-        );
-    }
-
+  if (result.exitCode === 0) {
     console.log(
-        `[example-fixtures] ${project} compiles; ignored ${diagnostics.length} pre-existing diagnostic(s) outside the fixture corpus`
+      `[example-fixtures] ${project} compiles in the Nuxt project context`,
     );
+    return;
+  }
+
+  const diagnosticPattern = /^([^\n(]+)\(\d+,\d+\): error TS\d+:/gm;
+  const diagnostics = [...output.matchAll(diagnosticPattern)].map(
+    (match, index, matches) => {
+      const start = match.index ?? 0;
+      const end = matches[index + 1]?.index ?? output.length;
+      const rawFile = match[1]!.trim();
+      const absoluteFile = resolve(repoRoot, rawFile);
+      return {
+        file: posixPath(relative(repoRoot, absoluteFile)),
+        text: output.slice(start, end).trimEnd(),
+      };
+    },
+  );
+
+  if (!diagnostics.length) {
+    console.error(output);
+    throw new Error(
+      `[example-fixtures] vue-tsc failed with exit code ${result.exitCode} without parseable diagnostics`,
+    );
+  }
+
+  const relevant = diagnostics.filter(
+    ({ file }) =>
+      file.startsWith("app/plugins/examples/") ||
+      file.startsWith("tests/plugin-runtime/"),
+  );
+  if (relevant.length) {
+    console.error(relevant.map(({ text }) => text).join("\n"));
+    throw new Error(
+      `[example-fixtures] ${relevant.length} V1 example diagnostic(s) failed compatibility compilation`,
+    );
+  }
+
+  console.log(
+    `[example-fixtures] ${project} compiles; ignored ${diagnostics.length} pre-existing diagnostic(s) outside the fixture corpus`,
+  );
 }
 
 /**
@@ -107,35 +117,54 @@ function checkV1Examples(): void {
  * dedicated first-party lane.
  */
 async function checkV2Examples(): Promise<void> {
-    const examplesDir = resolve(repoRoot, 'examples/plugins');
-    if (!existsSync(examplesDir)) return;
-    const packages = readdirSync(examplesDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => resolve(examplesDir, entry.name))
-        .filter((root) => existsSync(resolve(root, 'or3.manifest.json')))
-        .sort();
+  const examplesDir = resolve(repoRoot, "examples/plugins");
+  if (!existsSync(examplesDir)) return;
+  const packages = readdirSync(examplesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => resolve(examplesDir, entry.name))
+    .filter((root) => existsSync(resolve(root, "or3.manifest.json")))
+    .sort();
 
-    const failures: string[] = [];
-    for (const root of packages) {
-        const name = posixPath(relative(repoRoot, root));
-        const result = await checkV2PackageConformance(root, { repoRoot });
-        if (result.status === 'nonconformant') {
-            for (const issue of result.issues) {
-                failures.push(
-                    `[${issue.code}] ${name}/${issue.file}: ${issue.message}`
-                );
-            }
-            continue;
-        }
-        console.log(`[example-fixtures] ${name}: ${result.status}`);
+  const failures: string[] = [];
+  for (const root of packages) {
+    const name = posixPath(relative(repoRoot, root));
+    let temporary: string | undefined;
+    let result;
+    try {
+      const manifest = JSON.parse(
+        readFileSync(resolve(root, "or3.manifest.json"), "utf8"),
+      );
+      if (manifest.toolCards?.length) {
+        temporary = mkdtempSync(resolve(tmpdir(), "or3-card-example-"));
+        const built = await buildV2Package(root, {
+          buildDirectory: resolve(temporary, "build"),
+          packDirectory: resolve(temporary, "pack"),
+        });
+        result = await checkV2PackageConformance(built.pack.packRoot, {
+          repoRoot,
+          mode: "artifact",
+        });
+      } else result = await checkV2PackageConformance(root, { repoRoot });
+    } finally {
+      if (temporary) rmSync(temporary, { recursive: true, force: true });
     }
-
-    if (failures.length) {
-        console.error(failures.join('\n'));
-        throw new Error(
-            `[example-fixtures] ${failures.length} V2 example diagnostic(s) failed conformance`
+    if (result.status === "nonconformant") {
+      for (const issue of result.issues) {
+        failures.push(
+          `[${issue.code}] ${name}/${issue.file}: ${issue.message}`,
         );
+      }
+      continue;
     }
+    console.log(`[example-fixtures] ${name}: ${result.status}`);
+  }
+
+  if (failures.length) {
+    console.error(failures.join("\n"));
+    throw new Error(
+      `[example-fixtures] ${failures.length} V2 example diagnostic(s) failed conformance`,
+    );
+  }
 }
 
 checkV1Examples();

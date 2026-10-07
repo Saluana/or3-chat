@@ -1,3 +1,5 @@
+import { registerToolCardBinding } from '~/composables/chat/tool-cards';
+import type { PluginToolCardDefinition } from '@or3/plugin-sdk/cards';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
@@ -39,6 +41,9 @@ export interface Or3WorkspacePluginApi {
     registerSidebarPage: (def: SidebarPageDef) => () => void;
     registerPaneApp: (def: PaneAppDef) => RegistrationHandle;
     registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;
+    registerToolCard: (
+        definition: PluginToolCardDefinition
+    ) => RegistrationHandle;
     registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
     registerCommandPalettePostSource: (
         definition: PalettePostSourceDefinition
@@ -165,8 +170,23 @@ export function createManagedWorkspacePluginRuntime(options?: {
             scope.onCleanup(cleanup);
             return handle;
         },
+        registerToolCard({ tool, card, ...presentation }) {
+            const handle = registerToolCardBinding({
+                ...presentation,
+                tool,
+                ownerPluginId: ownerPluginId ?? null,
+                source: { kind: 'page', module: card },
+            });
+            scope.onCleanup(() => {
+                handle.dispose();
+            });
+            return handle;
+        },
         registerTool(def, handler) {
-            const tool = tools.registerTool(def, handler, { override: true });
+            const tool = tools.registerTool(def, handler, {
+                override: true,
+                ownerPluginId,
+            });
             let disposed = false;
             const handle: RegistrationHandle = {
                 id: def.function.name,

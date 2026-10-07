@@ -76,6 +76,8 @@ export const TRUSTED_HOST_GRANTS = [
     'chat.read',
     'chat.message.write',
     'chat.message.renderer',
+    'chat.tool.card',
+    'chat.tool.card.embed',
     'chat.editor.extension',
     'workspace.read',
     'workspace.switch',
@@ -275,7 +277,9 @@ export function createTrustedHostContext(
     const abort = () => controller.abort(input.signal?.reason);
     input.signal?.addEventListener('abort', abort, { once: true });
     if (input.signal?.aborted) abort();
-    runtime.api.onCleanup(() => input.signal?.removeEventListener('abort', abort));
+    runtime.api.onCleanup(() =>
+        input.signal?.removeEventListener('abort', abort)
+    );
     const granted = new Set<PluginGrant>(input.grants ?? []);
     const listeners: ListenerEntry[] = [];
     const activations: Array<() => void | Promise<void>> = [];
@@ -563,7 +567,9 @@ export function createTrustedHostContext(
         },
     };
 
-    function registerContribution(contribution: PluginContribution): PluginRegistrationHandle {
+    function registerContribution(
+        contribution: PluginContribution
+    ): PluginRegistrationHandle {
         live();
         const kind: PluginContributionKind = contribution.kind;
         switch (kind) {
@@ -621,6 +627,13 @@ export function createTrustedHostContext(
                 }
                 return registerRenderer({ ...definition, id: contribution.id } as unknown as MessageRendererDefinition);
             }
+            case 'chat.tool.card':
+                allow('chat.tool.card');
+                return toPluginHandle(
+                    runtime.api.registerToolCard(
+                        contribution.definition as import('@or3/plugin-sdk/cards').PluginToolCardDefinition
+                    )
+                );
             case 'chat.tool.client': {
                 const record = asRecord(contribution.definition);
                 const fn = record ? asRecord(record.function) : null;
@@ -747,7 +760,24 @@ export function createTrustedHostContext(
                     ai: services?.ai ?? fallback.ai,
                     tools: services?.tools ?? fallback.tools,
                     jobs: services?.jobs ?? fallback.jobs,
-                    chat: { ...fallback.chat, messages: records.messages, composer: { prefill: services?.prefill ?? fallback.chat.composer.prefill }, send: { markHandled() { allow('chat.editor.extension'); if (!beforeSendDepth) return pluginError('permission-denied', 'markHandled requires an approved before-send callback'); markChatSendHandled(); return pluginOk(undefined); } } },
+                    chat: {
+                        ...fallback.chat,
+                        registerToolCard(
+                            definition: import('@or3/plugin-sdk/cards').PluginToolCardDefinition
+                        ) {
+                            allow('chat.tool.card');
+                            return toPluginHandle(
+                                runtime.api.registerToolCard(definition)
+                            );
+                        },
+                        messages: records.messages,
+                        composer: {
+                            prefill:
+                                services?.prefill ??
+                                fallback.chat.composer.prefill,
+                        },
+                        send: { markHandled() { allow('chat.editor.extension'); if (!beforeSendDepth) return pluginError('permission-denied', 'markHandled requires an approved before-send callback'); markChatSendHandled(); return pluginOk(undefined); } },
+                    },
                     ui: {
                         ...fallback.ui,
                         kit: available.has('or3-trusted-ui-kit-v1') && input.requestedFeatures?.includes('or3-trusted-ui-kit-v1') ? services?.kit : undefined,

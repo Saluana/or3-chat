@@ -154,4 +154,6 @@ async function main(): Promise<void> {
     }
 }
 
-await main();
+if (process.argv.includes('tool-card-frame'))
+    await import('./qualify-tool-card-containment');
+else await main();

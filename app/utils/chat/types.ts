@@ -49,6 +49,7 @@ export interface ChatMessage {
 }
 
 export interface SendMessageParams {
+    cardOrigin?: import('~~/shared/chat/tool-card-data').CardOrigin;
     /** Explicit read-only omission inspection, followed by a one-use confirmation. */
     inspectLossyRequest?: boolean;
     lossyConfirmation?: import('./lossy-request').LossyRequestPreview;

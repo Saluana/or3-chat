@@ -1,0 +1,20 @@
+{
+  "name": "@or3/example-weather-card",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.1.0"
+  },
+  "scripts": {
+    "build": "or3-plugin build .",
+    "validate": "or3-plugin validate dist",
+    "dev:plugin": "or3-plugin dev ."
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "vue": "^3.5.0"
+  }
+}

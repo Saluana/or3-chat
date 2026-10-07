@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ToolCardAuthorityReview from '~/components/plugins/ToolCardAuthorityReview.vue';
 import { describePluginGrant } from '~~/shared/plugins/grant-description';
 /**
  * Dashboard > Marketplace > Discover.
@@ -100,7 +101,9 @@ onBeforeUnmount(() => {
     catalog.dispose(); detail.clear(); preflight.clear(); install.reset();
 });
 const navigation = useDashboardNavigation();
-const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
+const closeDashboard = inject<() => void>('or3:dashboard:close', () => {
+        // Restoring is a convenience: a refused list must not break discovery.
+    });
 
 const selectedPluginId = ref<string | null>(null);
 const rolloutOpen = ref(false);
@@ -1150,7 +1153,8 @@ function blockActionLabel(block: { action: string }): string | null {
                         <p><strong>Data scopes:</strong> {{ selectedRelease.authority.dataScopes.join(', ') || 'none' }}</p>
                         <p><strong>Writes:</strong> {{ selectedRelease.authority.writes.join(', ') || 'none' }}</p>
                         <p><strong>Setup hooks:</strong> {{ selectedRelease.authority.setupHooks.join(', ') || 'none' }}</p>
-                        <p><strong>Dependencies:</strong> {{ selectedRelease.authority.dependencies.join(', ') || 'none' }}</p>
+                        <ToolCardAuthorityReview :dependencies="selectedRelease.authority.dependencies" />
+<p><strong>Dependencies:</strong> {{ selectedRelease.authority.dependencies.join(', ') || 'none' }}</p>
                     </div>
                 </details>
                 <p v-else-if="requestedGrants.length > 0" class="text-xs text-(--ui-text-error)">

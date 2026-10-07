@@ -1,3 +1,4 @@
+import { toolCardAuthorityEntries } from './tool-card-manifest';
 import { createHash } from 'node:crypto';
 import type { Or3PackagePolicyV1, Or3SetupDescriptorV1 } from './profile';
 import type { Sha256 } from './candidate';
@@ -29,6 +30,7 @@ import type { Sha256 } from './candidate';
  */
 
 export interface CandidateAuthorityManifest {
+    readonly toolCards?: readonly import('./manifest').PluginToolCardManifestEntry[];
     readonly trust: string;
     readonly requestedGrants: readonly string[];
     readonly features: { readonly required: readonly string[] };
@@ -125,7 +127,10 @@ export function toCandidateAuthority(input: {
             ...(setup.testAction ? [setup.testAction.operationId] : []),
             setup.firstAction.operationId,
         ],
-        dependencies: dependencyEntries(manifest.dependencies),
+        dependencies: uniqueSorted([
+            ...dependencyEntries(manifest.dependencies),
+            ...toolCardAuthorityEntries(manifest.toolCards),
+        ]),
     };
 }
 

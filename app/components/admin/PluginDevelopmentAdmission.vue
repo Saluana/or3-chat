@@ -1,15 +1,11 @@
-/**
- * Admin > Plugins > Development candidate.
- *
- * Owner-only admission for unpublished SDK candidates, visible only on the
- * dedicated loopback development instance. On any other host it explains the
- * required setup instead of offering an install path.
- *
- * After admission the existing canary/promote controls on this page qualify
- * the candidate; this component additionally exports the scoped developer
- * verification receipt bound to the canary evidence.
- */
+/** * Admin > Plugins > Development candidate. * * Owner-only admission for
+unpublished SDK candidates, visible only on the * dedicated loopback development
+instance. On any other host it explains the * required setup instead of offering
+an install path. * * After admission the existing canary/promote controls on
+this page qualify * the candidate; this component additionally exports the
+scoped developer * verification receipt bound to the canary evidence. */
 <script setup lang="ts">
+import ToolCardAuthorityReview from '~/components/plugins/ToolCardAuthorityReview.vue';
 import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { presentError } from '~~/shared/errors';
 import { computed, onMounted, ref } from 'vue';
@@ -54,6 +50,7 @@ const approvedGrantsKey = ref<string | null>(null);
 const grantsApproved = ref(false);
 const blockedReview = ref<{
     readonly requestedGrants: readonly string[];
+    readonly authority?: { dependencies?: readonly string[] } | null;
     readonly authoritySha256: string;
     readonly packageDigest: string;
 } | null>(null);
@@ -156,10 +153,10 @@ async function admit(): Promise<void> {
             form.append('expectedPackageDigest', blockedReview.value!.packageDigest);
             form.append('expectedAuthoritySha256', blockedReview.value!.authoritySha256);
         }
-        const result = (await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
+        const result = await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
             '/api/admin/plugins/development/admit',
             { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: form }
-        )) as {
+        ) as {
             ok: boolean;
             pluginId: string;
             version: string;
@@ -168,12 +165,16 @@ async function admit(): Promise<void> {
             stage?: string;
             codes?: readonly string[];
             requestedGrants?: readonly string[];
+            authority?: { dependencies?: readonly string[] } | null;
             authoritySha256?: string;
         };
         if (!result.ok) {
-            if (result.stage === 'grants' && result.requestedGrants && result.authoritySha256 && result.packageDigest) {
+            if (
+                result.stage === 'grants' && result.requestedGrants && result.authoritySha256 && result.packageDigest
+            ) {
                 blockedReview.value = {
                     requestedGrants: result.requestedGrants,
+                    authority: result.authority,
                     authoritySha256: result.authoritySha256,
                     packageDigest: result.packageDigest,
                 };
@@ -250,7 +251,9 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
 </script>
 
 <template>
-    <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+    <div
+        class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
+    >
         <h3 class="text-base font-medium">Development candidate</h3>
         <p class="text-sm opacity-70">
             Test an unpublished SDK candidate as a real plugin. This dedicated
@@ -258,18 +261,29 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
             offer this path.
         </p>
 
-        <p v-if="eligibilityError" class="mt-2 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
+        <p
+            v-if="eligibilityError"
+            class="mt-2 text-sm text-[var(--md-sys-color-error,#b91c1c)]"
+        >
             {{ eligibilityError }}
         </p>
 
-        <div v-else-if="eligibility && !eligibility.eligible" class="mt-2 text-sm">
-            <p class="font-medium">Local testing is not available on this host.</p>
+        <div
+            v-else-if="eligibility && !eligibility.eligible"
+            class="mt-2 text-sm"
+        >
+            <p class="font-medium">
+                Local testing is not available on this host.
+            </p>
             <ul class="mt-1 list-disc pl-5 opacity-80">
-                <li v-for="reason in eligibility.help" :key="reason">{{ reason }}</li>
+                <li v-for="reason in eligibility.help" :key="reason">
+                    {{ reason }}
+                </li>
             </ul>
             <p class="mt-1 opacity-70">
-                Start the dedicated instance with <code>bun run dev:plugin</code>; it uses
-                separate application data and extension storage.
+                Start the dedicated instance with
+                <code>bun run dev:plugin</code>; it uses separate application
+                data and extension storage.
             </p>
         </div>
 
@@ -277,38 +291,92 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <label class="flex flex-col gap-1 text-xs">
                     package.zip
-                    <input type="file" accept=".zip" data-testid="dev-candidate-package" @change="pick('package', ($event.target as HTMLInputElement).files)" />
+                    <input
+                        type="file"
+                        accept=".zip"
+                        data-testid="dev-candidate-package"
+                        @change="
+                            pick(
+                                'package',
+                                ($event.target as HTMLInputElement).files
+                            )
+                        "
+                    />
                 </label>
                 <label class="flex flex-col gap-1 text-xs">
                     source.zip
-                    <input type="file" accept=".zip" data-testid="dev-candidate-source" @change="pick('source', ($event.target as HTMLInputElement).files)" />
+                    <input
+                        type="file"
+                        accept=".zip"
+                        data-testid="dev-candidate-source"
+                        @change="
+                            pick(
+                                'source',
+                                ($event.target as HTMLInputElement).files
+                            )
+                        "
+                    />
                 </label>
                 <label class="flex flex-col gap-1 text-xs">
                     receipt.json
-                    <input type="file" accept=".json" data-testid="dev-candidate-receipt" @change="pick('receipt', ($event.target as HTMLInputElement).files)" />
+                    <input
+                        type="file"
+                        accept=".json"
+                        data-testid="dev-candidate-receipt"
+                        @change="
+                            pick(
+                                'receipt',
+                                ($event.target as HTMLInputElement).files
+                            )
+                        "
+                    />
                 </label>
             </div>
 
-            <p v-if="previewError" class="text-xs text-[var(--md-sys-color-error,#b91c1c)]">{{ previewError }}</p>
+            <p
+                v-if="previewError"
+                class="text-xs text-[var(--md-sys-color-error,#b91c1c)]"
+            >
+                {{ previewError }}
+            </p>
 
-            <details v-if="preview" class="rounded border border-[var(--md-outline-variant)] p-2 text-xs">
+            <details
+                v-if="preview"
+                class="rounded border border-[var(--md-outline-variant)] p-2 text-xs"
+            >
                 <summary class="cursor-pointer font-medium">
                     {{ preview.pluginId }} {{ preview.version }}
-                    <span class="font-normal opacity-70">— Development candidate, not a marketplace release</span>
+                    <span class="font-normal opacity-70"
+                        >— Development candidate, not a marketplace
+                        release</span
+                    >
                 </summary>
                 <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
                     <dt>Profile</dt>
                     <dd class="break-all">{{ preview.profile }}</dd>
                     <dt>Package digest</dt>
-                    <dd class="break-all font-mono">{{ preview.packageTreeSha256 }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ preview.packageTreeSha256 }}
+                    </dd>
                     <dt>Authority</dt>
-                    <dd class="break-all font-mono">{{ preview.authoritySha256 }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ preview.authoritySha256 }}
+                    </dd>
                     <dt>Source</dt>
-                    <dd class="break-all">{{ preview.revision }}{{ preview.dirty ? ' (dirty snapshot)' : ' (clean)' }}</dd>
+                    <dd class="break-all">
+                        {{ preview.revision
+                        }}{{ preview.dirty ? ' (dirty snapshot)' : ' (clean)' }}
+                    </dd>
                     <dt>Host features</dt>
-                    <dd>{{ preview.requiredHostFeatures.join(', ') || 'none' }}</dd>
+                    <dd>
+                        {{ preview.requiredHostFeatures.join(', ') || 'none' }}
+                    </dd>
                 </dl>
-                <p class="mt-1 opacity-70">Digests are re-verified server-side on admission. Requested authority still needs explicit workspace approval, and the canary still runs before promotion.</p>
+                <p class="mt-1 opacity-70">
+                    Digests are re-verified server-side on admission. Requested
+                    authority still needs explicit workspace approval, and the
+                    canary still runs before promotion.
+                </p>
             </details>
 
             <div class="flex flex-wrap gap-2">
@@ -319,14 +387,30 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
                     data-testid="dev-candidate-admit"
                     @click="admit"
                 >
-                    {{ blockedReview ? 'Approve and admit again' : 'Admit candidate' }}
+                    {{
+                        blockedReview
+                            ? 'Approve and admit again'
+                            : 'Admit candidate'
+                    }}
                 </UButton>
             </div>
 
-            <div v-if="blockedReview" class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs" data-testid="dev-candidate-grants">
+            <div
+                v-if="blockedReview"
+                class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs"
+                data-testid="dev-candidate-grants"
+            >
                 <p class="font-medium">Authority this candidate asks for</p>
                 <ul class="list-disc pl-5">
-                    <li v-for="grant in blockedReview.requestedGrants" :key="grant"><code>{{ describePluginGrant(grant) }}</code></li>
+                    <ToolCardAuthorityReview
+                        :dependencies="blockedReview.authority?.dependencies"
+                    />
+                    <li
+                        v-for="grant in blockedReview.requestedGrants"
+                        :key="grant"
+                    >
+                        <code>{{ describePluginGrant(grant) }}</code>
+                    </li>
                 </ul>
                 <label class="flex items-center gap-2">
                     <input
@@ -335,43 +419,80 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
                         data-testid="dev-candidate-grant-approve"
                         @change="approvedGrantsKey = previewKey"
                     />
-                    I approve these permissions for this workspace and these exact bytes.
+                    I approve these permissions for this workspace and these
+                    exact bytes.
                 </label>
             </div>
 
             <p v-if="admitNote" class="text-xs opacity-80">{{ admitNote }}</p>
 
-            <div v-if="admitted" class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs" data-testid="dev-candidate-admitted">
+            <div
+                v-if="admitted"
+                class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs"
+                data-testid="dev-candidate-admitted"
+            >
                 <p>
-                    <strong>{{ admitted.pluginId }} {{ admitted.version }}</strong> staged.
-                    Digest <code class="break-all">{{ admitted.packageDigest }}</code>.
-                    Use Run canary and Promote in the package list below; open the plugin
-                    from Chat to exercise it as a real sidebar, pane, tool and storage integration.
+                    <strong
+                        >{{ admitted.pluginId }} {{ admitted.version }}</strong
+                    >
+                    staged. Digest
+                    <code class="break-all">{{ admitted.packageDigest }}</code
+                    >. Use Run canary and Promote in the package list below;
+                    open the plugin from Chat to exercise it as a real sidebar,
+                    pane, tool and storage integration.
                 </p>
                 <div class="flex flex-col gap-2">
                     <div class="flex flex-wrap gap-2">
-                        <UButton size="xs" :loading="canaryBusy" data-testid="dev-candidate-canary" @click="runBrowserCheck">
+                        <UButton
+                            size="xs"
+                            :loading="canaryBusy"
+                            data-testid="dev-candidate-canary"
+                            @click="runBrowserCheck"
+                        >
                             Run browser check
                         </UButton>
                     </div>
                     <p v-if="canaryNote" class="opacity-80">{{ canaryNote }}</p>
                     <label class="flex items-center gap-2">
                         Verification scope
-                        <select v-model="verificationScope" class="rounded border border-[var(--md-outline-variant)] bg-transparent px-2 py-1">
-                            <option value="runtime-canary">Runtime canary</option>
-                            <option value="recorded-interaction-check">Recorded interaction check</option>
+                        <select
+                            v-model="verificationScope"
+                            class="rounded border border-[var(--md-outline-variant)] bg-transparent px-2 py-1"
+                        >
+                            <option value="runtime-canary">
+                                Runtime canary
+                            </option>
+                            <option value="recorded-interaction-check">
+                                Recorded interaction check
+                            </option>
                         </select>
                     </label>
-                    <label v-if="verificationScope === 'recorded-interaction-check'" class="flex items-center gap-2">
+                    <label
+                        v-if="
+                            verificationScope === 'recorded-interaction-check'
+                        "
+                        class="flex items-center gap-2"
+                    >
                         <input v-model="attestedInteraction" type="checkbox" />
-                        I exercised this candidate's sidebar, pane, tools and storage in this browser.
+                        I exercised this candidate's sidebar, pane, tools and
+                        storage in this browser.
                     </label>
                     <div>
-                        <UButton size="xs" :loading="exporting" data-testid="dev-candidate-verify" @click="exportVerification">
+                        <UButton
+                            size="xs"
+                            :loading="exporting"
+                            data-testid="dev-candidate-verify"
+                            @click="exportVerification"
+                        >
                             Export verification receipt
                         </UButton>
                     </div>
-                    <p class="opacity-70">Receipts are developer-supplied and never substitute for trusted marketplace validation. Replacing the candidate keeps plugin data and requires fresh authority review where grants changed.</p>
+                    <p class="opacity-70">
+                        Receipts are developer-supplied and never substitute for
+                        trusted marketplace validation. Replacing the candidate
+                        keeps plugin data and requires fresh authority review
+                        where grants changed.
+                    </p>
                 </div>
             </div>
         </div>

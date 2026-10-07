@@ -313,3 +313,10 @@ Nitro webhook events fire on `nitroApp.hooks` via `emitWebhookSystemHook` and fe
 -   Use `typedOn(hooks)` from `hook-keys` to get argument inference for known keys.
 -   Filters: always return the next value. For veto-capable filters, return `false` to cancel and `''` to clear where supported.
 -   For DB hooks, check the specific module under `app/db/` to see exactly which ops emit hooks and with which shapes.
+
+## Tool cards
+
+- ui.chat.tool-card:action:mounted — { pluginId, tool, callId, runtime }
+- ui.chat.tool-card:action:failed — { pluginId, tool, callId, runtime, code }
+
+These events carry identity and status only, without card arguments, results, state or chat text.

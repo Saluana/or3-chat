@@ -57,6 +57,15 @@ const pluginSdkSourceRoot = resolve(__dirname, 'packages/plugin-sdk/src');
 const hasPluginSdkSource = existsSync(resolve(pluginSdkSourceRoot, 'index.ts'));
 const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
     ? {
+          '@or3/plugin-sdk/cards/vue': resolve(
+              pluginSdkSourceRoot,
+              'cards-vue.ts'
+          ),
+          '@or3/plugin-sdk/cards/react': resolve(
+              pluginSdkSourceRoot,
+              'cards-react.ts'
+          ),
+          '@or3/plugin-sdk/cards': resolve(pluginSdkSourceRoot, 'cards.ts'),
           '@or3/plugin-sdk/host': resolve(pluginSdkSourceRoot, 'host.ts'),
           '@or3/plugin-sdk/package-tree': resolve(
               pluginSdkSourceRoot,
@@ -197,6 +206,9 @@ export default defineNuxtConfig({
     // Disable SSR for test pages to avoid hydration mismatches
     routeRules: {
         '/_tests/**': { ssr: false },
+        ...(process.env.NODE_ENV !== 'production' && process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true'
+            ? {'/__or3-tool-cards-test':{ssr:false}}
+            : {}),
         // Renderer harness for the portable Tasks plugin. The page itself
         // refuses to render outside development, so this never ships.
         '/__tasks-preview': { ssr: false },
@@ -212,7 +224,15 @@ export default defineNuxtConfig({
             : {}),
     },
     compatibilityDate: '2025-07-15',
-    runtimeConfig: applicationPlan.runtimeConfig,
+    runtimeConfig: {
+        ...applicationPlan.runtimeConfig,
+        public: {
+            ...applicationPlan.runtimeConfig.public,
+            toolCardsTestHarness:
+                process.env.NODE_ENV !== 'production' &&
+                process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true',
+        },
+    },
     experimental: {
         defaults: {
             nuxtLink: {
@@ -247,12 +267,12 @@ export default defineNuxtConfig({
     // preserveSymlinks prevents TypeScript from resolving them to their real
     // paths outside the project root, which would break module resolution.
     typescript: {
-        tsConfig: {
-            compilerOptions: {
-                preserveSymlinks: true,
+            tsConfig: {
+                compilerOptions: {
+                    preserveSymlinks: true,
+                },
             },
         },
-    },
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
     icon: {
@@ -700,6 +720,10 @@ export default defineNuxtConfig({
         '**/*.test.*',
         '**/__tests__/**',
         'tests/**',
+        ...(isStaticGenerateBuild ? [
+            'server/routes/or3/tool-card-frame/**',
+            'server/routes/or3/tool-card-probe.get.ts',
+        ] : []),
         // Example plugins and test pages (dev only); keep them out of production build
         ...(process.env.NODE_ENV === 'production'
             ? [
@@ -723,6 +747,18 @@ export default defineNuxtConfig({
             }
         },
         'pages:extend'(pages) {
+            if (
+                process.env.NODE_ENV !== 'production' &&
+                process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true'
+            )
+                pages.push({
+                    name: 'or3-tool-cards-test',
+                    path: '/__or3-tool-cards-test',
+                    file: resolve(
+                        __dirname,
+                        'tests/e2e/fixtures/ToolCardsJourney.vue'
+                    ),
+                });
             if (isScrollTestHarnessEnabled) {
                 pages.push({
                     name: 'or3-scroll-test-harness',
