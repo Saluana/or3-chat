@@ -17,7 +17,10 @@ const BUNDLE_ENTRY = process.env.OR3_CLOUD_TEST_CLI;
 const CLI_COMMAND = BUNDLE_ENTRY ? ['node', BUNDLE_ENTRY] : [process.execPath, CLI_ENTRY];
 export const OLD_VERSION = '0.1.74';
 export const OLD_DIGEST = `sha256:${'a'.repeat(64)}`;
-export const NEW_DIGEST = `sha256:${'b'.repeat(64)}`;
+// The candidate lane binds the manifest before running this real CLI fixture.
+// Docker must serve those input identities, rather than a conflicting fake digest.
+const releaseMetadata = JSON.parse(await readFile(join(import.meta.dir, '../package.json'), 'utf8')).or3Cloud;
+export const NEW_DIGEST = releaseMetadata?.imageDigest ?? `sha256:${'b'.repeat(64)}`;
 export const REPOSITORY = 'ghcr.io/saluana/or3-chat';
 
 export type FakeDockerRule = {
@@ -38,6 +41,7 @@ export type FakeDockerConfig = {
   healthy: boolean;
   runningImage: string;
   digests: Record<string, string>;
+  sourceRevision?: string;
   maintenance?: unknown;
 };
 
@@ -100,7 +104,7 @@ if (args[0] === 'image' && args[1] === 'inspect') {
   const ref = refOf(last);
   if (joined.includes('.RepoDigests')) out(JSON.stringify([repoOf(ref) + '@' + digestOf(ref)]));
   else if (joined.includes('.Config.Labels')) {
-    out(JSON.stringify({ ...labels, 'org.opencontainers.image.version': ref.match(/:(\d+\.\d+\.\d+)$/)?.[1] ?? config.version, 'org.opencontainers.image.revision': '1'.repeat(40) }));
+    out(JSON.stringify({ ...labels, 'org.opencontainers.image.version': ref.match(/:(\d+\.\d+\.\d+)$/)?.[1] ?? config.version, 'org.opencontainers.image.revision': config.sourceRevision ?? '1'.repeat(40) }));
   } else if (joined.includes('.Architecture')) out('arm64');
   else if (joined.includes('{{.Id}}')) out(idOf(ref));
   else out('[]');
@@ -238,6 +242,7 @@ export async function createSandbox(options: { version?: string; mode?: 'local' 
     healthy: true,
     runningImage: image,
     digests: { default: OLD_DIGEST, [`${REPOSITORY}:${PACKAGE_VERSION}`]: NEW_DIGEST },
+    sourceRevision: releaseMetadata?.sourceRevision,
   };
   const volumeLabels = {
     'com.docker.compose.project': env.OR3_COMPOSE_PROJECT,
