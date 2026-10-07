@@ -222,7 +222,9 @@ describe('POST /api/openrouter/stream credential authorization', () => {
             messages: [{ role: 'user', content: 'Keep every source turn. '.repeat(100) }],
             _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null,
                 model_context_tokens: 9_000_000 } });
-        expect(await handler(makeEvent())).toMatchObject({ code: 'context_full', retryable: false });
+        const res = makeResponse();
+        expect(await handler(makeEvent({}, res))).toMatchObject({ code: 'context_full', retryable: false });
+        expect(res.listenerCount('close')).toBe(0);
         expect(catalogBoundary.calls).toBe(1); expect(fetch).not.toHaveBeenCalled();
         expect(startBackgroundStreamMock).not.toHaveBeenCalled();
     });
@@ -478,11 +480,13 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { code: 404,
             message: 'No endpoints found that support image input' } }), { status: 404, headers: { 'Content-Type': 'application/json' } })));
 
-        await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))).resolves.toMatchObject({
+        const res = makeResponse();
+        await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res))).resolves.toMatchObject({
             error: { code: 'ERR_UNSUPPORTED_MODEL', status: 404, source: 'provider', retryable: false,
                 message: 'Choose another model and try again.' } });
         expect(setResponseStatusMock).toHaveBeenLastCalledWith(expect.anything(), 404);
         expect(setHeaderMock).toHaveBeenCalledWith(expect.anything(), 'X-OR3-Stream-Route', '1');
+        expect(res.listenerCount('close')).toBe(0);
     });
 
     it('isolates a transient OpenRouter network outage and serves the next request', async () => {
@@ -497,13 +501,15 @@ describe('POST /api/openrouter/stream credential authorization', () => {
             );
         vi.stubGlobal('fetch', fetchMock);
 
+        const res = makeResponse();
         await expect(
-            handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))
+            handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }, res))
         ).resolves.toMatchObject({ error: { code: 'ERR_PROVIDER', status: 502, source: 'provider', retryable: true, message: 'The AI provider could not complete the request. Please try again later.' } });
         expect(setResponseStatusMock).toHaveBeenLastCalledWith(
             expect.anything(),
             502
         );
+        expect(res.listenerCount('close')).toBe(0);
 
         await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
         expect(fetchMock).toHaveBeenCalledTimes(2);

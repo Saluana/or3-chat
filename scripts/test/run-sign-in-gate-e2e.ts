@@ -38,6 +38,7 @@ try {
             '--workers=1',
             '--reporter=line',
             '--trace=on',
+            ...process.argv.slice(2),
         ],
         {
             cwd: process.cwd(),
@@ -68,6 +69,8 @@ try {
                 OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'sign-in-gate-e2e@example.test',
                 OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'DisposableSignInGate!123',
                 OR3_ADMIN_DATA_DIR: join(dataDir, 'admin'),
+                OR3_ADMIN_USERNAME: 'sign-in-gate-admin',
+                OR3_ADMIN_PASSWORD: 'DisposableSignInGateAdmin!123',
                 OPENROUTER_API_KEY: '',
                 OR3_OPENROUTER_API_KEY: '',
                 NUXT_OPENROUTER_API_KEY: '',

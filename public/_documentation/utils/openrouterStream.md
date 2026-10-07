@@ -40,7 +40,9 @@ the full tool name/arguments in each event.
 On the server route, a foreground request is bound to the outgoing response:
 when the browser disconnects (Stop, a closed tab, a lost connection) before
 provider headers or mid-stream, the upstream OpenRouter request is aborted.
-Background jobs are not tied to it. The route reads the request body through a
+The response-close listener is removed when the foreground handler settles,
+including context admission and provider failures. Background jobs are not tied
+to it. The route reads the request body through a
 bounded reader: 413 above `MODEL_REQUEST_BODY_LIMIT_BYTES`, 400 for anything
 that is not a JSON object. That limit only bounds buffering; context and token
 limits are still enforced after parsing.

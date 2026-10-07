@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { STORAGE_CONTROL_BODY_LIMIT_BYTES } from '../../../utils/security/limited-json-body';
 
-const readBodyMock = vi.fn();
-const setResponseHeaderMock = vi.fn();
-const setHeaderMock = vi.fn();
+const { readBodyMock, setResponseHeaderMock, setHeaderMock } = vi.hoisted(() => ({
+    readBodyMock: vi.fn(),
+    setResponseHeaderMock: vi.fn(),
+    setHeaderMock: vi.fn(),
+}));
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -407,6 +409,7 @@ describe('POST /api/storage/presign-download', () => {
 
         it('rejects a declared oversized body with 413 before reading it', async () => {
             const handler = await load();
+            readBodyMock.mockResolvedValue(makeValidBody());
             const event = { context: {}, node: { req: { headers: { 'content-length': String(tooLarge) } } } } as unknown as H3Event;
 
             await expect(handler(event)).rejects.toMatchObject({ statusCode: 413 });
@@ -418,11 +421,14 @@ describe('POST /api/storage/presign-download', () => {
 
         it('rejects an oversized chunked body with 413 as soon as the limit is crossed', async () => {
             const handler = await load();
+            const body = { ...makeValidBody(), padding: 'x'.repeat(tooLarge) };
+            readBodyMock.mockResolvedValue(body);
+            const bytes = Buffer.from(JSON.stringify(body));
             const request = {
                 headers: {},
                 async *[Symbol.asyncIterator]() {
-                    yield Buffer.alloc(tooLarge - 100, 'a');
-                    yield Buffer.alloc(200, 'b');
+                    yield bytes.subarray(0, tooLarge - 100);
+                    yield bytes.subarray(tooLarge - 100);
                     throw new Error('the reader continued past the limit');
                 },
             };

@@ -135,6 +135,14 @@ Run the relevant provider qualification in its own repository before tagging.
 The VPS operator never installs those packages; they are compiled into the
 image during this release.
 
+For changes to Basic Auth invite-only onboarding, also run
+`bun run test:e2e:sign-in-gate -- --grep 'completes invite-only sign-up'`
+against the exact published provider version selected by the host. This checks
+desktop and mobile registration from an Admin invite link, then verifies the
+invited workspace, role and session after reload. Keep the traces, screenshots
+and signup receipts with the candidate evidence. A host-cookie test or rebuilt
+unpublished provider output cannot replace this check.
+
 ## Release
 
 After the candidate workflow succeeds, push the matching tag at that exact
