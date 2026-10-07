@@ -943,6 +943,26 @@ test.describe('production chat journey', () => {
         await info.attach('text-only-model-requests', { contentType: 'application/json', body: JSON.stringify(await requests()) });
     });
 
+    test('a title-only sidebar miss hands the query to message search', async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await send(page, 'journey:palette handoff');
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+        // The reply text is not in the title, so the sidebar list cannot match it.
+        await page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true }).fill('deterministic');
+        await expect(page.getByText('No matches found', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Search inside messages', exact: true }).click();
+        await expect(page.locator('[data-test="command-palette"]')).toBeVisible();
+        await expect(page.locator('[data-test="command-palette-input"]')).toHaveValue('deterministic');
+        await expect(page.locator('[data-test="command-palette"]').getByRole('option').filter({ hasText: 'journey:palette handoff' }).first())
+            .toBeVisible({ timeout: 30_000 });
+        const path = info.outputPath('sidebar-message-search-handoff.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('sidebar-message-search-handoff', { path, contentType: 'image/png' });
+    });
+
     test('same-title search results retain distinct source identities until the user chooses', async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));

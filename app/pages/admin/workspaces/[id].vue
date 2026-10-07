@@ -635,9 +635,18 @@ async function revokeInvite(inviteId: string) {
     }
 }
 
+/** The API returns a path; the person receiving the invite needs a full link. */
+function absoluteInviteUrl(url: string): string {
+    try {
+        return new URL(url, window.location.origin).toString();
+    } catch {
+        return url;
+    }
+}
+
 async function copyInviteUrl(url: string) {
     try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(absoluteInviteUrl(url));
     } catch {
         // ignore clipboard errors
     }

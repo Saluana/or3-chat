@@ -230,7 +230,9 @@ const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
 
 /** Extract the provider prefix from a model id (`anthropic/claude-3.5` → `anthropic`). */
 export function getProviderSlug(model: Pick<OpenRouterModel, 'id'>): string {
-    const id = model.id || '';
+    // OpenRouter alias slugs (`~openai/gpt-luna-latest`) belong to the
+    // provider after the `~`, not to a separate "~openai" provider.
+    const id = (model.id || '').replace(/^~+/, '');
     const idx = id.indexOf('/');
     return (idx === -1 ? id : id.slice(0, idx)).toLowerCase();
 }
@@ -395,8 +397,11 @@ export function getCapabilities(m: OpenRouterModel): ModelCapabilities {
 
 export interface ModelBadge {
     label: string;
-    /** Visual tone mapped to a Nuxt UI badge color. */
-    tone: 'primary' | 'success' | 'info' | 'warning' | 'neutral';
+    /**
+     * Visual tone mapped to a Nuxt UI badge color. Not `info`: OR3 themes map
+     * it to a surface container, so an info badge label is invisible.
+     */
+    tone: 'primary' | 'success' | 'warning' | 'neutral';
 }
 
 /**
@@ -410,10 +415,10 @@ export function getModelBadges(m: OpenRouterModel, max = 2): ModelBadge[] {
     if (caps.free) badges.push({ label: 'Free', tone: 'success' });
     if (caps.isNew) badges.push({ label: 'New', tone: 'primary' });
     if (caps.reasoning) badges.push({ label: 'Reasoning', tone: 'primary' });
-    if (caps.longContext) badges.push({ label: 'Long context', tone: 'info' });
+    if (caps.longContext) badges.push({ label: 'Long context', tone: 'neutral' });
     if (caps.costEffective)
         badges.push({ label: 'Cost effective', tone: 'success' });
-    if (caps.openWeights) badges.push({ label: 'Open weights', tone: 'info' });
+    if (caps.openWeights) badges.push({ label: 'Open weights', tone: 'neutral' });
     if (caps.vision && !caps.imageOutput)
         badges.push({ label: 'Vision', tone: 'neutral' });
     if (caps.imageOutput) badges.push({ label: 'Image gen', tone: 'neutral' });

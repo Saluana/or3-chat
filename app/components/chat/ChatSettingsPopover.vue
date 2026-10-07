@@ -645,9 +645,7 @@ const closeButtonProps = computed(() => {
 const { favoriteModels } = useModelStore();
 
 function providerSlugFor(modelId: string): string {
-    // Some upstream canonical slugs carry a leading `~`, which is not part
-    // of the provider prefix.
-    return getProviderSlug({ id: modelId.replace(/^~+/, '') });
+    return getProviderSlug({ id: modelId });
 }
 
 const modelItems = computed(() =>
