@@ -24,6 +24,10 @@ The route-availability result is cached in `localStorage` for 15 minutes. In
 the optional server-first path, 404/405 responses and network failures mark the
 route unavailable; other proxy errors do not. When SSR auth requires the
 server route, 404/405 and network failures throw without marking it unavailable.
+The route marks every response it produces with `X-OR3-Stream-Route: 1`. A
+404/405 carrying that header is a relayed provider error (for example, no
+endpoint supports the request's input), reported as `ERR_UNSUPPORTED_MODEL`;
+it never marks the route unavailable or triggers the direct fallback.
 The cache can be stale after changing between static and SSR builds or
 providers. Clear `or3:server-route-available` (and
 `or3:background-streaming-available`) in that case.

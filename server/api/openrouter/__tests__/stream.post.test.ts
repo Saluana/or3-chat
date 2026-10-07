@@ -400,6 +400,18 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         }
     });
 
+    it('marks a relayed provider 404 as a route response with model guidance', async () => {
+        const setHeaderMock = vi.fn(); vi.stubGlobal('setHeader', setHeaderMock);
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { code: 404,
+            message: 'No endpoints found that support image input' } }), { status: 404, headers: { 'Content-Type': 'application/json' } })));
+
+        await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))).resolves.toMatchObject({
+            error: { code: 'ERR_UNSUPPORTED_MODEL', status: 404, source: 'provider', retryable: false,
+                message: 'Choose another model and try again.' } });
+        expect(setResponseStatusMock).toHaveBeenLastCalledWith(expect.anything(), 404);
+        expect(setHeaderMock).toHaveBeenCalledWith(expect.anything(), 'X-OR3-Stream-Route', '1');
+    });
+
     it('isolates a transient OpenRouter network outage and serves the next request', async () => {
         const fetchMock = vi
             .fn()

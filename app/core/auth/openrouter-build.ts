@@ -181,6 +181,16 @@ function isSupportedRasterDataUrl(value: string): boolean {
     return isSupportedRasterMimeType(dataUrlMime(value));
 }
 
+/** Whether an image candidate would become an image part (PDF hashes share `file_hashes`). */
+async function isImageCandidate(hash: string, inline: ReadonlyMap<string, unknown>): Promise<boolean> {
+    if (inline.has(hash)) return true;
+    if (hash.startsWith('data:')) return isSupportedRasterDataUrl(hash);
+    if (/^https?:|^blob:/i.test(hash)) return true;
+    const { getFileMeta } = await getFilesMod();
+    const meta = await getFileMeta(hash).catch(() => null);
+    return meta?.kind === 'image';
+}
+
 async function remoteRefToDataUrl(ref: string): Promise<string | null> {
     if (ref.startsWith('data:')) {
         return isSupportedRasterDataUrl(ref) ? ref : null;
@@ -385,6 +395,11 @@ export interface BuildOptions {
     filterIncludeImages?: (
         candidates: BuildImageCandidate[]
     ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
+    /**
+     * False when the selected model's catalog entry lacks image input. Images
+     * become a short text note instead of parts the provider would reject.
+     */
+    acceptsImageInput?: boolean;
     debug?: boolean; // verbose logging
 }
 
@@ -516,15 +531,17 @@ export async function selectOpenRouterImageCandidates(
         }
     }
 
-    // Enforce max & dedupe
+    // Dedupe first so a repeated image stays where it was first attached, then
+    // keep the newest images: the current attachment must never be the one
+    // dropped because older turns already filled the cap.
     const seen = new Set<string>();
-    const selected: BuildImageCandidate[] = [];
+    const unique: BuildImageCandidate[] = [];
     for (const c of filtered) {
-        if (selected.length >= maxImageInputs) break;
         if (dedupeImages && seen.has(c.hash)) continue;
         seen.add(c.hash);
-        selected.push(c);
+        unique.push(c);
     }
+    const selected = maxImageInputs > 0 ? unique.slice(-maxImageInputs) : [];
 
     return { selected, inlineImageCandidates };
 }
@@ -547,7 +564,11 @@ export async function buildOpenRouterMessages(
     messages: ChatMessageLike[],
     opts: BuildOptions = {}
 ): Promise<ORMessage[]> {
-    const { selected, inlineImageCandidates } = await selectOpenRouterImageCandidates(messages, opts);
+    const acceptsImages = opts.acceptsImageInput !== false;
+    // A text-only model gets a note for every omitted image, not just the
+    // newest ones a vision model would receive.
+    const { selected, inlineImageCandidates } = await selectOpenRouterImageCandidates(messages,
+        acceptsImages ? opts : { ...opts, maxImageInputs: Number.POSITIVE_INFINITY });
 
     // Group selected hashes by message index for convenient inclusion
     const byMessageIndex = new Map<number, BuildImageCandidate[]>();
@@ -624,7 +645,14 @@ export async function buildOpenRouterMessages(
         }
 
         // Add images associated with this message index (only if truly images)
-        const imgs = byMessageIndex.get(i) || [];
+        if (!acceptsImages) {
+            let omitted = 0;
+            for (const img of byMessageIndex.get(i) || []) {
+                if (await isImageCandidate(img.hash, inlineImageCandidates)) omitted += 1;
+            }
+            if (omitted) parts.push({ type: 'text', text: `[${omitted} image${omitted === 1 ? '' : 's'} omitted: the selected model does not accept image input.]` });
+        }
+        const imgs = acceptsImages ? byMessageIndex.get(i) || [] : [];
         for (const img of imgs) {
             const inlineImage = inlineImageCandidates.get(img.hash);
             if (inlineImage) {

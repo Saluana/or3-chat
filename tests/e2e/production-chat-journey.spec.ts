@@ -901,6 +901,48 @@ test.describe('production chat journey', () => {
         await info.attach('model-without-tools', { path, contentType: 'image/png' });
     });
 
+    test('a text-only model continues an image conversation and refuses a new image with guidance', async ({ page }, info) => {
+        test.setTimeout(90_000);
+        const plain = { id: 'journey/plain', name: 'Plain fixture model', context_length: 8192, supported_parameters: ['temperature'],
+            architecture: { input_modalities: ['text'], output_modalities: ['text'] } };
+        await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [plain], links: { next: null }, total_count: 1 } }));
+        await page.goto(`${chatPage}?model=plain&imagehistory=1`);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await expect(input).toBeVisible({ timeout: 45_000 });
+        await expect(page.getByText('What colour is this image?', { exact: true })).toBeVisible();
+        const requests = () => page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:plain-requests') ?? '[]') as Array<{ partTypes: string[]; text: string[] }>);
+
+        // The saved image (history and composer carry-forward) never reaches a model that cannot read it.
+        await send(page, 'journey:summarize after the image');
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        const [continued] = await requests();
+        expect(continued?.partTypes).not.toContain('image_url');
+        expect(continued?.text).toContain('What colour is this image?[1 image omitted: the selected model does not accept image input.]');
+
+        // A newly attached image is refused before any write, with the draft and image kept.
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await input.fill('journey:describe the new image');
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.getByText("Plain fixture model can't read images. Choose a model that accepts images, or remove the image to send this message.", { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Choose model', exact: true })).toBeVisible();
+        await expect(input).toHaveText('journey:describe the new image');
+        expect(await requests()).toHaveLength(1);
+        const path = info.outputPath('text-only-model-image-guidance.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('text-only-model-image-guidance', { path, contentType: 'image/png' });
+
+        // Removing the image clears the guidance; the text-only turn then succeeds.
+        await page.getByRole('button', { name: 'Remove image', exact: true }).click();
+        await expect(page.getByText(/can't read images/)).toHaveCount(0);
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toHaveCount(2, { timeout: 30_000 });
+        expect((await requests()).every((request) => !request.partTypes.includes('image_url'))).toBe(true);
+        await info.attach('text-only-model-requests', { contentType: 'application/json', body: JSON.stringify(await requests()) });
+    });
+
     test('same-title search results retain distinct source identities until the user chooses', async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));

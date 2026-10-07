@@ -165,6 +165,16 @@ function isServerRouteAvailable(): boolean {
 }
 
 /**
+ * A 404/405 only means the stream route is absent when the route did not
+ * answer itself. The route marks every response (including relayed provider
+ * errors such as "No endpoints found that support image input").
+ */
+function isMissingServerRoute(response: Response): boolean {
+    return (response.status === 404 || response.status === 405)
+        && response.headers.get('x-or3-stream-route') !== '1';
+}
+
+/**
  * Mark server routes as available or unavailable with TTL.
  */
 function setServerRouteAvailable(available: boolean): void {
@@ -351,7 +361,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 return; // Success; don't fall back
             }
 
-            if (serverResp.status === 404 || serverResp.status === 405) {
+            if (isMissingServerRoute(serverResp)) {
                 if (forceServerRoute) {
                     throw new OpenRouterStreamError(
                         'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)',
@@ -841,7 +851,7 @@ export async function startBackgroundStream(params: {
                         capabilityDisabled: true,
                     });
                 }
-                if (resp.status === 404 || resp.status === 405) {
+                if (isMissingServerRoute(resp)) {
                     setServerRouteAvailable(false);
                     setBackgroundStreamingAvailable(false);
                 }

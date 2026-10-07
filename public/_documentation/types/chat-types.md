@@ -30,7 +30,7 @@ export function visibleText(message: ChatMessage): string {
 
 `SendMessageParams` contains model selection, attachments, additional context hashes, reasoning choices, retry history, and the `onUserPersisted` callback. Use `modelVariant` for routing variants rather than the deprecated `online` flag. The callback runs after the user row is durable and before response generation.
 
-`SendResult` is discriminated by `status`: accepted, rejected, failed, aborted, complete, or detached. Some failed/aborted/detached results can still carry a persisted user message ID. An accepted request is not a completed assistant answer. Use the exported `hasDurableSendAcceptance(result)` when deciding whether the user's message has been saved.
+`SendResult` is discriminated by `status`: accepted, rejected, failed, aborted, complete, or detached. A rejected result with reason `unsupported_input` means the selected model cannot read an attachment in this turn (an image for a text-only model); nothing was saved and the composer keeps the draft. Some failed/aborted/detached results can still carry a persisted user message ID. An accepted request is not a completed assistant answer. Use the exported `hasDurableSendAcceptance(result)` when deciding whether the user's message has been saved.
 
 ```ts
 import { hasDurableSendAcceptance, type SendResult } from '~/utils/chat/types';

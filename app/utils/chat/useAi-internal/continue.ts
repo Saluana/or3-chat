@@ -116,6 +116,8 @@ export type ContinueMessageContext = {
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
     resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
+    /** False only when catalog metadata says the model cannot read images. */
+    acceptsImageInput?: (modelId: string) => boolean;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -391,6 +393,7 @@ export async function continueMessageImpl(
             fileHashes: [],
             maxImageInputs: 5,
             imageInclusionPolicy: 'all',
+            acceptsImageInput: ctx.acceptsImageInput?.(modelOverride || ctx.defaultModelId) ?? true,
         });
 
         const filteredMessages = await ctx.hooks.applyFilters(

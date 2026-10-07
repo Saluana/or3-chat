@@ -262,6 +262,34 @@ describe('buildOpenRouterMessagesForSend', () => {
         expect(result).toEqual(passedMessages);
     });
 
+    it('does not carry forward an image already attached by the user, but keeps PDFs and assistant images', async () => {
+        const pdf = { type: 'file', data: 'data:application/pdf;base64,cGRm', mediaType: 'application/pdf', name: 'a.pdf' };
+        const generated = { type: 'image', image: 'data:image/png;base64,BBBB', mediaType: 'image/png' };
+        hashToContentPartSpy.mockImplementation(async (hash: string) => hash === 'img-1'
+            ? { type: 'image', image: 'data:image/png;base64,AAAA', mediaType: 'image/png' } : hash === 'pdf-1' ? pdf : hash === 'img-2' ? generated : null);
+        await buildOpenRouterMessagesForSend({
+            effectiveMessages: [
+                { id: 'u-1', role: 'user', content: 'first', file_hashes: JSON.stringify(['img-1', 'pdf-1']) },
+                { id: 'a-1', role: 'assistant', content: 'middle', file_hashes: JSON.stringify(['img-2']) },
+                { id: 'u-2', role: 'user', content: 'last' },
+            ],
+            assistantHashes: [], contextHashes: ['img-1', 'pdf-1', 'img-2'],
+        });
+        const [passedMessages] = buildOpenRouterMessagesSpy.mock.calls[0] as [Array<{ content: unknown }>];
+        expect(passedMessages[2]?.content).toEqual([{ type: 'text', text: 'last' }, pdf, generated]);
+    });
+
+    it('carries no images and tells the builder when the model has no image input', async () => {
+        hashToContentPartSpy.mockResolvedValue({ type: 'image', image: 'data:image/png;base64,AAAA', mediaType: 'image/png' });
+        await buildOpenRouterMessagesForSend({
+            effectiveMessages: [{ id: 'u-1', role: 'user', content: 'last' }],
+            assistantHashes: [], contextHashes: ['img-9'], acceptsImageInput: false,
+        });
+        const [passedMessages, options] = buildOpenRouterMessagesSpy.mock.calls[0] as [Array<{ content: unknown }>, Record<string, unknown>];
+        expect(passedMessages[0]?.content).toBe('last');
+        expect(options).toMatchObject({ acceptsImageInput: false });
+    });
+
     it('trims messages to maxInputTokens budget while keeping system and last user', async () => {
         const effectiveMessages: ChatMessage[] = [
             { id: 's-1', role: 'system', content: 'system' },

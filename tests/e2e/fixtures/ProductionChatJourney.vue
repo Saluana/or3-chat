@@ -78,6 +78,8 @@ const benchmarkResult = ref('');
 const boundedFilesJourney = useRoute().query.files === 'bounded';
 const retryFilesJourney = useRoute().query.files === 'retry';
 const plainModelJourney = useRoute().query.model === 'plain';
+/** A saved conversation with an image, continued on the text-only plain model. */
+const imageHistoryJourney = plainModelJourney && useRoute().query.imagehistory === '1';
 const ambiguousJourney = useRoute().query.ambiguous === '1';
 const plainModel = { id: 'journey/plain', name: 'Plain fixture model', context_length: 8192,
     supported_parameters: ['temperature'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } };
@@ -295,6 +297,16 @@ function installDeterministicFetch(): void {
 
         const body = await requestBody(input, init);
         const messages = Array.isArray(body.messages) ? body.messages : [];
+        if (plainModelJourney) {
+            const partTypes = messages.flatMap((message) => Array.isArray((message as { content?: unknown }).content)
+                ? ((message as { content: Array<{ type?: string }> }).content).map((part) => part?.type) : []);
+            const requests = JSON.parse(localStorage.getItem('or3:e2e:plain-requests') ?? '[]') as unknown[];
+            localStorage.setItem('or3:e2e:plain-requests', JSON.stringify([...requests, { model: body.model, partTypes,
+                text: messages.map((message) => messageText(message)) }]));
+            // OpenRouter answers image parts for a text-only model with a 404.
+            if (partTypes.includes('image_url'))
+                return Response.json({ error: { code: 404, message: 'No endpoints found that support image input' } }, { status: 404 });
+        }
         if (compactionJourney) {
             const requests = JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') as unknown[];
             localStorage.setItem('or3:e2e:compaction-requests', JSON.stringify([...requests, {
@@ -531,6 +543,20 @@ onMounted(async () => {
         hooks.addFilter('ai.chat.model:filter:select', selectPlainModel);
         const { useModelStore } = await import('~/composables/chat/useModelStore');
         useModelStore().catalog.value = [plainModel];
+    }
+    if (imageHistoryJourney && !localStorage.getItem(THREAD_KEY)) {
+        const image = await createOrRefFile(new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII='),
+            (value) => value.charCodeAt(0))], { type: 'image/png' }), 'earlier.png');
+        const { createThread } = await import('~/db/threads');
+        const thread = await createThread({ title: 'Image conversation' });
+        const timestamp = nowSec();
+        await getDb().messages.bulkPut([
+            { id: `${thread.id}-image-question`, thread_id: thread.id, role: 'user', index: 1, created_at: timestamp, updated_at: timestamp,
+                clock: 1, pending: false, deleted: false, file_hashes: JSON.stringify([image.hash]), data: { content: 'What colour is this image?' } },
+            { id: `${thread.id}-image-answer`, thread_id: thread.id, role: 'assistant', index: 2, created_at: timestamp, updated_at: timestamp,
+                clock: 1, pending: false, deleted: false, data: { content: 'It is a single dark pixel.' } },
+        ]);
+        localStorage.setItem(THREAD_KEY, thread.id);
     }
     if (workspaceJourney) {
         const key = 'or3:e2e:workspace-document';

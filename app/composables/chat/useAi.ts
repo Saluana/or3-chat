@@ -100,10 +100,12 @@ import {
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import {
     appendModelVariant,
+    stripModelVariantSuffix,
 } from '~~/shared/openrouter/model-variants';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { placeHistoryTools } from '~/utils/chat/history-placement';
 import { inferMimeFromUrl } from '~/utils/chat/files';
+import { acceptsImageInput, unsupportedImageInputMessage } from '~/utils/modelCatalog';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
@@ -2214,6 +2216,14 @@ export function useChat(
         const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
         const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
         if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
+        const budgetModelMeta = catalog.value.find((entry) => entry.id === readiness.modelId)
+            ?? favoriteModels.value.find((entry) => entry.id === readiness.modelId);
+        const imageInput = acceptsImageInput(budgetModelMeta);
+        // Refuse before any write: silently dropping an image the user just
+        // attached would answer a question about content the model never saw.
+        if (!imageInput && parts.some((part) => part.type === 'image'))
+            return { status: 'rejected', requestId, reason: 'unsupported_input',
+                error: unsupportedImageInputMessage(budgetModelMeta?.name ?? readiness.modelId) };
         const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
             userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
             requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
@@ -2228,7 +2238,8 @@ export function useChat(
         const sanitizedEffectiveMessages = (Array.isArray(effectiveMessages) ? effectiveMessages : []).filter(shouldKeepAssistantMessage);
         let orMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: sanitizedEffectiveMessages,
             assistantHashes, prevAssistantId: prevAssistant?.id, contextHashes: context_hashes,
-            fileHashes: Array.isArray(file_hashes) ? file_hashes : [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
+            fileHashes: Array.isArray(file_hashes) ? file_hashes : [], maxImageInputs: 5, imageInclusionPolicy: 'all',
+            acceptsImageInput: imageInput });
         const preparation: ChatSendPreparation = { requestId, workspaceId: requestScope.workspaceId,
             workspaceGeneration, model: modelId, messages: JSON.parse(JSON.stringify(orMessages)) as ChatSendPreparation['messages'],
             editorDoc: sendMessagesParams.editorDoc, signal: preparationSignal };
@@ -2246,8 +2257,6 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'empty_context', error: 'No model input remained after preparation.' };
         const modalities = getChatModalities(modelId);
         const toolRegistry = useToolRegistry();
-        const budgetModelMeta = catalog.value.find((entry) => entry.id === readiness.modelId)
-            ?? favoriteModels.value.find((entry) => entry.id === readiness.modelId);
         const modelSupportsTools = !budgetModelMeta?.supported_parameters || budgetModelMeta.supported_parameters.includes('tools');
         const advertisedToolDefs = JSON.parse(JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
             workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : [])) as import('~/utils/chat/types').ToolDefinition[];
@@ -3583,6 +3592,12 @@ export function useChat(
                         if (!model.ok) throw new ChatContextAdmissionError(model);
                         return Object.freeze({ model: model.metadata, source: model.source,
                             userMaxContextTokens: preference.maxContextTokens });
+                    },
+                    acceptsImageInput: (selectedModelId) => {
+                        const { catalog, favoriteModels } = useModelStore();
+                        const id = stripModelVariantSuffix(stripThinkingSuffix(selectedModelId));
+                        return acceptsImageInput(catalog.value.find((entry) => entry.id === id)
+                            ?? favoriteModels.value.find((entry) => entry.id === id));
                     },
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,

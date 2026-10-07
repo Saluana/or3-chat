@@ -328,6 +328,21 @@ export function getOutputPrice(m: OpenRouterModel): number {
     return parsePrice(m.pricing?.completion) ?? 0;
 }
 
+/**
+ * Request gating, unlike `getCapabilities().vision`: only explicit catalog
+ * input modalities without "image" refuse images. Unknown models keep them.
+ */
+export function acceptsImageInput(
+    m: { architecture?: { input_modalities?: unknown } | null } | null | undefined
+): boolean {
+    const inputs = m?.architecture?.input_modalities;
+    return !Array.isArray(inputs) || inputs.length === 0 || inputs.includes('image');
+}
+
+export function unsupportedImageInputMessage(modelName: string): string {
+    return `${modelName} can't read images. Choose a model that accepts images, or remove the image to send this message.`;
+}
+
 export function getCapabilities(m: OpenRouterModel): ModelCapabilities {
     const inputMods = m.architecture?.input_modalities ?? ['text'];
     const outputMods = m.architecture?.output_modalities ?? ['text'];

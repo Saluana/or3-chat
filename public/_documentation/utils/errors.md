@@ -86,6 +86,11 @@ recovery copy; arbitrary upstream text and generic HTTP 400 responses do not
 establish context overflow. Stored background error strings retain these codes
 through the shared serializer and presenter.
 
+A provider-sourced HTTP 404 maps to `ERR_UNSUPPORTED_MODEL` ("choose another
+model"): OpenRouter uses it when no endpoint can serve the request, such as a
+retired model or an input the model does not accept. Other 404s remain
+`ERR_NOT_FOUND`.
+
 Reporter tags are small, flat string/number/boolean values. Use `domain`
 (chat, db, files, auth), `stage` or `op`, and the relevant record ID where
 needed. `dbTry` adds `rw` and `entity` context for database failures.

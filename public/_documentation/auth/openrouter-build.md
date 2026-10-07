@@ -46,14 +46,15 @@ Stored `file_hashes` is a **JSON-serialized array**, not a space-separated or co
 
 | Option | Default | Behavior |
 | --- | --- | --- |
-| `maxImageInputs` | 8 | Maximum selected image candidates across history; zero excludes image candidates. Explicit file parts remain. |
+| `maxImageInputs` | 8 | Maximum selected image candidates across history, keeping the newest after dedupe; zero excludes image candidates. Explicit file parts remain. |
 | `dedupeImages` | true | Keeps the first occurrence of a reference. |
+| `acceptsImageInput` | true | `false` replaces each message's images with a short text note, for a model whose catalog input modalities lack `image`. |
 | `imageInclusionPolicy` | `all` | `all`, `recent`, `recent-user`, or `recent-assistant`. |
 | `recentWindow` | 12 | The last N messages in the entire history, then role filtering for the role-specific policies. It is not the last N messages of that role. |
 | `filterIncludeImages` | none | Optional synchronous or async callback over candidates before final selection. |
 | `debug` | false | Accepted option; current implementation suppresses debug logging. |
 
-A `BuildImageCandidate` has `hash`, `role`, and `messageIndex`. Policies apply to image candidates, not to ordinary file parts. Image count limiting is not token budgeting or a guarantee that the model supports images.
+A `BuildImageCandidate` has `hash`, `role`, and `messageIndex`. Policies apply to image candidates, not to ordinary file parts. Image count limiting is not token budgeting. Native chat passes `acceptsImageInput: false` only when the selected model's catalog entry lists input modalities without `image`; unknown metadata keeps images. A new image attached for such a model is refused before any write with reason `unsupported_input`.
 
 ## Attachment hydration
 
