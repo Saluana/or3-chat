@@ -16,7 +16,7 @@ export const historyToolDefinitions: ToolDefinition[] = [
                 include_after_compaction: expansion,
             } },
         },
-        ui: { label: 'Read original message', category: 'Chat', icon: 'i-lucide-history', defaultEnabled: true },
+        ui: { label: 'Read original message', descriptionHint: 'Look up an original message from before this chat was compacted.', category: 'Chat', icon: 'i-lucide-history', defaultEnabled: true },
     },
     {
         type: 'function', runtime: 'client',
@@ -32,6 +32,6 @@ export const historyToolDefinitions: ToolDefinition[] = [
                 cursor: { type: 'string', minLength: 1, maxLength: 2048 },
             } },
         },
-        ui: { label: 'Search original history', category: 'Chat', icon: 'i-lucide-search', defaultEnabled: true },
+        ui: { label: 'Search original history', descriptionHint: 'Search the original messages from before this chat was compacted.', category: 'Chat', icon: 'i-lucide-search', defaultEnabled: true },
     },
 ];
