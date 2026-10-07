@@ -40,7 +40,7 @@
     ]
   },
   "or3-plugin-workflows": {
-    "patchSha256": "29794b3648c4691319c78046ef60d6f1de909a4c78fbea7095ceed82d588d835",
+    "patchSha256": "498d215327057674467016237d686bd3781b29343c01a524a2d3dad6b5c820b5",
     "originalFiles": {
       "README.md": "032a6929412d5f32f4199d7f1bdac5775992da4391bf6c086995a690546a2bac",
       "bun.lock": "300fbddfafb594cd9987a6336482f11e3e393a3d8a1117f6ef555672a01f41b5",

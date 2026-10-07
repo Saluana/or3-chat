@@ -20,7 +20,7 @@ index c4b4ea9..9cc5e8e 100644
 -This checkout is pinned at package version `0.1.1`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
 +This checkout is pinned at package version `0.2.0`. Use `bun install --frozen-lockfile` before qualification. Keep `package.json` and `or3.manifest.json` on the same fresh version for each new artifact; a different archive with changed bytes needs a new version before release. This package is private and is installed through OR3's reviewed package flow, not the creator's build-time provider version map.
 diff --git a/bun.lock b/bun.lock
-index d6f957a..8e43977 100644
+index d6f957a..0f85ea1 100644
 --- a/bun.lock
 +++ b/bun.lock
 @@ -15,15 +15,18 @@
@@ -50,7 +50,7 @@ index d6f957a..8e43977 100644
      "@openrouter/sdk": ["@openrouter/sdk@1.3.32", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-B6Y3KfevGNHdeohV+Qng+SyFcitFMTdWn0sLsCA+yUouyFPUJrgwDVuQFEueXIMgxtqmTAzHi7uL6N25IoHLnw=="],
  
 -    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:.or3-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
-+    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/plugin-sdk", { "devDependencies": { "@or3/plugin-sdk": "file:../or3-chat/packages/plugin-sdk", "typescript": "^5.9.3" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
++    "@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" }, "peerDependencies": { "vue": "^3.5.0" }, "bin": { "or3-plugin": "./bin/or3-plugin.mjs" } }],
  
      "@tiptap/core": ["@tiptap/core@3.31.3", "", { "peerDependencies": { "@tiptap/pm": "3.31.3" } }, "sha512-Cz50pvciQrxdSxgTkHOVz0uD0Yl/8Xt0QatGD6ILm47jW8EzyHR9RkUGs/D5IqzXKuVPntfw1ttaT926vXfiRg=="],
  
@@ -100,12 +100,8 @@ index d6f957a..8e43977 100644
  
      "vue-demi": ["vue-demi@0.14.10", "", { "peerDependencies": { "@vue/composition-api": "^1.0.0-rc.1", "vue": "^3.0.0-0 || ^2.6.0" }, "optionalPeers": ["@vue/composition-api"], "bin": { "vue-demi-fix": "bin/vue-demi-fix.js", "vue-demi-switch": "bin/vue-demi-switch.js" } }, "sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg=="],
  
-@@ -211,12 +214,20 @@
+@@ -213,10 +216,16 @@
  
-     "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
- 
-+    "@or3/plugin-sdk/@or3/plugin-sdk": ["@or3/plugin-sdk@file:../or3-chat/packages/or3-chat/packages/plugin-sdk", {}],
-+
      "@vue-flow/core/@vueuse/core": ["@vueuse/core@10.11.1", "", { "dependencies": { "@types/web-bluetooth": "^0.0.20", "@vueuse/metadata": "10.11.1", "@vueuse/shared": "10.11.1", "vue-demi": ">=0.14.8" } }, "sha512-guoy26JQktXPcz+0n3GukWIy/JDNKti9v6VEMu6kV2sYBsWuGiTU8OWdg+ADfUbHg3/3DlqySDe7JmdHrktiww=="],
  
 +    "@vue/language-core/@vue/compiler-dom": ["@vue/compiler-dom@3.5.40", "", { "dependencies": { "@vue/compiler-core": "3.5.40", "@vue/shared": "3.5.40" } }, "sha512-pwkx4vqlqOspFstrcmzwkKLePVMD3PT65imRzLhanU2V1Fj4K13g6OXjanOyzw3aTAuRk84BOmY8f3rEHqPaVA=="],
