@@ -25,7 +25,7 @@ import {
 } from '~~/shared/projects/memory-classification';
 import type { Message, Thread } from '~/db/schema';
 
-function messageText(message: Message): string {
+export function messageText(message: Message): string {
     const data = message.data as { content?: unknown; text?: unknown } | null;
     const content = data?.content ?? data?.text;
     if (typeof content === 'string') return content;
@@ -58,10 +58,12 @@ export async function saveClassifiedProjectMemory(
         classificationScope.subject !== scope.subject
     )
         throw new Error('Workspace access changed. Try again.');
+    // An explicit save/edit is user-owned; later extraction must not overwrite it.
+    const { origin: _origin, ...manualInput } = input;
     const saved = await saveProjectMemory(
         scope,
         projectId,
-        { ...input, kind: 'fact' },
+        { ...manualInput, kind: 'fact' },
         id,
         expectedClock,
     );

@@ -40,6 +40,7 @@ export const ProjectMemorySchema = z
         version: z.literal(1).default(1),
         text: z.string().trim().min(1).max(4000),
         kind: z.enum(['fact', 'decision']).default('fact'),
+        origin: z.literal('automatic').optional(),
         source_message_id: z.string().min(1).max(200).optional(),
         source_thread_id: z.string().min(1).max(200).optional(),
     })

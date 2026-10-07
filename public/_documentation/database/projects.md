@@ -262,7 +262,7 @@ close this dependency gap.
 User-facing saves and edits use `saveClassifiedProjectMemory` in `app/utils/projects/memory.ts`.
 It persists through `saveProjectMemory` first, with the existing reference (fact) default.
 The form does not await inference. Existing records retain their kinds until explicitly edited;
-there is no migration, backfill, automatic harvesting or additional memory store.
+there is no migration, backfill or additional memory store. Automatic capture uses the same records as described below.
 
 One OpenRouter Decisions choice question classifies a saved reference. The pinned model is
 `typesafe/jev-1.13`, with a 0.9 decision threshold. It passed a real OpenRouter comparison
@@ -285,3 +285,13 @@ Only kind metadata can change, in an expected-clock transaction after fresh work
 project, thread and evidence checks. Sidebar navigation does not cancel the operation;
 edits, deletion, moves, exclusion and revoked access invalidate it. Diagnostic metadata
 includes model, probabilities, latency and cost, never memory text or credentials.
+
+## Automatic memory capture
+
+The workspace-projects client plugin subscribes to `ai.chat.stream:action:complete`. Browser foreground completion and successfully persisted canonical/tracker background completion supply captured `workspaceId` and `projectId`. The listener returns immediately and owns a bounded batching helper (at most sixteen active chats), disposed on workspace switch and plugin HMR. No inference runs in the send path. Capture processes three completed exchanges or an idle batch after ten seconds. It requires the browser to remain open.
+
+`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 16 KiB aggregate bound including up to twenty existing references. Older context can explain an approval; only fresh user messages can establish new memory. Oversized evidence is skipped whole. One `typesafe/jev-1.13` Decisions choice must return save with probability at least 0.9 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are three and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key and rate-limit policies as explicit classification. Callers cannot choose models or prompts.
+
+The expected-clock transaction rechecks workspace authority, owning project, chat exclusion, evidence revisions and batch cursor. Every candidate must cite an exact quote from a fresh user message. Stable project/text-derived IDs, existing records and tombstones prevent exact duplicates and revival of deleted captures. Existing references include dismissed memories for semantic deduplication. An explicit correction may replace an unchanged automatic record; user edits remove its optional `origin: automatic` marker and cannot be overwritten. At most twenty live automatic memories are saved. Additional new captures are skipped at capacity, while explicit corrections and manual memory remain available.
+
+The existing workspace KV table holds `project-memory-cursor:<threadId>` with the processed project/index, committed atomically with memories. Reloads and repeated completion events do not reprocess successful batches. Failures never roll back messages or manual memories and do not schedule retries; a later completed turn can try a new bounded batch. No historical backfill, durable inference queue, embeddings or new database table is introduced. Request context selects at most four matching automatic memories (or four recent entries for a handoff), while explicit memories retain their existing inclusion behavior. All automatic memories remain editable/deletable in the normal Memory list and retain source-chat links.

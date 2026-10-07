@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project sidebar navigation, compact inline brief editing and project chat/document creation, source library, simple memory saves, continuity, tools, and recorded request context."
+                    "summary": "Project sidebar navigation, compact inline brief editing and project chat/document creation, source library, explicit and automatic memory, continuity, tools, and recorded request context."
                 },
                 {
                     "name": "development-setup.md",

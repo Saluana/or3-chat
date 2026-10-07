@@ -79,13 +79,23 @@ export async function buildProjectContext(
         throw new Error('Captured project context has a different owner.');
     scope.assertCurrent();
     const marker = `[OR3 project ${projectId}]`;
+    const memoryTerms = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])]
+        .filter(term => !['the', 'and', 'this', 'that', 'what', 'how', 'can', 'you', 'for', 'with', 'project'].includes(term));
+    const scoreMemory = (text: string) => memoryTerms.filter(term => text.toLowerCase().includes(term)).length;
+    const selectedMemories = [
+        ...state.memories.filter(memory => memory.value.origin !== 'automatic'),
+        ...state.memories.filter(memory => memory.value.origin === 'automatic' &&
+            (purpose === 'handoff' || scoreMemory(memory.value.text) > 0))
+            .sort((a, b) => scoreMemory(b.value.text) - scoreMemory(a.value.text) || b.row.updated_at - a.row.updated_at)
+            .slice(0, 4),
+    ];
     const receipt: ProjectContextReceipt = {
         version: 1,
         project_id: projectId,
         project_name: state.project.name,
         instructions: state.settings.instructions,
         brief: state.settings.brief,
-        memories: state.memories.map((m) => ({
+        memories: selectedMemories.map((m) => ({
             id: m.row.id,
             text: m.value.text,
             kind: m.value.kind,
@@ -121,7 +131,7 @@ export async function buildProjectContext(
         });
     const facts = [
         state.settings.brief && `Project brief:\n${state.settings.brief}`,
-        ...state.memories.map(
+        ...selectedMemories.map(
             (m) => `Saved ${m.value.kind} (${m.row.id}): ${m.value.text}`,
         ),
     ]

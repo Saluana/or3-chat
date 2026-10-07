@@ -313,3 +313,5 @@ Nitro webhook events fire on `nitroApp.hooks` via `emitWebhookSystemHook` and fe
 -   Use `typedOn(hooks)` from `hook-keys` to get argument inference for known keys.
 -   Filters: always return the next value. For veto-capable filters, return `false` to cancel and `''` to clear where supported.
 -   For DB hooks, check the specific module under `app/db/` to see exactly which ops emit hooks and with which shapes.
+
+Browser `ai.chat.stream:action:complete` payloads include optional captured `workspaceId` and `projectId`. Successful canonical/tracker background finalization uses the same browser event after persistence; it is not emitted for failed, aborted or superseded completions. Automatic project memory subscribes through the normal hook lifecycle and returns immediately rather than awaiting auxiliary inference. Server webhook events remain a separate engine.

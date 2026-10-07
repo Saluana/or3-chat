@@ -32,6 +32,7 @@ import {
 } from '~/utils/projects/context';
 
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
+import { captureAutomaticMemories } from '~/utils/projects/automatic-memory';
 import * as projectContext from '~/utils/projects/context';
 import { defaultProjectSettings } from '~~/shared/projects/workspace';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
@@ -1231,5 +1232,94 @@ describe('nonblocking project memory classification', () => {
         const saved = await saveClassifiedProjectMemory(scope(), 'a', { text: 'Uncategorized reference.' });
         expect(JSON.parse((await db.posts.get(saved.row.id))!.content).text).toBe('Uncategorized reference.');
         await new Promise(resolve => setTimeout(resolve, 50)); expect(fetcher).not.toHaveBeenCalled();
+    });
+});
+
+// Automatic capture failures considered before implementation: unsupported assistant
+// proposals, repeated batches/deleted memories, stale evidence/owners/permissions,
+// exclusions, and offline inference. This owner checks the actual Dexie commit;
+// browser journeys separately check that the completion hook never blocks send.
+describe('automatic project memory capture', () => {
+    const seed = async () => {
+        await db.kv.clear();
+        await db.threads.put({ id: 'auto-chat', project_id: 'a', status: 'ready',
+            clock: 1, created_at: 1, updated_at: 1, deleted: false, pinned: false, forked: false });
+        await db.messages.bulkPut([
+            { id: 'auto-user', thread_id: 'auto-chat', index: 0, role: 'user',
+                data: { content: 'We have chosen SQLite for this project.' }, clock: 1,
+                created_at: 1, updated_at: 1, deleted: false, pending: false },
+            { id: 'auto-assistant', thread_id: 'auto-chat', index: 1, role: 'assistant',
+                data: { content: 'Understood.', generation_state: 'complete' }, clock: 1,
+                created_at: 1, updated_at: 1, deleted: false, pending: false },
+        ]);
+        useUserApiKey().setKey('sk-or-automatic-fixture');
+    };
+    const candidate = { text: 'This project uses SQLite.', kind: 'decision',
+        source_message_id: 'auto-user', source_quote: 'We have chosen SQLite for this project.', replace_id: null };
+    const reply = (memories = [candidate]) => new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ memories }) } }],
+    }), { status: 200 });
+    const gate = () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+        answers: { worth_saving: { type: 'choice', choice: 'save',
+            probabilities: { save: 0.99, skip: 0.005, uncertain: 0.005 } } },
+        usage: { cost: 0.00001 } }), { status: 200 });
+    afterEach(() => vi.unstubAllGlobals());
+    it('saves grounded memory, advances the cursor, and never revives a deleted capture', async () => {
+        await seed();
+        const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply());
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        const memory = (await readProjectWorkspace(db, 'a')).memories[0]!;
+        expect(memory.value).toMatchObject({ text: candidate.text, kind: 'decision', source_message_id: 'auto-user' });
+        await db.posts.update(memory.row.id, { deleted: true });
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
+    });
+    it.each(['owner', 'evidence', 'exclusion', 'revocation'])(
+        'rejects a result after %s changes during inference', async change => {
+            await seed();
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockImplementationOnce(async () => {
+                if (change === 'owner') await db.threads.update('auto-chat', { project_id: 'b', clock: 2 });
+                if (change === 'evidence') await db.messages.update('auto-user', { data: { content: 'Do not use SQLite.' }, clock: 2 });
+                if (change === 'exclusion') await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), excluded_chat_ids: ['auto-chat'] }, null);
+                if (change === 'revocation') revoked = true;
+                return reply();
+            }));
+            await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant').catch(() => {});
+            expect(await db.posts.where('postType').equals('or3:project-memory').count()).toBe(0);
+        });
+    it('discards assistant-only evidence and makes no extraction call after a skip', async () => {
+        await seed();
+        const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply([
+            { ...candidate, source_message_id: 'auto-assistant', source_quote: 'Understood.' },
+        ]));
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
+        await db.kv.clear();
+        fetcher.mockReset().mockResolvedValue(new Response(JSON.stringify({
+            model: 'typesafe/jev-1.13', answers: { worth_saving: { type: 'choice', choice: 'skip',
+                probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } },
+        })));
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+});
+
+// Auto memories must not become an unbounded required prompt prefix.
+describe('automatic memory retrieval budget', () => {
+    it('includes at most four matching automatic memories and preserves explicit memory', async () => {
+        await db.threads.put({ id: 'recall', project_id: 'a', status: 'ready',
+            clock: 1, created_at: 1, updated_at: 1, deleted: false, pinned: false, forked: false });
+        for (let i = 0; i < 10; i++) await saveProjectMemory(scope(), 'a', {
+            text: 'Database constraint ' + i, origin: 'automatic' }, 'auto-recall-' + i);
+        await saveProjectMemory(scope(), 'a', { text: 'Explicit project reference.' }, 'manual-recall');
+        const matching = await buildProjectContext(scope(), 'recall', 'database constraints', false);
+        expect(matching!.receipt.memories).toHaveLength(5);
+        expect(matching!.receipt.memories.some(m => m.id === 'manual-recall')).toBe(true);
+        const unrelated = await buildProjectContext(scope(), 'recall', 'apples and nutrition', false);
+        expect(unrelated!.receipt.memories.map(m => m.id)).toEqual(['manual-recall']);
     });
 });

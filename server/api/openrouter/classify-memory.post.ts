@@ -16,15 +16,23 @@ import {
     MemoryClassificationStateSchema,
     classifyMemoryReference,
 } from '~~/shared/projects/memory-classification';
+import {
+    AutomaticMemoryStateSchema,
+    analyzeAutomaticMemory,
+} from '~~/shared/projects/automatic-memory';
 
-const BodySchema = z
-    .object({
+const BodySchema = z.union([
+    z.object({
         workspaceId: z.string().min(1).max(200),
         state: MemoryClassificationStateSchema,
-    })
-    .strict();
+    }).strict(),
+    z.object({
+        workspaceId: z.string().min(1).max(200),
+        capture: AutomaticMemoryStateSchema,
+    }).strict(),
+]);
 
-/** Auxiliary classification only: fixed question/model, no writes or arbitrary inference. */
+/** Auxiliary memory inference only: fixed question/model, no writes or arbitrary inference. */
 export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-store');
     if (!isSsrAuthEnabled(event)) throw createError({ statusCode: 404 });
@@ -91,6 +99,12 @@ export default defineEventHandler(async (event) => {
     event.node.req.on('aborted', abort);
     event.node.res?.on('close', abort);
     try {
+        if ('capture' in body.data)
+            return await analyzeAutomaticMemory(
+                body.data.capture,
+                key,
+                controller.signal,
+            );
         return await classifyMemoryReference(
             body.data.state,
             key,

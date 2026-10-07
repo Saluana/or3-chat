@@ -85,6 +85,7 @@ const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
 const newProjectIcon = useIcon('sidebar.new_folder');
 const newChatIcon = useIcon('sidebar.new_chat');
+const chatIcon = useIcon('sidebar.chat');
 const newDocumentIcon = useIcon('sidebar.new_note');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
@@ -106,7 +107,6 @@ const editingMemory = ref<{
     >['memories'][number];
     text: string;
 } | null>(null);
-const suggestionsReviewed = ref(false);
 const tab = ref('Overview');
 const sectionDescriptions: Record<string, string> = {
     Knowledge: 'Sources for this project.',
@@ -135,23 +135,10 @@ const previewImage = ref('');
 const previewLocations = ref<
     Array<{ label: string; start: number; end: number }>
 >([]);
-const memoryEvidence = ref<{
-    source_thread_id: string;
-    source_message_id: string;
-    summary_id: string;
-} | null>(null);
 const noteTitle = ref('');
 const noteText = ref('');
-const briefEvidence = ref<string | null>(null);
 const upload = ref<HTMLInputElement | null>(null);
 const replace = ref<ProjectRecord<ProjectSource> | undefined>();
-const suggestions = ref<
-    Awaited<
-        ReturnType<
-            typeof import('~/utils/projects/continuity').projectContinuity
-        >
-    >
->([]);
 const existingChatId = ref('');
 const allChats = ref<Thread[]>([]);
 const tools = useToolRegistry().listTools;
@@ -256,7 +243,6 @@ function discardSettings() {
     if (!state.value) return;
     settings.value = structuredClone(toRaw(state.value.settings));
     editClock.value = state.value.settingsRow?.clock ?? null;
-    briefEvidence.value = null;
     dirty.value = false;
 }
 let controller = new AbortController();
@@ -307,10 +293,7 @@ function connect() {
     dirty.value = false;
     toolQuery.value = '';
     manageChatsOpen.value = false;
-    suggestions.value = [];
     memory.value = '';
-    memoryEvidence.value = null;
-    briefEvidence.value = null;
     sourceInput.value = '';
     noteTitle.value = '';
     noteText.value = '';
@@ -320,7 +303,6 @@ function connect() {
     briefEditing.value = false;
     creatingMemory.value = false;
     editingMemory.value = null;
-    suggestionsReviewed.value = false;
     releasePreview();
     subscribePage();
 }
@@ -530,7 +512,6 @@ function currentRevision(source: ProjectRecord<ProjectSource>) {
 function cancelBriefEdit() {
     if (!state.value) return;
     settings.value.brief = state.value.settings.brief;
-    briefEvidence.value = null;
     briefEditing.value = false;
     dirty.value =
         JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
@@ -539,7 +520,6 @@ function cancelBriefEdit() {
 async function editInlineBrief() {
     if (!state.value || busy.value) return;
     settings.value.brief = state.value.settings.brief || state.value.project.description || '';
-    briefEvidence.value = null;
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
     briefEditing.value = true;
     await nextTick();
@@ -589,48 +569,6 @@ async function openActivity(item: UnifiedSidebarItem) {
     );
     if (result && !result.ok) throw new Error(result.error.message);
 }
-async function verifySuggestion(
-    captured: ReturnType<typeof captureProjectOperation>,
-    projectId: string,
-    summaryId: string,
-) {
-    const { projectContinuity } = await import('~/utils/projects/continuity');
-    if (
-        !(await projectContinuity(captured, projectId)).some(
-            (item) => item.row.id === summaryId,
-        )
-    )
-        throw new Error(
-            'This suggestion is stale or excluded. Review a current handoff.',
-        );
-}
-async function reviewSuggestions() {
-    const captured = scope;
-    const projectId = id.value;
-    const { projectContinuity } = await import('~/utils/projects/continuity');
-    const next = await projectContinuity(captured, projectId);
-    captured.assertCurrent();
-    if (captured !== scope || projectId !== id.value) return;
-    suggestions.value = next;
-    suggestionsReviewed.value = true;
-}
-async function reviewMemory(
-    suggestion: (typeof suggestions.value)[number],
-    landmark: (typeof suggestion.data.landmarks)[number],
-) {
-    const captured = scope;
-    const projectId = id.value;
-    await verifySuggestion(captured, projectId, suggestion.row.id);
-    captured.assertCurrent();
-    if (captured !== scope || projectId !== id.value) return;
-    memory.value = landmark.summary;
-    memoryEvidence.value = {
-        summary_id: suggestion.row.id,
-        source_thread_id: landmark.thread_id,
-        source_message_id: landmark.message_id,
-    };
-    creatingMemory.value = true;
-}
 async function addNote() {
     const captured = scope;
     const projectId = id.value;
@@ -660,38 +598,22 @@ async function addSelectedFile() {
         sourceInput.value = '';
 }
 
-async function reviewBrief(suggestion: (typeof suggestions.value)[number]) {
-    const captured = scope;
-    const projectId = id.value;
-    await verifySuggestion(captured, projectId, suggestion.row.id);
-    captured.assertCurrent();
-    if (captured !== scope || projectId !== id.value) return;
-    settings.value.brief = suggestion.data.summary_markdown.slice(0, 8000);
-    briefEvidence.value = suggestion.row.id;
-    dirty.value = true;
-    briefEditing.value = true;
-}
 async function saveSettings() {
     const captured = scope;
     const projectId = id.value;
     const draft = ProjectSettingsSchema.parse(settings.value);
     const clock = editClock.value;
-    const evidence = briefEvidence.value;
-    if (evidence) await verifySuggestion(captured, projectId, evidence);
     captured.assertCurrent('write');
     const saved = await saveProjectSettings(captured, projectId, draft, clock);
     if (captured !== scope || projectId !== id.value) return;
     editClock.value = saved.clock;
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(draft);
-    if (briefEvidence.value === evidence) briefEvidence.value = null;
 }
 async function saveBrief() {
     const captured = scope;
     const projectId = id.value;
     const brief = settings.value.brief;
     const clock = editClock.value;
-    const evidence = briefEvidence.value;
-    if (evidence) await verifySuggestion(captured, projectId, evidence);
     captured.assertCurrent('write');
     const current = await readProjectWorkspace(captured.db, projectId);
     if ((current.settingsRow?.clock ?? null) !== clock)
@@ -708,7 +630,6 @@ async function saveBrief() {
     if (captured !== scope || projectId !== id.value) return;
     editClock.value = saved.clock;
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(next);
-    if (briefEvidence.value === evidence) briefEvidence.value = null;
     if (settings.value.brief === brief) briefEditing.value = false;
 }
 async function uploadFiles(event: Event) {
@@ -782,28 +703,15 @@ async function addMemory() {
     const captured = scope;
     const projectId = id.value;
     const text = memory.value;
-    const evidence = memoryEvidence.value;
-    if (evidence)
-        await verifySuggestion(captured, projectId, evidence.summary_id);
     captured.assertCurrent('write');
-    await saveClassifiedProjectMemory(captured, projectId, {
-        text,
-        ...(evidence
-            ? {
-                  source_thread_id: evidence.source_thread_id,
-                  source_message_id: evidence.source_message_id,
-              }
-            : {}),
-    });
+    await saveClassifiedProjectMemory(captured, projectId, { text });
     if (
         captured !== scope ||
         projectId !== id.value ||
-        memory.value !== text ||
-        memoryEvidence.value !== evidence
+        memory.value !== text
     )
         return;
     memory.value = '';
-    memoryEvidence.value = null;
     creatingMemory.value = false;
 }
 async function saveMemoryEdit() {
@@ -1647,88 +1555,6 @@ function toolCannotScope(name: string) {
                         class="project-memory-view space-y-5"
                     >
                         <section
-                            class="project-brief space-y-3"
-                            aria-label="Project brief"
-                        >
-                            <div
-                                class="flex items-center justify-between gap-2"
-                            >
-                                <h2 class="font-semibold text-xs">
-                                    Project brief
-                                </h2>
-                                <UButton
-                                    v-if="!briefEditing"
-                                    :icon="editIcon"
-                                    aria-label="Edit project brief"
-                                    title="Edit project brief"
-                                    square
-                                    size="xs"
-                                    color="neutral"
-                                    variant="ghost"
-                                    @click="briefEditing = true"
-                                />
-                            </div>
-                            <template v-if="briefEditing">
-                                <label
-                                    class="sr-only"
-                                    for="project-brief-editor"
-                                    >Project brief</label
-                                >
-                                <textarea
-                                    id="project-brief-editor"
-                                    v-model="settings.brief"
-                                    class="project-input"
-                                    rows="4"
-                                    maxlength="8000"
-                                    placeholder="Describe the current state and next steps…"
-                                    @input="dirty = true"
-                                />
-                                <div class="flex justify-end gap-2">
-                                    <UButton
-                                        label="Cancel"
-                                        color="neutral"
-                                        variant="ghost"
-                                        @click="cancelBriefEdit"
-                                    />
-                                    <UButton
-                                        label="Save brief"
-                                        :disabled="busy"
-                                        @click="
-                                            run(async () => {
-                                                await saveBrief();
-                                            })
-                                        "
-                                    />
-                                </div>
-                            </template>
-                            <template v-else>
-                                <p
-                                    v-if="state.settings.brief"
-                                    class="project-muted text-xs leading-relaxed whitespace-pre-wrap"
-                                >
-                                    {{ state.settings.brief }}
-                                </p>
-                                <template v-else>
-                                    <p
-                                        class="project-muted text-xs leading-relaxed"
-                                    >
-                                        Keep the current state and next steps
-                                        here.
-                                    </p>
-                                    <button
-                                        class="project-brief-action"
-                                        @click="briefEditing = true"
-                                    >
-                                        Add a brief
-                                        <UIcon
-                                            :name="chevronIcon"
-                                            class="size-3.5"
-                                        />
-                                    </button>
-                                </template>
-                            </template>
-                        </section>
-                        <section
                             class="project-saved-memories"
                             aria-label="Saved memories"
                         >
@@ -1777,7 +1603,6 @@ function toolCannotScope(name: string) {
                                         @click="
                                             creatingMemory = false;
                                             memory = '';
-                                            memoryEvidence = null;
                                         "
                                     />
                                     <UButton
@@ -1821,6 +1646,19 @@ function toolCannotScope(name: string) {
                                     "
                                     :content="{ align: 'end', sideOffset: 4 }"
                                     :items="[
+                                        ...(record.value.source_thread_id
+                                            ? [
+                                                {
+                                                    label: 'View original chat',
+                                                    icon: chatIcon,
+                                                    disabled: busy,
+                                                    onSelect: () =>
+                                                        run(() =>
+                                                            openChat(record.value.source_thread_id!),
+                                                        ),
+                                                },
+                                            ]
+                                            : []),
                                         {
                                             label: 'Edit memory',
                                             icon: editIcon,
@@ -1891,108 +1729,6 @@ function toolCannotScope(name: string) {
                                 <p v-else class="project-memory-text">
                                     {{ record.value.text }}
                                 </p>
-                                <UButton
-                                    v-if="record.value.source_thread_id"
-                                    label="Open evidence"
-                                    class="project-memory-evidence"
-                                    size="xs"
-                                    variant="ghost"
-                                    color="neutral"
-                                    @click="
-                                        run(() =>
-                                            openChat(
-                                                record.value.source_thread_id!,
-                                            ),
-                                        )
-                                    "
-                                />
-                            </article>
-                        </section>
-                        <section
-                            class="border-t border-[var(--md-outline-variant)] pt-3 space-y-3"
-                            aria-label="Memory suggestions"
-                        >
-                            <UButton
-                                icon="i-lucide-sparkles"
-                                label="Review suggestions"
-                                aria-label="Review handoff suggestions"
-                                color="neutral"
-                                variant="ghost"
-                                class="w-full justify-start"
-                                :disabled="busy"
-                                @click="run(reviewSuggestions)"
-                            />
-                            <p
-                                v-if="
-                                    suggestionsReviewed && !suggestions.length
-                                "
-                                class="project-muted text-xs leading-relaxed"
-                            >
-                                No current suggestions. Continue in new chat to
-                                create a handoff.
-                            </p>
-                            <article
-                                v-for="suggestion in suggestions"
-                                :key="suggestion.row.id"
-                                class="project-memory space-y-3"
-                            >
-                                <h2 class="font-medium text-xs">
-                                    Handoff from
-                                    {{ suggestion.thread.title }}
-                                </h2>
-                                <div class="flex flex-wrap gap-1">
-                                    <UButton
-                                        label="Review as brief"
-                                        size="xs"
-                                        color="neutral"
-                                        variant="outline"
-                                        @click="
-                                            run(() => reviewBrief(suggestion))
-                                        "
-                                    />
-                                    <UButton
-                                        label="Open source chat"
-                                        size="xs"
-                                        color="neutral"
-                                        variant="ghost"
-                                        @click="
-                                            run(() =>
-                                                openChat(
-                                                    suggestion.data
-                                                        .source_thread_id,
-                                                ),
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div
-                                    v-for="landmark in suggestion.data.landmarks.filter(
-                                        (l) =>
-                                            ['decision', 'constraint'].includes(
-                                                l.kind,
-                                            ),
-                                    )"
-                                    :key="landmark.message_id"
-                                    class="space-y-2"
-                                >
-                                    <p class="text-xs leading-relaxed">
-                                        {{ landmark.summary }}
-                                    </p>
-                                    <UButton
-                                        label="Review as memory"
-                                        size="xs"
-                                        color="neutral"
-                                        variant="ghost"
-                                        @click="
-                                            run(() =>
-                                                reviewMemory(
-                                                    suggestion,
-                                                    landmark,
-                                                ),
-                                            )
-                                        "
-                                    />
-                                </div>
                             </article>
                         </section>
                     </div>
@@ -2585,15 +2321,6 @@ function toolCannotScope(name: string) {
 .project-start:hover {
     background: color-mix(in srgb, var(--project-accent) 70%, #000);
 }
-.project-brief {
-    padding: 12px;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: var(--md-border-radius-medium, 12px);
-    background: var(--md-surface-container-low);
-}
-.project-memory-view .project-brief {
-    border-color: transparent;
-}
 .project-saved-memories > .project-editor,
 .project-saved-memories > .project-empty {
     margin-top: 12px;
@@ -2623,20 +2350,6 @@ function toolCannotScope(name: string) {
     min-height: 28px;
     color: var(--md-on-surface-variant);
 }
-.project-memory-evidence {
-    margin-top: 8px;
-    font-size: 11px;
-}
-.project-brief-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 24px;
-    padding: 2px 0;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--project-accent);
-}
 .project-section-label {
     padding: 0 4px 6px;
     font-size: 11px;
@@ -2648,13 +2361,10 @@ function toolCannotScope(name: string) {
     gap: 5px;
     margin-bottom: 16px;
 }
-.project-editor,
-.project-memory {
+.project-editor {
     padding: 12px;
     border: 1px solid var(--md-outline-variant);
     border-radius: var(--md-border-radius-medium, 12px);
-}
-.project-editor {
     background: var(--md-surface-container-low);
 }
 .project-empty {
@@ -2682,8 +2392,7 @@ function toolCannotScope(name: string) {
 .project-source-details :deep(summary) {
     min-height: 24px;
 }
-.project-editor :deep(button),
-.project-memory :deep(button) {
+.project-editor :deep(button) {
     font-size: 12px;
 }
 .project-content :deep(.project-input) {

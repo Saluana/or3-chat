@@ -541,3 +541,31 @@ describe('project memory classification proxy admission', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 });
+
+// Capture shares the existing route's admission/key policy. This transport test
+// protects the fixed model task and skip-before-extraction contract, not Dexie writes.
+describe('automatic memory proxy', () => {
+    it('runs only the fixed gate when no durable memory is present', async () => {
+        const capture = (await import('../classify-memory.post')).default;
+        runtimeConfig = { auth: { enabled: true }, security: { proxy: {}, allowedOrigins: [] },
+            openrouterApiKey: 'managed-fixture', openrouterAllowUserOverride: true,
+            openrouterRequireUserKey: false, limits: { enabled: false } };
+        resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'user-1' },
+            workspace: { id: 'workspace-1' }, role: 'editor' });
+        requireCanMock.mockReset();
+        getHeaderMock.mockImplementation((event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()]);
+        readBodyMock.mockResolvedValue({ workspaceId: 'workspace-1', capture: {
+            messages: [{ id: 'u', role: 'user', text: 'What is SQLite?', fresh: true }], existing: [] } });
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+            answers: { worth_saving: { type: 'choice', choice: 'skip', probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } } })));
+        vi.stubGlobal('fetch', fetcher);
+        const event = () => makeEvent({ host: 'chat.test', origin: 'https://chat.test',
+            'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' });
+        expect(await capture(event())).toEqual({ memories: [] });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).model).toBe('typesafe/jev-1.13');
+        requireCanMock.mockImplementation(() => { throw forbidden(403); });
+        await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+});

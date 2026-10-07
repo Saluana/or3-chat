@@ -3316,6 +3316,8 @@ export function useChat(
                     };
                     await hooks.doAction('ai.chat.stream:action:complete', {
                         threadId: requestThreadId,
+                        workspaceId: requestScope.workspaceId,
+                        projectId: requestScope.projectContext?.projectId ?? null,
                         assistantId: assistantDbMsg.id,
                         streamId: newStreamId,
                         totalLength: incoming.length,

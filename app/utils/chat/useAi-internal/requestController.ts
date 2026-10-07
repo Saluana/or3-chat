@@ -14,6 +14,7 @@ import type { AssistantPersister, StoredMessage } from './types';
 import { updateMessageRecord } from './persistence';
 import { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
 import { isStaleForegroundGeneration } from '~/utils/chat/generation-lease';
+import { tryGetHooks } from '~/core/hooks/useHooks';
 
 type Accumulator = {
     reset: () => void;
@@ -403,8 +404,28 @@ export function finalizeRequest(
         try {
             if (request.ownsView() && !result.superseded)
                 request.projectTerminal(result);
-            if (!result.persistenceError && !result.superseded)
+            if (!result.persistenceError && !result.superseded) {
+                // Foreground completion is emitted by useAi's afterPersist callback.
+                // Canonical/tracker responses use the same browser completion hook.
+                if (
+                    terminal.outcome === 'completed' &&
+                    request.assistantMessageId &&
+                    (terminal.persistence === 'tracker' ||
+                        terminal.persistence === 'canonical')
+                )
+                    await tryGetHooks()?.doAction('ai.chat.stream:action:complete', {
+                        threadId: request.threadId,
+                        workspaceId: request.workspaceId,
+                        projectId:
+                            request.projectContext?.projectId ??
+                            request.expectedProjectId ??
+                            null,
+                        assistantId: request.assistantMessageId,
+                        streamId: request.streamId ?? request.requestId,
+                        totalLength: terminal.content?.length ?? 0,
+                    });
                 await terminal.afterPersist?.();
+            }
         } catch (error) {
             result.effectError = error;
         } finally {

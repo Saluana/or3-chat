@@ -174,6 +174,8 @@ export interface AiStreamReasoningContext {
 /** Final streaming completion context. */
 export interface AiStreamCompleteContext {
     threadId?: string;
+    workspaceId?: string;
+    projectId?: string | null;
     assistantId: string;
     streamId: string;
     totalLength: number;

@@ -1374,10 +1374,9 @@ test('project chat keeps captured context and memory actions without an inline i
     });
 });
 
-// Handoffs must retain ownership and captured project context, remain reviewable,
-// and disappear when their original evidence is excluded. Store tests cannot
-// detect broken Home suggestions or inference integration.
-test('project handoff keeps ownership and offers a reviewed brief before evidence exclusion', async ({
+// Handoffs must retain ownership and captured project context, and their
+// original chats must remain excludable from project memory.
+test('project handoff keeps captured project context and supports evidence exclusion', async ({
     page,
 }, info) => {
     test.setTimeout(120000);
@@ -1405,33 +1404,9 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
         .last()
         .click();
     await openProjectSection(page, 'Memory');
-    await page
-        .getByRole('button', { name: 'Edit project brief', exact: true })
-        .click();
-    await page
-        .getByRole('button', {
-            name: 'Review handoff suggestions',
-            exact: true,
-        })
-        .click();
-    await expect(
-        page.getByText('Handoff from Compaction original evidence', {
-            exact: false,
-        }),
-    ).toBeVisible();
     await expect(
         page.getByRole('textbox', { name: 'Project brief', exact: true }),
-    ).toHaveValue('Saffron brief marker: current implementation.');
-    await page
-        .getByRole('button', { name: 'Review as brief', exact: true })
-        .click();
-    await expect(
-        page.getByRole('textbox', { name: 'Project brief', exact: true }),
-    ).toHaveValue(/Preserve app\/example.ts exactly/);
-    await page.getByRole('button', { name: 'Save brief', exact: true }).click();
-    await expect(
-        page.getByText(/Saffron saved decision marker/).first(),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await openProjectSection(page, 'Settings');
     await page
         .getByRole('button', { name: 'Manage chats', exact: true })
@@ -1447,18 +1422,6 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
     await includeInMemory.click();
     await expect(includeInMemory).not.toBeChecked();
     await openProjectSection(page, 'Memory');
-    await page
-        .getByRole('button', {
-            name: 'Review handoff suggestions',
-            exact: true,
-        })
-        .click();
-    await expect(
-        page.getByRole('button', {
-            name: 'Review as brief',
-            exact: true,
-        }),
-    ).toHaveCount(0);
     await info.attach('project-handoff-request', {
         body: JSON.stringify(requests, null, 2),
         contentType: 'application/json',
