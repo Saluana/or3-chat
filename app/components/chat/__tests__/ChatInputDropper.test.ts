@@ -72,6 +72,11 @@ vi.mock('#imports', () => ({
     useIcon: (name: string) => ref(name),
 }));
 
+// SSR auth is off in these tests, so the sign-in gate never needs a session.
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    useSessionContext: () => ({ data: ref(null) }),
+}));
+
 vi.mock('~/composables/useThemeResolver', () => ({
     useThemeOverrides: () => ref({})
 }));

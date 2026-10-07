@@ -437,6 +437,7 @@ import type {
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
+import { SIGN_IN_PROMPT, useSignInGate } from '~/composables/auth/useSignInGate';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
 import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
 import {
@@ -517,6 +518,7 @@ const runtimeConfig = useRuntimeConfig();
 const toast = useToast();
 const { apiKey } = useUserApiKey();
 const { startLogin } = useOpenRouterAuth();
+const { signInRequired, promptSignIn } = useSignInGate();
 const hooks = useHooks();
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
@@ -558,7 +560,8 @@ async function initializeEditor(replaceExisting = false) {
             enterToSend,
             Placeholder.configure({
                 // Use a placeholder:
-                placeholder: 'Write something …',
+                placeholder: () =>
+                    signInRequired.value ? SIGN_IN_PROMPT : 'Write something …',
             }),
             StarterKit.configure({
                 // The composer sends plain text. Keep pasted URLs editable
@@ -789,6 +792,12 @@ const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const editor = ref<Editor | null>(null);
+// The placeholder callback only runs on editor transactions; nudge one when
+// the session resolves so an empty composer updates without a keystroke.
+watch(signInRequired, () => {
+    const current = editor.value;
+    if (current && !current.isDestroyed) current.commands.setMeta('signInGate', true);
+});
 
 const composerActionContext = (): ComposerActionContext => ({
     editor: editor.value as any,
@@ -1132,6 +1141,11 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
 }
 const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }): Promise<SendResult> => {
     if (props.loading) return { status: 'rejected', reason: 'busy' };
+    // Account first: a signed-out visitor cannot use any key, so never ask for one.
+    if (signInRequired.value) {
+        promptSignIn();
+        return { status: 'rejected', reason: 'missing_credentials' };
+    }
     if (
         !guardPendingAttachmentSend(attachments.value, toast, {
             description: 'Please wait for attachments to finish before sending.',
