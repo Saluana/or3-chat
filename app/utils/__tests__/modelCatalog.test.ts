@@ -38,6 +38,10 @@ describe('getProviderSlug', () => {
     it('lowercases the slug', () => {
         expect(getProviderSlug(makeModel({ id: 'OpenAI/GPT-4' }))).toBe('openai');
     });
+
+    it('groups OpenRouter alias slugs under their provider', () => {
+        expect(getProviderSlug(makeModel({ id: '~openai/gpt-luna-latest' }))).toBe('openai');
+    });
 });
 
 describe('getProviderInfo', () => {
@@ -221,6 +225,12 @@ describe('getModelBadges', () => {
         const badges = getModelBadges(m, 2);
         expect(badges.length).toBeLessThanOrEqual(2);
         expect(badges[0]!.label).toBe('Free');
+    });
+
+    it('never uses the info tone, which themes render as an invisible surface color', () => {
+        const badges = getModelBadges(makeModel({ id: 'meta-llama/llama-3.3-70b', context_length: 1_000_000 }), 8);
+        expect(badges.map((badge) => badge.label)).toEqual(expect.arrayContaining(['Long context', 'Open weights']));
+        expect(badges.map((badge) => badge.tone)).not.toContain('info');
     });
 });
 

@@ -19,7 +19,7 @@
                 <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <UButton size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
+                    <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
                     <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="props.loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
                 </div>
@@ -1124,7 +1124,7 @@ watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVa
 watch([attachments, largeTextBlocks, imageSettings], invalidateContextDecision, { deep: true });
 async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}): Promise<SendResult> {
     const result = await performSend(decision);
-    if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit'].includes(result.reason)) {
+    if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit', 'unsupported_input'].includes(result.reason)) {
         sendBlock.value = result;
         if (result.status === 'rejected') lossyPreview.value = result.lossyPreview;
     }

@@ -37,6 +37,7 @@ import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
 import { hashToContentPart } from './files';
+import { parseHashes } from '~/utils/files/attachments';
 type OpenRouterBuildModule = typeof import('~/core/auth/openrouter-build');
 
 let openRouterBuildModulePromise: Promise<OpenRouterBuildModule> | null = null;
@@ -163,6 +164,11 @@ export type BuildOpenRouterMessagesParams = {
      * and last user message are always kept.
      */
     maxInputTokens?: number;
+    /**
+     * False when the selected model's catalog entry lacks image input. Unknown
+     * metadata keeps images (the provider decides).
+     */
+    acceptsImageInput?: boolean;
 };
 
 /**
@@ -198,6 +204,10 @@ export async function buildOpenRouterMessagesForSend(
     const maxImageInputs = params.maxImageInputs ?? 5;
     const imageInclusionPolicy = params.imageInclusionPolicy ?? 'all';
     const { maxInputTokens } = params;
+    const acceptsImageInput = params.acceptsImageInput !== false;
+    // User rows already send their own images; a carried copy would send the
+    // same image twice per turn. Assistant-row images still need carrying.
+    const historyHashes = new Set(params.effectiveMessages.flatMap((m) => m.role === 'user' ? parseHashes(m.file_hashes) : []));
     const modelInputMessages: ModelInputMessage[] = params.effectiveMessages.map(
         (m): ModelInputMessage => {
             const calls = m.tool_calls ??
@@ -276,7 +286,8 @@ export async function buildOpenRouterMessagesForSend(
             uniqueContextHashes.map((hash) => hashToContentPart(hash))
         );
         const contextParts: ContentPart[] = resolvedContextParts.filter(
-            (part): part is ContentPart => part !== null
+            (part, index): part is ContentPart => part !== null && (part.type !== 'image'
+                || acceptsImageInput && !historyHashes.has(uniqueContextHashes[index]!))
         );
 
         if (contextParts.length) {
@@ -302,6 +313,7 @@ export async function buildOpenRouterMessagesForSend(
         {
             maxImageInputs,
             imageInclusionPolicy,
+            acceptsImageInput,
             debug: false,
         }
     );

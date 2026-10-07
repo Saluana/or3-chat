@@ -158,12 +158,9 @@ const items = computed(() =>
         )
 );
 
-/**
- * Provider slug for the logo tile. Strips a leading `~` some upstream
- * canonical slugs carry so favorites still resolve to the right brand.
- */
+/** Provider slug for the logo tile (alias `~` prefixes resolve to the brand). */
 function providerSlugForModelId(modelId: string): string {
-    return getProviderSlug({ id: modelId.replace(/^~+/, '') });
+    return getProviderSlug({ id: modelId });
 }
 
 const selectedProviderSlug = computed(() =>

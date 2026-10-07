@@ -82,6 +82,10 @@ function getOptionalBodyString(
 }
 
 export default defineEventHandler(async (event) => {
+    // Every response from this route carries the marker. Clients treat a
+    // 404/405 without it as "route unavailable" (static build or older
+    // server); a relayed provider 404 is an ordinary provider error.
+    setHeader(event, 'X-OR3-Stream-Route', '1');
     // Read request body
     let body: Record<string, unknown>;
     try {

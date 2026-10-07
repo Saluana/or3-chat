@@ -211,7 +211,10 @@ export function normalizeError(
             code = 'ERR_TIMEOUT';
         else if (classificationStatus === 400 || classificationStatus === 422)
             code = 'ERR_BAD_REQUEST';
-        else if (classificationStatus === 404) code = 'ERR_NOT_FOUND';
+        // A provider 404 means no model/endpoint can serve the request (retired
+        // model, unsupported input, data policy), not a deleted user item.
+        else if (classificationStatus === 404)
+            code = source === 'provider' ? 'ERR_UNSUPPORTED_MODEL' : 'ERR_NOT_FOUND';
         else if (classificationStatus === 529) code = 'ERR_OVERLOADED';
         else if (
             classificationStatus !== undefined &&

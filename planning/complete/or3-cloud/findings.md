@@ -14,6 +14,15 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- A managed-install chat pass found that relayed provider 404s cached the
+  stream route as missing, that image history broke every send after
+  switching to a text-only model, that carried images were sent twice and
+  that the image cap dropped the newest attachment. All are repaired, with
+  provider-404 and unsupported-image guidance; catalog badges, alias provider
+  grouping and title-only sidebar search were clarified. Evidence and open
+  follow-ups (invite links, failed-turn copy, signed-out shell, prerendered
+  config) are in
+  [the 2026-10-07 chat reliability report](../or3-cloud-production-readiness/chat-reliability-2026-10-07.md).
 - A code-review follow-up now guards composer ownership across asynchronous
   hooks, keeps active streamed replies pending, copies inherited reference
   history with remapped turn/tool ownership, scopes reused tool-call results

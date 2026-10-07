@@ -118,11 +118,22 @@
                         v-else-if="item.type === 'empty-state'"
                         icon="lucide:ghost"
                         :title="sidebarQuery.trim() ? 'No matches found' : 'No activity yet'"
-                        :description="sidebarQuery.trim() ? 'Try different search terms or clear the search to see your saved work.' : 'Kick things off with a project, or jump straight into a chat or document.'"
+                        :description="sidebarQuery.trim() ? 'This list matches titles only. Search inside messages, try different terms, or clear the search to see your saved work.' : 'Kick things off with a project, or jump straight into a chat or document.'"
                         actions-layout="column"
                         class="sb-empty-state"
                     >
-                        <template v-if="!sidebarQuery.trim()" #actions>
+                        <template v-if="sidebarQuery.trim()" #actions>
+                            <UButton
+                                size="sm"
+                                variant="ghost"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
+                                title="Search inside messages"
+                                @click="searchInsideMessages"
+                            >
+                                Search inside messages
+                            </UButton>
+                        </template>
+                        <template v-else #actions>
                             <UButton
                                 size="sm"
                                 variant="ghost"
@@ -249,6 +260,7 @@ import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarS
 import { useOr3Config } from '~/composables/useOr3Config';
 import { resolvedWorkspaceProfile } from '~/core/workspace-profiles/projection';
 import { isMobile } from '~/state/global';
+import { useCommandPalette } from '~/composables/search/useCommandPalette';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
@@ -371,6 +383,12 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
+const commandPalette = useCommandPalette();
+/** The sidebar filters titles; the command palette also searches message text. */
+function searchInsideMessages(): void {
+    commandPalette.query.value = sidebarQuery.value;
+    commandPalette.open();
+}
 const { items, activeFamilyIds, loading, loadMore, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     query: sidebarQuery,
     type: documentsEnabled.value ? 'all' : 'thread',

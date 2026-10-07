@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "b0d47d1ca0956b38a9ae4a56a9817d1cf1f40dcbb4b504bdfeb492a4cff315b3",
+      "apiSha256": "3b4e420ef7b108a8a6bfa562dbadd5190bb83d4ff601387242a0c4fda4780056",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6565,7 +6565,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 219,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6574,7 +6574,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 219,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -11827,7 +11827,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "674142434b8910567413e5244b42727892f48c38dfbaff8d74f153f05bb11a90",
+      "apiSha256": "13c082dfd12ee001d424c5843e415c5497d9ff9729eb85404499565542f8ee44",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11900,7 +11900,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 122,
+              "line": 124,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11914,7 +11914,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 160,
+              "line": 162,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11928,7 +11928,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 134,
+              "line": 136,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11956,7 +11956,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 131,
+              "line": 133,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

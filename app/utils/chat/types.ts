@@ -88,6 +88,8 @@ export type SendFailureReason =
     | 'missing_credentials'
     | 'filtered'
     | 'client_limit'
+    /** The selected model cannot read an attachment in this turn (e.g. an image). */
+    | 'unsupported_input'
     | 'unavailable'
     | 'context_full'
     | 'model_metadata_unavailable'

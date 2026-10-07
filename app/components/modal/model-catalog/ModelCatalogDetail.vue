@@ -128,8 +128,10 @@ const favoriteButtonProps = computed(() =>
     })
 );
 
+// Labels keep their width; long values (capability chips) wrap instead of
+// squeezing "Capabilities" into a mid-word break.
 const rowLabelClass =
-    'flex items-center gap-2 text-[13px] text-[var(--md-on-surface-variant)]';
+    'flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] text-[var(--md-on-surface-variant)]';
 const rowValueClass =
     'text-[13px] font-medium text-[var(--md-on-surface)] text-right tabular-nums';
 </script>

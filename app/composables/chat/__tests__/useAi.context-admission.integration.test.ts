@@ -39,7 +39,8 @@ vi.mock('~~/shared/openrouter', async (original) => ({
     createOpenRouterClient: () => ({ models: { list: async () => ({
         async *[Symbol.asyncIterator]() { external.catalogEntered?.(); await external.catalogGate; yield { result: { data: [{
             id: 'fixture/model', name: 'Fixture', canonicalSlug: 'fixture/model', contextLength: external.capacity,
-            architecture: { inputModalities: ['text'], outputModalities: ['text'] },
+            // Image-capable: the attachment-retention case sends image bytes.
+            architecture: { inputModalities: ['text', 'image'], outputModalities: ['text'] },
             topProvider: { contextLength: external.capacity, maxCompletionTokens: 4096, isModerated: false },
             pricing: { prompt: '0', completion: '0' }, supportedParameters: ['tools'],
         }] } }; },

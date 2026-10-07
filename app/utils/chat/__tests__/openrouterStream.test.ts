@@ -431,6 +431,29 @@ describe('openrouterStream', () => {
         );
     });
 
+    // A provider 404 ("No endpoints found that support image input", retired
+    // model, data policy) relayed by the proxy is not a missing route.
+    it.each([
+        ['personal key', 'key-1', false],
+        ['SSR server key', undefined, true],
+    ] as const)('keeps the server route for a relayed provider 404 with a %s', async (_label, apiKey, ssr) => {
+        runtimeConfigMock.public.ssrAuthEnabled = ssr;
+        runtimeConfigMock.public.backgroundStreaming.enabled = false;
+        const fetchMock = vi.fn((url: RequestInfo | URL) => url === '/api/openrouter/stream'
+            ? Promise.resolve(new Response(JSON.stringify({ error: { code: 'ERR_UNSUPPORTED_MODEL', status: 404,
+                source: 'provider', retryable: false, message: 'Choose another model and try again.' } }), {
+                status: 404, headers: { 'Content-Type': 'application/json', 'X-OR3-Stream-Route': '1' } }))
+            : Promise.resolve(createStreamResponse()));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        await expect((async () => {
+            for await (const _event of openRouterStream({ apiKey, model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'] })) { /* drain */ }
+        })()).rejects.toMatchObject({ status: 404, retryable: false, message: 'Choose another model and try again.' });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('or3:server-route-available')).toBeNull();
+    });
+
     it('preserves a pre-header abort and never falls back to another request', async () => {
         const controller = new AbortController();
         const fetchMock = vi.fn().mockImplementation(() => {

@@ -423,3 +423,41 @@ describe('buildOpenRouterMessages tool history', () => {
         });
     });
 });
+
+describe('buildOpenRouterMessages image selection', () => {
+    const image = (n: number) => `data:image/png;base64,AAAA${n}`;
+    const imageUrls = (messages: Awaited<ReturnType<typeof buildOpenRouterMessages>>) =>
+        messages.map((message) => message.content.flatMap((part) => part.type === 'image_url' ? [part.image_url.url] : []));
+
+    it('keeps the newest attachments when history exceeds the image cap', async () => {
+        const history = Array.from({ length: 6 }, (_, n) => ({
+            role: 'user' as const, content: `turn ${n}`, file_hashes: JSON.stringify([image(n)]),
+        }));
+        const result = await buildOpenRouterMessages(history, { maxImageInputs: 5 });
+        expect(imageUrls(result)).toEqual([[], [image(1)], [image(2)], [image(3)], [image(4)], [image(5)]]);
+    });
+
+    it('sends a repeated image once, where it was first attached', async () => {
+        const result = await buildOpenRouterMessages([
+            { role: 'user', content: 'look', file_hashes: JSON.stringify([image(1)]) },
+            { role: 'assistant', content: 'red' },
+            { role: 'user', content: [{ type: 'text', text: 'again' }, { type: 'image', image: image(1) }] },
+        ]);
+        expect(imageUrls(result)).toEqual([[image(1)], [], []]);
+    });
+
+    it('replaces images with a note for a model without image input', async () => {
+        const result = await buildOpenRouterMessages([
+            { role: 'user', content: 'what colour?', file_hashes: JSON.stringify([image(1), image(2)]) },
+            { role: 'assistant', content: 'red and blue' },
+            { role: 'user', content: 'summarize' },
+        ], { acceptsImageInput: false });
+        expect(imageUrls(result)).toEqual([[], [], []]);
+        expect(result[0]?.content).toEqual([
+            { type: 'text', text: 'what colour?' },
+            { type: 'text', text: '[2 images omitted: the selected model does not accept image input.]' },
+        ]);
+        expect(result[2]?.content).toEqual([{ type: 'text', text: 'summarize' }]);
+        expect(getFileBlob).not.toHaveBeenCalled();
+    });
+});
