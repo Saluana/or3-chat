@@ -2,7 +2,8 @@
 
 Tool cards turn a tool call into an interactive view inside an assistant reply.
 The handler still returns normal tool data to the model; mounting a card never
-executes the handler again. Examples in the source tree are disabled by default.
+executes the handler again. Examples in the source development server are
+registered automatically and disabled by default.
 Enable Quiz, Weather or Map in the tool picker to try them.
 
 ## Source plugins

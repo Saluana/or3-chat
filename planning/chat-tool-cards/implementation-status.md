@@ -3,8 +3,9 @@
 The implementation is ready for code review on branch `codex/chat-tool-cards`.
 The worktree starts from `origin/or3-cloud` at
 `1eb07b34c9280d8288fa895b7ae8c80daec40981` (merged PR 220).
-The implementation and all seven review corrections are prepared for a PR against
-`or3-cloud`. No package, image or application release was published.
+The implementation and all seven review corrections are in
+[PR 222](https://github.com/Saluana/or3-chat/pull/222) against `or3-cloud`.
+No package, image or application release was published.
 
 Source and trusted cards have the SDK contract, Vue/React/vanilla adapters,
 ownership registry, ordered/legacy/end rendering, lazy mounting, accessible
@@ -23,6 +24,27 @@ portable-card admission and execution are disabled. The development-only harness
 forces the exact frame implementation for verification.
 
 ## Verification
+
+A live first-run Chrome walkthrough on 2026-10-07 used the normal `/chat`
+route and GLM-5.3-Flash through the user's OpenRouter connection. It found that
+Nuxt did not discover the three nested example plugins; explicit development-only
+plugin registration fixes their absence from the normal tool picker. All three
+remain disabled by default and excluded from production builds.
+
+The walkthrough verified a live quiz reply, `via Quiz` attribution, saved
+selection and disabled choices after reload/remount, live Paris weather, and a
+live OpenStreetMap embed for Paris.
+User feedback prompted a quiz redesign using the existing Vue adapter, UCard,
+UButton and theme tokens. Its header, bordered answer rows, letter markers,
+pending lock and selected state distinguish the card from prose. The tool's
+description/result instruct the model not to repeat the question and choices;
+a fresh live quiz followed that instruction. Map now uses the same Vue/UI-kit
+path with a place header, framed map and solid external-link button. Clicking
+Open in Maps opened a separate OpenStreetMap tab at the expected Paris
+coordinates; refused card actions now display their error instead of failing
+silently. Changed-file lint and application typecheck passed after these
+corrections. These live observations complement
+the deterministic browser evidence below; they are not mocked API results.
 
 | Check | Result |
 | --- | --- |

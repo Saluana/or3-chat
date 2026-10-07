@@ -1,73 +1,10 @@
 import { defineNuxtPlugin } from '#app';
-import { defineToolCard } from '@or3/plugin-sdk/cards';
+import { vueCard } from '@or3/plugin-sdk/cards/vue';
 import { registerCardTool } from '~/utils/chat/tool-cards-public';
 import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
-import { getKvByName } from '~/db/kv';
 import { geocode } from './weather-card/forecast';
-export const mapCard = defineToolCard<
-    { query: string },
-    { latitude: number; longitude: number; place: string }
->({
-    mount(el, card) {
-        const point = card.result;
-        if (!point) {
-            el.textContent = 'Map unavailable';
-            return;
-        }
-        const name = document.createElement('p');
-        name.textContent = point.place;
-        const frame = document.createElement('iframe');
-        frame.title = 'Map of ' + point.place;
-        frame.loading = 'lazy';
-        frame.referrerPolicy = 'no-referrer';
-        frame.style.cssText = 'width:100%;height:280px;border:0';
-        const bbox = [
-            point.longitude - 0.02,
-            point.latitude - 0.02,
-            point.longitude + 0.02,
-            point.latitude + 0.02
-        ].join(',');
-        frame.src =
-            'https://www.openstreetmap.org/export/embed.html?' +
-            new URLSearchParams({
-                bbox,
-                layer: 'mapnik',
-                marker: point.latitude + ',' + point.longitude
-            });
-        void getKvByName('example:map:google-embed-key')
-            .then((setting) => {
-                if (!setting?.value || card.signal.aborted) return;
-                frame.referrerPolicy = 'strict-origin-when-cross-origin';
-                frame.src =
-                    'https://www.google.com/maps/embed/v1/place?' +
-                    new URLSearchParams({
-                        key: setting.value,
-                        q: card.args?.query ?? point.place
-                    });
-            })
-            .catch(() => {});
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'retro-btn px-3 py-2';
-        button.textContent = 'Open in Maps';
-        button.onclick = () => {
-            void card.openLink(
-                'https://www.openstreetmap.org/?mlat=' +
-                    point.latitude +
-                    '&mlon=' +
-                    point.longitude +
-                    '#map=14/' +
-                    point.latitude +
-                    '/' +
-                    point.longitude
-            );
-        };
-        el.replaceChildren(name, frame, button);
-        return () => {
-            frame.src = 'about:blank';
-        };
-    }
-});
+import MapCard from './map-card/MapCard.vue';
+export const mapCard = vueCard(MapCard);
 export function registerMapExample() {
     return registerCardTool<{ query: string }>({
         name: 'map_show',
@@ -80,6 +17,7 @@ export function registerMapExample() {
         handler: ({ query }, context) => geocode(query, context.abortSignal),
         card: mapCard,
         label: 'Map',
+        chrome: 'none',
         minHeight: 320
     });
 }
