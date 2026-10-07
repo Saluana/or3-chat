@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "181bbe76df2553fc427443f0e36813a52115f46b5e3dc309772d87050bf008b2",
+      "apiSha256": "b0d47d1ca0956b38a9ae4a56a9817d1cf1f40dcbb4b504bdfeb492a4cff315b3",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7455,7 +7455,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSearch.ts",
-                "line": 182,
+                "line": 163,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
               }
@@ -7464,7 +7464,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSearch.ts",
-              "line": 182,
+              "line": 163,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
             }
