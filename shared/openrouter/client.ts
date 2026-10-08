@@ -2,12 +2,13 @@
 // OpenRouter SDK Client Adapter
 // Provides consistent SDK initialization and common request options
 
-import { OpenRouter } from '@openrouter/sdk';
+import { OpenRouter, type HTTPClient } from '@openrouter/sdk';
 import { normalizeOpenRouterBaseUrl } from './url';
 
 export interface OpenRouterClientConfig {
     apiKey?: string;
     serverURL?: string;
+    httpClient?: HTTPClient;
 }
 
 // Default headers for all requests
@@ -30,6 +31,7 @@ export function createOpenRouterClient(
         serverURL: normalizeOpenRouterBaseUrl(config.serverURL),
         httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
         appTitle: DEFAULT_HEADERS['X-Title'],
+        httpClient: config.httpClient,
     });
 }
 

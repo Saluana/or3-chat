@@ -49,6 +49,23 @@ it.
 
 ## Running in chat
 
+Workflow message updates and generated-image attachments use the originating
+workspace's write permission. The host verifies the destination thread and
+workflow stream inside the message write transaction; deleted or unrelated
+messages cannot be overwritten. These write ports currently refuse project
+chats until workflow execution supports the shared project context boundary.
+Moving a chat into a project or losing write access during preparation refuses
+the pending write. Images that fail attachment release their temporary file
+reference.
+
+Model and image-caption ports also require the originating workflow message,
+thread and stream. The SDK transport checks those records, nullable project
+ownership and captured workspace write access before every fetch, including
+transport retries. Workflows 0.2.1 requires `or3-trusted-chat-origin-v1` and
+supplies that identity for model, caption and background calls. An older
+artifact that supplies no origin refuses inference in workspaces containing
+projects; changing the visible pane cannot supply that missing identity.
+
 The workflow card in chat updates as nodes start, call tools, and produce
 visible output. Long-reasoning models show **Thinking…** until they begin
 streaming their response; OR3 does not expose private model reasoning. Expand

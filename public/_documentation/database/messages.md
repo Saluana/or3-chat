@@ -34,11 +34,13 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `createMessage(input)`                            | Validates payload (including array → string conversion for `file_hashes`) and writes a row. |
 | `upsertMessage(value)` / `upsertMessageInDb(db, value)` | Validates and replaces a row; the `InDb` variant targets an explicit DB.              |
-| `patchMessageInDb(db, id, patch, fallback?, ifCurrent?)` | Merges owned fields into the latest row without replacing concurrent updates. |
+| `patchMessageInDb(db, id, patch, fallback?, ifCurrent?, commitGuard?)` | Merges owned fields into the latest row without replacing concurrent updates. |
 | `messagesByThread(threadId)`                      | Fetches ordered messages, applying output filters.                                          |
 | `getMessage(id)` / `messageByStream(streamId)`    | Targeted lookups with output filters.                                                       |
 | `softDeleteMessage(id)` / `hardDeleteMessage(id)` | Delete flows with before/after hook actions.                                                |
 | `appendMessage(input)` / `appendMessageToDb(db, input)` | Transactionally inserts at end of thread and updates timestamps.                      |
+| `prepareMessageAppend(input)` | Runs append preparation hooks and returns a validated value plus its `afterCommit` notification. |
+| `appendMessageRows(db, value)` | Hook-free append and timestamp update within the caller's captured write transaction. |
 | `moveMessage(messageId, toThreadId)`              | Moves a message to another thread and reindexes.                                            |
 | `copyMessage(messageId, toThreadId)`              | Duplicates a message into another thread with new ID.                                       |
 | `insertMessageAfter(afterId, input)`              | Inserts between two messages, normalizing indexes as needed.                                |
@@ -62,6 +64,14 @@ the write and after hook, even when a fallback was supplied. Chat finalization
 uses this guard to avoid saving over a newer generation or resurrecting a deleted
 message after an asynchronous hook.
 
+Host tool writes can supply `commitGuard: { tables, assertCurrent }`. The named
+authorization tables join the write transaction; `assertCurrent` runs after
+preparation hooks and before the fresh-row read/write. It may await database
+authorization checks within that transaction, but must not run arbitrary hooks,
+approval UI, network calls or timers there. Throwing aborts the write. Document
+read manifests and edit proposals use it to fence the originating chat's captured
+nullable owner and live tool policy at commit.
+
 ---
 
 ## Sparse indexing strategy
@@ -82,6 +92,12 @@ must use `card.setState()` instead of replacing `data` or the complete state map
 the host updates a single entry against the latest row, preserving sibling cards
 and concurrent streaming writes. State is limited to 16 KiB per call and 64 KiB
 for the message map.
+
+Append preparation runs before the write transaction; notifications run after
+commit. A notification failure is reported without failing a durable append.
+Tools that must authorize and append atomically use `prepareMessageAppend`,
+recheck the prepared destination/content, call `appendMessageRows` within their
+guarded transaction, then call `afterCommit` after that outer transaction succeeds.
 
 -   Creation helpers accept hash arrays and serialize them; full-row upserts use the stored JSON string contract. Use [message-file helpers](/documentation/database/message-files) to change an existing message's attachments.
 -   Use `appendMessage` rather than manual `createMessage` when you need thread timestamps updated.

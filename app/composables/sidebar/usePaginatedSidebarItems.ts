@@ -1,4 +1,4 @@
-import { ref, shallowRef, type Ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, shallowRef, type Ref, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
@@ -25,7 +25,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
         const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
-        const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db);
+        const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db, currentFilter);
         for (const item of page.items) {
             if (!item.family) { rows.push(item); continue; }
             const rootId = item.family.rootId;
@@ -76,6 +76,8 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     watch(() => [options.query?.value, options.projectId?.value, options.pinned?.value], reset);
     watch(() => options.activeIds?.value, startSubscription, { deep: true });
     onMounted(() => { mounted = true; startSubscription(); });
+    onActivated(() => { if (!mounted) { mounted = true; startSubscription(); } });
+    onDeactivated(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); loading.value = false; });
     onUnmounted(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); stopWorkspace(); });
     return { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction };
 }

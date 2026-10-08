@@ -1,5 +1,5 @@
 import { PostSchema, type Post } from './schema';
-import { createOrRefFile, changeRefCount, getFileBlob } from './files';
+import { createOrRefFile, changeRefCount, changeFileRefRows, notifyFileRefChanges, type FileRefNotification, getFileBlob } from './files';
 import { parseFileHashes } from './files-util';
 import { getWriteTxTableNames, nextClock, nowSec } from './util';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -117,6 +117,7 @@ export async function catalogWorkspaceFile(scope: WorkspaceOperationScope, hash:
         created_at: existing?.created_at ?? nowSec(), updated_at: nowSec(), deleted: false, clock: nextClock(existing?.clock) });
     // Await extension code outside Dexie transactions, then compare again under the write lock.
     const event = await prepareFileChange(scope, restored ? 'restore' : existing ? 'index' : 'import', existing, post);
+    const referenceChanges: FileRefNotification[] = [];
     const result = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta']), async () => {
         const current = await scope.db.posts.get(id);
         const currentMeta = await scope.db.file_meta.get(hash);
@@ -130,12 +131,16 @@ export async function catalogWorkspaceFile(scope: WorkspaceOperationScope, hash:
             }
             throw changed();
         }
-        if (!existing || existing.deleted) await changeRefCount(hash, 1, scope.db);
+        if (!existing || existing.deleted) {
+            const changed = await changeFileRefRows(hash, 1, scope.db);
+            if (changed) referenceChanges.push(changed.notification);
+        }
         scope.assertCurrent('write');
         await scope.db.posts.put(post);
         scope.assertCurrent('write');
         return { post, duplicate: !!existing, restored, committed: true };
     });
+    await notifyFileRefChanges(referenceChanges);
     await notify(result.post, result.committed ? [event] : []);
     scope.assertCurrent();
     return { post: result.post, duplicate: result.duplicate, restored: result.restored };
@@ -252,17 +257,20 @@ export async function removeWorkspaceFile(scope: WorkspaceOperationScope, id: st
     if (base.postType === FILE_CATALOG_POST_TYPE && hashes.length !== 1) throw new Error('Invalid file catalog reference.');
     const removed = PostSchema.parse({ ...base, deleted: true, updated_at: nowSec(), clock: nextClock(base.clock) });
     const event = await prepareFileChange(scope, 'remove', base, removed);
+    const referenceChanges: FileRefNotification[] = [];
     await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta']), async () => {
         const current = await scope.db.posts.get(id);
         scope.assertCurrent('write');
         if (JSON.stringify(current) !== JSON.stringify(base)) throw changed();
         await scope.db.posts.put(removed);
         for (const hash of new Set(hashes)) {
-            if (await scope.db.file_meta.get(hash)) await changeRefCount(hash, -1, scope.db);
+            const changed = await changeFileRefRows(hash, -1, scope.db);
+            if (changed) referenceChanges.push(changed.notification);
             scope.assertCurrent('write');
         }
         scope.assertCurrent('write');
     });
+    await notifyFileRefChanges(referenceChanges);
     await notify(removed, [event]);
     scope.assertCurrent();
 }

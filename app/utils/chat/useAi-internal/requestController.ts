@@ -14,7 +14,9 @@ import type { AssistantPersister, StoredMessage } from './types';
 import { updateMessageRecord } from './persistence';
 import { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
 import { isStaleForegroundGeneration } from '~/utils/chat/generation-lease';
+import { tryGetHooks } from '~/core/hooks/useHooks';
 import { serializeError } from '~~/shared/errors';
+import { parseHashes } from '~/utils/files/attachments';
 
 /**
  * The classified public error of a failed foreground turn, kept beside the
@@ -72,11 +74,13 @@ export type RequestFinalization = {
 
 /** One owner per admitted generation; attachment and save state are independent. */
 export type ChatRequest = {
+    expectedProjectId?: string | null;
     readonly requestId: string;
     readonly originDb: Or3DB;
     readonly workspaceId: string;
     readonly accumulator: Accumulator;
     readonly kind: 'send' | 'continue' | 'reattach' | 'recovery';
+    projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     threadId?: string;
     userMessageId?: string;
     assistantMessageId?: string;
@@ -112,6 +116,7 @@ export function createChatRequest(options: {
     requestId: string;
     originDb: Or3DB;
     workspaceId: string;
+    projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     threadId?: string;
     accumulator: Accumulator;
     kind?: ChatRequest['kind'];
@@ -333,7 +338,7 @@ export function finalizeRequest(
                         terminal.content ||
                         terminal.reasoning ||
                         terminal.toolCalls?.length ||
-                        request.message?.file_hashes?.length
+                        parseHashes(request.message?.file_hashes).length
                     );
                     if (terminal.deleteEmpty && !hasOutput) {
                         await request.originDb.transaction(
@@ -428,8 +433,30 @@ export function finalizeRequest(
         try {
             if (request.ownsView() && !result.superseded)
                 request.projectTerminal(result);
-            if (!result.persistenceError && !result.superseded)
+            if (!result.persistenceError && !result.superseded) {
+                // Foreground completion is emitted by useAi's afterPersist callback.
+                // Canonical/tracker responses emit it only for project chats (memory
+                // capture); backgroundJobNotifications owns ordinary completions.
+                if (
+                    terminal.outcome === 'completed' &&
+                    request.assistantMessageId &&
+                    (request.projectContext || request.expectedProjectId) &&
+                    (terminal.persistence === 'tracker' ||
+                        terminal.persistence === 'canonical')
+                )
+                    await tryGetHooks()?.doAction('ai.chat.stream:action:complete', {
+                        threadId: request.threadId,
+                        workspaceId: request.workspaceId,
+                        projectId:
+                            request.projectContext?.projectId ??
+                            request.expectedProjectId ??
+                            null,
+                        assistantId: request.assistantMessageId,
+                        streamId: request.streamId ?? request.requestId,
+                        totalLength: terminal.content?.length ?? 0,
+                    });
                 await terminal.afterPersist?.();
+            }
         } catch (error) {
             result.effectError = error;
         } finally {

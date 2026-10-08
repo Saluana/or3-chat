@@ -200,6 +200,7 @@ import {
 import { nowSec } from '~/db/util';
 import { DocumentConflictError, updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -208,6 +209,7 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
+import { relatedChatsNotice } from '~/utils/projects/related-chats';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
@@ -216,7 +218,6 @@ import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
 import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
 import {
     isDocumentPost,
-    type SidebarProject,
     type SidebarRenamePayload,
 } from '~/core/sidebar/sidebar-types';
 import { useResolvedSidebarSections } from '~/core/sidebar/sidebar-section-components';
@@ -267,7 +268,7 @@ interface SideNavContentInstance extends ComponentPublicInstance {
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
 const items = shallowRef<Thread[]>([]);
-const projects = shallowRef<SidebarProject[]>([]);
+const projects = shallowRef<Project[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
@@ -409,6 +410,19 @@ if (topHeaderHeightInjected) {
     watch(topHeaderHeightInjected, recomputeListHeight);
 }
 
+function bindProjectQuery() {
+    subProjects?.unsubscribe();
+    const workspaceDb = getDb(); const generation = getWorkspaceGeneration();
+    const fullCatalog = Boolean(sidebarQuery.value.trim() || showAddToProjectModal.value);
+    subProjects = liveQuery(() => {
+        const rows = workspaceDb.projects.orderBy("updated_at").reverse().filter(p => !p.deleted);
+        return (fullCatalog ? rows : rows.limit(6)).toArray();
+    }).subscribe({
+        next: rows => { if (generation === getWorkspaceGeneration()) projects.value = rows; },
+        error: err => console.error("projects liveQuery error", err),
+    });
+}
+
 function bindWorkspaceQueries() {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
@@ -431,40 +445,7 @@ function bindWorkspaceQueries() {
         },
         error: (err) => console.error('liveQuery error', err),
     });
-    // Projects subscription (most recently updated first)
-    subProjects = liveQuery(async () => {
-        const currentProjects = await workspaceDb.projects
-            .orderBy('updated_at')
-            .reverse()
-            .filter((p: any) => !p.deleted)
-            .toArray();
-        return Promise.all(currentProjects.map(async project => {
-            const entries = normalizeProjectData(project.data);
-            const visible = await Promise.all(entries.map(async entry => {
-                const row = entry.kind === 'chat' ? await workspaceDb.threads.get(entry.id) : await workspaceDb.posts.get(entry.id);
-                if (!row || !isVisibleWorkspaceItem(row)) return null;
-                if (entry.kind !== 'chat') {
-                    if (!('postType' in row) || row.postType !== (entry.kind === 'file' ? 'or3:file' : 'doc')) return null;
-                    if (entry.kind === 'file') {
-                        const hashes = parseFileHashes(row.file_hashes);
-                        const meta = hashes.length === 1 ? await workspaceDb.file_meta.get(hashes[0]!) : undefined;
-                        if (!meta || meta.deleted) return null;
-                    }
-                }
-                return { ...entry, name: entry.name ?? row.title };
-            }));
-            return { ...project, data: visible.filter(entry => entry !== null) };
-        }));
-    }).subscribe({
-        next: (res) => {
-            if (generation !== getWorkspaceGeneration()) return;
-            projects.value = res.map((p: Project) => ({
-                ...p,
-                data: normalizeProjectData(p.data),
-            }));
-        },
-        error: (err) => console.error('projects liveQuery error', err),
-    });
+    bindProjectQuery();
     if (documentsEnabled.value) {
         // Documents subscription (docs only, excluding deleted)
         subDocs = liveQuery(() =>
@@ -504,35 +485,24 @@ watch([projects, expandedProjects, sidebarFooterActions], () => {
 // --------------- Command palette project reveal ---------------
 const { open: openCommandPalette } = useCommandPalette();
 
-const REVEAL_CLASS = 'or3-project-revealed';
+const { openProjectSidebar } = useProjectSidebar();
+const projectNavigationToast = useToast();
+const notifyRelatedChats = (count: number) => {
+    const notice = relatedChatsNotice(count);
+    if (notice) projectNavigationToast.add(notice);
+};
 let stopRevealSubscription: (() => void) | null = null;
-let revealHighlightTimer: ReturnType<typeof setTimeout> | null = null;
-let revealedElement: HTMLElement | null = null;
-
-function clearRevealHighlight() {
-    if (revealHighlightTimer) clearTimeout(revealHighlightTimer);
-    revealHighlightTimer = null;
-    revealedElement?.classList.remove(REVEAL_CLASS);
-    revealedElement = null;
-}
-
 async function revealProject(projectId: string) {
     if (!projectId) return;
-    if (!activeSections.value.projects) activeSections.value.projects = true;
-    if (!expandedProjects.value.includes(projectId)) {
-        expandedProjects.value = [...expandedProjects.value, projectId];
+    try {
+        await openProjectSidebar(projectId);
+    } catch (error) {
+        projectNavigationToast.add({
+            title: 'Project unavailable',
+            description: error instanceof Error ? error.message : 'Could not open project.',
+            color: 'error',
+        });
     }
-    await nextTick();
-    clearRevealHighlight();
-    const row = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-project-id]')
-    ).find((element) => element.dataset.projectId === projectId);
-    if (!row) return;
-    row.scrollIntoView({ block: 'nearest' });
-    // Transient highlight: the palette already navigated, this only orients the eye.
-    row.classList.add(REVEAL_CLASS);
-    revealedElement = row;
-    revealHighlightTimer = setTimeout(clearRevealHighlight, 2200);
 }
 
 onMounted(() => {
@@ -551,7 +521,6 @@ onUnmounted(() => {
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();
     stopRevealSubscription?.();
-    clearRevealHighlight();
 });
 
 const emit = defineEmits<{
@@ -928,7 +897,7 @@ async function handleRemoveFromProject(payload: {
         const idx = entries.findIndex((d) => d.id === payload.entryId);
         if (idx === -1) return;
         entries.splice(idx, 1);
-        await updateProjectEntries(payload.projectId, entries);
+        notifyRelatedChats(await updateProjectEntries(payload.projectId, entries));
     } catch (e) {
         console.error('remove from project failed', e);
     }
@@ -975,6 +944,8 @@ async function submitCreateProject() {
         // Auto expand the new project
         if (!expandedProjects.value.includes(newId))
             expandedProjects.value.push(newId);
+        if (activePageId.value === 'sidebar-projects-home')
+            await openProjectSidebar(newId, 'projects');
         closeCreateProject();
     } catch (e) {
         console.error('Failed to create project', e);
@@ -1002,6 +973,8 @@ const addToProjectModalProps = createSidebarModalProps(
         ui: { footer: 'justify-end' },
     }
 );
+
+watch(() => Boolean(sidebarQuery.value.trim() || showAddToProjectModal.value), bindProjectQuery);
 
 const projectSelectOptions = computed(() =>
     projects.value.map((p) => ({ label: p.name, value: p.id }))
@@ -1070,7 +1043,7 @@ async function submitAddToProject() {
                 name: projectName,
                 description: newProjectDescription.value.trim() || undefined,
             });
-            await updateProjectEntries(pid, [entry]);
+            notifyRelatedChats(await updateProjectEntries(pid, [entry]));
             projectId = pid;
             if (!expandedProjects.value.includes(pid))
                 expandedProjects.value.push(pid);
@@ -1089,7 +1062,7 @@ async function submitAddToProject() {
             );
             if (!existing) entries.push(entry);
             else existing.name = entry.name;
-            await updateProjectEntries(project.id, entries);
+            notifyRelatedChats(await updateProjectEntries(project.id, entries));
         }
         closeAddToProject();
     } catch (e: any) {

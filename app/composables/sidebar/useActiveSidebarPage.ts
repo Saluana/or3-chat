@@ -85,6 +85,22 @@ export function __resetActiveSidebarPageForTests(): void {
     g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
 }
 
+function profileSidebarPageIds() {
+    const profile = resolvedWorkspaceProfile.value;
+    const ids = isMobile.value
+        ? profile.mobile.bottomNavigation
+        : profile.navigation.items;
+    // Projects is an inline Home destination, not a rail/bottom-navigation item.
+    if (
+        ids.includes(DEFAULT_PAGE_ID) &&
+        !profile.navigation.hidden.includes('sidebar-projects-home') &&
+        !ids.includes('sidebar-projects-home')
+    ) {
+        return [...ids, 'sidebar-projects-home'];
+    }
+    return ids;
+}
+
 /** Activate a sidebar page from a host callback without creating component watchers. */
 export async function setActiveSidebarPage(id: string): Promise<boolean> {
     const { getSidebarPage } = useSidebarPages();
@@ -92,10 +108,7 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
     const state = g.__or3ActiveSidebarPageState!;
     const activePageId = state.activePageId;
     const previousPageId = state.previousPageId;
-    const activeProfilePageIds = () =>
-        isMobile.value
-            ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
-            : resolvedWorkspaceProfile.value.navigation.items;
+    const activeProfilePageIds = profileSidebarPageIds;
     const activeProfileDefaultPage = () => workspaceProfileDefaultPage(isMobile.value);
 
     if (!process.client) return false;
@@ -203,10 +216,7 @@ export function useActiveSidebarPage() {
     const activePageId = state.activePageId;
     const previousPageId = state.previousPageId;
     const initialRequestedPageId = state.initialRequestedPageId;
-    const activeProfilePageIds = () =>
-        isMobile.value
-            ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
-            : resolvedWorkspaceProfile.value.navigation.items;
+    const activeProfilePageIds = profileSidebarPageIds;
     const activeProfileDefaultPage = () =>
         workspaceProfileDefaultPage(isMobile.value);
 

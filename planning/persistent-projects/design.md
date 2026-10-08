@@ -20,12 +20,12 @@ flowchart LR
 
 | Component | Responsibility and reuse | Requirements |
 | --- | --- | --- |
-| Project Home | Follow [Files registration](../../app/plugins/workspace-files.client.ts), pane/tab and profile registries; embed a project-scoped Files view. | R1 |
+| Project Home | Register a sidebar page using Chats/Documents navigation, shared search, list and empty-state styles. Home links to the Projects list; direct project shortcuts return to Home, while list selections return to Projects. Each section reuses the single top back button. The home shows project identity, New chat, a brief, Knowledge/Memory links, and time-grouped chats/documents. Knowledge uses an Add source menu and compact source rows with expandable history/actions; Memory uses readable brief/memory cards with add/edit forms on demand. Reuse `SidebarPageLink`, `SidebarTimeGroupedList` with its header slot, and existing Files intake. Settings holds chat association and memory-exclusion controls. Opening a project preserves the active pane and tabs. | R1 |
 | Project Store | Extend [project associations](../../app/utils/chat/workspace-projects.ts); own settings, explicit memories, and knowledge bindings. | R2, R3, R7 |
 | Source Intake | Extend [Files intake](../../app/db/workspace-files.ts), preview, bounded reads, and document history. | R2 |
 | Project Context Builder | Resolve immutable turn inputs before [native admission](../../app/composables/chat/useAi.ts); all project-bound inference paths call it. | R4 |
 | Project Tool Policy | Narrow existing client/server registries and plugin/workflow authority at execution. | R5 |
-| Context Receipt | Extend [source receipts](../../app/utils/chat/workspace-source-receipts.ts) with evidence from submitted requests. | R4 |
+| Context Receipt | Extend [source receipts](../../app/utils/chat/workspace-source-receipts.ts) with persisted evidence from submitted requests. Keep receipts internal; remove the inline message counter and inspector per user review. | R4 |
 | Project Continuity | Reuse [compaction](../../app/composables/chat/useThreadCompaction.ts) and existing workspace search/read. | R6 |
 
 ```ts

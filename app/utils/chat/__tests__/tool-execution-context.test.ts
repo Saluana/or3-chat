@@ -1,12 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Dexie from 'dexie';
+import { setActiveWorkspaceDb, evictWorkspaceDb, getDb } from '~/db/client';
 import type { ToolDefinition, ToolExecutionContext } from '../types';
 import { useToolRegistry } from '../tool-registry';
 
 const names: string[] = [];
+let workspace: string;
 
-afterEach(() => {
+beforeEach(async () => {
+    workspace = `tool-context-${crypto.randomUUID()}`;
+    const db = setActiveWorkspaceDb(workspace);
+    await db.threads.put({ id: 'thread-1', title: 'Ordinary tool origin', status: 'ready',
+        created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
+});
+
+afterEach(async () => {
     const registry = useToolRegistry();
     names.splice(0).forEach((name) => registry.unregisterTool(name));
+    const db = getDb();
+    setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
 });
 
 describe('client tool execution context', () => {

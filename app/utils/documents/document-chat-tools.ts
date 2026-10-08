@@ -1,5 +1,8 @@
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
-import { createDocumentInDb, getDocument, getDocumentInDb, type CreateDocumentInput } from '~/db/documents';
+import { prepareDocumentCreate, getDocument, getDocumentInDb, type CreateDocumentInput } from '~/db/documents';
+import { getWriteTxTableNames } from '~/db/util';
+import { parseFileHashes } from '~/db/files-util';
+import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
@@ -97,6 +100,30 @@ const duplicateDocumentDefinition: ToolDefinition = {
     runtime: 'client',
 };
 
+/** Preparation may run plugin hooks; authorization is checked again at commit. */
+async function saveChatDocument(input: CreateDocumentInput, context: ToolExecutionContext, sourceId?: string) {
+    const scope = captureWorkspaceOperation(context);
+    scope.assertCurrent('write');
+    const prepared = await prepareDocumentCreate(input);
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta', 'projects', 'threads']), async () => {
+        scope.assertCurrent('write');
+        await context.assertToolAuthorized?.();
+        if (sourceId) {
+            const source = await scope.db.posts.get(sourceId);
+            if (!source || source.deleted || source.postType !== 'doc') throw new Error('The source document is no longer available.');
+        }
+        for (const hash of parseFileHashes(prepared.row.file_hashes)) {
+            const file = await scope.db.file_meta.get(hash);
+            if (!file || file.deleted) throw new Error('A referenced workspace image is unavailable.');
+        }
+        scope.assertCurrent('write');
+        await scope.db.posts.put(prepared.row);
+    });
+    try { await prepared.afterCommit(); }
+    catch (error) { console.warn('Document saved; after-create hook failed.', error); }
+    return prepared.row;
+}
+
 async function createChatDocument(
     title: string | undefined,
     content: string | undefined,
@@ -111,7 +138,7 @@ async function createChatDocument(
         documentContent = markdownToTipTapDoc(content) as CreateDocumentInput['content'];
     }
     assertWriteOrigin(context, db, generation);
-    const created = await createDocumentInDb(db, { title, content: documentContent });
+    const created = await saveChatDocument({ title, content: documentContent }, context);
     return JSON.stringify({ documentId: created.id, title: created.title });
 }
 
@@ -147,10 +174,10 @@ async function duplicateChatDocument(
     const source = await getDocumentInDb(db, documentId);
     if (!source || source.deleted) throw new Error('The source document is no longer available.');
     assertWriteOrigin(context, db, generation);
-    const copy = await createDocumentInDb(db, {
+    const copy = await saveChatDocument({
         title: title?.trim() || `${source.title} (copy)`,
         content: source.content,
-    });
+    }, context, source.id);
     return JSON.stringify({ documentId: copy.id, title: copy.title, sourceDocumentId: source.id });
 }
 

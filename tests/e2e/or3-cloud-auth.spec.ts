@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
+import { defaultProjectSettings, PROJECT_POST_TYPES } from '../../shared/projects/workspace';
 
 const adminCredentials = {
     username: process.env.OR3_ADMIN_E2E_USERNAME ?? '',
@@ -188,10 +189,21 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         const op = (tableName: string, pk: string, payload: unknown, clock = 1) => ({ id: randomUUID(), tableName, pk, payload,
             operation: 'put', stamp: { deviceId: 'cloud-proof-device', opId: randomUUID(), hlc: `${Date.now()}:0:cloud-proof`, clock },
             createdAt: Date.now(), attempts: 0, status: 'pending' });
+        const projectId = 'persistent-cloud-project';
+        const projectRecord = (id: string, type: string, content: unknown, refs: string[] = []) => ({id,title:projectId,post_type:type,
+            content:JSON.stringify(content),meta:JSON.stringify([{key:'or3.workspace-item',value:{version:1,projectRecord:true}}]),file_hashes:JSON.stringify(refs),clock:1,created_at:1,updated_at:1,deleted:false});
+        const projectRecords = [
+            projectRecord(`project-settings-${projectId}`,PROJECT_POST_TYPES.settings,{...defaultProjectSettings(),instructions:'Saffron cloud instructions',brief:'Saffron brief',tools:{github:{mode:'ask',resources:['owner/repo']}}}),
+            projectRecord('persistent-cloud-memory',PROJECT_POST_TYPES.memory,{version:1,text:'Saffron explicit decision',kind:'decision'}),
+            projectRecord('persistent-cloud-source',PROJECT_POST_TYPES.source,{version:1,item_id:postId,kind:'file',title:'Cloud knowledge',mode:'always',current_revision_id:'r2',
+                revisions:[{id:'r1',original_hash:hash,text_hash:hash,status:'ready',coverage:'full',created_at:1,locations:[]},{id:'r2',original_hash:hash,text_hash:hash,status:'ready',coverage:'full',created_at:2,locations:[]}]},[hash]),
+        ];
         const push = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [
             op('file_meta', hash, { hash, name: 'cloud-proof.txt', mime_type: 'text/plain', kind: 'file', size_bytes: bytes.length,
                 ref_count: 1, storage_id: storageId, storage_provider_id: storageProvider, deleted: false, created_at: 1, updated_at: 1, clock: 1 }),
             op('posts', postId, catalog),
+            op('projects',projectId,{id:projectId,name:'Persistent cloud project',data:[{kind:'file',id:postId}],clock:1,created_at:1,updated_at:1,deleted:false}),
+            ...projectRecords.map(row => op('posts',row.id,row)),
         ] } });
         expect(push.ok(), await push.text()).toBe(true);
         expect((await push.json()).results.every((result: { success: boolean }) => result.success)).toBe(true);
@@ -225,6 +237,8 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             const snapshotItems = (await snapshot.json()).items;
             expect(snapshotItems).toContainEqual(expect.objectContaining({ kind: 'row', pk: postId, payload: expect.objectContaining(catalog) }));
             expect(snapshotItems.filter((item: { pk: string }) => item.pk === 'cloud-replay-proof')).toHaveLength(1);
+            for (const record of projectRecords) expect(snapshotItems).toContainEqual(expect.objectContaining({pk:record.id,payload:expect.objectContaining(record)}));
+            await info.attach('project-provider-roundtrip',{contentType:'application/json',body:JSON.stringify({projectId,hash,projectRecords:projectRecords.map(row=>({id:row.id,content:row.content,file_hashes:row.file_hashes})),assertions:['second authenticated device preserved settings, brief, tool allowlist, decisions and all source revisions']})});
             const download = await second.request.post('/api/storage/presign-download', { headers,
                 data: { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' } });
             expect(download.ok(), await download.text()).toBe(true);

@@ -7,6 +7,9 @@ export type CanonicalChatQuery =
 export type CanonicalChatReadResult = {
     status: 'ok' | 'scope_incomplete';
     thread?: CanonicalHistoryRecord;
+    /** Provider resolves explicit and legacy project ownership in its authorized
+     * snapshot. Absence means that project execution cannot be admitted safely. */
+    project_ownership?: 'resolved' | 'conflict';
     messages?: CanonicalHistoryRecord[];
     next_cursor?: string;
     /** Physical content rows read, including rows excluded at a legacy tie

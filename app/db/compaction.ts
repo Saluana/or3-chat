@@ -11,6 +11,9 @@ import { resolveThreadProjection, type ThreadProjection } from '../utils/chat/co
 import { storedMessagesToCanonicalTranscript, type CanonicalTranscriptRecord } from '../utils/chat/transcript';
 import { CompactionDataSchema, readCompactionData, type CompactionData, type HistoryScope } from '~~/shared/chat/compaction';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
+import { ProjectContextReceiptSchema, type ProjectContextReceipt } from '~~/shared/projects/workspace';
+import { resolveChatProject } from './project-workspace';
+import { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
 
 export class CompactionError extends Error {
     constructor(readonly code: 'stale_source' | 'cancelled' | 'source_busy' | 'not_eligible' | 'scope_incomplete'
@@ -41,7 +44,7 @@ interface CaptureOptions {
     signal?: AbortSignal;
 }
 const captures = new WeakMap<CompactionCapture, CapturedState>();
-const summaries = new WeakMap<ValidatedCompactionSummary, { capture: CompactionCapture; data: CompactionData; content: string }>();
+const summaries = new WeakMap<ValidatedCompactionSummary, { capture: CompactionCapture; data: CompactionData; content: string; projectReceipt?: ProjectContextReceipt }>();
 function freeze<T>(value: T): T {
     if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
     return value;
@@ -162,7 +165,7 @@ export async function inspectCompactionSource(sourceThreadId: string): Promise<v
 }
 async function inspectCompactionRevision(sourceThreadId: string, captureRevision = true): Promise<string> {
     const db = getDb(); const generation = getWorkspaceGeneration();
-    const revision = await db.transaction('r', ['threads', 'messages'], async () => {
+    const revision = await db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => {
         const projection = await resolveThreadProjection(sourceThreadId, db);
         const anchor = projection.segments.at(-1)?.visible.at(-1);
         if (!anchor) throw new CompactionError('not_eligible', 'This conversation has no local persisted anchor.');
@@ -217,7 +220,7 @@ export async function captureCompaction(options: CaptureOptions): Promise<Compac
     const db = options.db ?? getDb(); const generation = getWorkspaceGeneration();
     const ownership = { db, generation, options: { ...options } }; requireCurrent(ownership);
     if (!options.model.trim()) throw new CompactionError('invalid_capture', 'Compaction requires its captured chat model.');
-    const state = await db.transaction('r', ['threads', 'messages'], () => readCapture(options, db));
+    const state = await db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => await readCapture(options, db));
     requireCurrent(ownership);
     const capture: CompactionCapture = freeze({ operationId: newId(), childThreadId: newId(), summaryMessageId: newId(),
         sourceThreadId: options.sourceThreadId, anchorMessageId: options.anchorMessageId, model: options.model,
@@ -273,7 +276,7 @@ function requireSections(markdown: string): void {
 }
 /** Only this validator can brand a summary for this exact immutable capture. */
 export async function validateCompactionSummary(capture: CompactionCapture, response: string,
-    options: { targetTokens: number; countText: (text: string) => Promise<number> }): Promise<ValidatedCompactionSummary> {
+    options: { targetTokens: number; countText: (text: string) => Promise<number>; projectReceipt?: ProjectContextReceipt }): Promise<ValidatedCompactionSummary> {
     const state = captures.get(capture); if (!state) throw new CompactionError('invalid_capture', 'Use a valid captured scope.');
     requireCurrent(state);
     if (new TextEncoder().encode(response).length > 64 * 1024) throw new CompactionError('summary_too_large', 'Summary response exceeds its artifact byte budget.');
@@ -298,7 +301,7 @@ export async function validateCompactionSummary(capture: CompactionCapture, resp
         anchor_message_id: capture.anchorMessageId, anchor_index: state.anchor.index, generated_at: nowSec(), model: capture.model,
         message_count: state.messageCount, prior_message_count: state.priorMessageCount, summary_markdown: parsed.summary_markdown, landmarks, history_scope: state.scope });
     const summary = freeze({ summaryMarkdown: parsed.summary_markdown, content, discardedLandmarks: discarded });
-    summaries.set(summary, { capture, data, content }); return summary;
+    summaries.set(summary, { capture, data, content, projectReceipt: options.projectReceipt ? ProjectContextReceiptSchema.parse(options.projectReceipt) : undefined }); return summary;
 }
 export async function createCompactedFork(input: { capture: CompactionCapture; summary: ValidatedCompactionSummary; signal?: AbortSignal }): Promise<{ thread: Thread; summary: Message }> {
     const state = captures.get(input.capture); const accepted = summaries.get(input.summary);
@@ -326,7 +329,7 @@ export async function createCompactedFork(input: { capture: CompactionCapture; s
         });
         requireCurrent(state, input.signal ?? state.options.signal);
     }
-    const result = await state.db.transaction('rw', getWriteTxTableNames(state.db, ['threads', 'messages']), async () => {
+    const result = await state.db.transaction('rw', getWriteTxTableNames(state.db, ['threads', 'messages', 'projects', 'posts']), async () => {
         const existing = await state.db.threads.get(capture.childThreadId);
         if (existing) {
             const summary = await state.db.messages.get(capture.summaryMessageId);
@@ -344,23 +347,33 @@ export async function createCompactedFork(input: { capture: CompactionCapture; s
         const current = await readCapture(state.options, state.db);
         requireCurrent(state, input.signal ?? state.options.signal);
         if (current.snapshot !== state.snapshot) throw new CompactionError('stale_source', 'Selected history changed. Capture it again before compacting.');
+        const projectId = await resolveChatProject(state.db, capture.sourceThreadId);
+        if (accepted.projectReceipt && accepted.projectReceipt.project_id !== projectId) throw new CompactionError('stale_source', 'The handoff’s project changed before saving.');
         const now = nowSec();
         const thread = ThreadSchema.parse({ id: capture.childThreadId, title: titleOverride || `${state.source.title || 'Conversation'} — compacted`,
             created_at: now, updated_at: now, last_message_at: now, parent_thread_id: capture.sourceThreadId,
             anchor_message_id: capture.anchorMessageId, anchor_index: state.anchor.index, branch_mode: 'compacted',
             root_thread_id: current.root, summary_message_id: capture.summaryMessageId, fork_reason: 'compaction',
             status: 'ready', deleted: false, pinned: false, forked: true, clock: nextClock(), hlc: generateHLC(),
-            project_id: state.source.project_id ?? null, system_prompt_id: state.source.system_prompt_id ?? null });
+            project_id: projectId, system_prompt_id: state.source.system_prompt_id ?? null });
         const summary = MessageSchema.parse({ id: capture.summaryMessageId, thread_id: thread.id, role: 'system', index: 0,
             order_key: `${now}:${capture.summaryMessageId}`, created_at: now, updated_at: now, deleted: false,
             pending: false, clock: nextClock(), hlc: generateHLC(), error: null, file_hashes: null,
-            data: { kind: 'compaction', content: accepted.content, compaction: accepted.data } });
+            data: { kind: 'compaction', content: accepted.content, compaction: accepted.data,
+                ...(accepted.projectReceipt ? { project_context: accepted.projectReceipt } : {}) } });
         if (new TextEncoder().encode(JSON.stringify(summary)).length > MAX_SYNC_PAYLOAD_BYTES
             || new TextEncoder().encode(JSON.stringify(thread)).length > MAX_SYNC_PAYLOAD_BYTES) {
             throw new CompactionError('summary_too_large', 'Complete summary row exceeds the existing storage byte limit.');
         }
         await state.db.threads.add(thread); requireCurrent(state, input.signal ?? state.options.signal);
         await state.db.messages.add(summary); requireCurrent(state, input.signal ?? state.options.signal);
+        if (projectId) {
+            const project = await state.db.projects.get(projectId);
+            if (!project || project.deleted) throw new CompactionError('stale_source', 'The owning project is unavailable.');
+            const entries = preservedProjectEntries(project.data);
+            if (!entries.some(entry => projectEntryIdentity(entry) === `chat:${thread.id}`)) await state.db.projects.put({ ...project,
+                data: [...entries, { kind: 'chat', id: thread.id, name: thread.title }], clock: nextClock(project.clock), updated_at: now });
+        }
         return { thread, summary, replayed: false };
     });
     if (!result.replayed) {

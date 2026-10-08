@@ -12,14 +12,15 @@
  * - Uploading or downloading file blobs
  * - Rendering attachment previews
  */
-import Dexie from 'dexie';
-import { getDb } from './client';
+import { getDb, getWorkspaceGeneration } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import {
+    changeFileRefRows,
     changeRefCount,
+    notifyFileRefChanges,
+    type FileRefNotification,
     createOrRefFile,
-    derefFile,
     getFileMeta,
 } from './files';
 import { useHooks } from '../core/hooks/useHooks';
@@ -78,87 +79,65 @@ export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
  * Non-Goals:
  * - Does not enforce UI selection limits.
  */
-export async function addFilesToMessage(
-    messageId: string,
-    files: AddableFile[]
-): Promise<void> {
+export async function addFilesToMessage(messageId: string, files: AddableFile[]): Promise<void> {
     if (!files.length) return;
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'messages', {
-            include: ['file_meta', 'file_blobs'],
-        }),
-        async () => {
-            const msg = await db.messages.get(messageId);
-            if (!msg) throw new Error('message not found');
-            const existing = parseFileHashes(msg.file_hashes);
-            const newHashes: string[] = [];
-            const provisionalRefIncrements = new Map<string, number>();
-            for (const f of files) {
-                // Handle blob variant
-                if ('blob' in f && f.blob instanceof Blob) {
-                    const meta = await Dexie.waitFor(
-                        createOrRefFile(f.blob, f.name || 'file')
-                    );
-                    newHashes.push(meta.hash);
-                    provisionalRefIncrements.set(
-                        meta.hash,
-                        (provisionalRefIncrements.get(meta.hash) ?? 0) + 1
-                    );
-                }
-                // Handle hash variant
-                else if ('hash' in f && typeof f.hash === 'string') {
-                    // Validate meta exists
-                    const meta = await Dexie.waitFor(getFileMeta(f.hash));
-                    if (meta) newHashes.push(meta.hash);
-                }
+    const generation = getWorkspaceGeneration();
+    const assertCurrent = () => {
+        if (getDb() !== db || getWorkspaceGeneration() !== generation)
+            throw new Error('Workspace changed while attaching files.');
+    };
+    const msg = await db.messages.get(messageId);
+    if (!msg || msg.deleted) throw new Error('message not found');
+    const existing = parseFileHashes(msg.file_hashes);
+    const provisional = new Map<string, number>();
+    let committed = false;
+    try {
+        const newHashes: string[] = [];
+        for (const f of files) {
+            assertCurrent();
+            if ('blob' in f && f.blob instanceof Blob) {
+                const meta = await createOrRefFile(f.blob, f.name || 'file', { assertCurrent });
+                provisional.set(meta.hash, (provisional.get(meta.hash) ?? 0) + 1);
+                newHashes.push(meta.hash);
+            } else if ('hash' in f && typeof f.hash === 'string') {
+                const meta = await getFileMeta(f.hash);
+                if (meta && !meta.deleted) newHashes.push(meta.hash);
             }
-            const combined = existing.concat(newHashes);
-            // Provide hook for validation & pruning
-            const filtered = await Dexie.waitFor(
-                hooks.applyFilters(
-                    'db.messages.files.validate:filter:hashes',
-                    combined
-                )
-            );
-            const candidates = new Set(combined);
-            const accepted = Array.isArray(filtered)
-                ? filtered.filter((hash) => candidates.has(hash))
-                : [];
-            const serialized = serializeFileHashes(accepted);
-            const finalHashes = parseFileHashes(serialized);
-            const existingSet = new Set(existing);
-            const finalSet = new Set(finalHashes);
-            const affectedHashes = new Set([
-                ...existingSet,
-                ...finalSet,
-                ...provisionalRefIncrements.keys(),
-            ]);
-
-            // createOrRefFile provisionally increments every Blob attempt.
-            // Reconcile that work against the actual unique edge transition
-            // after validation, deduplication, and per-message limits.
-            for (const hash of affectedHashes) {
-                const desiredDelta =
-                    Number(finalSet.has(hash)) - Number(existingSet.has(hash));
-                const provisionalDelta =
-                    provisionalRefIncrements.get(hash) ?? 0;
-                const adjustment = desiredDelta - provisionalDelta;
-                if (adjustment !== 0) {
-                    await changeRefCount(hash, adjustment);
-                }
-            }
-
-            await db.messages.put({
-                ...msg,
-                file_hashes: serialized,
-                updated_at: nowSec(),
-                clock: nextClock(msg.clock),
-            });
         }
-    );
+        const combined = existing.concat(newHashes);
+        const filtered = await hooks.applyFilters('db.messages.files.validate:filter:hashes', combined);
+        const candidates = new Set(combined);
+        const serialized = serializeFileHashes(Array.isArray(filtered) ? filtered.filter(hash => candidates.has(hash)) : []);
+        const existingSet = new Set(existing);
+        const finalSet = new Set(parseFileHashes(serialized));
+        const referenceChanges: FileRefNotification[] = [];
+        assertCurrent();
+        await db.transaction('rw', getWriteTxTableNames(db, 'messages', { include: ['file_meta'] }), async () => {
+            const current = await db.messages.get(messageId);
+            assertCurrent();
+            if (JSON.stringify(current) !== JSON.stringify(msg)) throw new Error('The message changed while attaching files. Try again.');
+            for (const hash of finalSet) {
+                const meta = await db.file_meta.get(hash);
+                if (!meta || meta.deleted) throw new Error('An attachment is unavailable.');
+            }
+            for (const hash of new Set([...existingSet, ...finalSet, ...provisional.keys()])) {
+                const adjustment = Number(finalSet.has(hash)) - Number(existingSet.has(hash)) - (provisional.get(hash) ?? 0);
+                if (adjustment) {
+                    const changed = await changeFileRefRows(hash, adjustment, db);
+                    if (changed) referenceChanges.push(changed.notification);
+                }
+            }
+            await db.messages.put({ ...msg, file_hashes: serialized, updated_at: nowSec(), clock: nextClock(msg.clock) });
+            assertCurrent();
+        });
+        committed = true;
+        await notifyFileRefChanges(referenceChanges);
+    } finally {
+        // Blob preparation owns temporary references outside the message commit.
+        if (!committed) for (const [hash, count] of provisional) await changeRefCount(hash, -count, db);
+    }
 }
 
 /**
@@ -179,6 +158,7 @@ export async function removeFileFromMessage(
     hash: string
 ): Promise<void> {
     const db = getDb();
+    const referenceChanges: FileRefNotification[] = [];
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'messages', { include: ['file_meta'] }),
@@ -194,6 +174,8 @@ export async function removeFileFromMessage(
             updated_at: nowSec(),
             clock: nextClock(msg.clock),
         });
-        await derefFile(hash);
+        const changed = await changeFileRefRows(hash, -1, db);
+        if (changed) referenceChanges.push(changed.notification);
     });
+    await notifyFileRefChanges(referenceChanges);
 }

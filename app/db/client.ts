@@ -37,6 +37,7 @@ import {
     applyDocumentReferenceKey,
     applyGalleryState,
     applyReadyAt,
+    computeProjectChatIds,
     installDerivedIndexHooks,
 } from './derived-indexes';
 
@@ -357,6 +358,12 @@ export class Or3DB extends Dexie {
             // Compaction development databases already at v24 also need the Files index.
             pending_ops: 'id, status, [status+readyAt+createdAt+id], [tableName+pk]',
         });
+
+        this.version(26).stores({
+            projects: 'id, name, clock, created_at, updated_at, *chat_ids',
+        }).upgrade(tx => tx.table('projects').toCollection().modify(row => {
+            row.chat_ids = computeProjectChatIds(row);
+        }));
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

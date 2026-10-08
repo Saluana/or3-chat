@@ -7,7 +7,7 @@ import {
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
-import { appendMessageToDb, messagesByThread } from '~/db/messages';
+import { appendMessageRows, prepareMessageAppend, messagesByThread } from '~/db/messages';
 import { getThread } from '~/db/threads';
 import { normalizeMessageContent } from '~/core/search/command-palette/normalize';
 
@@ -202,11 +202,13 @@ async function sendMessageToThread(
     threadId: string,
     content: string,
     role: string | undefined,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
 ): Promise<string> {
     assertChatWorkspace(context);
     if (threadId === context.threadId) {
-        throw new Error('Cannot send a message to the current chat. Choose a different thread.');
+        throw new Error(
+            'Cannot send a message to the current chat. Choose a different thread.'
+        );
     }
     const trimmed = content.trim();
     if (!trimmed) throw new Error('Enter the message content to send.');
@@ -214,13 +216,48 @@ async function sendMessageToThread(
     const db = getDb();
     const generation = getWorkspaceGeneration();
     const thread = await getThread(threadId);
-    if (!thread || thread.deleted) throw new Error('That chat is no longer available.');
+    if (!thread || thread.deleted)
+        throw new Error('That chat is no longer available.');
     assertWriteOrigin(context, db, generation);
-    const message = await appendMessageToDb(db, {
-        thread_id: threadId,
-        role: messageRole,
-        data: { content: trimmed, attachments: [] },
-    });
+    const { captureWorkspaceOperation } = await import('./workspace-access');
+    const { assertProjectToolAllowed } =
+        await import('~/utils/projects/context');
+    const { getWriteTxTableNames } = await import('~/db/util');
+    const scope = captureWorkspaceOperation(context);
+    const prepared = await prepareMessageAppend({ thread_id: threadId, role: messageRole,
+        data: { content: trimmed, attachments: [] } });
+    if (prepared.value.thread_id !== threadId || prepared.value.role !== messageRole
+        || JSON.stringify(prepared.value.data) !== JSON.stringify({ content: trimmed, attachments: [] }))
+        throw new Error('The approved message changed during preparation.');
+    const message = await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, [
+            'threads',
+            'messages',
+            'projects',
+            'posts',
+            'file_meta',
+        ]),
+        async () => {
+            scope.assertCurrent('write');
+            await context.assertToolAuthorized?.();
+            await assertProjectToolAllowed(
+                scope,
+                context.threadId!,
+                'send_message_to_thread',
+                { threadId, content: trimmed, role: messageRole },
+                async () => true,
+                context.projectId
+            );
+            const current = await db.threads.get(threadId);
+            if (!current || current.deleted)
+                throw new Error('That chat is no longer available.');
+            const message = await appendMessageRows(db, prepared.value);
+            scope.assertCurrent('write');
+            return message;
+        }
+    );
+    await prepared.afterCommit(message);
     return JSON.stringify({
         threadId,
         messageId: message.id,

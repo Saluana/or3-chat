@@ -108,6 +108,7 @@ vi.mock('~/db/client', () => ({
 
 const recoveryStore = new Map<string, any>();
 const dbMock = {
+    projects: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
     chat_request_recoveries: {
         get: async (id: string) => recoveryStore.get(id),
         put: async (row: any) => { recoveryStore.set(row.thread_id, row); },
@@ -523,6 +524,8 @@ describe('useChat background detach race', () => {
     it.each(['missing', 'wrong-role', 'wrong-source', 'pending', 'deleted', 'future-version', 'wrong-anchor'] as const)('rejects a partial or mismatched compacted summary (%s) before native turn writes', async (failure) => {
         const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
         const origin = new Or3DB(`native-summary-${crypto.randomUUID()}`); await origin.open();
+        await origin.threads.put({ id: 'source', status: 'ready', deleted: true, pinned: false, forked: false,
+            clock: 1, created_at: 1, updated_at: 1 });
         await origin.threads.put({ id: 'comp-child', branch_mode: 'compacted', parent_thread_id: 'source', anchor_message_id: 'source-last', summary_message_id: 'summary',
             status: 'ready', deleted: false, pinned: false, forked: true, clock: 1, created_at: 1, updated_at: 1 });
         if (failure !== 'missing') await origin.messages.put({ id: 'summary', thread_id: 'comp-child', role: failure === 'wrong-role' ? 'assistant' : 'system',
@@ -541,7 +544,7 @@ describe('useChat background detach race', () => {
             expect(appendMessageMock.mock.calls.length, JSON.stringify(result)).toBe(0);
             expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable' });
             expect(appendMessageMock).not.toHaveBeenCalled(); expect(runForegroundStreamLoopMock).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
-            expect(await origin.messages.count()).toBe(originalCount); expect(await origin.threads.count()).toBe(1);
+            expect(await origin.messages.count()).toBe(originalCount); expect(await origin.threads.count()).toBe(2);
             expect('userMessageId' in result).toBe(false);
             // Eventual sync of a valid pair enables admission in the same warm
             // view, without a remount or an original source row.

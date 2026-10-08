@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { effectScope, ref, type EffectScope } from 'vue';
+import { defineComponent, h, effectScope, ref, type EffectScope } from 'vue';
+import { mount } from '@vue/test-utils';
 import Dexie from 'dexie';
-import { Blob as NodeBlob } from 'node:buffer';
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { useChatModelSelection } from '../useChatModelSelection';
 import { useAiSettings } from '../useAiSettings';
 import { useModelStore } from '../useModelStore';
 import { createThreadInDb } from '~/db/threads';
@@ -16,10 +18,15 @@ import { consumeChatSendHandled } from '~/utils/chat/send-interception';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { registerHistoryTools } from '~/utils/chat/history-tools';
 import { createOrRefFile } from '~/db/files';
+import { catalogWorkspaceFile } from '~/db/workspace-files';
+import { captureProjectOperation } from '~/utils/projects/context';
+import { addProjectDocument } from '~/utils/projects/source-intake';
+import { PROJECT_POST_TYPES } from '~~/shared/projects/workspace';
+import { moveChatToProject, saveProjectSource, saveProjectSettings } from '~/db/project-workspace';
 
 const external = vi.hoisted(() => ({ capacity: 1_000_000, bodies: [] as Record<string, unknown>[],
-    catalogGate: undefined as Promise<void> | undefined, catalogEntered: undefined as (() => void) | undefined,
-    toolCall: false, background: false }));
+    workspace: '', catalogGate: undefined as Promise<void> | undefined, catalogEntered: undefined as (() => void) | undefined,
+    toolCall: false, background: false, role: 'owner' }));
 vi.unmock('~/composables/chat/useAi');
 vi.mock('#imports', async (original) => ({
     ...await original<typeof import('#imports')>(),
@@ -32,7 +39,7 @@ vi.mock('#imports', async (original) => ({
     useHooks: () => useHooks(),
 }));
 vi.mock('~/core/auth/useOpenrouter', () => ({ useOpenRouterAuth: () => ({ startLogin() {} }) }));
-vi.mock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: ref(external.background
+vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => external.background ? { authenticated: true, user: { id: 'fixture-user' }, workspace: { id: external.workspace }, role: external.role } : null, getCachedSessionPayload: () => null, useSessionContext: () => ({ data: ref(external.background
     ? { session: { authenticated: true, workspace: { id: 'scripted-workspace' } } } : null) }) }));
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),
@@ -50,12 +57,12 @@ import { useChat } from '../useAi';
 
 let workspace: string; let scope: EffectScope | undefined;
 beforeEach(async () => {
-    workspace = `native-context-${crypto.randomUUID()}`;
+    workspace = `native-context-${crypto.randomUUID()}`; external.workspace = workspace;
     await setActiveWorkspaceDb(workspace).open();
     setHookEngine(createTypedHookEngine(createHookEngine()));
     localStorage.clear(); external.capacity = 1_000_000; external.bodies = [];
     external.catalogGate = undefined; external.catalogEntered = undefined;
-    external.toolCall = false; external.background = false;
+    external.toolCall = false; external.background = false; external.role = 'owner';
     await useModelStore().invalidate();
     await useAiSettings().ensureLoaded();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
@@ -83,6 +90,488 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    // Diagnostics must not block valid provider input, and a prepared receipt
+    // must distinguish a held dispatch, successful acceptance and network failure.
+    it('bounds large saved memory in provider input and its diagnostic preview budget', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Memory', project_id: 'project' });
+        await db.posts.bulkPut(Array.from({ length: 500 }, (_, i) => ({ id: 'memory-' + i, title: 'project',
+            postType: PROJECT_POST_TYPES.memory, content: JSON.stringify({ version: 1, text: ('Fact ' + i + ': full durable content. ').padEnd(4000, 'x'), kind: 'fact' }),
+            clock: 1, created_at: 1, updated_at: 1, deleted: false })));
+        const result = await chat(thread.id).sendMessage('Use the saved facts', { model: 'fixture/model' });
+        expect(result.status, JSON.stringify(result)).toBe('complete');
+        // 500 explicit memories exceed the 12 KiB selection budget: only a bounded subset is sent.
+        const included = JSON.stringify(external.bodies.at(-1)?.messages).match(/full durable content\./g) ?? [];
+        expect(included.length).toBeGreaterThan(0);
+        expect(included.length).toBeLessThanOrEqual(3);
+        const assistant = (await db.messages.where('thread_id').equals(thread.id).toArray()).find(row => row.role === 'assistant')!;
+        const data = assistant.data as Record<string, unknown>;
+        const receipt = data.project_context as { memories: Array<{ id: string }>; omitted_memory_count: number };
+        expect(receipt.memories).toHaveLength(included.length);
+        expect(receipt.omitted_memory_count + receipt.memories.length).toBe(500);
+        expect(new TextEncoder().encode(JSON.stringify({ project_context: receipt, project_context_iterations: data.project_context_iterations })).byteLength).toBeLessThanOrEqual(128 * 1024);
+    });
+
+    it.each(['success', 'network'] as const)('records actual project dispatch state (%s)', async outcome => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Dispatch', project_id: 'project' });
+        localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        let release!: () => void;
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(() => ++requests > 1 ? Promise.reject(new TypeError('Connection refused')) : new Promise<Response>((resolve, reject) => {
+            release = () => outcome === 'network' ? reject(new TypeError('Connection refused')) : resolve(new Response(
+                'data: {"choices":[{"delta":{"content":"Accepted"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+                { headers: { 'Content-Type': 'text/event-stream' } }));
+        })));
+        const iterations = async () => {
+            const rows = await db.messages.where('thread_id').equals(thread.id).toArray();
+            return (rows.find(row => row.role === 'assistant')?.data as Record<string, unknown>)?.project_context_iterations as Array<{ request_state: string }> | undefined;
+        };
+        let failureState: string | undefined;
+        useHooks().addAction('ai.chat.stream:action:error', async () => {
+            failureState = (await iterations())?.at(-1)?.request_state;
+        });
+        const sending = chat(thread.id).sendMessage('Hello', { model: 'fixture/model' });
+        try {
+            await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+            expect((await iterations())?.at(-1)?.request_state).toBe('dispatched');
+        } finally { release(); await sending; }
+        if (outcome === 'success') expect((await iterations())?.at(-1)?.request_state).toBe('accepted');
+        else {
+            expect(failureState).toBe('failed');
+            // Cloud retains interrupted responses for recovery after reload,
+            // including the outcome of each project-context dispatch attempt.
+            const retained = await iterations();
+            expect(retained?.length).toBeGreaterThan(0);
+            expect(retained?.every(iteration => iteration.request_state === 'failed')).toBe(true);
+            const assistant = (await db.messages.where('thread_id').equals(thread.id).toArray())
+                .find(row => row.role === 'assistant')!;
+            expect(assistant.data).toEqual(expect.objectContaining({
+                generation_state: 'interrupted',
+            }));
+        }
+    });
+    // Failure inventory: rejected preparation or a stale omission token promotes
+    // temporary attachments before the user's request has been admitted.
+    it.each(['preparation', 'lossy-confirmation'] as const)('does not promote knowledge on rejected %s', async reason => {
+        vi.stubGlobal('Blob', NodeBlob);
+        vi.stubGlobal('File', NodeFile);
+        vi.stubGlobal('Worker', class {
+            onmessage?: (event: { data: unknown }) => void;
+            postMessage() { queueMicrotask(() => this.onmessage?.({ data: { ok: true, text: 'Temporary attachment', partial: false, locations: [] } })); }
+            terminate() {}
+        });
+        const db = getDb();
+        await db.projects.put({ id: 'knowledge', name: 'Knowledge', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Admission', project_id: 'knowledge' });
+        const file = await createOrRefFile(new NodeBlob(['Temporary attachment'], { type: 'text/plain' }) as Blob, 'temporary.txt');
+        if (reason === 'preparation') useHooks().addFilter('ai.chat.send:filter:prepare', value => ({ ...value, error: { code: 'unavailable', message: 'Refused preparation' } }));
+        const owner = chat(thread.id);
+        const result = await owner.sendMessage('Use my attachment', { model: 'fixture/model', file_hashes: [file.hash], knowledge_project_id: 'knowledge',
+            ...(reason === 'lossy-confirmation' ? { lossyConfirmation: {} as import('~~/shared/chat/context-budget').LossyRequestPreview } : {}) });
+        expect(result.status).not.toBe('complete');
+        expect(external.bodies).toEqual([]);
+        expect(await db.posts.where('postType').equals(PROJECT_POST_TYPES.source).count()).toBe(0);
+        expect(await db.messages.count()).toBe(0);
+    });
+    // Project CRUD's actual hook/Dexie boundary: switches and read-only access
+    // must refuse without leaking writes to either workspace. The persistence
+    // suite's identity hook fixture cannot exercise delayed plugin preparation.
+    // Concurrent membership must survive a narrow rename/document association.
+    it.each(['create', 'rename', 'thread', 'document'] as const)('fences project %s CRUD during a workspace switch', async operation => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Before', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const otherWorkspace = `crud-other-${crypto.randomUUID()}`;
+        const filter = operation === 'thread' ? 'db.threads.create:filter:input'
+            : operation === 'document' ? 'db.documents.create:filter:input'
+            : operation === 'create' ? 'db.projects.create:filter:input' : 'db.projects.upsert:filter:input';
+        let otherDb: ReturnType<typeof getDb> | undefined;
+        useHooks().addFilter(filter, async value => {
+            otherDb = setActiveWorkspaceDb(otherWorkspace);
+            await otherDb.open();
+            return value;
+        });
+        const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+        const crud = useProjectsCrud();
+        const action = () => operation === 'create' ? crud.createProject({ id: 'created', name: 'Created' })
+            : operation === 'rename' ? crud.renameProject('project', 'After')
+            : operation === 'thread' ? crud.createThreadEntry('project') : crud.createDocumentEntry('project');
+        try {
+            await expect(action()).rejects.toThrow(/workspace|origin/i);
+            expect(await db.projects.count()).toBe(1);
+            expect((await db.projects.get('project'))?.name).toBe('Before');
+            expect(await db.posts.count()).toBe(0);
+            expect(await db.threads.count()).toBe(0);
+            expect(await otherDb!.projects.count()).toBe(0);
+            expect(await otherDb!.posts.count()).toBe(0);
+            expect(await otherDb!.threads.count()).toBe(0);
+        } finally {
+            await setActiveWorkspaceDb(workspace).open();
+            evictWorkspaceDb(otherWorkspace);
+            if (otherDb) await Dexie.delete(otherDb.name);
+        }
+    });
+    it.each(['create', 'rename', 'thread', 'document'] as const)('refuses project %s CRUD in a viewer workspace', async operation => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Before', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        external.background = true; external.role = 'viewer';
+        const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+        const crud = useProjectsCrud();
+        const action = () => operation === 'create' ? crud.createProject({ id: 'created', name: 'Created' })
+            : operation === 'rename' ? crud.renameProject('project', 'After')
+            : operation === 'thread' ? crud.createThreadEntry('project') : crud.createDocumentEntry('project');
+        await expect(action()).rejects.toThrow(/read-only/);
+        expect(await db.projects.count()).toBe(1);
+        expect((await db.projects.get('project'))?.name).toBe('Before');
+        expect(await db.posts.count()).toBe(0);
+        expect(await db.threads.count()).toBe(0);
+    });
+    it.each(['rename', 'document'] as const)('preserves concurrent membership during project %s preparation', async operation => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Before', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        useHooks().addFilter(operation === 'rename' ? 'db.projects.upsert:filter:input' : 'db.documents.create:filter:input', async value => {
+            await db.projects.update('project', { data: [{ kind: 'doc', id: 'other', name: 'Other', color: 'blue' }], clock: 1 });
+            return value;
+        });
+        const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+        const crud = useProjectsCrud();
+        if (operation === 'rename') await crud.renameProject('project', 'After');
+        else await crud.createDocumentEntry('project');
+        const project = (await db.projects.get('project'))!;
+        expect(project.data).toContainEqual({ kind: 'doc', id: 'other', name: 'Other', color: 'blue' });
+        if (operation === 'rename') expect(project.name).toBe('After');
+        else expect((project.data as unknown[]).length).toBe(2);
+        expect(project.clock).toBeGreaterThan(1);
+    });
+    it.each([false, true])('keeps delayed project hooks outside membership transactions (invalid target: %s)', async invalid => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Move' });
+        const wait = () => new Promise<void>(resolve => setTimeout(resolve, 5));
+        useHooks().addFilter('db.projects.upsert:filter:input', async value => { await wait(); return value; });
+        useHooks().addAction('db.projects.upsert:action:after', wait);
+        const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+        const entries = [{ id: thread.id, name: 'Move', kind: 'chat' as const },
+            ...(invalid ? [{ id: 'missing', name: 'Missing', kind: 'chat' as const }] : [])];
+        const pending = useProjectsCrud().updateProjectEntries('project', entries);
+        if (invalid) await expect(pending).rejects.toThrow();
+        else await pending;
+        expect((await db.threads.get(thread.id))?.project_id ?? null).toBe(invalid ? null : 'project');
+        expect((await db.projects.get('project'))?.data).toEqual(invalid ? [] : entries);
+    });
+
+    // Project discovery must see the effective prompt, including detached large
+    // pastes, and reuse that user intent when continuing a persisted response.
+    // Existing admission cases exercise continuations without project sources.
+    it.each(['paste', 'continue', 'filtered'] as const)('retrieves project evidence for %s at provider dispatch', async (kind) => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Research', project_id: 'project' });
+        await db.posts.put({ id: 'evidence', title: 'Reference', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nebulacode launch is September 2032.' }] }] }),
+            meta: '', file_hashes: '[]', clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await addProjectDocument(captureProjectOperation(undefined, thread.id), 'project', 'evidence');
+        const owner = chat(thread.id);
+        if (kind === 'filtered') useHooks().addFilter('ui.chat.message:filter:outgoing', () => 'Explain nebulacode');
+        const result = await owner.sendMessage(kind === 'paste' ? '' : kind === 'filtered' ? 'Unrelated original' : 'Explain nebulacode', {
+            model: 'fixture/model', ...(kind === 'paste' ? { extraTextParts: ['Explain nebulacode'] } : {}),
+        });
+        expect(result.status).toBe('complete');
+        if (kind === 'continue' && result.status === 'complete')
+            await owner.continueMessage(result.assistantMessageId, 'fixture/model');
+        expect(JSON.stringify(external.bodies.at(-1)?.messages)).toContain('launch is September 2032');
+    });
+    // Preparation hooks are another authorization boundary after registry
+    // admission. Refusal must precede durable host mutations, not just delivery.
+    it.each(['unchanged', 'owner', 'policy', 'registration', 'enabled', 'legacy-enabled'] as const)('refuses a host document write after %s changes during preparation', async change => {
+        const db = getDb();
+        await db.projects.bulkPut(['project', 'other'].map(id => ({ id, name: id, data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false })));
+        const thread = await createThreadInDb(db, { title: 'Tool origin', project_id: 'project' });
+        const { registerWorkspaceChatTools } = await import('~/utils/chat/workspace-chat-tools');
+        const dispose = registerWorkspaceChatTools();
+        const registry = useToolRegistry();
+        const name = 'workspace_create_document';
+        const tool = registry.getTool(name)!;
+        let prepared = false;
+        useHooks().addFilter('db.documents.create:filter:input', async value => {
+            prepared = true;
+            if (change === 'owner') await db.threads.update(thread.id, { project_id: 'other' });
+            if (change === 'policy') {
+                const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+                await saveProjectSettings(captureProjectOperation(undefined, thread.id), 'project',
+                    { ...defaultProjectSettings(), tools: { [name]: { mode: 'disabled', resources: [] } } }, null);
+            }
+            if (change === 'registration') registry.unregisterTool(name);
+            if (change === 'enabled' || change === 'legacy-enabled') tool.enabled.value = false;
+            return value;
+        });
+        try {
+            const result = await registry.executeTool(name, JSON.stringify({ title: 'Must not be saved', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Requested document' }] }] } }), {
+                projectId: 'project', subject: null, workspaceId: workspace, threadId: thread.id, messageId: null,
+                callId: 'guarded-create', requestId: 'guarded-request', abortSignal: new AbortController().signal,
+            }, change === 'legacy-enabled' ? undefined : { definition: tool.definition });
+            expect(prepared, JSON.stringify(result)).toBe(true);
+            if (change === 'unchanged') expect(result.error, JSON.stringify(result)).toBeUndefined();
+            else expect(result.error, JSON.stringify(result)).toMatch(/changed|disabled|registration|availability/);
+            expect(await db.posts.where('postType').equals('doc').count()).toBe(change === 'unchanged' ? 1 : 0);
+        } finally { dispose(); }
+    });
+
+    // These registered host boundaries protect durable writes after preparation,
+    // including old plugin callers that omit projectId. Existing native cases
+    // start in a project and cannot catch ordinary-to-project transitions.
+    // Failure modes: a moved owner still saves a legacy create/copy, a registry
+    // omits the nullable-owner fence, or a receipt commits after revocation.
+    // Real registry, hooks and Dexie writes are used; no production test seam.
+    it.each(['create_document', 'duplicate_document', 'workspace_create_document'] as const)(
+        'fences ordinary ownership during preparation of %s', async name => {
+            const db = getDb();
+            await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+                created_at: 1, updated_at: 1, deleted: false });
+            const thread = await createThreadInDb(db, { title: 'Ordinary origin' });
+            const { createDocumentInDb } = await import('~/db/documents');
+            const source = await createDocumentInDb(db, { title: 'Source' });
+            const { registerDocumentChatTools } = await import('~/utils/documents/document-chat-tools');
+            const { registerWorkspaceChatTools } = await import('~/utils/chat/workspace-chat-tools');
+            const dispose = name === 'workspace_create_document' ? registerWorkspaceChatTools() : registerDocumentChatTools();
+            useHooks().addFilter('db.documents.create:filter:input', async value => {
+                await moveChatToProject(captureProjectOperation(undefined, thread.id), thread.id, 'project');
+                return value;
+            });
+            try {
+                const registry = useToolRegistry();
+                const args = name === 'duplicate_document' ? { documentId: source.id }
+                    : name === 'workspace_create_document' ? { title: 'Output', content: { type: 'doc', content: [{ type: 'paragraph' }] } }
+                    : { title: 'Output' };
+                const result = await registry.executeTool(name, JSON.stringify(args), {
+                    subject: null, workspaceId: workspace, threadId: thread.id, messageId: null,
+                    callId: 'ordinary-create', requestId: 'ordinary-request', abortSignal: new AbortController().signal,
+                }, { definition: registry.getTool(name)!.definition });
+                expect(result.error, JSON.stringify(result)).toMatch(/owning project changed/);
+                expect(await db.posts.where('postType').equals('doc').count()).toBe(1);
+            } finally { dispose(); }
+        },
+    );
+    it.each(['unchanged', 'owner'] as const)('checks %s ownership before a registered read receipt commits', async change => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Receipt origin' });
+        const { createDocumentInDb } = await import('~/db/documents');
+        const source = await createDocumentInDb(db, { title: 'Reference', content: {
+            type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Evidence' }] }],
+        } });
+        await db.messages.put({ id: 'receipt-message', thread_id: thread.id, role: 'assistant', index: 1,
+            data: { content: 'Answer' }, clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        let prepared = false;
+        useHooks().addFilter('db.messages.upsert:filter:input', async value => {
+            prepared = true;
+            if (change === 'owner') await moveChatToProject(captureProjectOperation(undefined, thread.id), thread.id, 'project');
+            return value;
+        });
+        const { registerWorkspaceChatTools } = await import('~/utils/chat/workspace-chat-tools');
+        const dispose = registerWorkspaceChatTools();
+        try {
+            const registry = useToolRegistry();
+            const result = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'document', id: source.id } }), {
+                projectId: null, subject: null, workspaceId: workspace, threadId: thread.id, messageId: 'receipt-message',
+                callId: 'receipt-read', requestId: 'receipt-request', abortSignal: new AbortController().signal,
+            }, { definition: registry.getTool('workspace_read')!.definition });
+            expect(prepared, JSON.stringify(result)).toBe(true);
+            if (change === 'owner') expect(result.error, JSON.stringify(result)).toMatch(/owning project changed/);
+            else expect(result.error, JSON.stringify(result)).toBeUndefined();
+            const data = (await db.messages.get('receipt-message'))!.data as Record<string, unknown>;
+            expect(Object.keys(data).some(key => key.startsWith('or3.workspace-read'))).toBe(change === 'unchanged');
+        } finally { dispose(); }
+    });
+
+    // Populated chats must inherit project policy across navigation/remount;
+    // a user's explicit per-chat model choice must survive those same boundaries.
+    it('retains project model inheritance and durable chat overrides after navigation and remount', async () => {
+        vi.stubGlobal('process', { ...process, client: true });
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const first = await createThreadInDb(db, { title: 'First', project_id: 'project' });
+        const second = await createThreadInDb(db, { title: 'Second', project_id: 'project' });
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        await saveProjectSettings(captureProjectOperation(undefined, first.id), 'project',
+            { ...defaultProjectSettings(), default_model: 'fixture/project-model' }, null);
+        await db.messages.put({ id: 'populated', thread_id: first.id, role: 'assistant', index: 1,
+            data: { content: 'Previous answer' }, clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        localStorage.setItem('last_selected_model', 'fixture/model');
+        const threadId = ref(first.id);
+        let selection!: ReturnType<typeof useChatModelSelection>;
+        const component = defineComponent({ setup() {
+            selection = useChatModelSelection({ threadId: () => threadId.value, onChange() {} });
+            return () => h('div', selection.selectedModel.value);
+        } });
+        let wrapper = mount(component);
+        try {
+            await vi.waitFor(() => expect(selection.selectedModel.value).toBe('fixture/project-model'));
+            selection.selectedModel.value = 'fixture/explicit-model';
+            selection.modelVariant.value = 'nitro';
+            await vi.waitFor(() => expect(db.kv.where('name').equals('chat-model:' + first.id).count()).resolves.toBe(1));
+            threadId.value = second.id;
+            await vi.waitFor(() => expect(selection.selectedModel.value).toBe('fixture/project-model'));
+            expect(selection.modelVariant.value).toBe('off');
+            threadId.value = first.id;
+            await vi.waitFor(() => expect(selection.selectedModel.value).toBe('fixture/explicit-model'));
+            expect(selection.modelVariant.value).toBe('nitro');
+            wrapper.unmount();
+            wrapper = mount(component);
+            await vi.waitFor(() => expect(selection.selectedModel.value).toBe('fixture/explicit-model'));
+            expect(selection.modelVariant.value).toBe('nitro');
+        } finally { wrapper.unmount(); }
+    });
+
+    it('updates inherited models on policy changes and project moves without overwriting explicit choices', async () => {
+        vi.stubGlobal('process', { ...process, client: true });
+        const db = getDb();
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        for (const id of ['first-project', 'second-project']) {
+            await db.projects.put({ id, name: id, data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+            await saveProjectSettings(captureProjectOperation(), id,
+                { ...defaultProjectSettings(), default_model: 'fixture/' + id }, null);
+        }
+        const thread = await createThreadInDb(db, { title: 'Inherited', project_id: 'first-project' });
+        let selection!: ReturnType<typeof useChatModelSelection>;
+        const wrapper = mount(defineComponent({ setup() {
+            selection = useChatModelSelection({ threadId: () => thread.id, onChange() {} });
+            return () => h('div', selection.selectedModel.value);
+        } }));
+        try {
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/first-project'));
+            const settings = await db.posts.get('project-settings-first-project');
+            await saveProjectSettings(captureProjectOperation(), 'first-project',
+                { ...defaultProjectSettings(), default_model: 'fixture/revised' }, settings!.clock);
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/revised'));
+            await moveChatToProject(captureProjectOperation(), thread.id, 'second-project');
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/second-project'));
+            selection.selectedModel.value = 'fixture/explicit';
+            selection.modelVariant.value = 'nitro';
+            await vi.waitFor(async () => expect((await db.kv.where('name').equals('chat-model:' + thread.id).first())?.value)
+                .toBe(JSON.stringify({ model: 'fixture/explicit', variant: 'nitro' })));
+            await moveChatToProject(captureProjectOperation(), thread.id, 'first-project');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            expect(wrapper.text()).toBe('fixture/explicit');
+            expect(selection.modelVariant.value).toBe('nitro');
+        } finally { wrapper.unmount(); }
+    });
+
+    it('can clear a durable model override and resume inheritance across remounts', async () => {
+        vi.stubGlobal('process', { ...process, client: true });
+        const db = getDb();
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await saveProjectSettings(captureProjectOperation(), 'project',
+            { ...defaultProjectSettings(), default_model: 'fixture/inherited' }, null);
+        const thread = await createThreadInDb(db, { title: 'Reset', project_id: 'project' });
+        let selection!: ReturnType<typeof useChatModelSelection>;
+        const component = defineComponent({ setup() {
+            selection = useChatModelSelection({ threadId: () => thread.id, onChange() {} });
+            return () => h('div', selection.selectedModel.value);
+        } });
+        let wrapper = mount(component);
+        try {
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/inherited'));
+            selection.selectedModel.value = 'fixture/explicit';
+            await vi.waitFor(() => expect(db.kv.where('name').equals('chat-model:' + thread.id).count()).resolves.toBe(1));
+            await selection.useInheritedModel();
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/inherited'));
+            wrapper.unmount(); wrapper = mount(component);
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/inherited'));
+            const settings = await db.posts.get('project-settings-project');
+            await saveProjectSettings(captureProjectOperation(), 'project',
+                { ...defaultProjectSettings(), default_model: 'fixture/revised' }, settings!.clock);
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/revised'));
+        } finally { wrapper.unmount(); }
+    });
+
+    // The full extracted text already exists as a blob; the bounded catalog
+    // preview must not make facts later in that extraction undiscoverable.
+    it('retrieves file evidence beyond the catalog preview at actual dispatch', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Long reference', project_id: 'project' });
+        const text = 'General reference material. '.repeat(1800) + '\nNebulacode launch is September 2032.';
+        const file = await createOrRefFile(new NodeBlob([text], { type: 'text/plain' }) as unknown as Blob, 'reference.txt');
+        const captured = captureProjectOperation(undefined, thread.id);
+        const item = await catalogWorkspaceFile(captured, file.hash, { text: {
+            text: text.slice(0, 16000), coverage: 'prefix', indexed_bytes: 16000,
+        } });
+        await saveProjectSource(captured, 'project', {
+            item_id: item.post.id, kind: 'file', title: 'Reference', mode: 'relevant',
+            current_revision_id: 'extracted', revisions: [{ id: 'extracted', item_id: item.post.id,
+                original_hash: file.hash, text_hash: file.hash, status: 'ready', coverage: 'full', created_at: 1 }],
+        });
+        const result = await chat(thread.id).sendMessage('Explain nebulacode', { model: 'fixture/model' });
+        expect(result.status, JSON.stringify(result)).toBe('complete');
+        expect(JSON.stringify(external.bodies.at(-1)?.messages)).toContain('launch is September 2032');
+    });
+    // Unselected knowledge is diagnostic inventory, not model context. Hundreds
+    // of catalog entries must not prevent an otherwise small request dispatch.
+    it('dispatches with a large unselected project inventory and bounded receipts', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Inventory', project_id: 'project' });
+        await db.posts.bulkPut(Array.from({ length: 300 }, (_, index) => ({
+            id: 'source-' + index, title: 'project', postType: PROJECT_POST_TYPES.source,
+            content: JSON.stringify({ version: 1, item_id: 'deleted-item-' + index, kind: 'document',
+                title: 'Reference '.repeat(50), mode: 'off', current_revision_id: 'revision-' + index,
+                revisions: [{ id: 'revision-' + index, status: 'ready', coverage: 'full', created_at: 1, locations: [] }] }),
+            meta: '', file_hashes: '[]', clock: 0, created_at: 1, updated_at: 1, deleted: false,
+        })));
+        const result = await chat(thread.id).sendMessage('Hello', { model: 'fixture/model' });
+        expect(result.status, JSON.stringify(result)).toBe('complete');
+        expect(external.bodies).toHaveLength(1);
+        if (result.status !== 'complete') throw new Error('Expected completed turn');
+        const receipt = (await db.messages.get(result.assistantMessageId))?.data as Record<string, unknown>;
+        expect(new TextEncoder().encode(JSON.stringify(receipt.project_context)).length).toBeLessThan(16 * 1024);
+        expect(receipt.project_context).toMatchObject({ available_source_count: 300, sources: [] });
+    });
+    it('does not dispatch a continuation assigned to a project during model selection', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Ordinary continuation' });
+        const owner = chat(thread.id);
+        const first = await owner.sendMessage('Start', { model: 'fixture/model' });
+        expect(first.status).toBe('complete');
+        if (first.status !== 'complete') throw new Error('Expected first response');
+        external.bodies = [];
+        useHooks().addFilter('ai.chat.model:filter:select', async model => {
+            await moveChatToProject(captureProjectOperation(undefined, thread.id), thread.id, 'project');
+            return model;
+        });
+        await owner.continueMessage(first.assistantMessageId, 'fixture/model');
+        expect(external.bodies).toHaveLength(0);
+        expect((await db.messages.get(first.assistantMessageId))?.pending).toBe(false);
+    });
+    it('rejects a chat assigned to a project while its outgoing filter is pending', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Ordinary' });
+        const owner = chat(thread.id);
+        useHooks().addFilter('ui.chat.message:filter:outgoing', async text => {
+            await moveChatToProject(captureProjectOperation(undefined, thread.id), thread.id, 'project');
+            return text;
+        });
+        expect(await owner.sendMessage('Question', { model: 'fixture/model' })).toMatchObject({ status: 'rejected' });
+        expect(external.bodies).toHaveLength(0);
+        expect(await db.messages.where('thread_id').equals(thread.id).count()).toBe(0);
+    });
     it.each(['complete', 'stop', 'switch'] as const)('keeps incoming-filter settlement consistent with %s at the public and durable boundary', async (action) => {
         let release!: (text: string) => void; let entered!: () => void;
         const gate = new Promise<string>(resolve => { release = resolve; });
@@ -276,7 +765,7 @@ describe('native context admission at the actual durable boundary', () => {
                     : new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
             }));
             const result = await chat(child.thread.id).sendMessage('Retrieve original evidence', { model: 'fixture/model' });
-            expect(result.status).toBe(scenario.background ? 'failed' : 'complete'); expect(readiness).toHaveBeenCalledTimes(1);
+            expect(result.status, JSON.stringify(result)).toBe(scenario.background ? 'failed' : 'complete'); expect(readiness).toHaveBeenCalledTimes(1);
             expect(bridgeChecks).toBe(scenario.ready ? 0 : 1); expect(external.bodies).toHaveLength(1);
             const body = external.bodies[0]!; expect(Boolean(body._background)).toBe(scenario.background);
             expect((body.tools as Array<{ function: { name: string } }>).map(tool => tool.function.name)).toEqual(['get_message', 'search_parent']);
@@ -312,6 +801,45 @@ describe('native context admission at the actual durable boundary', () => {
         expect(external.bodies[1]?.messages).toEqual(external.bodies[0]?.messages);
         expect(await getDb().chat_request_recoveries.count()).toBe(0);
     });
+    // Existing recovery tests have no filtered project query. A real provider
+    // rejection must recover its same IDs/body without rerunning outgoing hooks;
+    // using the raw draft instead changes source selection and falsely refuses.
+    it('recovers filtered project evidence with the admitted query and original durable IDs', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Recovery', project_id: 'project' });
+        await db.posts.put({ id: 'recovery-evidence', title: 'Reference', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nebulacode launches September 2032.' }] }] }),
+            meta: '', file_hashes: '[]', clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await addProjectDocument(captureProjectOperation(undefined, thread.id), 'project', 'recovery-evidence');
+        const outgoing = vi.fn(() => 'Explain nebulacode');
+        useHooks().addFilter('ui.chat.message:filter:outgoing', outgoing);
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            if (external.bodies.length === 1) return Response.json({ error: {
+                code: 'context_length_exceeded', message: 'Scripted initial refusal',
+            } }, { status: 400 });
+            return new Response('data: {"choices":[{"delta":{"content":"Recovered"}}]}\n\ndata: [DONE]\n\n',
+                { headers: { 'Content-Type': 'text/event-stream' } });
+        }));
+        const owner = chat(thread.id);
+        expect(await owner.sendMessage('Unrelated original draft', { model: 'fixture/model' }))
+            .toMatchObject({ status: 'failed', reason: 'context_full' });
+        const checkpoint = (await db.chat_request_recoveries.get(thread.id))!;
+        expect(checkpoint).toBeTruthy();
+        const rows = await db.messages.toArray();
+        scope?.stop();
+        const recovered = await chat(thread.id).retryMessage(checkpoint.assistant_message_id, 'fixture/model');
+        expect(recovered, JSON.stringify(recovered)).toMatchObject({ status: 'complete', userMessageId: checkpoint.user_message_id,
+            assistantMessageId: checkpoint.assistant_message_id });
+        expect((await db.messages.toArray()).map(row => row.id)).toEqual(rows.map(row => row.id));
+        expect(external.bodies[1]?.messages).toEqual(external.bodies[0]?.messages);
+        expect(JSON.stringify(external.bodies[1]?.messages)).toContain('September 2032');
+        expect(outgoing).toHaveBeenCalledOnce();
+        expect(await db.chat_request_recoveries.count()).toBe(0);
+    });
+
     async function rejectedAttempt() {
         const owner = chat(); const filters = vi.fn((request) => request);
         useHooks().addFilter('ai.chat.messages:filter:before_send', filters);

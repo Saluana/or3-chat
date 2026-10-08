@@ -23,6 +23,10 @@ import * as ts from 'typescript';
 import * as convexValues from 'convex/values';
 import { internalMutationGeneric, internalQueryGeneric } from 'convex/server';
 
+// This HTTP owner qualifies job/workspace admission and provider persistence;
+// canonical project fences have their own scoped-provider integration owner.
+vi.mock('../../../utils/chat/project-policy', () => ({ assertServerProjectExecutionSupported: vi.fn() }));
+
 const usage: RequestUsage = {
     prompt_tokens: 42, completion_tokens: 7, model: 'test/model',
     request_id: 'request-1', iteration: 0, measured_at: 1,

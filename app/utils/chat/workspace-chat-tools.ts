@@ -103,6 +103,16 @@ async function searchWorkspace(args: Record<string, unknown>, context: ToolExecu
         if (!project || project.deleted) throw new Error('That project is unavailable.');
         membershipProject = project;
         members = new Set((await readVisibleWorkspaceProjectEntries(scope, project)).map((item) => `${item.kind}:${item.id}`));
+        if (context.threadId) {
+            const { resolveChatProject, readProjectWorkspace } = await import('~/db/project-workspace');
+            if (await resolveChatProject(scope.db, context.threadId) === project.id) {
+                const state = await readProjectWorkspace(scope.db, project.id);
+                const knowledge = new Set(state.sources.filter(s => s.value.mode !== 'off').map(s => s.value.item_id));
+                for (const key of members) if ((key.startsWith('file:') || key.startsWith('document:')) && !knowledge.has(key.slice(key.indexOf(':') + 1))) members.delete(key);
+                for (const source of state.sources) if (source.value.mode === 'off') members.delete(`${source.value.kind}:${source.value.item_id}`);
+                for (const id of state.settings.excluded_chat_ids) if (id !== context.threadId) members.delete(`chat:${id}`);
+            }
+        }
         members.add(`project:${project.id}`);
         scope.assertCurrent();
     }

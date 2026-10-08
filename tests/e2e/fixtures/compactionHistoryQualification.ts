@@ -101,8 +101,13 @@ export async function qualifyCompactionHistory(current: string) {
     }) as typeof db.threads.get;
     let switched: Record<string, unknown>;
     try {
-        const pending = call('get_message', { message_id: `${root}-decision` }); await readingStarted;
-        setActiveWorkspaceDb('qualification-isolated-switch'); release(); switched = await pending;
+        const pending = registry.executeTool('get_message', JSON.stringify({ message_id: `${root}-decision` }), {
+            subject: 'disposable-qualification', workspaceId: workspace ?? 'local', threadId: current,
+            messageId: null, callId: crypto.randomUUID(), requestId: crypto.randomUUID(), abortSignal: new AbortController().signal });
+        await readingStarted;
+        setActiveWorkspaceDb('qualification-isolated-switch'); release();
+        const result = await pending;
+        switched = result.error ? { status: 'refused', error: result.error, result: result.result } : JSON.parse(result.result!);
     } finally { release(); db.threads.get = originalGet; setActiveWorkspaceDb(workspace); }
 
     const now = Math.floor(Date.now() / 1000);

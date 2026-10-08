@@ -36,14 +36,11 @@
                             @delete="emit('delete-project', project.id)"
                         />
 
-                        <!-- Nested grid animation for project children -->
                         <div
-                            v-if="project.data.length > 0"
-                            class="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                            :class="
-                                expandedProjectsSet.has(project.id)
-                                    ? 'grid-rows-[1fr] opacity-100'
-                                    : 'grid-rows-[0fr] opacity-0'
+                            v-if="
+                                !collapsed &&
+                                expandedProjectsSet.has(project.id) &&
+                                children[project.id]?.length
                             "
                         >
                             <div class="overflow-hidden min-h-0">
@@ -51,7 +48,7 @@
                                     class="ml-5 border-l-2 border-[color:var(--md-primary-tint)]/60 space-y-1"
                                 >
                                     <SidebarProjectChild
-                                        v-for="child in project.data"
+                                        v-for="child in children[project.id]"
                                         :key="`${project.id}:${child.id}`"
                                         :child="child"
                                         :active="isProjectChildActive(child)"
@@ -103,13 +100,38 @@
                         </div>
                     </div>
                 </div>
+                <UButton
+                    v-if="hasMore"
+                    label="Show more"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    class="mx-1 mt-1"
+                    trailing-icon="i-lucide-chevron-right"
+                    @click="emit('show-more')"
+                />
+                <p
+                    v-if="childError"
+                    role="alert"
+                    class="px-3 text-xs text-[var(--md-error)]"
+                >
+                    {{ childError }}
+                </p>
             </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { liveQuery } from 'dexie';
+import {
+    getDb,
+    getWorkspaceGeneration,
+    subscribeActiveWorkspaceDb,
+} from '~/db/client';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { parseFileHashes } from '~/db/files-util';
 import type { Project } from '~/db';
 import type {
     ProjectEntry,
@@ -129,6 +151,7 @@ type ProjectEntryPayload = {
 
 const props = defineProps<{
     projects: SidebarProject[];
+    hasMore: boolean;
     collapsed: boolean;
     expandedProjects: string[];
     activeThreadIds: string[];
@@ -139,6 +162,7 @@ const iconPlus = useIcon('ui.plus');
 
 const emit = defineEmits<{
     (e: 'toggle-collapse'): void;
+    (e: 'show-more'): void;
     (e: 'new-project'): void;
     (e: 'add-chat-to-project', id: string): void;
     (e: 'add-document-to-project-root', id: string): void;
@@ -152,6 +176,79 @@ const emit = defineEmits<{
 }>();
 
 const expandedProjectsSet = computed(() => new Set(props.expandedProjects));
+const children = ref<Record<string, ProjectEntry[]>>({});
+const childError = ref('');
+let childSubscription: { unsubscribe(): void } | undefined;
+function bindChildren() {
+    childSubscription?.unsubscribe();
+    children.value = {};
+    childError.value = '';
+    const expanded = props.collapsed
+        ? []
+        : props.projects.filter((project) =>
+              expandedProjectsSet.value.has(project.id),
+          );
+    if (!expanded.length) return;
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    childSubscription = liveQuery(async () => {
+        const result: Record<string, ProjectEntry[]> = {};
+        for (const project of expanded) {
+            const entries: ProjectEntry[] = [];
+            for (const entry of project.data) {
+                const row =
+                    entry.kind === 'chat'
+                        ? await db.threads.get(entry.id)
+                        : await db.posts.get(entry.id);
+                if (!row || !isVisibleWorkspaceItem(row)) continue;
+                if (entry.kind !== 'chat') {
+                    if (
+                        !('postType' in row) ||
+                        row.postType !==
+                            (entry.kind === 'file' ? 'or3:file' : 'doc')
+                    )
+                        continue;
+                    if (entry.kind === 'file') {
+                        const hashes = parseFileHashes(row.file_hashes);
+                        const meta =
+                            hashes.length === 1
+                                ? await db.file_meta.get(hashes[0]!)
+                                : undefined;
+                        if (!meta || meta.deleted) continue;
+                    }
+                }
+                entries.push({
+                    ...entry,
+                    name: entry.name ?? row.title ?? undefined,
+                });
+            }
+            result[project.id] = entries;
+        }
+        return result;
+    }).subscribe({
+        next(value) {
+            if (generation === getWorkspaceGeneration()) children.value = value;
+        },
+        error() {
+            if (generation === getWorkspaceGeneration())
+                childError.value = 'Could not load project shortcuts.';
+        },
+    });
+}
+watch(
+    () => [props.projects, props.expandedProjects.slice(), props.collapsed],
+    bindChildren,
+    { immediate: true },
+);
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    childSubscription?.unsubscribe();
+    children.value = {};
+    childError.value = '';
+});
+onBeforeUnmount(() => {
+    stopWorkspace();
+    childSubscription?.unsubscribe();
+});
 
 function toggleProjectExpand(id: string) {
     const next = new Set(props.expandedProjects);

@@ -249,8 +249,14 @@ export interface PluginCompletion {
     };
 }
 
+export interface PluginAiOrigin {
+    readonly threadId: string;
+    readonly messageId: string;
+    readonly streamId: string;
+}
+
 export interface PluginAiClient {
-    provider(): Promise<PluginResult<{ readonly client: unknown; readonly apiKey: string; readonly headers: Readonly<Record<string, string>> }>>;
+    provider(origin?: PluginAiOrigin): Promise<PluginResult<{ readonly client: unknown; readonly apiKey: string; readonly headers: Readonly<Record<string, string>> }>>;
     requestSignIn(): PluginResult<void>;
     onModelsChange(listener: () => void): PluginRegistrationHandle;
     models(): Promise<PluginResult<PluginModelCatalog>>;

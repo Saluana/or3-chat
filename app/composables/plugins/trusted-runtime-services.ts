@@ -1,5 +1,6 @@
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
+import { HTTPClient } from '@openrouter/sdk';
 import { useAppConfig, useRuntimeConfig, useToast } from '#imports';
 import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue } from '@or3/plugin-sdk';
 import { createTrustedUiKit } from './trusted-ui-kit';
@@ -16,11 +17,13 @@ import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { programmaticPrefill } from '~/composables/chat/useChatInputBridge';
 import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
 import { abortBackgroundJob, pollJobStatus, isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
-import type { Or3DB } from '~/db/client';
+import { getActiveWorkspaceId, type Or3DB } from '~/db/client';
+import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
+import { resolveChatProject } from '~/db/project-workspace';
 
 /** Resolve Nuxt services once during activation; callbacks retain their authority. */
 export function createTrustedRuntimeServices(input: {
-    pluginId: string; db: Or3DB; allow(grant: PluginGrant): void; current(): boolean;
+    pluginId: string; db: Or3DB; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean;
     cleanup(callback: () => void): void;
 }) {
     const runtime = useRuntimeConfig(); const config = useOr3Config();
@@ -57,9 +60,42 @@ export function createTrustedRuntimeServices(input: {
             const favorites = new Set(models.favoriteModels.value.map(model => model.id));
             return { configured: Boolean(apiKey.value), models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
         }),
-        provider: () => run('ai.provider', async () => {
+        provider: originInput => run('ai.provider', async () => {
             if (!apiKey.value) throw Object.assign(new Error('Sign in to OpenRouter'), { code: 'not-signed-in' });
-            return { client: createOpenRouterClient({ apiKey: apiKey.value }), apiKey: apiKey.value, headers: DEFAULT_HEADERS };
+            const origin = originInput && Object.freeze({ ...originInput });
+            if (origin && [origin.threadId, origin.messageId, origin.streamId].some(id => typeof id !== 'string' || !id))
+                throw Object.assign(new Error('Invalid request origin'), { code: 'invalid-input' });
+            const controller = new AbortController(); input.cleanup(() => controller.abort());
+            const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+                threadId: origin?.threadId ?? 'plugin-provider', messageId: origin?.messageId ?? null,
+                callId: input.pluginId, requestId: input.pluginId, abortSignal: controller.signal });
+            const authorize = async () => {
+                input.allow('ai.provider'); scope.assertCurrent('write');
+                if (!input.current() || scope.db !== input.db) throw new Error('Plugin workspace changed');
+                if (!origin) return;
+                await input.db.transaction('r', ['messages', 'threads', 'projects'], async () => {
+                    scope.assertCurrent('write');
+                    const row = await input.db.messages.get(origin.messageId);
+                    const thread = await input.db.threads.get(origin.threadId);
+                    if (!row || row.deleted || row.role !== 'assistant' || row.thread_id !== origin.threadId
+                        || row.stream_id !== origin.streamId || !thread || thread.deleted
+                        || (input.messageTypes && !input.messageTypes.has((row.data as { type?: string })?.type ?? '')))
+                        throw new Error('The originating plugin message is no longer available.');
+                    if (await resolveChatProject(input.db, origin.threadId))
+                        throw new Error('This plugin cannot capture project context. Use a normal project chat.');
+                    scope.assertCurrent('write');
+                });
+            };
+            await authorize();
+            const httpClient = new HTTPClient({ fetcher: async (request, init) => {
+                await authorize();
+                if (!origin && await input.db.projects.filter(project => !project.deleted).count())
+                    throw new Error('Request origin is required in workspaces with projects. Update the plugin.');
+                scope.assertCurrent('write');
+                return fetch(request, { ...init, signal: init?.signal
+                    ? AbortSignal.any([init.signal, controller.signal]) : controller.signal });
+            } });
+            return { client: createOpenRouterClient({ apiKey: apiKey.value, httpClient }), apiKey: apiKey.value, headers: DEFAULT_HEADERS };
         }),
         requestSignIn() { input.allow('ai.provider'); window.dispatchEvent(new CustomEvent('openrouter:login')); return pluginOk(undefined); },
         onModelsChange(listener) { input.allow('ai.models'); const stop = watch([models.favoriteModels, models.catalog], () => { if (input.current()) listener(); }, { deep: true }); input.cleanup(stop); return { dispose: stop }; },

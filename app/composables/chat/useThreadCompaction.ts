@@ -52,12 +52,12 @@ async function prepareCapture(options: Omit<Parameters<typeof captureCompaction>
     return captureCompaction({ ...options, anchorMessageId: anchor });
 }
 function boundaryError(error: unknown): { code: ErrorCode; message: string } {
-    if (import.meta.dev) console.warn('[compaction] boundary failure', errorDiagnostics(error));
     const code = error instanceof CompactionError ? error.code : error instanceof CompactionHistoryError ? 'scope_incomplete' : 'generation_failed';
     // Provider/DB errors can contain request bodies or credentials. Only
     // host-authored finite boundary errors may supply display text.
     const message = error instanceof CompactionError || error instanceof CompactionHistoryError
         ? error.message : 'Unable to prepare a compaction summary. Retry explicitly when the source and model are available.';
+    if (import.meta.dev) console.warn('[compaction] boundary failure', { ...errorDiagnostics(error), compactionCode: code, message });
     return { code, message };
 }
 export function useThreadCompaction(options: ControllerOptions) {

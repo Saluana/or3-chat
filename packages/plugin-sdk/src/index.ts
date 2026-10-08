@@ -34,6 +34,7 @@ export type {
     PluginActivityStatus,
     PluginActivitySubscriptionInput,
     PluginAiClient,
+    PluginAiOrigin,
     PluginCardDefinition,
     PluginChatClient,
     PluginChatMessage,

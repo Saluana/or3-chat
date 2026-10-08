@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useRuntimeConfig } from '#imports';
+import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
+import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
+import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
+import type { AuthWorkspaceStore } from '../../../auth/store/types';
 import {
     executeServerTool,
     getServerTool,
@@ -130,6 +135,21 @@ async function capture(enabled: boolean) {
 }
 
 describe('server tool ownership adapter', () => {
+    // These execution tests use an authorized unowned canonical chat. The
+    // project policy itself is production code, not a mocked permission check.
+    beforeEach(() => {
+        vi.mocked(useRuntimeConfig).mockReturnValue({ public: { sync: { provider: 'unowned-tools-fixture' } } } as ReturnType<typeof useRuntimeConfig>);
+        registerSyncGatewayAdapter({ id: 'unowned-tools-fixture', create: () => ({
+            capabilities: { canonicalChatHistory: 'v1' },
+            readChatHistory: async (_actor, query) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: query.kind === 'thread' ? { id: query.thread_id, project_id: null, clock: 1 } : undefined }),
+        }) as SyncGatewayAdapter });
+        registerAuthWorkspaceStore({ id: 'unowned-tools-fixture', create: () => ({
+            listUserWorkspaces: async subject => subject === 'user-1' ? [{ id: 'workspace-1', name: 'Fixture', role: 'owner' }] : [],
+        }) as AuthWorkspaceStore });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
     it('keeps owners internal without changing registration, validation, or execution', async () => {
         requireCompatibilityProfile(profiles, 'registry.server-tools');
 

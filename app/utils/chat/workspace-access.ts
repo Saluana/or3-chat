@@ -26,7 +26,7 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
     const generation = getWorkspaceGeneration();
     const workspaceId = getActiveWorkspaceId() ?? 'local';
     const authenticated = useRuntimeConfig().public.ssrAuthEnabled === true;
-    const session = getCachedSessionContext();
+    const session = authenticated ? getCachedSessionContext() : null;
     const subject = authenticated ? session?.user?.id ?? null : null;
     const authorizationRevision = session?.authorizationRevision;
     const role = session?.role;

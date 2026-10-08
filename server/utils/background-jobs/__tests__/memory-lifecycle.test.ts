@@ -14,6 +14,11 @@ import { getChatJobExecution } from '../types';
 import type { JobUpdate } from '../types';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { createNormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
+import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
+import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
+import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
+import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
+
 
 const config = vi.hoisted(() => ({
     maxConcurrentJobs: 2,
@@ -75,6 +80,16 @@ describe('memory background job admission and lifecycle', () => {
         vi.unstubAllGlobals();
         config.maxConcurrentJobs = 2;
         config.maxConcurrentJobsPerUser = 2;
+        // Lifecycle cases execute an authorized, unowned canonical chat. The
+        // scoped-provider suite owns project changes and permission failures.
+        registerSyncGatewayAdapter({ id: 'memory', create: () => ({
+            capabilities: { canonicalChatHistory: 'v1', projectOwnership: 'v1' },
+            readChatHistory: async (_actor, query) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: query.kind === 'thread' ? { id: query.thread_id, clock: 1, project_id: null } : undefined }),
+        } as SyncGatewayAdapter) });
+        registerAuthWorkspaceStore({ id: 'memory', create: () => ({
+            listUserWorkspaces: async () => [{ id: 'workspace-1', name: 'Fixture', role: 'owner' }],
+        } as unknown as AuthWorkspaceStore) });
     });
 
     it('authenticates encrypted recovery credentials', () => {

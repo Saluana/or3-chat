@@ -37,7 +37,11 @@ export async function persistWorkspaceReceipt(
             scope.assertCurrent('write');
             return Boolean(message && !message.deleted && message.role === 'assistant' && message.thread_id === context.threadId
                 && (!(key in messageData(message)) || JSON.stringify(messageData(message)[key]) === JSON.stringify(value)));
-        });
+        }, undefined, { tables: ['projects', 'threads', 'posts', 'file_meta'], assertCurrent: async () => {
+            scope.assertCurrent('write');
+            await context.assertToolAuthorized?.();
+            scope.assertCurrent('write');
+        } });
     } catch (error) { notificationError = error; }
     scope.assertCurrent('write');
     const message = await scope.db.messages.get(context.messageId);

@@ -197,7 +197,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
     await page.locator('.unified-sb-item-active').getByRole('button', { name: 'Open actions', exact: true }).last().click();
-    const historyCompact = page.getByRole('button', { name: 'Compact conversation', exact: true }).filter({ hasText: 'Compact conversation' });
+    const historyCompact = page.getByRole('button', { name: 'Continue in new chat', exact: true }).filter({ hasText: 'Continue in new chat' });
     await expect(historyCompact).toBeDisabled();
     await expect(historyCompact).toHaveAttribute('title', /at least two settled/);
     await page.keyboard.press('Escape');
@@ -356,7 +356,7 @@ test('compaction history and families use production scope and deletion policies
     expect(result.expandedPages.at(-1).scan_complete).toBe(true); expect(result.canceled).toBe(true);
     expect(result.missingSummary.status).toBe('scope_incomplete'); expect(result.missingCaptured.status).toBe('scope_incomplete');
     expect(result.missingAnchor.status).toBe('scope_incomplete');
-    expect(result.switched.status).toBe('scope_incomplete'); expect(result.switched.message).toBeUndefined();
+    expect(result.switched.status).toBe('refused'); expect(result.switched.error).toContain('workspace'); expect(result.switched.result).toBeNull(); expect(result.switched.message).toBeUndefined();
     expect(result.crossConnectionContinuation.status).toBe('scope_incomplete');
     expect(result.filtered.items.map((item: { id: string }) => item.id)).toEqual(['qualification-family-match']);
     expect(result.filtered.items[0].family.rootId).toBe('qualification-family-root');
@@ -422,7 +422,8 @@ test('native context recovery retains saved identities after reload', async ({ p
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect.poll(async () => (await readAttempt()).checkpoints.length).toBe(1);
     await expect.poll(async () => (await readAttempt()).rows.find((row) => row.role === 'assistant')?.pending).toBe(false);
-    await expect(input).toHaveText('journey:context-reject');
+    // The turn is saved even when the provider rejects it; Retry owns recovery.
+    await expect(input).toHaveText('');
     const failed = await readAttempt(); expect(failed.rows.filter((row) => row.role === 'user')).toHaveLength(1);
     const savedUser = failed.rows.find((row) => row.role === 'user')!; const assistant = failed.rows.find((row) => row.role === 'assistant')!;
     expect(assistant.pending).toBe(false); expect(assistant.data.turn_id).toBe(savedUser.id);
@@ -630,7 +631,7 @@ for (const kind of ['image', 'pdf'] as const) {
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         const files = page.locator('#main-content').getByRole('region', { name: 'Workspace Files' });
         await files.getByRole('button', { name: `Open ${name}`, exact: true }).click();
-        const preview = page.getByRole('dialog', { name: 'File preview' });
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
         if (kind === 'image') await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
         else await expect(preview.locator('.preview-note')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
@@ -1216,6 +1217,45 @@ test.describe('production chat journey', () => {
         await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
         await expect(page.getByText(/Late response from the old page/)).toHaveCount(0);
     });
+    test('clears a saved message before the provider responds and preserves the next draft', async ({ page }, info) => {
+        await openChat(page);
+        // Hold the fixture transport before it returns response headers. The
+        // real send pipeline must still save the turn and clear its composer.
+        await page.evaluate(() => {
+            const originalFetch = globalThis.fetch.bind(globalThis);
+            const responseGate = new Promise<void>((resolve) => {
+                window.addEventListener('journey:release-provider', () => resolve(), { once: true });
+            });
+            globalThis.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (url.includes('/api/__or3-e2e/chat/completions')) {
+                    await responseGate;
+                }
+                return originalFetch(input, init);
+            };
+        });
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        try {
+            await send(page, 'journey:delayed-provider');
+            await expect(input).toHaveText('');
+            await expect(page.getByRole('button', { name: 'Stop generation' })).toBeVisible();
+            await expect(page.getByText('Hello from deterministic stream.')).toHaveCount(0);
+            const path = info.outputPath('saved-message-cleared-before-response.png');
+            await page.screenshot({ path, animations: 'disabled' });
+            await info.attach('saved-message-cleared-before-response', { path, contentType: 'image/png' });
+            await input.fill('Keep this next draft.');
+        } finally {
+            await page.evaluate(() => window.dispatchEvent(new Event('journey:release-provider')));
+        }
+        await expect(page.getByText('Hello from deterministic stream.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await expect(input).toHaveText('Keep this next draft.');
+        await waitForDurableReply(page, 'Hello from deterministic stream.');
+        await page.reload();
+        await expect(page.locator('.cm-text-user').getByText('journey:delayed-provider', { exact: true })).toBeVisible();
+        await expect(page.getByText('Hello from deterministic stream.')).toBeVisible();
+    });
+
     test('stops an admitted request before its outgoing filter resolves', async ({
         page,
     }) => {

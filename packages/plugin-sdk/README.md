@@ -19,6 +19,14 @@ Registrations are disposed with their activation. Portable hosts return
 `unsupported`. See the host's [Saved Files SDK guide](../../public/_documentation/plugins/plugin-sdk.md#saved-files)
 for examples and exact event semantics.
 
+Trusted plugins can require `or3-trusted-chat-origin-v1` and call
+`context.ai.provider({ threadId, messageId, streamId })`. Each model request and
+retry rechecks the captured workspace, registered assistant message, stream,
+write permission and canonical project ownership. Message writes and file
+attachments apply the same project fences. Plugins without project context
+support use ordinary chats; project chats are refused. `PluginAiOrigin` is
+exported from the SDK root.
+
 ## Start building
 
 With Bun 1.3.6 or newer, an OR3 Chat source checkout whose dependencies are

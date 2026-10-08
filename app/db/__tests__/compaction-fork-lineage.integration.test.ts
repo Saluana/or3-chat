@@ -7,8 +7,12 @@ import { forkThread as ordinaryFork, createThread, upsertThread } from '../threa
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
+import { testRuntimeConfig } from '~~/tests/setup';
 let workspace: string;
+let originalSsrAuth: boolean;
 beforeEach(async () => {
+    originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
     workspace = `fork-lineage-${crypto.randomUUID()}`;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb(workspace).open();
@@ -23,7 +27,7 @@ beforeEach(async () => {
         { id: 'own-anchor', thread_id: 'compacted', role: 'user', index: 1, data: { content: 'New question' }, pending: false, deleted: false, created_at: 1, updated_at: 1, clock: 1 },
     ]);
 });
-afterEach(async () => { const name = getDb().name; setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(name); setHookEngine(null); });
+afterEach(async () => { testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth; const name = getDb().name; setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(name); setHookEngine(null); });
 
 describe('ordinary forks after compaction', () => {
     it('copies the complete visible reference history and remaps tool and turn ownership', async () => {

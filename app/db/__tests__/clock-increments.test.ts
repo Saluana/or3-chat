@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// This fixture owns clock increments; project authorization is qualified by
+// the real workspace integration suite. Use the ordinary local profile here.
+vi.mock('#imports', async original => ({
+    ...await original<typeof import('#imports')>(),
+    useRuntimeConfig: () => ({ public: { ssrAuthEnabled: false } }),
+}));
+
 // Mock dependencies before other imports
 vi.mock('../../utils/errors', () => ({
     reportError: vi.fn(),
@@ -86,6 +93,8 @@ vi.mock('../client', () => {
     return {
         db,
         getDb: () => db,
+        getActiveWorkspaceId: () => null,
+        getWorkspaceGeneration: () => 0,
     };
 });
 

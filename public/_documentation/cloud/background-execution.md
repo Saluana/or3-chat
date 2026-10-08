@@ -65,6 +65,10 @@ creating a job or contacting the model.
 4. The selected sync gateway atomically writes the admission rows, contiguous
    change-log versions, and an idempotent generation receipt. Only then can the
    server claim the job and contact OpenRouter.
+   A new chat is checked for canonical project ownership after this admission,
+   when its thread exists. Unsupported ownership saves a terminal error snapshot.
+   Resumed chat jobs and every tool-loop model request recheck current workspace
+   access and canonical ownership immediately before dispatch.
 5. `server/utils/background-jobs/stream-handler.ts` runs the stream loop and writes:
    - content deltas
    - reasoning deltas (reasoning-only progress counts and streams independently)
