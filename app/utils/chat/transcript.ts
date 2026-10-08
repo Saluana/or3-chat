@@ -1,3 +1,8 @@
+import { readCardOrigin,
+    readToolCardStates,
+    type CardOrigin,
+    type ToolCardStateMap,
+} from '~~/shared/chat/tool-card-data';
 import { readCompactionData, readRequestUsage, type CompactionData, type RequestUsage } from '~~/shared/chat/compaction';
 import type { Message } from '~/db/schema';
 import { parseFileHashes } from '~/db/files-util';
@@ -97,6 +102,8 @@ export interface CanonicalTranscriptRecord {
     error?: string | null;
     /** Serialized public error envelope of a failed turn (`data.error_envelope`). */
     errorEnvelope?: string;
+cardOrigin?: CardOrigin;
+    toolCards?: ToolCardStateMap;
 }
 
 type StoredTranscriptMessage = Message & {
@@ -244,6 +251,8 @@ export function messageToCanonicalTranscript(
             : undefined,
         compaction: data.kind === 'compaction' ? readCompactionData(data.compaction) : undefined,
         usage: readRequestUsage(data.usage),
+        cardOrigin: readCardOrigin(data.card_origin),
+        toolCards: readToolCardStates(data.tool_cards),
         error:
             message.error ??
             (typeof data.tool_error === 'string' ? data.tool_error : null),
@@ -316,6 +325,10 @@ export function projectTranscriptForOpenRouter(
             data: {
                 ...(record.compaction ? { kind: 'compaction', compaction: record.compaction } : {}),
                 ...(record.usage ? { usage: record.usage } : {}),
+                ...(record.cardOrigin
+                    ? { card_origin: record.cardOrigin }
+                    : {}),
+                ...(record.toolCards ? { tool_cards: record.toolCards } : {}),
                 ...(record.errorEnvelope ? { error_envelope: record.errorEnvelope } : {}),
                 transcript_version: TRANSCRIPT_VERSION,
                 transcript_kind: record.kind,

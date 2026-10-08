@@ -14,6 +14,10 @@
  * - Server-side synchronization
  */
 import Dexie from 'dexie';
+import {
+    jsonCardValue,
+    assertCardStateLimits,
+} from '~~/shared/chat/tool-card-data';
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -255,7 +259,8 @@ export async function patchMessageInDb(
         data?: Record<string, unknown> | null;
     },
     fallback?: Message | null,
-    ifCurrent?: (message: Message | undefined) => boolean
+    ifCurrent?: (message: Message | undefined) => boolean,
+    entryPatch?: { field: string; key: string; value: unknown | null },
 ): Promise<void> {
     const hooks = useHooks();
     // Preparation hooks run outside the write transaction (see upsertMessageInDb:
@@ -266,11 +271,23 @@ export async function patchMessageInDb(
             entity: 'messages',
             action: 'get',
         })) ?? fallback;
-    if (!baseOutside) return;
+    if (!baseOutside) {
+        if (entryPatch) throw new Error('not-found');
+        return;
+    }
 
     const baseOutsideData = dataRecord(baseOutside.data);
-    const patchData = dataRecord(patch.data);
-    const { data: _droppedData, ...topPatch } = patch as Record<string, unknown>;
+    const patchData = { ...dataRecord(patch.data) };
+    if (entryPatch) {
+        const entries = { ...dataRecord(baseOutsideData[entryPatch.field]) };
+        if (entryPatch.value === null) delete entries[entryPatch.key];
+        else entries[entryPatch.key] = entryPatch.value;
+        patchData[entryPatch.field] = entries;
+    }
+    const { data: _droppedData, ...topPatch } = patch as Record<
+        string,
+        unknown
+    >;
     const candidateOutside = {
         ...baseOutside,
         ...topPatch,
@@ -310,6 +327,23 @@ export async function patchMessageInDb(
     for (const [key, value] of Object.entries(patchData)) {
         if (value === null) dataDelta[key] = null;
     }
+    const entryDelta = new Map<string, unknown>();
+    if (entryPatch) {
+        const before = dataRecord(baseOutsideData[entryPatch.field]);
+        const after = dataRecord(validatedOutsideData[entryPatch.field]);
+        for (const key of new Set([
+            ...Object.keys(before),
+            ...Object.keys(after),
+            entryPatch.key,
+        ])) {
+            if (key === entryPatch.key || !jsonEqual(before[key], after[key]))
+                entryDelta.set(
+                    key,
+                    Object.hasOwn(after, key) ? after[key] : undefined,
+                );
+        }
+        delete dataDelta[entryPatch.field];
+    }
     const topDelta: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(
         validatedOutside as Record<string, unknown>
@@ -336,15 +370,31 @@ export async function patchMessageInDb(
                 entity: 'messages',
                 action: 'get',
             });
-            if (ifCurrent && !ifCurrent(stored)) return undefined;
+            if (ifCurrent && !ifCurrent(stored)) {
+                if (entryPatch) throw new Error('stale-context');
+                return undefined;
+            }
+            if (entryPatch && (!stored || stored.deleted))
+                throw new Error('not-found');
             const base = stored ?? fallback;
             if (!base) return undefined;
             const baseData = dataRecord(base.data);
+            const mergedData = { ...baseData, ...dataDelta };
+            if (entryPatch) {
+                const entries = { ...dataRecord(baseData[entryPatch.field]) };
+                for (const [key, value] of entryDelta) {
+                    if (value === undefined) delete entries[key];
+                    else entries[key] = jsonCardValue(value);
+                }
+                if (entryPatch.field === 'tool_cards')
+                    assertCardStateLimits(entries);
+                mergedData[entryPatch.field] = entries;
+            }
             const candidate = {
                 ...base,
                 ...topDelta,
                 id: base.id,
-                data: { ...baseData, ...dataDelta },
+                data: mergedData,
                 updated_at:
                     typeof topDelta.updated_at === 'number'
                         ? (topDelta.updated_at as number)
@@ -354,8 +404,9 @@ export async function patchMessageInDb(
             const fresh = {
                 ...validated,
                 clock: nextClock(base.clock),
-                hlc:
-                    (validated as { hlc?: string }).hlc ??
+                hlc: entryPatch
+                    ? generateHLC()
+                    : (validated as { hlc?: string }).hlc ??
                     (base as { hlc?: string }).hlc ??
                     generateHLC(),
             };
@@ -365,7 +416,7 @@ export async function patchMessageInDb(
                 { rethrow: true }
             );
             return fresh;
-        }
+        },
     );
     if (!next) return;
     await hooks.doAction('db.messages.upsert:action:after', {
@@ -884,5 +935,31 @@ export async function normalizeThreadIndexes(
         await hooks.doAction('db.messages.normalize:action:after', {
             threadId,
         });
+    });
+}
+
+/** Merge one nested data entry using the same preparation and atomic write path. */
+export async function patchMessageDataEntry(
+    db: Or3DB,
+    id: string,
+    field: string,
+    entryKey: string,
+    value: unknown | null,
+    current?: (message: Message | undefined) => boolean,
+): Promise<void> {
+    if (
+        [field, entryKey].some(
+            (key) =>
+                !key || ['__proto__', 'constructor', 'prototype'].includes(key),
+        )
+    )
+        throw new Error('invalid-input');
+    const snapshot = value === null ? null : jsonCardValue(value);
+    if (field === 'tool_cards' && snapshot !== null)
+        assertCardStateLimits({ [entryKey]: snapshot });
+    await patchMessageInDb(db, id, {}, undefined, current, {
+        field,
+        key: entryKey,
+        value: snapshot,
     });
 }

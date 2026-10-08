@@ -45,6 +45,7 @@ export type PluginContributionKind =
     | 'ui.command-palette.command'
     | 'chat.action'
     | 'chat.message.renderer'
+    | 'chat.tool.card'
     | 'chat.tool.client'
     | 'chat.tool.server'
     | 'editor.extension'

@@ -1,0 +1,57 @@
+{
+    "manifestVersion": 2,
+    "kind": "plugin",
+    "id": "or3.weather-card",
+    "name": "Weather Card",
+    "version": "0.1.0",
+    "description": "Forecast cards backed by Open-Meteo",
+    "engines": {
+        "or3": "^0.3.0",
+        "pluginApi": "^2.0.0"
+    },
+    "runtime": {
+        "client": {
+            "entry": "client.mjs",
+            "format": "esm",
+            "isolation": "worker"
+        }
+    },
+    "requestedGrants": [
+        "settings.read",
+        "settings.write",
+        "tools.register.client",
+        "chat.tool.card",
+        "network.http"
+    ],
+    "features": {
+        "required": ["or3-portable-client-v1"],
+        "optional": ["or3-tool-card-frame-v1"]
+    },
+    "dependencies": {
+        "required": [],
+        "optional": []
+    },
+    "trust": "isolated-client",
+    "settings": {
+        "version": 1,
+        "schema": "settings.schema.json"
+    },
+    "stateCompatibility": {
+        "version": 1,
+        "reads": {
+            "minimum": 1,
+            "maximum": 1
+        },
+        "rollback": "safe"
+    },
+    "toolCards": [
+        {
+            "id": "forecast",
+            "tool": "or3_weather_card_show",
+            "entry": "cards/forecast.mjs",
+            "label": "Weather",
+            "chrome": "none",
+            "minHeight": 220
+        }
+    ]
+}

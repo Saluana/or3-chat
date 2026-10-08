@@ -41,17 +41,30 @@
                         :data-stream-id="item.stream_id"
                     >
                         <component
-                            :is="resolveCoreChatComponent($theme.activeComponents.value['chat-message'], 'chat-message')"
+                            :is="
+                                resolveCoreChatComponent(
+                                    $theme.activeComponents.value[
+                                        'chat-message'
+                                    ],
+                                    'chat-message'
+                                )
+                            "
                             :message="item"
                             :thread-id="props.threadId"
                             :retry-disabled="retryPending || loading"
                             :compaction-action="compactionActionFor(item)"
-                            :history-retrieval-available="historyRetrievalAvailable"
+                            :history-retrieval-available="
+                                historyRetrievalAvailable
+                            "
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
-                            @view-compaction-source="onViewCompactionSource(item, $event)"
-                            @view-related-thread="onViewRelatedThread(item, $event)"
+                            @view-compaction-source="
+                                onViewCompactionSource(item, $event)
+                            "
+                            @view-related-thread="
+                                onViewRelatedThread(item, $event)
+                            "
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
                             @cancel-edit="onEndEdit(item.id)"
@@ -126,7 +139,13 @@
                     </span>
                 </div>
                 <component
-                    :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
+                    :is="
+                        resolveCoreChatComponent(
+                            $theme.activeComponents.value['chat-input'],
+                            'chat-input'
+                        )
+                    "
+                    ref="cardComposer"
                     :loading="inputLoading || compaction.active.value"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
@@ -151,6 +170,12 @@
 </template>
 
 <script setup lang="ts">
+import { provideToolCardFrameBudget } from '~/composables/chat/tool-card-frame-budget';
+import {
+    createToolCardChatBridge,
+    provideToolCardChatBridge,
+} from '~/composables/chat/tool-card-chat-bridge';
+import { pluginOk, pluginError } from '@or3/plugin-sdk';
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import {
@@ -1050,6 +1075,55 @@ function waitForDurableSendAcceptance(
         });
     });
 }
+
+const cardComposer = ref<{ getSendOptions?: () => {
+    model: string;
+    modelVariant: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
+    thinking: boolean;
+    reasoningEffort: string | null;
+} }>();
+const cardBridge = createToolCardChatBridge({
+    threadId: computed(() => currentThreadId.value ?? null),
+    busy: computed(
+        () => loading.value || retryPending.value || compaction.active.value
+    ),
+    async send(text, origin) {
+        const activeChat = chat.value;
+        if (!activeChat)
+            return pluginError('unsupported', 'Chat is unavailable');
+        const result = activeChat.send({
+            content: text,
+            model: model.value,
+            ...cardComposer.value?.getSendOptions?.(),
+            cardOrigin: origin,
+            files: [],
+            file_hashes: [],
+        });
+        try {
+            const accepted = await waitForDurableSendAcceptance(
+                activeChat,
+                result
+            );
+            if ('userMessageId' in accepted && accepted.userMessageId)
+                return pluginOk(undefined);
+            return pluginError('conflict', 'Message was not accepted', {
+                retryable: true,
+            });
+        } catch {
+            return pluginError('internal', 'Message could not be saved');
+        }
+    },
+});
+provideToolCardChatBridge(cardBridge);
+provideToolCardFrameBudget();
+const flushCardState = () => {
+    void cardBridge.flush();
+};
+onMounted(() => window.addEventListener('pagehide', flushCardState));
+onBeforeUnmount(() => {
+    window.removeEventListener('pagehide', flushCardState);
+    flushCardState();
+});
 
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value || retryPending.value || compaction.active.value) return;

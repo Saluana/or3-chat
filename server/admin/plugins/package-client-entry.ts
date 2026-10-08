@@ -100,3 +100,61 @@ export class PluginPackageClientEntryError extends Error {
 export function isPackageClientEntryUnavailable(error: unknown): boolean {
     return error instanceof PluginPackageAssetError || error instanceof PluginPackageClientEntryError;
 }
+/** Card assets are hashed from the same immutable selected tree as the client. */
+export async function readPackageToolCardEntries(
+    input: Parameters<typeof readPackageClientEntry>[0]
+): Promise<
+    readonly import('../../../shared/plugins/runtime-descriptor').PackageV2ToolCardDescriptor[]
+> {
+    const reader = input.reader ?? createPackageAssetReader();
+    const read = (requestPath: string) =>
+        input.requireSelected === false
+            ? reader.readAsset({
+                  pluginId: input.pluginId,
+                  packageDigest: input.packageDigest,
+                  requestPath,
+              })
+            : reader.readSelectedAsset({
+                  pluginId: input.pluginId,
+                  packageDigest: input.packageDigest,
+                  requestPath,
+              });
+    const cards = [];
+    for (const card of input.manifest.toolCards ?? []) {
+        const entry = await read(card.entry);
+        const source = new TextDecoder().decode(entry.bytes);
+        await init;
+        if (parse(source)[0].length)
+            throw new PluginPackageClientEntryError(
+                'client-entry-unresolvable',
+                'Card entries must be self-contained, with no remaining imports'
+            );
+        const path = card.entry.replace(/\.[^.]+$/, '.css');
+        let stylesheet: { path: string; sha256: Sha256 } | undefined;
+        let bytes = entry.bytes.byteLength;
+        try {
+            const asset = await read(path);
+            bytes += asset.bytes.byteLength;
+            stylesheet = { path, sha256: await sha256Identity(asset.bytes) };
+        } catch (error) {
+            if (
+                !(error instanceof PluginPackageAssetError) ||
+                error.statusCode !== 404
+            )
+                throw error;
+        }
+        if (bytes > 1536 * 1024)
+            throw new PluginPackageClientEntryError(
+                'client-entry-unresolvable',
+                'Card bundle exceeds 1.5 MiB'
+            );
+        cards.push(
+            Object.freeze({
+                ...card,
+                entrySha256: await sha256Identity(entry.bytes),
+                ...(stylesheet ? { stylesheet } : {}),
+            })
+        );
+    }
+    return Object.freeze(cards);
+}

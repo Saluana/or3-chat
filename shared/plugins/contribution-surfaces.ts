@@ -16,6 +16,7 @@ export const PLUGIN_CONTRIBUTION_SURFACES = [
     'dashboard-navigation',
     'editor-extensions',
     'admin-extensions',
+    'chat-tool-cards',
     'client-tools',
     'server-tools',
     'command-palette',

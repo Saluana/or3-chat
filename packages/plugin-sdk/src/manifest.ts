@@ -24,6 +24,8 @@ export type PluginGrant =
     | 'chat.read'
     | 'chat.message.write'
     | 'chat.message.renderer'
+    | 'chat.tool.card'
+    | 'chat.tool.card.embed'
     | 'chat.editor.extension'
     | 'workspace.read'
     | 'workspace.switch'
@@ -64,6 +66,7 @@ export interface PluginDependencyV2 {
 }
 
 export interface PluginManifestV2 {
+    readonly toolCards?: readonly PluginToolCardManifestEntry[];
     readonly manifestVersion: 2;
     readonly kind: 'plugin';
     readonly id: string;
@@ -119,5 +122,20 @@ export interface PluginManifestV2 {
     };
     readonly integrity?: {
         readonly package: `sha256-${string}`;
+    };
+}
+
+export interface PluginToolCardManifestEntry {
+    readonly id: string;
+    readonly tool: string;
+    readonly entry: string;
+    readonly label?: string;
+    readonly placement?: 'inline' | 'end';
+    readonly renderWhile?: 'complete' | 'always';
+    readonly chrome?: 'card' | 'none';
+    readonly minHeight?: number;
+    readonly embeds?: {
+        readonly frames?: readonly string[];
+        readonly images?: readonly string[];
     };
 }

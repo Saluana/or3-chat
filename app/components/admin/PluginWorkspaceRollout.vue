@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ToolCardAuthorityReview from '~/components/plugins/ToolCardAuthorityReview.vue';
 import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from '#imports';
@@ -241,6 +242,7 @@ onUnmounted(() => { mounted = false; running.value = false; });
                 <p>Connection scopes: {{ release.authority?.connectionScopes?.join(', ') || 'none' }}.</p>
                 <p>Writes: {{ release.authority?.writes?.join(', ') || 'none' }}.</p>
                 <p>Setup hooks: {{ release.authority?.setupHooks?.join(', ') || 'none' }}.</p>
+<ToolCardAuthorityReview :dependencies="release.authority?.dependencies" />
                 <p>Features: {{ release.authority?.features?.join(', ') || 'none' }} · Engines: {{ release.authority?.engines?.join(', ') || 'none' }} · Dependencies: {{ release.authority?.dependencies?.join(', ') || 'none' }}.</p>
                 <p v-if="operation.permissionReviewsNeeded">{{ operation.permissionReviewsNeeded }} workspace(s) have older or missing permission reviews. Each workspace is rechecked before enablement.</p>
                 <details class="mt-1 text-xs"><summary>Technical identity</summary><p class="break-all">{{ release.packageDigest }}</p></details>

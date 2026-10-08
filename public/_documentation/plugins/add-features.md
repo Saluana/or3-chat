@@ -244,3 +244,5 @@ handle on cleanup. Chat renderers use `chat.message.renderer`; editor extensions
 use `chat.editor.extension`. Packages import `vue` and `@or3/plugin-sdk` as host
 singletons, never app aliases or Nuxt auto-imports. Rebuild before packing and
 verify that disabling removes every registration while retaining saved data.
+
+See [Interactive tool cards](/documentation/plugins/tool-cards) for cards attached to tool calls, state, chat actions, embeds and browser qualification.

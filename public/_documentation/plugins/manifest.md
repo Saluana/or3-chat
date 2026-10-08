@@ -186,3 +186,5 @@ server code must not assume the author's dependencies remain installed on the ho
 Inspection reports identity, imports, requested access, state compatibility,
 and conformance without executing plugin code. Use the [CLI reference](/documentation/plugins/plugin-sdk-cli)
 for candidate commands and [SDK reference](/documentation/plugins/plugin-sdk) for method permissions.
+
+See [Interactive tool cards](/documentation/plugins/tool-cards) for cards attached to tool calls, state, chat actions, embeds and browser qualification.

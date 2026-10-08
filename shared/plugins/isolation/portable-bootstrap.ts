@@ -55,6 +55,14 @@ export const PORTABLE_PROFILE_NAME = 'or3-portable-client-v1';
 
 /** Browser engines that may run the portable profile once qualified. */
 export const QUALIFIED_BROWSER_ENGINES = ['chromium'] as const;
+/** Empty until a card-frame receipt qualifies an exact engine/runtime. */
+export const QUALIFIED_TOOL_CARD_ENGINES: readonly BrowserEngine[] = [];
+export const TOOL_CARD_FRAME_FEATURE = 'or3-tool-card-frame-v1';
+export function toolCardEngineQualified(
+    engine = detectBrowserEngine()
+): boolean {
+    return QUALIFIED_TOOL_CARD_ENGINES.includes(engine);
+}
 export type BrowserEngine = 'chromium' | 'firefox' | 'webkit' | string;
 
 /**
@@ -96,7 +104,9 @@ export function defaultHostAbi(
 ): HostAbiDescriptor {
     return Object.freeze({
         version: HOST_ABI_VERSION,
-        features: [PORTABLE_CLIENT_FEATURE, 'or3-portable-workspace-v1'],
+        features: [PORTABLE_CLIENT_FEATURE, 'or3-portable-workspace-v1',
+            ...(toolCardEngineQualified() ? [TOOL_CARD_FRAME_FEATURE]: []),
+        ],
         qualifiedBrowsers: [...QUALIFIED_BROWSER_ENGINES],
         staticHost: false,
         ...overrides,

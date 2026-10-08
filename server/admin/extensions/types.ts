@@ -1,3 +1,4 @@
+import { toolCardManifestProblems } from '../../../packages/plugin-sdk/src/tool-card-manifest';
 /**
  * @module server/admin/extensions/types.ts
  *
@@ -369,6 +370,30 @@ export const Or3ExtensionManifestV2Schema = z
             .strict(),
         runtime: V2RuntimeSchema,
         requestedGrants: z.array(V2GrantSchema),
+        toolCards: z
+            .array(
+                z
+                    .object({
+                        id: z.string(),
+                        tool: z.string(),
+                        entry: z.string(),
+                        label: z.string().optional(),
+                        placement: z.enum(['inline', 'end']).optional(),
+                        renderWhile: z.enum(['complete', 'always']).optional(),
+                        chrome: z.enum(['card', 'none']).optional(),
+                        minHeight: z.number().optional(),
+                        embeds: z
+                            .object({
+                                frames: z.array(z.string()).optional(),
+                                images: z.array(z.string()).optional(),
+                            })
+                            .strict()
+                            .optional(),
+                    })
+                    .strict()
+            )
+            .max(16)
+            .optional(),
         features: V2FeatureNegotiationSchema,
         dependencies: V2DependenciesSchema,
         trust: z.enum(['trusted-host', 'isolated-client', 'isolated-server']),
@@ -379,6 +404,8 @@ export const Or3ExtensionManifestV2Schema = z
     })
     .strict()
     .superRefine((value, ctx) => {
+        for (const problem of toolCardManifestProblems(value))
+            ctx.addIssue({ code: z.ZodIssueCode.custom, ...problem });
         if (new Set(value.requestedGrants).size !== value.requestedGrants.length) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,

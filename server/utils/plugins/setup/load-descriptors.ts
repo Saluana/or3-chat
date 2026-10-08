@@ -1,3 +1,4 @@
+import { toolCardAuthorityEntries } from '../../../../packages/plugin-sdk/src/tool-card-manifest';
 /**
  * Reads a package's generated portable descriptors from an installed extension.
  *
@@ -127,6 +128,7 @@ export function toConnectionDispatchPolicy(
 
 /** The manifest fields that change what a release may do at runtime. */
 export interface PackageAuthorityManifest {
+    readonly toolCards?: readonly import('../../../../packages/plugin-sdk/src/manifest').PluginToolCardManifestEntry[];
     readonly trust: string;
     readonly engines: { readonly or3: string; readonly pluginApi?: string };
     readonly requestedGrants: readonly string[];
@@ -214,7 +216,10 @@ export function toTrustedManifestAuthority(manifest: PackageAuthorityManifest): 
         dataScopes: [],
         writes: [],
         setupHooks: [],
-        dependencies: dependencyEntries(manifest.dependencies),
+        dependencies: uniqueSorted([
+            ...dependencyEntries(manifest.dependencies),
+            ...toolCardAuthorityEntries(manifest.toolCards),
+        ]),
     };
 }
 
@@ -265,6 +270,9 @@ export function toEffectiveAuthority(input: {
         dataScopes: uniqueSorted(policy.dataScopes),
         writes: uniqueSorted(policy.writes),
         setupHooks,
-        dependencies: dependencyEntries(manifest.dependencies),
+        dependencies: uniqueSorted([
+            ...dependencyEntries(manifest.dependencies),
+            ...toolCardAuthorityEntries(manifest.toolCards),
+        ]),
     };
 }

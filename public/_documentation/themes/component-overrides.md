@@ -127,3 +127,7 @@ Retain screenshots and the host revision with the theme. A visually correct
 replacement that drops a caller event is still broken. Use
 [Troubleshooting](/documentation/themes/troubleshooting) when the replacement
 falls back or stops working after a host refactor.
+
+## Preserve tool cards in chat-message replacements
+
+Render ChatToolBlock for ordered and legacy tool blocks, and ChatToolCardsEnd after the body. Forward their resize events as content-resize so the message list updates its measured height. Keep the user cardOrigin attribution chip. See [Tool cards](/documentation/plugins/tool-cards).

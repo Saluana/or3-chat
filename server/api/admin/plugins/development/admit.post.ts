@@ -327,6 +327,7 @@ export default defineEventHandler(async (event) => {
                 stage: result.stage,
                 codes: result.codes,
                 requestedGrants: [...grantCandidate.requestedGrants],
+                authority: grantCandidate.authority,
                 authoritySha256: grantCandidate.authoritySha256,
                 packageDigest: receipt.packageTreeSha256,
             };

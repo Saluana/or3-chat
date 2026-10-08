@@ -39,6 +39,8 @@ export type KnownHookKey =
     | 'workspace.files:action:before'
     | 'workspace.files:action:after'
     | 'workspace.files:filter:policy'
+    | 'ui.chat.tool-card:action:mounted'
+    | 'ui.chat.tool-card:action:failed'
     | 'ui.chat.message:filter:outgoing'
     | 'ui.chat.message:filter:incoming'
     | 'ai.chat.model:filter:select'

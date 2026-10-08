@@ -12,7 +12,7 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 599,
+    "exportCount": 600,
     "callableExportCount": 276,
     "nuxtAutoImportCount": 309
   },
@@ -7724,7 +7724,7 @@
     },
     {
       "source": "app/composables/plugins/trusted-host-context.ts",
-      "apiSha256": "292db5ea1d8e3896bfea3094af64c7c8056601f5c5f6519a8cc129fb4af1e8d9",
+      "apiSha256": "6390e87d76b75398a777dfbfc947030eb08798351cc5547201289e1166cca8d1",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/trusted-host-context"
@@ -7746,7 +7746,7 @@
               "resolvedReturnType": "TrustedHostContext",
               "declaration": {
                 "source": "app/composables/plugins/trusted-host-context.ts",
-                "line": 275,
+                "line": 277,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
               }
@@ -7755,7 +7755,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 275,
+              "line": 277,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
             }
@@ -7769,7 +7769,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 152,
+              "line": 154,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly signal?: AbortSignal;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;\n    readonly requestedFeatures?: readonly string[];\n    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;\n    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'\n    >;\n}"
             }
@@ -7785,7 +7785,7 @@
               "source": "app/composables/plugins/trusted-host-context.ts",
               "line": 63,
               "syntaxKind": "VariableDeclaration",
-              "text": "TRUSTED_HOST_GRANTS = [\n    'ui.workspace-profile.register', 'ai.provider', 'tools.use', 'jobs.background', 'hooks.emit',\n    'ui.dashboard.register',\n    'ui.sidebar.register',\n    'ui.pane.register',\n    'ui.card.register',\n    'ui.action.register',\n    'ui.command-palette.register',\n    'ui.toast',\n    'ui.confirm',\n    'ui.progress',\n    'panes.open',\n    'commands.register',\n    'commands.run.public',\n    'chat.create',\n    'chat.read',\n    'chat.message.write',\n    'chat.message.renderer',\n    'chat.editor.extension',\n    'workspace.read',\n    'workspace.switch',\n    'workspace.connections.read',\n    'workspace.connections.manage',\n    'events.register',\n    'ai.models',\n    'ai.complete',\n    'secrets.read',\n    'secrets.write',\n    'secrets.use',\n    'files.pick',\n    'files.read',\n    'files.write',\n    'files.catalog.read',\n    'files.catalog.write',\n    'files.actions.register',\n    'network.stream',\n    'activity.register',\n    'documents.read',\n    'documents.write',\n    'tools.register.client',\n    'tools.register.server',\n    'tools.model.register',\n    'posts.read',\n    'posts.write',\n    'hooks.register',\n    'network.http',\n    'storage.read',\n    'storage.write',\n    'settings.read',\n    'settings.write',\n] as const satisfies readonly PluginGrant[]"
+              "text": "TRUSTED_HOST_GRANTS = [\n    'ui.workspace-profile.register', 'ai.provider', 'tools.use', 'jobs.background', 'hooks.emit',\n    'ui.dashboard.register',\n    'ui.sidebar.register',\n    'ui.pane.register',\n    'ui.card.register',\n    'ui.action.register',\n    'ui.command-palette.register',\n    'ui.toast',\n    'ui.confirm',\n    'ui.progress',\n    'panes.open',\n    'commands.register',\n    'commands.run.public',\n    'chat.create',\n    'chat.read',\n    'chat.message.write',\n    'chat.message.renderer',\n    'chat.tool.card',\n    'chat.tool.card.embed',\n    'chat.editor.extension',\n    'workspace.read',\n    'workspace.switch',\n    'workspace.connections.read',\n    'workspace.connections.manage',\n    'events.register',\n    'ai.models',\n    'ai.complete',\n    'secrets.read',\n    'secrets.write',\n    'secrets.use',\n    'files.pick',\n    'files.read',\n    'files.write',\n    'files.catalog.read',\n    'files.catalog.write',\n    'files.actions.register',\n    'network.stream',\n    'activity.register',\n    'documents.read',\n    'documents.write',\n    'tools.register.client',\n    'tools.register.server',\n    'tools.model.register',\n    'posts.read',\n    'posts.write',\n    'hooks.register',\n    'network.http',\n    'storage.read',\n    'storage.write',\n    'settings.read',\n    'settings.write',\n] as const satisfies readonly PluginGrant[]"
             }
           ]
         },
@@ -7797,7 +7797,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 179,
+              "line": 181,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedHostContext {\n    readonly context: PluginContext;\n    /** Trusted execution-model registrations; SDK tools expose list/execute. */\n    readonly tools: TrustedPluginToolsClient;\n    readonly editor: TrustedPluginEditorClient;\n    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];\n    readonly renderers: {\n        register(definition: MessageRendererDefinition): PluginRegistrationHandle;\n    };\n    /**\n     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules\n     * register through this object; it is the same runtime as `context`.\n     */\n    readonly workspaceApi: Or3WorkspacePluginApi;\n    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */\n    readonly liveListenerCount: number;\n    dispose(reason?: unknown): Promise<LegacyCleanupReport>;\n}"
             }
@@ -7811,7 +7811,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 146,
+              "line": 148,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedPluginEditorClient {\n    register(input: TrustedEditorExtensionInput): PluginRegistrationHandle;\n    applyExtensions(existing: readonly object[]): object[];\n    handleBeforeSend(text: string): Promise<boolean>;\n}"
             }
@@ -7825,7 +7825,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 138,
+              "line": 140,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedPluginToolsClient {\n    register(\n        definition: ExtendedToolDefinition,\n        handler: ToolHandler\n    ): PluginRegistrationHandle;\n    registerModel(input: TrustedModelContribution): PluginRegistrationHandle;\n}"
             }
@@ -7835,7 +7835,7 @@
     },
     {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "e5017a6d0221c8b296f8075c3fa2aa0622d49b8033fb30f1f5d454d898191f94",
+      "apiSha256": "b996fecee116caaaf13710957d258645964702037678608aacce569d7cd27c5b",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -7857,7 +7857,7 @@
               "resolvedReturnType": "ManagedWorkspacePluginRuntime",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 108,
+                "line": 113,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
               }
@@ -7866,7 +7866,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 108,
+              "line": 113,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
             }
@@ -7883,7 +7883,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 230,
+                "line": 250,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -7892,7 +7892,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 230,
+              "line": 250,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -7909,7 +7909,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 293,
+                "line": 313,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -7918,7 +7918,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 293,
+              "line": 313,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
             }
@@ -7932,7 +7932,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 95,
+              "line": 100,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ManagedWorkspacePluginRuntime {\n    api: Or3WorkspacePluginApi;\n    dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;\n}"
             }
@@ -7946,7 +7946,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 54,
+              "line": 59,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePlugin {\n    id: string;\n    register(api: Or3WorkspacePluginApi): void | Promise<void>;\n}"
             }
@@ -7960,9 +7960,9 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 37,
+              "line": 39,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    registerCommandPalettePostSource: (\n        definition: PalettePostSourceDefinition\n    ) => RegistrationHandle;\n    registerCommandPaletteCommand: (\n        definition: PaletteCommandDefinition,\n        handler: PaletteCommandHandler\n    ) => RegistrationHandle;\n    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
+              "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerToolCard: (\n        definition: PluginToolCardDefinition\n    ) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    registerCommandPalettePostSource: (\n        definition: PalettePostSourceDefinition\n    ) => RegistrationHandle;\n    registerCommandPaletteCommand: (\n        definition: PaletteCommandDefinition,\n        handler: PaletteCommandHandler\n    ) => RegistrationHandle;\n    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
             }
           ]
         },
@@ -7977,7 +7977,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 245,
+                "line": 265,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -7986,7 +7986,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 245,
+              "line": 265,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -8003,7 +8003,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 277,
+                "line": 297,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -8012,7 +8012,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 277,
+              "line": 297,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -8026,7 +8026,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 30,
+              "line": 32,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspacePluginSource = 'builtin' | 'extension';"
             }
@@ -9898,7 +9898,7 @@
     },
     {
       "source": "app/core/hooks/hook-keys.ts",
-      "apiSha256": "f70bd214807586e72335876b2213798ec468351dbd6f3881275e296316726bd6",
+      "apiSha256": "f382e73956da9550c76fa60eb7145bcfcab77f6e4c5a1e820c09f7bbf48d3de8",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-keys"
@@ -9917,7 +9917,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 168,
+              "line": 170,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChatIncomingFilterReturn = string;"
             }
@@ -9931,7 +9931,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 162,
+              "line": 164,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChatOutgoingFilterReturn = string | false;"
             }
@@ -9945,7 +9945,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 101,
+              "line": 103,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFamily =\n    | 'messages'\n    | 'documents'\n    | 'files'\n    | 'threads'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -9959,7 +9959,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 119,
+              "line": 121,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbHookKey = `db.${DbFamily}.${string}`;"
             }
@@ -9973,7 +9973,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 177,
+              "line": 179,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilesAttachFilterReturn = FilesAttachInputPayload | false;"
             }
@@ -9987,7 +9987,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 129,
+              "line": 131,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookKey = KnownHookKey | DbHookKey | (string & {});"
             }
@@ -10003,7 +10003,7 @@
               "source": "app/core/hooks/hook-keys.ts",
               "line": 38,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type KnownHookKey =\n    | 'workspace.files:action:before'\n    | 'workspace.files:action:after'\n    | 'workspace.files:filter:policy'\n    | 'ui.chat.message:filter:outgoing'\n    | 'ui.chat.message:filter:incoming'\n    | 'ai.chat.model:filter:select'\n    | 'ai.chat.messages:filter:input'\n    | 'ai.chat.send:action:before'\n    | 'ai.chat.send:filter:prepare'\n    | 'ai.chat.send:filter:commit'\n    | 'ai.chat.send:action:after'\n    | 'ai.chat.stream:action:delta'\n    | 'ai.chat.stream:action:reasoning'\n    | 'ai.chat.stream:action:complete'\n    | 'ai.chat.stream:action:error'\n    | 'ai.chat.retry:action:before'\n    | 'ai.chat.retry:action:after'\n    | 'ai.document.edit:filter:request'\n    | 'ai.document.edit:action:before'\n    | 'ai.document.edit:action:after'\n    | 'ai.document.edit:action:error'\n    | 'ui.pane.active:action'\n    | 'ui.pane.blur:action'\n    | 'ui.pane.switch:action'\n    | 'ui.pane.thread:filter:select'\n    | 'ui.pane.thread:action:changed'\n    | 'ui.pane.doc:filter:select'\n    | 'ui.pane.doc:action:changed'\n    | 'ui.pane.doc:action:saved'\n    | 'ui.pane.msg:action:sent'\n    | 'ui.pane.msg:action:received'\n    | 'files.attach:filter:input'\n    | 'sync.bootstrap:action:start'\n    | 'sync.bootstrap:action:progress'\n    | 'sync.bootstrap:action:complete'\n    | 'sync.pull:action:received'\n    | 'sync.pull:action:applied'\n    | 'sync.pull:action:error'\n    | 'sync.pull:action:after'\n    | 'sync.subscription:action:statusChange'\n    | 'sync.conflict:action:detected'\n    | 'sync.op:action:captured'\n    | 'sync.push:action:before'\n    | 'sync.push:action:after'\n    | 'sync.error:action'\n    | 'sync.retry:action'\n    | 'sync.queue:action:full'\n    | 'sync.rescan:action:starting'\n    | 'sync.rescan:action:progress'\n    | 'sync.rescan:action:completed'\n    | 'sync.stats:action'\n    | 'notify:action:push'\n    | 'notify:action:read'\n    | 'notify:action:clicked'\n    | 'notify:action:cleared'\n    | 'notify:filter:before_store';"
+              "text": "export type KnownHookKey =\n    | 'workspace.files:action:before'\n    | 'workspace.files:action:after'\n    | 'workspace.files:filter:policy'\n    | 'ui.chat.tool-card:action:mounted'\n    | 'ui.chat.tool-card:action:failed'\n    | 'ui.chat.message:filter:outgoing'\n    | 'ui.chat.message:filter:incoming'\n    | 'ai.chat.model:filter:select'\n    | 'ai.chat.messages:filter:input'\n    | 'ai.chat.send:action:before'\n    | 'ai.chat.send:filter:prepare'\n    | 'ai.chat.send:filter:commit'\n    | 'ai.chat.send:action:after'\n    | 'ai.chat.stream:action:delta'\n    | 'ai.chat.stream:action:reasoning'\n    | 'ai.chat.stream:action:complete'\n    | 'ai.chat.stream:action:error'\n    | 'ai.chat.retry:action:before'\n    | 'ai.chat.retry:action:after'\n    | 'ai.document.edit:filter:request'\n    | 'ai.document.edit:action:before'\n    | 'ai.document.edit:action:after'\n    | 'ai.document.edit:action:error'\n    | 'ui.pane.active:action'\n    | 'ui.pane.blur:action'\n    | 'ui.pane.switch:action'\n    | 'ui.pane.thread:filter:select'\n    | 'ui.pane.thread:action:changed'\n    | 'ui.pane.doc:filter:select'\n    | 'ui.pane.doc:action:changed'\n    | 'ui.pane.doc:action:saved'\n    | 'ui.pane.msg:action:sent'\n    | 'ui.pane.msg:action:received'\n    | 'files.attach:filter:input'\n    | 'sync.bootstrap:action:start'\n    | 'sync.bootstrap:action:progress'\n    | 'sync.bootstrap:action:complete'\n    | 'sync.pull:action:received'\n    | 'sync.pull:action:applied'\n    | 'sync.pull:action:error'\n    | 'sync.pull:action:after'\n    | 'sync.subscription:action:statusChange'\n    | 'sync.conflict:action:detected'\n    | 'sync.op:action:captured'\n    | 'sync.push:action:before'\n    | 'sync.push:action:after'\n    | 'sync.error:action'\n    | 'sync.retry:action'\n    | 'sync.queue:action:full'\n    | 'sync.rescan:action:starting'\n    | 'sync.rescan:action:progress'\n    | 'sync.rescan:action:completed'\n    | 'sync.stats:action'\n    | 'notify:action:push'\n    | 'notify:action:read'\n    | 'notify:action:clicked'\n    | 'notify:action:cleared'\n    | 'notify:filter:before_store';"
             }
           ]
         },
@@ -10018,7 +10018,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/core/hooks/hook-keys.ts",
-                "line": 142,
+                "line": 144,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function typedOn(hooks: HookEngine);"
               }
@@ -10027,7 +10027,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 142,
+              "line": 144,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function typedOn(hooks: HookEngine);"
             }
@@ -10037,7 +10037,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "ebdc5c6f9e8aad5e67f83c01cd4200c352a2637e3673beb55e5f87f824b20ae6",
+      "apiSha256": "3f93713db393585dc2ddfcbefb29ea96588c18dc1e8ddc32a7d7b26e0b3bc034",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -10350,7 +10350,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 877,
+              "line": 898,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CallbackMismatch<Expected, Got> =\n    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;"
             }
@@ -10394,7 +10394,7 @@
               "source": "app/core/hooks/hook-types.ts",
               "line": 484,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },
@@ -10616,7 +10616,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 787,
+              "line": 808,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtractHookPayload<K extends HookName> =\n    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;"
             }
@@ -10700,7 +10700,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 744,
+              "line": 765,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookPayloadMap = CoreHookPayloadMap &\n    DbActionMap &\n    DbFilterMap &\n    Or3ActionHooks &\n    Or3FilterHooks;"
             }
@@ -10714,7 +10714,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 818,
+              "line": 839,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbCreateEntity<K extends string> =\n    K extends `db.messages.${string}`\n        ? MessageCreateEntity\n        : K extends `db.posts.${string}`\n        ? PostCreateEntity\n        : K extends `db.threads.${string}`\n        ? ThreadCreateEntity\n        : InferDbEntity<K>;"
             }
@@ -10728,7 +10728,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 797,
+              "line": 818,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbEntity<K extends string> = K extends `db.messages.${string}`\n    ? MessageEntity\n    : K extends `db.threads.${string}`\n    ? ThreadEntity\n    : K extends `db.documents.${string}`\n    ? DocumentEntity\n    : K extends `db.files.${string}`\n    ? FileEntity\n    : K extends `db.projects.${string}`\n    ? ProjectEntity\n    : K extends `db.posts.${string}`\n    ? PostEntity\n    : K extends `db.prompts.${string}`\n    ? PromptEntity\n    : K extends `db.attachments.${string}`\n    ? AttachmentEntity\n    : K extends `db.kv.${string}`\n    ? KvEntry\n    : unknown;"
             }
@@ -10742,7 +10742,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 771,
+              "line": 792,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookCallback<K extends HookName> = (\n    ...args: InferHookParams<K>\n) => InferHookReturn<K> | Promise<InferHookReturn<K>>;"
             }
@@ -10756,7 +10756,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 756,
+              "line": 777,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap\n    ? HookPayloadMap[K]\n    : unknown[];"
             }
@@ -10770,7 +10770,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 762,
+              "line": 783,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookReturn<K extends HookName> =\n    K extends `${string}:filter${string}`\n        ? K extends keyof HookPayloadMap\n            ? HookPayloadMap[K][0]\n            : unknown\n        : void;"
             }
@@ -10784,7 +10784,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 777,
+              "line": 798,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsAction<K extends HookName> = K extends ActionHookName\n    ? true\n    : false;"
             }
@@ -10798,7 +10798,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 781,
+              "line": 802,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsFilter<K extends HookName> = K extends FilterHookName\n    ? true\n    : false;"
             }
@@ -10840,7 +10840,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 791,
+              "line": 812,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MatchingHooks<Pattern extends string> = Extract<\n    HookName,\n    `${Pattern}`\n>;"
             }
@@ -11134,7 +11134,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 841,
+              "line": 862,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`\n    ? Extract<HookName, `${Prefix}.${string}`>\n    : HookName;"
             }
@@ -11176,7 +11176,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 828,
+              "line": 849,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]\n    ? Rest\n    : [];"
             }
@@ -11218,7 +11218,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 859,
+              "line": 880,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypeName<T> = T extends string\n    ? 'string'\n    : T extends number\n    ? 'number'\n    : T extends boolean\n    ? 'boolean'\n    : T extends bigint\n    ? 'bigint'\n    : T extends undefined\n    ? 'undefined'\n    : T extends null\n    ? 'null'\n    : T extends (...args: unknown[]) => unknown\n    ? 'function'\n    : T extends object\n    ? 'object'\n    : 'unknown';"
             }
@@ -11386,7 +11386,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 848,
+              "line": 869,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ValidateHookName<K> = K extends HookName\n    ? K\n    : `Invalid hook name: ${Extract<\n          K,\n          string\n      >}. Did you mean one of: ${SuggestSimilar<K>}`;"
             }
@@ -11672,7 +11672,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "b7396482a6ed0d54d8e00c83dfb062802385c446a4cb00fe8047aeddb2f955b9",
+      "apiSha256": "ea9068cbb4542de0448c111ed180d588a807c94f0b6fdcdf1c47462ebfda52ba",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11737,7 +11737,21 @@
               "source": "app/utils/chat/tool-registry.ts",
               "line": 75,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
+              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
+            }
+          ]
+        },
+        {
+          "name": "RegisterOptions",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/utils/chat/tool-registry.ts",
+              "line": 91,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
           ]
         },
@@ -11749,7 +11763,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 89,
+              "line": 90,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }"
             }
@@ -11777,7 +11791,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 108,
+              "line": 110,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -11808,7 +11822,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 238,
+                "line": 240,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -11817,7 +11831,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 238,
+              "line": 240,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -11827,7 +11841,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "13c082dfd12ee001d424c5843e415c5497d9ff9729eb85404499565542f8ee44",
+      "apiSha256": "d829ddb567bec42d045f6a23958bf276035ca762e36dfe1454ab5dfaf56e6c50",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11888,7 +11902,7 @@
               "source": "app/utils/chat/tool-registry.ts",
               "line": 75,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
+              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
           ]
         },
@@ -11900,7 +11914,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 124,
+              "line": 125,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11914,7 +11928,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 162,
+              "line": 163,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11928,7 +11942,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 136,
+              "line": 137,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11956,7 +11970,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 133,
+              "line": 134,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
@@ -11987,7 +12001,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 238,
+                "line": 240,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -11996,7 +12010,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 238,
+              "line": 240,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }

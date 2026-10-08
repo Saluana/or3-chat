@@ -1,0 +1,52 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.card-containment-probe",
+  "name": "Card containment probes",
+  "version": "0.1.0",
+  "description": "Forecast cards backed by Open-Meteo",
+  "engines": {
+    "or3": "^0.3.0",
+    "pluginApi": "^2.0.0"
+  },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "worker"
+    }
+  },
+  "requestedGrants": [
+    "tools.register.client",
+    "chat.tool.card"
+  ],
+  "features": {
+    "required": [
+      "or3-portable-client-v1"
+    ],
+    "optional": [
+      "or3-tool-card-frame-v1"
+    ]
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "trust": "isolated-client",
+  "stateCompatibility": {
+    "version": 1,
+    "reads": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "rollback": "safe"
+  },
+  "toolCards": [
+    {
+      "id": "probe",
+      "tool": "or3_card_containment_probe",
+      "entry": "probe.mjs",
+      "label": "Frame fixture"
+    }
+  ]
+}

@@ -2428,3 +2428,5 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
         },
     };
 }
+
+export { createToolCardHarness } from './cards-testing';

@@ -73,3 +73,5 @@ Their presence in the source tree does not install them into your workspace.
 Each package has its own README, source, fixtures, and tests. Workflows and
 External Agents are separate trusted-host packages; their host-specific bridges
 are not general SDK capabilities available to every plugin.
+
+See [Interactive tool cards](/documentation/plugins/tool-cards) for cards attached to tool calls, state, chat actions, embeds and browser qualification.

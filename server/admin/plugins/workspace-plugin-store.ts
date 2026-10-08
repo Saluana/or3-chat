@@ -194,7 +194,7 @@ const EffectiveAuthoritySchema = z
         dataScopes: z.array(z.string().min(1).max(64)).max(64),
         writes: z.array(z.string().min(1).max(64)).max(64),
         setupHooks: z.array(z.string().min(1).max(64)).max(32),
-        dependencies: z.array(z.string().min(1).max(128)).max(64),
+        dependencies: z.array(z.string().min(1).max(512)).max(256),
     })
     .strict();
 

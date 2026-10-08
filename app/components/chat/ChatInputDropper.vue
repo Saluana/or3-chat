@@ -1362,7 +1362,14 @@ async function attachMentionImage(id: string): Promise<void> {
         }
     }
 }
-defineExpose({ setText, focus, triggerSend, insertReference, attachFile });
+defineExpose({ setText, focus, triggerSend, insertReference, attachFile,
+    getSendOptions: () => ({
+        model: selectedModel.value,
+        modelVariant: modelVariant.value,
+        thinking: thinkingEnabled.value && modelSupportsThinking.value,
+        reasoningEffort: thinkingEnabled.value && modelSupportsThinking.value ? reasoningEffort.value ?? null : null,
+    }),
+});
 
 onBeforeUnmount(() => {
     if (props.paneId) unregisterPaneInput(props.paneId);

@@ -132,7 +132,8 @@
         "plugin-runtime:containment:qualify": "bun run scripts/plugin-runtime/qualify-containment.ts",
         "plugin-runtime:runtime-controls:check": "bun x vitest run shared/plugins/__tests__/runtime-controls.test.ts",
         "plugin-runtime:cli:check": "bun x vitest run scripts/__tests__/plugin-runtime-cli.test.ts scripts/__tests__/plugin-runtime-v1-codemod.test.ts",
-        "dev:offline": "tsx scripts/cli/dev.ts --or3-offline"
+        "dev:offline": "tsx scripts/cli/dev.ts --or3-offline",
+        "test:e2e:tool-cards": "env OR3_PLUGIN_CONTRIBUTION_V2_SURFACES=chat-tool-cards OR3_TOOL_CARDS_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --workers=1 --reporter=line --output=test-results/tool-cards/browser"
     },
     "bin": {
         "or3-cloud": "./bin/or3-cloud.js",
@@ -187,6 +188,10 @@
         "zod": "^4.6.5"
     },
     "devDependencies": {
+        "react": "^19.3.0",
+        "react-dom": "^19.3.0",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
         "@iconify-json/carbon": "^1.2.27",
         "@iconify-json/lucide": "^1.2.134",
         "@iconify-json/pixelarticons": "^1.2.9",

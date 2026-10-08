@@ -1,3 +1,4 @@
+import type { PluginToolCardManifestEntry } from '../../packages/plugin-sdk/src/manifest';
 /** A host-computed SHA-256 identity, never a plugin-reported version or digest. */
 export type Sha256 = `sha256-${string}`;
 
@@ -98,6 +99,7 @@ export interface PackageV2PluginDescriptor extends PluginDescriptorBase {
      * browser enforces the same authority the server does.
      */
     readonly effectiveGrants: readonly string[];
+    readonly toolCards?: readonly PackageV2ToolCardDescriptor[];
     readonly artifact: PackageV2ArtifactIdentity;
 }
 
@@ -114,4 +116,9 @@ export function isPostBuildReloadableArtifact(
     artifact: PluginArtifactIdentity
 ): artifact is PackageV2ArtifactIdentity {
     return artifact.kind === 'package-v2';
+}
+
+export interface PackageV2ToolCardDescriptor extends PluginToolCardManifestEntry {
+    readonly entrySha256: Sha256;
+    readonly stylesheet?: { readonly path: string; readonly sha256: Sha256 };
 }

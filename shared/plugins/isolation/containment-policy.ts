@@ -28,6 +28,10 @@
 import { PORTABLE_FRAME_SCRIPT_HASH } from './portable-frame-document';
 
 export type ContainmentChannel =
+    | 'navigation.self'
+    | 'network.webrtc'
+    | 'embed.frame'
+    | 'embed.image'
     | 'dom.parent'
     | 'dom.frameElement'
     | 'dom.hostDocument'
@@ -272,9 +276,8 @@ const WILDCARD_HOST = /(^|[\s;])\*([\s;]|$)/;
  * Refuse a containment policy that has been loosened.
  * This runs in unit tests and can run as a startup assertion.
  */
-export function assertNoContainmentRelaxation(
-    policy: ContainmentPolicy
-): { readonly ok: true } | { readonly ok: false; readonly violations: readonly ContainmentRelaxation[] } {
+export function assertNoContainmentRelaxation(policy: ContainmentPolicy):
+    { readonly ok: true } | { readonly ok: false; readonly violations: readonly ContainmentRelaxation[] } {
     const violations: ContainmentRelaxation[] = [];
     const csp = policy.csp;
 
@@ -290,7 +293,11 @@ export function assertNoContainmentRelaxation(
             message: "CSP must not allow 'unsafe-eval'",
         });
     }
-    if (csp.includes("'unsafe-inline'")) {
+    const withoutAllowedStyle =
+        policy.profile === 'or3-contained-view-v1'
+            ? csp.replace(/style-src 'unsafe-inline' blob:;/, '')
+            : csp;
+    if (withoutAllowedStyle.includes("'unsafe-inline'")) {
         violations.push({
             code: 'csp-unsafe-inline',
             message: "CSP must not allow 'unsafe-inline'",

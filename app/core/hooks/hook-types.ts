@@ -482,6 +482,23 @@ export type HookName = ActionHookName | FilterHookName;
 
 // Core (non-db) hook payloads. Keep explicit entries for commonly used hooks.
 export type CoreHookPayloadMap = {
+    'ui.chat.tool-card:action:mounted': [
+        {
+            pluginId: string | null;
+            tool: string;
+            callId: string;
+            runtime: 'page' | 'frame';
+        },
+    ];
+    'ui.chat.tool-card:action:failed': [
+        {
+            pluginId: string | null;
+            tool: string;
+            callId: string;
+            runtime: 'page' | 'frame';
+            code?: string;
+        },
+    ];
     // AI/Chat Actions
     'ai.chat.send:action:before': [AiSendBeforePayload];
     'ai.chat.send:action:after': [AiSendAfterPayload];
@@ -614,7 +631,9 @@ export type CoreHookPayloadMap = {
     'storage.files.download:action:before': [StorageFileDownloadBeforePayload];
     'storage.files.download:action:after': [StorageFileDownloadAfterPayload];
     'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];
-    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];
+    'storage.files.upload:filter:policy': [
+        StorageFileUploadPolicyPayload | false,
+    ];
     'storage.files.gc:action:run': [StorageFileGcPayload];
     'storage:action:error': [{ message?: string } & Record<string, unknown>];
 
@@ -671,7 +690,9 @@ export type CoreHookPayloadMap = {
     'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];
     'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];
     'sync.rescan:action:starting': [{ scope: SyncScopePayload }];
-    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];
+    'sync.rescan:action:progress': [
+        { scope: SyncScopePayload; progress: number },
+    ];
     'sync.rescan:action:completed': [{ scope: SyncScopePayload }];
     'sync.stats:action': [
         { pendingCount: number; cursor: number; lastSyncAt: number }

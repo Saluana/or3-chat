@@ -1,4 +1,7 @@
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync ,
+    existsSync,
+    mkdirSync,
+} from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { assertPackageRoot, isWithinPath, materializePackTree, readJsonObject } from './shared';
@@ -209,8 +212,14 @@ export async function bundleClientEntry(
         // the author's install layout and make the packed digest host-dependent.
         minify: true,
         sourcemap: 'none',
-        external: trustedHost ? ['vue', '@or3/plugin-sdk'] : [],
-        ...(trustedHost ? { plugins: [await trustedVueSfcPlugin(sourceRoot)] } : {}),
+        external: trustedHost ? ['vue'] : [],
+        ...(trustedHost ? { plugins: [{
+            name: 'or3-host-sdk-singleton',
+            setup(build: { onResolve(options: {filter:RegExp}, callback: (args:{path:string}) => {path:string;external:boolean}):void }) {
+                // Keep the root host facade shared; bundle card helpers with the host Vue external.
+                build.onResolve({filter:/^@or3\/plugin-sdk$/}, args => ({path:args.path,external:true}));
+            },
+        }, await trustedVueSfcPlugin(sourceRoot)] } : {}),
     }).catch((error: unknown) => {
         throw new Error(`Bundling ${entry} failed:\n${formatBundleDiagnostics(error)}`);
     });
@@ -321,6 +330,7 @@ export async function buildV2Package(
     await bundleClientEntry(sourceRoot, buildRoot, {
         ...(options.bundler ? { bundler: options.bundler } : {}),
     });
+    await bundleToolCardEntries(sourceRoot, buildRoot, options);
     await bundleServerRoutes(sourceRoot, buildRoot, {
         ...(options.bundler ? { bundler: options.bundler } : {}),
     });
@@ -333,4 +343,109 @@ export async function buildV2Package(
         files: Object.freeze(files.slice().sort()),
         pack,
     };
+}
+
+/** Self-contained card modules run in opaque frames; no host externals. */
+export async function bundleToolCardEntries(
+    sourceRoot: string,
+    buildRoot: string,
+    options: { readonly bundler?: ClientEntryBundler } = {}
+): Promise<void> {
+    const manifest = readJsonObject(resolve(sourceRoot, 'or3.manifest.json'));
+    const cards = manifest.toolCards;
+    if (!Array.isArray(cards) || !cards.length) return;
+    const { toolCardManifestProblems, MAX_CARD_BUNDLE_BYTES } =
+        await import('../tool-card-manifest');
+    const problems = toolCardManifestProblems(manifest);
+    if (problems.length)
+        throw new Error(
+            problems
+                .map(
+                    (problem) => problem.path.join('.') + ': ' + problem.message
+                )
+                .join('\n')
+        );
+    const bundler = options.bundler ?? (globalThis as { Bun?: ClientEntryBundler }).Bun;
+    if (!bundler) throw new Error('Tool card bundling requires Bun');
+    for (const card of cards as { entry: string }[]) {
+        const path = resolve(sourceRoot, card.entry);
+        if (
+            !existsSync(path) ||
+            !isWithinPath(realpathSync(sourceRoot), realpathSync(path))
+        )
+            throw new Error('Missing or unsafe card entry: ' + card.entry);
+        const result = await bundler.build({
+            entrypoints: [path],
+            target: 'browser',
+            format: 'esm',
+            minify: true,
+            sourcemap: 'none',
+            external: [],
+            plugins: [
+                await trustedVueSfcPlugin(sourceRoot),
+                {
+                    name: 'card-small-assets',
+                    setup(build: {onLoad(options:{filter:RegExp}, callback:(asset:{path:string})=>Promise<undefined>):void}) {
+                        build.onLoad(
+                            { filter: /\.(png|jpe?g|webp|svg|woff2?)$/ },
+                            async (asset: { path: string }) => {
+                                if (
+                                    readFileSync(asset.path).byteLength >
+                                    64 * 1024
+                                )
+                                    throw new Error(
+                                        'Card assets must be within 64 KiB: ' +
+                                            asset.path
+                                    );
+                                return undefined;
+                            }
+                        );
+                    },
+                },
+            ],
+            loader: {
+                '.png': 'dataurl',
+                '.jpg': 'dataurl',
+                '.jpeg': 'dataurl',
+                '.webp': 'dataurl',
+                '.svg': 'dataurl',
+                '.woff': 'dataurl',
+                '.woff2': 'dataurl',
+            },
+        });
+        const entry =
+            result.outputs.find((output) => output.kind === 'entry-point') ??
+        (result.outputs.length === 1 ? result.outputs[0] : undefined);
+        const styles = result.outputs.filter((output) => output !== entry);
+        if (
+            !result.success ||
+            !entry ||
+            styles.length > 1 ||
+            (styles.length && !styles[0]?.path?.endsWith('.css'))
+        )
+            throw new Error(
+                'Card bundle must contain one module and at most one stylesheet: ' +
+                    card.entry
+            );
+        const code = await entry.text();
+        const css = styles[0] ? await styles[0].text() : '';
+        if (moduleSpecifiers(code).length)
+            throw new Error('Card bundle has remaining imports: ' + card.entry);
+        if (
+            new TextEncoder().encode(code + css).byteLength >
+            MAX_CARD_BUNDLE_BYTES
+        )
+            throw new Error('Card bundle exceeds 1.5 MiB: ' + card.entry);
+        mkdirSync(dirname(resolve(buildRoot, card.entry)), { recursive: true });
+        writeFileSync(resolve(buildRoot, card.entry), code);
+        if (css)
+            writeFileSync(
+                resolve(buildRoot, card.entry.replace(/\.[^.]+$/, '.css')),
+                css
+            );
+        if (/\b(fetch|XMLHttpRequest|WebSocket|importScripts)\b/.test(code))
+            console.warn(
+                card.entry + ': network APIs are blocked in card frames'
+            );
+    }
 }

@@ -25,6 +25,9 @@ vi.mock('../../core/hooks/useHooks', () => ({
 }));
 
 import { Or3DB } from '../client';
+import { ref } from 'vue';
+import { captureCardChatScope, createToolCardChatBridge } from '~/composables/chat/tool-card-chat-bridge';
+import { pluginOk } from '@or3/plugin-sdk';
 import { makeAssistantPersister, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import {
     appendMessage,
@@ -34,6 +37,7 @@ import {
     moveMessage,
     normalizeThreadIndexes,
     patchMessageInDb,
+    patchMessageDataEntry,
 } from '../messages';
 
 let databaseSequence = 0;
@@ -99,6 +103,60 @@ describe('message transaction and ordering contracts', () => {
             db.close();
             await db.delete();
         }
+    });
+
+    it('finishes admitted card saves on the original thread while rejecting new stale actions', async () => {
+        const db = testState.db!;
+        await db.messages.put(makeMessage('card', 'original', 1, { role: 'assistant' }));
+        const threadId = ref<string | null>('original');
+        const bridge = createToolCardChatBridge({ threadId, busy: ref(false), send: async () => pluginOk(undefined) });
+        const scope = captureCardChatScope(threadId.value);
+        const write = bridge.writeState('card', 'call', { answer: 'A' }, scope);
+        threadId.value = 'other';
+        await bridge.flush();
+        expect((await write).ok).toBe(true);
+        expect((await db.messages.get('card'))?.data).toMatchObject({ tool_cards: { call: { state: { answer: 'A' } } } });
+        expect((await bridge.writeState('card', 'call', {}, scope)).ok).toBe(false);
+        const admitted = bridge.writeState('card', 'call', {}, captureCardChatScope('other'));
+        testState.db = new Or3DB('switched-card-workspace');
+        try {
+            await bridge.flush();
+            expect((await admitted).ok).toBe(false);
+        } finally {
+            testState.db.close();
+            testState.db = db;
+        }
+    });
+
+    it('keeps same-call saves ordered across asynchronous preparation hooks and waits for active saves', async () => {
+        vi.useRealTimers();
+        const db = testState.db!;
+        await db.messages.put(makeMessage('card', 'original', 1, { role: 'assistant' }));
+        const bridge = createToolCardChatBridge({ threadId: ref('original'), busy: ref(false), send: async () => pluginOk(undefined) });
+        const scope = captureCardChatScope('original');
+        let release!: () => void;
+        let entered!: () => void;
+        const firstEntered = new Promise<void>(resolve => { entered = resolve; });
+        let blocked = false;
+        testState.doAction.mockImplementation(async (name: string) => {
+            if (name === 'db.messages.upsert:action:before' && !blocked) {
+                blocked = true;
+                entered();
+                await new Promise<void>(resolve => { release = resolve; });
+            }
+        });
+        const first = bridge.writeState('card', 'call', 1, scope);
+        const firstFlush = bridge.flush();
+        await firstEntered;
+        const second = bridge.writeState('card', 'call', 2, scope);
+        const secondFlush = bridge.flush();
+        // Allow an incorrectly concurrent second transaction to complete first.
+        await new Promise(resolve => setTimeout(resolve, 100));
+        release();
+        await Promise.all([firstFlush, secondFlush]);
+        expect((await first).ok).toBe(true);
+        expect((await second).ok).toBe(true);
+        expect((await db.messages.get('card'))?.data).toMatchObject({ tool_cards: { call: { state: 2 } } });
     });
 
     it('appends with sparse indexes, serializes file hashes, and updates the thread atomically', async () => {
@@ -336,6 +394,57 @@ describe('message transaction and ordering contracts', () => {
                 tool_calls: [],
             },
         });
+    });
+
+    // state-concurrency, state-validation and state-lifecycle in failure-modes.md.
+    it('merges card entries with a concurrent streaming patch and deletes only one entry', async () => {
+        const db = testState.db!;
+        await db.messages.put(
+            makeMessage('card-row', 'thread', 1000, {
+                role: 'assistant',
+                clock: 3,
+            }),
+        );
+        await Promise.all([
+            patchMessageDataEntry(db, 'card-row', 'tool_cards', 'a', {
+                v: 1,
+                state: { picked: 1 },
+                updated_at: 1,
+            }),
+            patchMessageDataEntry(db, 'card-row', 'tool_cards', 'b', {
+                v: 1,
+                state: { picked: 2 },
+                updated_at: 1,
+            }),
+            patchMessageInDb(db, 'card-row', {
+                data: { tool_calls: [{ name: 'quiz', status: 'complete' }] },
+            }),
+        ]);
+        expect(await db.messages.get('card-row')).toMatchObject({
+            clock: 6,
+            data: {
+                tool_cards: {
+                    a: { state: { picked: 1 } },
+                    b: { state: { picked: 2 } },
+                },
+                tool_calls: [{ name: 'quiz', status: 'complete' }],
+                content: 'card-row',
+            },
+        });
+        await patchMessageDataEntry(db, 'card-row', 'tool_cards', 'a', null);
+        const row = await db.messages.get('card-row');
+        expect(Object.keys((row!.data as any).tool_cards)).toEqual(['b']);
+        await expect(
+            patchMessageDataEntry(db, 'card-row', 'tool_cards', 'b', {
+                state: 'x'.repeat(17000),
+            }),
+        ).rejects.toThrow();
+        expect(await db.messages.get('card-row')).toEqual(row);
+        await db.messages.delete('card-row');
+        await expect(
+            patchMessageDataEntry(db, 'card-row', 'tool_cards', 'a', {}),
+        ).rejects.toThrow();
+        expect(await db.messages.get('card-row')).toBeUndefined();
     });
 
     it.each(['new-owner', 'cancel'] as const)('fences an in-flight foreground heartbeat after %s', async (change) => {

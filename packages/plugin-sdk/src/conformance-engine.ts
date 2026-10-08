@@ -1,3 +1,6 @@
+import { toolCardManifestProblems,
+    MAX_CARD_BUNDLE_BYTES,
+} from './tool-card-manifest';
 import { existsSync, readFileSync } from 'node:fs';
 import {
     ALLOWED_BARE_IMPORTS,
@@ -37,6 +40,7 @@ export const CONFORMANCE_MANIFEST_FILE = 'or3.manifest.json';
 export const CONFORMANCE_PACKAGE_FILE = 'package.json';
 
 export type V2ConformanceIssueCode =
+    | 'card-network-api'
     | 'manifest-invalid'
     | 'sdk-dependency-missing'
     | 'sdk-range-invalid'
@@ -428,7 +432,9 @@ function issue(
  * Applies the full static/portable rule set. The returned issues are unsorted;
  * {@link composeV2Conformance} sorts and freezes the final list.
  */
-export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2ConformanceDecision {
+export function evaluateV2Conformance(
+    input: V2ConformanceEngineInput
+): V2ConformanceDecision {
     const manifest = input.manifest;
     if (!isJsonObject(manifest)) {
         return {
@@ -448,9 +454,51 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
     }
 
     const issues: V2ConformanceIssue[] = [];
+    for (const problem of toolCardManifestProblems(manifest))
+        issues.push(
+            issue(
+                'manifest-invalid',
+                CONFORMANCE_MANIFEST_FILE,
+                problem.message,
+                problem.path.join('.')
+            )
+        );
+    if (Array.isArray(manifest.toolCards))
+        for (const raw of manifest.toolCards) {
+            if (!isJsonObject(raw) || typeof raw.entry !== 'string') continue;
+            const entry = raw.entry;
+            const cardModule = input.moduleGraph.find(
+                (module) => module.path === entry
+            );
+            if (!cardModule)
+                issues.push(
+                    issue(
+                        'client-entry-missing',
+                        CONFORMANCE_MANIFEST_FILE,
+                        'Card entry is missing from the reviewed package',
+                        raw.entry
+                    )
+                );
+            if (cardModule && (new TextEncoder().encode(cardModule.source ?? '').byteLength + new TextEncoder().encode(input.moduleGraph.find(module => module.path === entry.replace(/\.(?:m?js)$/, '.css'))?.source ?? '').byteLength > MAX_CARD_BUNDLE_BYTES))
+                issues.push(issue('manifest-invalid', raw.entry, 'Card JavaScript and stylesheet exceed 1.5 MiB'));
+            else if (
+                cardModule?.source &&
+                new TextEncoder().encode(cardModule.source).byteLength >
+                    MAX_CARD_BUNDLE_BYTES
+            )
+                issues.push(
+                    issue(
+                        'manifest-invalid',
+                        raw.entry,
+                        'Card bundle exceeds 1.5 MiB'
+                    )
+                );
+        }
 
     // --- package.json dependency and SDK API compatibility -------------------
-    const packageJson = isJsonObject(input.packageJson) ? input.packageJson : null;
+    const packageJson = isJsonObject(input.packageJson)
+        ? input.packageJson
+        : null;
     if (packageJson === null) {
         issues.push(
             issue(
@@ -498,7 +546,9 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
         }
     }
 
-    const engines = isJsonObject(manifest.engines) ? manifest.engines : undefined;
+    const engines = isJsonObject(manifest.engines)
+        ? manifest.engines
+        : undefined;
     const pluginApiRange = engines?.pluginApi;
     if (typeof pluginApiRange !== 'string' || !isValidVersionRange(pluginApiRange)) {
         issues.push(
@@ -539,7 +589,9 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
         }
     }
     const runtimeServer = isJsonObject(manifest.runtime) ? manifest.runtime.server : undefined;
-    const routes = isJsonObject(runtimeServer) ? runtimeServer.routes : undefined;
+    const routes = isJsonObject(runtimeServer)
+        ? runtimeServer.routes
+        : undefined;
     if (Array.isArray(routes)) {
         for (const route of routes) {
             const path = isJsonObject(route) ? route.path : undefined;
@@ -613,7 +665,8 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
     const features = isJsonObject(manifest.features) ? manifest.features : undefined;
     const requiredFeatures = Array.isArray(features?.required) ? features.required : [];
     const declaresPortable = requiredFeatures.includes(PORTABLE_PROFILE_ID);
-    const shipsPortable = input.shipsPolicy === true || input.shipsSetup === true;
+    const shipsPortable =
+        input.shipsPolicy === true || input.shipsSetup === true;
     if (declaresPortable || shipsPortable) {
         const findings = validatePortableProfile({
             manifest: manifest as unknown as PluginManifestV2,
