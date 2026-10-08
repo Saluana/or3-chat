@@ -703,7 +703,7 @@ describe('or3 cloud wizard apply', () => {
         expect(plan.commands.npm).toContain(
             'or3-provider-basic-auth@0.0.11'
         );
-        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.10');
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.11');
         expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.15');
     });
 
@@ -713,10 +713,10 @@ describe('or3 cloud wizard apply', () => {
         const pluginDir = resolve(packageDir, 'dist/runtime/server/plugins');
         await mkdir(pluginDir, { recursive: true });
         await writeFile(resolve(instanceDir, 'package.json'), JSON.stringify({
-            dependencies: { 'or3-provider-fs': '0.0.10' },
+            dependencies: { 'or3-provider-fs': '0.0.11' },
         }));
         await writeFile(resolve(packageDir, 'package.json'), JSON.stringify({
-            name: 'or3-provider-fs', version: '0.0.10',
+            name: 'or3-provider-fs', version: '0.0.11',
         }));
         const plugin = await readFile(
             resolve(process.cwd(), 'node_modules/or3-provider-fs/dist/runtime/server/plugins/register.js'),
