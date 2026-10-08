@@ -63,6 +63,12 @@ authenticated behavior after starting the server.
 
 ## Find the right files
 
+Production builds share one KaTeX renderer across Markdown and diagrams. The
+document extraction worker loads when a file is extracted, and the trusted
+plugin UI kit loads when a plugin activates. The production asset gate checks
+total assets separately from initial module preloads; the Projects/Files
+baseline includes the extraction worker while retaining the initial-load limit.
+
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 
 | Directory | Responsibility |

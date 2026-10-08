@@ -636,6 +636,9 @@ export default defineNuxtConfig({
     },
     vite: {
         resolve: {
+            // Math renderers accept the root KaTeX patch release. Share it
+            // instead of bundling rehype's older copy alongside Mermaid's.
+            dedupe: ['katex'],
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
             // and deployment images where those checkouts do not exist.
@@ -754,6 +757,11 @@ export default defineNuxtConfig({
             // SSR-generated <link rel="prefetch"> tags during initial load.
             for (const resource of Object.values(manifest)) {
                 resource.prefetch = false;
+                // Extraction runs in a worker only after an upload. Nuxt
+                // otherwise modulepreloads this emitted worker on every page.
+                if (/\.worker-[^/]+\.js$/.test(resource.file ?? '')) {
+                    resource.preload = false;
+                }
             }
         },
         'pages:extend'(pages) {

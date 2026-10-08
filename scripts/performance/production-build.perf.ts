@@ -328,14 +328,17 @@ if (import.meta.main) {
         throw new Error('Production build is missing public/index.html or 200.html');
     }
 
+    // Projects/Files add a 758 KB extraction worker and their UI. The 0.1.80
+    // same-host comparison also removes 260 KB of duplicate KaTeX. Account for
+    // that measured feature cost without relaxing initial-load/chunk budgets.
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            12_600_000
+            13_400_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
-            4_000_000
+            4_200_000
         ),
         largestJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_CHUNK_JS_BYTES,
@@ -359,7 +362,7 @@ if (import.meta.main) {
         ),
         precacheRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_BYTES,
-            18_400_000
+            19_200_000
         ),
         rootModulepreloadFiles: positiveNumber(
             process.env.OR3_PERF_MAX_ROOT_MODULEPRELOAD_FILES,
