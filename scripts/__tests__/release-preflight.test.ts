@@ -1,10 +1,66 @@
 import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
     assertCleanStatus,
     assertReleaseVersionContract,
     isRegistryNotFound,
 } from '../release/release-preflight-core';
 import { assertCandidateReceipt } from '../release/candidate-receipt-core.mjs';
+
+describe('fixed-profile lock qualification', () => {
+    const root = resolve(import.meta.dirname, '../..');
+
+    async function checkLock(extraPath?: string) {
+        const directory = await mkdtemp(join(tmpdir(), 'or3-lock-preflight-'));
+        try {
+            const manifest = await readFile(join(root, 'package.json'), 'utf8');
+            const lock = JSON.parse(await readFile(join(root, 'package-lock.json'), 'utf8'));
+            if (extraPath) lock.packages[extraPath] = { version: '1.0.0' };
+            await writeFile(join(directory, 'package.json'), manifest);
+            await writeFile(join(directory, 'package-lock.json'), JSON.stringify(lock));
+            return spawnSync('bun', [join(root, 'scripts/release/check-lock-drift.mjs')], {
+                cwd: directory,
+                encoding: 'utf8',
+                timeout: 10_000,
+            });
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    }
+
+    it('accepts the committed fixed-profile dependency graph', async () => {
+        const result = await checkLock();
+        expect(result.error).toBeUndefined();
+        expect(result.status, result.stderr).toBe(0);
+    });
+
+    it.each([
+        'or3-provider-clerk',
+        'or3-provider-convex',
+        'or3-provider-s3',
+        'convex',
+        'or3-provider-sqlite-tests',
+    ])('rejects inactive %s at root and nested npm package paths', async (name) => {
+        for (const prefix of ['node_modules/', 'node_modules/fixture/node_modules/']) {
+            const packagePath = `${prefix}${name}`;
+            const result = await checkLock(packagePath);
+            expect(result.error).toBeUndefined();
+            expect(result.status, `${packagePath}\n${result.stdout}`).toBe(1);
+            expect(result.stderr).toContain(`inactive fixed-profile dependency ${packagePath}`);
+        }
+    });
+
+    it('does not reject similarly named packages', async () => {
+        for (const packagePath of ['node_modules/convex-helper', 'node_modules/@fixture/convex']) {
+            const result = await checkLock(packagePath);
+            expect(result.error).toBeUndefined();
+            expect(result.status, result.stderr).toBe(0);
+        }
+    });
+});
 
 describe('release preflight invariants', () => {
     it('requires every version surface including lock metadata to match', () => {
