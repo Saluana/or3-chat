@@ -52,6 +52,15 @@ import { getDb } from '~/db/client';
 import { nowSec } from '~/db/util';
 import type { Message } from '~/db/schema';
 
+/**
+ * How a `saveEdit()` call ended:
+ * - `saved`: changed text was persisted
+ * - `unchanged`: text matches the original; nothing was written
+ * - `cancelled`: empty draft; the edit was discarded
+ * - `ignored`: nothing ran (a save is in progress, or there is no message id)
+ */
+export type EditSaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'ignored';
+
 export interface EditableMessage {
     id?: string;
     text?: string;
@@ -133,7 +142,8 @@ export function useMessageEditing(message: EditableMessageSource) {
      *
      * **Behavior**
      * - Validates message ID exists
-     * - Trims draft text; treats empty as cancel
+     * - Trims draft text; treats empty as cancel (no write)
+     * - Text identical to the original exits edit mode without a write
      * - Loads existing message from DB
      * - Updates `data.content` field via `upsert.message`
      * - Updates message object in-place (both `content` and `text` fields)
@@ -144,17 +154,22 @@ export function useMessageEditing(message: EditableMessageSource) {
      * - **Caller must catch and handle errors** (e.g., show toast)
      * - `saving` flag is reset in finally block (guaranteed cleanup)
      *
+     * @returns How the call ended; only `saved` changed the stored text
      * @throws {Error} If message not found in DB
      */
-    async function saveEdit() {
-        if (saving.value) return;
+    async function saveEdit(): Promise<EditSaveOutcome> {
+        if (saving.value) return 'ignored';
         const m = getMessage();
         const id = m?.id;
-        if (!id) return;
+        if (!id) return 'ignored';
         const trimmed = draft.value.trim();
         if (!trimmed) {
             cancelEdit();
-            return;
+            return 'cancelled';
+        }
+        if (trimmed === original.value.trim()) {
+            editing.value = false;
+            return 'unchanged';
         }
         try {
             saving.value = true;
@@ -174,6 +189,7 @@ export function useMessageEditing(message: EditableMessageSource) {
             m.content = trimmed;
             m.text = trimmed;
             editing.value = false;
+            return 'saved';
         } finally {
             saving.value = false;
         }

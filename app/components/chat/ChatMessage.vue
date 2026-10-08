@@ -889,12 +889,13 @@ function wrappedCancelEdit() {
     if (id) emit('cancel-edit', id);
 }
 async function saveEdit() {
-    await internalSaveEdit();
-    if (!editing.value) {
-        const id = props.message.id;
-        if (id) emit('edited', { id, content: draft.value });
-        if (id) emit('save-edit', id);
-    }
+    const outcome = await internalSaveEdit();
+    const id = props.message.id;
+    if (!id || outcome === 'ignored') return;
+    // Only a persisted change counts as an edit; empty and unchanged drafts just leave edit mode.
+    if (outcome === 'saved') emit('edited', { id, content: draft.value });
+    if (outcome === 'cancelled') emit('cancel-edit', id);
+    else emit('save-edit', id);
 }
 
 // (hashList defined earlier)
@@ -1012,7 +1013,8 @@ watch(
 // Detect if message has math or code content
 const hasMathContent = computed(() => {
     const text = props.message.text || '';
-    return /\$\$[\s\S]*?\$\$|\$[^\$\n]+\$/.test(text);
+    // The renderer also typesets `\[…\]` display math (normalized to `$$`).
+    return /\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\[[\s\S]*?\\\]/.test(text);
 });
 const hasCodeContent = computed(() => {
     const text = props.message.text || '';
@@ -1061,6 +1063,10 @@ onMounted(() => {
     rafHydrate.resume();
     loadKaTeXOnIdle();
     loadShikiOnIdle();
+});
+// Streamed replies mount empty; load KaTeX once math actually arrives.
+watch(hasMathContent, (hasMath) => {
+    if (hasMath) loadKaTeXOnIdle();
 });
 
 const { copy: copyToClipboard } = useClipboard({ legacy: true });

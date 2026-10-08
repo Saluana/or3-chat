@@ -297,7 +297,13 @@ export function projectTranscriptForOpenRouter(
 ): ChatMessage[] {
     const durableResults = new Set(input.filter((record) => record.kind === 'tool_result' && record.callId)
         .map((record) => toolResultKey(record.threadId, record.parentAssistantId, record.callId!)));
+    // A result whose recorded assistant is absent (superseded by a retry or
+    // removed) answers no call in this history; providers reject the request.
+    const assistantIds = new Set(input.filter((record) => record.kind === 'assistant')
+        .map((record) => JSON.stringify([record.threadId, record.id])));
     return reconcileTranscriptToolState(input).flatMap((record) => {
+        if (record.kind === 'tool_result' && record.parentAssistantId
+            && !assistantIds.has(JSON.stringify([record.threadId, record.parentAssistantId]))) return [];
         const toolCalls: ToolCall[] | undefined = record.toolCalls.length
             ? record.toolCalls.map((call) => ({
                   id: call.callId,

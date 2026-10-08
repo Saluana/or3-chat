@@ -115,6 +115,18 @@ const parentTurnIdOf = (message: StoredMessage): string | undefined => {
 };
 
 /**
+ * Internal helper. Assistant whose tool call a tool-result row answers.
+ */
+const parentAssistantIdOf = (message: StoredMessage): string | undefined => {
+    const data =
+        message.data && typeof message.data === 'object'
+            ? (message.data as Record<string, unknown>)
+            : null;
+    const parent = data?.parent_assistant_id;
+    return typeof parent === 'string' && parent ? parent : undefined;
+};
+
+/**
  * Internal helper. Extracts plain text from content that may be string or ContentPart array.
  */
 const extractUserText = (originalText: unknown): string => {
@@ -273,12 +285,23 @@ export async function retryMessageImpl(
                 (nextUserPosition === undefined || pos < nextUserPosition)
             );
         };
-        const selectedTurn = ordered.filter((message) => {
+        const turnRows = ordered.filter((message) => {
             if (message.id === userMsg.id) return true;
             if (message.role === 'user' || message.role === 'system') return false;
             const parentTurnId = parentTurnIdOf(message as StoredMessage);
             return parentTurnId ? parentTurnId === userTurnId : inTurn(message as StoredMessage);
         });
+        // Tool results record their assistant (not the user turn) as parent.
+        // Superseding the call without its results leaves an orphaned tool
+        // message that providers reject on every later request.
+        const turnAssistantIds = new Set(
+            turnRows.filter((message) => message.role === 'assistant').map((message) => message.id)
+        );
+        const turnRowIds = new Set(turnRows.map((message) => message.id));
+        const selectedTurn = ordered.filter((message) => turnRowIds.has(message.id) || (
+            message.role === 'tool'
+            && turnAssistantIds.has(parentAssistantIdOf(message as StoredMessage) ?? '')
+        ));
         const selectedIds = new Set(selectedTurn.map((message) => message.id));
         const assistant =
             target.role === 'assistant'

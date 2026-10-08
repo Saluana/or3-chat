@@ -37,7 +37,9 @@ export interface NormalizedError {
 export type OpenRouterStreamFailureKind =
     | 'transport'
     | 'protocol'
-    | 'provider';
+    | 'provider'
+    /** Refused locally (ownership/workspace scope) before any request was sent. */
+    | 'admission';
 
 /**
  * Error thrown by the raw-fetch OpenRouter streaming path.

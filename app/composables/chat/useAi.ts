@@ -3571,18 +3571,29 @@ export function useChat(
      * Behavior:
      * - Rebuilds message context from local state
      * - Reuses the current settings unless a model override is supplied
+     * - `afterEdit`: the user prompt was just edited, which changes the turn's
+     *   conversation fingerprint. A saved attempt for it can no longer be
+     *   recovered, so it is discarded and a fresh request is built from the
+     *   edited row instead.
      *
      * Constraints:
      * - No-op if message or thread context is missing
      */
-    async function retryMessage(messageId: string, modelOverride?: string) {
+    async function retryMessage(messageId: string, modelOverride?: string, options: { afterEdit?: boolean } = {}) {
         const retryRevision = navigationRevision;
         if (threadIdRef.value) {
             const db = getDb(); const generation = getWorkspaceGeneration(); const threadId = threadIdRef.value;
             const checkpoint = await db.chat_request_recoveries.get(threadId);
             if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration() || threadIdRef.value !== threadId)
                 return { status: 'rejected' as const, reason: 'unavailable' as const };
-            if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
+            if (options.afterEdit) {
+                if (checkpoint?.user_message_id === messageId) {
+                    await db.transaction('rw', db.chat_request_recoveries, async () => {
+                        const saved = await db.chat_request_recoveries.get(threadId);
+                        if (saved?.user_message_id === messageId) await db.chat_request_recoveries.delete(threadId);
+                    });
+                }
+            } else if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
                 if (checkpoint.version !== 1)
                     return { status: 'rejected' as const, reason: 'unavailable' as const,

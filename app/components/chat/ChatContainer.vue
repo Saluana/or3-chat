@@ -1217,7 +1217,7 @@ function onSend(payload: ChatInputSendPayload) {
         .catch(() => {});
 }
 
-async function onRetry(messageId: string) {
+async function onRetry(messageId: string, options: { afterEdit?: boolean } = {}) {
     const activeChat = chat.value;
     if (!activeChat || activeChat.loading.value || retryPending.value || compaction.active.value) return;
     retryPending.value = true;
@@ -1226,7 +1226,7 @@ async function onRetry(messageId: string) {
         // viewport there immediately instead of leaving it at the old turn.
         await nextTick();
         scroller.value?.scrollToBottom?.({ smooth: false });
-        const result = await activeChat.retryMessage(messageId, model.value);
+        const result = await activeChat.retryMessage(messageId, model.value, options);
         if (!result || result.status === 'rejected' || result.status === 'failed' && result.reason === 'unavailable') {
             toast.add({
                 title: 'Retry did not start',
@@ -1269,6 +1269,11 @@ function onEdited(payload: { id: string; content: string }) {
         typeof chat.value.applyLocalEdit === 'function'
             ? chat.value.applyLocalEdit(payload.id, payload.content)
             : false;
+    // Only a changed, persisted save emits `edited`. An edited prompt asks a
+    // different question, so re-run its turn; assistant edits stay corrections.
+    if (messages.value.find((message) => message.id === payload.id)?.role === 'user') {
+        void onRetry(payload.id, { afterEdit: true });
+    }
     if (applied) {
         // Content changed size, force measure
         nextTick(() => scroller.value?.refreshMeasurements?.());
