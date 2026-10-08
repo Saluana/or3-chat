@@ -4,6 +4,7 @@ import trustedPackage from "../../plugin-runtime/fixtures/trusted-card/client.mj
 import { createTrustedRuntimeServices } from "~/composables/plugins/trusted-runtime-services";
 import probeModule from "../../plugin-runtime/fixtures/tool-card-probes/probe.mjs?raw";
 import { onMounted, onBeforeUnmount, ref } from "vue";
+import { liveQuery, type Subscription } from "dexie";
 import { useRoute, useNuxtApp } from "#imports";
 import ChatContainer from "~/components/chat/ChatContainer.vue";
 import { getDb } from "~/db/client";
@@ -44,6 +45,23 @@ const history = ref<ChatMessage[]>([]);
 const receipt = ref("");
 const fixtureRoute = useRoute();
 const scenario = String(fixtureRoute.query.scenario ?? "quiz");
+const savedState = ref("");
+const saveBarrier = ref("");
+let releaseStateSave = () => {};
+let savedStateSubscription: Subscription | undefined;
+async function applyPersistedState() {
+  await patchMessageDataEntry(
+    getDb(),
+    "fixture-message",
+    "tool_cards",
+    "state",
+    {
+      v: 1,
+      state: "remote",
+      updated_at: Math.floor(Date.now() / 1000),
+    },
+  );
+}
 provideToolCardFrameBudget();
 const budgetBinding = ref<ToolCardBinding>();
 const releaseFirst = ref(false);
@@ -134,6 +152,82 @@ onMounted(async () => {
     registry.setEnabled(name, true);
   hooks.addAction("ui.chat.tool-card:action:mounted", record);
   hooks.addAction("ui.chat.tool-card:action:failed", record);
+  if (scenario.startsWith("state-")) {
+    const hookName =
+      scenario === "state-cross-pane"
+        ? "db.messages.upsert:action:before"
+        : "db.messages.upsert:action:after";
+    const blockSave: Parameters<
+      typeof hooks.addAction<typeof hookName>
+    >[1] = async ({ entity }) => {
+      if (entity.id !== "fixture-message" || saveBarrier.value) return;
+      saveBarrier.value = "blocked";
+      await new Promise<void>((resolve) => {
+        releaseStateSave = resolve;
+      });
+    };
+    hooks.addAction(hookName, blockSave);
+    handles.push({ dispose: () => hooks.removeAction(hookName, blockSave) });
+    if (scenario === "state-normalized") {
+      const normalize: Parameters<
+        typeof hooks.addFilter<"db.messages.upsert:filter:input">
+      >[1] = (message) => {
+        if (message.id !== "fixture-message") return message;
+        const data = message.data as Record<string, unknown>;
+        const entries = data.tool_cards as Record<
+          string,
+          Record<string, unknown>
+        >;
+        return {
+          ...message,
+          data: {
+            ...data,
+            tool_cards: {
+              ...entries,
+              state: { ...entries.state, state: "normalized" },
+            },
+          },
+        };
+      };
+      hooks.addFilter("db.messages.upsert:filter:input", normalize);
+      handles.push({
+        dispose: () =>
+          hooks.removeFilter("db.messages.upsert:filter:input", normalize),
+      });
+    }
+    handles.push(
+      registerCardTool({
+        name: "fixture_state",
+        description: "State persistence card",
+        parameters: { type: "object", properties: {} },
+        label: "State persistence",
+        card: defineToolCard({
+          mount(el, card) {
+            const state = document.createElement("output");
+            state.dataset.currentState = "";
+            const render = () => {
+              state.textContent = JSON.stringify(card.state);
+            };
+            render();
+            el.append(state);
+            for (const value of ["earlier", "later"]) {
+              const result = document.createElement("output");
+              result.dataset.stateSave = value;
+              const button = document.createElement("button");
+              button.textContent = "Save " + value;
+              button.onclick = async () => {
+                result.textContent = "pending";
+                const saved = await card.setState(value);
+                result.textContent = saved.ok ? "saved" : saved.error.code;
+              };
+              el.append(button, result);
+            }
+            return card.onUpdate(render);
+          },
+        }),
+      }),
+    );
+  }
   handles.push(
     registerCardTool({
       name: "fixture_throw",
@@ -330,6 +424,7 @@ onMounted(async () => {
       result: JSON.stringify(result),
     });
     let calls: unknown[] = [];
+    if (scenario.startsWith("state-")) calls = [call("fixture_state", "state")];
     if (scenario === "examples")
       calls = [
         call(
@@ -421,9 +516,21 @@ onMounted(async () => {
       );
   }
   await ensureThreadHistoryLoaded(threadId, ref(null), history);
+  if (scenario.startsWith("state-")) {
+    savedStateSubscription = liveQuery(() =>
+      getDb().messages.get("fixture-message"),
+    ).subscribe((row) => {
+      const data = row?.data as
+        | { tool_cards?: { state?: { state: unknown } } }
+        | undefined;
+      savedState.value = JSON.stringify(data?.tool_cards?.state?.state ?? null);
+    });
+  }
   ready.value = true;
 });
 onBeforeUnmount(() => {
+  releaseStateSave();
+  savedStateSubscription?.unsubscribe();
   window.removeEventListener("or3:trusted-card-cleanup", recordTrustedCleanup);
   for (const handle of handles) handle.dispose();
   for (const card of budgetCards) card.dispose();
@@ -444,12 +551,27 @@ onBeforeUnmount(() => {
       <button @click="resetSavedQuiz">Reset saved quiz</button>
       <button @click="releaseFirst = true">Release first frame</button>
       <output data-trusted-cleanups>{{ trustedCleanups }}</output>
+      <template v-if="scenario.startsWith('state-')">
+        <button @click="releaseStateSave">Release state save</button>
+        <button @click="applyPersistedState">Apply persisted state</button>
+        <output data-saved-state>{{ savedState }}</output>
+        <output data-save-barrier>{{ saveBarrier }}</output>
+      </template>
     </nav>
     <ChatContainer
       v-if="ready && scenario !== 'frame-budget'"
       :thread-id="threadId"
       :message-history="history"
       pane-id="tool-cards-journey"
+      data-state-pane="primary"
+      class="flex-1 min-h-0"
+    />
+    <ChatContainer
+      v-if="ready && scenario === 'state-cross-pane'"
+      :thread-id="threadId"
+      :message-history="history"
+      pane-id="tool-cards-journey-secondary"
+      data-state-pane="secondary"
       class="flex-1 min-h-0"
     />
     <template v-if="ready && scenario === 'frame-budget' && budgetBinding">

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   ref,
-  shallowRef,
   computed,
   watch,
   onMounted,
@@ -170,18 +169,32 @@ const state = () =>
   props.call.id
     ? (props.message.toolCards?.[props.call.id]?.state ?? null)
     : null;
-const persistedState = shallowRef<unknown>(state());
 if (!bridge)
   watch(
     () => props.message.toolCards,
     () => {
-      persistedState.value = state();
+      live.updateState(state());
     },
     { deep: true },
   );
 let stateSubscription: Subscription | undefined;
+const stateMessageId = props.message.id;
+const stateCallId = props.call.id ?? "";
+let persistedRevision = 0;
 const workspaceCurrent = () =>
   scope.db === getDb() && scope.generation === getWorkspaceGeneration();
+async function readPersistedState() {
+  const row = await scope.db.messages.get(stateMessageId);
+  const data = row?.data;
+  return row &&
+    !row.deleted &&
+    row.thread_id === scope.threadId &&
+    data &&
+    typeof data === "object" &&
+    "tool_cards" in data
+    ? (readToolCardStates(data.tool_cards)?.[stateCallId]?.state ?? null)
+    : null;
+}
 const live = createToolCardContext({
   call: props.call,
   messageId: props.message.id,
@@ -198,19 +211,33 @@ const live = createToolCardContext({
       Promise.resolve(
         pluginError("unsupported", "This card is outside a chat pane"),
       ));
-    if (result.ok && workspaceCurrent() && !live.card.signal.aborted)
-      persistedState.value = value;
+    if (bridge && workspaceCurrent() && !live.card.signal.aborted) {
+      try {
+        // Hooks may normalize the input or delay completion after another
+        // write. Reconcile from storage even when liveQuery has not fired yet.
+        const revision = persistedRevision;
+        const saved = await readPersistedState();
+        if (
+          workspaceCurrent() &&
+          !live.card.signal.aborted &&
+          revision === persistedRevision
+        ) {
+          persistedRevision++;
+          live.updateState(saved);
+        }
+      } catch {
+        fail("state-unavailable");
+      }
+    }
     return result;
   },
   send,
   openLink,
   onError: () => fail("mount-error"),
 });
-watch(
-  [() => props.call, persistedState, theme],
-  () => live.update(props.call, persistedState.value, theme.value),
-  { deep: true },
-);
+watch([() => props.call, theme], () => live.update(props.call, theme.value), {
+  deep: true,
+});
 let lazyObserver: IntersectionObserver | undefined;
 let visibilityObserver: IntersectionObserver | undefined;
 let resizeObserver: ResizeObserver | undefined;
@@ -222,22 +249,12 @@ onMounted(() => {
     return;
   }
   if (bridge && props.call.id) {
-    const callId = props.call.id;
-    const messageId = props.message.id;
-    stateSubscription = liveQuery(async () => {
-      const row = await scope.db.messages.get(messageId);
-      const data = row?.data;
-      return row &&
-        !row.deleted &&
-        row.thread_id === scope.threadId &&
-        data &&
-        typeof data === "object" &&
-        "tool_cards" in data
-        ? (readToolCardStates(data.tool_cards)?.[callId]?.state ?? null)
-        : null;
-    }).subscribe({
+    stateSubscription = liveQuery(readPersistedState).subscribe({
       next: (value) => {
-        if (workspaceCurrent()) persistedState.value = value;
+        if (workspaceCurrent()) {
+          persistedRevision++;
+          live.updateState(value);
+        }
       },
       error: () => fail("state-unavailable"),
     });

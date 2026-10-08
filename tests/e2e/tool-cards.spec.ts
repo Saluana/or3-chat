@@ -215,6 +215,60 @@ test("saved card state survives virtualization and receives persisted updates", 
   ).toBeEnabled();
 });
 
+test("card saves stay ordered across panes while preparation is delayed", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1800 });
+  await scripted(page);
+  await page.goto("/__or3-tool-cards-test?scenario=state-cross-pane");
+  const first = page.locator('[data-state-pane="primary"]');
+  const second = page.locator('[data-state-pane="secondary"]');
+  await first.getByRole("button", { name: "Save earlier" }).click();
+  await expect(page.locator("[data-save-barrier]")).toHaveText("blocked");
+  await second.getByRole("button", { name: "Save later" }).click();
+  // Let the second pane's debounce expire while the first write is blocked.
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "Release state save" }).click();
+  await expect(first.locator('[data-state-save="earlier"]')).toHaveText(
+    "saved",
+  );
+  await expect(second.locator('[data-state-save="later"]')).toHaveText("saved");
+  await expect(page.locator("[data-saved-state]")).toHaveText('"later"');
+  await expect(first.locator("[data-current-state]")).toHaveText('"later"');
+  await expect(second.locator("[data-current-state]")).toHaveText('"later"');
+  await page.screenshot({ path: evidence + "/state-cross-pane.png" });
+});
+
+for (const source of ["remote", "normalized"]) {
+  test(`card save completion preserves ${source} persisted state`, async ({
+    page,
+  }) => {
+    await open(page, "state-" + source);
+    const card = page.getByRole("group", { name: "State persistence" });
+    await card.getByRole("button", { name: "Save earlier" }).click();
+    await expect(page.locator("[data-save-barrier]")).toHaveText("blocked");
+    if (source === "remote")
+      await page.getByRole("button", { name: "Apply persisted state" }).click();
+    await expect(page.locator("[data-saved-state]")).toHaveText(
+      JSON.stringify(source),
+    );
+    // Allow the mounted slot to observe the same committed Dexie update.
+    await page.waitForTimeout(200);
+    await page.getByRole("button", { name: "Release state save" }).click();
+    await expect(card.locator('[data-state-save="earlier"]')).toHaveText(
+      "saved",
+    );
+    await expect(card.locator("[data-current-state]")).toHaveText(
+      JSON.stringify(source),
+    );
+    await page.getByRole("button", { name: "Toggle theme" }).click();
+    await expect(card.locator("[data-current-state]")).toHaveText(
+      JSON.stringify(source),
+    );
+    await page.screenshot({ path: evidence + "/state-" + source + ".png" });
+  });
+}
+
 test("offscreen preloads preserve visible frames and resume when capacity frees", async ({
   page,
 }) => {

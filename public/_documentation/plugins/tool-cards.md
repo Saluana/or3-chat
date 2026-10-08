@@ -141,9 +141,12 @@ and never becomes a model message. Writes replace only the call's entry inside
 the normal message transaction. Unmount/pagehide flush pending writes.
 A captured workspace DB and generation fence stale cards after a switch.
 Accepted saves finish on their original thread during navigation within the same
-workspace. Saves to a call are serialized, with only the latest pending value
-retained. Mounted cards observe their persisted entry, including synced changes,
-so theme changes and virtualization preserve saved state.
+workspace. Saves to a call are serialized across panes and remounts in the same
+app, with only the latest pending value retained. Mounted cards observe their
+persisted entry, including synced changes and filter-normalized values. Save
+completion reconciles optimistic state with storage, so delayed hooks cannot
+restore an older requested value over a newer observation. Theme changes and
+virtualization preserve saved state.
 
 send(text) uses the pane's current model/variant and normal durable chat admission.
 Only text reaches the model. The user message displays via {label}, stored as

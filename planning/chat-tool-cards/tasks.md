@@ -346,6 +346,8 @@ section 8 notes as each task lands.
 
 ## Review corrections
 
+- [x] Share same-call save ordering across panes and remounted bridges.
+- [x] Reconcile pending optimistic saves with authoritative remote and normalized state.
 - [x] Include all source examples in compilation and review built card-package artifacts.
 - [x] Preserve saved state across theme changes and virtualization; observe persisted updates.
 - [x] Finish admitted saves on their original thread during same-workspace navigation.

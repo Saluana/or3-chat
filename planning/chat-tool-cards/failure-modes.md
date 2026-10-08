@@ -13,6 +13,17 @@ card examples before reviewing their distributable imports. Clean installs must
 resolve the optional React adapter's development dependencies. Containment
 receipts must keep mobile and desktop WebKit projects and runs separate.
 
+Private-review regressions (before repairs): separate panes or a remounted pane
+must share same-call save ordering through delayed hooks, with the latest queued
+value retained and all waiters settled. A pending optimistic save must retain
+newer database observations, including input-filter normalization, when it
+completes or fails; theme-only updates must not roll back a successful save.
+Queued writes must still respect workspace generations and release idle queue
+entries. The existing browser journey owns the cross-pane and observed-state
+regressions; its real ChatContainer, hooks and Dexie path need no production-only
+test seams. Existing coverage only serializes one bridge and observes updates
+after saves have already completed.
+
 - **state-concurrency:** Two calls write concurrently, or a streaming tool_calls
   patch interleaves: retain both entries and all unrelated keys in one transaction.
 - **state-lifecycle:** Missing/deleted row or switched workspace: never resurrect

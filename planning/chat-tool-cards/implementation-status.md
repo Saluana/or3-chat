@@ -25,6 +25,41 @@ forces the exact frame implementation for verification.
 
 ## Verification
 
+### Private-review persistence corrections
+
+Two further state races from PR 222 are repaired. The save coordinator is shared
+by workspace DB handle, retaining generation fences, per-call coalescing and
+idle cleanup across panes and remounts. Each bridge tracks its own admitted
+writes for flushing. Mounted contexts retain authoritative state observations
+while edits are optimistic and reread storage after save completion; a delayed
+hook or normalized input cannot restore the original requested value over newer
+stored state. Theme/call updates no longer stand in for state observations.
+
+Three new browser cases failed against the original implementation at
+`405b97b2`, then passed with the repairs: cross-pane save ordering, a remote write
+during the save's after-hook, and input-filter normalization. Three existing
+journeys also passed for quiz save/reload/theme behavior, virtualization and
+remote updates, and persisted call-status updates. The focused transaction
+suite passed all 16 tests. Application typecheck passed with the CI
+basic-auth/SQLite/FS provider selection; changed-source lint and documentation
+checks passed. The complete browser lane and portable containment qualification
+were not rerun for these state repairs.
+
+Repeat the focused browser checks with:
+
+```sh
+bun run test:e2e:tool-cards --grep 'card saves stay ordered|card save completion preserves'
+bun run test:e2e:tool-cards --grep 'quiz executes inline|saved card state survives|always cards'
+```
+
+Local evidence is under `test-results/tool-cards`: `state-races-after.json`
+contains the three passing regression results, `receipt.json` contains the three
+existing lifecycle results, and `state-cross-pane.png`, `state-remote.png` and
+`state-normalized.png` show the final card and database state. These receipts
+record the PR head plus dirty local repairs, not a published revision.
+
+### Previous implementation verification
+
 A live first-run Chrome walkthrough on 2026-10-07 used the normal `/chat`
 route and GLM-5.3-Flash through the user's OpenRouter connection. It found that
 Nuxt did not discover the three nested example plugins; explicit development-only

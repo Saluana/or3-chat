@@ -42,11 +42,14 @@ export function provideToolCardChatBridge(bridge: ToolCardChatBridge) {
 export function useToolCardChatBridge() {
   return inject(bridgeKey, null);
 }
-export function createToolCardChatBridge(
-  input: Pick<ToolCardChatBridge, "threadId" | "busy"> & {
-    send(text: string, origin: CardOrigin): Promise<PluginResult<void>>;
-  },
-) {
+const workspaceCurrent = (scope: CardChatScope) =>
+  scope.db === getDb() && scope.generation === getWorkspaceGeneration();
+const stale = () =>
+  pluginError("stale-context", "The card conversation changed");
+// The DB handle owns save ordering, so panes and remounts share one queue.
+// Idle entries are removed after flushing; retired DB handles are weakly held.
+const stateQueues = new WeakMap<Or3DB, ReturnType<typeof createStateQueue>>();
+function createStateQueue() {
   interface PendingWrite {
     messageId: string;
     callId: string;
@@ -61,13 +64,6 @@ export function createToolCardChatBridge(
     string,
     { entry: PendingWrite; promise: Promise<void> }
   >();
-  const sends = new Map<string, number>();
-  const workspaceCurrent = (scope: CardChatScope) =>
-    scope.db === getDb() && scope.generation === getWorkspaceGeneration();
-  const current = (scope: CardChatScope) =>
-    workspaceCurrent(scope) && scope.threadId === input.threadId.value;
-  const stale = () =>
-    pluginError("stale-context", "The card conversation changed");
   async function persistEntry(entry: PendingWrite) {
     let result: PluginResult<void>;
     try {
@@ -128,31 +124,13 @@ export function createToolCardChatBridge(
     inFlight.set(key, { entry, promise });
     return promise;
   }
-  const bridge: ToolCardChatBridge = {
-    threadId: input.threadId,
-    busy: input.busy,
-    canSend(key) {
-      return Date.now() - (sends.get(key) ?? -Infinity) >= 3000;
-    },
-    reserveSend(key) {
-      const now = Date.now();
-      if (now - (sends.get(key) ?? -Infinity) < 3000) return false;
-      sends.delete(key);
-      sends.set(key, now);
-      if (sends.size > 1024) sends.delete(sends.keys().next().value!);
-      return true;
-    },
-    async send(text, origin, scope) {
-      if (!current(scope)) return stale();
-      if (input.busy.value)
-        return pluginError("conflict", "Chat is busy", {
-          retryable: true,
-          details: { reason: "chat-busy" },
-        });
-      return input.send(text, origin);
-    },
-    async writeState(messageId, callId, value, scope) {
-      if (!current(scope)) return stale();
+  return {
+    async writeState(
+      messageId: string,
+      callId: string,
+      value: unknown,
+      scope: CardChatScope,
+    ) {
       if (!callId)
         return pluginError(
           "invalid-input",
@@ -204,7 +182,7 @@ export function createToolCardChatBridge(
       });
       return promise;
     },
-    async flush(messageId, callId) {
+    async flush(messageId?: string, callId?: string) {
       await Promise.all(
         [
           ...new Map([
@@ -223,5 +201,68 @@ export function createToolCardChatBridge(
       );
     },
   };
-  return bridge;
+}
+export function createToolCardChatBridge(
+  input: Pick<ToolCardChatBridge, "threadId" | "busy"> & {
+    send(text: string, origin: CardOrigin): Promise<PluginResult<void>>;
+  },
+): ToolCardChatBridge {
+  const sends = new Map<string, number>();
+  const writes = new Set<{
+    messageId: string;
+    callId: string;
+    queue: ReturnType<typeof createStateQueue>;
+  }>();
+  const current = (scope: CardChatScope) =>
+    workspaceCurrent(scope) && scope.threadId === input.threadId.value;
+  return {
+    threadId: input.threadId,
+    busy: input.busy,
+    canSend(key) {
+      return Date.now() - (sends.get(key) ?? -Infinity) >= 3000;
+    },
+    reserveSend(key) {
+      const now = Date.now();
+      if (now - (sends.get(key) ?? -Infinity) < 3000) return false;
+      sends.delete(key);
+      sends.set(key, now);
+      if (sends.size > 1024) sends.delete(sends.keys().next().value!);
+      return true;
+    },
+    async send(text, origin, scope) {
+      if (!current(scope)) return stale();
+      if (input.busy.value)
+        return pluginError("conflict", "Chat is busy", {
+          retryable: true,
+          details: { reason: "chat-busy" },
+        });
+      return input.send(text, origin);
+    },
+    async writeState(messageId, callId, value, scope) {
+      if (!current(scope)) return stale();
+      let queue = stateQueues.get(scope.db);
+      if (!queue) {
+        queue = createStateQueue();
+        stateQueues.set(scope.db, queue);
+      }
+      const write = { messageId, callId, queue };
+      writes.add(write);
+      try {
+        return await queue.writeState(messageId, callId, value, scope);
+      } finally {
+        writes.delete(write);
+      }
+    },
+    async flush(messageId, callId) {
+      await Promise.all(
+        [...writes]
+          .filter(
+            (write) =>
+              (!messageId || messageId === write.messageId) &&
+              (!callId || callId === write.callId),
+          )
+          .map((write) => write.queue.flush(write.messageId, write.callId)),
+      );
+    },
+  };
 }

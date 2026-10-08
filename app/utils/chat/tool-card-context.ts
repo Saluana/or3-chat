@@ -48,6 +48,7 @@ export function createToolCardContext(input: {
     const values = shallowReactive(snapshot(input.call, input.state, input.theme));
     let committedState = input.state;
     let committedSequence = 0;
+    let observedRevision = 0;
     let queued = false;
     let stateSequence = 0;
     let optimistic: { state: unknown; sequence: number } | undefined;
@@ -120,6 +121,7 @@ export function createToolCardContext(input: {
                     );
                 }
                 const sequence = ++stateSequence;
+                const revision = observedRevision;
                 optimistic = { state: copy, sequence };
                 values.state = copy;
                 notify();
@@ -129,13 +131,17 @@ export function createToolCardContext(input: {
                 } catch {
                     result = pluginError('internal', 'Card state could not be saved');
                 }
-                if (result.ok && sequence >= committedSequence) {
+                if (
+                    result.ok &&
+                    sequence >= committedSequence &&
+                    revision === observedRevision
+                ) {
                     committedState = copy;
                     committedSequence = sequence;
                 }
                 if (!controller.signal.aborted && optimistic?.sequence === sequence) {
                     optimistic = undefined;
-                    if (!result.ok) values.state = committedState;
+                    values.state = committedState;
                     notify();
                 }
                 return result;
@@ -151,11 +157,18 @@ export function createToolCardContext(input: {
     });
     return {
         card,
-        update(call: ToolCallInfo, state: unknown, theme: ToolCardTheme) {
-            if (!optimistic) committedState = state;
+        updateState(state: unknown) {
+            // Keep observations even while a newer local edit is optimistic.
+            // Its completion must reveal the latest stored value, not its input.
+            committedState = state;
+            observedRevision++;
+            if (!optimistic) values.state = state;
+            notify();
+        },
+        update(call: ToolCallInfo, theme: ToolCardTheme) {
             Object.assign(
                 values,
-                snapshot(call, optimistic ? optimistic.state : state, theme)
+                snapshot(call, values.state, theme)
             );
             notify();
         },
