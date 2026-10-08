@@ -95,12 +95,10 @@ export const ProjectSourceSchema = z
             });
     });
 export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
-export type ProjectMemory = z.infer<typeof ProjectMemorySchema>;
 export type ProjectMemoryInput = z.input<typeof ProjectMemorySchema>;
 export type ProjectSource = z.infer<typeof ProjectSourceSchema>;
 export type ProjectSourceInput = z.input<typeof ProjectSourceSchema>;
 export type SourceRevision = z.infer<typeof SourceRevisionSchema>;
-export type ContextMode = z.infer<typeof ContextModeSchema>;
 
 /** Synced rows may come from newer clients: drop unknown keys; other versions or damage read as null. */
 export function readPersistedProjectRecord<S extends z.ZodType>(
@@ -199,6 +197,3 @@ export const ProjectContextIterationSchema = z.object({
     ),
 });
 export type ProjectContextReceipt = z.infer<typeof ProjectContextReceiptSchema>;
-export type ProjectContextIteration = z.infer<
-    typeof ProjectContextIterationSchema
->;

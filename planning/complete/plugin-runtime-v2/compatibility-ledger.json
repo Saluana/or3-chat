@@ -12,7 +12,7 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 600,
+    "exportCount": 601,
     "callableExportCount": 276,
     "nuxtAutoImportCount": 309
   },
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "8526e1466301e86a4ea457c4d8db21aeb6ef2206b66b5f494fa42278703f10ff",
+      "apiSha256": "4fe842c205bbe08f4928596abc53c959651a3b15d239dfaa37f4516350e26cfe",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3571,7 +3571,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageEditing.ts",
-              "line": 55,
+              "line": 64,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditableMessage {\n    id?: string;\n    text?: string;\n    content?: string;\n}"
             }
@@ -3644,6 +3644,20 @@
               "line": 42,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorToolbarButton {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Owning plugin used for enabled-state and server access checks. */\n    pluginId?: string;\n    /** Optional per-contribution access requirements. */\n    access?: PluginGatePolicy;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip?: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Visual group. Older registrations default to the plugin overflow group. */\n    group?: 'format' | 'insert' | 'history' | 'plugin-overflow' | string;\n    /** Priority within responsive overflow decisions. Higher stays visible longer. */\n    priority?: number;\n    /** Hint for compact layouts. Defaults to overflow for plugin buttons. */\n    responsive?: 'always' | 'compact' | 'overflow';\n    /** Check if button should be active/highlighted. */\n    isActive?: (editor: Editor) => boolean;\n    /** Handler invoked on click. */\n    onClick: (editor: Editor) => void | Promise<void>;\n    /** Optional visibility check. */\n    visible?: (editor: Editor) => boolean;\n}"
+            }
+          ]
+        },
+        {
+          "name": "EditSaveOutcome",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useMessageEditing.ts",
+              "line": 62,
+              "syntaxKind": "TypeAliasDeclaration",
+              "text": "export type EditSaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'ignored';"
             }
           ]
         },
@@ -7073,7 +7087,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageEditing.ts",
-                "line": 83,
+                "line": 92,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageEditing(message: EditableMessageSource);"
               }
@@ -7082,7 +7096,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageEditing.ts",
-              "line": 83,
+              "line": 92,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageEditing(message: EditableMessageSource);"
             }

@@ -56,10 +56,6 @@ export function getResourceKey(
     return allowDuplicate ? `${canonical}:instance:${encode(tabId)}` : canonical;
 }
 
-export function getTabResourceKey(tab: WorkspaceTab): string | null {
-    return getCanonicalResourceKey(tab.resource, tab.id);
-}
-
 export function isValidWorkspaceResource(resource: unknown): resource is WorkspaceResource {
     if (resource === null || typeof resource !== 'object') return false;
     const candidate = resource as Partial<WorkspaceResource>;

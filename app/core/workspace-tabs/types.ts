@@ -107,8 +107,6 @@ export interface WorkspaceTabsSnapshotV1 {
     savedAt: number;
 }
 
-export type WorkspaceTabsSnapshot = WorkspaceTabsSnapshotV1;
-
 export interface WorkspaceTabOpenOptions {
     allowDuplicate?: boolean;
     reuseActiveBlank?: boolean;

@@ -36,15 +36,3 @@ export function hasAdmissionCancelled(admissionId: string): boolean {
     }
     return true;
 }
-
-/** Consumes the marker so a later duplicate admission is not auto-cancelled. */
-export function consumeAdmissionCancelled(admissionId: string): boolean {
-    const cancelled = hasAdmissionCancelled(admissionId);
-    pendingAdmissionCancels.delete(admissionId);
-    return cancelled;
-}
-
-/** Test-only reset. */
-export function resetAdmissionCancelsForTests(): void {
-    pendingAdmissionCancels.clear();
-}

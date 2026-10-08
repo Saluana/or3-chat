@@ -103,38 +103,3 @@ export function useAdminSystemConfigEnriched() {
         }
     );
 }
-
-export function useAdminSystemConfig() {
-    return useFetch<{ entries: Array<{ key: string; value: string | null }> }>(
-        '/api/admin/system/config',
-        {
-            key: 'admin:system:config',
-            dedupe: 'defer',
-            ...adminFetchOptions,
-            server: false,
-        }
-    );
-}
-
-/**
- * Fetch all workspaces (super admin only)
- */
-export function useAdminWorkspacesList() {
-    return useFetch<{
-        items: Array<{
-            id: string;
-            name: string;
-            memberCount: number;
-            ownerEmail?: string;
-            deleted?: boolean;
-        }>;
-        total: number;
-    }>('/api/admin/workspaces', {
-        key: 'admin:workspaces:list',
-        query: { perPage: '100' },
-        ...adminFetchOptions,
-        server: false,
-        retry: 3,
-        retryDelay: 1000,
-    });
-}

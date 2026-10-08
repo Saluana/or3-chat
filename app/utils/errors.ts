@@ -43,8 +43,6 @@ export interface AppError extends Error, ErrorMetadata {
     timestamp: number; // ms epoch
 }
 
-export type StandardError = AppError; // alias for wording continuity
-
 // Only explicit app-owned presentation context can survive another boundary.
 // Exception messages and objects claiming to be AppErrors never establish trust.
 const trustedErrorContexts = new WeakMap<

@@ -198,11 +198,3 @@ export function clearAdminCookie(event: H3Event): void {
         path: '/admin',
     });
 }
-
-/**
- * Check if the request has a valid admin session.
- */
-export async function hasAdminSession(event: H3Event): Promise<boolean> {
-    const claims = await getAdminFromCookie(event);
-    return claims !== null;
-}

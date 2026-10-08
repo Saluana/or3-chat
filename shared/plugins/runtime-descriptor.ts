@@ -54,7 +54,6 @@ export type PluginArtifactIdentity =
     | BundledV1ArtifactIdentity
     | PackageV2ArtifactIdentity;
 
-export type PluginSource = 'builtin' | 'extension' | 'package';
 export type PluginTrustMode = 'trusted-host' | 'isolated-client' | 'isolated-server';
 export type PluginLifecycleCoverage =
     | 'managed-v2'

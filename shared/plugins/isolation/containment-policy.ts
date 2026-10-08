@@ -21,7 +21,7 @@
  * - A capability flag or type alone never unlocks a browser/profile.
  *
  * Non-Goals:
- * - Starting sandboxes (see `worker-runtime` / `iframe-runtime` / `portable-bootstrap`).
+ * - Starting sandboxes (see `worker-runtime` / `portable-bootstrap`).
  * - Grant evaluation (see `host-rpc-broker`).
  */
 

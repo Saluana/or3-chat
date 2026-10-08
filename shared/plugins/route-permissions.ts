@@ -1,5 +1,3 @@
-export type PluginRouteHttpMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-
 export type WorkspaceRoutePermission = 'workspace.read' | 'workspace.write';
 
 /**

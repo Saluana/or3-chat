@@ -31,36 +31,6 @@ function releaseReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
     }
 }
 
-async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
-    const reader = stream.getReader();
-    try {
-        for (;;) {
-            const { done } = await reader.read();
-            if (done) {
-                return;
-            }
-        }
-    } finally {
-        reader.releaseLock();
-    }
-}
-
-export async function mirrorForegroundStreamCompletion(params: {
-    stream: ReadableStream<Uint8Array>;
-} & ForegroundCompletionParams): Promise<void> {
-
-    try {
-        await drainStream(params.stream);
-        await emitCompletion(params);
-    } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-            return;
-        }
-
-        params.onError?.(error);
-    }
-}
-
 /**
  * Return a client stream that emits its completion webhook only after the
  * client-facing stream naturally reaches EOF. Reading occurs from `pull()`,

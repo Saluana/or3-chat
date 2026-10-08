@@ -45,14 +45,3 @@ export function buildTocFromElement(
 
     return { toc, headingOffsets: offsets };
 }
-
-export function getHeadingOffsets(root: HTMLElement): Record<string, number> {
-    const headings = root.querySelectorAll<HTMLElement>('[id]');
-    const offsets: Record<string, number> = {};
-    for (const heading of headings) {
-        const id = heading.id.trim();
-        if (!id) continue;
-        offsets[id] = heading.offsetTop;
-    }
-    return offsets;
-}

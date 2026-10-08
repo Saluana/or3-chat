@@ -521,5 +521,3 @@ export const SDK_LOGIC_RPC_METHODS = {
     'settings.set': 'settings.write',
     'settings.delete': 'settings.write',
 } as const satisfies Readonly<Record<string, HostRpcMethodGrant>>;
-
-export type SdkLogicRpcMethod = keyof typeof SDK_LOGIC_RPC_METHODS;

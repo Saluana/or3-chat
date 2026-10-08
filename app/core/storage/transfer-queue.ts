@@ -1182,14 +1182,3 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
     });
     return queueInstance;
 }
-
-/**
- * Internal API.
- *
- * Purpose:
- * Dispose and reset the singleton transfer queue. Intended for tests and HMR.
- */
-export function _resetStorageTransferQueue(): void {
-    queueInstance?.dispose();
-    queueInstance = null;
-}

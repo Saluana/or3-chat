@@ -26,24 +26,9 @@ function getRegistryState(): WorkspaceProfileRegistryState {
 }
 
 const version = reactive({ value: 0 });
-const listeners = new Set<() => void>();
 
 function notify(): void {
   version.value += 1;
-  for (const listener of [...listeners]) {
-    try {
-      listener();
-    } catch {
-      // Registry observers cannot break profile ownership.
-    }
-  }
-}
-
-export function subscribeWorkspaceProfileRegistry(
-  listener: () => void,
-): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
 }
 
 export function registerWorkspaceProfile(
@@ -123,7 +108,6 @@ export function registerWorkspaceProfileBatch(
 
 export function __resetWorkspaceProfileRegistryForTests(): void {
   getRegistryState().entries.clear();
-  listeners.clear();
   notify();
 }
 

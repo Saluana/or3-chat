@@ -47,10 +47,6 @@ export function isIsolatedTrust(trust: string): boolean {
     return trust === 'isolated-client' || trust === 'isolated-server';
 }
 
-export function isTrustedHostTrust(trust: string): boolean {
-    return trust === 'trusted-host';
-}
-
 /**
  * Human-facing label for UI/docs. Trusted grants are never called a "sandbox".
  */

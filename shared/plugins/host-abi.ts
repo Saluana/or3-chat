@@ -18,7 +18,3 @@ export const MODULE_V2_REQUIRED_UI_EXTERNALS = Object.freeze([
     '@or3/plugin-sdk',
     'vue',
 ] as const satisfies readonly ModuleV2HostAbiExternal[]);
-
-export function isModuleV2HostAbiExternal(specifier: string): specifier is ModuleV2HostAbiExternal {
-    return (MODULE_V2_HOST_ABI_EXTERNALS as readonly string[]).includes(specifier);
-}

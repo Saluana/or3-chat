@@ -353,11 +353,6 @@ export function useWebWizardApi(): Or3CloudWizardApi {
     return g[WEB_WIZARD_API_KEY];
 }
 
-export function readSessionIdFromQuery(event: H3Event): string | undefined {
-    const query = getQuery(event);
-    return toStringOrUndefined(query.sessionId);
-}
-
 export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSession> {
     const api = useWebWizardApi();
     const query = getQuery(event);

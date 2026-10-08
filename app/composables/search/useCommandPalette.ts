@@ -96,7 +96,6 @@ const actionTrayOpen = ref(false);
 const announcement = ref('');
 const errorMessage = ref<string | null>(null);
 const focusToken = ref(0);
-const registryVersion = ref(0);
 // Keyboard selection wins until the pointer moves again. A clicked selection
 // stays locked until the user explicitly clicks another row, so merely moving
 // the cursor cannot replace the preview they chose to inspect.
@@ -137,11 +136,6 @@ export function setPaletteHostContext(
 
 export function getPaletteHostContext(): PaletteHostContext | null {
     return hostContext;
-}
-
-/** Re-read registry-derived data (categories) after registrations change. */
-export function refreshPaletteRegistrySnapshot(): void {
-    registryVersion.value += 1;
 }
 
 function cancelCoordinatorIdleDispose(): void {
@@ -229,7 +223,6 @@ export function disposeCommandPalette(): void {
 }
 
 const groups = computed<PaletteResultGroup[]>(() => {
-    void registryVersion.value;
     const categoryById = new Map(
         listPaletteCategories().map((category) => [category.id, category])
     );
@@ -272,13 +265,11 @@ const failedStatuses = computed(() =>
 );
 
 const categories = computed<PaletteCategory[]>(() => {
-    void registryVersion.value;
     return listPaletteCategories();
 });
 
 /** Source id -> human label, used for indexing and failure notices. */
 const sourceLabels = computed<Record<string, string>>(() => {
-    void registryVersion.value;
     const labels: Record<string, string> = {};
     for (const source of listPaletteSources()) labels[source.id] = source.label;
     return labels;

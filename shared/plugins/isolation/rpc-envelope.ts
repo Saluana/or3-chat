@@ -20,13 +20,6 @@ export const RPC_MAX_WIRE_NODES = 20_000;
 /** Correlation / message IDs must be opaque, non-empty, bounded tokens. */
 const RPC_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
-export type RpcMessageKind =
-    | 'request'
-    | 'response'
-    | 'event'
-    | 'cancel'
-    | 'error';
-
 export type RpcErrorCode =
     | 'invalid-envelope'
     | 'unknown-version'

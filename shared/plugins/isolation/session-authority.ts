@@ -20,7 +20,7 @@
  * - No plugin-supplied identity field is ever read as authority.
  *
  * Non-Goals:
- * - Message transport (see `worker-runtime` / `iframe-runtime`).
+ * - Message transport (see `worker-runtime`).
  * - Grant evaluation (see `host-rpc-broker` and `grant-review`).
  */
 

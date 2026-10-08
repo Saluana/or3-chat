@@ -158,7 +158,3 @@ export function evaluatePluginGate(input: EvaluatePluginGateInput): PluginGateDe
         effectivePolicy,
     };
 }
-
-export function isPluginGatePolicy(value: unknown): value is PluginGatePolicy {
-    return PluginGatePolicySchema.safeParse(value).success;
-}

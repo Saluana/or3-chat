@@ -720,15 +720,6 @@ export function getConfigMetadata(key: string): ConfigMetadata | undefined {
 }
 
 /**
- * Returns the list of all available configuration groups.
- *
- * @returns A readonly array of group names used for UI layout
- */
-export function getConfigGroups(): readonly ConfigGroup[] {
-    return CONFIG_GROUPS;
-}
-
-/**
  * A configuration entry augmented with its schema metadata.
  *
  * Purpose:

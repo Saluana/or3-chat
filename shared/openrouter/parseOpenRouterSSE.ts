@@ -481,7 +481,3 @@ export async function* parseOpenRouterSSE(
         reader.releaseLock();
     }
 }
-
-export function eventToSSE(evt: ORStreamEvent): string {
-    return `data: ${JSON.stringify(evt)}\n\n`;
-}

@@ -92,12 +92,3 @@ export function getActiveWorkspaceApi(): WorkspaceApi | null {
     const firstId = Array.from(apis.keys())[0];
     return firstId ? getWorkspaceApi(firstId) : null;
 }
-
-/**
- * Purpose:
- * Returns a list of all registered API IDs.
- * Primarily used for diagnostics or configuration validation.
- */
-export function listWorkspaceApiIds(): string[] {
-    return Array.from(apis.keys());
-}

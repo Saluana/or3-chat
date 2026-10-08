@@ -23,10 +23,6 @@ export async function loadCommandPaletteSearchModule(): Promise<{
     });
 }
 
-export function getCommandPaletteModuleLoadGeneration(): number {
-    return moduleLoadGeneration;
-}
-
 /**
  * Preload the command-palette code after the app is interactive without
  * hydrating the workspace-wide search indexes until the palette is opened.
@@ -63,9 +59,4 @@ export function scheduleCommandPalettePrewarm(): void {
         return;
     }
     run();
-}
-
-/** Test helper */
-export function __resetCommandPalettePrewarmForTests(): void {
-    prewarmScheduled = false;
 }
