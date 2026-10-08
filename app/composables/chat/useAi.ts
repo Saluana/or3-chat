@@ -1807,13 +1807,11 @@ export function useChat(
             if (!stopped && import.meta.dev) {
                 console.warn('[useChat] sendMessage threw', errorDiagnostics(error));
             }
-            if (!stopped && !contextAdmissionFailureReason(error)) reportError(
-                err('ERR_INTERNAL', message || 'Failed to send message', {
-                    severity: 'error',
-                    tags: { domain: 'chat', stage: 'send' },
-                }),
-                { toast: true }
-            );
+            if (!stopped && !contextAdmissionFailureReason(error)) reportError(error, {
+                severity: 'error',
+                tags: { domain: 'chat', stage: 'send' },
+                toast: true,
+            });
         } finally {
             if (result.status !== 'detached') requestScope.abortController?.abort();
             if (!requestScope.finalization && result.status !== 'detached') {

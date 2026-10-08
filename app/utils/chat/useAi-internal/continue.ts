@@ -383,6 +383,8 @@ export async function continueMessageImpl(
                 shouldKeepAssistantMessage({
                     role: candidate.role,
                     content: candidate.content,
+                    tool_calls: candidate.tool_calls,
+                    data: candidate.data,
                 })
             );
         });

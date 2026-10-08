@@ -7,6 +7,7 @@ import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 import { captureWorkspaceOperation, workspaceFilesAvailable, type WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { getCachedSessionContext, refreshCachedSessionContext } from '~/composables/auth/useSessionContext';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
@@ -90,9 +91,20 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
     };
     const persist = async () => {
         assertLocalOrigin();
-        if (catalogEnabled) scope ??= captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
-            threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
-            abortSignal: owner?.signal ?? new AbortController().signal });
+        if (catalogEnabled && !scope) {
+            // A file picker may outlive the access token. Recover the session
+            // before capturing authority, without admitting a different owner.
+            const session = getCachedSessionContext();
+            if (session?.expiresAt && Date.parse(session.expiresAt) <= Date.now()) {
+                await refreshCachedSessionContext();
+                assertLocalOrigin();
+                if (getCachedSessionContext()?.user?.id !== session.user?.id)
+                    throw new Error('Workspace access changed. Refresh and try again.');
+            }
+            scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+                threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
+                abortSignal: owner?.signal ?? new AbortController().signal });
+        }
         // Apply files.attach:filter:input hook before creating/referencing file
         const hooks = useHooks();
         const payload: FilesAttachInputPayload = {

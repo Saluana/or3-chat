@@ -57,7 +57,7 @@ export function createWorkspaceTabPaletteSource(): PaletteSearchSource {
                     title: tabTitle(tab),
                     subtitle: tabSubtitle(tab),
                     keywords: [tab.resource.kind],
-                    updatedAt: tab.lastActivatedAt,
+                    updatedAt: Math.floor(tab.lastActivatedAt / 1000),
                     icon: tabIcon(tab),
                     primaryAction: {
                         id: `workspace-tab:open:${tab.id}`,
