@@ -51,11 +51,13 @@ vi.mock('@vueuse/core', async () => {
     };
 });
 
+const cloudIntake = vi.hoisted(() => ({ enabled: false, session: null as null | { authenticated: boolean; user: { id: string }; workspace: { id: string }; role: string; authorizationRevision: string; expiresAt: string }, refresh: vi.fn() }));
 // Mock other dependencies
 vi.mock('#imports', () => ({
     useToast: () => ({ add: vi.fn() }),
     useRuntimeConfig: () => ({
         public: {
+            ssrAuthEnabled: cloudIntake.enabled,
             openRouter: {},
             limits: {},
         },
@@ -77,6 +79,9 @@ vi.mock('#imports', () => ({
 vi.mock('~/composables/auth/useSessionContext', async (importOriginal) => ({
     ...(await importOriginal<typeof import('~/composables/auth/useSessionContext')>()),
     useSessionContext: () => ({ data: ref(null) }),
+    getCachedSessionContext: () => cloudIntake.session,
+    getCachedSessionPayload: () => cloudIntake.session ? { session: cloudIntake.session, appAccessAllowed: true, workspaceItemCapability: 'v1' } : null,
+    refreshCachedSessionContext: () => cloudIntake.refresh(),
 }));
 
 vi.mock('~/composables/useThemeResolver', () => ({
@@ -143,6 +148,38 @@ function deferred<T>() {
 }
 
 describe('ChatInputDropper', () => {
+    // A file picker can outlive the access token. Renew cached authorization,
+    // but never admit bytes after sign-out, a viewer downgrade or a workspace move.
+    it.each(['renew', 'sign-out', 'viewer', 'workspace'] as const)('handles expired cloud attachment authorization after %s recovery', async transition => {
+        const workspace = `expired-intake-${crypto.randomUUID()}`;
+        const other = `expired-destination-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open();
+        cloudIntake.enabled = true;
+        cloudIntake.session = { authenticated: true, user: { id: 'qa-owner' }, workspace: { id: workspace },
+            role: 'owner', authorizationRevision: 'qa-1', expiresAt: new Date(Date.now() - 1000).toISOString() };
+        cloudIntake.refresh.mockImplementation(async () => {
+            if (transition === 'sign-out') cloudIntake.session = null;
+            else {
+                cloudIntake.session = { ...cloudIntake.session!, expiresAt: new Date(Date.now() + 60000).toISOString(),
+                    role: transition === 'viewer' ? 'viewer' : 'owner' };
+                if (transition === 'workspace') setActiveWorkspaceDb(other);
+            }
+        });
+        const actual = await vi.importActual<typeof import('../file-upload-utils')>('../file-upload-utils');
+        const att = { file: new NativeFile(['%PDF-1.4 disposable'], 'expired.pdf', { type: 'application/pdf' }) as unknown as File,
+            name: 'expired.pdf', status: 'pending' as 'pending' | 'ready' | 'error', kind: 'pdf' };
+        try {
+            await actual.persistAttachment(att);
+            expect(att.status).toBe(transition === 'renew' ? 'ready' : 'error');
+            expect(await db.file_meta.count()).toBe(transition === 'renew' ? 1 : 0);
+            expect(await db.posts.count()).toBe(transition === 'renew' ? 1 : 0);
+            if (transition === 'workspace') expect(await getDb().file_meta.count()).toBe(0);
+        } finally {
+            cloudIntake.enabled = false; cloudIntake.session = null;
+            setActiveWorkspaceDb(null);
+            for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
+        }
+    });
     it.each(['workspace', 'unmount', 'draft-discard', 'tab'] as const)('stops selected-file intake on %s while the first filter is pending', async (transition) => {
         const workspace = `attachment-source-${crypto.randomUUID()}`;
         const other = `attachment-destination-${crypto.randomUUID()}`;
@@ -192,6 +229,8 @@ describe('ChatInputDropper', () => {
     });
     beforeEach(() => {
         vi.clearAllMocks();
+        cloudIntake.enabled = false;
+        cloudIntake.session = null;
         attachmentFilter.apply = undefined;
         beforeSendAction.apply = undefined;
         vi.mocked(persistAttachment).mockResolvedValue(undefined);

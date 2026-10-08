@@ -103,7 +103,7 @@ export async function analyzeAutomaticMemory(
                 },
             },
         },
-        3000,
+        10000,
     ) as {
         model?: unknown;
         answers?: { worth_saving?: { type?: unknown; choice?: unknown; probabilities?: unknown } };

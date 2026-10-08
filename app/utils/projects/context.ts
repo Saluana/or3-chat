@@ -18,6 +18,7 @@ import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { parseFileHashes } from '~/db/files-util';
 import { PROJECT_MEMORY_HEADING, PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { asAppError } from '~/utils/errors';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { workspaceSourceReceipts } from '~/utils/chat/workspace-source-receipts';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
@@ -64,6 +65,10 @@ async function blobUrl(blob: Blob): Promise<string> {
         reader.onload = () => resolve(String(reader.result));
         reader.readAsDataURL(blob);
     });
+}
+
+function projectInputError(message: string) {
+    return asAppError(new Error(message), { code: 'ERR_VALIDATION', message });
 }
 
 /** One project resolver for native, continued, workflow, and plugin requests. */
@@ -259,7 +264,7 @@ export async function buildProjectContext(
             !['ready', 'partial'].includes(revision.status)
         ) {
             if (required)
-                throw new Error(
+                throw projectInputError(
                     `Required source “${source.value.title}” is unavailable. Retry processing or change its context mode.`,
                 );
             sourceReceipt.reason = 'Not ready or unavailable';
@@ -271,7 +276,7 @@ export async function buildProjectContext(
         if (meta && isSupportedRasterMimeType(meta.mime_type)) {
             if (!supportsImages) {
                 if (required)
-                    throw new Error(
+                    throw projectInputError(
                         `Choose a vision model to include “${source.value.title}”.`,
                     );
                 sourceReceipt.reason = 'This model does not accept images';
@@ -281,7 +286,7 @@ export async function buildProjectContext(
             scope.assertCurrent();
             if (!blob) {
                 if (required)
-                    throw new Error('A required image is unavailable offline.');
+                    throw projectInputError('A required image is unavailable offline.');
                 sourceReceipt.reason = 'Image unavailable';
                 continue;
             }
@@ -312,7 +317,7 @@ export async function buildProjectContext(
                 scope.assertCurrent();
                 if (!blob) {
                     if (required)
-                        throw new Error(
+                        throw projectInputError(
                             'Required extracted text is unavailable offline.',
                         );
                     sourceReceipt.reason = 'Text unavailable';
@@ -321,7 +326,7 @@ export async function buildProjectContext(
                 text = await blob.text();
             }
             if (required && revision.coverage !== 'full')
-                throw new Error(
+                throw projectInputError(
                     `“${source.value.title}” is only partially readable. Use when relevant or replace it.`,
                 );
             if (!required) {

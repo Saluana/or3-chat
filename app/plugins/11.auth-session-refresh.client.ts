@@ -1,3 +1,4 @@
+import { watch } from 'vue';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import {
@@ -90,12 +91,48 @@ export default defineNuxtPlugin(() => {
         }
     };
 
+    // Provider cookies can renew independently of the host's cached session.
+    // Refresh at expiry, and again on focus after suspended/offline tabs resume.
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+    let expiryRefresh: Promise<void> | null = null;
+    const refreshExpiredSession = (): void => {
+        const session = sessionContext.data.value?.session;
+        if (
+            !session?.authenticated || !session.expiresAt ||
+            Date.parse(session.expiresAt) > Date.now() || expiryRefresh
+        ) return;
+        expiryRefresh = handleAuthSessionChanged().finally(() => {
+            expiryRefresh = null;
+        });
+    };
+    const stopExpiryWatch = watch(
+        () => sessionContext.data.value?.session?.expiresAt,
+        (expiresAt) => {
+            clearTimeout(expiryTimer);
+            if (!expiresAt || !sessionContext.data.value?.session?.authenticated) return;
+            expiryTimer = setTimeout(
+                refreshExpiredSession,
+                Math.max(0, Date.parse(expiresAt) - Date.now()) + 1
+            );
+        },
+        { immediate: true }
+    );
+    const handleVisibility = (): void => {
+        if (document.visibilityState === 'visible') refreshExpiredSession();
+    };
+    window.addEventListener('focus', refreshExpiredSession);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     window.addEventListener('or3:auth-session-changed', handleAuthSessionChanged);
     window.addEventListener('or3:sync-session-invalid', handleAuthSessionChanged);
     window.addEventListener('storage', handleStorage);
 
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            stopExpiryWatch();
+            clearTimeout(expiryTimer);
+            window.removeEventListener('focus', refreshExpiredSession);
+            document.removeEventListener('visibilitychange', handleVisibility);
             window.removeEventListener(
                 'or3:auth-session-changed',
                 handleAuthSessionChanged

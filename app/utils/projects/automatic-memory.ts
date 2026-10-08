@@ -287,7 +287,7 @@ export async function captureAutomaticMemories(
                 }),
                 signal: AbortSignal.any([
                     scope.signal,
-                    AbortSignal.timeout(12000),
+                    AbortSignal.timeout(20000),
                 ]),
             });
             if (!response.ok)

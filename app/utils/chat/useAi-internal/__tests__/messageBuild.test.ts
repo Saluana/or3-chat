@@ -31,7 +31,8 @@ vi.mock('~/utils/chat/prompt-utils', () => ({
 
 const countTokensApproxSpy = vi.fn();
 
-vi.mock('~/utils/chat/messages', () => ({
+vi.mock('~/utils/chat/messages', async (importOriginal) => ({
+    ...await importOriginal<typeof import('~/utils/chat/messages')>(),
     trimOrMessagesByTokenBudget: async (
         messages: unknown[],
         maxTokens: number,
@@ -81,6 +82,7 @@ vi.mock('~/core/auth/openrouter-build', () => ({
 }));
 
 import { buildOpenRouterMessagesForSend } from '../messageBuild';
+import { shouldKeepAssistantMessage } from '~/utils/chat/messages';
 
 describe('buildOpenRouterMessagesForSend', () => {
     beforeEach(() => {
@@ -395,14 +397,16 @@ describe('buildOpenRouterMessagesForSend', () => {
         });
     });
 
-    it('preserves assistant tool calls and their associated tool result rows', async () => {
+    // Card-only replies must retain the calling assistant during input cleanup;
+    // otherwise the next request contains an orphan result and providers reject it.
+    it.each(['calling', '', []])('preserves paired tool turns through input cleanup with content %j', async (content) => {
         await buildOpenRouterMessagesForSend({
-            effectiveMessages: [
+            effectiveMessages: ([
                 { id: 'u-1', role: 'user', content: 'look it up' },
                 {
                     id: 'a-1',
                     role: 'assistant',
-                    content: 'calling',
+                    content,
                     data: {
                         tool_calls: [
                             {
@@ -419,8 +423,9 @@ describe('buildOpenRouterMessagesForSend', () => {
                     content: 'result',
                     data: { tool_call_id: 'call-1', tool_name: 'lookup' },
                 },
+                { id: 'empty-placeholder', role: 'assistant', content: '' },
                 { id: 'u-2', role: 'user', content: 'continue' },
-            ],
+            ] satisfies ChatMessage[]).filter(shouldKeepAssistantMessage),
             assistantHashes: [],
             contextHashes: [],
             fileHashes: [],
@@ -429,6 +434,7 @@ describe('buildOpenRouterMessagesForSend', () => {
         const [passedMessages] = buildOpenRouterMessagesSpy.mock.calls[0] as [
             Array<Record<string, unknown>>,
         ];
+        expect(passedMessages).toHaveLength(4);
         expect(passedMessages[1]).toMatchObject({
             role: 'assistant',
             tool_calls: [

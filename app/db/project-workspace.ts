@@ -148,10 +148,10 @@ async function save(
     if (new TextEncoder().encode(candidate.content).length > 128 * 1024)
         throw new Error('Project record is too large.');
     const filtered = PostSchema.parse(
-        await hooks.applyFilters(
+        await Dexie.waitFor(hooks.applyFilters(
             'db.posts.upsert:filter:input',
             structuredClone(candidate),
-        ),
+        )),
     );
     if (
         filtered.id !== id ||
@@ -163,10 +163,12 @@ async function save(
         filtered.deleted !== deleted
     )
         throw new Error('A filter changed the project record.');
-    await hooks.doAction('db.posts.upsert:action:before', {
+    // This helper can join an automatic-memory transaction. Hooks may yield
+    // to browser tasks, so keep that transaction alive only around hook work.
+    await Dexie.waitFor(hooks.doAction('db.posts.upsert:action:before', {
         entity: filtered,
         tableName: 'posts',
-    });
+    }));
     let row = filtered;
     const referenceChanges: CoreHookPayloadMap['db.files.refchange:action:after'][0][] = [];
     await scope.db.transaction(
@@ -379,16 +381,16 @@ async function save(
     );
     for (const change of referenceChanges) {
         try {
-            await hooks.doAction('db.files.refchange:action:after', change);
+            await Dexie.waitFor(hooks.doAction('db.files.refchange:action:after', change));
         } catch (error) {
             console.warn('[projects] Source saved; reference notification failed', error);
         }
     }
     try {
-        await hooks.doAction('db.posts.upsert:action:after', {
+        await Dexie.waitFor(hooks.doAction('db.posts.upsert:action:after', {
             entity: row,
             tableName: 'posts',
-        });
+        }));
     } catch (error) {
         console.warn('[projects] Record saved; notification failed', error);
     }

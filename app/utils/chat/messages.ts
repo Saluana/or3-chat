@@ -222,6 +222,7 @@ export function mergeFileHashes(
  * Behavior:
  * - Keeps non-empty text messages
  * - Keeps image/file content parts
+ * - Keeps tool calls paired with their results, including card-only replies
  *
  * Constraints:
  * - Only applies to assistant role messages
@@ -229,8 +230,14 @@ export function mergeFileHashes(
 export function shouldKeepAssistantMessage(m: {
     role: string;
     content?: string | ContentPart[] | null;
+    tool_calls?: unknown;
+    data?: unknown;
 }): boolean {
     if (m.role !== 'assistant') return true;
+    if (normalizeStreamingMessage({
+        toolCalls: m.tool_calls,
+        data: m.data,
+    }).toolCalls.length > 0) return true;
     const c = m.content;
     if (typeof c === 'string') return c.trim().length > 0;
     if (Array.isArray(c)) {
