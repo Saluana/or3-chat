@@ -100,8 +100,17 @@ export function runForegroundCommand(
             env: input.env ?? process.env,
             shell: false,
         });
+        const interrupt = () => child.kill('SIGINT');
+        const terminate = () => child.kill('SIGTERM');
+        process.once('SIGINT', interrupt);
+        process.once('SIGTERM', terminate);
+        const cleanup = () => {
+            process.removeListener('SIGINT', interrupt);
+            process.removeListener('SIGTERM', terminate);
+        };
 
         child.on('error', (error) => {
+            cleanup();
             rejectPromise(
                 new Error(
                     `${input.label} failed: "${formatCommand(command)}" (${error.message})`,
@@ -109,6 +118,7 @@ export function runForegroundCommand(
             );
         });
         child.on('exit', (code) => {
+            cleanup();
             if (code === 0) {
                 resolvePromise();
                 return;

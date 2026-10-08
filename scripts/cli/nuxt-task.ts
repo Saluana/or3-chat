@@ -9,8 +9,9 @@ import {
     execPackageCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import { nuxtRuntime } from '../../shared/dev/nuxt-runtime';
+import { prepareConvexBackend } from '../../shared/dev/convex-backend';
 
-type Task = 'build' | 'generate-static' | 'type-check';
+type Task = 'build' | 'generate-static' | 'type-check' | 'preview';
 
 function run(
     command: string,
@@ -39,7 +40,8 @@ function run(
 
 export async function runNuxtTask(
     task: Task,
-    env: NodeJS.ProcessEnv = process.env
+    env: NodeJS.ProcessEnv = process.env,
+    args: string[] = [],
 ): Promise<void> {
     const packageManager = detectPackageManager();
     const fileEnv: Record<string, string> = {};
@@ -54,7 +56,9 @@ export async function runNuxtTask(
             ? ['build']
             : task === 'generate-static'
               ? ['generate']
-              : ['typecheck'];
+              : task === 'preview'
+                ? ['preview', ...args]
+                : ['typecheck'];
 
     // Node accepts underscore aliases and double-quoted NODE_OPTIONS tokens.
     // A percentage cap is also an operator-selected limit; never override it.
@@ -79,7 +83,10 @@ export async function runNuxtTask(
     const runtime = task === 'type-check'
         ? (process.versions.bun ? 'node' : process.execPath)
         : nuxtRuntime(taskEnv);
-    await run(runtime, [nuxtEntry, ...nuxtArgs], taskEnv);
+    const startupEnv = task === 'preview'
+        ? await prepareConvexBackend(process.cwd(), taskEnv)
+        : taskEnv;
+    await run(runtime, [nuxtEntry, ...nuxtArgs], startupEnv);
 
     if (task === 'build' || task === 'generate-static') {
         const check = execPackageCommand(packageManager, [
@@ -98,13 +105,13 @@ const isDirectRun =
 
 if (isDirectRun) {
     const task = process.argv[2] as Task | undefined;
-    if (!task || !['build', 'generate-static', 'type-check'].includes(task)) {
+    if (!task || !['build', 'generate-static', 'type-check', 'preview'].includes(task)) {
         console.error(
-            'Usage: nuxt-task.ts build|generate-static|type-check'
+            'Usage: nuxt-task.ts build|generate-static|type-check|preview'
         );
         process.exit(1);
     }
-    runNuxtTask(task).catch((error) => {
+    runNuxtTask(task, process.env, process.argv.slice(3)).catch((error) => {
         console.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
     });

@@ -60,6 +60,9 @@ export async function prepareLocalProviders(
             if (!isRecord(parsedLocal)) throw new Error('sibling package manifest is invalid');
             const local = parsedLocal;
             if (local.name !== name) throw new Error('sibling package name does not match');
+            if (name === 'or3-provider-convex' && local.version !== dependencies[name]) {
+                throw new Error(`sibling Convex version ${String(local.version)} does not match the installed host pin ${String(dependencies[name])}`);
+            }
             const exports = isRecord(local.exports) ? local.exports : {};
             const nuxtExport = isRecord(exports['./nuxt']) ? exports['./nuxt'] : {};
             const entry = nuxtExport.import;
