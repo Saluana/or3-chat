@@ -75,25 +75,28 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'OpenRouter credentials unavailable.',
         });
     const limits = config.limits;
+    // Auxiliary inference has its own buckets: it never spends the user's
+    // chat per-minute or daily message quota.
+    const limited = (result: { allowed: boolean; retryAfterMs?: number }) => {
+        if (result.allowed) return;
+        setResponseHeader(event, 'Retry-After', Math.ceil((result.retryAfterMs ?? 1000) / 1000));
+        throw createError({ statusCode: 429 });
+    };
     if (limits.enabled !== false) {
-        const rateKey = 'user:' + session.user.id;
-        if (limits.requestsPerMinute > 0) {
-            const result = checkAndRecordLlmRequest(rateKey, {
+        const rateKey = 'memory:user:' + session.user.id;
+        if (limits.requestsPerMinute > 0)
+            limited(checkAndRecordLlmRequest(rateKey, {
                 windowMs: 60000,
                 maxRequests: limits.requestsPerMinute,
-            });
-            if (!result.allowed) throw createError({ statusCode: 429 });
-        }
-        if (limits.maxMessagesPerDay > 0) {
-            const provider = getRateLimitProvider();
-            if (!provider) throw createError({ statusCode: 503 });
-            const result = await provider.checkAndRecord('daily:' + rateKey, {
+            }));
+        const provider = limits.maxMessagesPerDay > 0 ? getRateLimitProvider() : null;
+        if (provider)
+            limited(await provider.checkAndRecord('daily:' + rateKey, {
                 windowMs: 86400000,
                 maxRequests: limits.maxMessagesPerDay,
-            });
-            if (!result.allowed) throw createError({ statusCode: 429 });
-        }
+            }));
     }
+    const baseUrl = config.openrouterBaseUrl;
     const controller = new AbortController();
     const abort = () => controller.abort();
     event.node.req.on('aborted', abort);
@@ -104,11 +107,13 @@ export default defineEventHandler(async (event) => {
                 body.data.capture,
                 key,
                 controller.signal,
+                baseUrl,
             );
         return await classifyMemoryReference(
             body.data.state,
             key,
             controller.signal,
+            baseUrl,
         );
     } finally {
         event.node.req.off('aborted', abort);

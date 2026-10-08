@@ -406,10 +406,12 @@ export function finalizeRequest(
                 request.projectTerminal(result);
             if (!result.persistenceError && !result.superseded) {
                 // Foreground completion is emitted by useAi's afterPersist callback.
-                // Canonical/tracker responses use the same browser completion hook.
+                // Canonical/tracker responses emit it only for project chats (memory
+                // capture); backgroundJobNotifications owns ordinary completions.
                 if (
                     terminal.outcome === 'completed' &&
                     request.assistantMessageId &&
+                    (request.projectContext || request.expectedProjectId) &&
                     (terminal.persistence === 'tracker' ||
                         terminal.persistence === 'canonical')
                 )

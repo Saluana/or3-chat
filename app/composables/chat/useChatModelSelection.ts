@@ -14,7 +14,7 @@ import {
 import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { liveQuery, type Subscription } from 'dexie';
 import { resolveChatProject, projectSettingsId } from '~/db/project-workspace';
-import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
+import { ProjectSettingsSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 import { useLocalStorage } from '@vueuse/core';
 import { useAiSettings } from './useAiSettings';
 import { useModelStore } from './useModelStore';
@@ -56,6 +56,8 @@ export function useChatModelSelection(options: {
     modelInherited: Readonly<Ref<boolean>>;
     useInheritedModel: () => Promise<void>;
     restoreDraftModel: (model: string | undefined, variant: OpenRouterModelVariant) => void;
+    /** Call right before a new-chat composer sends; the chat that send creates keeps an explicit choice. */
+    armNewChatSelection: () => void;
 } {
     const { favoriteModels, getFavoriteModels, catalog, fetchModels } =
         useModelStore();
@@ -154,7 +156,7 @@ export function useChatModelSelection(options: {
                 const owner = await resolveChatProject(db, id);
                 const row = owner ? await db.posts.get(projectSettingsId(owner)) : undefined;
                 return row && !row.deleted
-                    ? ProjectSettingsSchema.parse(JSON.parse(row.content)).default_model
+                    ? readPersistedProjectRecord(ProjectSettingsSchema, row.content)?.default_model ?? null
                     : null;
             }).subscribe({ next(model) {
                 if (!current() || !modelInherited.value) return;
@@ -225,7 +227,22 @@ export function useChatModelSelection(options: {
         }
     }
 
-    watch(options.threadId, () => {
+    // Set only by this composer's own new-chat send that explicitly chose a model.
+    let newChatSentAt: number | undefined;
+    function armNewChatSelection(): void {
+        if (!options.threadId() && !modelInherited.value) newChatSentAt = Date.now();
+    }
+    watch(options.threadId, async (id, previous) => {
+        const sentAt = newChatSentAt;
+        newChatSentAt = undefined;
+        if (id && !previous && sentAt !== undefined && !modelInherited.value) {
+            const thread = await getDb().threads.get(id);
+            // The thread must have been created by that send, not merely opened afterwards.
+            if (thread && thread.created_at * 1000 >= sentAt - 1000 && id === options.threadId()) {
+                persistChoice(id, selectedModel.value, modelVariant.value);
+                return;
+            }
+        }
         void applyChatDefault();
     });
     watch([chatDefault, defaultVariant], () => {
@@ -277,29 +294,31 @@ export function useChatModelSelection(options: {
             stopPolicySubscription();
             persistedModel.value = modelId;
             const id = options.threadId();
-            if (!id) return;
-            const db = getDb();
-            const generation = getWorkspaceGeneration();
-            const value = JSON.stringify({ model: modelId, variant });
-            // Serialize explicit choices so an earlier asynchronous hook cannot
-            // overwrite a newer choice. Navigation doesn't cancel captured intent.
-            persistence = persistence
-                .then(async () => {
-                    await setKvByName('chat-model:' + id, value, db, {
-                        isValid: () =>
-                            db === getDb() &&
-                            generation === getWorkspaceGeneration(),
-                    });
-                })
-                .catch((error) => {
-                    console.warn(
-                        '[chat] Model preference could not be saved',
-                        error,
-                    );
-                });
+            if (id) persistChoice(id, modelId, variant);
         },
         { flush: 'sync' },
     );
+    function persistChoice(id: string, modelId: string, variant: OpenRouterModelVariant) {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const value = JSON.stringify({ model: modelId, variant });
+        // Serialize explicit choices so an earlier asynchronous hook cannot
+        // overwrite a newer choice. Navigation doesn't cancel captured intent.
+        persistence = persistence
+            .then(async () => {
+                await setKvByName('chat-model:' + id, value, db, {
+                    isValid: () =>
+                        db === getDb() &&
+                        generation === getWorkspaceGeneration(),
+                });
+            })
+            .catch((error) => {
+                console.warn(
+                    '[chat] Model preference could not be saved',
+                    error,
+                );
+            });
+    }
 
     return {
         selectedModel,
@@ -312,5 +331,6 @@ export function useChatModelSelection(options: {
         modelInherited,
         useInheritedModel,
         restoreDraftModel,
+        armNewChatSelection,
     };
 }

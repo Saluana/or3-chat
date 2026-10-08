@@ -29,6 +29,8 @@ import {
     captureProjectOperation,
     projectToolEnabled,
 } from '~/utils/projects/context';
+import { relatedChatsNotice } from '~/utils/projects/related-chats';
+import { useToast } from '#imports';
 import {
     addProjectUpload,
     addProjectDocument,
@@ -46,6 +48,7 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import {
     defaultProjectSettings,
     ProjectSettingsSchema,
+    readPersistedProjectRecord,
     type ProjectSettings,
     type ProjectSource,
 } from '~~/shared/projects/workspace';
@@ -122,13 +125,20 @@ const chats = ref<Thread[]>([]);
 const documents = ref<Post[]>([]);
 const settings = ref<ProjectSettings>(defaultProjectSettings());
 const dirty = ref(false);
-const editClock = ref<number | null>(null);
+// Sync can land different settings at the same clock; edits keep the revision they read.
+const editRevision = ref<Pick<Post, 'clock' | 'content'> | null>(null);
+const revisionOf = (row?: Post) => (row ? { clock: row.clock, content: row.content } : null);
 const memory = ref('');
 const documentId = ref('');
 const fileId = ref('');
 const files = ref<Post[]>([]);
 const busy = ref(false);
 const error = ref('');
+const toast = useToast();
+const notifyRelatedChats = (count: number) => {
+    const notice = relatedChatsNotice(count);
+    if (notice) toast.add(notice);
+};
 const previewText = ref('');
 const previewTitle = ref('');
 const previewImage = ref('');
@@ -242,7 +252,7 @@ function setToolResources(name: string, value: string) {
 function discardSettings() {
     if (!state.value) return;
     settings.value = structuredClone(toRaw(state.value.settings));
-    editClock.value = state.value.settingsRow?.clock ?? null;
+    editRevision.value = revisionOf(state.value.settingsRow);
     dirty.value = false;
 }
 let controller = new AbortController();
@@ -329,9 +339,10 @@ function subscribePage() {
                 project,
                 pinned:
                     settingsRow && !settingsRow.deleted
-                        ? ProjectSettingsSchema.parse(
-                              JSON.parse(settingsRow.content),
-                          ).pinned
+                        ? (readPersistedProjectRecord(
+                              ProjectSettingsSchema,
+                              settingsRow.content,
+                          )?.pinned ?? false)
                         : false,
             };
         });
@@ -420,7 +431,7 @@ function subscribePage() {
             files.value = value.files;
             if (!dirty.value && value.current) {
                 settings.value = structuredClone(value.current.settings);
-                editClock.value = value.current.settingsRow?.clock ?? null;
+                editRevision.value = revisionOf(value.current.settingsRow);
             }
         },
         error(cause) {
@@ -515,7 +526,7 @@ function cancelBriefEdit() {
     briefEditing.value = false;
     dirty.value =
         JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
-    if (!dirty.value) editClock.value = state.value.settingsRow?.clock ?? null;
+    if (!dirty.value) editRevision.value = revisionOf(state.value.settingsRow);
 }
 async function editInlineBrief() {
     if (!state.value || busy.value) return;
@@ -532,7 +543,7 @@ async function pin(projectId: string) {
         captured,
         projectId,
         { ...current.settings, pinned: !current.settings.pinned },
-        current.settingsRow?.clock ?? null,
+        current.settingsRow ?? null,
     );
 }
 async function newChat() {
@@ -602,21 +613,21 @@ async function saveSettings() {
     const captured = scope;
     const projectId = id.value;
     const draft = ProjectSettingsSchema.parse(settings.value);
-    const clock = editClock.value;
+    const expected = editRevision.value;
     captured.assertCurrent('write');
-    const saved = await saveProjectSettings(captured, projectId, draft, clock);
+    const saved = await saveProjectSettings(captured, projectId, draft, expected);
     if (captured !== scope || projectId !== id.value) return;
-    editClock.value = saved.clock;
+    editRevision.value = revisionOf(saved);
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(draft);
 }
 async function saveBrief() {
     const captured = scope;
     const projectId = id.value;
     const brief = settings.value.brief;
-    const clock = editClock.value;
+    const expected = editRevision.value;
     captured.assertCurrent('write');
     const current = await readProjectWorkspace(captured.db, projectId);
-    if ((current.settingsRow?.clock ?? null) !== clock)
+    if (JSON.stringify(revisionOf(current.settingsRow)) !== JSON.stringify(expected))
         throw new Error(
             'Project settings changed. Reload before saving your brief.',
         );
@@ -625,10 +636,10 @@ async function saveBrief() {
         captured,
         projectId,
         next,
-        current.settingsRow?.clock ?? null,
+        current.settingsRow ?? null,
     );
     if (captured !== scope || projectId !== id.value) return;
-    editClock.value = saved.clock;
+    editRevision.value = revisionOf(saved);
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(next);
     if (settings.value.brief === brief) briefEditing.value = false;
 }
@@ -726,7 +737,7 @@ async function saveMemoryEdit() {
         projectId,
         { ...record.value, text },
         record.row.id,
-        record.row.clock,
+        record.row,
     );
     if (
         captured === scope &&
@@ -751,7 +762,7 @@ async function exclude(thread: Thread) {
                 ? exclusions.filter((value) => value !== threadId)
                 : [...exclusions, threadId],
         },
-        current.settingsRow?.clock ?? null,
+        current.settingsRow ?? null,
     );
 }
 function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
@@ -1392,7 +1403,7 @@ function toolCannotScope(name: string) {
                                                     ).value as any,
                                                 },
                                                 source.row.id,
-                                                source.row.clock,
+                                                source.row,
                                             ),
                                         )
                                     "
@@ -2119,7 +2130,7 @@ function toolCannotScope(name: string) {
                                             scope,
                                             existingChatId,
                                             id,
-                                        ),
+                                        ).then(notifyRelatedChats),
                                     )
                                 "
                             >
@@ -2215,7 +2226,7 @@ function toolCannotScope(name: string) {
                                                     scope,
                                                     chat.id,
                                                     null,
-                                                ),
+                                                ).then(notifyRelatedChats),
                                             )
                                         "
                                     />

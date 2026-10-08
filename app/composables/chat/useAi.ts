@@ -1887,7 +1887,7 @@ export function useChat(
             const { captureProjectOperation } = await import('~/utils/projects/context');
             const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
             if (scope.writable && !(await scope.db.threads.get(requestScope.threadId))?.project_id)
-                await moveChatToProject(scope, requestScope.threadId, initialProjectId);
+                await moveChatToProject(scope, requestScope.threadId, initialProjectId, { family: false });
         }
         const projectState = initialProjectId ? await readProjectWorkspace(requestScope.originDb, initialProjectId) : undefined;
         const capturedPreference = await useAiSettings().captureContextPreference();
@@ -2281,19 +2281,9 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
-        if (sendMessagesParams.knowledge_project_id && !sendMessagesParams.inspectLossyRequest) {
-            if (!requestScope.threadId || initialProjectId !== sendMessagesParams.knowledge_project_id)
-                return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
-            const { captureProjectOperation } = await import('~/utils/projects/context');
-            const { addProjectUpload } = await import('~/utils/projects/source-intake');
-            const { getFileBlob } = await import('~/db/files');
-            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
-            for (const hash of sendMessagesParams.file_hashes ?? []) {
-                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
-                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
-                await addProjectUpload(scope, sendMessagesParams.knowledge_project_id, new File([blob], meta.name, { type: meta.mime_type }));
-            }
-        }
+        const knowledgeProjectId = !sendMessagesParams.inspectLossyRequest ? sendMessagesParams.knowledge_project_id : undefined;
+        if (knowledgeProjectId && (!requestScope.threadId || initialProjectId !== knowledgeProjectId))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2363,6 +2353,19 @@ export function useChat(
             requestId,
             userMessageId: userDbMsg.id,
         });
+        // Promotion follows the committed turn and never delays dispatch: bind
+        // each file now, extract in the background (the intake lease covers crashes).
+        if (knowledgeProjectId) void (async () => {
+            const { captureProjectOperation } = await import('~/utils/projects/context');
+            const { addProjectUpload } = await import('~/utils/projects/source-intake');
+            const { getFileBlob } = await import('~/db/files');
+            const scope = captureProjectOperation(undefined, requestThreadId);
+            for (const hash of sendMessagesParams.file_hashes ?? []) {
+                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
+                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
+                await addProjectUpload(scope, knowledgeProjectId, new File([blob], meta.name, { type: meta.mime_type }), undefined, { background: true });
+            }
+        })().catch((error) => reportError(error, { message: 'Message sent, but its attachments could not be added to project knowledge.', toast: true }));
         if (sendMessagesParams.onUserPersisted) {
             try {
                 await sendMessagesParams.onUserPersisted(userDbMsg.id);

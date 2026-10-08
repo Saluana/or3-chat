@@ -16,6 +16,7 @@ import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import {
     PROJECT_POST_TYPES,
     ProjectMemorySchema,
+    readPersistedProjectRecord,
 } from '~~/shared/projects/workspace';
 import {
     analyzeAutomaticMemory,
@@ -26,6 +27,8 @@ import {
 import type { AiStreamCompletePayload } from '~/core/hooks/hook-types';
 import { messageText } from './memory';
 
+const STATE_BYTES = 16384;
+const OMITTED_ASSISTANT_TEXT = '[assistant reply omitted: too long]';
 const normalized = (text: string) =>
     text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -196,10 +199,10 @@ export async function captureAutomaticMemories(
         .limit(501)
         .toArray();
     if (memoryRows.length > 500) return;
-    const memories = memoryRows.map((row) => ({
-        row,
-        value: ProjectMemorySchema.parse(JSON.parse(row.content)),
-    }));
+    const memories = memoryRows.flatMap((row) => {
+        const value = readPersistedProjectRecord(ProjectMemorySchema, row.content);
+        return value ? [{ row, value }] : [];
+    });
     const freshText = rows
         .filter((row) => row.index > lastIndex)
         .map(messageText)
@@ -214,19 +217,27 @@ export async function captureAutomaticMemories(
             return score(b.value.text) - score(a.value.text);
         })
         .slice(0, 20);
-    const state: AutomaticMemoryState = {
-        messages: rows.map((row) => ({
-            id: row.id,
-            role: row.role as 'user' | 'assistant',
-            text: messageText(row),
-            fresh: row.index > lastIndex,
-        })),
-        existing: existing.map((m) => ({
-            id: m.row.id,
-            text: m.value.text,
-            replaceable: !m.row.deleted && m.value.origin === 'automatic',
-        })),
+    // Build per message, never clipping: an oversized user message is skipped
+    // whole and an oversized assistant reply (context only) becomes a marker.
+    const candidates = rows.flatMap((row) => {
+        const text = messageText(row);
+        const message = { id: row.id, role: row.role as 'user' | 'assistant', text, fresh: row.index > lastIndex };
+        if (text.length <= 4000) return [message];
+        return row.role === 'assistant' ? [{ ...message, text: OMITTED_ASSISTANT_TEXT }] : [];
+    });
+    const state: AutomaticMemoryState = { messages: [], existing: [] };
+    const add = <T>(list: T[], item: T) => {
+        list.push(item);
+        if (new TextEncoder().encode(JSON.stringify(state)).byteLength > STATE_BYTES) list.pop();
     };
+    // Fresh user statements first (newest first), then dedupe references, then older context.
+    const freshUsers = candidates.filter((message) => message.fresh && message.role === 'user');
+    for (const message of [...freshUsers].reverse()) add(state.messages, message);
+    for (const m of existing)
+        add(state.existing, { id: m.row.id, text: m.value.text, replaceable: !m.row.deleted && m.value.origin === 'automatic' });
+    for (const message of [...candidates].reverse())
+        if (!freshUsers.includes(message)) add(state.messages, message);
+    state.messages.sort((a, b) => candidates.indexOf(a) - candidates.indexOf(b));
     const validate = async () => {
         scope.assertCurrent('write');
         if (apiKey.value !== key || getUserApiKeyGeneration() !== keyGeneration)
@@ -258,8 +269,9 @@ export async function captureAutomaticMemories(
     let result = { memories: [] } as ReturnType<
         typeof AutomaticMemoryOutputSchema.parse
     >;
-    // Oversized messages are skipped whole, never clipped across a rejection or caveat.
-    if (AutomaticMemoryStateSchema.safeParse(state).success) {
+    // With no processable fresh user statement the cursor advances without inference.
+    if (state.messages.some((message) => message.fresh && message.role === 'user')
+        && AutomaticMemoryStateSchema.safeParse(state).success) {
         if (server) {
             const response = await fetch('/api/openrouter/classify-memory', {
                 method: 'POST',
@@ -286,6 +298,7 @@ export async function captureAutomaticMemories(
                 state,
                 key!,
                 scope.signal,
+                useRuntimeConfig().public.openRouter?.baseUrl,
                 validate,
             );
     }
@@ -303,6 +316,7 @@ export async function captureAutomaticMemories(
                 ? existing.find(
                       (m) =>
                           m.row.id === candidate.replace_id &&
+                          state.existing.some((sent) => sent.id === m.row.id) &&
                           !m.row.deleted &&
                           m.value.origin === 'automatic',
                   )
@@ -343,18 +357,15 @@ export async function captureAutomaticMemories(
                 .toArray();
             if (currentMemories.length > 500)
                 throw new Error('Memory catalog changed.');
-            let automaticCount = currentMemories.filter(
-                (row) =>
-                    !row.deleted &&
-                    ProjectMemorySchema.parse(JSON.parse(row.content))
-                        .origin === 'automatic',
+            const currentValues = currentMemories.map((row) => ({
+                row,
+                value: readPersistedProjectRecord(ProjectMemorySchema, row.content),
+            }));
+            let automaticCount = currentValues.filter(
+                ({ row, value }) => !row.deleted && value?.origin === 'automatic',
             ).length;
             const known = new Set(
-                currentMemories.map((row) =>
-                    normalized(
-                        ProjectMemorySchema.parse(JSON.parse(row.content)).text,
-                    ),
-                ),
+                currentValues.flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
             );
             for (const item of prepared) {
                 if (!item || known.has(normalized(item.candidate.text)))
@@ -388,7 +399,7 @@ export async function captureAutomaticMemories(
                         source_thread_id: threadId,
                     },
                     item.id,
-                    item.prior?.row.clock ?? null,
+                    item.prior?.row ?? null,
                 );
                 known.add(normalized(item.candidate.text));
             }

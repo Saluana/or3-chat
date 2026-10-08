@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { HTTPClient } from '@openrouter/sdk';
 import { createOpenRouterClient } from '../openrouter/client';
+import { normalizeOpenRouterBaseUrl } from '../openrouter/url';
+import { DEFAULT_OPENROUTER_BASE_URL } from '../config/constants';
+
+/** Memory inference uses OpenRouter-only APIs; a key configured for another base URL never goes there. */
+export function memoryInferenceOrigin(baseUrl: unknown): string | null {
+    const origin = new URL(normalizeOpenRouterBaseUrl(baseUrl)).origin;
+    return origin === new URL(DEFAULT_OPENROUTER_BASE_URL).origin ? origin : null;
+}
 
 // Qualified against labeled and held-out adoption cases using the real Decisions API.
 export const MEMORY_CLASSIFIER_MODEL = 'typesafe/jev-1.13';
@@ -72,6 +80,7 @@ export async function classifyMemoryReference(
     state: MemoryClassificationState,
     apiKey: string,
     signal: AbortSignal,
+    baseUrl: unknown,
     beforeDispatch?: () => Promise<void>,
     model = MEMORY_CLASSIFIER_MODEL,
 ): Promise<MemoryClassificationResult> {
@@ -90,6 +99,9 @@ export async function classifyMemoryReference(
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
         MemoryClassificationStateSchema.parse(state);
+        // Gateways may not implement Decisions: keep the saved fact unclassified.
+        const origin = memoryInferenceOrigin(baseUrl);
+        if (!origin) return result;
         const httpClient = new HTTPClient();
         if (beforeDispatch)
             httpClient.addHook('beforeRequest', async () => {
@@ -98,7 +110,7 @@ export async function classifyMemoryReference(
             });
         const client = createOpenRouterClient({
             apiKey,
-            serverURL: 'https://openrouter.ai',
+            serverURL: origin,
             httpClient,
         });
         const timeout = new Promise<never>((_, reject) => {

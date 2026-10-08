@@ -23,6 +23,8 @@ import { assertServerProjectExecutionSupported } from '../chat/project-policy';
 
 interface WorkflowJobOrigin { jobId: string; userId: string; workspaceId: string; threadId: string; messageId: string }
 
+let warnedLegacyWorkflowOrigin = false;
+
 /** Generic host operations supplied only after the package dispatcher authorizes the route. */
 export function createWorkflowServerBridge(requestEvent: H3Event) {
     const reservedRequests = new Set<string>();
@@ -100,7 +102,16 @@ export function createWorkflowServerBridge(requestEvent: H3Event) {
             const serverURL = normalizeOpenRouterBaseUrl(useRuntimeConfig().openrouterBaseUrl);
             const origin = input.origin && { ...input.origin };
             const httpClient = new HTTPClient({ fetcher: async (request, init) => {
-                if (!origin) throw new Error('Workflow job origin is required. Update the Workflows package.');
+                if (!origin) {
+                    // Transition for Workflows builds that predate run origins: job
+                    // admission (createJob) still refuses project chats; only the
+                    // per-request move fence needs the origin.
+                    if (!warnedLegacyWorkflowOrigin) {
+                        warnedLegacyWorkflowOrigin = true;
+                        console.warn('[workflows] This Workflows package predates run origins; update it to fence project moves during background runs.');
+                    }
+                    return fetch(request, init);
+                }
                 const session = await resolveSessionContext(requestEvent);
                 if (session.user?.id !== origin.userId) throw new Error('Workflow actor changed.');
                 const provider = await getJobProvider();

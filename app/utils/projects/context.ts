@@ -16,7 +16,7 @@ import {
 } from '~/utils/chat/workspace-access';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { parseFileHashes } from '~/db/files-util';
-import { PROJECT_POST_TYPES, ProjectSourceSchema } from '~~/shared/projects/workspace';
+import { PROJECT_MEMORY_HEADING, PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { workspaceSourceReceipts } from '~/utils/chat/workspace-source-receipts';
@@ -44,6 +44,19 @@ export function captureProjectOperation(
 
 import type { ProjectContextSnapshot } from './types';
 export type { ProjectContextSnapshot } from './types';
+
+const MANUAL_MEMORY_BYTES = 12 * 1024;
+const QUERY_STOP_WORDS = new Set(['the', 'and', 'for', 'you', 'your', 'are', 'was', 'were', 'what', 'how', 'can', 'this', 'that',
+    'these', 'those', 'with', 'from', 'have', 'has', 'had', 'not', 'but', 'all', 'any', 'our', 'its', 'into', 'about', 'does', 'did',
+    'why', 'who', 'when', 'where', 'which', 'will', 'would', 'should', 'could', 'there', 'their', 'them', 'they', 'then', 'than',
+    'also', 'just', 'some', 'more', 'other', 'only', 'very', 'here', 'been', 'use', 'get', 'make', 'need', 'want', 'please', 'tell',
+    'give', 'show', 'know', 'project']);
+
+/** One retrieval tokenizer for memories, sources and continuity; stop words never establish relevance. */
+export function projectQueryTerms(query: string): string[] {
+    return [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])]
+        .filter((term) => !QUERY_STOP_WORDS.has(term));
+}
 async function blobUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -71,7 +84,7 @@ export async function buildProjectContext(
     const thread = await scope.db.threads.get(threadId);
     if (thread && !thread.project_id && scope.writable && purpose === 'turn') {
         const { moveChatToProject } = await import('~/db/project-workspace');
-        await moveChatToProject(scope, threadId, projectId);
+        await moveChatToProject(scope, threadId, projectId, { family: false });
     }
     const state =
         capturedState ?? (await readProjectWorkspace(scope.db, projectId));
@@ -79,11 +92,21 @@ export async function buildProjectContext(
         throw new Error('Captured project context has a different owner.');
     scope.assertCurrent();
     const marker = `[OR3 project ${projectId}]`;
-    const memoryTerms = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])]
-        .filter(term => !['the', 'and', 'this', 'that', 'what', 'how', 'can', 'you', 'for', 'with', 'project'].includes(term));
-    const scoreMemory = (text: string) => memoryTerms.filter(term => text.toLowerCase().includes(term)).length;
+    const terms = projectQueryTerms(query);
+    const scoreMemory = (text: string) => terms.filter(term => text.toLowerCase().includes(term)).length;
+    // Manual memories are bounded by relevance/recency so they cannot exhaust the model context.
+    let manualBudget = MANUAL_MEMORY_BYTES;
+    const encoder = new TextEncoder();
+    const rankedManual = state.memories.filter(memory => memory.value.origin !== 'automatic')
+        .sort((a, b) => scoreMemory(b.value.text) - scoreMemory(a.value.text) || b.row.updated_at - a.row.updated_at);
+    const selectedManual = rankedManual.filter(memory => {
+        const bytes = encoder.encode(memory.value.text).byteLength;
+        if (bytes > manualBudget) return false;
+        manualBudget -= bytes;
+        return true;
+    });
     const selectedMemories = [
-        ...state.memories.filter(memory => memory.value.origin !== 'automatic'),
+        ...selectedManual,
         ...state.memories.filter(memory => memory.value.origin === 'automatic' &&
             (purpose === 'handoff' || scoreMemory(memory.value.text) > 0))
             .sort((a, b) => scoreMemory(b.value.text) - scoreMemory(a.value.text) || b.row.updated_at - a.row.updated_at)
@@ -95,6 +118,7 @@ export async function buildProjectContext(
         project_name: state.project.name,
         instructions: state.settings.instructions,
         brief: state.settings.brief,
+        omitted_memory_count: rankedManual.length - selectedManual.length,
         memories: selectedMemories.map((m) => ({
             id: m.row.id,
             text: m.value.text,
@@ -129,22 +153,20 @@ export async function buildProjectContext(
             role: 'system',
             content: `${marker}\nProject instructions:\n${state.settings.instructions}`,
         });
-    const facts = [
-        state.settings.brief && `Project brief:\n${state.settings.brief}`,
-        ...selectedMemories.map(
-            (m) => `Saved ${m.value.kind} (${m.row.id}): ${m.value.text}`,
-        ),
-    ]
-        .filter(Boolean)
-        .join('\n\n');
-    if (facts)
+    if (state.settings.brief)
         messages.push({
             role: 'user',
-            content: `${marker}\nSaved project context (reference material):\n${facts}`,
+            content: `${marker}\nSaved project context (reference material):\nProject brief:\n${state.settings.brief}`,
         });
-    const terms = [
-        ...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []),
-    ];
+    // A separate message lets context admission drop memories after sources and chats.
+    const memoryFacts = selectedMemories
+        .map((m) => `Saved ${m.value.kind} (${m.row.id}): ${m.value.text}`)
+        .join('\n\n');
+    if (memoryFacts)
+        messages.push({
+            role: 'user',
+            content: `${marker}\n${PROJECT_MEMORY_HEADING}\n${memoryFacts}`,
+        });
     const scored = state.sources.map((source) => ({
         source,
         excerpt: undefined as string | undefined,
@@ -468,6 +490,11 @@ export function finalizeProjectReceipt(
     receipt.memories = receipt.memories.filter(
         (memory) => includes(memory.id) && includes(memory.text),
     );
+    // Budget omissions plus memories that admission removed from this request.
+    receipt.omitted_memory_count =
+        (snapshot.receipt.omitted_memory_count ?? 0) +
+        snapshot.receipt.memories.length -
+        receipt.memories.length;
     for (const source of receipt.sources)
         if (
             source.state === 'retrieved' &&
@@ -723,8 +750,8 @@ async function authorizeProjectTool(
         const bindings = kind === 'document' || kind === 'file'
             ? await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray() : [];
         const source = bindings.filter(row => !row.deleted)
-            .map(row => ProjectSourceSchema.parse(JSON.parse(row.content)))
-            .find(value => value.item_id === target);
+            .map(row => readPersistedProjectRecord(ProjectSourceSchema, row.content))
+            .find(value => value?.item_id === target);
         const targetRow = kind === 'chat' ? await scope.db.threads.get(target)
             : kind === 'document' || kind === 'file' ? await scope.db.posts.get(target) : undefined;
         const member = targetRow && isVisibleWorkspaceItem(targetRow) && (
@@ -827,7 +854,7 @@ export async function filterProjectToolResult(
     const state = await readProjectPolicy(scope.db, projectId);
     if (!projectToolEnabled(state.settings, name))
         throw new Error('Project tool policy changed during execution.');
-    let sources: ReturnType<typeof ProjectSourceSchema.parse>[] | undefined;
+    let sources: (ReturnType<typeof ProjectSourceSchema.parse> | null)[] | undefined;
     const permitted = async (kind: string, id: string) => {
         if (kind === 'project') return id === projectId;
         if (kind === 'chat')
@@ -840,8 +867,8 @@ export async function filterProjectToolResult(
         const item = await scope.db.posts.get(id);
         if (!item || !isVisibleWorkspaceItem(item)) return false;
         sources ??= (await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray())
-            .filter(row => !row.deleted).map(row => ProjectSourceSchema.parse(JSON.parse(row.content)));
-        const source = sources.find(source => source.item_id === id);
+            .filter(row => !row.deleted).map(row => readPersistedProjectRecord(ProjectSourceSchema, row.content));
+        const source = sources.find(source => source?.item_id === id);
         if (source) return source.mode !== 'off';
         // A newly created document's durable receipt is still visible to its creator.
         return (

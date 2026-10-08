@@ -5,7 +5,7 @@ import type { Thread, Post } from '~/db/schema';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import { getKvByName, tombstoneKvByName } from '~/db/kv';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
-import { PROJECT_POST_TYPES, ProjectSourceSchema } from '~~/shared/projects/workspace';
+import { PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 
 export const FAMILY_PAGE_SIZE = 50;
 export const familyExpansionPreferenceName = (rootId: string) => 'compaction-family:expanded:' + encodeURIComponent(rootId);
@@ -131,8 +131,8 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
                 .equals([PROJECT_POST_TYPES.source, project.id]).toArray();
             for (const row of sources) {
                 if (row.deleted) continue;
-                const source = ProjectSourceSchema.parse(JSON.parse(row.content));
-                if (source.kind === 'document') projectDocuments.add(source.item_id);
+                const source = readPersistedProjectRecord(ProjectSourceSchema, row.content);
+                if (source?.kind === 'document') projectDocuments.add(source.item_id);
             }
         }
         if (projectDocuments) {

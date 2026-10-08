@@ -88,6 +88,7 @@ export async function addProjectUpload(
     projectId: string,
     file: File,
     replace?: ProjectRecord<ProjectSource>,
+    options: { background?: boolean } = {},
 ): Promise<ProjectRecord<ProjectSource>> {
     scope.assertCurrent('write');
     const imported = await importWorkspaceFile(scope, file, file.name);
@@ -125,9 +126,15 @@ export async function addProjectUpload(
             revisions: [...(replace?.value.revisions ?? []), revision],
         },
         replace?.row.id,
-        replace?.row.clock ?? null,
+        replace?.row ?? null,
     );
     if (revision.status === 'ready') return saved;
+    if (options.background) {
+        // The Processing lease makes an interrupted extraction retryable.
+        void processProjectSource(scope, projectId, saved, revision.id).catch((error) =>
+            console.warn('[projects] Source bound; background extraction failed', error));
+        return saved;
+    }
     return processProjectSource(scope, projectId, saved, revision.id);
 }
 
@@ -147,7 +154,7 @@ export async function processProjectSource(
     current = { ...current, status: 'processing', processing_started_at: nowSec() };
     source = await saveProjectSource(scope, projectId, { ...source.value,
         revisions: source.value.revisions.map(revision => revision.id === revisionId ? current : revision),
-    }, source.row.id, source.row.clock);
+    }, source.row.id, source.row);
     const meta = await scope.db.file_meta.get(originalHash);
     const blob = await getFileBlob(originalHash, scope.db);
     scope.assertCurrent('write');
@@ -204,7 +211,7 @@ export async function processProjectSource(
                 ),
             },
             source.row.id,
-            source.row.clock,
+            source.row,
         );
         if (result.ok) {
             const catalog = await scope.db.posts.get(

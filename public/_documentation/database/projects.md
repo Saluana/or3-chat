@@ -80,7 +80,7 @@ response body; later stream failures change it to failed. Old iterations without
 these fields have unknown dispatch state. Updates fence the current request and
 message, so a replaced execution cannot overwrite its successor's diagnostics.
 
-`readProjectWorkspace(db, id)` validates settings, memories, and bindings. `saveProjectSettings`, `saveProjectMemory`, and `saveProjectSource` accept a captured `WorkspaceOperationScope` and expected clock. Stale writes, revoked access, invalid source identity, and foreign memory provenance refuse. Source `file_hashes` retains every original/extraction revision using existing reference accounting.
+`readProjectWorkspace(db, id)` validates settings, memories, and bindings. Persisted rows are read with `readPersistedProjectRecord` (unknown keys from newer clients are dropped; other versions or damage read as null), so an unreadable memory or binding is skipped rather than failing the project; unreadable settings refuse with an "update OR3" message. Writes stay strict. `saveProjectSettings`, `saveProjectMemory`, and `saveProjectSource` accept a captured `WorkspaceOperationScope` and the record the editor read (`{ clock, content }`; a bare clock still works for immediate writes), so a same-clock revision replaced by sync is refused rather than overwritten. A save keeps stored top-level fields that this version does not know, so an older client never drops a newer client's fields; nested unknown fields are not kept. A save also refuses to overwrite a record in a format it cannot read. New persisted fields must be optional and safe to ignore; a change of meaning bumps `version`. Stale writes, revoked access, invalid source identity, and foreign memory provenance refuse. Source `file_hashes` retains every original/extraction revision using existing reference accounting.
 
 `readProjectPolicy(db, id)` reads only the live project and singleton settings row.
 Tool admission, approval rechecks and execution/delivery guards use it without
@@ -119,21 +119,24 @@ the outer commit, so asynchronous extension hooks cannot split ownership from
 its source record. Rollbacks emit no reference notifications; notification
 failure after a successful commit is reported without failing the save.
 
-Normal history and workspace chat reads share the canonical thread projection.
+Model requests and workspace chat reads share the canonical thread projection.
 Every reference ancestor and compacted-summary provenance thread must retain the
 same nullable project owner as the requested chat. Project exclusions also apply
-to inherited provenance, while the current chat remains readable. Inherited
-summary chains are checked recursively and cyclic/missing provenance refuses.
-Moving only a branch does not implicitly authorize its former project's history.
+to inherited provenance. Inherited summary chains are checked recursively and
+cyclic/missing provenance refuses. Display reads pass
+`resolveThreadProjection(id, db, undefined, { projectProvenance: false })`, so a
+chat's own transcript always renders even when sends refuse its provenance.
+User moves keep a branch family together, so this refusal is reserved for data
+moved outside those paths.
 `resolveChatProject(db, id, { includeDeleted: true })` is reserved for retained
 summary provenance: deleted thread tombstones still prove ownership. Default
 calls continue to reject deleted chats; this option grants no mutation authority.
 
-`resolveChatProject(db, threadId)` prefers `threads.project_id`, otherwise resolves a single legacy membership. Ambiguous ownership refuses. `moveChatToProject(scope, threadId, projectId | null)` updates the pointer and memberships atomically, retaining extension entries. `createThreadInDb` accepts an optional `assertCurrent` guard for captured callers.
+`resolveChatProject(db, threadId)` prefers `threads.project_id`, otherwise resolves a single legacy membership. A missing or deleted explicit owner resolves to no project (deletion releases chats, including a pointer that raced the delete). Ambiguous legacy ownership refuses sends and forks until the user chooses. The composer then shows a banner listing each project that lists the chat (`ambiguousChatProjects`, `useAmbiguousChatProjects`); keeping it in one calls `moveChatToProject`. `moveChatToProject(scope, threadId, projectId | null, { family = true })` updates the pointer and memberships atomically for the chat's whole branch family (`chatFamilyIds`: the root and every `parent_thread_id` descendant), retaining extension entries; legacy-membership migration passes `{ family: false }`. Joining a project takes the whole family. Leaving releases only the branches that project owned, so branches owned elsewhere or ambiguous keep their membership. The call resolves to how many other chats moved, which the UI reports as related chats. `createThreadInDb` accepts an optional `assertCurrent` guard for captured callers.
 
-`moveChatProjectRows(scope, threadId, projectId)` is the hook-free write used by
-atomic membership editors. It requires a read/write transaction on the captured
-database with projects/threads included, and returns changed project/thread rows.
+`moveChatProjectRows(scope, threadId, projectId, { family? })` is the hook-free write used by
+atomic membership editors (forks move only the new chat). It requires a read/write transaction on the captured
+database with projects/threads included, and returns changed `{ projects, threads }` rows.
 Call `notifyChatProjectMove(changes)` only after the outer transaction commits.
 Preparation hooks and notifications must not be awaited inside that transaction.
 The ordinary `moveChatToProject` wrapper owns its transaction and notification.
@@ -198,7 +201,10 @@ or a newer draft.
 Model selection inherits the project default even for populated chats. An
 explicit chat model and routing variant are saved as a `chat-model:<threadId>`
 preference through the existing workspace KV helpers, surviving navigation and
-reload without changing the project default.
+reload without changing the project default. A new chat's first send saves the
+composer's explicit choice to the chat that send creates (the composer arms this
+right before sending); a chat opened later loads only its own preference or the
+default, never a stale choice.
 Inherited selections follow saved project-default changes and chat moves. The
 model controls expose **Use project default** (or **Use default model** outside
 a project) to clear an explicit chat override and resume inheritance. Changing
@@ -274,10 +280,15 @@ Canonical model IDs and their dated provider snapshots are accepted; other model
 State contains only the saved text and at most six preceding messages from the source's
 owning chat, with a 16 KiB UTF-8 bound. Oversized evidence skips classification rather than losing caveats through clipping. Attachments and other chats are never sent.
 
-Static/BYOK uses the installed SDK directly with the root OpenRouter base. Authenticated SSR
+Static/BYOK uses the installed SDK directly. Authenticated SSR
 uses `POST /api/openrouter/classify-memory`, requiring mutation intent, workspace write access,
-matching active workspace, normal key precedence and LLM rate limits. The endpoint accepts
-only bounded state, fixes the model/question, and cannot mutate memories or invoke tools.
+matching active workspace and normal key precedence. Its per-minute and daily limits use
+separate `memory:user:<id>` buckets (with the configured values), so auxiliary inference never
+spends chat quota; 429 responses include `Retry-After`. The endpoint accepts only bounded
+state, fixes the model/question, and cannot mutate memories or invoke tools. Memory inference
+uses OpenRouter-only APIs, so it runs only when the configured OpenRouter base URL is on
+`openrouter.ai`; with a gateway/proxy base URL, classification and capture are skipped rather
+than sending that key to another host.
 
 A three-second total deadline and disabled retries bound classification. Missing credentials,
 network failures, malformed probabilities and uncertainty leave the saved reference intact.
@@ -290,8 +301,8 @@ includes model, probabilities, latency and cost, never memory text or credential
 
 The workspace-projects client plugin subscribes to `ai.chat.stream:action:complete`. Browser foreground completion and successfully persisted canonical/tracker background completion supply captured `workspaceId` and `projectId`. The listener returns immediately and owns a bounded batching helper (at most sixteen active chats), disposed on workspace switch and plugin HMR. No inference runs in the send path. Capture processes three completed exchanges or an idle batch after ten seconds. It requires the browser to remain open.
 
-`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 16 KiB aggregate bound including up to twenty existing references. Older context can explain an approval; only fresh user messages can establish new memory. Oversized evidence is skipped whole. One `typesafe/jev-1.13` Decisions choice must return save with probability at least 0.9 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are three and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key and rate-limit policies as explicit classification. Callers cannot choose models or prompts.
+`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 16 KiB aggregate bound including up to twenty existing references. The state is built per message, never clipped: fresh user messages come first, then existing references, then older context newest-first while the bound allows. A user message over 4,000 characters is skipped whole and an oversized assistant reply becomes a fixed omission marker. Older context can explain an approval; only fresh user messages can establish new memory. Without a processable fresh user message the cursor advances without inference. One `typesafe/jev-1.13` Decisions choice must return save with probability at least 0.9 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are three and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key, base-URL and memory rate-limit policies as explicit classification; a 429/503 leaves the cursor for a later batch. Callers cannot choose models or prompts.
 
 The expected-clock transaction rechecks workspace authority, owning project, chat exclusion, evidence revisions and batch cursor. Every candidate must cite an exact quote from a fresh user message. Stable project/text-derived IDs, existing records and tombstones prevent exact duplicates and revival of deleted captures. Existing references include dismissed memories for semantic deduplication. An explicit correction may replace an unchanged automatic record; user edits remove its optional `origin: automatic` marker and cannot be overwritten. At most twenty live automatic memories are saved. Additional new captures are skipped at capacity, while explicit corrections and manual memory remain available.
 
-The existing workspace KV table holds `project-memory-cursor:<threadId>` with the processed project/index, committed atomically with memories. Reloads and repeated completion events do not reprocess successful batches. Failures never roll back messages or manual memories and do not schedule retries; a later completed turn can try a new bounded batch. No historical backfill, durable inference queue, embeddings or new database table is introduced. Request context selects at most four matching automatic memories (or four recent entries for a handoff), while explicit memories retain their existing inclusion behavior. All automatic memories remain editable/deletable in the normal Memory list and retain source-chat links.
+The existing workspace KV table holds `project-memory-cursor:<threadId>` with the processed project/index, committed atomically with memories. Reloads and repeated completion events do not reprocess successful batches. Failures never roll back messages or manual memories and do not schedule retries; a later completed turn can try a new bounded batch. No historical backfill, durable inference queue, embeddings or new database table is introduced. Request context selects at most four matching automatic memories (or four recent entries for a handoff) plus explicit memories ranked by query match and recency within a 12 KiB budget. The receipt's `omitted_memory_count` counts explicit memories left out of the request, whether the budget or context admission removed them. Memories travel in their own context message, which context admission may drop after optional sources and chat summaries; instructions and the brief stay required. A project holds at most 500 live memories. Query terms ignore common stop words for memories, sources and chat continuity. All automatic memories remain editable/deletable in the normal Memory list and retain source-chat links.

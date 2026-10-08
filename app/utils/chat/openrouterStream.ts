@@ -28,6 +28,7 @@ import {
     type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { PROJECT_MEMORY_HEADING } from '~~/shared/projects/workspace';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import {
     getAnthropicPromptCacheControl,
@@ -284,8 +285,10 @@ export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): 
                     ? message.content.map(part => 'text' in part ? part.text : '').filter(Boolean).join(' ') : '';
                 return message.role === 'user' && params.projectContext!.messages.some(context => (typeof context.content === 'string' ? context.content === text
                     : Array.isArray(context.content) && context.content.some(part => part.type === 'text' && part.text === text)
-                        && context.content.every(part => part.type !== 'image' || JSON.stringify(message.content).includes(String(part.image)))) && optional.some(id => text.startsWith(`${params.projectContext!.marker} Source ${id}:`) || text.startsWith(`${params.projectContext!.marker} Source ${id} `)
-                        || text.startsWith(`${params.projectContext!.marker} Previous chat `) && text.includes(`summary ${id}:`)));
+                        && context.content.every(part => part.type !== 'image' || JSON.stringify(message.content).includes(String(part.image))))
+                    && (text.startsWith(`${params.projectContext!.marker}\n${PROJECT_MEMORY_HEADING}`)
+                        || optional.some(id => text.startsWith(`${params.projectContext!.marker} Source ${id}:`) || text.startsWith(`${params.projectContext!.marker} Source ${id} `)
+                        || text.startsWith(`${params.projectContext!.marker} Previous chat `) && text.includes(`summary ${id}:`))));
             });
             if (index < 0) throw error;
             body.messages.splice(index, 1);
@@ -406,7 +409,12 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         await assertDispatchOwner(params);
         try {
             const response = await fetchWithResponseDeadline(url, init, { signal, timeoutMs: params.responseTimeoutMs });
-            await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed');
+            try { await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed'); }
+            catch (error) {
+                // A refused turn must not leave the provider stream generating unseen tokens.
+                await response.body?.cancel().catch(() => undefined);
+                throw error;
+            }
             return response;
         } catch (error) { await recordFailure(); throw error; }
     };

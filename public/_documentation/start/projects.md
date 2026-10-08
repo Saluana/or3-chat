@@ -66,7 +66,7 @@ Settings groups instructions, the searchable default-model picker, and tool perm
 Server-owned tools also appear under Unavailable tools: project execution uses
 the browser boundary and cannot enable them through project settings.
 
-Expand **Project chats** to add or remove conversations or switch their inclusion in project memory. Those chat actions save immediately; save or discard other settings first. Saved project context must fit alongside the conversation and completion allowance; OR3 does not silently truncate required instructions or memory.
+Expand **Project chats** to add or remove conversations or switch their inclusion in project memory. Those chat actions save immediately; save or discard other settings first. A chat moves together with its branches, and OR3 reports how many related chats moved along. A chat that older versions listed in several projects shows a banner above the composer; choose **Keep in** the project it belongs to before sending. Saved project context must fit alongside the conversation and completion allowance; OR3 does not silently truncate required instructions or memory.
 
 Project context is recorded with each response for diagnostics, including submitted instructions, brief, memories, sources, images, and chat summaries. Available, retrieved, and included are different states; inclusion does not prove the model relied on a source. The conversation has no inline context counter or inspector. Originals remain accessible in Knowledge.
 

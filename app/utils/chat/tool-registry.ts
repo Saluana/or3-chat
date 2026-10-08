@@ -451,19 +451,23 @@ export function useToolRegistry() {
         let projectScope: import('./workspace-access').WorkspaceOperationScope | undefined;
         let projectOwner: string | null = null;
         let projectPolicy: string | undefined;
+        const { getDb } = await import('~/db/client');
+        const chatDb = getDb();
         if (context?.threadId) {
             try {
-                const { captureWorkspaceOperation } = await import('./workspace-access');
-                const { assertProjectToolAllowed, requestProjectToolApproval } = await import('~/utils/projects/context');
                 const { resolveChatProject } = await import('~/db/project-workspace');
-                projectScope = captureWorkspaceOperation(context);
-                const thread = await projectScope.db.threads.get(context.threadId);
+                const thread = await chatDb.threads.get(context.threadId);
                 if (!thread || thread.deleted) throw new Error('The originating chat is unavailable.');
-                const owner = await resolveChatProject(projectScope.db, thread.id);
-                projectScope.assertCurrent();
+                const owner = await resolveChatProject(chatDb, thread.id);
                 if (context.projectId !== undefined && context.projectId !== owner) throw new Error('The chat’s owning project changed before execution.');
                 projectOwner = owner;
-                if (owner && projectScope) {
+                // Only project chats need the authenticated workspace boundary;
+                // ordinary and guest chats keep their tools.
+                if (owner) {
+                    const { captureWorkspaceOperation } = await import('./workspace-access');
+                    const { assertProjectToolAllowed, requestProjectToolApproval } = await import('~/utils/projects/context');
+                    projectScope = captureWorkspaceOperation(context);
+                    if (projectScope.db !== chatDb) throw new Error('The originating workspace is no longer available.');
                     const { readProjectPolicy } = await import('~/db/project-workspace');
                     projectPolicy = JSON.stringify((await readProjectPolicy(projectScope.db,owner)).settings.tools[toolName] ?? null);
                     await assertProjectToolAllowed(projectScope, context.threadId, toolName,
@@ -488,14 +492,16 @@ export function useToolRegistry() {
                 || (admission && tool.runtime === 'server')) {
                 throw new Error('Tool availability or its admitted definition changed before execution.');
             }
-            if (!projectScope || !context?.threadId) return;
-            projectScope.assertCurrent();
-            if (await resolveChatProject(projectScope.db, context.threadId) !== projectOwner)
+            if (!context?.threadId) return;
+            projectScope?.assertCurrent();
+            if (getDb() !== chatDb) throw new Error('The originating workspace is no longer available.');
+            if (await resolveChatProject(chatDb, context.threadId) !== projectOwner)
                 throw new Error('The chat’s owning project changed before execution.');
-            if (projectOwner && JSON.stringify((await readProjectPolicy(projectScope.db, projectOwner)).settings.tools[toolName] ?? null) !== projectPolicy)
-                throw new Error('Project tool policy changed before execution.');
             if (JSON.stringify(parsed.value) !== argumentsSnapshot)
                 throw new Error('The authorized tool arguments changed before execution.');
+            if (!projectScope || !projectOwner) return;
+            if (JSON.stringify((await readProjectPolicy(projectScope.db, projectOwner)).settings.tools[toolName] ?? null) !== projectPolicy)
+                throw new Error('Project tool policy changed before execution.');
             const checkedArgs = JSON.parse(argumentsSnapshot) as Record<string, unknown>;
             await assertProjectToolAllowed(projectScope, context.threadId, toolName, checkedArgs, undefined, projectOwner, true);
             if (JSON.stringify(checkedArgs) !== argumentsSnapshot)
@@ -517,16 +523,16 @@ export function useToolRegistry() {
         const execution = await withTimeout(
             (abortSignal) => tool.handler(
                 parsed.value,
-                { ...baseContext, ...(projectScope ? { projectId: projectOwner } : {}), abortSignal, assertToolAuthorized }
+                { ...baseContext, ...(context?.threadId ? { projectId: projectOwner } : {}), abortSignal, assertToolAuthorized }
             ),
             baseContext.abortSignal,
             DEFAULT_TIMEOUT_MS
         );
 
-        if (!execution.error && projectScope && context?.threadId) {
+        if (!execution.error && context?.threadId) {
             try {
                 await assertToolAuthorized();
-                if (projectOwner && execution.result) {
+                if (projectScope && projectOwner && execution.result) {
                     const { filterProjectToolResult } = await import('~/utils/projects/context');
                     execution.result = await filterProjectToolResult(projectScope, context.threadId, projectOwner, toolName, execution.result);
                 }

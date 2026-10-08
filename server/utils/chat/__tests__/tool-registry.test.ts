@@ -264,20 +264,23 @@ describe('registered canonical history authorization', () => {
         dispose = registerServerHistoryTools();
     });
     afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); _resetSharedSessionCache(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-    it.each(['project', 'conflict', 'unresolved'] as const)('refuses %s ownership before executing a server tool', async ownership => {
+    it.each(['project', 'conflict', 'unresolved', 'legacy-provider'] as const)('applies %s ownership before executing a server tool', async ownership => {
+        // Providers declaring the contract must resolve ownership; older ones still run ordinary chats.
+        if (ownership !== 'legacy-provider') adapter.capabilities = { ...adapter.capabilities, projectOwnership: 'v1' };
         const originalRead = adapter.readChatHistory!;
         adapter.readChatHistory = async (actor, query, signal) => {
             const result = await originalRead(actor, query, signal);
             return query.kind !== 'thread' ? result : { ...result,
-                project_ownership: ownership === 'unresolved' ? undefined : ownership === 'conflict' ? 'conflict' : 'resolved',
+                project_ownership: ownership === 'unresolved' || ownership === 'legacy-provider' ? undefined : ownership === 'conflict' ? 'conflict' : 'resolved',
                 thread: result.thread ? { ...result.thread, project_id: ownership === 'project' ? 'project-a' : null } : undefined };
         };
-        const handler = vi.fn(() => 'must not execute');
+        const handler = vi.fn(() => 'executed');
         const remove = registerServerTool({ type: 'function', runtime: 'server', function: {
             name: 'project_boundary_fixture', description: 'Boundary fixture', parameters: { type: 'object', properties: {} } } }, handler);
         try {
             const result = await executeServerTool('project_boundary_fixture', '{}', context);
-            expect(result.error).toMatch(/project|Project/); expect(handler).not.toHaveBeenCalled();
+            if (ownership === 'legacy-provider') { expect(result.error).toBeUndefined(); expect(handler).toHaveBeenCalledOnce(); }
+            else { expect(result.error).toMatch(/project|Project/); expect(handler).not.toHaveBeenCalled(); }
         } finally { remove(); }
     });
     async function lookup(messageId = 'original', extra: Partial<ToolExecutionContext> = {}) {

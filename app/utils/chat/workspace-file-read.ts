@@ -6,7 +6,7 @@ import { workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileBlob } from '~/db/files';
 import { resolveChatProject } from '~/db/project-workspace';
-import { PROJECT_POST_TYPES, ProjectSourceSchema } from '~~/shared/projects/workspace';
+import { PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 
 const PAGE_BYTES = 2048; // JSON escaping still fits the existing 16 KiB result bound.
 
@@ -27,8 +27,8 @@ export async function readWorkspaceFilePage(scope: WorkspaceOperationScope,
         const rows = await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, owner]).toArray();
         for (const row of rows) {
             if (row.deleted) continue;
-            const binding = ProjectSourceSchema.parse(JSON.parse(row.content));
-            if (binding.kind !== 'file' || binding.item_id !== post.id || binding.mode === 'off') continue;
+            const binding = readPersistedProjectRecord(ProjectSourceSchema, row.content);
+            if (!binding || binding.kind !== 'file' || binding.item_id !== post.id || binding.mode === 'off') continue;
             const revision = binding.revisions.find(r => r.id === binding.current_revision_id)!;
             if (!revision.text_hash || !['ready', 'partial'].includes(revision.status)) continue;
             const extractedMeta = await scope.db.file_meta.get(revision.text_hash);

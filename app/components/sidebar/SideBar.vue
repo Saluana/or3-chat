@@ -208,6 +208,7 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
+import { relatedChatsNotice } from '~/utils/projects/related-chats';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
@@ -485,6 +486,10 @@ const { open: openCommandPalette } = useCommandPalette();
 
 const { openProjectSidebar } = useProjectSidebar();
 const projectNavigationToast = useToast();
+const notifyRelatedChats = (count: number) => {
+    const notice = relatedChatsNotice(count);
+    if (notice) projectNavigationToast.add(notice);
+};
 let stopRevealSubscription: (() => void) | null = null;
 async function revealProject(projectId: string) {
     if (!projectId) return;
@@ -877,7 +882,7 @@ async function handleRemoveFromProject(payload: {
         const idx = entries.findIndex((d) => d.id === payload.entryId);
         if (idx === -1) return;
         entries.splice(idx, 1);
-        await updateProjectEntries(payload.projectId, entries);
+        notifyRelatedChats(await updateProjectEntries(payload.projectId, entries));
     } catch (e) {
         console.error('remove from project failed', e);
     }
@@ -1023,7 +1028,7 @@ async function submitAddToProject() {
                 name: projectName,
                 description: newProjectDescription.value.trim() || undefined,
             });
-            await updateProjectEntries(pid, [entry]);
+            notifyRelatedChats(await updateProjectEntries(pid, [entry]));
             projectId = pid;
             if (!expandedProjects.value.includes(pid))
                 expandedProjects.value.push(pid);
@@ -1042,7 +1047,7 @@ async function submitAddToProject() {
             );
             if (!existing) entries.push(entry);
             else existing.name = entry.name;
-            await updateProjectEntries(project.id, entries);
+            notifyRelatedChats(await updateProjectEntries(project.id, entries));
         }
         closeAddToProject();
     } catch (e: any) {

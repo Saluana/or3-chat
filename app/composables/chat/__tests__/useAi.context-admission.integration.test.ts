@@ -91,7 +91,7 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 describe('native context admission at the actual durable boundary', () => {
     // Diagnostics must not block valid provider input, and a prepared receipt
     // must distinguish a held dispatch, successful acceptance and network failure.
-    it('dispatches large saved memory with an aggregate diagnostic preview budget', async () => {
+    it('bounds large saved memory in provider input and its diagnostic preview budget', async () => {
         const db = getDb();
         await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
         const thread = await createThreadInDb(db, { title: 'Memory', project_id: 'project' });
@@ -100,11 +100,15 @@ describe('native context admission at the actual durable boundary', () => {
             clock: 1, created_at: 1, updated_at: 1, deleted: false })));
         const result = await chat(thread.id).sendMessage('Use the saved facts', { model: 'fixture/model' });
         expect(result.status, JSON.stringify(result)).toBe('complete');
-        expect(JSON.stringify(external.bodies.at(-1)?.messages)).toContain('Fact 499: full durable content.');
+        // 500 explicit memories exceed the 12 KiB selection budget: only a bounded subset is sent.
+        const included = JSON.stringify(external.bodies.at(-1)?.messages).match(/full durable content\./g) ?? [];
+        expect(included.length).toBeGreaterThan(0);
+        expect(included.length).toBeLessThanOrEqual(3);
         const assistant = (await db.messages.where('thread_id').equals(thread.id).toArray()).find(row => row.role === 'assistant')!;
         const data = assistant.data as Record<string, unknown>;
-        const receipt = data.project_context as { memories: Array<{ id: string }> };
-        expect(receipt.memories.map(memory => memory.id)).toHaveLength(500);
+        const receipt = data.project_context as { memories: Array<{ id: string }>; omitted_memory_count: number };
+        expect(receipt.memories).toHaveLength(included.length);
+        expect(receipt.omitted_memory_count + receipt.memories.length).toBe(500);
         expect(new TextEncoder().encode(JSON.stringify({ project_context: receipt, project_context_iterations: data.project_context_iterations })).byteLength).toBeLessThanOrEqual(128 * 1024);
     });
 

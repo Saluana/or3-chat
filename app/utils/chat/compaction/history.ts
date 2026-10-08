@@ -4,7 +4,7 @@ import { compareMessageOrder } from '~/db/messages';
 import { withoutSupersededMessages } from '../transcript';
 import { readCompactionData } from '~~/shared/chat/compaction';
 import { resolveChatProject, projectSettingsId } from '~/db/project-workspace';
-import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
+import { readProjectSettings } from '~~/shared/projects/workspace';
 
 export class CompactionHistoryError extends Error {
     constructor(readonly code: 'scope_incomplete' | 'invalid_anchor' | 'cyclic_lineage' | 'summary_pending', message: string) {
@@ -28,18 +28,24 @@ export function assertCompactedSummary(thread: Thread, rows: readonly Message[])
     return summary;
 }
 
-/** One read snapshot, iterative lineage, ID anchors and no arbitrary depth/conversation cutoff. */
-export async function resolveThreadProjection(threadId: string, db: Or3DB = getDb(), throughMessageId?: string): Promise<ThreadProjection> {
+/**
+ * One read snapshot, iterative lineage, ID anchors and no arbitrary depth/conversation cutoff.
+ * Request paths enforce project provenance; display reads (`projectProvenance: false`)
+ * always render the chat's own transcript.
+ */
+export async function resolveThreadProjection(threadId: string, db: Or3DB = getDb(), throughMessageId?: string,
+    options: { projectProvenance?: boolean } = {}): Promise<ThreadProjection> {
+    const enforce = options.projectProvenance !== false;
     return db.transaction('r', ['threads', 'messages', 'projects', 'posts'], async () => {
         const source = await db.threads.get(threadId);
         if (!source || source.deleted) throw new CompactionHistoryError('scope_incomplete', 'Conversation source is unavailable.');
-        const owner = await resolveChatProject(db, threadId);
+        const owner = enforce ? await resolveChatProject(db, threadId) : null;
         const settings = owner ? await db.posts.get(projectSettingsId(owner)) : undefined;
         const excluded = new Set(settings && !settings.deleted
-            ? ProjectSettingsSchema.parse(JSON.parse(settings.content)).excluded_chat_ids : []);
+            ? readProjectSettings(settings.content).excluded_chat_ids : []);
         const permitted = new Set<string>([threadId]);
         const assertPermitted = async (id: string) => {
-            if (permitted.has(id)) return;
+            if (!enforce || permitted.has(id)) return;
             // Retained summaries survive source deletion, but never an owner
             // change or explicit exclusion. Tombstones retain their ownership.
             const provenanceOwner = await resolveChatProject(db, id, { includeDeleted: true }).catch(() => {
@@ -50,6 +56,7 @@ export async function resolveThreadProjection(threadId: string, db: Or3DB = getD
             permitted.add(id);
         };
         const assertSummaryProvenance = async (summary: Message) => {
+            if (!enforce) return;
             const seen = new Set<string>();
             let current: Message | undefined = summary;
             while (current) {

@@ -55,7 +55,7 @@ export function useContextPreview(options: {
         try {
             await preferences.ensureLoaded(); if (!current()) return;
             const settings = { ...preferences.settings.value };
-            const projection = threadId ? await resolveThreadProjection(threadId, db) : undefined;
+            const projection = threadId ? await resolveThreadProjection(threadId, db, undefined, { projectProvenance: false }) : undefined;
             if (!current()) return;
             const history = projection
                 ? projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(projection.messages)) : [];

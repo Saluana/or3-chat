@@ -5,6 +5,8 @@ export const PROJECT_POST_TYPES = {
     memory: 'or3:project-memory',
     source: 'or3:project-source',
 } as const;
+/** Heading of the optional memories context message; admission may drop it under context limits. */
+export const PROJECT_MEMORY_HEADING = 'Saved project memories (reference material):';
 export const ContextModeSchema = z.enum(['relevant', 'always', 'off']);
 export const ProjectToolRuleSchema = z
     .object({
@@ -100,12 +102,53 @@ export type ProjectSourceInput = z.input<typeof ProjectSourceSchema>;
 export type SourceRevision = z.infer<typeof SourceRevisionSchema>;
 export type ContextMode = z.infer<typeof ContextModeSchema>;
 
+/** Synced rows may come from newer clients: drop unknown keys; other versions or damage read as null. */
+export function readPersistedProjectRecord<S extends z.ZodType>(
+    schema: S,
+    content: string,
+): z.output<S> | null {
+    let value: unknown;
+    try {
+        value = JSON.parse(content);
+    } catch {
+        return null;
+    }
+    // Each pass strips the unknown keys zod reports; any other issue is unsupported.
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const result = schema.safeParse(value);
+        if (result.success) return result.data as z.output<S>;
+        if (result.error.issues.some((issue) => issue.code !== 'unrecognized_keys'))
+            return null;
+        for (const issue of result.error.issues) {
+            if (issue.code !== 'unrecognized_keys') continue;
+            let target: unknown = value;
+            for (const key of issue.path)
+                target = (target as Record<PropertyKey, unknown> | null)?.[key];
+            if (target && typeof target === 'object')
+                for (const key of issue.keys)
+                    delete (target as Record<string, unknown>)[key];
+        }
+    }
+    return null;
+}
+
+export function readProjectSettings(content: string): ProjectSettings {
+    const settings = readPersistedProjectRecord(ProjectSettingsSchema, content);
+    if (!settings)
+        throw new Error(
+            'These project settings were saved by a newer OR3 version or are damaged. Update OR3 to use project features.',
+        );
+    return settings;
+}
+
 const ReceiptStateSchema = z.enum(['available', 'retrieved', 'included']);
 export const ProjectContextReceiptSchema = z.object({
     version: z.literal(1),
     project_id: z.string(),
     project_name: z.string(),
     available_source_count: z.number().int().nonnegative().optional(),
+    /** Manual memories left out of this request by the byte budget (listed memories are in `memories`). */
+    omitted_memory_count: z.number().int().nonnegative().optional(),
     instructions: z.string(),
     brief: z.string(),
     instructions_included: z.boolean().optional(),

@@ -1,7 +1,9 @@
 import { defineComponent, h, nextTick, ref } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import { getDb } from '~/db/client';
+import { setKvByName } from '~/db/kv';
 import { useChatModelSelection } from '../useChatModelSelection';
 
 const modelStore = vi.hoisted(() => ({
@@ -33,6 +35,14 @@ vi.mock('../useAiSettings', () => ({
 
 vi.mock('@vueuse/core', () => ({
     useLocalStorage: (_key: string, defaultValue: string) => ref(defaultValue),
+}));
+
+// Real KV writes need the hook engine; the hooks themselves are not under test here.
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        applyFilters: async (_name: string, value: unknown) => value,
+        doAction: async () => {},
+    }),
 }));
 
 function model(
@@ -200,5 +210,73 @@ describe('useChatModelSelection', () => {
             'medium',
             'high',
         ]);
+    });
+});
+
+// A composer's explicit choice survives its own new-chat send, but never a later navigation.
+describe('new-chat model choice', () => {
+    const db = getDb();
+    const thread = (id: string, created_at: number) => ({
+        id, title: id, clock: 0, created_at, updated_at: created_at, deleted: false,
+        status: 'ready', forked: false, pinned: false,
+    });
+    // The composable records explicit choices only on the client, as in the browser.
+    const client = process as unknown as { client?: boolean };
+    beforeEach(async () => {
+        client.client = true;
+        await db.open();
+        await Promise.all([db.threads.clear(), db.kv.clear()]);
+    });
+    afterEach(() => {
+        delete client.client;
+    });
+
+    function mountWithThread() {
+        const threadId = ref<string | undefined>(undefined);
+        let selection!: ReturnType<typeof useChatModelSelection>;
+        const wrapper = mount(
+            defineComponent({
+                setup() {
+                    selection = useChatModelSelection({
+                        threadId: () => threadId.value,
+                        onChange: vi.fn(),
+                    });
+                    return () => h('div');
+                },
+            }),
+        );
+        return { selection, threadId, wrapper };
+    }
+
+    it('keeps the explicit model and variant chosen in a new chat after its first send', async () => {
+        const { selection, threadId, wrapper } = mountWithThread();
+        await flushPromises();
+        selection.selectedModel.value = 'provider/explicit';
+        selection.modelVariant.value = 'online';
+        selection.armNewChatSelection();
+        await db.threads.put(thread('fresh-chat', Math.floor(Date.now() / 1000)));
+        threadId.value = 'fresh-chat';
+        await flushPromises();
+        expect(selection.selectedModel.value).toBe('provider/explicit');
+        expect(selection.modelVariant.value).toBe('online');
+        await vi.waitFor(async () => {
+            const row = await db.kv.where('name').equals('chat-model:fresh-chat').first();
+            expect(JSON.parse(row!.value as string)).toEqual({ model: 'provider/explicit', variant: 'online' });
+        });
+        wrapper.unmount();
+    });
+
+    it('does not apply a new-chat choice to an older chat that is opened afterwards', async () => {
+        await setKvByName('chat-model:old-chat', JSON.stringify({ model: 'provider/saved', variant: 'off' }), db, { isValid: () => true });
+        await db.threads.put(thread('old-chat', 1));
+        const { selection, threadId, wrapper } = mountWithThread();
+        await flushPromises();
+        selection.selectedModel.value = 'provider/explicit';
+        selection.armNewChatSelection();
+        threadId.value = 'old-chat';
+        await vi.waitFor(() => expect(selection.selectedModel.value).toBe('provider/saved'));
+        const row = await db.kv.where('name').equals('chat-model:old-chat').first();
+        expect(JSON.parse(row!.value as string)).toEqual({ model: 'provider/saved', variant: 'off' });
+        wrapper.unmount();
     });
 });

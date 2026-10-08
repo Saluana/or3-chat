@@ -15,6 +15,8 @@ import {
     deleteProjectWorkspace,
     moveChatToProject,
     resolveChatProject,
+    ambiguousChatProjects,
+    projectSettingsId,
 } from '../project-workspace';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { capturedHistoryContext } from '~/utils/chat/history-reader';
@@ -143,7 +145,7 @@ describe('persistent project workspace', () => {
             expect(await resolveChatProject(db, 'ordinary')).toBe('a');
             expect(reads).toEqual(['a']);
             await db.projects.update('b', { data: [{ id: 'ordinary', kind: 'chat' }] });
-            await expect(resolveChatProject(db, 'ordinary')).rejects.toThrow(/multiple/);
+            await expect(resolveChatProject(db, 'ordinary')).rejects.toThrow(/more than one project/);
             await db.projects.update('b', { deleted: true });
             expect(await resolveChatProject(db, 'ordinary')).toBe('a');
         } finally { db.projects.hook('reading').unsubscribe(reading); }
@@ -561,6 +563,18 @@ describe('persistent project workspace', () => {
         ).toBe('Use metric units');
     });
 
+    // LWW applies a remote revision with a higher HLC at the same clock. An
+    // editor holding the earlier revision must not silently overwrite it.
+    it('refuses an edit whose revision was replaced by sync at the same clock', async () => {
+        const original = await readProjectWorkspace(db, 'a');
+        const opened = await saveProjectSettings(scope(), 'a', { ...original.settings, instructions: 'Local draft base' }, null);
+        await db.posts.put({ ...opened, content: JSON.stringify({ ...original.settings, instructions: 'Remote winner' }) });
+        await expect(
+            saveProjectSettings(scope(), 'a', { ...original.settings, instructions: 'Stale local edit' }, opened),
+        ).rejects.toThrow(/changed/i);
+        expect((await readProjectWorkspace(db, 'a')).settings.instructions).toBe('Remote winner');
+    });
+
     // Approval is an await boundary: changing either owner while the user is
     // reviewing must refuse execution, rather than discover the move after a write.
     it('reauthorizes originating and target ownership after approval', async () => {
@@ -674,7 +688,7 @@ describe('persistent project workspace', () => {
             project('b', [{ id: 'chat', kind: 'chat' }]),
         ]);
         await expect(resolveChatProject(db, 'chat')).rejects.toThrow(
-            /multiple|ambiguous/i,
+            /more than one project/i,
         );
         await moveChatToProject(scope(), 'chat', 'b');
         expect(await resolveChatProject(db, 'chat')).toBe('b');
@@ -688,6 +702,45 @@ describe('persistent project workspace', () => {
             name: 'Chat',
             color: 'blue',
         });
+    });
+
+    // The composer's banner lists every legacy folder until the user keeps the chat in one.
+    it('lists each legacy project of an ambiguous chat until the user keeps it in one', async () => {
+        await db.threads.put({ id: 'listed', title: 'Listed', clock: 0, created_at: 1, updated_at: 1, deleted: false, status: 'ready', forked: false, pinned: false });
+        await db.projects.bulkPut([project('a', [{ id: 'listed', kind: 'chat' }]), project('b', [{ id: 'listed', kind: 'chat' }])]);
+        expect((await ambiguousChatProjects(db, 'listed')).map((row) => row.id).sort()).toEqual(['a', 'b']);
+        await moveChatToProject(scope(), 'listed', 'a');
+        expect(await ambiguousChatProjects(db, 'listed')).toEqual([]);
+        expect(await resolveChatProject(db, 'listed')).toBe('a');
+        expect((await db.projects.get('b'))?.data).toEqual([]);
+    });
+
+    // Branches share provenance: joining moves the family, and leaving releases only the
+    // branches that project owned, so a chat owned elsewhere keeps its membership.
+    it('moves a branch family together and, when leaving, releases only its own project branches', async () => {
+        const branch = (id: string, parent: string | null, owner: string | null) => ({
+            id, title: id, parent_thread_id: parent, root_thread_id: 'family', project_id: owner,
+            clock: 0, created_at: 1, updated_at: 1, deleted: false, status: 'ready', forked: parent !== null, pinned: false,
+        });
+        await db.threads.bulkPut([branch('family', null, 'b'), branch('branch', 'family', 'b'), branch('elsewhere', 'family', 'a')]);
+        expect(await moveChatToProject(scope(), 'family', null)).toBe(1);
+        expect((await db.threads.get('branch'))?.project_id).toBeNull();
+        expect((await db.threads.get('elsewhere'))?.project_id).toBe('a');
+        expect(await moveChatToProject(scope(), 'family', 'b')).toBe(2);
+        expect((await db.threads.get('elsewhere'))?.project_id).toBe('b');
+    });
+
+    // Newer clients may add top-level fields. An older client's edit keeps them, and it
+    // refuses to overwrite a record in a format it cannot read.
+    it('keeps fields a newer OR3 version stored and refuses to overwrite an unreadable record', async () => {
+        const first = await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), instructions: 'Base' }, null);
+        await db.posts.put({ ...first, content: JSON.stringify({ ...JSON.parse(first.content), future_setting: { mode: 'kept' } }) });
+        const stored = (await db.posts.get(projectSettingsId('a')))!;
+        const saved = await saveProjectSettings(scope(), 'a', { ...(await readProjectWorkspace(db, 'a')).settings, instructions: 'Edited' }, stored);
+        expect(JSON.parse(saved.content)).toMatchObject({ instructions: 'Edited', future_setting: { mode: 'kept' } });
+        await db.posts.put({ ...saved, content: JSON.stringify({ ...JSON.parse(saved.content), version: 2 }) });
+        await expect(saveProjectSettings(scope(), 'a', defaultProjectSettings(), (await db.posts.get(projectSettingsId('a')))!))
+            .rejects.toThrow(/newer OR3 version/);
     });
 
     // Failure inventory: parallel source additions or replacement collisions must

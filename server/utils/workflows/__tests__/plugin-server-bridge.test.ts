@@ -58,9 +58,10 @@ describe('workflow server provider boundary', () => {
         await expect(config.client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } })).rejects.toThrow(/project/i);
         expect(fetch).toHaveBeenCalledOnce();
     });
-    it('refuses context-free older package requests', async () => {
+    it('keeps context-free older package requests working behind job admission', async () => {
+        // Transition: job creation refuses project chats; only the per-request move fence needs an origin.
         const { bridge } = await client();
-        await expect(bridge.createOpenRouterClient({ apiKey: 'fixture' }).client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } })).rejects.toThrow(/origin|package/i);
-        expect(fetch).not.toHaveBeenCalled();
+        await bridge.createOpenRouterClient({ apiKey: 'fixture' }).client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } });
+        expect(fetch).toHaveBeenCalledOnce(); expect(fixture.send).toHaveBeenCalledOnce();
     });
 });

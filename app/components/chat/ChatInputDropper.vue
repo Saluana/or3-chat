@@ -36,6 +36,7 @@
                     </div>
                 </details>
             </div>
+            <ChatProjectChoice :thread-id="props.threadId" />
             <label v-if="attachments.length && attachmentProject" class="flex items-center gap-2 text-xs">Attachment destination
                 <select v-model="attachmentDestination" aria-label="Attachment destination" class="rounded border border-current/20 p-1 bg-transparent"><option value="chat">This chat</option><option value="project">Add to project knowledge</option></select>
             </label>
@@ -443,6 +444,7 @@ import type {
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
+import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
@@ -792,6 +794,7 @@ const {
     modelInherited,
     useInheritedModel,
     restoreDraftModel,
+    armNewChatSelection,
 } = useChatModelSelection({
     threadId: () => props.threadId,
     onChange: (modelId) => emit('model-change', modelId),
@@ -1223,6 +1226,8 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         }
 
         const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
+        // A new chat's first send creates its thread; that chat keeps this composer's explicit model.
+        if (!props.threadId) armNewChatSelection();
         emit('send', {
             ...decision,
             knowledge_project_id: attachmentDestination.value === 'project' ? attachmentProject.value ?? undefined : undefined,

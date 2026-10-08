@@ -495,3 +495,17 @@ and the complete final diff review remain required.
 - Reauthorization inside transactions avoids imports/crypto preparation and
   preserves the normalized approved arguments; preparation remains outside the
   write transaction. Latest guard batch: 78 connected tests passed, 1 existing skipped; configured Nuxt typecheck and mapped documentation checks passed.
+
+## Code-review follow-up: fixes for the 15 review findings
+
+Implemented in this change:
+
+- Saves keep stored top-level fields this version does not know, and refuse to overwrite a record in a format it cannot read (`save`, `keepStoredUnknownFields`). Editors pass the revision they read, so a same-clock sync replacement is refused.
+- A legacy chat listed in several projects shows a choose-project banner above the composer (`ChatProjectChoice`, `ambiguousChatProjects`). Keeping it in one project moves its branch family.
+- Joining a project moves the whole branch family. Leaving releases only the branches that project owned. Moves report related chats in a notice from the sidebar and the banner.
+- Receipts carry `omitted_memory_count` for explicit memories left out by the byte budget or by context admission.
+- A new chat's first send persists the composer's explicit model only when that composer armed the choice (`armNewChatSelection`). A chat opened later keeps its own preference.
+
+Evidence: 14 affected suites passed (343 passed, 1 skipped). The wider changed-file run has the same 81 failures as the PR head, all pre-existing, and no new ones. The CI-profile typecheck passed. ESLint reports the same 19 `no-unsafe-assignment` errors as the PR head and none new.
+
+Not done here: a Playwright journey for the new-chat model choice (covered by a composable test instead); the title-weighting and score-threshold part of the source-relevance finding; lazy clearing of stale project pointers. Provider releases that declare `projectOwnership` (SQLite 0.0.14, Convex 0.0.11) and the new Workflows package need the release process and version pins, so they are outside this change.

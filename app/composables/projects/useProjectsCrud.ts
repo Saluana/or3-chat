@@ -1,5 +1,5 @@
 import { del, type Project } from '~/db';
-import { moveChatProjectRows, notifyChatProjectMove } from '~/db/project-workspace';
+import { chatFamilyIds, chatOwnerIn, moveChatProjectRows, notifyChatProjectMove } from '~/db/project-workspace';
 import { prepareProjectWrite } from '~/db/projects';
 import { prepareDocumentCreate } from '~/db/documents';
 import { createThreadInDb } from '~/db/threads';
@@ -145,10 +145,11 @@ export function useProjectsCrud() {
         return { id: document.row.id, title: document.row.title };
     }
 
+    /** Resolves to how many related chats (branch family members) moved along with the edited ones. */
     async function updateProjectEntries(
         id: string,
         entries: ProjectEntry[]
-    ): Promise<void> {
+    ): Promise<number> {
         const scope = captureProjectOperation();
         scope.assertCurrent('write');
         const db = scope.db;
@@ -161,22 +162,38 @@ export function useProjectsCrud() {
         if (prepared.row.id !== id || prepared.row.deleted) throw new Error('A project hook changed the operation target.');
         const requested = normalizeProjectData(prepared.row.data);
         const changes: Awaited<ReturnType<typeof moveChatProjectRows>>[] = [];
+        let related = 0;
         const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads']), async () => {
             scope.assertCurrent('write');
             if ((await db.projects.get(id))?.clock !== existing.clock)
                 throw new Error('Project changed. Reload before editing membership.');
+            // Branch families move with the chat they belong to, so relatives keep a readable shared history.
+            const ownership = await db.projects.toArray();
+            const familyIn = new Set<string>();
+            const detached = new Set<string>();
             for (const entry of requested.filter(entry => entry.kind === 'chat' &&
-                !previous.some(prior => prior.kind === 'chat' && prior.id === entry.id)))
-                changes.push(await moveChatProjectRows(scope, entry.id, id));
+                !previous.some(prior => prior.kind === 'chat' && prior.id === entry.id))) {
+                for (const relative of await chatFamilyIds(db, entry.id)) familyIn.add(relative);
+                const change = await moveChatProjectRows(scope, entry.id, id, { family: true });
+                changes.push(change);
+                related += change.threads.filter(thread => thread.id !== entry.id).length;
+            }
             for (const entry of previous.filter(entry => entry.kind === 'chat' && !requested.some(next => next.kind === 'chat' && next.id === entry.id))) {
                 const chat = await db.threads.get(entry.id);
-                if (chat?.project_id === id) changes.push(await moveChatProjectRows(scope, entry.id, null));
+                if (!chat || chatOwnerIn(chat, ownership) !== id) continue;
+                const change = await moveChatProjectRows(scope, entry.id, null, { family: true });
+                changes.push(change);
+                for (const thread of change.threads) detached.add(thread.id);
+                related += change.threads.filter(thread => thread.id !== entry.id).length;
             }
             const current = await db.projects.get(id);
             if (!current || current.deleted) throw new Error('Project unavailable.');
+            const relatives = normalizeProjectData(current.data).filter(entry => entry.kind === 'chat'
+                && familyIn.has(entry.id) && !requested.some(next => next.kind === 'chat' && next.id === entry.id));
             const next = {
                 ...current,
-                data: mergeProjectEntries(current.data, requested),
+                data: mergeProjectEntries(current.data, [...requested.filter(entry =>
+                    entry.kind !== 'chat' || !detached.has(entry.id)), ...relatives]),
                 updated_at: nowSec(),
                 clock: nextClock(current.clock),
             };
@@ -187,6 +204,7 @@ export function useProjectsCrud() {
         for (const change of changes) await notifyChatProjectMove(change);
         try { await prepared.afterCommit(saved); }
         catch (error) { console.warn('Project membership saved; after-update hook failed.', error); }
+        return related;
     }
 
     async function syncProjectEntryTitle(

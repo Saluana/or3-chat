@@ -22,6 +22,7 @@ for (const model of models) {
             key,
             new AbortController().signal,
             undefined,
+            undefined,
             model,
         );
         const probabilities = result.probabilities;

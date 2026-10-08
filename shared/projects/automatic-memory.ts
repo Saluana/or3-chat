@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MEMORY_CLASSIFIER_MODEL } from './memory-classification';
+import { MEMORY_CLASSIFIER_MODEL, memoryInferenceOrigin } from './memory-classification';
 import { DEFAULT_HEADERS } from '../openrouter/client';
 
 export const MEMORY_ANALYSIS_MODEL = '~openai/gpt-luna-latest';
@@ -63,12 +63,16 @@ export async function analyzeAutomaticMemory(
     state: AutomaticMemoryState,
     key: string,
     signal: AbortSignal,
+    baseUrl: unknown,
     beforeDispatch?: () => Promise<void>,
 ): Promise<AutomaticMemoryOutput> {
     AutomaticMemoryStateSchema.parse(state);
+    // Gateways may not implement Decisions: capture nothing rather than leave the configured host.
+    const origin = memoryInferenceOrigin(baseUrl);
+    if (!origin) return { memories: [] };
     const request = async (path: string, body: unknown, timeout: number) => {
         await beforeDispatch?.();
-        const response = await fetch('https://openrouter.ai' + path, {
+        const response = await fetch(origin + path, {
             method: 'POST',
             headers: {
                 ...DEFAULT_HEADERS,

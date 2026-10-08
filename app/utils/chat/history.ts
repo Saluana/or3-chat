@@ -35,7 +35,8 @@ export async function ensureThreadHistoryLoaded(
     try {
         const db = getDb();
         const generation = getWorkspaceGeneration();
-        const { messages: visible } = await resolveThreadProjection(targetThreadId, db);
+        // Display read: a chat's own transcript renders even when sends refuse its provenance.
+        const { messages: visible } = await resolveThreadProjection(targetThreadId, db, undefined, { projectProvenance: false });
 
         const storedById = new Map(visible.map((row) => [row.id, row]));
         const nextMessages = projectTranscriptForOpenRouter(

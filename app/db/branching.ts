@@ -158,9 +158,6 @@ export async function forkThread({
     reason = 'manual',
 }: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
     const db = getDb();
-    const { captureProjectOperation } = await import('~/utils/projects/context');
-    const scope = captureProjectOperation(undefined, sourceThreadId);
-    if (scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
     const hooks = useHooks();
     const filteredOptions = await hooks.applyFilters(
         'branch.fork:filter:options',
@@ -175,11 +172,18 @@ export async function forkThread({
     anchorMessageId = filteredOptions.anchorMessageId;
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
-    scope.assertCurrent('write');
     const { resolveChatProject, moveChatProjectRows, notifyChatProjectMove } = await import('./project-workspace');
+    if (getDb() !== db) throw new Error('Workspace changed before forking. Try again.');
     const src = await db.threads.get(sourceThreadId);
     if (!src || src.deleted) throw new Error('Source thread not found');
     const projectId = await resolveChatProject(db, src.id);
+    // Only project forks need the authenticated workspace boundary; ordinary
+    // and guest forks keep the unscoped write path.
+    const scope = projectId
+        ? (await import('~/utils/projects/context')).captureProjectOperation(undefined, sourceThreadId)
+        : null;
+    if (scope && scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
+    scope?.assertCurrent('write');
     const rootThreadId = await resolveRootThreadId(src.id, db);
 
     const anchor = await db.messages.get(anchorMessageId);
@@ -219,7 +223,7 @@ export async function forkThread({
     await hooks.doAction('branch.fork:action:before', beforePayload);
     let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
     const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects']), async () => {
-        scope.assertCurrent('write');
+        scope?.assertCurrent('write');
         const current = await db.threads.get(src.id);
         if (JSON.stringify(current) !== JSON.stringify(src)
             || await resolveChatProject(db, src.id) !== projectId
@@ -230,7 +234,7 @@ export async function forkThread({
             throw new Error('The anchor changed while preparing its fork. Try again.');
 
         await db.threads.put(fork);
-        membership = await moveChatProjectRows(scope, fork.id, projectId);
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
 
         if (branchMode === 'copy') {
             const ancestors = await db.messages
@@ -260,7 +264,7 @@ export async function forkThread({
             });
         }
 
-        scope.assertCurrent('write');
+        scope?.assertCurrent('write');
         return { thread: fork, anchor };
     });
     await notifyChatProjectMove(membership);

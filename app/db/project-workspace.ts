@@ -22,6 +22,8 @@ import {
     ProjectMemorySchema,
     ProjectSourceSchema,
     defaultProjectSettings,
+    readPersistedProjectRecord,
+    readProjectSettings,
     type ProjectSettings,
     type ProjectMemoryInput,
     type ProjectSourceInput,
@@ -31,6 +33,7 @@ export const projectSettingsId = (projectId: string) =>
     `project-settings-${projectId}`;
 // Extraction itself has a 30-second deadline; allow a short persistence grace.
 export const PROJECT_INTAKE_TIMEOUT_SECONDS = 45;
+export const PROJECT_MEMORY_LIMIT = 500;
 export interface ProjectRecord<T> {
     row: Post;
     value: T;
@@ -44,7 +47,7 @@ export async function readProjectPolicy(db: Or3DB, projectId: string) {
     const settingsRow = await db.posts.get(projectSettingsId(projectId));
     const settings =
         settingsRow && !settingsRow.deleted
-            ? ProjectSettingsSchema.parse(JSON.parse(settingsRow.content))
+            ? readProjectSettings(settingsRow.content)
             : defaultProjectSettings();
     return { project, settings, settingsRow: settingsRow && !settingsRow.deleted ? settingsRow : undefined };
 }
@@ -53,29 +56,62 @@ export async function readProjectWorkspace(db: Or3DB, projectId: string) {
     const policy = await readProjectPolicy(db, projectId);
     const read = async <T>(
         type: string,
-        parse: (value: unknown) => T,
+        parse: (content: string) => T | null,
     ): Promise<ProjectRecord<T>[]> => {
         const rows = await db.posts
             .where('[postType+title]')
             .equals([type, projectId])
             .toArray();
-        return rows
-            .filter((row) => !row.deleted)
-            .map((row) => ({ row, value: parse(JSON.parse(row.content)) }));
+        // An unreadable (newer/damaged) record is skipped rather than failing the project.
+        return rows.flatMap((row) => {
+            const value = row.deleted ? null : parse(row.content);
+            return value ? [{ row, value }] : [];
+        });
     };
     return {
         ...policy,
-        memories: await read(PROJECT_POST_TYPES.memory, (value) =>
-            ProjectMemorySchema.parse(value),
+        memories: await read(PROJECT_POST_TYPES.memory, (content) =>
+            readPersistedProjectRecord(ProjectMemorySchema, content),
         ),
-        sources: await read(PROJECT_POST_TYPES.source, (value) => {
-            const source = ProjectSourceSchema.parse(value);
+        sources: await read(PROJECT_POST_TYPES.source, (content) => {
+            const source = readPersistedProjectRecord(ProjectSourceSchema, content);
+            if (!source) return null;
             return { ...source, revisions: source.revisions.map(revision =>
                 revision.status === 'processing' && nowSec() >= (revision.processing_started_at ?? revision.created_at) + PROJECT_INTAKE_TIMEOUT_SECONDS
                     ? { ...revision, status: 'failed' as const, coverage: 'none' as const, error: 'Processing was interrupted. Retry this revision.' }
                     : revision) };
         }),
     };
+}
+
+/**
+ * The record an editor read. Sync LWW can apply different content at the same
+ * clock (a higher HLC wins), so editors pass the row/revision, not only its clock.
+ * A bare clock remains accepted for callers that read and write immediately.
+ */
+export type ProjectRecordExpectation = number | Pick<Post, 'clock' | 'content'> | null;
+
+const persistedSchemaFor = (type: string) =>
+    type === PROJECT_POST_TYPES.settings
+        ? ProjectSettingsSchema
+        : type === PROJECT_POST_TYPES.memory
+          ? ProjectMemorySchema
+          : ProjectSourceSchema;
+
+/**
+ * Newer clients may add top-level fields. A save keeps the stored fields this
+ * version does not know, so an edit cannot drop data it could not read.
+ */
+function keepStoredUnknownFields(
+    stored: string,
+    next: string,
+    schema: { shape: Record<string, unknown> },
+): string {
+    const known = new Set(Object.keys(schema.shape));
+    const content = JSON.parse(next) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(JSON.parse(stored) as Record<string, unknown>))
+        if (!known.has(key)) content[key] = value;
+    return JSON.stringify(content);
 }
 
 /** Project policy writes are CAS transactions in the captured workspace, including blob ownership. */
@@ -85,7 +121,7 @@ async function save(
     type: string,
     content: unknown,
     id: string,
-    expectedClock: number | null,
+    expected: ProjectRecordExpectation,
     hashes: string[] = [],
     deleted = false,
     newDocument?: Post,
@@ -146,8 +182,10 @@ async function save(
             if (!project || project.deleted)
                 throw new Error('This project is unavailable.');
             const previous = await scope.db.posts.get(id);
+            const expectedClock = typeof expected === 'number' ? expected : expected?.clock ?? null;
             if (
                 (previous?.clock ?? null) !== expectedClock ||
+                (expected && typeof expected === 'object' && previous?.content !== expected.content) ||
                 (previous &&
                     (previous.postType !== type ||
                         previous.title !== projectId))
@@ -155,6 +193,9 @@ async function save(
                 throw new Error(
                     'This project record changed. Reload before saving.',
                 );
+            // Overwriting a record this version cannot read would silently discard its newer format.
+            if (!deleted && previous && !previous.deleted && !readPersistedProjectRecord(persistedSchemaFor(type), previous.content))
+                throw new Error('This project record was saved by a newer OR3 version. Update OR3 before editing it.');
             if (newDocument) {
                 const source = ProjectSourceSchema.parse(content);
                 if (type !== PROJECT_POST_TYPES.source || source.kind !== 'document' || source.item_id !== newDocument.id
@@ -172,10 +213,19 @@ async function save(
                 const memory = ProjectMemorySchema.parse(content);
                 const prior =
                     previous && !previous.deleted
-                        ? ProjectMemorySchema.parse(
-                              JSON.parse(previous.content),
-                          )
+                        ? readPersistedProjectRecord(ProjectMemorySchema, previous.content) ?? undefined
                         : undefined;
+                if (!previous || previous.deleted) {
+                    const count = await scope.db.posts
+                        .where('[postType+title]')
+                        .equals([PROJECT_POST_TYPES.memory, projectId])
+                        .filter((row) => !row.deleted)
+                        .count();
+                    if (count >= PROJECT_MEMORY_LIMIT)
+                        throw new Error(
+                            `This project has reached its ${PROJECT_MEMORY_LIMIT}-memory limit. Remove memories before adding more.`,
+                        );
+                }
                 if (
                     memory.source_thread_id &&
                     memory.source_thread_id !== prior?.source_thread_id &&
@@ -209,9 +259,7 @@ async function save(
                 const source = ProjectSourceSchema.parse(content);
                 const prior =
                     previous && !previous.deleted
-                        ? ProjectSourceSchema.parse(
-                              JSON.parse(previous.content),
-                          )
+                        ? readPersistedProjectRecord(ProjectSourceSchema, previous.content) ?? undefined
                         : undefined;
                 const disabling =
                     prior &&
@@ -227,9 +275,10 @@ async function save(
                         (binding) =>
                             binding.id !== id &&
                             !binding.deleted &&
-                            ProjectSourceSchema.parse(
-                                JSON.parse(binding.content),
-                            ).item_id === source.item_id,
+                            readPersistedProjectRecord(
+                                ProjectSourceSchema,
+                                binding.content,
+                            )?.item_id === source.item_id,
                     )
                 )
                     throw new Error(
@@ -312,8 +361,15 @@ async function save(
                     if (changed) referenceChanges.push(changed.notification);
                 }
             scope.assertCurrent('write');
+            const stored =
+                previous && !previous.deleted && !deleted
+                    ? keepStoredUnknownFields(previous.content, filtered.content, persistedSchemaFor(type))
+                    : filtered.content;
+            if (new TextEncoder().encode(stored).length > 128 * 1024)
+                throw new Error('Project record is too large.');
             row = {
                 ...filtered,
+                content: stored,
                 created_at: previous?.created_at ?? filtered.created_at,
                 clock: nextClock(previous?.clock),
             };
@@ -343,7 +399,7 @@ export async function saveProjectSettings(
     scope: WorkspaceOperationScope,
     projectId: string,
     input: ProjectSettings,
-    expectedClock: number | null,
+    expected: ProjectRecordExpectation,
 ) {
     return save(
         scope,
@@ -351,7 +407,7 @@ export async function saveProjectSettings(
         PROJECT_POST_TYPES.settings,
         ProjectSettingsSchema.parse(input),
         projectSettingsId(projectId),
-        expectedClock,
+        expected,
     );
 }
 export async function saveProjectMemory(
@@ -359,7 +415,7 @@ export async function saveProjectMemory(
     projectId: string,
     input: ProjectMemoryInput,
     id = newId(),
-    expectedClock: number | null = null,
+    expected: ProjectRecordExpectation = null,
 ) {
     const value = ProjectMemorySchema.parse(input);
     return {
@@ -369,7 +425,7 @@ export async function saveProjectMemory(
             PROJECT_POST_TYPES.memory,
             value,
             id,
-            expectedClock,
+            expected,
         ),
         value,
     };
@@ -379,7 +435,7 @@ export async function saveProjectSource(
     projectId: string,
     input: ProjectSourceInput,
     id = newId(),
-    expectedClock: number | null = null,
+    expected: ProjectRecordExpectation = null,
 ) {
     const value = ProjectSourceSchema.parse(input);
     const hashes = value.revisions.flatMap((r) =>
@@ -394,7 +450,7 @@ export async function saveProjectSource(
             PROJECT_POST_TYPES.source,
             value,
             id,
-            expectedClock,
+            expected,
             hashes,
         ),
         value,
@@ -433,10 +489,48 @@ export async function deleteProjectRecord(
         record.postType,
         JSON.parse(record.content),
         record.id,
-        record.clock,
+        record,
         [],
         true,
     );
+}
+
+/** Legacy folders that list a chat. Several entries mean its owner is ambiguous until the user chooses. */
+async function legacyChatOwners(db: Or3DB, threadId: string): Promise<Project[]> {
+    return (await db.projects.where('chat_ids').equals(threadId).toArray()).filter(
+        (p) =>
+            !p.deleted &&
+            preservedProjectEntries(p.data).some(
+                (entry) => projectEntryIdentity(entry) === `chat:${threadId}`,
+            ),
+    );
+}
+
+/**
+ * A chat's owner within a snapshot of project rows, matching resolveChatProject:
+ * the explicit owner first, otherwise its single legacy folder. Undefined when ambiguous.
+ */
+export function chatOwnerIn(thread: Thread, projects: readonly Project[]): string | null | undefined {
+    if (thread.project_id) {
+        const owner = projects.find((project) => project.id === thread.project_id);
+        return owner && !owner.deleted ? owner.id : null;
+    }
+    const owners = projects.filter(
+        (project) =>
+            !project.deleted &&
+            preservedProjectEntries(project.data).some(
+                (entry) => projectEntryIdentity(entry) === `chat:${thread.id}`,
+            ),
+    );
+    return owners.length > 1 ? undefined : (owners[0]?.id ?? null);
+}
+
+/** Projects a chat could belong to while it is listed in several legacy folders; empty once resolved. */
+export async function ambiguousChatProjects(db: Or3DB, threadId: string): Promise<Project[]> {
+    const thread = await db.threads.get(threadId);
+    if (!thread || thread.deleted || thread.project_id) return [];
+    const owners = await legacyChatOwners(db, threadId);
+    return owners.length > 1 ? owners : [];
 }
 
 /** Resolve legacy membership without assigning an arbitrary project in an ambiguous workspace. */
@@ -448,44 +542,98 @@ export async function resolveChatProject(
     const thread = await db.threads.get(threadId);
     if (!thread || (thread.deleted && !options.includeDeleted)) throw new Error('This chat is unavailable.');
     if (thread.project_id) {
+        // Deletion releases owned chats. A stale pointer (e.g. LWW racing the
+        // delete's detach) or an unsynced owner must not strand the chat.
         const owner = await db.projects.get(thread.project_id);
-        if (!owner || owner.deleted)
-            throw new Error(
-                'The owning project is unavailable. Move this chat to continue.',
-            );
-        return owner.id;
+        return owner && !owner.deleted ? owner.id : null;
     }
-    const owners = (await db.projects.where('chat_ids').equals(threadId).toArray()).filter(
-        (p) =>
-            !p.deleted &&
-            preservedProjectEntries(p.data).some(
-                (entry) => projectEntryIdentity(entry) === `chat:${threadId}`,
-            ),
-    );
+    const owners = await legacyChatOwners(db, threadId);
     if (owners.length > 1)
         throw new Error(
-            'This chat has multiple project associations. Choose its owning project.',
+            'This chat is listed in more than one project. Choose its project above before continuing.',
         );
     return owners[0]?.id ?? null;
 }
 
+/**
+ * User moves keep a branch family together; legacy-membership migration moves one chat.
+ * Resolves to how many other chats moved with it, for the user-visible note.
+ */
 export async function moveChatToProject(
     scope: WorkspaceOperationScope,
     threadId: string,
     projectId: string | null,
-) {
+    options: { family?: boolean } = { family: true },
+): Promise<number> {
     const changed = await scope.db.transaction('rw',
         getWriteTxTableNames(scope.db, ['threads', 'projects']),
-        () => moveChatProjectRows(scope, threadId, projectId));
+        () => moveChatProjectRows(scope, threadId, projectId, options));
     await notifyChatProjectMove(changed);
+    return changed.threads.filter((thread) => thread.id !== threadId).length;
 }
 
-/** Hook-free membership mutation for callers already owning an atomic write. */
-export async function moveChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null) {
+async function lineageRootId(db: Or3DB, threadId: string): Promise<string> {
+    const seen = new Set<string>();
+    let id = threadId;
+    for (;;) {
+        seen.add(id);
+        const parent = (await db.threads.get(id))?.parent_thread_id;
+        if (!parent || seen.has(parent)) return id;
+        id = parent;
+    }
+}
+
+/** Branches share transcript provenance, so a lineage family belongs to one project. */
+export async function chatFamilyIds(db: Or3DB, threadId: string): Promise<string[]> {
+    const ids = new Set([threadId]);
+    const seen = new Set<string>();
+    const queue = [await lineageRootId(db, threadId)];
+    while (queue.length) {
+        const id = queue.shift()!;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const row = await db.threads.get(id);
+        if (row && !row.deleted) ids.add(id);
+        for (const child of await db.threads.where('parent_thread_id').equals(id).toArray()) queue.push(child.id);
+    }
+    return [...ids];
+}
+
+/**
+ * Hook-free membership mutation for callers already owning an atomic write.
+ * Joining a project takes the whole branch family. Leaving releases only the
+ * branches that project owned, so chats owned by another project keep it.
+ */
+export async function moveChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null,
+    options: { family?: boolean } = {}) {
     scope.assertCurrent('write');
     const transaction = Dexie.currentTransaction;
     if (!transaction || transaction.db !== scope.db || transaction.mode !== 'readwrite')
         throw new Error('Chat membership requires its captured write transaction.');
+    // Ownership is judged once, from one snapshot, before any member moves.
+    const snapshot = await scope.db.projects.toArray();
+    const origin = await scope.db.threads.get(threadId);
+    const leaving = origin ? chatOwnerIn(origin, snapshot) : null;
+    const moving: string[] = [];
+    for (const id of options.family ? await chatFamilyIds(scope.db, threadId) : [threadId]) {
+        const row = id === threadId ? origin : await scope.db.threads.get(id);
+        const owner = row ? chatOwnerIn(row, snapshot) : undefined;
+        // Leaving releases only the branches this project owned; ambiguous or other-owned branches stay.
+        if (projectId === null && id !== threadId && (owner === undefined || owner !== leaving)) continue;
+        moving.push(id);
+    }
+    const projects = new Map<string, Project>();
+    const threads: Thread[] = [];
+    for (const id of moving) {
+        const changed = await moveOneChatProjectRows(scope, id, projectId);
+        for (const project of changed.projects) projects.set(project.id, project);
+        if (changed.thread) threads.push(changed.thread);
+    }
+    scope.assertCurrent('write');
+    return { projects: [...projects.values()], threads };
+}
+
+async function moveOneChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null) {
     const changed: Project[] = [];
     let saved: Thread | undefined;
     const thread = await scope.db.threads.get(threadId);
@@ -553,7 +701,6 @@ export async function moveChatProjectRows(scope: WorkspaceOperationScope, thread
         };
         await scope.db.threads.put(saved);
     }
-    scope.assertCurrent('write');
     return { projects: changed, thread: saved };
 }
 
@@ -566,9 +713,9 @@ export async function notifyChatProjectMove(changed: Awaited<ReturnType<typeof m
                 entity,
                 tableName: 'projects',
             });
-        if (changed.thread)
+        for (const entity of changed.threads)
             await hooks.doAction('db.threads.upsert:action:after', {
-                entity: changed.thread,
+                entity,
                 tableName: 'threads',
             });
     } catch (error) { console.warn('Chat membership saved; after-move hook failed.', error); }

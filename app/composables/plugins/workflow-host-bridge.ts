@@ -54,6 +54,13 @@ import type { Message } from '~/db/schema';
 
 interface WorkflowRequestOrigin { threadId: string; messageId: string; streamId: string }
 
+let warnedLegacyWorkflowOrigin = false;
+function warnLegacyWorkflowOrigin() {
+    if (warnedLegacyWorkflowOrigin) return;
+    warnedLegacyWorkflowOrigin = true;
+    console.warn('[workflows] This Workflows package predates run origins. Update it before using workflows in workspaces with projects.');
+}
+
 function getPostsApi(): PanePluginApi | null {
     return (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi ?? null;
 }
@@ -126,12 +133,20 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
         return scope;
     };
     const workflowClient = (key: string, input?: WorkflowRequestOrigin) => {
-        // Old installed artifacts lack an origin. They fail closed until their
-        // adapter supplies the immutable run identity, never the active pane.
+        // Old installed artifacts lack an origin, never inferred from the active
+        // pane. Transition: without a run identity no project chat can be fenced,
+        // so they run only in workspaces that have no projects.
         const origin = input && { ...input };
-        const scope = origin?.threadId ? captureWrite(origin.threadId) : null;
+        const scope = origin?.threadId && origin.messageId ? captureWrite(origin.threadId) : null;
         const httpClient = new HTTPClient({ fetcher: async (request, init) => {
-            if (!origin?.messageId || !scope) throw new Error('Workflow request origin is required. Update the Workflows package.');
+            if (!origin?.messageId || !scope) {
+                assertOriginWorkspace();
+                if (await activationDb.projects.filter(project => !project.deleted).count())
+                    throw new Error('Workflow request origin is required in workspaces with projects. Update the Workflows package.');
+                warnLegacyWorkflowOrigin();
+                assertOriginWorkspace();
+                return fetch(request, init);
+            }
             await scope.db.transaction('r', ['messages', 'threads', 'projects'], async () => {
                 scope.assertCurrent('write');
                 const [row, thread] = await Promise.all([scope.db.messages.get(origin.messageId), scope.db.threads.get(origin.threadId)]);

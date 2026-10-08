@@ -5,6 +5,7 @@ import {
     readProjectPolicy,
     resolveChatProject,
     saveProjectMemory,
+    type ProjectRecordExpectation,
 } from '~/db/project-workspace';
 import { getWriteTxTableNames } from '~/db/util';
 import {
@@ -46,7 +47,7 @@ export async function saveClassifiedProjectMemory(
     projectId: string,
     input: ProjectMemoryInput,
     id?: string,
-    expectedClock: number | null = null,
+    expected: ProjectRecordExpectation = null,
 ) {
     scope.assertCurrent('write');
     const controller = new AbortController();
@@ -65,7 +66,7 @@ export async function saveClassifiedProjectMemory(
         projectId,
         { ...manualInput, kind: 'fact' },
         id,
-        expectedClock,
+        expected,
     );
     const timeout = setTimeout(
         () => controller.abort(),
@@ -222,6 +223,7 @@ async function classifySavedMemory(
             state,
             key!,
             scope.signal,
+            useRuntimeConfig().public.openRouter?.baseUrl,
             validate,
         );
     if (import.meta.dev)
@@ -253,7 +255,7 @@ async function classifySavedMemory(
                 projectId,
                 { ...saved.value, kind: 'decision' },
                 saved.row.id,
-                saved.row.clock,
+                saved.row,
             );
         },
     );

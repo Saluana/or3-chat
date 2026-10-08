@@ -427,9 +427,6 @@ export async function forkThread(
     const hooks = useHooks();
     const db = getDb();
     const { resolveChatProject, moveChatProjectRows, notifyChatProjectMove } = await import('./project-workspace');
-    const { captureProjectOperation } = await import('~/utils/projects/context');
-    const scope = captureProjectOperation(undefined, sourceThreadId);
-    if (scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
     const src = await dbTry(
         () => db.threads.get(sourceThreadId),
         { op: 'read', entity: 'threads', action: 'get' },
@@ -437,6 +434,12 @@ export async function forkThread(
     );
     if (!src || src.deleted) throw new Error('Source thread not found');
     const projectId = await resolveChatProject(db, src.id);
+    // Only project forks need the authenticated workspace boundary; ordinary
+    // and guest forks keep the unscoped write path.
+    const scope = projectId
+        ? (await import('~/utils/projects/context')).captureProjectOperation(undefined, sourceThreadId)
+        : null;
+    if (scope && scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
     if (overrides.project_id !== undefined && overrides.project_id !== projectId)
         throw new Error('Ordinary forks must retain the source project. Move the new chat explicitly instead.');
     if (overrides.branch_mode === 'compacted') throw new Error('Compacted forks require the validated atomic writer.');
@@ -469,7 +472,7 @@ export async function forkThread(
     if (fork.id !== forkId) throw new Error('Invalid ordinary fork identity.');
     let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
     const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects']), async () => {
-        scope.assertCurrent('write');
+        scope?.assertCurrent('write');
         const current = await db.threads.get(src.id);
         if (JSON.stringify(current) !== JSON.stringify(src)
             || await resolveChatProject(db, src.id) !== projectId
@@ -490,7 +493,7 @@ export async function forkThread(
             { op: 'write', entity: 'threads', action: 'fork' },
             { rethrow: true }
         );
-        membership = await moveChatProjectRows(scope, fork.id, projectId);
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
 
         if (options.copyMessages) {
             const msgs =
@@ -539,7 +542,7 @@ export async function forkThread(
                 );
             }
         }
-        scope.assertCurrent('write');
+        scope?.assertCurrent('write');
         return fork;
     });
     await notifyChatProjectMove(membership);
