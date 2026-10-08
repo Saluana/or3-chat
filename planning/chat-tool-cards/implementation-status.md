@@ -46,6 +46,20 @@ silently. Changed-file lint and application typecheck passed after these
 corrections. These live observations complement
 the deterministic browser evidence below; they are not mocked API results.
 
+The subsequent [responsive review](responsive-review.md) checked revision
+`470e56a0` at 320×640, 390×844, 768×1024, 1280×800 and 844×390 in Chrome.
+It found no persistent card overflow or unreachable actions; saved answers
+survived resizing, scrolling/remount and reload. The record includes measured
+widths, repeat steps, the short-landscape composer polish observation, and the
+limits of viewport-only testing.
+
+The table and automated screenshots below record verification before the live
+quiz/map redesign at `470e56a0`. The 13-journey automated lane was not rerun after
+that redesign. Changed-source lint, application typecheck and example
+compatibility were rerun; the live and responsive observations above cover the
+later UI revision. Documentation checks are rerun separately for documentation
+updates.
+
 | Check | Result |
 | --- | --- |
 | Named card E2E lane | 13 journeys passed; includes saved-state theme changes, virtualization/remount and persisted updates, visible-frame retention and deferred resumption |
@@ -119,3 +133,18 @@ Unchecked tasks are deliberately retained:
 Task 0.3 was verified in the real browser, including React, following AGENTS.md's
 E2E preference. Task 7.3 covers the final functional and regression checks; it
 does not imply a passing containment qualification or portable release approval.
+
+## Documentation audit
+
+The 2026-10-07 audit checked the public guide, SDK entry points, CLI reference,
+message metadata, theme integration, hook payloads and planning records against
+the implementation. The guide now includes exact source-example setup, a Vue
+registration recipe using the maintained component example, styling/lifecycle
+guidance, action error handling, quotas, ownership, portable manifests, embeds,
+browser support and troubleshooting. SDK/CLI/database references link to it;
+the docmap places it with the other plugin-building guides. The responsive
+review is preserved in this plan instead of only a temporary local file.
+
+The retained unchecked tasks above remain the authoritative proof gaps;
+documentation coverage does not imply portable qualification or a completed
+installation walkthrough for the generated packages.

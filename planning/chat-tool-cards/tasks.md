@@ -356,6 +356,13 @@ section 8 notes as each task lands.
 
 See `implementation-status.md` for regression results and the retained containment gates.
 
+## Live walkthrough and documentation follow-up
+
+- [x] Register nested source examples explicitly for development and verify real tool calls.
+- [x] Polish Quiz and Map using the existing Vue adapter, UI kit and theme tokens; surface action errors.
+- [x] Check scrolling and saved state at five Chrome viewport sizes; preserve findings and repeat steps in `responsive-review.md`.
+- [x] Audit authoring/setup, styling, lifecycle, action failures, SDK/CLI references and message metadata documentation; clarify portable gates and automated evidence revisions.
+
 ## Requirement traceability
 
 | Requirement | Components | Tasks |

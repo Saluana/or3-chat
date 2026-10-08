@@ -31,7 +31,7 @@ Invoke an installed CLI as `./node_modules/.bin/or3-plugin`, or use
 
 | Command | Effect |
 | --- | --- |
-| `create --id <id> --dir <path> --sdk-source <path> [--name <name>] [--template <template>]` | Creates a starter; SDK source is a local tarball or SDK directory |
+| `create --id <id> --dir <path> --sdk-source <path> [--name <name>] [--template <template>] [--with-tool-card]` | Creates a starter; SDK source is a local tarball or SDK directory; optional portable tool/card scaffold |
 | `dev [package-root] [--host <checkout>] [--port <port>]` | Starts the linked dedicated local host and watches a portable package |
 | `validate <root>` | Checks manifest, package tree, profile, imports, and conformance without activating code |
 | `test <root> [-- <test-args...>]` | Runs a declared `bun run test`; otherwise uses Vitest when its config exists, then `bun test` |
@@ -67,6 +67,14 @@ bun install
 
 For trusted-host scaffolding, add `--template minimal-v2`. Portable development
 uses `bun run dev`; the ignored `.or3-dev/host.json` remembers its linked checkout.
+
+`--with-tool-card` adds a portable tool and vanilla card to the portable starter.
+`build` bundles declared card entries, dependencies, styles and bounded assets;
+`validate` checks the resulting descriptors and reports unsafe network API usage.
+The development watcher includes card sources. **Portable-card grants remain
+unqualified and production execution is disabled on all browsers**; a successful
+build is not browser qualification. See [Tool cards](/documentation/plugins/tool-cards)
+for limits, supported source/trusted alternatives and containment evidence.
 
 ## Build and archive behavior
 

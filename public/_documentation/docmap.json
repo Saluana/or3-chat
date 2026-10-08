@@ -945,9 +945,9 @@
                     "path": "/plugins/tool-cards",
                     "title": "Interactive tool cards",
                     "category": "Building plugins",
-                    "categoryOrder": 1,
-                    "order": 8,
-                    "summary": "Build source, trusted and portable tool cards with scoped state, guarded chat actions and contained frames."
+                    "categoryOrder": 2,
+                    "order": 3,
+                    "summary": "Build source and trusted tool cards, try the examples, and understand portable authoring and its containment qualification gate."
                 }
             ]
         }

@@ -74,6 +74,15 @@ message after an asynchronous hook.
 
 ## Usage tips
 
+Interactive [tool cards](/documentation/plugins/tool-cards) reserve
+`data.tool_cards[callId]` for per-call JSON state on assistant messages and
+`data.card_origin` for attribution on card-generated user replies. Both are
+persisted and synced metadata; neither is sent as model context. Card authors
+must use `card.setState()` instead of replacing `data` or the complete state map:
+the host updates a single entry against the latest row, preserving sibling cards
+and concurrent streaming writes. State is limited to 16 KiB per call and 64 KiB
+for the message map.
+
 -   Creation helpers accept hash arrays and serialize them; full-row upserts use the stored JSON string contract. Use [message-file helpers](/documentation/database/message-files) to change an existing message's attachments.
 -   Use `appendMessage` rather than manual `createMessage` when you need thread timestamps updated.
 -   Keep sparse indexes. Insert helpers normalize only when needed; do not renumber entire threads after every edit.

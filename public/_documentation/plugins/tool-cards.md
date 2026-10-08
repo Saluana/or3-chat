@@ -2,9 +2,28 @@
 
 Tool cards turn a tool call into an interactive view inside an assistant reply.
 The handler still returns normal tool data to the model; mounting a card never
-executes the handler again. Examples in the source development server are
-registered automatically and disabled by default.
-Enable Quiz, Weather or Map in the tool picker to try them.
+executes the handler again. Source and trusted cards run in the host page.
+**Portable cards are currently disabled in production on every browser.** Their
+authoring and development verification tools exist, but containment qualification
+has not passed. See [Browser qualification](#browser-qualification).
+
+## Try the source examples
+
+1. From the source checkout, install dependencies with `bun install` and start
+   `bun run dev`. Quiz, Weather and Map register automatically in development;
+   their tools start disabled and are excluded from production builds.
+2. Connect OpenRouter through the app, choose a model that supports tools, then
+   open the chat composer's **Chat settings → Tools → Other** category and enable
+   Quiz, Weather and Map. Example requests use the connected account's credits.
+3. Ask for a multiple-choice quiz, weather in Paris, or a map of Paris. Click a
+   quiz choice to send an attributed reply, then reload to check saved selection.
+   Click Open in Maps to open the location in a separate tab.
+
+OpenStreetMap is the map default; no Google key is needed. Optional Google Maps
+setup is described in [Embeds and review](#embeds-and-review). These source
+examples do not need a managed-package contribution flag. Managed packages
+require the `chat-tool-cards` contribution surface to be selected as well as the
+appropriate reviewed grants.
 
 ## Source plugins
 
@@ -14,6 +33,50 @@ parameters, an optional handler, and card. Without a handler it returns
 { shown: true }. Object handler results are serialized as JSON.
 The returned registration handle owns both the tool and its card; dispose it
 on plugin teardown or HMR. registerToolCard binds an existing tool.
+
+For a Vue source plugin, put its entry directly under `app/plugins/` so Nuxt
+discovers it. Nested example entries in this repository are explicitly listed in
+`nuxt.config.ts`; copying another nested entry does not register it automatically.
+For example, `app/plugins/my-card.client.ts` can register a component:
+
+```ts
+import { defineNuxtPlugin } from '#app';
+import { vueCard } from '@or3/plugin-sdk/cards/vue';
+import { registerCardTool } from '~/utils/chat/tool-cards-public';
+import ChoiceCard from './my-card/ChoiceCard.vue';
+
+export default defineNuxtPlugin(() => {
+    const handle = registerCardTool({
+        name: 'my_quiz',
+        description: 'Show a quiz card. Do not repeat its question or choices in prose.',
+        parameters: {
+            type: 'object',
+            properties: {
+                question: { type: 'string' },
+                choices: { type: 'array', items: { type: 'string' } }
+            },
+            required: ['question', 'choices']
+        },
+        label: 'Quiz',
+        card: vueCard(ChoiceCard),
+        chrome: 'none'
+    });
+    if (import.meta.hot) import.meta.hot.dispose(() => handle.dispose());
+});
+```
+
+Use `app/plugins/examples/quiz-card/QuizCard.vue` as the `ChoiceCard.vue` starting
+point: it supplies the typed `card` prop, UI-kit controls, action handling and
+saved selection. The complete registration is in
+`app/plugins/examples/quiz-card-example.client.ts`. Weather and Map have sibling
+entries and component directories. These are maintained implementation examples,
+not additional framework APIs. The source aliases in the snippet are for source
+plugins only; packaged plugins use the SDK and contribution APIs below.
+
+`icon`, `category` and `defaultEnabled` configure the tool picker;
+`defaultEnabled` defaults to `false`, and an absent category appears under Other.
+For display-only tools, a handler can return a note telling the model that the
+card already shows the content and it should wait for user input.
 
 A card module exposes mount(el, card), returning an optional cleanup function.
 Use textContent, createElement or framework interpolation for model data.
@@ -27,6 +90,26 @@ Both pass a live card prop through onUpdate and dispose their roots once.
 React is an optional peer; ordinary OR3 builds do not require React.
 createToolCardHarness from @or3/plugin-sdk/testing records actions and lets
 an author drive snapshots and mount/dispose a card in a DOM test environment.
+
+## Styling and lifecycle
+
+`chrome: 'card'` supplies the host's surface, border and padding. It does not
+style a card's own buttons or make plain text interactive. Source Vue cards
+should use the existing UCard/UButton components, theme variants and tokens.
+Use `chrome: 'none'` when the component supplies its own UCard container, as Quiz
+and Map do. Portable components are bundled separately and must supply their
+own controls using the provided theme tokens.
+
+Keep long labels wrapping, controls visibly distinct, and external links labeled.
+Verify light/dark themes, 320 px layouts and short landscape scrolling. Weather's
+hourly strip deliberately scrolls horizontally inside the card; the card itself
+must fit its chat pane.
+
+For vanilla cards, read later snapshots through `onUpdate`; return cleanup that
+unsubscribes and removes listeners. Stop asynchronous work when `signal` aborts.
+Vue/React adapters handle updates and root cleanup, but component-owned timers
+and subscriptions still need teardown. Mounting, resizing or remounting a card
+must not resend a chat message or rerun the tool.
 
 ## Context and presentation
 
@@ -72,6 +155,13 @@ Without a pane bridge, setState/send return unsupported.
 openLink requires activation and an HTTP(S) URL within 2 KiB, and opens with
 noopener,noreferrer.
 
+Call `send` and `openLink` directly from a real click or keyboard activation;
+delaying the call through a timer or unrelated awaited work can lose activation.
+While a send is pending, disable duplicate submissions. Check `result.ok`, show
+`result.error.message` on refusal, and advance durable selection only after send
+succeeds. Handle `setState` failure too: sending a reply and saving card state
+are separate operations. The Quiz and Map components demonstrate both paths.
+
 ## Trusted packages
 
 Request chat.tool.card and tools.register.client. Register the tool using
@@ -82,6 +172,10 @@ same-owner replacement; another owner cannot replace them.
 Trusted code runs in the host page and has that trust level's existing access.
 
 ## Portable packages
+
+This is an authoring reference for the gated implementation. Building or
+validating a package does not enable portable-card grants or qualify its browser.
+Use source or reviewed trusted cards for the currently supported runtime.
 
 Portable cards are declared by isolated-client packages in toolCards:
 
@@ -153,3 +247,14 @@ OR3_TOOL_CARDS_TEST_HARNESS=true.
 
 Managed package cards require the `chat-tool-cards` contribution surface to be selected.
 The source examples remain development-only and their tools are disabled by default.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Source tool is absent from the picker | Confirm the correct dev server/checkout, development mode, and top-level Nuxt plugin discovery or explicit registration. |
+| Tool is present but no call appears | Enable it for the chat and select a tool-capable model. |
+| A tool indicator appears instead of a card | Check the binding's exact tool name, active owner/grants, and any muted failure reason. |
+| Card action is refused | Display the returned error; check user activation, visibility, cooldown and whether the chat is idle. |
+| Selection disappears after navigation | Use `card.setState`, observe its result, and avoid component-only state for durable choices. |
+| Portable card reports runtime-unsupported | Expected until containment qualification passes; changing trust mode is not an automatic fallback. |

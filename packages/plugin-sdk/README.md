@@ -59,6 +59,9 @@ developer-oriented `src/` is included for source inspection.
 | `@or3/plugin-sdk/manifest` | Manifest V2 / grant / trust types |
 | `@or3/plugin-sdk/host` | Host-only context construction boundary |
 | `@or3/plugin-sdk/testing` | `PluginTestHost` fake host |
+| `@or3/plugin-sdk/cards` | `defineToolCard`, typed card context/theme/presentation and safe snapshot helpers |
+| `@or3/plugin-sdk/cards/vue` | `vueCard` component adapter |
+| `@or3/plugin-sdk/cards/react` | `reactCard` component adapter; React is an optional peer |
 | `@or3/plugin-sdk/profile` | `defineOr3PortableProfile()` and the portable profile validator (Node-only) |
 | `@or3/plugin-sdk/package-tree` | Canonical package tree hashing/verification (Node-only) |
 | `@or3/plugin-sdk/plugin-icon` | Bounded PNG/WebP app-icon byte validation (Node-only) |
@@ -69,6 +72,15 @@ developer-oriented `src/` is included for source inspection.
 The host owns context construction, plugin identity, generation, grants,
 cancellation, client scoping, and cleanup. Plugin-facing client calls never
 accept a plugin or workspace identity parameter.
+
+Interactive [tool cards](../../public/_documentation/plugins/tool-cards.md) use
+scoped state, guarded chat/link actions and live theme snapshots.
+`createToolCardHarness` is exported from `/testing` for mount/update/dispose and
+action recording. Source and reviewed trusted cards run in the page; portable
+card packages can be built and inspected, but their production grants/execution
+remain disabled until containment qualification passes. Packaged plugins use
+SDK registration APIs; source-only `registerCardTool` uses host aliases and must
+not be imported by a package.
 
 Plugin packages can use `@or3/plugin-sdk/testing` for the local fake host. It
 supports activation, reviewed-grant denial, feature negotiation, generation
