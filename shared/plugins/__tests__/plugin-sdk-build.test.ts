@@ -181,26 +181,36 @@ describe('or3-plugin build bundling', () => {
         ).rejects.toThrow(/left-pad/);
     });
 
-    it('keeps host Vue and SDK singleton imports while bundling trusted dependencies', async () => {
+    it('keeps host Vue and SDK singletons while bundling trusted dependencies', () => {
         const { source, build } = packageWithEntry(
             "import { ref } from 'vue'; import { defineOr3Plugin } from '@or3/plugin-sdk'; import { compile } from 'or3-workflow-core'; export default [ref, defineOr3Plugin, compile];\n",
             true,
             true
         );
-        let externals: readonly string[] = [];
-        const bundler: Bundler = {
-            async build(options) {
-                externals = (options as { external: string[] }).external;
-                return {
-                    success: true,
-                    outputs: [{ text: async () => "import { ref } from 'vue'; import { defineOr3Plugin } from '@or3/plugin-sdk'; const compile = () => true; export default [ref, defineOr3Plugin, compile];\n" }],
-                    logs: [],
-                };
-            },
-        };
-        await bundleClientEntry(source, build, { bundler });
-        expect(externals).toEqual(['vue', '@or3/plugin-sdk']);
-        expect(readFileSync(resolve(build, 'client.mjs'), 'utf8')).toContain("from 'vue'");
+        const root = resolve(source, '..');
+        mkdirSync(resolve(root, 'node_modules/@or3'), { recursive: true });
+        symlinkSync(resolve(import.meta.dirname, '../../../node_modules/vue'), resolve(root, 'node_modules/vue'));
+        symlinkSync(resolve(import.meta.dirname, '../../../packages/plugin-sdk'), resolve(root, 'node_modules/@or3/plugin-sdk'));
+        const dependency = resolve(source, 'node_modules/or3-workflow-core');
+        mkdirSync(dependency, { recursive: true });
+        writeFileSync(resolve(dependency, 'package.json'), JSON.stringify({ name: 'or3-workflow-core', type: 'module', main: 'index.mjs' }));
+        writeFileSync(resolve(dependency, 'index.mjs'), 'export const compile = () => true;');
+        const runner = resolve(root, 'run-build.mjs');
+        writeFileSync(runner, [
+            `import { bundleClientEntry } from ${JSON.stringify(resolve(import.meta.dirname, '../../../packages/plugin-sdk/src/cli/build.ts'))};`,
+            `await bundleClientEntry(${JSON.stringify(source)}, ${JSON.stringify(build)});`,
+        ].join('\n'));
+        const bundled = spawnSync('bun', [runner], { encoding: 'utf8' });
+        expect(bundled.status, bundled.stderr).toBe(0);
+        rmSync(dependency, { recursive: true });
+        const loaded = spawnSync('bun', ['-e', [
+            'import { ref } from "vue";',
+            'import { defineOr3Plugin } from "@or3/plugin-sdk";',
+            `const { default: exports } = await import(${JSON.stringify(resolve(build, 'client.mjs'))});`,
+            'process.stdout.write(JSON.stringify({ sharedVue: exports[0] === ref, sharedSdk: exports[1] === defineOr3Plugin, compiled: exports[2]() }));',
+        ].join('\n')], { cwd: root, encoding: 'utf8' });
+        expect(loaded.status, loaded.stderr).toBe(0);
+        expect(JSON.parse(loaded.stdout)).toEqual({ sharedVue: true, sharedSdk: true, compiled: true });
     });
 
     it('compiles a trusted Vue component and its scoped style into the client entry', () => {
