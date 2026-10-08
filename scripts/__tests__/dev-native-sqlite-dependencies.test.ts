@@ -76,6 +76,7 @@ describe('dev launcher runtime', () => {
                 SSR_AUTH_ENABLED: 'true', OR3_AUTH_PROVIDER: auth,
                 OR3_SYNC_PROVIDER: 'sqlite', OR3_SYNC_ENABLED: 'false',
                 OR3_CLOUD_SYNC_ENABLED: 'false', OR3_SQLITE_DRIVER: driver,
+                NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
                 OR3_LOCAL_PROVIDERS: 'false', NODE_OPTIONS: '',
             },
         });
@@ -286,6 +287,18 @@ describe('local provider dev selection', () => {
         writeFileSync(f.entry, 'stale build');
         expect(await prepareLocalProviders(f.project, {}, async () => { throw new Error('build failed'); })).toEqual({});
         expect(f.warning).toHaveBeenCalledWith(expect.stringContaining('build failed'));
+    });
+
+    it('does not select a stale sibling Convex version for automatic backend updates', async () => {
+        const f = fixture();
+        const provider = resolve(f.project, '../or3-provider-convex');
+        mkdirSync(join(provider, 'dist'), { recursive: true });
+        writeFileSync(join(provider, 'package.json'), JSON.stringify({ name: 'or3-provider-convex', version: '0.0.12', exports: { './nuxt': { import: './dist/module.mjs' } } }));
+        writeFileSync(join(f.project, 'package.json'), JSON.stringify({ dependencies: { 'or3-provider-convex': '0.0.13' } }));
+        const build = vi.fn(async () => { writeFileSync(join(provider, 'dist/module.mjs'), 'export default {}'); });
+        expect(await prepareLocalProviders(f.project, {}, build)).toEqual({});
+        expect(build).not.toHaveBeenCalled();
+        expect(f.warning).toHaveBeenCalledWith(expect.stringContaining('does not match'));
     });
 
     it('requires the scoped Basic Auth build for watched plugin development', async () => {

@@ -5,7 +5,7 @@
 export const QUALIFIED_PROVIDER_VERSIONS: Readonly<Record<string, string>> = {
     'or3-provider-basic-auth': '0.0.11',
     'or3-provider-clerk': '0.0.8',
-    'or3-provider-convex': '0.0.12',
+    'or3-provider-convex': '0.0.14',
     'or3-provider-fs': '0.0.9',
     'or3-provider-s3': '0.0.9',
     'or3-provider-sqlite': '0.0.15',

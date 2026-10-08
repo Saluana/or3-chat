@@ -28,6 +28,7 @@ import {
 } from '../../shared/cloud/wizard/package-manager';
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 import { prepareLocalProviders } from '../../shared/dev/local-providers';
+import { prepareConvexBackend } from '../../shared/dev/convex-backend';
 import { nuxtRuntime, usesBunSqlite, usesSqliteProvider } from '../../shared/dev/nuxt-runtime';
 
 export const DEFAULT_PORT = 3000;
@@ -306,13 +307,14 @@ export function nuxtDevEnvironment(
 
 async function runNuxtDev(argv: string[]): Promise<number> {
     const localProviders = await prepareLocalProviders(process.cwd());
+    const startupEnv = await prepareConvexBackend(process.cwd(), nuxtDevEnvironment(), localProviders);
     const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
     const entry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
     return new Promise((resolvePromise, rejectPromise) => {
         const child = crossSpawn(nuxtRuntime(), [entry, 'dev', ...argv], {
             stdio: 'inherit',
             env: {
-                ...nuxtDevEnvironment(),
+                ...startupEnv,
                 OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders),
             },
         });

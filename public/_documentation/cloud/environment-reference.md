@@ -164,6 +164,7 @@ production validation requires both JWT and refresh secrets.
 | Variable | Scope | Purpose |
 |---|---|---|
 | `VITE_CONVEX_URL` | OR3 server/client | Convex deployment URL used by sync, storage, and Connect. |
+| `CONVEX_DEPLOY_KEY` | Source startup | Deployment credential for automatic backend updates before `dev`, `dev:ssr`, or `preview`. Takes precedence over the self-hosted admin key for deployment and must target `VITE_CONVEX_URL`. |
 | `CONVEX_SELF_HOSTED_ADMIN_KEY` | OR3 server | Server/deploy key used by internal Convex operations. |
 | `CONVEX_SELF_HOSTED_URL` | Convex/self-hosted deployments | Self-hosted Convex URL when the backend requires it. OR3 still resolves the public URL from `VITE_CONVEX_URL`. |
 | `VITE_CONVEX_SITE_URL` | Convex auth deployments | Optional Convex site URL written by the wizard for self-hosted/auth setups. |

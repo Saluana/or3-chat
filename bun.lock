@@ -37,7 +37,7 @@
         "nuxt": "4.5.2",
         "or3-provider-basic-auth": "0.0.11",
         "or3-provider-clerk": "0.0.8",
-        "or3-provider-convex": "0.0.12",
+        "or3-provider-convex": "0.0.14",
         "or3-provider-fs": "0.0.9",
         "or3-provider-s3": "0.0.9",
         "or3-provider-sqlite": "0.0.15",
@@ -2452,7 +2452,7 @@
 
     "or3-provider-clerk": ["or3-provider-clerk@0.0.8", "", { "dependencies": { "@clerk/nuxt": "^1.13.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-sSXCa7akRyt2nHcMb+HrN8E3BKyHZlG9/iX7Lyu1iyFd9ZkP3mSiTa56F+x+/h4gFpH25PUBaTx5WRxLCED++g=="],
 
-    "or3-provider-convex": ["or3-provider-convex@0.0.12", "", { "dependencies": { "convex": "^1.31.3", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-dMN6cMEEL5/1DVSe/irW0sEd2PBD5HH/8JKWRWX2kuWZemGkZpDhyJJx/ovkAOHmVbdkCC7EH/2AnWx6OTQIOQ=="],
+    "or3-provider-convex": ["or3-provider-convex@0.0.14", "", { "dependencies": { "convex": "^1.31.3", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-wCv349yGYQ0aWsfCAulkdA7L4fs/A3OHVF3bhoGcHN/aloZ+grpmy56c40Fgf/FOqHuQG9Ghy9tn7PmpdiRAMQ=="],
 
     "or3-provider-fs": ["or3-provider-fs@0.0.9", "", { "dependencies": { "jsonwebtoken": "^9.0.3" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-URvn8HQek8omeH9ZyBoX647NVwhNlO6zZ91Pmf1nZRkS9Pf8oT72KXKkBKU8pkYDs1Z3JwoL2GWS7dDADgDghQ=="],
 
