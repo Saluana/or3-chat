@@ -5,7 +5,6 @@ import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useHooks } from '~/core/hooks/useHooks';
-import { createTrustedRuntimeServices } from '~/composables/plugins/trusted-runtime-services';
 import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
 import { applyTrustedEditorExtensions } from '~/composables/plugins/trusted-editor';
 import {
@@ -107,6 +106,12 @@ export default defineNuxtPlugin((nuxtApp) => {
             const loaded = await resolution.load();
             if (loaded.status !== 'loaded') throw new Error(`Plugin load ${loaded.reason}`);
             const definition = pluginDefinition(loaded.module, descriptor);
+            // The UI kit includes Markdown and editor components. Load it only
+            // for an activated trusted plugin, inside the existing lifecycle.
+            const { createTrustedRuntimeServices } = await import(
+                '~/composables/plugins/trusted-runtime-services'
+            );
+            if (!isCurrent()) throw new Error('Plugin activation cancelled');
             const manifestDefaults: Record<string, PluginJsonValue> = {};
             if (definition.manifest.settings.schema) {
                 const response = await fetch(buildPluginPackageAssetUrl({ pluginId: descriptor.id, packageDigest: descriptor.artifact.packageDigest, entryPath: definition.manifest.settings.schema }), { signal, credentials: 'same-origin' });

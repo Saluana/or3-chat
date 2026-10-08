@@ -472,12 +472,16 @@ export default defineNuxtConfig({
                 'streamsaver/**',
                 // These assets remain available online, but are not required to
                 // install or operate the offline application shell.
-                'screenshots/chat-screenshot.png',
-                'screenshots/editor-screenshot.png',
+                'screenshots/**',
                 'logos/logo-8bit-raw.png',
                 'logos/logo-xl.png',
                 'logos/logo-1024.png',
                 'logos/icon-logo.png',
+                // The installed PWA uses the raster app icons below, not
+                // these SVG sources or the legacy logo preview.
+                'logos/app-icon.svg',
+                'logos/app-icon-maskable.svg',
+                'logos/logo-1024.webp',
             ],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
@@ -636,6 +640,9 @@ export default defineNuxtConfig({
     },
     vite: {
         resolve: {
+            // Math renderers accept the root KaTeX patch release. Share it
+            // instead of bundling rehype's older copy alongside Mermaid's.
+            dedupe: ['katex'],
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
             // and deployment images where those checkouts do not exist.
@@ -754,6 +761,11 @@ export default defineNuxtConfig({
             // SSR-generated <link rel="prefetch"> tags during initial load.
             for (const resource of Object.values(manifest)) {
                 resource.prefetch = false;
+                // Extraction runs in a worker only after an upload. Nuxt
+                // otherwise modulepreloads this emitted worker on every page.
+                if (/\.worker-[^/]+\.js$/.test(resource.file ?? '')) {
+                    resource.preload = false;
+                }
             }
         },
         'pages:extend'(pages) {
