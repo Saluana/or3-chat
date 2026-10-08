@@ -330,7 +330,7 @@ if (import.meta.main) {
 
     // Projects/Files add a 758 KB extraction worker and their UI. The 0.1.80
     // same-host comparison also removes 260 KB of duplicate KaTeX. Account for
-    // that measured feature cost without relaxing initial-load/chunk budgets.
+    // that measured feature cost without relaxing preload, chunk or PWA budgets.
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,

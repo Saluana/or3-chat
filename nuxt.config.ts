@@ -477,11 +477,11 @@ export default defineNuxtConfig({
                 'logos/logo-xl.png',
                 'logos/logo-1024.png',
                 'logos/icon-logo.png',
-                // The installed PWA uses the 192/512 raster icons below, not
-                // these source/oversized variants.
+                // The installed PWA uses the raster app icons below, not
+                // these SVG sources or the legacy logo preview.
                 'logos/app-icon.svg',
                 'logos/app-icon-maskable.svg',
-                'logos/app-icon-1024.png',
+                'logos/logo-1024.webp',
             ],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
