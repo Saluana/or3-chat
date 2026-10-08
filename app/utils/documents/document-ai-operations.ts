@@ -156,7 +156,22 @@ function validateInsertedNodes(editor: Pick<Editor, 'schema'>, nodes: JSONConten
     }
     for (const node of nodes) {
         if (hasInvalidLink(node)) throw new Error('AI edit contains an unsafe link.');
-        editor.schema.nodeFromJSON(node);
+        checkedNodeFromJSON(editor, node);
+    }
+}
+
+/**
+ * `nodeFromJSON` does not enforce content rules: text placed directly in a
+ * table cell is accepted here and silently dropped later. Reject it so the
+ * model gets an error it can correct instead of losing content.
+ */
+function checkedNodeFromJSON(editor: Pick<Editor, 'schema'>, json: JSONContent): void {
+    try {
+        editor.schema.nodeFromJSON(json).check();
+    } catch (error) {
+        throw new Error(`AI edit content does not fit the document structure: ${
+            error instanceof Error ? error.message : String(error)
+        }`);
     }
 }
 
@@ -233,7 +248,12 @@ export function buildDocumentAiCandidate(
         type: 'doc',
         content: roots.length ? roots.map((entry) => entry.node) : [{ type: 'paragraph' }],
     };
-    editor.schema.nodeFromJSON(candidate);
+    // Inserted nodes were deep-checked above; check only how the blocks sit in
+    // the document so untouched legacy content cannot block an edit.
+    const doc = editor.schema.nodeFromJSON(candidate);
+    if (!doc.type.validContent(doc.content)) {
+        throw new Error('AI edit content does not fit the document structure.');
+    }
     return candidate;
 }
 
