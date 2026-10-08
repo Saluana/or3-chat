@@ -78,7 +78,6 @@ describe('logoutCleanup', () => {
         );
         localStorage.setItem('or3.plugin.other.secret.vault', 'other');
         localStorage.setItem('or3.plugin.secret.old', 'legacy');
-        localStorage.setItem('or3.external-agents.credentials.v1', 'unmigrated-vault');
         localStorage.setItem('last_selected_model', 'openai/test');
         sessionStorage.setItem('openrouter_state', 'state');
         const { logoutCleanup } = await import('~/utils/logout-cleanup');
@@ -99,7 +98,6 @@ describe('logoutCleanup', () => {
         ).toBeNull();
         expect(localStorage.getItem('or3.plugin.other.secret.vault')).toBeNull();
         expect(localStorage.getItem('or3.plugin.secret.old')).toBeNull();
-        expect(localStorage.getItem('or3.external-agents.credentials.v1')).toBeNull();
         expect(localStorage.getItem('last_selected_model')).toBeNull();
         expect(sessionStorage.getItem('openrouter_state')).toBeNull();
     });

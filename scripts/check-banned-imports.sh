@@ -54,13 +54,11 @@ fi
 echo "✅ No banned provider imports found in core hot zones"
 
 # First-party packages must run solely through the public plugin contract.
-# Reviewed exceptions: builtin profile IDs, deployment-default translation,
-# and the temporary copy/read-back migration (retire after known installs upgrade).
+# Reviewed exceptions: builtin profile IDs and deployment-default translation.
 PLUGIN_IDS='or3-external-agents|or3-workflows|externalAgentHost|workflowHostIntegrations|preserveExternalAgentCredentials'
 if rg -n "$PLUGIN_IDS" app server shared --glob '*.ts' --glob '*.vue' --glob '!**/__tests__/**' --glob '!**/*.test.*' \
     --glob '!app/core/workspace-profiles/builtins.ts' \
-    --glob '!server/admin/config/plugin-setting-defaults.ts' \
-    --glob '!app/composables/plugins/legacy-plugin-data.ts'; then
+    --glob '!server/admin/config/plugin-setting-defaults.ts'; then
     echo 'Plugin-specific host runtime dependency found.'
     exit 1
 fi

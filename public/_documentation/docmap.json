@@ -911,7 +911,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization for model calls and writes, scoped storage, governed networking, and saved Files catalog methods, lifecycle hooks and menu actions."
+                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
