@@ -7,4 +7,4 @@ OpenClaw-specific setup is maintained in the [bridge package](../packages/opencl
 
 ## Installed package capabilities
 
-External Agents 0.2 uses the public trusted SDK 2.1 UI, pane, Connect, profile, scoped storage/secret and governed transport clients. The package owns agent staging protocols. During upgrade, legacy connection and encrypted-vault bytes are copied and verified before originals are removed; saved origins require one host-owned access prompt. Disable resets Agent panes and retains workspace connection data. Sign-out clears device-local plugin credentials.
+External Agents 0.2 uses the public trusted SDK 2.1 UI, pane, Connect, profile, scoped storage/secret and governed transport clients. The package owns agent staging protocols. Saved origins require one host-owned access prompt. The legacy connection/vault migration is retired after the Cloud 0.1.77 cutover; installations with 0.1.1 data must activate External Agents 0.2.0 on Cloud 0.1.77 before upgrading beyond that cutover. Disable resets Agent panes and retains workspace connection data. Sign-out clears device-local plugin credentials.

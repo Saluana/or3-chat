@@ -1,4 +1,3 @@
-import { LEGACY_PLUGIN_SECRET_KEYS } from '~/composables/plugins/legacy-plugin-data';
 /**
  * @module app/utils/logout-cleanup
  *
@@ -116,7 +115,6 @@ export async function logoutCleanup(
                 'openrouter_code_method',
             );
         }
-        if (!options.preservePluginSecrets) keys.push(...LEGACY_PLUGIN_SECRET_KEYS);
         for (let index = 0; index < localStorage.length; index += 1) {
             const key = localStorage.key(index);
             if (key?.startsWith('or3:bg-client-tool:') || (!options.preservePluginSecrets && key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.')))) keys.push(key);

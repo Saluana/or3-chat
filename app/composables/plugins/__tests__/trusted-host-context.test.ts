@@ -653,29 +653,3 @@ describe('governed trusted destinations', () => {
         expect(await access.authorize('https://chat.example/api/plugins/network-fixture/run', 'https://chat.example')).toBe(false);
     });
 });
-
-// Migration failure list: write/quota error, readback mismatch, workspace switch,
-// concurrent activation, one missing source, corrupt bytes, retry, rollback floor.
-describe('legacy data migration', () => {
-    it('copies opaque bytes before deletion and safely retries or refuses mismatches', async () => {
-        const { migrateLegacyPluginData } = await import('../legacy-plugin-data');
-        const { getDb } = await import('~/db/client');
-        const { setKvByName, getKvByName } = await import('~/db/kv');
-        const db = getDb();
-        await db.open();
-        await setKvByName('external-agents.connections.v1', 'opaque legacy bytes', db);
-        const memory = new Map<string, string>([['or3.external-agents.credentials.v1', 'ciphertext']]);
-        const local = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value); }, removeItem: (key: string) => { memory.delete(key); } };
-        const input = { pluginId: 'or3-external-agents', stateVersion: 2, db, current: () => true, localStorage: local };
-        await migrateLegacyPluginData(input);
-        expect((await getKvByName('or3.plugin.or3-external-agents.storage.connections', db))?.value).toBe(JSON.stringify('opaque legacy bytes'));
-        expect((await getKvByName('external-agents.connections.v1', db))?.deleted).toBe(true);
-        expect(memory.get('or3.plugin.or3-external-agents.secret.vault')).toBe('ciphertext');
-        expect(memory.has('or3.external-agents.credentials.v1')).toBe(false);
-        await migrateLegacyPluginData(input);
-        memory.set('or3.external-agents.credentials.v1', 'different');
-        await expect(migrateLegacyPluginData(input)).rejects.toThrow(/legacy-migration-failed.*credentials/);
-        expect(memory.get('or3.external-agents.credentials.v1')).toBe('different');
-        memory.delete('or3.external-agents.credentials.v1');
-    });
-});

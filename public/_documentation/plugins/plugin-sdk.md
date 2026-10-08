@@ -5,6 +5,8 @@ Start with [Build your first plugin](/documentation/plugins/first-plugin) for a 
 This page describes methods supported by the current host, their permissions,
 and how to handle results.
 
+Existing External Agents 0.1.1 data needs the Cloud 0.1.77 cutover migration before upgrading to a host where that migration is retired. Activate External Agents 0.2.0 on the cutover host first; new installations use scoped storage directly.
+
 ## Define and activate
 
 `defineOr3Plugin({ manifest, setup })` defines a package. Trusted-host entries
