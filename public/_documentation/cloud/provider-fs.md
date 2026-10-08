@@ -47,7 +47,7 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Upload endpoints must enforce server-side max file size.
 - Uploaded bytes should pass SHA-256 integrity verification before commit.
 - Delete validates the canonical `workspace_id:hash` storage ID. In
-  `or3-provider-fs@0.0.10`, existing blobs or sidecars return HTTP 503; an
+  `or3-provider-fs@0.0.11`, existing blobs or sidecars return HTTP 503; an
   already absent object is an idempotent success.
 - Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
