@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 // Must stay directly under src/: '../' is the package root from here and from the bundled dist/cli.mjs.
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.78';
+export const PACKAGE_VERSION = '0.1.79';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 export const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 

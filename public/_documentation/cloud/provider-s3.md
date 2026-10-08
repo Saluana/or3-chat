@@ -2,6 +2,10 @@
 
 S3-compatible storage provider for OR3 Cloud.
 
+Version `0.0.11` preserves stored blobs after failed commits, retrieves HEAD
+checksums explicitly, and keeps destructive deletion and GC disabled until
+provider-owned coordination is available.
+
 This provider:
 
 - registers a server-side `StorageGatewayAdapter` with ID `s3`

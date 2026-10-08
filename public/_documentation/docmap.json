@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Configure filesystem object storage, signed transfers, and fail-closed physical deletion and garbage collection."
+                    "summary": "Configure filesystem 0.0.11, signed transfers, and fail-closed physical deletion and garbage collection."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 storage setup, checksum verification, admin diagnostics, compatibility testing, and coordinated deletion requirements."
+                    "summary": "Configure S3 0.0.11 with checksum verification, blob preservation, admin diagnostics, compatibility testing, and coordinated deletion requirements."
                 },
                 {
                     "name": "deployment-operations.md",
