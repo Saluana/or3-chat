@@ -362,7 +362,7 @@ if (import.meta.main) {
         ),
         precacheRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_BYTES,
-            19_200_000
+            18_400_000
         ),
         rootModulepreloadFiles: positiveNumber(
             process.env.OR3_PERF_MAX_ROOT_MODULEPRELOAD_FILES,

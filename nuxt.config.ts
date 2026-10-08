@@ -472,12 +472,16 @@ export default defineNuxtConfig({
                 'streamsaver/**',
                 // These assets remain available online, but are not required to
                 // install or operate the offline application shell.
-                'screenshots/chat-screenshot.png',
-                'screenshots/editor-screenshot.png',
+                'screenshots/**',
                 'logos/logo-8bit-raw.png',
                 'logos/logo-xl.png',
                 'logos/logo-1024.png',
                 'logos/icon-logo.png',
+                // The installed PWA uses the 192/512 raster icons below, not
+                // these source/oversized variants.
+                'logos/app-icon.svg',
+                'logos/app-icon-maskable.svg',
+                'logos/app-icon-1024.png',
             ],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
