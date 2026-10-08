@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { resolveQualificationProvider } from '../test/workspace-cloud-providers';
 
 // Qualification must not substitute a sibling for installed bytes, accept a
@@ -8,7 +9,7 @@ import { resolveQualificationProvider } from '../test/workspace-cloud-providers'
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 async function fixture() {
-    const root = await mkdtemp('/private/tmp/or3-provider-qualification-'); roots.push(root);
+    const root = await mkdtemp(join(tmpdir(), 'or3-provider-qualification-')); roots.push(root);
     const app = join(root, 'app'); const installed = join(app, 'node_modules/or3-provider-sqlite');
     const sibling = join(root, 'or3-provider-sqlite');
     await mkdir(installed, { recursive: true }); await mkdir(sibling);
