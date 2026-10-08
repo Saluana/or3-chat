@@ -123,7 +123,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 version: descriptor.version,
                 workspaceId: descriptor.workspaceId,
                 generation, signal,
-                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1'],
+                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1', 'or3-workspace-files-v1'],
                 requestedFeatures: definition.manifest.features.required,
                 runtimeServices: createTrustedRuntimeServices,
                 settingDefaults: manifestDefaults,

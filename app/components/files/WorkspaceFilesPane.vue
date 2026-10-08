@@ -15,6 +15,8 @@ import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
+import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 
 const pageElement = ref<HTMLElement | null>(null);
 const widePreview = ref(false);
@@ -29,6 +31,7 @@ const menuUi = {
     itemWrapper: 'min-w-0 flex-1 text-left',
     itemLabel: 'text-sm! leading-5! tracking-normal!',
 };
+const pluginFileActions = useWorkspaceFileActions();
 async function closePreview() {
     preview.value = false;
     await nextTick();
@@ -144,6 +147,11 @@ function textCoverage(row: Post) {
     return coverage === 'full' ? 'Text searchable' : coverage === 'prefix' ? 'Text prefix searchable' : 'Filename searchable';
 }
 function rowActions(row: Post) {
+    const kind = row.postType === 'doc' ? 'document' : 'file';
+    const extensions = pluginFileActions.value.filter(action => !action.kinds || action.kinds.includes(kind)).map(action => ({
+        label: action.label, icon: action.icon ?? 'i-lucide-puzzle', disabled: busy.value || (action.requiresWrite && readOnly.value),
+        onSelect: () => { void runPluginFileAction(action, row); },
+    }));
     return [
         [
             ...(row.postType === 'doc' ? [{ label: 'Open document', icon: icons.document.value, onSelect: () => openEditor(row) }] : []),
@@ -160,9 +168,20 @@ function rowActions(row: Post) {
                     disabled: busy.value || readOnly.value, onSelect: () => enableText(row) }] : []),
             ] : []),
         ],
+        ...(extensions.length ? [extensions] : []),
         [{ label: 'Move to trash', icon: icons.trash.value, color: 'error' as const, disabled: busy.value || readOnly.value,
             onSelect: () => change(row, { trashed: true }) }],
     ];
+}
+
+async function runPluginFileAction(action: WorkspaceFileAction, row: Post) {
+    busy.value = true; error.value = '';
+    try {
+        const origin = scope ?? capture();
+        const { workspaceFileSnapshot } = await import('~/db/workspace-files');
+        await action.run(await workspaceFileSnapshot(origin, row));
+    } catch (failure) { error.value = failure instanceof Error ? failure.message : 'File action failed.'; }
+    finally { busy.value = false; }
 }
 
 function capture() {

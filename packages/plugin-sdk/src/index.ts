@@ -1,5 +1,6 @@
 export { defineOr3Plugin } from './contracts';
 export { pluginError, pluginOk } from './results';
+export type { PluginSavedFile, PluginFileOperation, PluginFileLifecycle, PluginFilesCatalogClient, PluginFileAction } from './workspace-files';
 export type {
     PluginJsonValue,
     PluginSettingsClient,

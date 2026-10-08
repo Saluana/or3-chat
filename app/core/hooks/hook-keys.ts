@@ -36,6 +36,9 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
  * - Keep this list stable; add only after a hook name is widely adopted
  */
 export type KnownHookKey =
+    | 'workspace.files:action:before'
+    | 'workspace.files:action:after'
+    | 'workspace.files:filter:policy'
     | 'ui.chat.message:filter:outgoing'
     | 'ui.chat.message:filter:incoming'
     | 'ai.chat.model:filter:select'

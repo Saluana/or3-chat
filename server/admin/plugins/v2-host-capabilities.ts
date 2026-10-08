@@ -165,6 +165,9 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'files.pick': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
             'files.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
             'files.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
+            'files.catalog.read': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
+            'files.catalog.write': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
+            'files.actions.register': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
             'posts.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
             'posts.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
         } as const satisfies Record<string, readonly [string, string]>).map(([grant, [module, exportName]]) => ({
@@ -231,7 +234,7 @@ export const OR3_PLUGIN_V2_HOST_CAPABILITIES: PluginV2HostCapabilities = Object.
     supportedTrustModes: Object.freeze(['trusted-host', 'isolated-client'] as const),
     supportedGrants: Object.freeze(qualifiedGrants),
     grantTrustModes: Object.freeze(grantTrustModes),
-    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1']),
+    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1', 'or3-workspace-files-v1']),
 });
 
 /**

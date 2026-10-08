@@ -21,12 +21,14 @@ import type {
     PluginContext,
     PluginContribution,
     PluginHooks,
+    PluginHookOptions,
     PluginLogger,
 } from '@or3/plugin-sdk';
 import type { PluginSettingsClient, PluginStorageClient, PluginStorageRecord } from '@or3/plugin-sdk';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { createTrustedWorkspaceStorage } from './trusted-workspace-storage';
 import { createTrustedRecords } from './trusted-records';
+import { createTrustedWorkspaceFiles } from './trusted-workspace-files';
 import { createTrustedNetworkAccess } from './trusted-network-access';
 import type { createTrustedRuntimeServices } from './trusted-runtime-services';
 import { markChatSendHandled } from '~/utils/chat/send-interception';
@@ -90,6 +92,9 @@ export const TRUSTED_HOST_GRANTS = [
     'files.pick',
     'files.read',
     'files.write',
+    'files.catalog.read',
+    'files.catalog.write',
+    'files.actions.register',
     'network.stream',
     'activity.register',
     'documents.read',
@@ -290,6 +295,9 @@ export function createTrustedHostContext(
     const services = input.runtimeServices?.({ pluginId: input.pluginId, db: activationDb, allow, current: () => !ended(), cleanup });
     const { settings, storage } = createTrustedWorkspaceStorage({ pluginId: input.pluginId, db: activationDb, grants: granted, ended, defaults: { ...services?.settingDefaults, ...input.settingDefaults } });
     const records = createTrustedRecords({ db: activationDb, allow, postTypes, messageTypes, inBeforeSend: () => beforeSendDepth > 0, current: () => !ended(), cleanup });
+    const workspaceFiles = createTrustedWorkspaceFiles({ pluginId: input.pluginId,
+        workspaceId: input.workspaceId ?? 'local', db: activationDb, signal: controller.signal,
+        allow, current: () => !ended(), cleanup });
     const access = createTrustedNetworkAccess({ pluginId: input.pluginId, db: activationDb, current: () => !ended(), hostOrigin: globalThis.location?.origin ?? 'https://localhost', destinations: input.mediation?.approvedDestinations,
         confirm: (origins, purpose) => services?.confirmOrigins(origins, purpose) ?? Promise.resolve(false),
         connectOrigins: async () => { if (!granted.has('workspace.connections.read') || !services) return []; const result = await services.connections.list(); return result.ok ? result.value.flatMap(row => row.baseUrl ? [row.baseUrl] : []) : []; },
@@ -520,11 +528,13 @@ export function createTrustedHostContext(
     }
 
     const approvedActionHooks = new Set([
+        'workspace.files:action:before',
+        'workspace.files:action:after',
         'ui.chat.editor:action:before_send',
         'ai.chat.send:action:before',
         'workflow.execution:action:state_update',
     ]);
-    const approvedFilterHooks = new Set(['ai.chat.messages:filter:before_send',
+    const approvedFilterHooks = new Set(['workspace.files:filter:policy', 'ai.chat.messages:filter:before_send',
         'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit']);
     function subscribeHook(
         name: string,
@@ -533,12 +543,37 @@ export function createTrustedHostContext(
         options?: { readonly priority?: number; readonly signal?: AbortSignal }
     ): PluginRegistrationHandle {
         allow('hooks.register');
+        const fileHook = name.startsWith('workspace.files:');
+        if (fileHook) {
+            // Grants only: workspace access is checked on delivery, so read-only
+            // members and hosts without Files can still activate the plugin.
+            allow(kind === 'filter' ? 'files.catalog.write' : 'files.catalog.read');
+            if (!input.subscribeHook) unsupported('Workspace file hook delivery is unavailable');
+        }
         // Bundled V1 keeps its legacy lifecycle-only hook handle. Runtime V2
-        // receives only the reviewed chat and workflow hook names below.
+        // receives only the reviewed chat, workflow and workspace file hooks.
         if (!input.subscribeHook) return trackListener();
         const approved = kind === 'action' ? approvedActionHooks : approvedFilterHooks;
         if (!approved.has(name)) unsupported(`Hook ${name} is not available to plugins`);
         const wrapped = (...args: unknown[]) => {
+            if (fileHook) {
+                const event = args[kind === 'filter' ? 1 : 0] as { workspaceId?: string } | undefined;
+                if (event?.workspaceId !== (input.workspaceId ?? 'local') || (kind === 'filter' && args[0] === false)) {
+                    return kind === 'filter' ? args[0] : undefined;
+                }
+                if (kind === 'filter') {
+                    // The hook engine keeps the previous value when a callback throws,
+                    // so a failing or non-boolean policy refuses the change here.
+                    try {
+                        workspaceFiles.assertAccess(true);
+                        live();
+                        return Promise.resolve(callback(...args)).then(allowed => allowed === true, () => false);
+                    } catch {
+                        return false;
+                    }
+                }
+                workspaceFiles.assertAccess();
+            }
             live();
             if (!['ui.chat.editor:action:before_send', 'ai.chat.send:action:before', 'ai.chat.messages:filter:before_send', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit'].includes(name)) return callback(...args);
             beforeSendDepth += 1;
@@ -555,10 +590,10 @@ export function createTrustedHostContext(
             if (!input.emitHook) return pluginError('unsupported', 'Host hook emission is unavailable');
             await input.emitHook(name, payload); return pluginOk(undefined);
         },
-        onAction(name, callback, options) {
+        onAction<TArgs extends readonly unknown[]>(name: string, callback: (...args: TArgs) => void | Promise<void>, options?: PluginHookOptions) {
             return subscribeHook(name, 'action', callback as unknown as (...args: unknown[]) => unknown, options);
         },
-        onFilter(name, callback, options) {
+        onFilter<TValue, TArgs extends readonly unknown[]>(name: string, callback: (value: TValue, ...args: TArgs) => TValue | Promise<TValue>, options?: PluginHookOptions) {
             return subscribeHook(name, 'filter', callback as (...args: unknown[]) => unknown, options);
         },
     };
@@ -878,7 +913,7 @@ export function createTrustedHostContext(
                     network: mediation.network,
                     http: mediation.http,
                     secrets: mediation.secrets,
-                    files: mediation.files,
+                    files: { ...mediation.files, catalog: workspaceFiles.catalog, registerAction: workspaceFiles.registerAction },
                 };
             },
         },

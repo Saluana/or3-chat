@@ -5,6 +5,20 @@ authoring CLI. Plugin packages import only this package (or its documented
 subpaths), never OR3 app aliases such as `~/`, `~~/`, `#imports`, or Nuxt
 auto-imports.
 
+Trusted-host packages can require `or3-workspace-files-v1` to use
+`context.files.catalog` (`list`, `get`, `save`, `update`, `enableText`, `remove`)
+and `context.files.registerAction`. Catalog reads require `files.catalog.read`,
+writes require `files.catalog.write`, and menu actions require
+`files.actions.register` plus catalog read access. Mutations preserve the host's
+workspace authorization, observed revision, Trash and shared-byte ownership rules.
+Lifecycle subscriptions to `workspace.files:action:before/after` require
+`hooks.register` plus catalog read access; `workspace.files:filter:policy`
+requires hooks registration plus catalog write access. `PluginSavedFile`,
+`PluginFileLifecycle`, and `PluginFileAction` are exported from the SDK root.
+Registrations are disposed with their activation. Portable hosts return
+`unsupported`. See the host's [Saved Files SDK guide](../../public/_documentation/plugins/plugin-sdk.md#saved-files)
+for examples and exact event semantics.
+
 ## Start building
 
 With Bun 1.3.6 or newer, an OR3 Chat source checkout whose dependencies are

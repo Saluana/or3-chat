@@ -1,11 +1,49 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 
 async function upload(page: Page, file: { name: string; mimeType: string; buffer: Buffer }): Promise<void> {
     await page.getByTestId('upload-input').setInputFiles(file);
 }
 
 test.describe('Storage Layer', () => {
+    test('a trusted file plugin receives lifecycle events, adds an action and cleans up', async ({ page }, info) => {
+        await page.getByTestId('file-plugin-enable').click();
+        const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
+        await files.getByLabel('Upload files', { exact: true }).setInputFiles({
+            name: 'plugin-contract.txt', mimeType: 'text/plain', buffer: Buffer.from('Plugin contract original bytes.'),
+        });
+        const item = files.getByRole('listitem').filter({ hasText: 'plugin-contract.txt' });
+        await expect(item).toBeVisible();
+        await item.getByRole('button', { name: /^More actions for/ }).click();
+        await page.getByRole('menuitem', { name: 'Plugin rename', exact: true }).click();
+        const renamed = files.getByRole('listitem').filter({ hasText: 'Renamed by plugin' });
+        await expect(renamed).toBeVisible();
+        await renamed.getByRole('button', { name: /^More actions for/ }).click();
+        await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
+        await expect(files).toContainText('rejected by policy');
+        await expect(renamed).toBeVisible();
+        const receipt = page.getByTestId('file-plugin-events');
+        await expect(receipt).toContainText('rename');
+        const events = JSON.parse(await receipt.textContent() ?? '[]');
+        expect(events.map((event: { operation: string }) => event.operation)).toEqual(['import', 'rename']);
+        expect(events[1]).toMatchObject({ before: { title: 'plugin-contract.txt' }, after: { title: 'Renamed by plugin' } });
+        await page.getByTestId('file-plugin-disable').click();
+        await renamed.getByRole('button', { name: /^More actions for/ }).click();
+        await expect(page.getByRole('menuitem', { name: 'Plugin rename', exact: true })).toHaveCount(0);
+        await page.keyboard.press('Escape');
+        await renamed.getByRole('button', { name: 'Open Renamed by plugin', exact: true }).click();
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
+        const downloaded = page.waitForEvent('download');
+        await preview.getByRole('button', { name: 'Download', exact: true }).click();
+        const original = info.outputPath('plugin-original.txt');
+        await (await downloaded).saveAs(original);
+        expect(await readFile(original, 'utf8')).toBe('Plugin contract original bytes.');
+        const receiptPath = info.outputPath('file-plugin-receipt.json');
+        await writeFile(receiptPath, JSON.stringify(events, null, 2));
+        await info.attach('file-plugin-receipt', { path: receiptPath, contentType: 'application/json' });
+        await info.attach('file-plugin-original', { path: original, contentType: 'text/plain' });
+        await page.screenshot({ path: info.outputPath('file-plugin.png'), animations: 'disabled' });
+    });
     test('Files preserves a named text upload through Trash, restore and reload', async ({ page }, info) => {
         await page.goto('/_tests/_test-storage');
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });

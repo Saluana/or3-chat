@@ -5,6 +5,7 @@ import type {
     PluginStorageClient,
 } from './clients';
 import type { PluginRegistrationHandle } from './contracts';
+import type { PluginFileAction, PluginFilesCatalogClient } from './workspace-files';
 import { pluginError } from './results';
 import type { PluginError, PluginResult } from './results';
 
@@ -297,6 +298,8 @@ export interface PluginFileRead extends AsyncIterable<Uint8Array> {
 }
 
 export interface PluginFilesClient {
+    readonly catalog: PluginFilesCatalogClient;
+    registerAction(action: PluginFileAction): PluginRegistrationHandle;
     limits(): Promise<PluginResult<{ maxFilesPerMessage: number; maxFileSizeBytes: number }>>;
     pick(options?: {
         readonly multiple?: boolean;
@@ -654,6 +657,15 @@ export function createUnsupportedPluginClients(input: {
             unlock: async () => unsupported('secrets.unlock'),
         },
         files: {
+            catalog: {
+                list: async () => unsupported('files.catalog.list'),
+                get: async () => unsupported('files.catalog.get'),
+                save: async () => unsupported('files.catalog.save'),
+                update: async () => unsupported('files.catalog.update'),
+                enableText: async () => unsupported('files.catalog.enableText'),
+                remove: async () => unsupported('files.catalog.remove'),
+            },
+            registerAction: () => unsupportedHandle('files.registerAction'),
             limits: async () => unsupported('files.limits'),
             pick: async () => unsupported('files.pick'),
             read: async () => unsupported('files.read'),

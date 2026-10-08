@@ -1,4 +1,5 @@
 import { PluginSseDecoder, pluginError, pluginOk, type PluginGrant, type PluginHttpBody, type PluginHttpClient, type PluginResult } from '@or3/plugin-sdk';
+import { createUnsupportedPluginClients } from '@or3/plugin-sdk/host';
 import type {
     PluginFileRead,
     PluginFileRef,
@@ -299,6 +300,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
     };
 
     const filesClient: PluginFilesClient = {
+        ...createUnsupportedPluginClients({ workspaceId: 'local' }).files,
         async limits() { try { allow('files.read'); } catch { return denied('files.read'); } if (ended()) return pluginError('stale-context', 'Activation ended'); return pluginOk(options.limits ?? { maxFilesPerMessage: 10, maxFileSizeBytes: 20 * 1024 * 1024 }); },
         async pick() {
             try {
