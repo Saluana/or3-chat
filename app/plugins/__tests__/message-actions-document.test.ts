@@ -127,7 +127,7 @@ describe('Create document message action', () => {
         expect(mocks.addToast).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Document created',
-                description: 'Opened in current pane: doc-1',
+                description: 'Opened in the current pane.',
             })
         );
     });

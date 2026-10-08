@@ -4,6 +4,25 @@ import { createDocument, type CreateDocumentInput } from '~/db/documents';
 import { registerMessageAction } from '~/composables/chat/useMessageActions';
 import { isMobile } from '~/state/global';
 import { markdownToTipTapDoc } from '~/utils/chat/markdownToTipTapDoc';
+import type { JSONContent } from '@tiptap/core';
+
+const MAX_TITLE_CHARS = 80;
+
+/** First heading, else first prose paragraph, as a one-line title. */
+function titleFromDoc(doc: JSONContent): string {
+    const textOf = (node: JSONContent): string =>
+        node.text ?? (node.content ?? []).map(textOf).join('');
+    const isProse = (text: string) => text.trim() && !/^\$\$[\s\S]*\$\$$/.test(text.trim());
+    const blocks = doc.content ?? [];
+    const source =
+        blocks.find((block) => block.type === 'heading' && textOf(block).trim()) ??
+        blocks.find((block) => block.type === 'paragraph' && isProse(textOf(block)));
+    const line = source ? textOf(source).replace(/\s+/g, ' ').trim() : '';
+    if (!line) return 'Untitled';
+    return line.length > MAX_TITLE_CHARS
+        ? `${line.slice(0, MAX_TITLE_CHARS - 1)}…`
+        : line;
+}
 
 export default defineNuxtPlugin(() => {
     registerMessageAction({
@@ -39,7 +58,7 @@ export default defineNuxtPlugin(() => {
             let doc: Awaited<ReturnType<typeof createDocument>>;
             try {
                 doc = await createDocument({
-                    title: 'Untitled', // UiChatMessage doesn't have a title
+                    title: titleFromDoc(tiptapDoc),
                     content: tiptapDoc as CreateDocumentInput['content'],
                 });
             } catch (createErr) {
@@ -89,8 +108,8 @@ export default defineNuxtPlugin(() => {
             useToast().add({
                 title: 'Document created',
                 description: `Opened in ${
-                    openedInNewPane ? 'new' : 'current'
-                } pane: ${doc.id}`,
+                    openedInNewPane ? 'a new' : 'the current'
+                } pane.`,
                 duration: 2600,
             });
         },

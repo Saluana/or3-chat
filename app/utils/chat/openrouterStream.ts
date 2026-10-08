@@ -416,9 +416,23 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         try { await recordRequestState?.('failed'); }
         catch (error) { console.warn('[projects] Could not record failed dispatch', error); }
     };
-    const dispatchRequest = async (url: string, init: RequestInit) => {
-        await recordRequestState?.('dispatched');
-        await assertDispatchOwner(params);
+    // Admission (ownership, workspace/project scope) refuses before any network
+    // I/O. The refusal is final for this payload, so it must not be retried or
+    // reported as a connection problem.
+    const admitDispatch = async (assertOwnerFirst = false) => {
+        try {
+            if (assertOwnerFirst) await assertDispatchOwner(params);
+            await recordRequestState?.('dispatched');
+            await assertDispatchOwner(params);
+        } catch (error) {
+            if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+            throw new OpenRouterStreamError(
+                error instanceof Error ? error.message : String(error),
+                { status: 0, retryable: false, kind: 'admission' }
+            );
+        }
+    };
+    const transportRequest = async (url: string, init: RequestInit) => {
         try {
             const response = await fetchWithResponseDeadline(url, init, { signal, timeoutMs: params.responseTimeoutMs });
             try { await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed'); }
@@ -429,6 +443,10 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             }
             return response;
         } catch (error) { await recordFailure(); throw error; }
+    };
+    const dispatchRequest = async (url: string, init: RequestInit) => {
+        await admitDispatch();
+        return await transportRequest(url, init);
     };
     let providerAccepted = false;
     const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
@@ -445,7 +463,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         let serverResp: Response | undefined;
         let networkError: Error | undefined;
 
-        await assertDispatchOwner(params);
+        await admitDispatch(true);
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
@@ -454,7 +472,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
-            serverResp = await dispatchRequest('/api/openrouter/stream', {
+            serverResp = await transportRequest('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(requestSnapshot),

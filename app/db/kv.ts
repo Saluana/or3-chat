@@ -12,6 +12,7 @@
  * - Storing secrets outside the KV table
  * - Schema migrations or indexing
  */
+import Dexie from 'dexie';
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -431,10 +432,10 @@ export async function setKvByName(
         updated_at: now,
         clock: nextClock(existingClock),
     };
-    const filtered = await hooks.applyFilters(
+    const filtered = await Dexie.waitFor(hooks.applyFilters(
         'db.kv.upsertByName:filter:input',
         record
-    );
+    ));
     throwIfRevoked(options);
     const kvEntity: Kv =
         'id' in filtered && 'created_at' in filtered
@@ -497,7 +498,7 @@ export async function setKvByName(
             { op: 'write', entity: 'kv', action: 'upsertByName' },
             { rethrow: true }
         );
-        await hooks.doAction('db.kv.upsertByName:action:after', transactionEntity);
+        await Dexie.waitFor(hooks.doAction('db.kv.upsertByName:action:after', transactionEntity));
         throwIfRevoked(options);
     });
     return committedEntity;

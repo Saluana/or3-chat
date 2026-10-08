@@ -37,8 +37,8 @@
         "nuxt": "4.5.2",
         "or3-provider-basic-auth": "0.0.11",
         "or3-provider-clerk": "0.0.8",
-        "or3-provider-convex": "0.0.12",
-        "or3-provider-fs": "0.0.9",
+        "or3-provider-convex": "0.0.16",
+        "or3-provider-fs": "0.0.10",
         "or3-provider-s3": "0.0.9",
         "or3-provider-sqlite": "0.0.15",
         "or3-scroll": "0.1.3",
@@ -2452,9 +2452,9 @@
 
     "or3-provider-clerk": ["or3-provider-clerk@0.0.8", "", { "dependencies": { "@clerk/nuxt": "^1.13.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-sSXCa7akRyt2nHcMb+HrN8E3BKyHZlG9/iX7Lyu1iyFd9ZkP3mSiTa56F+x+/h4gFpH25PUBaTx5WRxLCED++g=="],
 
-    "or3-provider-convex": ["or3-provider-convex@0.0.12", "", { "dependencies": { "convex": "^1.31.3", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-dMN6cMEEL5/1DVSe/irW0sEd2PBD5HH/8JKWRWX2kuWZemGkZpDhyJJx/ovkAOHmVbdkCC7EH/2AnWx6OTQIOQ=="],
+    "or3-provider-convex": ["or3-provider-convex@0.0.16", "", { "dependencies": { "convex": "^1.31.3", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-xYYCC6SRacRphLCBZOC5AmsQlS2E8uXjG967G+GdcyHJmZflIpTrrPZGdOU3soFxO6FJa8PtlooO3vGBswq2oQ=="],
 
-    "or3-provider-fs": ["or3-provider-fs@0.0.9", "", { "dependencies": { "jsonwebtoken": "^9.0.3" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-URvn8HQek8omeH9ZyBoX647NVwhNlO6zZ91Pmf1nZRkS9Pf8oT72KXKkBKU8pkYDs1Z3JwoL2GWS7dDADgDghQ=="],
+    "or3-provider-fs": ["or3-provider-fs@0.0.10", "", { "dependencies": { "jsonwebtoken": "^9.0.3" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-8IcgMsnn5H0O0v6R+fCfAqe7DZS9YF70iFjFfUQJM78lzZppiXqYZeWav/piTgz1/DQ4HBGNknxQ2gDsvynpIA=="],
 
     "or3-provider-s3": ["or3-provider-s3@0.0.9", "", { "dependencies": { "@aws-sdk/client-s3": "^3.888.0", "@aws-sdk/s3-request-presigner": "^3.888.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-5fqdPa/8HWny6zg6TumgtPPNdtGUaFZaS4V9wghpr/MruI6EsAGsdv7P+EM0sdp3IDxHHVYJPqMhG5k9JjNTrA=="],
 

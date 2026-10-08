@@ -618,3 +618,17 @@ nothing important changed.
 - [Releasing OR3 Cloud](releasing.md)
 - [Cloud package README](../packages/or3-cloud/README.md)
 - [Deployment and operations](../public/_documentation/cloud/deployment-operations.md)
+
+## Convex source backends
+
+An editable source checkout connected to Convex uses the automatic backend
+update described in [Convex provider](../public/_documentation/cloud/provider-convex.md#automatic-source-updates).
+After updating source and dependencies, `bun run dev:ssr` or `bun run preview`
+updates and verifies the matching backend before starting OR3. Configure the
+exact deployment credential once. Normal restarts skip deployment when the
+backend already matches; builds remain network independent.
+
+The managed `@or3/cloud` profile uses SQLite and has no Convex backend to
+update. Existing source customizations may require one deliberate template
+merge. Keep the source backup and any independent Convex database backup until
+acceptance. A source/app rollback never silently rolls back a remote backend.

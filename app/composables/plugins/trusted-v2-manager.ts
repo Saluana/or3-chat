@@ -44,6 +44,7 @@ export class TrustedV2ClientManager {
     readonly #active = new Map<string, {
         descriptor: PackageV2PluginDescriptor;
         activation: TrustedV2Activation;
+        controller: AbortController;
     }>();
     readonly #observations = shallowReactive(new Map<string, TrustedV2ObservedActivation>());
     #generation = 0;
@@ -65,13 +66,22 @@ export class TrustedV2ClientManager {
         const controller = new AbortController();
         this.#controller = controller;
         const isCurrent = () => generation === this.#generation && !controller.signal.aborted;
+        for (const [id, current] of this.#active) {
+            const next = wanted.get(id);
+            if (next?.descriptorKey !== current.descriptor.descriptorKey ||
+                next.workspaceId !== current.descriptor.workspaceId) {
+                current.controller.abort('manifest-replaced');
+            }
+        }
         return this.#enqueue(async () => {
+            if (!isCurrent()) return;
             const cleanupErrors: unknown[] = [];
             for (const [id, current] of this.#active) {
                 const next = wanted.get(id);
                 if (
                     next?.descriptorKey === current.descriptor.descriptorKey &&
-                    next.workspaceId === current.descriptor.workspaceId
+                    next.workspaceId === current.descriptor.workspaceId &&
+                    !current.controller.signal.aborted
                 ) continue;
                 try {
                     await current.activation.dispose();
@@ -86,16 +96,21 @@ export class TrustedV2ClientManager {
             for (const [id, descriptor] of wanted) {
                 if (!isCurrent()) return;
                 if (this.#active.has(id)) continue;
+                // A manifest generation owns pending setup, not the lifetime of
+                // an activation retained by the next manifest.
+                const activationController = new AbortController();
+                const abortActivation = () => activationController.abort(controller.signal.reason);
+                controller.signal.addEventListener('abort', abortActivation, { once: true });
                 try {
                     const activation = await this.#options.activate(
-                        descriptor, generation, controller.signal,
+                        descriptor, generation, activationController.signal,
                         isCurrent
                     );
                     if (!isCurrent()) {
                         await activation.dispose();
                         return;
                     }
-                    this.#active.set(id, { descriptor, activation });
+                    this.#active.set(id, { descriptor, activation, controller: activationController });
                     this.#observations.set(id, {
                         pluginId: id,
                         version: descriptor.version,
@@ -104,7 +119,10 @@ export class TrustedV2ClientManager {
                         observedAt: new Date().toISOString(),
                     });
                 } catch (error) {
+                    activationController.abort(error);
                     if (isCurrent()) this.#options.onError?.(id, error);
+                } finally {
+                    controller.signal.removeEventListener('abort', abortActivation);
                 }
             }
         });
@@ -113,6 +131,7 @@ export class TrustedV2ClientManager {
     stopAll(): Promise<void> {
         ++this.#generation;
         this.#controller.abort('workspace-ended');
+        for (const current of this.#active.values()) current.controller.abort('workspace-ended');
         return this.#enqueue(async () => {
             const cleanupErrors: unknown[] = [];
             for (const [id, current] of this.#active) {

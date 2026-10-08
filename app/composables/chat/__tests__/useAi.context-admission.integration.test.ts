@@ -1,3 +1,5 @@
+vi.unmock('~/utils/errors');
+import { setErrorToastApi } from '~/utils/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, effectScope, ref, type EffectScope } from 'vue';
 import { mount } from '@vue/test-utils';
@@ -90,6 +92,30 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    // A required failed source must explain how to unblock the preserved draft,
+    // without persisting a turn or contacting the model.
+    it('presents actionable required-source failures before model dispatch', async () => {
+        const db = getDb();
+        await db.projects.put({ id: 'failed-source-project', name: 'Failed source QA', data: [], clock: 1,
+            created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Blocked draft', project_id: 'failed-source-project' });
+        await db.posts.put({ id: 'failed-source', title: 'failed-source-project', postType: PROJECT_POST_TYPES.source,
+            content: JSON.stringify({ version: 1, item_id: 'failed-file', title: 'broken-reference.pdf', kind: 'file',
+                mode: 'always', current_revision_id: 'r1', revisions: [{ id: 'r1', status: 'failed', coverage: 'none', created_at: 1 }] }),
+            clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const add = vi.fn(); setErrorToastApi({ add });
+        try {
+            const result = await chat(thread.id).sendMessage('Keep my draft', { model: 'fixture/model' });
+            expect(result.status).toBe('failed');
+            expect(await db.messages.where('thread_id').equals(thread.id).count()).toBe(0);
+            expect(external.bodies).toHaveLength(0);
+            expect(add).toHaveBeenCalledWith(expect.objectContaining({
+                description: expect.stringContaining('broken-reference.pdf'),
+            }));
+            expect(add.mock.calls[0]?.[0].description).toContain('context mode');
+        } finally { setErrorToastApi(null); }
+    });
+
     // Diagnostics must not block valid provider input, and a prepared receipt
     // must distinguish a held dispatch, successful acceptance and network failure.
     it('bounds large saved memory in provider input and its diagnostic preview budget', async () => {

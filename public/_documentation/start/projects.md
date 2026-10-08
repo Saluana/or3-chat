@@ -52,6 +52,17 @@ The project brief is edited inline on Project Home. Memory shows saved memories 
 
 Relevant valid handoff summaries may be retrieved in later turns. Project search/read tools can search previous project chats when useful. Exclude a chat under **Settings → Project chats** to remove it from future retrieval. Moving or excluding evidence, deleting it, or editing its captured revision invalidates dependent handoff summaries.
 
+If an **Always include** source is unavailable, OR3 keeps your draft and names
+the blocking source. Retry processing in **Knowledge**, replace the source, or
+change its context mode before sending again. Cloud attachment intake refreshes
+an expired session before saving, while still rejecting changed workspace or
+read-only access. Cloud sessions refresh when their cached access expires and when an idle tab returns to the foreground. This keeps project messages and uploads usable after an idle period while preserving workspace and permission checks.
+
+Automatic capture allows up to ten seconds for its Jev gate and eight seconds
+for extraction. These background requests do not block chat. An unavailable
+service leaves the conversation intact; later completed turns can reconsider
+uncaptured information.
+
 ## Settings and context
 
 Chats inherit their project's saved default model until you choose a model or

@@ -18,6 +18,8 @@ describe('Nuxt task launcher', () => {
             envFile?: Record<string, string>;
             entry?: 'node' | 'npm' | 'bun';
             explicitEnv?: NodeJS.ProcessEnv;
+            providerExitCode?: number;
+            args?: string[];
         } = {},
     ) {
         const root = realpathSync(mkdtempSync(join(tmpdir(), 'or3-nuxt-task-')));
@@ -39,6 +41,14 @@ describe('Nuxt task launcher', () => {
         for (const dependency of ['cross-spawn', 'dotenv', 'tsx']) {
             symlinkSync(resolve('node_modules', dependency), join(root, 'node_modules', dependency));
         }
+        if (options.providerExitCode !== undefined) {
+            const provider = join(root, 'node_modules/or3-provider-convex');
+            mkdirSync(join(provider, 'dist'), { recursive: true });
+            mkdirSync(join(provider, 'scripts'), { recursive: true });
+            writeFileSync(join(provider, 'package.json'), JSON.stringify({ name: 'or3-provider-convex', exports: { './nuxt': { import: './dist/module.mjs' } } }));
+            writeFileSync(join(provider, 'dist/module.mjs'), 'export default {};');
+            writeFileSync(join(provider, 'scripts/init.mjs'), `console.log('BACKEND_CHECK=' + process.argv.slice(2).join(' ')); process.exit(${options.providerExitCode});`);
+        }
         if (options.envFile) {
             writeFileSync(join(root, '.env'), Object.entries(options.envFile)
                 .map(([key, value]) => `${key}=${value}`).join('\n'));
@@ -59,7 +69,7 @@ describe('Nuxt task launcher', () => {
         mkdirSync(join(root, 'scripts/plugin-runtime'), { recursive: true });
         writeFileSync(join(root, 'scripts/plugin-runtime/check-production-build.ts'), receipt);
         let command = process.execPath;
-        let args = ['--import', import.meta.resolve('tsx'), launcher, task];
+        let args = ['--import', import.meta.resolve('tsx'), launcher, task, ...(options.args ?? [])];
         if (options.entry === 'npm' || options.entry === 'bun') {
             command = options.entry;
             args = ['run', 'build'];
@@ -86,6 +96,7 @@ describe('Nuxt task launcher', () => {
                     NODE_OPTIONS: '', SSR_AUTH_ENABLED: 'true', OR3_AUTH_PROVIDER: 'clerk',
                     OR3_SYNC_PROVIDER: 'sqlite', OR3_SYNC_ENABLED: 'false',
                     OR3_CLOUD_SYNC_ENABLED: 'false', OR3_SQLITE_DRIVER: 'better-sqlite3',
+                    NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
                 }),
                 ...env,
             },
@@ -101,6 +112,47 @@ describe('Nuxt task launcher', () => {
                 driver?: string; args: string[];
             });
     }
+
+    it('checks the selected installed Convex backend before production preview', () => {
+        const result = launch('preview', {}, undefined, { envFile: { SSR_AUTH_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex', VITE_CONVEX_URL: 'https://preview.example.test' }, providerExitCode: 0, args: ['--port', '4173'] });
+        const rows = receipts(result);
+        expect(result.stdout).toContain('BACKEND_CHECK=deploy');
+        expect(result.stdout.indexOf('BACKEND_CHECK=')).toBeLessThan(result.stdout.indexOf('RECEIPT='));
+        expect(rows[0]?.args).toEqual(['preview', '--port', '4173']);
+    });
+
+    it('does not start preview when backend deployment or verification fails', () => {
+        const result = launch('preview', { SSR_AUTH_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }, undefined, { providerExitCode: 1 });
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).toContain('BACKEND_CHECK=deploy');
+        expect(result.stdout).not.toContain('RECEIPT=');
+    });
+
+    it('updates an enabled direct Convex sync backend without SSR auth', () => {
+        const result = launch('preview', { SSR_AUTH_ENABLED: 'false', OR3_SYNC_ENABLED: 'true', OR3_CLOUD_SYNC_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }, undefined, { providerExitCode: 0 });
+        receipts(result);
+        expect(result.stdout).toContain('BACKEND_CHECK=deploy');
+    });
+
+    it('updates Convex storage enabled by default with SQLite sync', () => {
+        const result = launch('preview', { SSR_AUTH_ENABLED: 'true', OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: 'convex' }, undefined, { providerExitCode: 0 });
+        receipts(result);
+        expect(result.stdout).toContain('BACKEND_CHECK=deploy');
+    });
+
+    it('builds Convex source without invoking remote deployment', () => {
+        const result = launch('build', { SSR_AUTH_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }, undefined, { providerExitCode: 1 });
+        receipts(result);
+        expect(result.stdout).not.toContain('BACKEND_CHECK=');
+    });
+
+    it('starts SQLite preview without a Convex package', () => {
+        expect(receipts(launch('preview'))[0]?.args).toEqual(['preview']);
+    });
+
+    it('starts the setup wizard before a Convex deployment is configured', () => {
+        expect(receipts(launch('preview', { OR3_WIZARD_UI_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }))[0]?.args).toEqual(['preview']);
+    });
 
     it('defaults the build heap to 4 GiB while preserving other Node options', () => {
         const result = receipts(launch('build', { NODE_OPTIONS: '--trace-warnings' }));

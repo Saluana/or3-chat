@@ -38,12 +38,12 @@ describe('wizard deployment provider contracts', () => {
 
     it.each([
         ['stale', '0.0.8', true],
-        ['matching', '0.0.9', false],
+        ['matching', '0.0.10', false],
     ] as const)('repairs a %s installed artifact under an exact manifest pin', async (_label, installedVersion, shouldInstall) => {
         const packageDir = resolve(instanceDir, 'node_modules/or3-provider-fs');
         await mkdir(packageDir, { recursive: true });
         await writeFile(resolve(instanceDir, 'package.json'), JSON.stringify({
-            dependencies: { 'or3-provider-fs': '0.0.9' },
+            dependencies: { 'or3-provider-fs': '0.0.10' },
         }));
         await writeFile(resolve(packageDir, 'package.json'), JSON.stringify({
             name: 'or3-provider-fs', version: installedVersion,
@@ -52,7 +52,7 @@ describe('wizard deployment provider contracts', () => {
         const plan = { ...createDependencyInstallPlan(answers), packages: ['or3-provider-fs'] };
         await executeDependencyInstallPlan(answers, plan, { enabled: true, packageManager: 'bun' });
         if (shouldInstall) {
-            expect(crossSpawn).toHaveBeenCalledWith('bun', ['add', 'or3-provider-fs@0.0.9'], expect.objectContaining({ cwd: instanceDir }));
+            expect(crossSpawn).toHaveBeenCalledWith('bun', ['add', 'or3-provider-fs@0.0.10'], expect.objectContaining({ cwd: instanceDir }));
         } else {
             expect(crossSpawn).not.toHaveBeenCalled();
         }

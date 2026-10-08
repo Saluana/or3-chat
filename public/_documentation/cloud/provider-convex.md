@@ -71,12 +71,9 @@ The supported scaffold command (used by the wizard and `doctor` preflight) is:
 bunx or3-provider-convex init
 ```
 
-It copies the provider templates into `./convex`. You can also copy them
-manually:
-
-```bash
-cp -r node_modules/or3-provider-convex/templates/convex ./convex
-```
+It installs the provider-owned templates into `./convex` and records their
+hashes in `.or3/convex-templates.json`. Custom functions and generated
+declarations are kept separate from provider ownership.
 
 Generate Convex artifacts:
 
@@ -86,32 +83,58 @@ bunx convex dev --once
 
 This creates `convex/_generated/` used by the Convex backend path. Keep the scaffolded `convex/tsconfig.json`; it ensures `convex dev --typecheck enable` actually checks the Convex functions.
 
-### Upgrading an existing deployment
+### Automatic source updates
 
-Private host settings add a `host_settings` table plus `hostSettings` functions.
-Run the supported update flow before using the updated server adapter:
+After updating the source and its installed dependencies, start OR3 normally:
 
 ```bash
-bunx or3-provider-convex init --update
-bunx convex dev --once
+bun run dev:ssr
+# Or, after an offline production build:
+bun run preview
 ```
 
-`init --update` adds the new `hostSettings.ts`, but it never overwrites
-existing template files — it reports them as conflicts. You must merge all of
-these from the provider templates before deploying:
+These source launchers verify the live Convex backend before starting OR3. If
+its bundled backend changed, the launcher updates untouched scaffold files,
+deploys them, and verifies the actual backend code digest. Later starts skip
+deployment. Builds, typechecks and static generation never deploy remotely.
 
-- `schema.ts` — the `host_settings` table definition.
-- `sync.ts` — the reserved-key guard blocking editor sync writes to
-  `plugins.*`, `admin.guest_access.enabled`, and `plugin:<id>:setup-values*`.
-  Without it, reserved KV writes stay enabled.
-- `admin.ts` — the deployment-admin settings bridge on private storage.
-  Without it, admin settings still use the old client-writable `kv` table.
-- `workspaces.ts` — the `host_settings` cleanup in `deleteWorkspaceData`.
-  Without it, hard-deleting a workspace retains its plugin configuration,
-  consent reviews, and budget records.
+Configure a server-only deployment credential once: `CONVEX_DEPLOY_KEY` for
+this exact Convex Cloud deployment, or `CONVEX_SELF_HOSTED_ADMIN_KEY` for
+self-hosting. The app URL, `VITE_CONVEX_URL`, is the explicit target. If
+`CONVEX_SELF_HOSTED_URL` is present, it must match. CLI login state cannot
+silently select another project. Deployment-side environment variables such as
+`CLERK_ISSUER_URL` remain unchanged. Keep credentials out of public config.
 
-The adapter calls the new functions, so deploying the adapter ahead of the
-Convex schema/functions fails closed.
+Untouched `or3-provider-convex@0.0.12` scaffolds are adopted automatically.
+Subsequent upgrades use the recorded file hashes. A customized or locally
+deleted provider file stops the update before any files change, with a list to
+merge deliberately. Custom functions and `convex/_generated/` are preserved.
+Previous source is saved under `.or3/convex-backups/`; keep it until acceptance.
+This source backup does not back up the remote database.
+
+A failed deploy prevents app startup. Retry after correcting the error; the
+launcher checks the live backend again. An older checkout never automatically
+pushes older backend code over a newer incompatible deployment. A checkout
+lease prevents concurrent updates and recovers a dead owner. For a backend
+shared by multiple hosts, designate one updater.
+
+The provider also verifies its backend at Nitro startup before registering
+persistence services. Custom process managers must run the installed provider
+command `or3-provider-convex deploy` with the deployment environment loaded
+before starting Nitro. The normal source launchers do this for you. A bare
+Nitro restart checks compatibility and never performs a deployment.
+
+`or3Backend:version` is a public query returning only the provider version and
+backend code digest. It exposes no records or credentials. Rollback of the app
+does not roll back Convex data or code automatically; select a compatible app
+version and review an intentional backend rollback separately.
+
+### Older or customized backends
+
+Earlier templates may require a deliberate merge of schema, sync, storage,
+workspace cleanup and host-settings changes. `init --update` refuses conflicts
+before changing anything. Merge the provider-owned files before using the
+source launcher; do not use a force reset as an upgrade shortcut.
 
 ## Private Host Settings
 

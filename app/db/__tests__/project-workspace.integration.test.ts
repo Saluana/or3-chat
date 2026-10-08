@@ -1317,6 +1317,43 @@ describe('automatic project memory capture', () => {
             probabilities: { save: 0.99, skip: 0.005, uncertain: 0.005 } } },
         usage: { cost: 0.00001 } }), { status: 200 });
     afterEach(() => vi.unstubAllGlobals());
+    // A healthy cold gate can exceed three seconds. Instant-response fixtures
+    // miss the observed Chrome failure: no memory or cursor is ever committed.
+    it('saves grounded automatic memory after a slow successful gate', async () => {
+        await seed();
+        const fetcher = vi.fn()
+            .mockImplementationOnce((_url: string, options: RequestInit) => new Promise<Response>((resolve, reject) => {
+                const signal = options.signal!;
+                const timer = setTimeout(() => {
+                    signal.removeEventListener('abort', abort);
+                    resolve(gate());
+                }, 3500);
+                const abort = () => {
+                    clearTimeout(timer);
+                    reject(signal.reason);
+                };
+                signal.addEventListener('abort', abort, { once: true });
+            }))
+            .mockResolvedValueOnce(reply());
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect((await readProjectWorkspace(db, 'a')).memories[0]?.value.text).toBe(candidate.text);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
+    }, 10000);
+    // Browser hooks can await a task (search indexing, plugin notifications).
+    // The memory and cursor must still commit together, never expire mid-write.
+    it('commits automatic memory and its cursor when write hooks yield to the browser', async () => {
+        await seed();
+        hookActions.mockImplementation(async (name) => {
+            if (name === 'db.posts.upsert:action:before' || name === 'db.kv.upsertByName:action:after')
+                await new Promise(resolve => setTimeout(resolve, 10));
+        });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect((await readProjectWorkspace(db, 'a')).memories[0]?.value.text).toBe(candidate.text);
+        expect(JSON.parse((await db.kv.where('name').equals('project-memory-cursor:auto-chat').first())!.value!))
+            .toEqual({ projectId: 'a', index: 1 });
+    });
     it('saves grounded memory, advances the cursor, and never revives a deleted capture', async () => {
         await seed();
         const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply());

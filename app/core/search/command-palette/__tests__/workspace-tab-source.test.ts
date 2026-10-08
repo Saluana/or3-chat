@@ -15,8 +15,8 @@ describe('workspace-tab palette source', () => {
                 id: 'duplicate-chat-tab',
                 resource: { kind: 'chat', threadId: 'chat-1' },
                 cachedTitle: 'Planning',
-                createdAt: 1,
-                lastActivatedAt: 2,
+                createdAt: 1791471000000,
+                lastActivatedAt: 1791471100123,
                 ephemeral: false,
             },
         ]);
@@ -31,6 +31,8 @@ describe('workspace-tab palette source', () => {
         expect(resources[0]).toMatchObject({
             key: 'workspace-tab:duplicate-chat-tab',
             categoryId: 'tab',
+            // Palette resources share Unix seconds; tabs store browser milliseconds.
+            updatedAt: 1791471100,
             primaryAction: {
                 target: {
                     kind: 'workspace-tab',
