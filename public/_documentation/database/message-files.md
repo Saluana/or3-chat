@@ -33,7 +33,7 @@ Helpers for attaching/detaching files to chat messages while maintaining ref cou
 
 ## Implementation notes
 
-1. **Transactions** — Adds include `messages`, `file_meta`, and `file_blobs`; removals include `messages` and `file_meta`. Both include sync capture tables through the existing transaction helper.
+1. **Transactions** — Blob intake and validation hooks prepare outside the message write. Adds recheck the captured message and file availability before committing message edges and reference adjustments together; failed preparation/commits release temporary Blob references. Removals also commit messages and references together. Both include sync capture tables through the existing transaction helper. Reference notifications run after the outer commit and cannot fail a durable change.
 2. **Hooks** — `db.messages.files.validate:filter:hashes` lets extensions prune or reorder known candidate hashes before persistence.
 3. **Reference reconciliation** — Counts are derived from the unique before/after message edge set. Duplicate additions are idempotent, filtered/overflow Blob attempts are dereferenced, and concurrent identical uploads retain one metadata/blob pair with the correct count.
 4. **Serialization** — Uses `serializeFileHashes` so limits/deduping stay consistent with message creation flows.

@@ -144,7 +144,7 @@ type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 const props = defineProps<{
     activeThread?: string;
     items: Thread[];
-    projects: SidebarProject[];
+    projects: Project[];
     expandedProjects: string[];
     docs: Post[];
     listHeight: number;
@@ -331,6 +331,9 @@ const activePageProps = computed(() => {
     // For chats/docs pages, pass required IDs
     return {
         ...pageControlProps,
+        ...(activePageId.value === 'sidebar-projects-home'
+            ? { sidebarQuery: props.sidebarQuery }
+            : {}),
         activeThreadIds: props.activeThreadIds,
         activeDocumentIds: props.activeDocumentIds,
     };

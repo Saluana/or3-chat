@@ -36,6 +36,10 @@
                     </div>
                 </details>
             </div>
+            <ChatProjectChoice :thread-id="props.threadId" />
+            <label v-if="attachments.length && attachmentProject" class="flex items-center gap-2 text-xs">Attachment destination
+                <select v-model="attachmentDestination" aria-label="Attachment destination" class="rounded border border-current/20 p-1 bg-transparent"><option value="chat">This chat</option><option value="project">Add to project knowledge</option></select>
+            </label>
             <!-- Main Input Area -->
             <div class="relative">
                 <div
@@ -133,6 +137,9 @@
                                         :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
                                         v-model:model-variant="modelVariant"
+                                        :model-inherited="modelInherited"
+                                        :project-model-default="Boolean(attachmentProject)"
+                                        @use-default-model="resetModel"
                                         v-model:thinking-enabled="
                                             thinkingEnabled
                                         "
@@ -380,6 +387,7 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
+import { reportError } from '~/utils/errors';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     computed,
@@ -436,8 +444,10 @@ import type {
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
+import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 import { SIGN_IN_PROMPT, useSignInGate } from '~/composables/auth/useSignInGate';
+import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
 import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
 import {
@@ -757,6 +767,7 @@ const emit = defineEmits<{
             modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
+            knowledge_project_id?: string;
             editorDoc?: Record<string, unknown>;
             registerResult: RegisterSendResult;
             inspectLossyRequest?: boolean;
@@ -783,11 +794,24 @@ const {
     modelReasoningEfforts,
     modelDefaultReasoningEffort,
     modelSupportsThinking,
+    modelInherited,
+    useInheritedModel,
+    restoreDraftModel,
+    armNewChatSelection,
 } = useChatModelSelection({
     threadId: () => props.threadId,
     onChange: (modelId) => emit('model-change', modelId),
 });
 
+const attachmentDestination = ref<'chat'|'project'>('chat');
+async function resetModel() {
+    try { await useInheritedModel(); }
+    catch (error) { reportError(error, { message: 'Could not restore the default model.', toast: true }); }
+}
+const attachmentProject = useChatProjectOwner(() => props.threadId);
+watch([() => props.threadId, attachmentProject], () => {
+    attachmentDestination.value = 'chat';
+}, { immediate: true });
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -984,14 +1008,13 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             { emitUpdate: false }
         );
         if (draft?.composer) {
-            selectedModel.value = draft.composer.model;
             // Migrate legacy drafts that stored the web-search toggle.
-            modelVariant.value = sanitizeModelVariant(
+            restoreDraftModel(draft.composer.model, sanitizeModelVariant(
                 draft.composer.modelVariant ??
                     (draft.composer.webSearchEnabled === true
                         ? 'online'
                         : undefined)
-            );
+            ));
             thinkingEnabled.value = draft.composer.thinkingEnabled;
             reasoningEffort.value = draft.composer.reasoningEffort;
             imageSettings.value = { ...draft.composer.imageSettings };
@@ -1005,9 +1028,9 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
                 revision !== draftRestoreRevision ||
                 props.tabId !== tabId
             ) return;
-            modelVariant.value = sanitizeModelVariant(
+            restoreDraftModel(undefined, sanitizeModelVariant(
                 aiSettings.value?.defaultModelVariant
-            );
+            ));
         }
     } finally {
         await nextTick();
@@ -1027,6 +1050,7 @@ watch(
     }
 );
 
+watch(() => attachments.value.length, length => { if (!length) attachmentDestination.value = 'chat'; });
 watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
 });
@@ -1228,9 +1252,12 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         }
 
         const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
+        // A new chat's first send creates its thread; that chat keeps this composer's explicit model.
+        if (!props.threadId) armNewChatSelection();
         emit('send', {
             ...decision,
             ...submittedSettings,
+            knowledge_project_id: attachmentDestination.value === 'project' ? attachmentProject.value ?? undefined : undefined,
             editorDoc: submittedEditorDoc,
             text: submittedText,
             images: submittedAttachments, // backward compatibility

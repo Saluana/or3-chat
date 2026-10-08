@@ -50,9 +50,11 @@ export interface ChatMessage {
 
 export interface SendMessageParams {
     cardOrigin?: import('~~/shared/chat/tool-card-data').CardOrigin;
+    /** Explicit promotion of this turn’s attachments into its captured project. */
+    knowledge_project_id?: string;
     /** Explicit read-only omission inspection, followed by a one-use confirmation. */
     inspectLossyRequest?: boolean;
-    lossyConfirmation?: import('./lossy-request').LossyRequestPreview;
+    lossyConfirmation?: import('~~/shared/chat/context-budget').LossyRequestPreview;
     files?: { type: string; url: string }[];
     model?: string;
     file_hashes?: string[];
@@ -104,7 +106,7 @@ export type SendFailureReason =
 
 export type SendResult =
     | { status: 'accepted'; requestId: string; userMessageId?: string; assistantMessageId?: string }
-    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string; lossyPreview?: import('./lossy-request').LossyRequestPreview }
+    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string; lossyPreview?: import('~~/shared/chat/context-budget').LossyRequestPreview }
     | { status: 'failed'; requestId: string; reason: SendFailureReason; error: string; userMessageId?: string; assistantMessageId?: string }
     | { status: 'aborted'; requestId: string; reason: 'aborted'; userMessageId?: string; assistantMessageId?: string }
     | { status: 'complete'; requestId: string; userMessageId: string; assistantMessageId: string }
@@ -135,6 +137,9 @@ export type ToolRuntime = 'hybrid' | 'client' | 'server';
 
 /** Request-scoped authority and cancellation passed to every tool handler. */
 export interface ToolExecutionContext {
+    /** Recheck captured registry/project authority inside a host mutation transaction. */
+    assertToolAuthorized?: () => Promise<void>;
+    projectId?: string | null;
     subject: string | null;
     workspaceId: string | null;
     threadId: string | null;

@@ -13,6 +13,7 @@ beforeEach(async () => {
     workspace = `compacted-write-${crypto.randomUUID()}`;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb(workspace).open();
+    await getDb().projects.put({ id: 'project', name: 'Project', data: [], created_at: 1, updated_at: 1, deleted: false, clock: 1 });
     await getDb().threads.put({ id: 'source', title: 'Original', status: 'ready', deleted: false, pinned: true, forked: false,
         created_at: 1, updated_at: 1, clock: 1, project_id: 'project', system_prompt_id: 'prompt' });
     for (let index = 0; index < 4; index += 1) await getDb().messages.put({ id: `m${index}`, thread_id: 'source', index,
@@ -42,10 +43,10 @@ describe('atomic compacted fork', () => {
         expect(committed.summary.order_key).toBeTruthy(); expect(committed.summary.hlc).toBeTruthy();
         expect(await getDb().threads.get('source')).toEqual(originalThread);
         expect(await getDb().messages.where('thread_id').equals('source').toArray()).toEqual(originals);
-        const operations = await getDb().pending_ops.toArray(); expect(operations).toHaveLength(2);
-        expect(new Set(operations.map((row) => row.tableName))).toEqual(new Set(['threads', 'messages']));
+        const operations = await getDb().pending_ops.toArray(); expect(operations).toHaveLength(3);
+        expect(new Set(operations.map((row) => row.tableName))).toEqual(new Set(['threads', 'messages', 'projects']));
         const replay = await createCompactedFork(first); expect(replay.thread.id).toBe(committed.thread.id);
-        expect(await getDb().pending_ops.count()).toBe(2);
+        expect(await getDb().pending_ops.count()).toBe(3);
         expect((await createCompactedFork(await prepared())).thread.id).not.toBe(committed.thread.id);
     });
     it.each(['edit', 'insert', 'reindex', 'delete', 'pending'] as const)('refuses changed selected membership/eligibility (%s) without partial writes', async (change) => {

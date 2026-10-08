@@ -1,5 +1,5 @@
 import { getDb, type Or3DB } from '~/db/client';
-import { appendMessageToDb } from '~/db/messages';
+import { appendMessageRows, prepareMessageAppend } from '~/db/messages';
 import { getWriteTxTableNames } from '~/db/util';
 import type { ToolCall } from './types';
 import { toolResultTranscriptData } from './transcript';
@@ -28,7 +28,11 @@ export async function appendForegroundToolResult(params: {
         result: params.durableResult,
         error: params.error,
     });
-    return targetDb.transaction(
+    const prepared = await prepareMessageAppend({ thread_id: params.threadId, role: 'tool', data });
+    if (prepared.value.thread_id !== params.threadId || prepared.value.role !== 'tool'
+        || JSON.stringify(prepared.value.data) !== JSON.stringify(data))
+        throw new Error('Cannot persist tool result: transcript changed during preparation');
+    const result = await targetDb.transaction(
         'rw',
         getWriteTxTableNames(targetDb, 'messages', { include: ['threads'] }),
         async () => {
@@ -66,11 +70,9 @@ export async function appendForegroundToolResult(params: {
                     'Cannot persist tool result: parent generation was superseded'
                 );
             }
-            return await appendMessageToDb(targetDb, {
-                thread_id: params.threadId,
-                role: 'tool',
-                data,
-            });
+            return await appendMessageRows(targetDb, prepared.value);
         }
     );
+    await prepared.afterCommit(result);
+    return result;
 }

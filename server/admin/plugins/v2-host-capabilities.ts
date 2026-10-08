@@ -261,7 +261,7 @@ export const OR3_PLUGIN_V2_HOST_CAPABILITIES: PluginV2HostCapabilities = Object.
     supportedTrustModes: Object.freeze(['trusted-host', 'isolated-client'] as const),
     supportedGrants: Object.freeze(qualifiedGrants),
     grantTrustModes: Object.freeze(grantTrustModes),
-    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1', 'or3-workspace-files-v1']),
+    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1', 'or3-trusted-chat-origin-v1', 'or3-workspace-files-v1']),
 });
 
 /**

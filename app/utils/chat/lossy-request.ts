@@ -4,17 +4,8 @@ import { buildOpenRouterRequestBody, prepareOpenRouterRequest, type OpenRouterSt
 import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { admitChatContext, ChatContextAdmissionError } from '~~/shared/chat/context-budget';
 
-export interface LossyRequestPreview {
-    readonly input_tokens: number;
-    readonly effective_context_tokens: number;
-    readonly reply_tokens: number;
-    readonly omitted_message_count: number;
-    readonly omitted_turn_count: number;
-    readonly omitted_messages: readonly { position: number; role: string; excerpt: string }[];
-    readonly original_digest: string;
-    readonly candidate_digest: string;
-    readonly protected_digest: string;
-}
+import type { LossyRequestPreview } from '~~/shared/chat/context-budget';
+export type { LossyRequestPreview } from '~~/shared/chat/context-budget';
 interface Scope { db: object; generation: number; threadId?: string; sourceFingerprint?: string }
 type Body = ReturnType<typeof buildOpenRouterRequestBody>;
 const previews = new WeakMap<LossyRequestPreview, { scope: Scope; original: string; policy: string;

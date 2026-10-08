@@ -222,6 +222,7 @@ import { kv } from '~/db';
 import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { liveQuery, type Subscription } from 'dexie';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
+import { provideChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -550,6 +551,7 @@ const tailDisplay = computed(() => streamState.value?.text || '');
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value?.threadId?.value);
+provideChatProjectOwner(() => props.threadId ?? currentThreadId.value);
 // Tail active means stream not finalized
 const streamActive = computed(() => !(streamState.value?.finalized ?? false));
 // Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
@@ -1010,6 +1012,7 @@ type UploadedImage = {
 };
 
 type ChatInputSendPayload = {
+    knowledge_project_id?: string;
     editorDoc?: Record<string, unknown>;
     text: string;
     images: UploadedImage[];
@@ -1053,12 +1056,16 @@ function waitForDurableSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            if (state.status === 'streaming' && state.providerAccepted) {
+            // Saving the outgoing turn accepts the draft; provider latency
+            // must not keep that same message in the composer.
+            if (state.status === 'persisted' || state.status === 'streaming') {
                 finish({
                     status: 'accepted',
                     requestId,
                     userMessageId: state.userMessageId,
-                    assistantMessageId: state.assistantMessageId,
+                    ...(state.status === 'streaming'
+                        ? { assistantMessageId: state.assistantMessageId }
+                        : {}),
                 });
             }
             // Finalization publishes an intermediate terminal projection.
@@ -1184,6 +1191,7 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
+        knowledge_project_id: payload.knowledge_project_id,
         editorDoc: payload.editorDoc,
         content: payload.text,
         model: payload.model || model.value,
@@ -1219,10 +1227,10 @@ async function onRetry(messageId: string) {
         await nextTick();
         scroller.value?.scrollToBottom?.({ smooth: false });
         const result = await activeChat.retryMessage(messageId, model.value);
-        if (!result || result.status === 'rejected') {
+        if (!result || result.status === 'rejected' || result.status === 'failed' && result.reason === 'unavailable') {
             toast.add({
                 title: 'Retry did not start',
-                description: 'Your conversation is unchanged. Please try again.',
+                description: result && 'error' in result && result.error || 'Your conversation is unchanged. Please try again.',
                 color: 'warning',
                 duration: 3500,
             });

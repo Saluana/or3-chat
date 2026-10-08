@@ -1,6 +1,6 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
-import { recoveryInputFingerprint, recoverySourceFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
+import { recoveryInputFingerprint, recoverySourceFingerprint, recoveryProjectFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript, associateUiToolResultMessages } from '~/utils/chat/transcript';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
@@ -1913,6 +1913,16 @@ export function useChat(
         const ownsPreparation = () => !isRequestCancelled(requestScope) && !preparationSignal.aborted
             && requestScope.ownsView() && getDb() === requestScope.originDb
             && getWorkspaceGeneration() === workspaceGeneration;
+        const { resolveChatProject, readProjectWorkspace, moveChatToProject } = await import('~/db/project-workspace');
+        const initialProjectId = requestScope.threadId ? await resolveChatProject(requestScope.originDb, requestScope.threadId) : null;
+        requestScope.expectedProjectId = initialProjectId;
+        if (requestScope.threadId && initialProjectId) {
+            const { captureProjectOperation } = await import('~/utils/projects/context');
+            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
+            if (scope.writable && !(await scope.db.threads.get(requestScope.threadId))?.project_id)
+                await moveChatToProject(scope, requestScope.threadId, initialProjectId, { family: false });
+        }
+        const projectState = initialProjectId ? await readProjectWorkspace(requestScope.originDb, initialProjectId) : undefined;
         const capturedPreference = await useAiSettings().captureContextPreference();
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
@@ -2102,6 +2112,7 @@ export function useChat(
 
         requestScope.accumulator.reset();
         let { files, model, file_hashes } = sendMessagesParams;
+        model ||= projectState?.settings.default_model ?? undefined;
         const {
             extraTextParts,
             online,
@@ -2224,6 +2235,13 @@ export function useChat(
         if (!imageInput && parts.some((part) => part.type === 'image'))
             return { status: 'rejected', requestId, reason: 'unsupported_input',
                 error: unsupportedImageInputMessage(budgetModelMeta?.name ?? readiness.modelId) };
+        if (requestScope.threadId && initialProjectId) {
+            const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
+            requestScope.projectContext = await buildProjectContext(
+                captureProjectOperation(preparationSignal, requestScope.threadId), requestScope.threadId,
+                persistedUserText, readiness.metadata.architecture?.input_modalities?.includes('image') === true,
+                initialProjectId, 'turn', projectState);
+        }
         const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
             userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
             requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
@@ -2232,7 +2250,7 @@ export function useChat(
             masterPrompt });
         const candidateUser: ChatMessage = { role: 'user', content: parts,
             file_hashes: file_hashes.length ? serializeFileHashes(file_hashes) : undefined };
-        const messagesWithSystemRaw = [...canonicalHistory, candidateUser];
+        const messagesWithSystemRaw = [...canonicalHistory, ...(requestScope.projectContext?.messages ?? []), candidateUser];
         if (systemMessage) messagesWithSystemRaw.unshift(systemMessage);
         const effectiveMessages = await hooks.applyFilters('ai.chat.messages:filter:input', messagesWithSystemRaw);
         const sanitizedEffectiveMessages = (Array.isArray(effectiveMessages) ? effectiveMessages : []).filter(shouldKeepAssistantMessage);
@@ -2247,6 +2265,7 @@ export function useChat(
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (!ownsFilterChain() || preparationHookNames.some((name, index) => (hooks._diagnostics.errors[name] ?? 0) > preparationErrors[index]!))
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request filters changed or failed during preparation. Retry the request.' };
+        if (prepared.delegation && requestScope.projectContext) return { status: 'rejected', requestId, reason: 'unavailable', error: 'This workflow has not declared a project context boundary. Use a normal project chat.' };
         if (prepared.error) return { status: 'rejected', requestId, reason: 'unavailable', error: prepared.error.message };
         if (prepared.requestId !== requestId || prepared.workspaceId !== requestScope.workspaceId
             || prepared.workspaceGeneration !== workspaceGeneration || prepared.model !== modelId
@@ -2258,17 +2277,20 @@ export function useChat(
         const modalities = getChatModalities(modelId);
         const toolRegistry = useToolRegistry();
         const modelSupportsTools = !budgetModelMeta?.supported_parameters || budgetModelMeta.supported_parameters.includes('tools');
-        const advertisedToolDefs = JSON.parse(JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
-            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : [])) as import('~/utils/chat/types').ToolDefinition[];
+        const { projectToolEnabled } = await import('~/utils/projects/context');
+        const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
+            ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
+        const advertisedToolDefs = JSON.parse(JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
+            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : []))) as import('~/utils/chat/types').ToolDefinition[];
         const enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: backgroundStreamingAllowed.value,
             threadId: preparationThreadId, signal: preparationSignal });
         const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
         const browserToolBridgeAvailable = !hasBrowserTools || !backgroundStreamingAllowed.value
             || await isBackgroundClientToolBridgeAvailable();
-        const allowBackgroundStreaming = backgroundStreamingAllowed.value && browserToolBridgeAvailable
+        const allowBackgroundStreaming = !requestScope.projectContext && backgroundStreamingAllowed.value && browserToolBridgeAvailable
             && modalities.length === 1 && modalities[0] === 'text';
-        const providerPreparation = { model: modelId, orMessages, modalities, reasoning,
+        const providerPreparation = { projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning,
             tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                 ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
             contextPolicy, signal: preparationSignal };
@@ -2287,16 +2309,21 @@ export function useChat(
                 reviewedLossyMessages = JSON.stringify(orMessages);
             }
         } else if (!prepared.delegation) await prepareOpenRouterRequest(providerPreparation);
+        if (requestScope.threadId && await resolveChatProject(requestScope.originDb, requestScope.threadId) !== initialProjectId)
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'This chat changed projects during preparation. Retry the request.' };
         if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
             || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
-            || JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
-                threadId: admissionThreadId }) : []) !== JSON.stringify(advertisedToolDefs))
+            || JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
+                threadId: admissionThreadId }) : [])) !== JSON.stringify(advertisedToolDefs))
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
+        const knowledgeProjectId = !sendMessagesParams.inspectLossyRequest ? sendMessagesParams.knowledge_project_id : undefined;
+        if (knowledgeProjectId && (!requestScope.threadId || initialProjectId !== knowledgeProjectId))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2367,6 +2394,19 @@ export function useChat(
             requestId,
             userMessageId: userDbMsg.id,
         });
+        // Promotion follows the committed turn and never delays dispatch: bind
+        // each file now, extract in the background (the intake lease covers crashes).
+        if (knowledgeProjectId) void (async () => {
+            const { captureProjectOperation } = await import('~/utils/projects/context');
+            const { addProjectUpload } = await import('~/utils/projects/source-intake');
+            const { getFileBlob } = await import('~/db/files');
+            const scope = captureProjectOperation(undefined, requestThreadId);
+            for (const hash of sendMessagesParams.file_hashes ?? []) {
+                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
+                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
+                await addProjectUpload(scope, knowledgeProjectId, new File([blob], meta.name, { type: meta.mime_type }), undefined, { background: true });
+            }
+        })().catch((error) => reportError(error, { message: 'Message sent, but its attachments could not be added to project knowledge.', toast: true }));
         if (sendMessagesParams.onUserPersisted) {
             try {
                 await sendMessagesParams.onUserPersisted(userDbMsg.id);
@@ -2610,7 +2650,7 @@ export function useChat(
                 };
             }
 
-            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, advertisedToolDefs });
+            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs });
         } catch (err) {
             stopForegroundHeartbeat?.();
             if (err instanceof Error && err.name === 'AbortError') {
@@ -2772,6 +2812,10 @@ export function useChat(
         const masterPrompt = useAiSettings().settings.value.masterSystemPrompt; const taskPrompt = activePromptContent.value;
         if (checkpoint.source_fingerprint !== await recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt))
             return unavailable('The saved conversation changed. Edit the draft to prepare a new request.');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const projectId = await resolveChatProject(db, checkpoint.thread_id);
+        requestScope.expectedProjectId = projectId;
+        const { projectToolEnabled } = await import('~/utils/projects/context');
         const store = useModelStore(); const preference = await useAiSettings().captureContextPreference();
         const modelId = appendModelVariant(stripThinkingSuffix(params.model || DEFAULT_AI_MODEL), params.modelVariant ?? (params.online ? 'online' : 'off'));
         const readiness = await store.resolveContextModel(modelId, { signal });
@@ -2780,20 +2824,33 @@ export function useChat(
         const metadata = store.catalog.value.find((row) => row.id === readiness.modelId) ?? store.favoriteModels.value.find((row) => row.id === readiness.modelId);
         const reasoning = params.thinking || params.model?.endsWith(THINKING_SUFFIX)
             ? resolveReasoningConfig({ model: metadata, enabled: true, effort: params.reasoningEffort }) : undefined;
+        if (projectId) {
+            if (typeof checkpoint.project_query !== 'string')
+                return unavailable('The saved attempt lacks its admitted project query. Edit the draft to prepare a fresh request.');
+            const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
+            const snapshot = await buildProjectContext(captureProjectOperation(signal, checkpoint.thread_id), checkpoint.thread_id,
+                checkpoint.project_query,
+                readiness.metadata.architecture?.input_modalities?.includes('image') === true, projectId);
+            if (!snapshot || !checkpoint.project_fingerprint || await recoveryProjectFingerprint(snapshot) !== checkpoint.project_fingerprint)
+                return unavailable('Project context changed. Edit the draft to prepare a fresh request.');
+            requestScope.projectContext = snapshot;
+        } else if (checkpoint.project_fingerprint) return unavailable('The saved chat changed projects. Prepare a fresh request.');
+        const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
+            ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
         const advertisedToolDefs = metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
-            : useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id });
+            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }));
         if (advertisedToolDefs.length !== checkpoint.tools.length || advertisedToolDefs.some((tool, index) => !toolDefinitionEquals(tool, checkpoint.tools[index]!)))
             return unavailable('The saved attempt’s tools changed or this model cannot use them. Restore its tools or edit the draft for a new request.');
-        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
+        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: !projectId && backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
         const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
         const bridgeReady = !hasBrowserTools || !backgroundStreamingAllowed.value || await isBackgroundClientToolBridgeAvailable();
-        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
+        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
         const contextPolicy: ContextRequestPolicy = { model: readiness.metadata, source: readiness.source,
             userMaxContextTokens: preference.maxContextTokens, requestedCompletionTokens: params.maxCompletionTokens };
         const orMessages = structuredClone(checkpoint.messages);
         try {
-            await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning, contextPolicy, signal,
+            await prepareOpenRouterRequest({ projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning, contextPolicy, signal,
                 tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined });
         } catch (error) {
             if (!(error instanceof ChatContextAdmissionError)) throw error;
@@ -2802,13 +2859,12 @@ export function useChat(
         }
         if (!owns()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (JSON.stringify(advertisedToolDefs) !== JSON.stringify(metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
-            : useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id })))
+            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }))))
             return unavailable('Tool selection changed during recovery. Retry the saved attempt again.');
         const newStreamId = newId();
-        const Dexie = (await import('dexie')).default;
-        const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'chat_request_recoveries'])], async () => {
+        const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'projects', 'posts', 'chat_request_recoveries'])], async () => {
             if (!owns() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt || activePromptContent.value !== taskPrompt
-                || checkpoint.source_fingerprint !== await Dexie.waitFor(recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt))) return false;
+                || checkpoint.source_fingerprint !== await recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt)) return false;
             const current = await db.messages.get(savedAssistant.id);
             if (!current || current.clock !== savedAssistant.clock || current.pending || current.deleted) return false;
             await updateMessageRecord(db, savedAssistant.id, { pending: true, error: null, stream_id: newStreamId,
@@ -2829,7 +2885,7 @@ export function useChat(
         publishRequest(requestScope, { status: 'streaming', requestId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id });
         return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy,
             enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt: Date.now(),
-            recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, advertisedToolDefs });
+            recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, projectQuery: checkpoint.project_query, advertisedToolDefs });
     }
 
     const nativeRecoveryCandidates = new WeakMap<ChatRequestScope, { checkpoint: NativeRecoveryCheckpoint; providerAccepted: boolean }>();
@@ -2839,11 +2895,11 @@ export function useChat(
         reasoning: ReturnType<typeof resolveReasoningConfig>; contextPolicy: ContextRequestPolicy;
         enabledToolDefs: import('~/utils/chat/types').ToolDefinition[]; foregroundToolDefs: import('~/utils/chat/types').ToolDefinition[];
         allowBackgroundStreaming: boolean; startedAt: number; reviewedLossyMessages?: string;
-        recoveryInput: SendMessageParams & { content: string }; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
+        recoveryInput: SendMessageParams & { content: string }; projectQuery?: string; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
     };
     /** One native foreground/background owner, shared by new turns and explicit unsent recovery. */
     async function runPreparedNative(input: NativeExecutionInput): Promise<SendResult> {
-        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, advertisedToolDefs } = input;
+        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, projectQuery, advertisedToolDefs } = input;
         const requestId = requestScope.requestId; const requestThreadId = requestScope.threadId!;
         const preparationSignal = requestScope.abortController!.signal;
         const toolRegistry = useToolRegistry(); const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2864,6 +2920,7 @@ export function useChat(
                 input: structuredClone(savedInput), input_fingerprint: await recoveryInputFingerprint(savedInput.content, savedInput),
                 source_fingerprint: await recoverySourceFingerprint(requestScope.originDb, requestThreadId, assistantDbMsg.id, useAiSettings().settings.value.masterSystemPrompt, activePromptContent.value),
                 messages: structuredClone(orMessages), tools: structuredClone(advertisedToolDefs),
+                ...(requestScope.projectContext ? { project_fingerprint: await recoveryProjectFingerprint(requestScope.projectContext), project_query: projectQuery } : {}),
             };
             // Durable before inference: a crash after rejection cannot append a
             // duplicate user turn. The row/lease gate excludes accepted output.
@@ -2876,7 +2933,7 @@ export function useChat(
                 await requestScope.originDb.chat_request_recoveries.put(checkpoint);
             });
             nativeRecoveryCandidates.set(requestScope, { providerAccepted: false, checkpoint });
-            await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
+            await prepareOpenRouterRequest({ projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning,
                 tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                     ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
                 contextPolicy, signal: preparationSignal });
@@ -2973,6 +3030,7 @@ export function useChat(
                     }
 
                     const result = await startBackgroundStream({
+                        expectedProjectId: requestScope.expectedProjectId,
                         apiKey: effectiveApiKey.value,
                         model: modelId,
                         orMessages: orMessages as Parameters<
@@ -3237,6 +3295,8 @@ export function useChat(
                 parentTurnId: userDbMsg.id,
                 streamId: newStreamId,
                 threadId: requestThreadId,
+                projectContext: requestScope.projectContext,
+                expectedProjectId: requestScope.expectedProjectId,
                 originDb: requestScope.originDb,
                 streamAcc: requestScope.accumulator,
                 workspaceId: requestScope.workspaceId,
@@ -3303,6 +3363,8 @@ export function useChat(
                     };
                     await hooks.doAction('ai.chat.stream:action:complete', {
                         threadId: requestThreadId,
+                        workspaceId: requestScope.workspaceId,
+                        projectId: requestScope.projectContext?.projectId ?? null,
                         assistantId: assistantDbMsg.id,
                         streamId: newStreamId,
                         totalLength: incoming.length,
@@ -3852,8 +3914,10 @@ export function useChat(
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
             (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        // Component disposal detaches the visible request before scope cleanup.
+        // Its durable generation remains active after loading becomes false.
         const isForegroundStreamActive =
-            loading.value &&
+            Boolean(activeRequestScope && activeRequestScope.phase.value !== 'terminal') &&
             !backgroundJobId.value &&
             backgroundJobMode.value === 'none' &&
             Boolean(abortController.value);

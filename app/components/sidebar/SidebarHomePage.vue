@@ -40,14 +40,19 @@
                         :icon="item.icon"
                         :accent="item.accent"
                         :class="item.class"
-                        @select="setActivePage(item.pageId)"
+                        @select="
+                            item.pageId === 'sidebar-projects-home'
+                                ? openProjectsSidebar()
+                                : setActivePage(item.pageId)
+                        "
                     />
 
                     <!-- Projects Section -->
                     <SidebarProjectsSection
                         v-else-if="item.type === 'projects'"
                         class="pb-4"
-                        :projects="displayProjects"
+                        :projects="homeProjects"
+                        :has-more="displayProjects.length > 5"
                         :collapsed="projectsCollapsed"
                         :expanded-projects="expandedProjects"
                         :active-thread-ids="activeThreadIds"
@@ -56,6 +61,7 @@
                             projectsCollapsed = !projectsCollapsed
                         "
                         @new-project="emit('new-project')"
+                        @show-more="openProjectsSidebar()"
                         @update:expanded-projects="
                             (val) => emit('update:expandedProjects', val)
                         "
@@ -138,10 +144,10 @@
                                 size="sm"
                                 variant="ghost"
                                 class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
-                                title="Create your first project"
+                                title="Create a project"
                                 @click="emit('new-project')"
                             >
-                                Create your first project
+                                Create a project
                             </UButton>
                             <UButton
                                 size="sm"
@@ -255,6 +261,8 @@ import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import SidebarFamilyItem from './SidebarFamilyItem.vue';
 import { useIcon } from '~/composables/useIcon';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -352,6 +360,7 @@ const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Project state
 const projectsCollapsed = ref(false);
+const homeProjects = computed(() => props.displayProjects.slice(0, 5));
 
 // Time grouping state
 const collapsedGroups = reactive(new Set<string>());
@@ -403,6 +412,9 @@ async function goToLatestCompaction(rootId: string) {
 
 const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
+const iconProjects = useIcon('sidebar.folder');
+const { openProjectsSidebar } = useProjectSidebar();
+const { listSidebarPages } = useSidebarPages();
 
 // All active IDs for highlighting
 const allActiveIds = computed(() => [
@@ -479,25 +491,42 @@ const combinedItems = computed(() => {
                   },
               ]
             : []),
+        {
+            key: 'page-link-projects',
+            type: 'page-link',
+            label: 'Projects',
+            description: 'View your projects',
+            icon: iconProjects.value,
+            pageId: 'sidebar-projects-home',
+            class: 'mb-1.5',
+            accent: 'projects',
+        },
     ];
     const navigationOrder = isMobile.value
         ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
         : resolvedWorkspaceProfile.value.navigation.items;
+    const pageOrder = [
+        ...navigationOrder.filter((id) => id !== 'sidebar-projects-home'),
+        'sidebar-projects-home',
+    ];
     pageLinks.sort(
         (left, right) =>
-            navigationOrder.indexOf(
-                left.type === 'page-link' ? left.pageId : ''
-            ) -
-            navigationOrder.indexOf(
-                right.type === 'page-link' ? right.pageId : ''
-            )
+            pageOrder.indexOf(left.type === 'page-link' ? left.pageId : '') -
+            pageOrder.indexOf(right.type === 'page-link' ? right.pageId : ''),
     );
     result.push(
         ...pageLinks.filter(
             (item) =>
                 item.type === 'page-link' &&
-                navigationOrder.includes(item.pageId)
-        )
+                (item.pageId === 'sidebar-projects-home'
+                    ? listSidebarPages.value.some(
+                          (page) => page.id === item.pageId,
+                      ) &&
+                      !resolvedWorkspaceProfile.value.navigation.hidden.includes(
+                          item.pageId,
+                      )
+                    : navigationOrder.includes(item.pageId)),
+        ),
     );
 
     // Projects section (single item that renders the whole section)

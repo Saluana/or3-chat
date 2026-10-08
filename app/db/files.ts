@@ -39,6 +39,7 @@ import type {
     DbCreatePayload,
     DbDeletePayload,
     FileEntity,
+    CoreHookPayloadMap,
 } from '../core/hooks/hook-types';
 import { useRuntimeConfig } from '#imports';
 import {
@@ -160,35 +161,51 @@ function createFileDeletePayload(
     };
 }
 
-/** Internal helper to change ref_count and fire hook */
+/** Hook-free reference update for callers owning an atomic write transaction. */
+export async function changeFileRefRows(hash: string, delta: number, db = getDb()) {
+    const transaction = Dexie.currentTransaction;
+    if (!transaction || transaction.db !== db || transaction.mode !== 'readwrite')
+        throw new Error('File references require their captured write transaction.');
+    const meta = await db.file_meta.get(hash);
+    if (!meta) return undefined;
+    const next = {
+        ...meta,
+        kind: resolveStoredFileKind(meta),
+        ref_count: Math.max(0, meta.ref_count + delta),
+        updated_at: nowSec(),
+        clock: nextClock(meta.clock),
+    };
+    await db.file_meta.put(next);
+    const notification: CoreHookPayloadMap['db.files.refchange:action:after'][0] = {
+        before: toFileEntity(meta), after: toFileEntity(next), delta,
+    };
+    return { row: next, notification };
+}
+
+export type FileRefNotification = CoreHookPayloadMap['db.files.refchange:action:after'][0];
+
+/** Deliver committed reference changes; notification failures cannot undo writes. */
+export async function notifyFileRefChanges(changes: FileRefNotification[]): Promise<void> {
+    const hooks = useHooks();
+    for (const change of changes) {
+        try { await hooks.doAction('db.files.refchange:action:after', change); }
+        catch (error) { console.warn('[files] References committed; notification failed', error); }
+    }
+}
+
+/** Standalone reference update. Outer transactions use changeFileRefRows instead. */
 async function changeRefCount(
     hash: string,
     delta: number,
     db = getDb()
 ): Promise<FileMeta | undefined> {
-    return db.transaction(
+    const changed = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta'),
-        async () => {
-            const meta = await db.file_meta.get(hash);
-            if (!meta) return undefined;
-            const next = {
-                ...meta,
-                kind: resolveStoredFileKind(meta),
-                ref_count: Math.max(0, meta.ref_count + delta),
-                updated_at: nowSec(),
-                clock: nextClock(meta.clock),
-            };
-            await db.file_meta.put(next);
-            const hooks = useHooks();
-            await hooks.doAction('db.files.refchange:action:after', {
-                before: toFileEntity(meta),
-                after: toFileEntity(next),
-                delta,
-            });
-            return next;
-        }
+        () => changeFileRefRows(hash, delta, db)
     );
+    if (changed) await notifyFileRefChanges([changed.notification]);
+    return changed?.row;
 }
 
 /**
@@ -247,14 +264,16 @@ export async function createOrRefFile(
     if (existing) {
         // The supplied bytes have already been hashed. Metadata may have arrived
         // through sync before its original; preserve the original atomically with intake.
-        const incremented = await db.transaction('rw',
+        const changed = await db.transaction('rw',
             getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }), async () => {
                 assertCurrentDb();
                 if (!(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
-                const incremented = await changeRefCount(hash, 1, db);
+                const incremented = await changeFileRefRows(hash, 1, db);
                 assertCurrentDb();
                 return incremented;
             });
+        if (changed) await notifyFileRefChanges([changed.notification]);
+        const incremented = changed?.row;
         if (incremented) {
             assertCurrentDb();
             if (import.meta.dev) {
@@ -324,7 +343,10 @@ export async function createOrRefFile(
 
     let storedMeta: FileMeta | null = null;
     let createdNew = false;
+    const referenceChanges: FileRefNotification[] = [];
     const wasCreated = (): boolean => createdNew;
+    await hooks.doAction('db.files.create:action:before', actionPayload);
+    const mergedMeta = parseOrThrow(FileMetaSchema, applyFileEntityToMeta(seededMeta, actionPayload.entity));
     assertCurrentDb();
     await db.transaction(
         'rw',
@@ -335,30 +357,14 @@ export async function createOrRefFile(
         // the single canonical row instead of overwriting each other at one.
         const concurrentExisting = await db.file_meta.get(hash);
         if (concurrentExisting) {
-            const next = {
-                ...concurrentExisting,
-                kind: resolveStoredFileKind(concurrentExisting),
-                ref_count: concurrentExisting.ref_count + 1,
-                updated_at: nowSec(),
-                clock: nextClock(concurrentExisting.clock),
-            };
             assertCurrentDb();
-            await db.file_meta.put(next);
-            await hooks.doAction('db.files.refchange:action:after', {
-                before: toFileEntity(concurrentExisting),
-                after: toFileEntity(next),
-                delta: 1,
-            });
-            storedMeta = next;
+            if (!(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
+            const changed = (await changeFileRefRows(hash, 1, db))!;
+            referenceChanges.push(changed.notification);
+            storedMeta = changed.row;
+            assertCurrentDb();
             return;
         }
-
-        await hooks.doAction('db.files.create:action:before', actionPayload);
-        assertCurrentDb();
-        const mergedMeta = parseOrThrow(
-            FileMetaSchema,
-            applyFileEntityToMeta(seededMeta, actionPayload.entity)
-        );
         // Parallel writes for ~20% faster file creation
         assertCurrentDb();
         await Promise.all([
@@ -371,8 +377,12 @@ export async function createOrRefFile(
             entity: toFileEntity(mergedMeta),
             tableName: FILE_TABLE,
         };
-        await hooks.doAction('db.files.create:action:after', actionPayload);
     });
+    await notifyFileRefChanges(referenceChanges);
+    if (createdNew) {
+        try { await hooks.doAction('db.files.create:action:after', actionPayload); }
+        catch (error) { console.warn('[files] File committed; notification failed', error); }
+    }
     assertCurrentDb();
     // storedMeta is always set within the transaction, but TypeScript doesn't track this
     // Use non-null assertion since the transaction guarantees the value is set

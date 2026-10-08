@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `20` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `26` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -46,6 +46,13 @@ Version 16 adds two sparse, local-only derived fields and their indexes:
 -   `file_meta.gallery_state` — `'active' | 'trash'` for rows that pass the verified raster rules.
 
 Derived keys are recomputed at the Dexie write boundary on create, update, bulk write, remote apply, snapshot install, and backup restore; they are stripped from sync payloads by `sanitizePayloadForSync` and never trusted from incoming data. The v16 upgrade populates them for existing rows without parsing document bodies.
+
+Version 26 adds local `projects.chat_ids` and its multi-entry index for legacy
+chat ownership. The upgrade derives it from existing membership without changing
+clocks or canonical data. Every creating/updating hook recomputes it, including
+remote and restored rows; deleted projects have no keys. Sync strips the field.
+Ownership resolution checks indexed candidates and still rejects ambiguous
+associations instead of scanning every project for ordinary chats.
 
 ### Outbox due-time projection (version 17)
 

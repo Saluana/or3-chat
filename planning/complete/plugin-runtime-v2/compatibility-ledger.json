@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "e375713f8a54f413f20d07c44e86b5deba79de6e4e07dcfc947ede9d74936081",
+      "apiSha256": "8526e1466301e86a4ea457c4d8db21aeb6ef2206b66b5f494fa42278703f10ff",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3153,7 +3153,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 11,
+              "line": 15,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CreateProjectInput {\n    name: string;\n    description?: string | null;\n    id?: string;\n}"
             }
@@ -3319,7 +3319,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 17,
+              "line": 21,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DeleteProjectOptions {\n    soft?: boolean;\n}"
             }
@@ -7325,7 +7325,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectsCrud.ts",
-                "line": 21,
+                "line": 25,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectsCrud();"
               }
@@ -7334,7 +7334,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 21,
+              "line": 25,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectsCrud();"
             }
@@ -7724,7 +7724,7 @@
     },
     {
       "source": "app/composables/plugins/trusted-host-context.ts",
-      "apiSha256": "6390e87d76b75398a777dfbfc947030eb08798351cc5547201289e1166cca8d1",
+      "apiSha256": "df92b958b4ce6118716c940fbee4aa884ea738c5f93a17759c517899c5cc32c7",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/trusted-host-context"
@@ -7771,7 +7771,7 @@
               "source": "app/composables/plugins/trusted-host-context.ts",
               "line": 154,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly signal?: AbortSignal;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;\n    readonly requestedFeatures?: readonly string[];\n    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;\n    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'\n    >;\n}"
+              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly signal?: AbortSignal;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;\n    readonly requestedFeatures?: readonly string[];\n    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;\n    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'\n    >;\n}"
             }
           ]
         },
@@ -10037,7 +10037,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "3f93713db393585dc2ddfcbefb29ea96588c18dc1e8ddc32a7d7b26e0b3bc034",
+      "apiSha256": "dc8d9c85e54c63fe3bea8dca463ef61dac74c2544cca277fad7d7a4442e4e455",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -10070,7 +10070,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 449,
+              "line": 451,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ActionHookName =\n    | CoreActionHookName\n    | DbActionHookName\n    | ExtensionActionHookName\n    | (string & {});"
             }
@@ -10084,7 +10084,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 206,
+              "line": 208,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryAfterPayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    newUserId?: string;\n    newAssistantId?: string;\n}"
             }
@@ -10098,7 +10098,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 199,
+              "line": 201,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryBeforePayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    triggeredBy: 'user' | 'assistant';\n}"
             }
@@ -10156,7 +10156,7 @@
               "source": "app/core/hooks/hook-types.ts",
               "line": 176,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiStreamCompleteContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    totalLength: number;\n    reasoningLength?: number;\n    fileHashes?: string | null;\n}"
+              "text": "export interface AiStreamCompleteContext {\n    threadId?: string;\n    workspaceId?: string;\n    projectId?: string | null;\n    assistantId: string;\n    streamId: string;\n    totalLength: number;\n    reasoningLength?: number;\n    fileHashes?: string | null;\n}"
             }
           ]
         },
@@ -10168,7 +10168,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 196,
+              "line": 198,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamCompletePayload = AiStreamCompleteContext;"
             }
@@ -10196,7 +10196,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 194,
+              "line": 196,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamDeltaPayload = AiStreamDeltaContext;"
             }
@@ -10210,7 +10210,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 186,
+              "line": 188,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamErrorContext {\n    threadId?: string;\n    streamId?: string;\n    error?: unknown;\n    aborted?: boolean;\n}"
             }
@@ -10224,7 +10224,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 197,
+              "line": 199,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamErrorPayload = AiStreamErrorContext;"
             }
@@ -10252,7 +10252,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 195,
+              "line": 197,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamReasoningPayload = AiStreamReasoningContext;"
             }
@@ -10266,7 +10266,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 313,
+              "line": 315,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AppInitPayload {\n    nuxtApp: unknown; // kept opaque to avoid heavy imports\n}"
             }
@@ -10294,7 +10294,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 359,
+              "line": 361,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchContextAfterPayload {\n    threadId: string;\n    mode: BranchMode;\n    ancestorCount: number;\n    localCount: number;\n    finalCount: number;\n}"
             }
@@ -10308,7 +10308,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 352,
+              "line": 354,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkBeforePayload {\n    source: ThreadEntity;\n    anchor: MessageEntity;\n    mode: BranchMode;\n    options?: { titleOverride?: string };\n}"
             }
@@ -10322,7 +10322,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 339,
+              "line": 341,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkOptions {\n    sourceThreadId: string;\n    anchorMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10336,7 +10336,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 337,
+              "line": 339,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type BranchMode = 'reference' | 'copy' | 'compacted';"
             }
@@ -10350,7 +10350,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 898,
+              "line": 900,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CallbackMismatch<Expected, Got> =\n    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;"
             }
@@ -10364,7 +10364,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 441,
+              "line": 443,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreActionHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:action${string}`\n>;"
             }
@@ -10378,7 +10378,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 461,
+              "line": 463,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreFilterHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:filter${string}`\n>;"
             }
@@ -10392,7 +10392,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 484,
+              "line": 486,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
@@ -10406,7 +10406,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 416,
+              "line": 418,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbActionHookName =\n    | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`\n    | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`\n    // extra specialized actions seen in docs\n    | `db.files.refchange:action:after`\n    | `db.kv.upsertByName:action:after`\n    | `db.kv.deleteByName:action:hard:${DbPhase}`;"
             }
@@ -10448,7 +10448,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 413,
+              "line": 415,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbDeleteType = 'soft' | 'hard';"
             }
@@ -10462,7 +10462,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 388,
+              "line": 390,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbEntityName =\n    | 'messages'\n    | 'threads'\n    | 'documents'\n    | 'files'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -10476,7 +10476,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 425,
+              "line": 427,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFilterHookName =\n    | `db.${DbEntityName}.${DbOperation}:filter:input`\n    | `db.${DbEntityName}.${DbOperation}:filter:output`\n    // extra specialized filters seen in docs\n    | `db.messages.files.validate:filter:hashes`\n    | `db.kv.getByName:filter:output`\n    | `db.kv.upsertByName:filter:input`\n    | `db.threads.searchByTitle:filter:output`\n    | `db.posts.all:filter:output`;"
             }
@@ -10490,7 +10490,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 399,
+              "line": 401,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbOperation =\n    | 'create'\n    | 'upsert'\n    | 'update'\n    | 'delete'\n    | 'get'\n    | 'search'\n    | 'byProject'\n    | 'children'\n    | 'fork'\n    | 'normalize'\n    | 'list';"
             }
@@ -10504,7 +10504,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 412,
+              "line": 414,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbPhase = 'before' | 'after';"
             }
@@ -10532,7 +10532,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 214,
+              "line": 216,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditRequestPayload {\n    documentId: string;\n    modelId: string;\n    prompt: string;\n    scope: 'selection' | 'section' | 'document';\n    context: string;\n    references: Array<{\n        id: string;\n        source: 'document' | 'chat';\n        label: string;\n    }>;\n    referenceContext: string;\n    tokenEstimate: number;\n    maxIterations?: number;\n    chunkWordLimit?: number;\n}"
             }
@@ -10546,7 +10546,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 231,
+              "line": 233,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditResultPayload {\n    request: DocumentAiEditRequestPayload;\n    operationCount?: number;\n    accepted?: boolean;\n    error?: unknown;\n}"
             }
@@ -10588,7 +10588,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 445,
+              "line": 447,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionActionHookName = keyof Or3ActionHooks;"
             }
@@ -10602,7 +10602,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 465,
+              "line": 467,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionFilterHookName = keyof Or3FilterHooks;"
             }
@@ -10616,7 +10616,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 808,
+              "line": 810,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtractHookPayload<K extends HookName> =\n    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;"
             }
@@ -10644,7 +10644,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 325,
+              "line": 327,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachInputPayload {\n    file: File;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n}"
             }
@@ -10658,7 +10658,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 317,
+              "line": 319,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachPayload extends FilesAttachInputPayload {\n    accepted: boolean;\n    url?: string;\n    hash?: string;\n}"
             }
@@ -10672,7 +10672,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 469,
+              "line": 471,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilterHookName =\n    | CoreFilterHookName\n    | DbFilterHookName\n    | ExtensionFilterHookName\n    | (string & {});"
             }
@@ -10686,7 +10686,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 477,
+              "line": 479,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookName = ActionHookName | FilterHookName;"
             }
@@ -10700,7 +10700,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 765,
+              "line": 767,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookPayloadMap = CoreHookPayloadMap &\n    DbActionMap &\n    DbFilterMap &\n    Or3ActionHooks &\n    Or3FilterHooks;"
             }
@@ -10714,7 +10714,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 839,
+              "line": 841,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbCreateEntity<K extends string> =\n    K extends `db.messages.${string}`\n        ? MessageCreateEntity\n        : K extends `db.posts.${string}`\n        ? PostCreateEntity\n        : K extends `db.threads.${string}`\n        ? ThreadCreateEntity\n        : InferDbEntity<K>;"
             }
@@ -10728,7 +10728,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 818,
+              "line": 820,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbEntity<K extends string> = K extends `db.messages.${string}`\n    ? MessageEntity\n    : K extends `db.threads.${string}`\n    ? ThreadEntity\n    : K extends `db.documents.${string}`\n    ? DocumentEntity\n    : K extends `db.files.${string}`\n    ? FileEntity\n    : K extends `db.projects.${string}`\n    ? ProjectEntity\n    : K extends `db.posts.${string}`\n    ? PostEntity\n    : K extends `db.prompts.${string}`\n    ? PromptEntity\n    : K extends `db.attachments.${string}`\n    ? AttachmentEntity\n    : K extends `db.kv.${string}`\n    ? KvEntry\n    : unknown;"
             }
@@ -10742,7 +10742,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 792,
+              "line": 794,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookCallback<K extends HookName> = (\n    ...args: InferHookParams<K>\n) => InferHookReturn<K> | Promise<InferHookReturn<K>>;"
             }
@@ -10756,7 +10756,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 777,
+              "line": 779,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap\n    ? HookPayloadMap[K]\n    : unknown[];"
             }
@@ -10770,7 +10770,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 783,
+              "line": 785,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookReturn<K extends HookName> =\n    K extends `${string}:filter${string}`\n        ? K extends keyof HookPayloadMap\n            ? HookPayloadMap[K][0]\n            : unknown\n        : void;"
             }
@@ -10784,7 +10784,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 798,
+              "line": 800,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsAction<K extends HookName> = K extends ActionHookName\n    ? true\n    : false;"
             }
@@ -10798,7 +10798,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 802,
+              "line": 804,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsFilter<K extends HookName> = K extends FilterHookName\n    ? true\n    : false;"
             }
@@ -10826,7 +10826,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 368,
+              "line": 370,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvUpsertByNameInput {\n    name: string;\n    value: unknown;\n}"
             }
@@ -10840,7 +10840,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 812,
+              "line": 814,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MatchingHooks<Pattern extends string> = Extract<\n    HookName,\n    `${Pattern}`\n>;"
             }
@@ -11008,7 +11008,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 346,
+              "line": 348,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RetryBranchParams {\n    assistantMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -11134,7 +11134,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 862,
+              "line": 864,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`\n    ? Extract<HookName, `${Prefix}.${string}`>\n    : HookName;"
             }
@@ -11176,7 +11176,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 849,
+              "line": 851,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]\n    ? Rest\n    : [];"
             }
@@ -11218,7 +11218,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 880,
+              "line": 882,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypeName<T> = T extends string\n    ? 'string'\n    : T extends number\n    ? 'number'\n    : T extends boolean\n    ? 'boolean'\n    : T extends bigint\n    ? 'bigint'\n    : T extends undefined\n    ? 'undefined'\n    : T extends null\n    ? 'null'\n    : T extends (...args: unknown[]) => unknown\n    ? 'function'\n    : T extends object\n    ? 'object'\n    : 'unknown';"
             }
@@ -11232,7 +11232,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 308,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiChatNewPayload {\n    threadId?: string;\n    createdAt?: number;\n}"
             }
@@ -11246,7 +11246,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 254,
+              "line": 256,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneActivePayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11260,7 +11260,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 260,
+              "line": 262,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneBlurPayload {\n    pane: PaneState;\n    previousIndex: number;\n}"
             }
@@ -11274,7 +11274,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 279,
+              "line": 281,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneDocChangedPayload {\n    pane: PaneState;\n    oldDocumentId: string;\n    newDocumentId: string;\n    paneIndex: number;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11288,7 +11288,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 242,
+              "line": 244,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgBase {\n    id: string;\n    threadId?: string;\n    length?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -11302,7 +11302,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 249,
+              "line": 251,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceived extends UiPaneMsgBase {\n    reasoningLength?: number;\n}"
             }
@@ -11316,7 +11316,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 294,
+              "line": 296,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceivedPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgReceived;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11330,7 +11330,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 287,
+              "line": 289,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgSentPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgBase;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11344,7 +11344,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 265,
+              "line": 267,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneSwitchPayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11358,7 +11358,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 271,
+              "line": 273,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneThreadChangedPayload {\n    pane: PaneState;\n    oldThreadId: string;\n    newThreadId: string;\n    paneIndex: number;\n    messageCount?: number;\n}"
             }
@@ -11372,7 +11372,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 303,
+              "line": 305,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiSidebarSelectPayload {\n    kind: 'chat' | 'doc';\n    id: string;\n}"
             }
@@ -11386,7 +11386,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 869,
+              "line": 871,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ValidateHookName<K> = K extends HookName\n    ? K\n    : `Invalid hook name: ${Extract<\n          K,\n          string\n      >}. Did you mean one of: ${SuggestSimilar<K>}`;"
             }
@@ -11841,7 +11841,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "d829ddb567bec42d045f6a23958bf276035ca762e36dfe1454ab5dfaf56e6c50",
+      "apiSha256": "fae6bcef3b2f30547042397912847257025c377a12e10e140cf9fcf85dbef172",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11914,7 +11914,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 125,
+              "line": 127,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11928,7 +11928,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 163,
+              "line": 168,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11942,9 +11942,9 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 137,
+              "line": 139,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
+              "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
           ]
         },
@@ -11970,7 +11970,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 134,
+              "line": 136,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

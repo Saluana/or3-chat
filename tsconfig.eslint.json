@@ -26,6 +26,7 @@
     "extensions/**/*.ts",
     "packages/**/*.ts",
     "examples/**/*.ts",
+    "planning/project-memory-classification/evaluate.ts",
     "config.or3.ts",
     "config.or3cloud.ts"
   ],

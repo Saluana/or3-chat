@@ -14,6 +14,13 @@ vi.mock('~/utils/chat/openrouterStream', async (original) => ({
     openRouterStream: transport,
 }));
 let workspace: string;
+// SSR transport fixtures now cross the production workspace/owner fence. Supply
+// the authenticated origin instead of bypassing that boundary for auxiliary calls.
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    getCachedSessionContext: () => ({ authenticated: true, user: { id: 'summary-user' },
+        workspace: { id: workspace }, role: 'owner' }),
+    getCachedSessionPayload: () => null,
+}));
 const markdown = '## Objective\nFinish implementation.\n## Important Details\nKeep exact paths.\n## Work State\nTwo turns settled.\n## Next Move\nContinue safely.\n## Relevant Files\nNone.';
 const envelope = (id = 'm0') => JSON.stringify({ summary_markdown: markdown, landmarks: [{ message_id: id, kind: 'decision', summary: 'Source evidence' }] });
 const modelMetadata = { context_length: 1000000, top_provider: { max_completion_tokens: 8192 } };
@@ -55,7 +62,7 @@ it('uses history-first guarded same-model inference with no send hooks, placehol
     expect(await getDb().messages.toArray()).toEqual(before); expect(await getDb().threads.count()).toBe(1);
     const request = transport.mock.calls[0]![0];
     expect(request).toMatchObject({ model: 'large-model', modalities: ['text'], apiKey: 'scripted' });
-    expect(request.tools).toBeUndefined(); expect(request.threadId).toBeUndefined(); expect(request.messageId).toBeUndefined();
+    expect(request.tools).toBeUndefined(); expect(request.threadId).toBe('source'); expect(request.expectedProjectId).toBeNull(); expect(request.messageId).toBeUndefined();
     expect(request.maxCompletionTokens).toBeGreaterThan(0); expect(request.maxCompletionTokens).toBeLessThanOrEqual(8192);
     expect(request.orMessages).toHaveLength(2); expect(request.orMessages[0]!.role).toBe('system');
     const body = bodyAt();
@@ -89,6 +96,27 @@ it.each(['success', 'correction', 'denied', 'abort'] as const)('uses the real fo
             expect(JSON.stringify(body.messages)).toContain('Evidence0');
         }
         expect(await getDb().threads.count()).toBe(1); expect(await getDb().messages.count()).toBe(4);
+    } finally { vi.unstubAllGlobals(); }
+});
+
+// Existing stale-capture cases check persistence or entry admission. Here an
+// external move happens after summary preparation, at the real transport entry;
+// paid dispatch must be refused, not merely the later summary commit. The actual
+// streaming implementation runs, with only the network response scripted.
+it('refuses auxiliary dispatch when an ordinary source moves into a project during preparation', async () => {
+    const actual = await vi.importActual<typeof import('~/utils/chat/openrouterStream')>('~/utils/chat/openrouterStream');
+    await getDb().projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
+        created_at: 1, updated_at: 1, deleted: false });
+    transport.mockImplementation(async function* (params) {
+        await getDb().threads.update('source', { project_id: 'project' });
+        yield* actual.openRouterStream(params);
+    });
+    const fetchMock = vi.fn(async () => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: envelope() } }] })}\n\ndata: [DONE]\n\n`,
+        { headers: { 'Content-Type': 'text/event-stream' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+        await expect(generate()).rejects.toThrow(/changed projects before dispatch/);
+        expect(fetchMock).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
 });
 it('corrects an invalid envelope once using original bounded history and compact error, then commits the captured summary', async () => {

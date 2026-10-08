@@ -34,7 +34,7 @@
             <output data-testid="files-review-measurement">{{ filesReviewMeasurement }}</output>
         </aside>
         <PageShell v-if="ready && compactionJourney && !evidenceJourney" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
-        <PageShell v-else-if="ready && workspaceJourney" :route-sync="false" />
+        <PageShell v-else-if="ready && workspaceJourney" :initial-thread-id="projectJourney ? threadId : undefined" :route-sync="false" />
         <ChatContainer
             v-else-if="ready && !evidenceJourney"
             :thread-id="threadId || undefined"
@@ -68,7 +68,8 @@ import { createProject, getProject } from '~/db/projects';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
 const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
-const workspaceJourney = useRoute().query.workspace === '1';
+const projectJourney = useRoute().query.project === '1';
+const workspaceJourney = projectJourney || useRoute().query.workspace === '1';
 const filesReviewJourney = useRoute().query.files === 'review';
 const filesReviewMeasurement = ref('');
 let metadataQueryRows = 0;
@@ -307,7 +308,7 @@ function installDeterministicFetch(): void {
             if (partTypes.includes('image_url'))
                 return Response.json({ error: { code: 404, message: 'No endpoints found that support image input' } }, { status: 404 });
         }
-        if (compactionJourney) {
+        if (compactionJourney || projectJourney) {
             const requests = JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') as unknown[];
             localStorage.setItem('or3:e2e:compaction-requests', JSON.stringify([...requests, {
                 model: body.model, messages, tools: body.tools, max_tokens: body.max_tokens,
@@ -379,7 +380,7 @@ function installDeterministicFetch(): void {
                             if (signal?.aborted) { resolve(); return; }
                             signal?.addEventListener('abort', () => resolve(), { once: true });
                         });
-                        const quotedRecords = nativeCompactionJourney ? messageText(messages[1]).split('\n').flatMap((line) => {
+                        const quotedRecords = nativeCompactionJourney ? messageText(messages.find(message => messageText(message).includes('<conversation-reference>'))).split('\n').flatMap((line) => {
                             try { const row = JSON.parse(line) as Record<string, unknown>; return row.role === 'assistant' && typeof row.message_id === 'string' ? [row] : []; }
                             catch { return []; }
                         }) : [];
@@ -491,7 +492,7 @@ function installDeterministicFetch(): void {
                         enqueue(sseChunk('after retry.'));
                     } else {
                         enqueue(sseChunk('Hello '));
-                        await delay(800);
+                        await delay(projectJourney && text.includes('journey:project-pane') ? 4000 : 800);
                         enqueue(sseChunk('from deterministic stream.'));
                     }
                     enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -536,13 +537,13 @@ onMounted(async () => {
     if (!contextJourney && !presentationJourney && !meterJourney && !mediaJourney) await useModelStore().addFavoriteModel({
         id: '~openai/gpt-luna-latest', name: 'Scripted journey model', context_length: 1_000_000,
         top_provider: { max_completion_tokens: 65_536 }, supported_parameters: ['tools'],
-        architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
+        architecture: { input_modalities: projectJourney ? ['text', 'image'] : ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
     });
     if (contextJourney) {
         const store = useModelStore();
         for (const [id, contextLength] of [['context-fixture-small', 32_768], ['context-fixture-large', 1_000_000]] as const)
             await store.addFavoriteModel({ id, name: id, context_length: contextLength, top_provider: { max_completion_tokens: 8192 },
-                supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+                supported_parameters: ['tools'], architecture: { input_modalities: projectJourney ? ['text', 'image'] : ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
         if (!localStorage.getItem('or3:e2e:context-attempt')) localStorage.setItem('last_selected_model', 'context-fixture-small');
     }
     if (plainModelJourney) {
@@ -655,6 +656,31 @@ onMounted(async () => {
             ref<string | null>(null),
             messageHistory
         );
+    }
+    if (projectJourney && !threadId.value) {
+        const { captureProjectOperation } = await import('~/utils/projects/context');
+        const { saveProjectSettings, saveProjectMemory } = await import('~/db/project-workspace');
+        const { addProjectDocument, addProjectUpload } = await import('~/utils/projects/source-intake');
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        const { createThread } = await import('~/db/threads');
+        const scope = captureProjectOperation(); const projectId = 'workspace-journey-project';
+        await saveProjectSettings(scope, projectId, { ...defaultProjectSettings(), instructions: 'Saffron instruction marker: preserve evidence.', brief: 'Saffron brief marker: current implementation.', default_model: contextJourney ? 'context-fixture-small' : '~openai/gpt-luna-latest' }, null);
+        await saveProjectMemory(scope, projectId, { text: 'Saffron saved decision marker: use SQLite.', kind: 'decision' });
+        const document = await addProjectDocument(scope, projectId, localStorage.getItem('or3:e2e:workspace-document')!);
+        const { saveProjectSource } = await import('~/db/project-workspace');
+        await saveProjectSource(scope, projectId, { ...document.value, mode: 'always' }, document.row.id, document.row.clock);
+        const image = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+        const photo = await addProjectUpload(scope, projectId, new File([image], 'Saffron image', { type: 'image/png' }));
+        await saveProjectSource(scope, projectId, { ...photo.value, mode: 'always' }, photo.row.id, photo.row.clock);
+        await createProject({ id: 'basil-journey-project', name: 'Basil isolation project', description: '', data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        await saveProjectMemory(scope, 'basil-journey-project', { text: 'Basil secret isolation marker', kind: 'decision' });
+        const chat = await createThread({ id: 'saffron-project-chat', title: 'Saffron project chat', project_id: projectId, forked: false, created_at: 1, updated_at: 1, deleted: false, clock: 0 });
+        threadId.value = chat.id; localStorage.setItem(THREAD_KEY, chat.id);
+    }
+    if (projectJourney && compactionJourney) {
+        const { moveChatToProject } = await import('~/db/project-workspace');
+        const { captureProjectOperation } = await import('~/utils/projects/context');
+        await moveChatToProject(captureProjectOperation(),fixtureSourceThread.value,'workspace-journey-project');
     }
     ready.value = true;
     } catch (error) {

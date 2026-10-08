@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 import { mkdtemp, readdir, readFile, writeFile, symlink, mkdir, rm, cp, lstat, chmod } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { resolveQualificationProvider } from './workspace-cloud-providers';
 
-// A disposable source overlay qualifies rebuilt provider source without
-// changing installed packages, operator environment files, or live databases.
+// Installed provider artifacts are the default. Development source overlays
+// require an explicit flag and never produce an installed qualification receipt.
 const sourceRoot = process.cwd();
+const development = process.argv.includes('--development-providers');
 const convexIndex = process.argv.indexOf('--convex-local');
 const convex = convexIndex < 0 ? null : await Bun.file(join(process.argv[convexIndex + 1]!, 'sandbox.json')).json() as { root: string; url: string; adminKey: string };
 if (convex && (!convex.root.startsWith('/private/tmp/or3-files-convex-') || new URL(convex.url).hostname !== '127.0.0.1')) {
@@ -12,6 +14,11 @@ if (convex && (!convex.root.startsWith('/private/tmp/or3-files-convex-') || new 
 }
 const storageProvider = process.argv.includes('--convex-storage') ? 'convex' : 'fs';
 if (storageProvider === 'convex' && !convex) throw new Error('--convex-storage requires --convex-local.');
+const syncPackage = await resolveQualificationProvider(sourceRoot, convex ? 'or3-provider-convex' : 'or3-provider-sqlite', development);
+const storagePackage = storageProvider === 'fs' ? await resolveQualificationProvider(sourceRoot, 'or3-provider-fs', development) : syncPackage;
+const providers = [syncPackage, ...(storagePackage === syncPackage ? [] : [storagePackage])];
+if (convex && (convex as { provider?: typeof syncPackage }).provider?.mode !== syncPackage.mode)
+    throw new Error('Convex sandbox template and app provider qualification modes must match. Recreate the sandbox in the selected mode.');
 const root = await mkdtemp('/private/tmp/or3-workspace-cloud-e2e-');
 async function removeOverlay() {
     // Installed extension copies have read-only directories. Never follow the
@@ -47,13 +54,14 @@ try {
         // Vite writes transformed modules here. Sharing this symlink between
         // disposable servers lets one optimizer invalidate another's chunks.
         if (name === '.cache' || name === '.vite') continue;
-        const path = ['or3-provider-sqlite', 'or3-provider-fs', ...(convex ? ['or3-provider-convex'] : [])].includes(name) ? resolve(sourceRoot, '..', name) : join(sourceRoot, 'node_modules', name);
-        await symlink(path, join(root, 'node_modules', name));
+        const provider = providers.find(pkg => pkg.name === name);
+        if (provider) await cp(provider.path, join(root, 'node_modules', name), { recursive: true, dereference: true });
+        else await symlink(join(sourceRoot, 'node_modules', name), join(root, 'node_modules', name));
     }
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });
     const port = probe.port!;
     await probe.stop(true);
-    await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider }));
+    await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider, providers }));
     const watch = process.argv.includes('--watch');
     const command = watch ? ['bun', 'run', 'dev', '--host', '127.0.0.1', '--port', String(port)]
         : ['bunx', 'playwright', 'test', 'tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile', '--workers=1', '--reporter=line', '--trace=on'];
@@ -63,7 +71,7 @@ try {
             ...process.env,
             SSR_AUTH_ENABLED: 'true', AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth',
             OR3_GUEST_ACCESS_ENABLED: 'false', OR3_AUTH_REGISTRATION_MODE: 'open', OR3_AUTH_AUTO_PROVISION: 'true',
-            OR3_LOCAL_PROVIDERS: 'false',
+            OR3_LOCAL_PROVIDERS: 'false', OR3_USE_LOCAL_PACKAGES: 'false',
             OR3_SYNC_ENABLED: 'true', OR3_CLOUD_SYNC_ENABLED: 'true', OR3_SYNC_PROVIDER: convex ? 'convex' : 'sqlite',
             VITE_CONVEX_URL: convex?.url ?? '', CONVEX_SELF_HOSTED_ADMIN_KEY: convex?.adminKey ?? '',
             OR3_CONVEX_ALLOW_INSECURE_HTTP: convex ? 'true' : 'false',
@@ -84,14 +92,14 @@ try {
         },
     });
     process.exitCode = await child.exited;
-    const output = join(sourceRoot, `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}`);
+    const output = join(sourceRoot, `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}-${development ? 'development' : 'installed'}`);
     await mkdir(output, { recursive: true });
     try { await cp(join(root, 'test-results'), join(output, 'test-results'), { recursive: true }); }
     catch (error) { if ((error as { code?: string }).code !== 'ENOENT') throw error; }
     await removeOverlay();
     await writeFile(join(output, 'profile.json'), JSON.stringify({
-        profile: `Basic Auth + ${convex ? 'rebuilt Convex' : 'rebuilt native SQLite'} + ${storageProvider} storage`,
-        sourceRoot, sqliteSource: resolve(sourceRoot, '../or3-provider-sqlite'), port,
+        profile: `Basic Auth + ${convex ? 'Convex' : 'native SQLite'} + ${storageProvider} storage`,
+        sourceRoot, providers, port,
         temporaryDataRemoved: true, exitCode: process.exitCode,
     }, null, 2) + '\n');
 } finally {

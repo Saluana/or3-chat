@@ -417,6 +417,7 @@ export async function startBackgroundStream(
         throw new Error('Invalid background history scope');
     }
     assertBackgroundHistoryProvider(syncProviderId);
+    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
@@ -510,6 +511,16 @@ export async function startBackgroundStream(
         if (historyResult === 'blocked') {
             error.name = 'BackgroundHistoryAdmissionError';
         }
+        throw error;
+    }
+    // First-turn ownership exists canonically only after admission. Refusing
+    // execution must also leave the admitted job terminal rather than stranded.
+    try {
+        await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) });
+    } catch (error) {
+        await persistTerminalGenerationSnapshot(provider, jobId, { status: 'error',
+            content: execution.contentBase ?? '', reasoning: execution.reasoningBase ?? '',
+            error: error instanceof Error ? error.message : String(error), completedAt: Date.now() });
         throw error;
     }
     logBackgroundEvent('info', 'background.chat.started', {
@@ -1456,8 +1467,13 @@ export async function consumeBackgroundStreamWithTools(params: {
                 measuredUsage: normalizedState.requestUsage } : undefined, params.abortSignal);
             const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
             const usageRequestId = crypto.randomUUID();
+            const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
 
-            const { response: upstream, errorText: refusedText } = await sendWithAffordableReply((body) => fetchWithResponseDeadline(openRouterUrl, {
+            const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
+                await assertServerProjectExecutionSupported({ subject: params.context.userId,
+                    workspaceId: params.context.workspaceId, threadId: params.context.threadId,
+                    abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) });
+                return fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${params.apiKey}`,
@@ -1467,7 +1483,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                     'X-Title': 'or3.chat',
                 },
                 body: JSON.stringify(body),
-            }, { signal: params.abortSignal }), requestBody, {
+            }, { signal: params.abortSignal });
+            }, requestBody, {
                 defaultAllowance: !!params.contextPolicy && params.contextPolicy.requestedCompletionTokens == null,
                 signal: params.abortSignal,
             });
@@ -1946,7 +1963,11 @@ export async function executeBackgroundJob(
     const contextPolicy = await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal);
     await admitServerProviderBody(cleanBody, contextPolicy, signal);
     const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
-    const { response: upstream, errorText: refusedText } = await sendWithAffordableReply((body) => fetchWithResponseDeadline(openRouterUrl, {
+    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+    const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
+        await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId,
+            threadId: params.threadId, abortSignal: signal });
+        return fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${params.apiKey}`,
@@ -1956,7 +1977,8 @@ export async function executeBackgroundJob(
             'X-Title': 'or3.chat',
         },
         body: JSON.stringify(body),
-    }, { signal }), cleanBody, {
+    }, { signal });
+    }, cleanBody, {
         defaultAllowance: !!contextPolicy && contextPolicy.requestedCompletionTokens == null,
         signal,
     });

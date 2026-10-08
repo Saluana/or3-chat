@@ -50,6 +50,7 @@ export function sanitizePayloadForSync(
     delete sanitized.hlc;
 
     // Remove derived fields
+    if (tableName === 'projects') delete sanitized.chat_ids;
     if (tableName === 'file_meta') {
         // ref_count is derived locally, not synced
         delete sanitized.ref_count;

@@ -1,5 +1,6 @@
 /** Provider capacity is a fact; usage is an estimate and the user's maximum is optional. */
 export interface ContextModelMetadata {
+    architecture?: { input_modalities?: readonly string[] };
     context_length?: unknown;
     top_provider?: { context_length?: unknown; max_completion_tokens?: unknown } | null;
 }
@@ -224,4 +225,17 @@ export async function admitProviderRequest<T extends {
         if (body.max_tokens !== undefined && body.max_tokens <= replyMaximum) return body;
         body.max_tokens = replyMaximum;
     }
+}
+
+/** Read-only inspection contract; browser execution owns confirmation. */
+export interface LossyRequestPreview {
+    readonly input_tokens: number;
+    readonly effective_context_tokens: number;
+    readonly reply_tokens: number;
+    readonly omitted_message_count: number;
+    readonly omitted_turn_count: number;
+    readonly omitted_messages: readonly { position: number; role: string; excerpt: string }[];
+    readonly original_digest: string;
+    readonly candidate_digest: string;
+    readonly protected_digest: string;
 }

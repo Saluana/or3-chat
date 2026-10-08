@@ -43,7 +43,7 @@ export function projectToResource(project: Project): PaletteResource {
         icon: 'i-lucide-folder',
         primaryAction: {
             id: `project:reveal:${project.id}`,
-            label: 'Reveal in sidebar',
+            label: 'Open project',
             target: { kind: 'project', projectId: project.id },
         },
         secondaryActions: [],

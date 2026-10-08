@@ -158,6 +158,7 @@ export async function forkThread({
     titleOverride,
     reason = 'manual',
 }: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
+    const db = getDb();
     const hooks = useHooks();
     const filteredOptions = await hooks.applyFilters(
         'branch.fork:filter:options',
@@ -172,53 +173,70 @@ export async function forkThread({
     anchorMessageId = filteredOptions.anchorMessageId;
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
-    const db = getDb();
+    const { resolveChatProject, moveChatProjectRows, notifyChatProjectMove } = await import('./project-workspace');
+    if (getDb() !== db) throw new Error('Workspace changed before forking. Try again.');
+    const src = await db.threads.get(sourceThreadId);
+    if (!src || src.deleted) throw new Error('Source thread not found');
+    const projectId = await resolveChatProject(db, src.id);
+    // Only project forks need the authenticated workspace boundary; ordinary
+    // and guest forks keep the unscoped write path.
+    const scope = projectId
+        ? (await import('~/utils/projects/context')).captureProjectOperation(undefined, sourceThreadId)
+        : null;
+    if (scope && scope.db !== db) throw new Error('Workspace changed before forking. Try again.');
+    scope?.assertCurrent('write');
+    const rootThreadId = await resolveRootThreadId(src.id, db);
 
-    return db.transaction(
-        'rw',
-        getWriteTxTableNames(db, ['threads', 'messages']),
-        async () => {
-        const src = await db.threads.get(sourceThreadId);
-        if (!src || src.deleted) throw new Error('Source thread not found');
-        const rootThreadId = await resolveRootThreadId(src.id, db);
+    const anchor = await db.messages.get(anchorMessageId);
+    if (!anchor || anchor.deleted || isSupersededMessage(anchor) || anchor.thread_id !== sourceThreadId)
+        throw new Error('Invalid anchor message');
+    if (anchor.pending) throw new Error('Wait for this response to finish before branching.');
+    // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
 
-        const anchor = await db.messages.get(anchorMessageId);
-        if (!anchor || anchor.deleted || isSupersededMessage(anchor) || anchor.thread_id !== sourceThreadId)
-            throw new Error('Invalid anchor message');
-        if (anchor.pending) throw new Error('Wait for this response to finish before branching.');
-        // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
+    const now = nowSec();
+    const forkId = newId();
 
-        const now = nowSec();
-        const forkId = newId();
+    const fork: Thread = {
+        ...src,
+        project_id: projectId,
+        id: forkId,
+        title: titleOverride || `${src.title || 'Branch'} - fork`,
+        parent_thread_id: sourceThreadId,
+        anchor_message_id: anchorMessageId,
+        anchor_index: anchor.index,
+        branch_mode: branchMode,
+        root_thread_id: rootThreadId,
+        summary_message_id: null,
+        fork_reason: reason,
+        created_at: now,
+        updated_at: now,
+        last_message_at: null,
+        // Preserve some flags; ensure forked boolean set
+        forked: true,
+        clock: nextClock(),
+    } as Thread;
 
-        const fork: Thread = {
-            ...src,
-            id: forkId,
-            title: titleOverride || `${src.title || 'Branch'} - fork`,
-            parent_thread_id: sourceThreadId,
-            anchor_message_id: anchorMessageId,
-            anchor_index: anchor.index,
-            branch_mode: branchMode,
-            root_thread_id: rootThreadId,
-            summary_message_id: null,
-            fork_reason: reason,
-            created_at: now,
-            updated_at: now,
-            last_message_at: null,
-            // Preserve some flags; ensure forked boolean set
-            forked: true,
-            clock: nextClock(),
-        } as Thread;
-
-        const beforePayload: BranchForkBeforePayload = {
-            source: toThreadEntity(src),
-            anchor: toMessageEntity(anchor),
-            mode: branchMode,
-            ...(titleOverride ? { options: { titleOverride } } : {}),
-        };
-        await hooks.doAction('branch.fork:action:before', beforePayload);
+    const beforePayload: BranchForkBeforePayload = {
+        source: toThreadEntity(src),
+        anchor: toMessageEntity(anchor),
+        mode: branchMode,
+        ...(titleOverride ? { options: { titleOverride } } : {}),
+    };
+    await hooks.doAction('branch.fork:action:before', beforePayload);
+    let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
+    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts']), async () => {
+        scope?.assertCurrent('write');
+        const current = await db.threads.get(src.id);
+        if (JSON.stringify(current) !== JSON.stringify(src)
+            || await resolveChatProject(db, src.id) !== projectId
+            || await resolveRootThreadId(src.id, db) !== rootThreadId)
+            throw new Error('The source chat changed while preparing its fork. Try again.');
+        if (await db.threads.get(fork.id)) throw new Error('The fork identity already exists.');
+        if (JSON.stringify(await db.messages.get(anchor.id)) !== JSON.stringify(anchor))
+            throw new Error('The anchor changed while preparing its fork. Try again.');
 
         await db.threads.put(fork);
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
 
         if (branchMode === 'copy') {
             const { messages: ancestors } = await resolveThreadProjection(sourceThreadId, db, anchorMessageId);
@@ -251,9 +269,13 @@ export async function forkThread({
             });
         }
 
-        await hooks.doAction('branch.fork:action:after', toThreadEntity(fork));
+        scope?.assertCurrent('write');
         return { thread: fork, anchor };
     });
+    await notifyChatProjectMove(membership);
+    try { await hooks.doAction('branch.fork:action:after', toThreadEntity(result.thread)); }
+    catch (error) { console.warn('[threads] Fork committed; notification failed', error); }
+    return result;
 }
 
 /**

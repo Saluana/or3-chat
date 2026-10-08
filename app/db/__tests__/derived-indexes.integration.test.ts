@@ -109,6 +109,37 @@ describe('derived index maintenance', () => {
         return db;
     }
 
+    // Local ownership keys must backfill legacy data, follow bulk/remote writes,
+    // ignore forged projections, roll back atomically and never enter sync payloads.
+    it('upgrades and maintains local project membership lookup keys', async () => {
+        const name = `or3-project-index-${crypto.randomUUID()}`;
+        const legacy = new Dexie(name);
+        legacy.version(25).stores({ projects: 'id, name, clock, created_at, updated_at' });
+        await legacy.open();
+        const row = { id: 'legacy-project', name: 'Legacy', data: JSON.stringify(['chat', { id: 'doc', kind: 'doc' }]),
+            clock: 7, created_at: 1, updated_at: 1, deleted: false };
+        await legacy.table('projects').put(row); legacy.close();
+        const db = new Or3DB(name); databases.push(db); await db.open();
+        expect(await db.projects.where('chat_ids').equals('chat').primaryKeys()).toEqual(['legacy-project']);
+        expect((await db.projects.get(row.id))?.clock).toBe(7);
+        await db.projects.update(row.id, { data: [{ id: 'new-chat' }] });
+        expect(await db.projects.where('chat_ids').equals('chat').count()).toBe(0);
+        expect(await db.projects.where('chat_ids').equals('new-chat').count()).toBe(1);
+        await db.projects.put({ ...row, data: JSON.stringify(['actual']), chat_ids: ['forged'] } as typeof row);
+        expect(await db.projects.where('chat_ids').equals('actual').count()).toBe(1);
+        expect(await db.projects.where('chat_ids').equals('forged').count()).toBe(0);
+        await expect(db.transaction('rw', db.projects, async () => {
+            await db.projects.update(row.id, { data: ['rolled-back'] }); throw new Error('rollback');
+        })).rejects.toThrow('rollback');
+        expect(await db.projects.where('chat_ids').equals('actual').count()).toBe(1);
+        const stored = await db.projects.get(row.id);
+        expect(sanitizePayloadForSync('projects', stored, 'put')?.chat_ids).toBeUndefined();
+        await db.projects.update(row.id, { data: [{ id: 'before' }] });
+        await db.table('projects').update(row.id, { 'data.0.id': 'after' });
+        expect(await db.projects.where('chat_ids').equals('before').count()).toBe(0);
+        expect(await db.projects.where('chat_ids').equals('after').count()).toBe(1);
+    });
+
     it('upgrades a real v14 database without touching canonical fields', async () => {
         const name = `or3-test-derived-upgrade-${crypto.randomUUID()}`;
         const legacy = new Dexie(name);
@@ -156,7 +187,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(25);
+        expect(db.verno).toBe(26);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -634,7 +665,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(25);
+        expect(db.verno).toBe(26);
         if (sourceVersion >= 18) expect(await db.snapshot_staging.get('__active__')).toEqual(sentinel);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.

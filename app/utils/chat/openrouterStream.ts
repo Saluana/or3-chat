@@ -28,6 +28,7 @@ import {
     type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { PROJECT_MEMORY_HEADING } from '~~/shared/projects/workspace';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import {
     getAnthropicPromptCacheControl,
@@ -209,7 +210,24 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
  * Purpose:
  * Streams OpenRouter responses as SSE events.
  */
+async function assertDispatchOwner(params: {
+    expectedProjectId?: string | null;
+    threadId?: string;
+    signal?: AbortSignal;
+}) {
+    if (params.expectedProjectId === undefined || !params.threadId) return;
+    const { captureProjectOperation } = await import('~/utils/projects/context');
+    const { resolveChatProject } = await import('~/db/project-workspace');
+    const scope = captureProjectOperation(params.signal, params.threadId);
+    if (await resolveChatProject(scope.db, params.threadId) !== params.expectedProjectId)
+        throw new Error('This chat changed projects before dispatch. Start a new turn.');
+    scope.assertCurrent();
+}
+
 export type OpenRouterStreamParams = {
+    expectedProjectId?: string | null;
+    onProjectContext?: (receipt: import('~~/shared/projects/workspace').ProjectContextReceipt, iterations: unknown[]) => void;
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -249,19 +267,44 @@ export function buildOpenRouterRequestBody(params: OpenRouterStreamParams): Open
 /** Validate the detached, complete provider body; preserve every selected message. */
 export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): Promise<OpenRouterRequestBody> {
     const body = buildOpenRouterRequestBody(params);
+    if (params.projectContext) {
+        const { assertProjectContextIncluded } = await import('~/utils/projects/context');
+        assertProjectContextIncluded(params.projectContext, body.messages);
+    }
     if (!params.contextPolicy) {
         if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0))
             throw new Error('Reply maximum must be a positive integer.');
         return body;
     }
-    return admitProviderRequest(body, { ...params.contextPolicy,
-        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens },
+    const policy = params.contextPolicy;
+    const admit = () => admitProviderRequest(body, { ...policy,
+        requestedCompletionTokens: policy.requestedCompletionTokens ?? params.maxCompletionTokens },
         countTokensApprox, params.signal, async (request) => {
             const { messages, ...configuration } = request;
             return estimateMeasuredChatRequest({ model: params.model, messages, tools: request.tools,
                 modalities: request.modalities, configuration, usage: params.contextPolicy?.measuredUsage,
                 countText: countTokensApprox });
         });
+    while (true) {
+        try { return await admit(); }
+        catch (error) {
+            if (!(error instanceof ChatContextAdmissionError) || error.code !== 'context_full' || !params.projectContext) throw error;
+            const optional = [...(params.projectContext.receipt.chats ?? []).map(chat => chat.message_id),
+                ...params.projectContext.receipt.sources.filter(source => !params.projectContext!.requiredSourceIds.includes(source.id)).map(source => source.id)];
+            const index = body.messages.findLastIndex(message => {
+                const text = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
+                    ? message.content.map(part => 'text' in part ? part.text : '').filter(Boolean).join(' ') : '';
+                return message.role === 'user' && params.projectContext!.messages.some(context => (typeof context.content === 'string' ? context.content === text
+                    : Array.isArray(context.content) && context.content.some(part => part.type === 'text' && part.text === text)
+                        && context.content.every(part => part.type !== 'image' || JSON.stringify(message.content).includes(String(part.image))))
+                    && (text.startsWith(`${params.projectContext!.marker}\n${PROJECT_MEMORY_HEADING}`)
+                        || optional.some(id => text.startsWith(`${params.projectContext!.marker} Source ${id}:`) || text.startsWith(`${params.projectContext!.marker} Source ${id} `)
+                        || text.startsWith(`${params.projectContext!.marker} Previous chat `) && text.includes(`summary ${id}:`))));
+            });
+            if (index < 0) throw error;
+            body.messages.splice(index, 1);
+        }
+    }
 }
 
 export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -298,11 +341,95 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     // before asynchronous provenance work so later view/tool mutations cannot
     // change the sent prefix after its fingerprint was captured.
     const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+    const usageRequestId = crypto.randomUUID();
+    let recordRequestState: ((state: 'dispatched' | 'accepted' | 'failed') => Promise<void>) | undefined;
+    await assertDispatchOwner(params);
+    if (params.projectContext && params.threadId && !params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId) throw new Error('Project changed while preparing the handoff.');
+        scope.assertCurrent();
+        params.onProjectContext?.(finalizeProjectReceipt(params.projectContext, requestSnapshot.messages), []);
+    }
+    if (params.projectContext && params.threadId && params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const { patchMessageInDb } = await import('~/db/messages');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId)
+            throw new Error('This chat changed workspace or project. Start a new turn.');
+        let receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages);
+        const previous = await scope.db.messages.get(params.messageId);
+        const prior = (previous?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+        const iterations: unknown[] = Array.isArray(prior) ? prior : [];
+        if (iterations.length >= 32) throw new Error('Project request iteration limit reached. Continue in a new chat.');
+        const { ProjectContextIterationSchema } = await import('~~/shared/projects/workspace');
+        const previousSources = new Map<string, { revision: string; state: string }>();
+        const previousChats = new Map<string, string>();
+        for (const iteration of iterations) {
+            const parsed = ProjectContextIterationSchema.safeParse(iteration);
+            if (!parsed.success) continue;
+            for (const source of parsed.data.source_changes) previousSources.set(source.id, source);
+            for (const chat of parsed.data.chat_changes) previousChats.set(chat.id, chat.state);
+        }
+        const iteration = { project_id: receipt.project_id, request_id: usageRequestId, request_state: 'prepared' as const,
+            instructions: receipt.instructions_included ?? Boolean(receipt.instructions), brief: receipt.brief_included ?? Boolean(receipt.brief), memory_count: receipt.memories.length,
+            source_changes: receipt.sources.filter(source => {
+                const previous = previousSources.get(source.id);
+                return previous ? previous.revision !== source.revision || previous.state !== source.state : source.state !== 'available';
+            }).map(source => ({ id: source.id, revision: source.revision, state: source.state })),
+            chat_changes: (receipt.chats ?? []).filter(chat => previousChats.get(chat.message_id) !== chat.state).map(chat => ({ id: chat.message_id, state: chat.state })) };
+        const history = [...iterations, iteration];
+        receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages,
+            new TextEncoder().encode(JSON.stringify(history)).byteLength);
+        const metadata = { project_context: receipt, project_context_iterations: history };
+        await patchMessageInDb(scope.db, params.messageId, { data: metadata }, undefined, message => {
+            scope.assertCurrent('write'); return Boolean(message && !message.deleted && message.thread_id === params.threadId);
+        });
+        scope.assertCurrent();
+        params.onProjectContext?.(receipt, metadata.project_context_iterations);
+        recordRequestState = async request_state => {
+            scope.assertCurrent('write');
+            if (await resolveChatProject(scope.db, params.threadId!) !== receipt.project_id)
+                throw new Error('Project changed before recording dispatch.');
+            const message = await scope.db.messages.get(params.messageId!);
+            const current = (message?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+            if (!Array.isArray(current) || current.at(-1)?.request_id !== usageRequestId)
+                throw new Error('The project request was replaced.');
+            const savedIterations: unknown[] = current;
+            const next = [...savedIterations.slice(0, -1), { ...(savedIterations.at(-1) as Record<string, unknown>), request_state }];
+            await patchMessageInDb(scope.db, params.messageId!, { data: { project_context_iterations: next } }, undefined, row => {
+                scope.assertCurrent('write');
+                return Boolean(row && !row.deleted && row.thread_id === params.threadId
+                    && JSON.stringify((row.data as Record<string, unknown>).project_context_iterations) === JSON.stringify(current));
+            });
+            scope.assertCurrent();
+            params.onProjectContext?.(receipt, next);
+        };
+    }
     const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, _context: _context, ...providerConfiguration } = requestSnapshot;
     const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
         tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
         countText: countTokensApprox }).catch(() => undefined);
-    const usageRequestId = crypto.randomUUID();
+    const recordFailure = async () => {
+        try { await recordRequestState?.('failed'); }
+        catch (error) { console.warn('[projects] Could not record failed dispatch', error); }
+    };
+    const dispatchRequest = async (url: string, init: RequestInit) => {
+        await recordRequestState?.('dispatched');
+        await assertDispatchOwner(params);
+        try {
+            const response = await fetchWithResponseDeadline(url, init, { signal, timeoutMs: params.responseTimeoutMs });
+            try { await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed'); }
+            catch (error) {
+                // A refused turn must not leave the provider stream generating unseen tokens.
+                await response.body?.cancel().catch(() => undefined);
+                throw error;
+            }
+            return response;
+        } catch (error) { await recordFailure(); throw error; }
+    };
     let providerAccepted = false;
     const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
         if (!providerAccepted && !signal?.aborted) { providerAccepted = true; params.onProviderAccepted?.(); }
@@ -318,6 +445,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         let serverResp: Response | undefined;
         let networkError: Error | undefined;
 
+        await assertDispatchOwner(params);
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
@@ -326,11 +454,11 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
-            serverResp = await fetchWithResponseDeadline('/api/openrouter/stream', {
+            serverResp = await dispatchRequest('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(requestSnapshot),
-            }, { signal, timeoutMs: params.responseTimeoutMs });
+            });
         } catch (e) {
             if (
                 signal?.aborted ||
@@ -356,6 +484,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                     yield measuredEvent(evt);
                 }
                 } catch (error) {
+                    await recordFailure();
                     if (error instanceof OpenRouterStreamError) error.credentialSource = serverResp.headers.get('x-or3-credential-source') === 'server' ? 'server' : hasApiKey ? 'personal' : undefined;
                     throw error;
                 }
@@ -411,7 +540,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     let resp: Response;
     let refusedText: string | undefined;
     try {
-        ({ response: resp, errorText: refusedText } = await sendWithAffordableReply((requestBody) => fetchWithResponseDeadline(openRouterChatUrl, {
+        ({ response: resp, errorText: refusedText } = await sendWithAffordableReply((requestBody) => dispatchRequest(openRouterChatUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -423,7 +552,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 Accept: 'text/event-stream',
             },
             body: JSON.stringify(requestBody),
-        }, { signal, timeoutMs: params.responseTimeoutMs }), fallbackBody, {
+        }), fallbackBody, {
             defaultAllowance: !!params.contextPolicy
                 && (params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens) == null,
             signal,
@@ -477,6 +606,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         yield measuredEvent(evt);
     }
     } catch (error) {
+        await recordFailure();
         if (error instanceof OpenRouterStreamError) error.credentialSource = 'personal';
         throw error;
     }
@@ -765,6 +895,8 @@ function setBackgroundStreamingAvailable(available: boolean): void {
  * Starts a background streaming job and returns its job ID.
  */
 export async function startBackgroundStream(params: {
+    expectedProjectId?: string | null;
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -826,6 +958,7 @@ export async function startBackgroundStream(params: {
     let result: BackgroundStreamResult | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+        await assertDispatchOwner(params);
         try {
             const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
                 method: 'POST',

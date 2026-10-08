@@ -69,6 +69,8 @@ async function mountedWorkspaces() {
     const idA = `mounted-doc-a-${crypto.randomUUID()}`;
     const idB = `mounted-doc-b-${crypto.randomUUID()}`;
     const dbA = setActiveWorkspaceDb(idA);
+    await dbA.threads.put({ id: 'mounted-thread', title: 'Tool origin', status: 'ready',
+        created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
     const created = await createDocumentInDb(dbA, { title: 'A private title', content: content('A original body') });
     const row = (await dbA.posts.get(created.id))!;
     await dbA.posts.delete(created.id);

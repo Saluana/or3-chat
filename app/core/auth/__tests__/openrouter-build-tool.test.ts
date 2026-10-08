@@ -18,6 +18,20 @@ beforeEach(() => {
 });
 
 describe('buildOpenRouterMessages attachment hydration', () => {
+    // Live failure: canonical history stores empty call arrays; forwarding one
+    // on a settled assistant causes OpenAI to reject the next turn. Omit empty
+    // arrays for every role, while the existing tool round-trip retains calls.
+    it('omits empty tool call arrays from settled conversation history', async () => {
+        const history = [
+            { role: 'user' as const, content: 'Question', tool_calls: [] },
+            { role: 'assistant' as const, content: 'Answer', tool_calls: [] },
+            { role: 'user' as const, content: 'Follow-up', tool_calls: [] },
+        ];
+        const result = await buildOpenRouterMessages(history);
+        expect(result).toHaveLength(3);
+        for (const message of result) expect(message).not.toHaveProperty('tool_calls');
+    });
+
     it('preserves valid local hash, data URL, and remote URL references', async () => {
         getFileBlob.mockResolvedValueOnce(
             new Blob(['pdf bytes'], { type: 'application/pdf' })

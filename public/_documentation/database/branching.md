@@ -49,7 +49,7 @@ The chat's **Branch conversation** action opens the saved child in a workspace t
 
 ## Implementation notes
 
-1. **Transactions** — `forkThread` runs inside a Dexie transaction touching `threads` and `messages` to avoid race conditions; `buildContext` resolves recursive canonical history and is not a write transaction.
+1. **Transactions** — `forkThread` prepares hooks before an atomic thread/message/project write, rechecks its source, owning project, root and anchor under that write, then notifies after commit. Failed notifications do not fail a durable fork. `buildContext` resolves recursive canonical history and is not a write transaction.
 2. **Indexing** — Copied messages normalize indexes starting at `0` to keep order stable in fresh forks.
 3. **Role normalization** — Canonical `user`, `assistant`, `system` and `tool` roles are preserved; unknown legacy roles normalize to `user`.
 4. **Perf** — `buildContext` follows reference ancestors through canonical anchor boundaries. A compacted boundary contributes its saved summary and local messages, without rehydrating raw ancestors. Missing or cyclic lineage fails explicitly.

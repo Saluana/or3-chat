@@ -404,6 +404,9 @@ export function useModelStore() {
                 if (!candidate.model || !admitChatContext({ model: candidate.model, inputTokens: 0 }).ok) continue;
                 const model = candidate.model;
                 const metadata = Object.freeze({ context_length: model.context_length,
+                    architecture: model.architecture ? Object.freeze({
+                        input_modalities: Object.freeze([...(model.architecture.input_modalities ?? [])]),
+                    }) : undefined,
                     top_provider: model.top_provider ? Object.freeze({ context_length: model.top_provider.context_length,
                         max_completion_tokens: model.top_provider.max_completion_tokens }) : undefined });
                 return Object.freeze({ ok: true, selectedModelId, modelId: model.id,

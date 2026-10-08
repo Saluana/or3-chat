@@ -87,6 +87,7 @@ export type UiChatMessagePart =
  * UI-friendly message shape with flattened text and optional workflow data.
  */
 export interface UiChatMessage {
+    data?: Record<string, unknown>;
     id: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
     text: string; // flattened text + markdown image placeholders
@@ -298,6 +299,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
                 : null,
         isWorkflow,
         workflowState,
+        ...(raw.data?.project_context ? { data: { project_context: raw.data.project_context, project_context_iterations: raw.data.project_context_iterations } } : {}),
         ...(role === 'system' && raw.data?.kind === 'compaction'
             ? { compaction: readCompactionData(raw.data.compaction) } : {}),
     };

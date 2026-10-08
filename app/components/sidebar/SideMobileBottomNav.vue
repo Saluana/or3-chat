@@ -485,6 +485,7 @@ import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { navigateTo, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import AppIcon from '~/components/ui/AppIcon.vue';
@@ -740,6 +741,7 @@ function pageDescription(page: { id: string; label: string; description?: string
 
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();
+const { openProjectsSidebar } = useProjectSidebar();
 
 const projectedPages = computed(() => {
     void resolvedWorkspaceProfile.value;
@@ -762,6 +764,7 @@ const orderedPages = computed(() => {
         DEFAULT_PAGE_ID,
         'sidebar-chats',
         'sidebar-docs',
+        'sidebar-projects-home',
     ]);
     return projectedPages.value.filter((page) => !hiddenPages.has(page.id));
 });
@@ -772,9 +775,9 @@ async function handlePageSelect(pageId: string) {
     if (pageId === DEFAULT_PAGE_ID) {
         await navigateTo('/');
     }
-    if (pageId === activePageId.value) return;
+    if (pageId === activePageId.value && pageId !== 'sidebar-projects-home') return;
     try {
-        const ok = await setActivePage(pageId);
+        const ok = pageId === 'sidebar-projects-home' ? await openProjectsSidebar() : await setActivePage(pageId);
         if (!ok) {
             const page = listSidebarPages.value.find((p) => p.id === pageId);
             toast.add({

@@ -384,7 +384,12 @@
             <!-- Desktop actions overlap the border; narrow panes keep them in flow. -->
             <div
                 v-if="!editing && interactive"
-                :class="['cm-actions flex z-10', `cm-actions-${roleVariant}`]"
+                role="group"
+                aria-label="Message actions"
+                :class="[
+                    'cm-actions flex z-10',
+                    `cm-actions-${roleVariant}`,
+                ]"
             >
                 <UFieldGroup
                     class="bg-(--md-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))] cm-action-group"
@@ -451,6 +456,19 @@
                             @click="wrappedBeginEdit"
                         ></UButton>
                     </UTooltip>
+                    <UTooltip
+                        v-if="projectMessageContext?.canRemember && !props.message.pending"
+                        :delay-duration="500"
+                        text="Remember for this project"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="pluginActionButtonProps"
+                            icon="i-lucide-bookmark-plus"
+                            aria-label="Remember for this project"
+                            @click="projectMessageContext?.startRemember()"
+                        />
+                    </UTooltip>
                     <!-- Dynamically registered plugin actions -->
                     <template v-for="action in extraActions" :key="action.id">
                         <UTooltip
@@ -476,6 +494,7 @@
                 </UFieldGroup>
             </div>
         </template>
+        <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
         <ThreadChildLinks
             v-if="props.message.id && !props.message.pending"
             :thread-id="props.threadId"
@@ -520,6 +539,7 @@ import {
     useMessageMarkdown,
 } from '~/composables/chat/useMessageMarkdown';
 import { useMessageEditing } from '~/composables/chat/useMessageEditing';
+import ProjectMessageContext from '~/components/projects/ProjectMessageContext.vue';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
 import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
 
@@ -543,6 +563,7 @@ const responseStopped = computed(() => props.message.role === 'assistant' && !pr
 const responseError = computed(() => props.message.role === 'assistant' && !props.message.pending &&
     props.message.error && !responseStopped.value
     ? presentError(props.message.errorEnvelope ?? props.message.error, { code: 'ERR_STREAM_FAILURE' }).message : null);
+const projectMessageContext = ref<InstanceType<typeof ProjectMessageContext>>();
 const customMessageRenderer = computed(
     () => resolveMessageRenderer(props.message)?.component ?? null
 );
@@ -1230,6 +1251,7 @@ const streamMdClasses = [
         align-items: center;
         padding-block: 6px;
         margin-top: 0.75rem;
+        margin-inline: auto;
     }
 
     .cm-action-group {
@@ -1277,6 +1299,7 @@ const streamMdClasses = [
         align-items: center;
         padding-block: 6px;
         margin-top: 0.75rem;
+        margin-inline: auto;
     }
 
     .cm-action-group {

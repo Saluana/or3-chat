@@ -9,6 +9,9 @@ import {
 } from '../../../../server/utils/chat/tool-registry';
 import type { ToolDefinition } from '../types';
 import { useToolRegistry } from '../tool-registry';
+import Dexie from 'dexie';
+import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { testRuntimeConfig } from '~~/tests/setup';
 
 function definition(name: string, runtime?: ToolDefinition['runtime']): ToolDefinition {
     return {
@@ -24,16 +27,27 @@ function definition(name: string, runtime?: ToolDefinition['runtime']): ToolDefi
 
 describe('V1 client tool registry profile', () => {
     const registry = useToolRegistry();
+    let originalSsrAuth: boolean;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+        originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        await setActiveWorkspaceDb('workspace-a').open();
+        await getDb().threads.put({ id: 'thread-a', title: 'Attached conversation', project_id: null,
+            created_at: 1, updated_at: 1, deleted: false, clock: 0, forked: false, status: 'active', pinned: false });
         for (const tool of registry.listTools.value) registry.unregisterTool(tool.definition.function.name);
         localStorage.clear();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         for (const tool of registry.listTools.value) registry.unregisterTool(tool.definition.function.name);
         vi.useRealTimers();
         vi.restoreAllMocks();
+        const name = getDb().name;
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb('workspace-a');
+        await Dexie.delete(name);
+        testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;
     });
 
     it('advertises and executes origin-scoped tools only in the attached conversation', async () => {
@@ -51,6 +65,12 @@ describe('V1 client tool registry profile', () => {
             subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'message', callId: 'call', requestId: 'request', abortSignal: new AbortController().signal,
         });
         expect(result.result).toBe('{"ok":true}'); expect(handler).toHaveBeenCalledOnce();
+        registry.setEnabled('origin_scoped', false);
+        const disabled = await registry.executeTool('origin_scoped', '{}', {
+            subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'message', callId: 'disabled-call', requestId: 'request', abortSignal: new AbortController().signal,
+        });
+        expect(disabled.error).toContain('disabled');
+        expect(handler).toHaveBeenCalledOnce();
     });
 
     it('rejects duplicates, overrides by identity, exposes refs, and normalizes runtime hints', () => {

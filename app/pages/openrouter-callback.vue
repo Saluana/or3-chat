@@ -1,46 +1,69 @@
 <template>
-    <div
-        class="min-h-[100dvh] flex items-center justify-center p-6"
+    <main
+        class="min-h-[100dvh] flex items-center justify-center bg-[var(--md-surface)] text-[var(--md-on-surface)] px-4! py-10!"
         data-page="openrouter-callback"
     >
-        <div
-            class="w-full max-w-md rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        <UCard
+            class="w-full max-w-md"
+            :ui="{ body: 'p-6! sm:p-8!' }"
+            :aria-busy="loading"
         >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-[var(--md-border-width)] border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+            <div
+                class="mb-5! flex size-12 items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                aria-hidden="true"
+            >
+                <UIcon
+                    :name="
+                        errorMessage
+                            ? warningIcon
+                            : ready
+                              ? checkIcon
+                              : loadingIcon
+                    "
+                    class="size-6"
+                    :class="{ 'animate-spin': loading }"
                 />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] bg-primary-600 text-white hover:bg-primary-500"
+            </div>
+            <div aria-live="polite" aria-atomic="true">
+                <h1 class="text-xl font-semibold leading-7">{{ title }}</h1>
+                <p
+                    class="mt-3! text-sm leading-6 text-[var(--md-on-surface-variant)]"
+                >
+                    {{ subtitle }}
+                </p>
+            </div>
+            <div v-if="!loading" class="mt-6! flex flex-col gap-3">
+                <UButton
+                    v-if="ready && !errorMessage"
+                    block
+                    size="touch"
                     @click="goHome"
                 >
                     Continue
-                </button>
-                <button
+                </UButton>
+                <UButton
                     v-if="errorMessage"
-                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] bg-amber-600 text-white hover:bg-amber-500"
+                    block
+                    size="touch"
+                    class="gap-2"
+                    :icon="retryIcon"
                     @click="startAgain"
                 >
-                    Start connection again
-                </button>
-                <button
+                    Try again
+                </UButton>
+                <UButton
                     v-if="errorMessage"
-                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] border border-neutral-300 dark:border-neutral-700"
+                    block
+                    size="touch"
+                    color="neutral"
+                    variant="outline"
                     @click="goHome"
                 >
-                    Go Home
-                </button>
+                    Back to OR3
+                </UButton>
             </div>
-        </div>
-    </div>
+        </UCard>
+    </main>
 </template>
 
 <script setup lang="ts">
@@ -52,8 +75,11 @@ import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 
 const route = useRoute();
 const router = useRouter();
-const rc = useRuntimeConfig();
 const { startLogin } = useOpenRouterAuth();
+const warningIcon = useIcon('ui.warning');
+const checkIcon = useIcon('ui.check');
+const loadingIcon = useIcon('ui.loading');
+const retryIcon = useIcon('ui.refresh');
 
 const PKCE_MARKER_KEYS = [
     'openrouter_auth_code',
@@ -213,7 +239,7 @@ onMounted(async () => {
         );
         loading.value = false;
         ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        errorMessage.value = 'This connection attempt could not be verified. Try again to start a fresh connection.';
         return;
     }
 

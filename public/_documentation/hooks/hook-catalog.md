@@ -326,3 +326,5 @@ Nitro webhook events fire on `nitroApp.hooks` via `emitWebhookSystemHook` and fe
 - ui.chat.tool-card:action:failed — { pluginId, tool, callId, runtime, code }
 
 These events carry identity and status only, without card arguments, results, state or chat text.
+
+Browser `ai.chat.stream:action:complete` payloads include optional captured `workspaceId` and `projectId`. Successful canonical/tracker background finalization of a project chat also emits the browser event after persistence; ordinary background completions do not (background job notifications own those), and it is never emitted for failed, aborted or superseded completions. Automatic project memory subscribes through the normal hook lifecycle and returns immediately rather than awaiting auxiliary inference. Server webhook events remain a separate engine.

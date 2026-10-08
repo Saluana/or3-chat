@@ -1,5 +1,12 @@
 // Stub for Nuxt auto-imports in Vitest context
 export { createRegistry } from '../../app/composables/_registry';
+import { ref, type Ref } from 'vue';
+
+const states = new Map<string, Ref<unknown>>();
+export function useState<T>(key: string, init?: () => T): Ref<T> {
+    if (!states.has(key)) states.set(key, ref(init?.()));
+    return states.get(key) as Ref<T>;
+}
 
 export function useToast() {
     return { add: () => {} };

@@ -66,7 +66,8 @@ describe('native continuation canonical preparation', () => {
         expect(inputs().filter((item) => !item.id?.startsWith('system-') && !item.id?.startsWith('continue-')).map((item) => item.id))
             .toEqual(['root-user', 'root-anchor', 'first-user', 'first-anchor', 'second-user', 'target']);
     });
-    it('uses only the summary and new turns at a compacted boundary with its original source absent', async () => {
+    it('uses only the summary and new turns with its original source deleted but ownership retained', async () => {
+        await thread('old', { deleted: true });
         await thread('child', { branch_mode: 'compacted', parent_thread_id: 'old', anchor_message_id: 'old-anchor', summary_message_id: 'summary' });
         await row('summary', 'child', 0, 'system', summary()); await row('new-user', 'child', 1); await row('target', 'child', 2, 'assistant'); await row('later', 'child', 3);
         await prepare('child', 'target');

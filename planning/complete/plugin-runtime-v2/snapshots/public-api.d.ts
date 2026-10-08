@@ -1579,6 +1579,7 @@ export interface CreateTrustedHostContextInput {
     readonly runtimeServices?: (authority: {
         pluginId: string;
         db: ReturnType<typeof getDb>;
+        messageTypes?: ReadonlySet<string>;
         allow(grant: PluginGrant): void;
         current(): boolean;
         cleanup(callback: () => void): void;
@@ -3518,6 +3519,8 @@ export interface AiStreamReasoningContext {
 /** Final streaming completion context. */
 export interface AiStreamCompleteContext {
     threadId?: string;
+    workspaceId?: string;
+    projectId?: string | null;
     assistantId: string;
     streamId: string;
     totalLength: number;

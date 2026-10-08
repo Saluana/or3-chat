@@ -163,6 +163,8 @@ export interface SyncGatewayAdapter {
         canonicalChatHistory?: 'v1';
         /** Transactional preservation/admission for catalog, Trash and file memberships. */
         workspaceItems?: 'v1';
+        /** `readChatHistory` resolves explicit and legacy project ownership (`project_ownership`). */
+        projectOwnership?: 'v1';
     };
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 

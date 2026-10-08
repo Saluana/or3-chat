@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter or use an existing key, understand model costs, send a message, and verify saved work."
+                    "summary": "Connect OpenRouter, choose a model, send a message, and understand draft clearing and saved work."
                 },
                 {
                     "name": "command-palette.md",
@@ -33,6 +33,15 @@
                     "categoryOrder": 0,
                     "order": 2,
                     "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, and coverage."
+                },
+                {
+                    "name": "projects.md",
+                    "path": "/start/projects",
+                    "title": "Work in a project",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 3,
+                    "summary": "Project sidebar navigation, compact inline brief editing and project chat/document creation, source library, explicit and automatic memory, continuity, tools, and recorded request context."
                 },
                 {
                     "name": "development-setup.md",
@@ -188,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD and revision-aware chat/document/file associations that preserve extension entries."
+                    "summary": "Project CRUD, revision-aware associations, captured execution boundaries and distinct installed/development provider qualification."
                 },
                 {
                     "name": "posts.md",
@@ -329,7 +338,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect or paste a personal key, disconnect, and recover from callback errors."
+                    "summary": "Connect or paste a personal key, disconnect, recover from callback errors, and prepare a real OpenRouter preview."
                 },
                 {
                     "name": "reference.md",
@@ -356,7 +365,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Translate internal content, select images, hydrate files, and handle attachment failures."
+                    "summary": "Translate internal content, preserve valid tool calls, omit empty call arrays, select images, hydrate files, and handle attachment failures."
                 }
             ]
         },
@@ -902,7 +911,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, and saved Files catalog methods, lifecycle hooks and menu actions."
+                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization for model calls and writes, scoped storage, governed networking, and saved Files catalog methods, lifecycle hooks and menu actions."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
