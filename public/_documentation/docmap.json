@@ -407,7 +407,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse saved Files, upload and reuse references, understand text coverage, Trash, and shared-byte retention."
+                    "summary": "Browse saved Files, understand text coverage, Trash and shared-byte retention, and extend catalog operations through the trusted Plugin SDK."
                 },
                 {
                     "name": "errors.md",
@@ -902,7 +902,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, and reviewed grants."
+                    "summary": "SDK contracts, trusted UI and records, scoped storage, governed networking, and saved Files catalog methods, lifecycle hooks and menu actions."
                 },
                 {
                     "name": "plugin-sdk-cli.md",

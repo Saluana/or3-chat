@@ -67,6 +67,8 @@ file and storage methods documented in the [Plugin SDK](/documentation/plugins/p
 
 ## Saved Files
 
+Trusted-host plugins can observe catalog operations, manage saved metadata through revision-checked SDK methods, and add file-menu actions. See [Saved Files in the SDK](/documentation/plugins/plugin-sdk#saved-files) for grants, lifecycle events, and examples.
+
 **Files** opens a lazy workspace tab containing native documents
 and saved uploads. Search names or indexed text, filter by type or project, and
 use **Upload** or **New document**. The **Files options** menu contains **Show Trash** and **Add existing uploads**. Each row has one menu for Rename, project association, original download, and moving to Trash. Click any file or document to inspect it. Wide panes show an adjacent preview and details panel; narrower panes show a scrollable preview inside the Files pane, with Close or Escape returning to the list. Choose **Open document** in the inspector to edit a native document. The list initially
