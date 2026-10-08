@@ -48,21 +48,6 @@ export const MAX_FILES_PER_MESSAGE: number = DEFAULT_MAX_FILES_PER_MESSAGE;
 
 /**
  * Purpose:
- * Backward compatibility alias for max file hashes per message.
- *
- * Behavior:
- * Mirrors `MAX_FILES_PER_MESSAGE`.
- *
- * Constraints:
- * - Intended for internal usage only.
- *
- * Non-Goals:
- * - Does not introduce a new limit value.
- */
-export const MAX_MESSAGE_FILE_HASHES: number = MAX_FILES_PER_MESSAGE;
-
-/**
- * Purpose:
  * Parse stored file hash arrays into a bounded list.
  *
  * Behavior:

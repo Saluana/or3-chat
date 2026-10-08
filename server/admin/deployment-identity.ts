@@ -92,7 +92,3 @@ export function deploymentIdentity(): Promise<string> {
     cached ??= resolveDeploymentIdentity();
     return cached;
 }
-
-export function _resetDeploymentIdentityForTest(): void {
-    cached = null;
-}

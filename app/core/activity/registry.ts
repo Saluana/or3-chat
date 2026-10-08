@@ -509,7 +509,3 @@ export function getActivityRegistry(): ActivityRegistry {
         (scope.__or3ActivityRegistry = new ActivityRegistry())
     );
 }
-
-export function resetActivityRegistryForTests(): void {
-    delete (globalThis as ActivityRegistryGlobal).__or3ActivityRegistry;
-}

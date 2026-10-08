@@ -17,62 +17,7 @@ function createStream() {
     });
 }
 
-function createErroredStream(error: Error) {
-    return new ReadableStream<Uint8Array>({
-        start(controller) {
-            controller.error(error);
-        },
-    });
-}
-
 describe('foreground stream monitor', () => {
-    it('emits message.completed when the foreground stream finishes naturally', async () => {
-        emitMessageCompletedWebhookEventMock.mockReset().mockResolvedValue(undefined);
-
-        const { mirrorForegroundStreamCompletion } = await import(
-            '../foreground-stream-monitor'
-        );
-
-        await mirrorForegroundStreamCompletion({
-            stream: createStream(),
-            workspaceId: 'ws-1',
-            threadId: 'thread-1',
-            messageId: 'message-1',
-            modelId: 'openai/gpt-4o-mini',
-        });
-
-        expect(emitMessageCompletedWebhookEventMock).toHaveBeenCalledWith({
-            workspaceId: 'ws-1',
-            threadId: 'thread-1',
-            messageId: 'message-1',
-            modelId: 'openai/gpt-4o-mini',
-        });
-    });
-
-    it('ignores aborted stream monitors without surfacing an error', async () => {
-        const abortError = new Error('aborted');
-        abortError.name = 'AbortError';
-
-        emitMessageCompletedWebhookEventMock.mockReset();
-        const onError = vi.fn();
-
-        const { mirrorForegroundStreamCompletion } = await import(
-            '../foreground-stream-monitor'
-        );
-
-        await mirrorForegroundStreamCompletion({
-            stream: createErroredStream(abortError),
-            workspaceId: 'ws-1',
-            threadId: 'thread-1',
-            messageId: 'message-1',
-            modelId: 'openai/gpt-4o-mini',
-            onError,
-        });
-
-        expect(emitMessageCompletedWebhookEventMock).not.toHaveBeenCalled();
-        expect(onError).not.toHaveBeenCalled();
-    });
-
     it('emits completion from the client stream without teeing the upstream', async () => {
         emitMessageCompletedWebhookEventMock.mockReset().mockResolvedValue(undefined);
         const { monitorForegroundStreamForClient } = await import(

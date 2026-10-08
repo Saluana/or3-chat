@@ -291,7 +291,6 @@ export class PluginClientCanaryStore {
     }
 }
 
-export const CLIENT_CANARY_TICKET_TTL_MS = TICKET_TTL_MS;
 export const CLIENT_CANARY_PENDING_CODE = 'client-canary-pending';
 
 /**

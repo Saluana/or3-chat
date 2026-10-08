@@ -13,9 +13,3 @@ export interface WorkflowToolRegistrationPolicy {
     permissions?: string[];
     idempotencyKey?: (input: unknown) => string;
 }
-
-export const DEFAULT_WORKFLOW_TOOL_POLICY = {
-    sideEffect: 'none',
-    approval: 'policy',
-    parallelSafe: true,
-} as const;

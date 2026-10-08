@@ -668,18 +668,3 @@ export async function hardDeletePrompt(id: string): Promise<void> {
     await deletePromptPostRow(id);
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
-
-/**
- * Purpose:
- * Public type alias for prompt records.
- *
- * Behavior:
- * Mirrors `PromptRecord`.
- *
- * Constraints:
- * - Provided for backward compatibility.
- *
- * Non-Goals:
- * - Does not represent the internal storage row shape.
- */
-export type { PromptRecord as Prompt };

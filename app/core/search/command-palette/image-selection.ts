@@ -35,10 +35,6 @@ export function consumePendingPaletteImageSelection(): string | null {
     return hash;
 }
 
-export function peekPendingPaletteImageSelection(): string | null {
-    return pendingImageHash;
-}
-
 export function subscribePaletteImageSelection(
     listener: (hash: string | null) => void
 ): () => void {

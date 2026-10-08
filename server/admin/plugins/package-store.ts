@@ -254,7 +254,3 @@ export class ImmutablePluginPackageStore {
         }
     }
 }
-
-export function isPackageTreeValidationFailure(error: unknown): error is PackageTreeValidationError {
-    return error instanceof PackageTreeValidationError;
-}

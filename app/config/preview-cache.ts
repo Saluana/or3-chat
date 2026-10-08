@@ -36,5 +36,3 @@ export function resolvePreviewCacheOptions(
         maxBytes: overrides.maxBytes ?? defaults.maxBytes,
     };
 }
-
-export const DEFAULT_PREVIEW_CACHE_OPTIONS = resolvePreviewCacheOptions();

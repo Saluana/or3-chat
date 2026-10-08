@@ -123,15 +123,3 @@ export function requireAdminContext(
 export function isSuperAdmin(context: AdminRequestContext): boolean {
     return context.principal.kind === 'super_admin';
 }
-
-/**
- * Require super admin access.
- */
-export function requireSuperAdmin(context: AdminRequestContext): void {
-    if (context.principal.kind !== 'super_admin') {
-        throw createError({
-            statusCode: 403,
-            statusMessage: 'Forbidden: Super admin access required',
-        });
-    }
-}

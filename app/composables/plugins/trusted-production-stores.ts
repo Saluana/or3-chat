@@ -66,11 +66,6 @@ export function createLocalStorageSecretStore(
     };
 }
 
-export function createMemorySecretStore(): SecretStore {
-    const values = new Map<string, string>();
-    return { get: key => values.get(key) ?? null, set: (key, value) => { values.set(key, value); }, delete: key => { values.delete(key); }, has: key => values.has(key) };
-}
-
 export function createMemoryFileStore(): FileStore {
     const files = new Map<string, StoredFile>();
     let seq = 0;

@@ -140,11 +140,6 @@ export function acquisitionConfig(): AcquisitionConfig {
     return cached;
 }
 
-/** Test seam: forget the resolved configuration. */
-export function resetAcquisitionConfig(): void {
-    cached = null;
-}
-
 /**
  * A stable identity for this deployment. An acquisition records it so a record
  * cannot be replayed against another host, and deployments may set

@@ -199,10 +199,3 @@ export function checkActionApproval(input: ApprovalCheckInput): ApprovalDecision
     }
     return { status: 'allowed', message: 'Approval is valid for this action' };
 }
-
-/** Test helper: forget every minted approval. */
-export function resetMintedApprovalsForTest(): void {
-    // WeakSet has no clear(); dropping references is enough for test isolation
-    // because each test mints its own approvals.
-    approvalCounter = 0;
-}

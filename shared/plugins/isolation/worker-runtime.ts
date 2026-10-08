@@ -901,6 +901,3 @@ export const WORKER_FORBIDDEN_CAPABILITIES = [
     'WebSocket',
     'navigator.serviceWorker',
 ] as const;
-
-export type WorkerForbiddenCapability =
-    (typeof WORKER_FORBIDDEN_CAPABILITIES)[number];

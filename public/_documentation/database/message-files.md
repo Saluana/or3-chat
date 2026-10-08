@@ -52,6 +52,6 @@ Import `parseFileHashes`, `serializeFileHashes`, and `getMaxMessageFileHashes` f
 
 `parseFileHashes` accepts a stored JSON string/null/undefined. Invalid JSON or a non-array returns an empty array; non-string elements are discarded and the result is bounded. It does not validate hash format or deduplicate.
 
-`serializeFileHashes` deduplicates strings, preserves first-occurrence order, bounds the list, and returns a JSON string. The dynamic cap comes from `runtimeConfig.public.or3.limits.maxFilesPerMessage`, falling back to 10. The constants `MAX_FILES_PER_MESSAGE` and its compatibility alias `MAX_MESSAGE_FILE_HASHES` are **static fallback values of 10**, not live runtime configuration.
+`serializeFileHashes` deduplicates strings, preserves first-occurrence order, bounds the list, and returns a JSON string. The dynamic cap comes from `runtimeConfig.public.or3.limits.maxFilesPerMessage`, falling back to 10. The constant `MAX_FILES_PER_MESSAGE` is a **static fallback value of 10**, not live runtime configuration.
 
 Neither utility checks file existence, adjusts references, or authorizes a file. Use the relationship helpers above for mutations. Do not decrement a reference again after `removeFileFromMessage`.

@@ -13,9 +13,6 @@ export type ActivityRunKind =
     | 'external-agent'
     | 'plugin';
 
-/** Open value for untrusted boundaries. Switch on `ActivityRunKind`, not this. */
-export type ActivityRunKindInput = ActivityRunKind | (string & {});
-
 export type { WorkflowToolRegistrationPolicy };
 
 /** Payload stored on a background job while a workflow run is in progress. */

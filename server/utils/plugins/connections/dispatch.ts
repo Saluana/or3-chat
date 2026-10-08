@@ -665,10 +665,3 @@ export async function dispatchApprovedConnectionOperation(input: {
         redirected: false,
     };
 }
-
-export const DISPATCH_POLICY = Object.freeze({
-    maxRedirectHops: MAX_REDIRECT_HOPS,
-    defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
-    maxRedactionDepth: MAX_REDACTION_DEPTH,
-    maxRedactionNodes: MAX_REDACTION_NODES,
-});

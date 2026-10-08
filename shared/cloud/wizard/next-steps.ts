@@ -16,12 +16,6 @@ export function resolveAppUrl(appUrl?: string): string {
     return (appUrl ?? DEFAULT_APP_URL).replace(/\/+$/, '');
 }
 
-/** Primary command to start the app after setup. */
-export const START_APP_COMMAND = 'npm run dev';
-
-/** Cloud-forced SSR start (sets SSR_AUTH_ENABLED=true). */
-export const START_SSR_COMMAND = 'npm run dev:ssr';
-
 /** Health check that includes provider/path/port checks. */
 export const DOCTOR_COMMAND = 'npm run doctor';
 

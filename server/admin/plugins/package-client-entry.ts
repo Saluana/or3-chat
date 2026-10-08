@@ -97,9 +97,6 @@ export class PluginPackageClientEntryError extends Error {
     }
 }
 
-export function isPackageClientEntryUnavailable(error: unknown): boolean {
-    return error instanceof PluginPackageAssetError || error instanceof PluginPackageClientEntryError;
-}
 /** Card assets are hashed from the same immutable selected tree as the client. */
 export async function readPackageToolCardEntries(
     input: Parameters<typeof readPackageClientEntry>[0]

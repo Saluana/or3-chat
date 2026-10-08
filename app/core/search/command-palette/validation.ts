@@ -4,9 +4,6 @@ import type {
 } from './types';
 import { isInternalPostType, INTERNAL_POST_TYPES } from '~~/shared/posts/visibility';
 
-/** Mirrors `INTERNAL_POST_TYPES` from `app/db/posts` without importing Dexie. */
-export const PALETTE_EXCLUDED_POST_TYPES = INTERNAL_POST_TYPES;
-
 const ID_RE = /^[a-z0-9-]+$/;
 const TARGET_ID_RE = /^[a-z0-9][a-z0-9._:-]*$/;
 const ALIAS_RE = /^[a-z0-9-]{2,32}$/;

@@ -480,12 +480,6 @@ async function streamWorkspaceExportCore({
     }
 }
 
-export interface StreamImportOptions {
-    clearTables: boolean;
-    overwriteValues: boolean;
-    onProgress?: (progress: WorkspaceBackupProgress) => void;
-}
-
 function isValidBackupFormat(
     format: string
 ): format is typeof WORKSPACE_BACKUP_FORMAT {

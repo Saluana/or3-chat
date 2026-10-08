@@ -148,7 +148,3 @@ export function installTrustedV2ClientManager(manager: TrustedV2ClientManager): 
 export function useTrustedV2Activations(): ReadonlyMap<string, TrustedV2ObservedActivation> {
     return installedManager?.observedActivations ?? noActivations;
 }
-
-export async function stopAllTrustedV2ClientsAndAwait(): Promise<void> {
-    await installedManager?.stopAll();
-}

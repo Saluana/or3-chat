@@ -53,8 +53,6 @@ export function defaultFsRoot(instanceDir: string): string {
     return resolvePath(instanceDir, '.data', 'or3-storage');
 }
 
-/** Available built-in theme identifiers for the theme selection step. */
-export const BUILTIN_THEMES = ['blank', 'retro'] as const;
 /**
  * Answer keys that contain secrets.
  * Used by `sanitizeAnswersForSession()` to strip secrets before persistence,

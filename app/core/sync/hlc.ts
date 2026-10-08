@@ -178,10 +178,3 @@ export function compareHLC(a: string, b: string): number {
 export function hlcToOrderKey(hlc: string): string {
     return hlc;
 }
-
-/**
- * @deprecated Use _resetHLC instead
- */
-export function _resetHLCState(): void {
-    _resetHLC();
-}

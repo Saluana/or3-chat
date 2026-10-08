@@ -85,9 +85,3 @@ export class CanonicalStorageContractFixture {
         };
     }
 }
-
-export function createCanonicalStorageContractFixture(
-    options: CanonicalStorageFixtureOptions = {}
-): CanonicalStorageContractFixture {
-    return new CanonicalStorageContractFixture(options);
-}

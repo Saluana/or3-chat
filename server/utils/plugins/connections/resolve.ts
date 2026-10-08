@@ -79,7 +79,3 @@ export function resolveConnectionService(
         durable: false,
     };
 }
-
-export function listRegisteredConnectionStores(): readonly string[] {
-    return listPluginConnectionStoreIds();
-}

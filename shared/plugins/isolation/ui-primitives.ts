@@ -241,8 +241,6 @@ export const PORTABLE_UI_NODE_TYPES = [
     'open-pane',
 ] as const;
 
-export type PortableUiNodeType = (typeof PORTABLE_UI_NODE_TYPES)[number];
-
 export type PortableUiValidation =
     | { readonly ok: true; readonly node: PortableUiNode }
     | { readonly ok: false; readonly code: 'ui-invalid-node'; readonly message: string };

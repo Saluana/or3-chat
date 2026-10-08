@@ -211,17 +211,6 @@ export function findLiveTopLevelRange(
     return { from, to };
 }
 
-/** Map a frozen block ref to a live ProseMirror block range (pre-accept only). */
-export function findFrozenBlockRange(
-    editor: Editor,
-    snapshot: DocumentAiFrozenSnapshot,
-    ref: string,
-): { from: number; to: number } | null {
-    const block = snapshot.blocks.find((entry) => entry.ref === ref);
-    if (!block) return null;
-    return findLiveTopLevelRange(editor, block.index);
-}
-
 /**
  * Resolve where a pending hunk should render after zero or more accepted ops
  * have already been applied to the live editor.

@@ -114,11 +114,3 @@ export function registerPluginPostSource(options: {
         },
     };
 }
-
-/** Test helper */
-export function __resetCorePaletteSourcesForTests(): void {
-    for (const handle of handles.splice(0)) {
-        handle.dispose();
-    }
-    registered = false;
-}
