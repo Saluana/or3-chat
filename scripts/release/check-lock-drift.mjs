@@ -67,9 +67,12 @@ for (const [name, entry] of Object.entries(lock.packages ?? {})) {
   }
 }
 
-for (const name of ['or3-provider-clerk', 'or3-provider-convex', 'or3-provider-s3', 'convex']) {
-  if (name in (lock.packages ?? {})) {
-    failures.push(`lock contains inactive fixed-profile dependency ${name}; it must not enter the production graph.`);
+for (const name of ['or3-provider-clerk', 'or3-provider-convex', 'or3-provider-s3', 'convex', 'or3-provider-sqlite-tests']) {
+  // npm lock packages are keyed by install path, including nested dependencies.
+  for (const packagePath of Object.keys(lock.packages ?? {})) {
+    if (packagePath === `node_modules/${name}` || packagePath.endsWith(`/node_modules/${name}`)) {
+      failures.push(`lock contains inactive fixed-profile dependency ${packagePath}; it must not enter the production graph.`);
+    }
   }
 }
 
