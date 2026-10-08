@@ -63,9 +63,12 @@ export async function runPluginCli(argv: readonly string[]): Promise<number> {
         case 'create': {
             const created = createV2Package({
                 pluginId: requireArg(rest, '--id'),
+                withToolCard: rest.includes('--with-tool-card'),
                 directory: requireArg(rest, '--dir'),
                 sdkSource: requireArg(rest, '--sdk-source'),
-                name: rest.includes('--name') ? requireArg(rest, '--name') : undefined,
+                name: rest.includes('--name')
+                    ? requireArg(rest, '--name')
+                    : undefined,
                 template: rest.includes('--template')
                     ? requireArg(rest, '--template')
                     : undefined,

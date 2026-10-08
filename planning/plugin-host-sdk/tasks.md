@@ -389,6 +389,8 @@ No existing server was stopped and no containment receipt was promoted.
 
 ## 8. Complete custom application UI and developer workflow
 
+The shared runtime is implemented by [chat tool cards](../chat-tool-cards/tasks.md) phases 5–7. It remains unqualified until the contained-view receipt passes every probe. See [implementation status](../chat-tool-cards/implementation-status.md) for the current gate.
+
 This section depends on the feasibility result in 1.6 and the service/lifecycle foundations above. A failed containment gate blocks custom-UI qualification and milestone 4; it does not justify bypassing isolation.
 
 - [ ] 8.1 Implement the versioned custom-UI package profile and asset validation (4h).
@@ -485,3 +487,7 @@ Also run all affected core/integration tests, the named SDK installed-package E2
 - Relevant tests, typechecks, builds, containment and documentation checks are green; the final diff and package contents are inspected.
 - Public docs and provider READMEs describe actual runtime/profile support, limits and errors. The traceability matrix has no gaps.
 - Release preparation and production publication remain distinct. No version is consumed or production state changed by completion of this plan alone.
+
+### Shared contained-view runtime
+
+The chat tool-card frame implementation and qualification are tracked in [chat-tool-cards/tasks.md](../chat-tool-cards/tasks.md), phases 5–7. It supplies the opaque frame document, policy, relay and engine gate; it does not qualify other custom-view profiles.

@@ -36,5 +36,8 @@ export function initializeContributionSurfaceSelection(
 }
 
 export function getContributionSurfaceSelection(): ContributionSurfaceSelection {
-    return initializeContributionSurfaceSelection([]);
+    // Imports can consult a surface before Nuxt's pre-plugin initializes it.
+    // An early read must not permanently freeze the configured selection empty.
+    return (globalThis as SelectionGlobals).__or3ContributionSurfaceSelection ??
+        createContributionSurfaceSelection([]);
 }

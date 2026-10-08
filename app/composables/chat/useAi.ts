@@ -2352,6 +2352,7 @@ export function useChat(
             role: 'user',
             data: {
                 ...userTranscriptData(nextUserMessageId),
+                ...(sendMessagesParams.cardOrigin ? { card_origin: sendMessagesParams.cardOrigin } : {}),
                 content: persistedUserText,
                 attachments: files ?? [],
                 ...(contextOmission ? { context_omission: contextOmission } : {}),
@@ -2384,6 +2385,7 @@ export function useChat(
             role: 'user',
             content: parts,
             id: userDbMsg.id,
+            data: userDbMsg.data as ChatMessage['data'],
             file_hashes: userDbMsg.file_hashes,
         };
         rawMessages.value.push(rawUser);

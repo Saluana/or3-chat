@@ -81,7 +81,7 @@ export function collectV2ModuleGraph(
         return [];
     }
     return files
-        .filter((file) => CODE_FILE.test(file))
+        .filter((file) => CODE_FILE.test(file) || /\.css$/.test(file))
         .map((file) => ({
             path: posix(relative(root, file)),
             source: readFileSync(file, 'utf8'),

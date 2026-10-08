@@ -13,6 +13,7 @@ export interface CreateCommandOptions {
     readonly pluginId: string;
     readonly directory: string;
     readonly name?: string;
+    readonly withToolCard?: boolean;
     /** Local SDK tarball or package directory, resolved from the caller's cwd. */
     readonly sdkSource?: string;
     /**
@@ -68,6 +69,70 @@ export function createV2Package(options: CreateCommandOptions): {
     const manifest = readJsonObject(resolve(root, 'or3.manifest.json'));
     manifest.id = pluginId;
     manifest.name = displayName;
+    if (options.withToolCard) {
+        if (manifest.trust !== 'isolated-client')
+            throw new Error('--with-tool-card requires the portable template');
+        const tool = pluginId.replace(/[^a-z0-9]/g, '_') + '_show_greeting';
+        manifest.toolCards = [
+            {
+                id: 'greeting',
+                tool,
+                entry: 'cards/greeting.mjs',
+                label: 'Greeting',
+            },
+        ];
+        manifest.requestedGrants = [
+            ...new Set([
+                ...(manifest.requestedGrants as string[]),
+                'tools.register.client',
+                'chat.tool.card',
+            ]),
+        ];
+        ensureDir(resolve(root, 'cards'));
+        writeFileSync(
+            resolve(root, 'cards/greeting.mjs'),
+            "export default { mount(el, card) { el.textContent = card.args?.greeting || 'Hello from OR3'; } };\n"
+        );
+        const clientPath = resolve(root, 'client.mjs');
+        const client = readFileSync(clientPath, 'utf8').replace(
+            'async setup(context) {',
+            'async setup(context) {\n' +
+                'context.onRequest("runtime.tools", () => [{ type: "function", function: { name: ' +
+                JSON.stringify(tool) +
+                ', description: "Show a greeting card", parameters: { type: "object", properties: { greeting: { type: "string" } } } } }]);\n' +
+                'context.onRequest("runtime.tool", () => ({ shown: true }));'
+        );
+        writeFileSync(
+            clientPath,
+            client
+                .replace(
+                    /requestedGrants: \[[^\]]*\]/,
+                    'requestedGrants: ' +
+                        JSON.stringify(manifest.requestedGrants)
+                )
+                .replace(
+                    'export const exampleManifest = Object.freeze({',
+                    'export const exampleManifest = Object.freeze({\n    toolCards: ' +
+                        JSON.stringify(manifest.toolCards) +
+                        ','
+                )
+        );
+    }
+    if (options.withToolCard) {
+        const authoringPath = resolve(root, '.authoring/profile.config.mjs');
+        const authoring = readFileSync(authoringPath, 'utf8')
+            .replace(
+                'export const baseManifest = Object.freeze({',
+                'export const baseManifest = Object.freeze({\n    toolCards: ' +
+                    JSON.stringify(manifest.toolCards) +
+                    ','
+            )
+            .replace(
+                /requestedGrants: \[[^\]]*\]/,
+                'requestedGrants: ' + JSON.stringify(manifest.requestedGrants)
+            );
+        writeFileSync(authoringPath, authoring);
+    }
     writeStableJson(resolve(root, 'or3.manifest.json'), manifest);
 
     const packageJson = readJsonObject(resolve(root, 'package.json'));
@@ -78,7 +143,9 @@ export function createV2Package(options: CreateCommandOptions): {
     };
     writeStableJson(resolve(root, 'package.json'), packageJson);
     const ignorePath = resolve(root, '.gitignore');
-    const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, 'utf8') : '';
+    const ignore = existsSync(ignorePath)
+        ? readFileSync(ignorePath, 'utf8')
+        : '';
     const ignored = new Set(ignore.split(/\r?\n/));
     const additions = ['node_modules/', 'dist/', '.or3-pack/', '.or3-dev/']
         .filter((entry) => !ignored.has(entry));

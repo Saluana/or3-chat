@@ -14,16 +14,21 @@ Phases 1–3 deliver cards for source plugins. Phase 4 adds trusted-host package
 Phases 5–7 add portable packages; their runtime ships disabled per browser engine
 until phase 7 records passing containment probes.
 
+Implementation and evidence are recorded in [implementation-status.md](implementation-status.md).
+Unchecked items identify remaining proof or qualification work, including otherwise implemented code.
+Task 0.3 uses the named real-browser E2E lane for the vanilla/Vue/React harness
+instead of happy-dom, following the repository preference for E2E verification.
+
 ## 0. Contracts first
 
-- [ ] 0.1 Write failure-mode notes for the isolated components (1h).
+- [x] 0.1 Write failure-mode notes for the isolated components (1h).
       Component: Card state store, Card registry, Frame runtime. Requirements: R12.AC3.
       Done when: `planning/chat-tool-cards/failure-modes.md` lists, for
       `patchMessageDataEntry`, binding resolution, the protocol validator and the
       CSP builder, every way each can fail and the expected behavior. Tests in later
       tasks reference these entries by name.
 
-- [ ] 0.2 Add the SDK card contract and helpers (3h).
+- [x] 0.2 Add the SDK card contract and helpers (3h).
       Component: Card module and card context. Requirements: R2.AC1–R2.AC5, R3.AC1–R3.AC4.
       Done when: `packages/plugin-sdk/src/cards.ts` exports `ToolCardContext`,
       `ToolCardModule`, `ToolCardStatus`, `ToolCardRuntime`, `ToolCardTheme`,
@@ -33,7 +38,7 @@ until phase 7 records passing containment probes.
       optional peers and dev dependencies; the SDK typecheck passes, and
       `bun run type-check` for the app passes without React installed.
 
-- [ ] 0.3 Add the card test harness (2h).
+- [x] 0.3 Add the card test harness (2h).
       Component: Card module and card context. Requirements: R2.AC4, R11.AC1.
       Done when: `createToolCardHarness()` in `@or3/plugin-sdk/testing` records
       `setState`, `send` and `openLink` calls and drives `onUpdate`; SDK tests mount
@@ -42,14 +47,14 @@ until phase 7 records passing containment probes.
 
 ## 1. Registry and in-page rendering
 
-- [ ] 1.1 Record the owning plugin on tools (2h).
+- [x] 1.1 Record the owning plugin on tools (2h).
       Component: Card bindings and the registry. Requirements: R6.AC2.
       Done when: `RegisterOptions` and `RegisteredTool` in
       `app/utils/chat/tool-registry.ts` carry optional `ownerPluginId`;
       `useToolRegistry().ownerOf(name)` returns it; `workspace-runtime.ts` and
       `portable-tools.ts` pass their plugin IDs; existing tool tests pass unchanged.
 
-- [ ] 1.2 Build the card registry (2h).
+- [x] 1.2 Build the card registry (2h).
       Component: Card bindings and the registry. Requirements: R6.AC2–R6.AC4.
       Done when: `app/composables/chat/tool-cards.ts` implements
       `registerToolCardBinding` and `resolveToolCard` with the conflict,
@@ -57,7 +62,7 @@ until phase 7 records passing containment probes.
       the failure-mode notes, and a reactive revision; `chat-tool-cards` is added to
       `PLUGIN_CONTRIBUTION_SURFACES`.
 
-- [ ] 1.3 Build the card context (2h).
+- [x] 1.3 Build the card context (2h).
       Component: In-page runtime. Requirements: R3.AC1–R3.AC5.
       Done when: `app/utils/chat/tool-card-context.ts` creates a live context from a
       `ToolCallInfo`, the message's card state, the binding and the theme; parses
@@ -65,7 +70,7 @@ until phase 7 records passing containment probes.
       microtask; aborts `signal` on dispose; and exposes nothing beyond the fields in
       R3.AC1.
 
-- [ ] 1.4 Render tool blocks with cards (4h).
+- [x] 1.4 Render tool blocks with cards (4h).
       Component: Rendering in chat. Requirements: R1.AC1–R1.AC4, R1.AC6, R10.AC1, R10.AC3, R10.AC4.
       Done when: `ChatToolBlock.vue`, `ToolCardSlot.vue` and
       `ChatToolCardsEnd.vue` exist under `app/components/chat/tool-cards/`;
@@ -75,7 +80,7 @@ until phase 7 records passing containment probes.
       the design table; the container has `role="group"`, an accessible name and
       `data-tool-card`; a 320 px viewport shows no horizontal scroll.
 
-- [ ] 1.5 Mount in-page cards safely (3h).
+- [x] 1.5 Mount in-page cards safely (3h).
       Component: In-page runtime. Requirements: R1.AC5, R2.AC1, R2.AC3, R9.AC5, R11.AC7.
       Done when: `ToolCardPageHost.vue` renders `module.component` in the host tree
       or calls `module.mount`; errors in mount, render or cleanup fall back with
@@ -84,14 +89,14 @@ until phase 7 records passing containment probes.
       and `hook-types.ts` and emitted without card data; failures log one console
       line with plugin, tool and code.
 
-- [ ] 1.6 Add lazy mounting, resize and fallback lines (2h).
+- [x] 1.6 Add lazy mounting, resize and fallback lines (2h).
       Component: Rendering in chat. Requirements: R1.AC5, R1.AC7, R9.AC1–R9.AC3.
       Done when: slots reserve `minHeight` and mount within 600 px of the viewport;
       a `ResizeObserver` emits `resize`, forwarded as `content-resize`; the muted
       "{label} card unavailable ({code})" line appears for every failure code
       except "no card"; a message with no bound tools does only the registry lookup.
 
-- [ ] 1.7 Publish the source-plugin API (2h).
+- [x] 1.7 Publish the source-plugin API (2h).
       Component: Registration paths. Requirements: R2.AC6, R6.AC1, R6.AC3.
       Done when: `app/utils/chat/tool-cards-public.ts` exports `registerToolCard`
       and `registerCardTool`; `registerCardTool` validates with `defineTool`,
@@ -109,13 +114,13 @@ until phase 7 records passing containment probes.
       tests cover every failure mode from 0.1, including interleaving with the
       streaming persister's `tool_calls` writes.
 
-- [ ] 2.2 Expose card data on UI messages (1h).
+- [x] 2.2 Expose card data on UI messages (1h).
       Component: Card state store, Chat bridge. Requirements: R1.AC7, R4.AC2, R5.AC5.
       Done when: `ensureUiMessage()` maps `data.tool_cards` to `toolCards` and
       `data.card_origin` to `cardOrigin`; malformed values are ignored rather than
       thrown.
 
-- [ ] 2.3 Provide the chat bridge and persist state (3h).
+- [x] 2.3 Provide the chat bridge and persist state (3h).
       Component: Chat bridge, Card state store. Requirements: R5.AC1, R5.AC2, R5.AC4, R5.AC5, R4.AC5.
       Done when: `app/composables/chat/tool-card-chat-bridge.ts` exists;
       `ChatContainer.vue` provides it; `writeState` binds to the pane's captured
@@ -124,7 +129,7 @@ until phase 7 records passing containment probes.
       a workspace switch; without a bridge, `setState` and `send` return
       `unsupported` and the card still renders.
 
-- [ ] 2.4 Implement `send`, attribution and `openLink` (3h).
+- [x] 2.4 Implement `send`, attribution and `openLink` (3h).
       Component: Chat bridge. Requirements: R4.AC1–R4.AC6.
       Done when: `SendMessageParams.cardOrigin` is written to the user row as
       `data.card_origin` by `useAi`; the bridge's `send` uses the pane's current
@@ -135,13 +140,13 @@ until phase 7 records passing containment probes.
 
 ## 3. Examples, E2E and first docs
 
-- [ ] 3.1 Build the quiz example (1h).
+- [x] 3.1 Build the quiz example (1h).
       Component: Reference examples. Requirements: R11.AC1, R4.AC1.
       Done when: `app/plugins/examples/quiz-card-example.client.ts` registers
       `quiz_ask` with `registerCardTool` (disabled by default); answering sends the
       choice, then locks the card with `setState`; it uses no `innerHTML`.
 
-- [ ] 3.2 Build the weather example (3h).
+- [x] 3.2 Build the weather example (3h).
       Component: Reference examples. Requirements: R11.AC1, R2.AC3.
       Done when: `app/plugins/examples/weather-card/` registers `weather_show`;
       the handler uses Open-Meteo geocoding and forecast and falls back to browser
@@ -150,21 +155,21 @@ until phase 7 records passing containment probes.
       conditions, an hourly strip and a 7-day list, with day and night styling that
       reads well in light and dark themes.
 
-- [ ] 3.3 Build the map example (2h).
+- [x] 3.3 Build the map example (2h).
       Component: Reference examples. Requirements: R11.AC1, R4.AC6.
       Done when: `app/plugins/examples/map-card-example.client.ts` registers
       `map_show`; the card embeds OpenStreetMap by default, or Google Maps for the
       query when a Google Maps Embed API key is saved in the example's settings;
       "Open in Maps" uses `openLink`.
 
-- [ ] 3.4 Add the E2E lane (4h).
+- [x] 3.4 Add the E2E lane (4h).
       Component: Testing strategy. Requirements: R12.AC1, R1, R4, R5, R9.
       Done when: `bun run test:e2e:tool-cards` runs `tests/e2e/tool-cards.spec.ts`
       under `OR3_TOOL_CARDS_TEST_HARNESS=true` with scripted OpenRouter SSE, covers
       cases 1–6 from the design, and writes `test-results/tool-cards/receipt.json`
       plus light and dark screenshots of the three examples.
 
-- [ ] 3.5 Write the first documentation (2h).
+- [x] 3.5 Write the first documentation (2h).
       Component: Documentation. Requirements: R11.AC6.
       Done when: `public/_documentation/plugins/tool-cards.md` covers source
       plugins, the context API, Vue/React/vanilla, placement, chrome, state, `send`,
@@ -174,7 +179,7 @@ until phase 7 records passing containment probes.
 
 ## 4. Trusted-host packages
 
-- [ ] 4.1 Extend SDK contracts (2h).
+- [x] 4.1 Extend SDK contracts (2h).
       Component: Registration paths, Manifest and grants. Requirements: R6.AC1, R6.AC5, R8.AC1.
       Done when: `PluginContributionKind` includes `chat.tool.card`; `PluginGrant`
       includes `chat.tool.card` and `chat.tool.card.embed`;
@@ -183,14 +188,14 @@ until phase 7 records passing containment probes.
       `unsupported` with the manifest hint; `bun run test:plugin-compatibility`
       passes.
 
-- [ ] 4.2 Wire the trusted-host context (2h).
+- [x] 4.2 Wire the trusted-host context (2h).
       Component: Registration paths. Requirements: R6.AC1–R6.AC4.
       Done when: `trusted-host-context.ts` adds both grants to
       `TRUSTED_HOST_GRANTS`, implements `context.chat.registerToolCard` and the
       `chat.tool.card` contribution case with `allow('chat.tool.card')`, binds with
       the package's plugin ID, and disposes with the activation.
 
-- [ ] 4.3 Add review text and trusted qualification (1h).
+- [x] 4.3 Add review text and trusted qualification (1h).
       Component: Manifest, grants, review and qualification. Requirements: R8.AC1, R8.AC3.
       Done when: `shared/plugins/grant-description.ts` describes both grants;
       `v2-host-capabilities.ts` lists `chat.tool.card` for `trusted-host` with the
@@ -218,7 +223,7 @@ section 8 notes as each task lands.
       sandbox constant; `assertNoContainmentRelaxation` accepts only the profile's
       `style-src 'unsafe-inline'` allowance; tests cover the failure modes from 0.1.
 
-- [ ] 5.2 Write the frame document and relay (4h).
+- [x] 5.2 Write the frame document and relay (4h).
       Component: Frame runtime. Requirements: R7.AC1, R7.AC3, R7.AC5–R7.AC7.
       Done when: `shared/plugins/isolation/contained-view-document.ts` exports the
       inert document and hash-authorized relay; the relay accepts one connect from
@@ -234,7 +239,7 @@ section 8 notes as each task lands.
       limits, rate-limits actions and resizes, and has tests for every failure mode
       from 0.1.
 
-- [ ] 5.4 Serve the frame per card (3h).
+- [x] 5.4 Serve the frame per card (3h).
       Component: Frame runtime. Requirements: R7.AC1, R8.AC2.
       Done when: `server/routes/or3/tool-card-frame/[pluginId]/[digest]/[cardId].get.ts`
       checks session, workspace access, selected digest, card ID and approved
@@ -242,7 +247,7 @@ section 8 notes as each task lands.
       headers; unapproved embed origins never appear in the CSP; static builds do
       not include the route.
 
-- [ ] 5.5 Verify and cache card bundles (3h).
+- [x] 5.5 Verify and cache card bundles (3h).
       Component: Frame runtime. Requirements: R7.AC2, R9.AC4.
       Done when: `readPackageToolCardEntries()` in `package-client-entry.ts` hashes
       each entry and stylesheet from the package tree; the runtime descriptor
@@ -250,7 +255,7 @@ section 8 notes as each task lands.
       route, verifies with `verifyServedModuleBytes()`, rejects mismatches with
       `bundle-unavailable`, and caches per `(packageDigest, cardId)`.
 
-- [ ] 5.6 Build the frame host (4h).
+- [x] 5.6 Build the frame host (4h).
       Component: Frame runtime, Rendering in chat. Requirements: R7.AC1–R7.AC7, R9.AC2, R4.AC4.
       Done when: `ToolCardFrameHost.vue` creates the iframe with the exact
       attributes in the design, runs the boot sequence, enforces the 5 s deadline,
@@ -258,7 +263,7 @@ section 8 notes as each task lands.
       updates, destroys the frame on a second load or three invalid messages, and
       participates in the per-pane LRU cap of 12.
 
-- [ ] 5.7 Gate the runtime per engine (1h).
+- [x] 5.7 Gate the runtime per engine (1h).
       Component: Manifest, grants, review and qualification. Requirements: R8.AC4.
       Done when: `QUALIFIED_TOOL_CARD_ENGINES` (initially empty) sits beside
       `QUALIFIED_BROWSER_ENGINES`; `or3-tool-card-frame-v1` is advertised only for
@@ -267,7 +272,7 @@ section 8 notes as each task lands.
 
 ## 6. Portable packages
 
-- [ ] 6.1 Add the `toolCards` manifest field (3h).
+- [x] 6.1 Add the `toolCards` manifest field (3h).
       Component: Manifest, grants, review and qualification. Requirements: R6.AC6, R8.AC2, R11.AC3.
       Done when: `PluginManifestV2.toolCards` and the zod schema in
       `server/admin/extensions/types.ts` enforce every rule in design section 9
@@ -275,13 +280,13 @@ section 8 notes as each task lands.
       requirements, `isolated-client` only), with matching messages in SDK
       validation.
 
-- [ ] 6.2 Show cards in review (3h).
+- [x] 6.2 Show cards in review (3h).
       Component: Manifest, grants, review and qualification. Requirements: R8.AC1, R8.AC2.
       Done when: the grant review lists each card's label and tool and every embed
       origin; a package update that adds a card or origin is treated as an
       authority expansion and requires new approval.
 
-- [ ] 6.3 Register portable bindings on activation (2h).
+- [x] 6.3 Register portable bindings on activation (2h).
       Component: Registration paths. Requirements: R6.AC1, R6.AC4.
       Done when: `app/composables/plugins/portable-tool-cards.ts` registers one frame
       binding per verified descriptor after `registerPortableTools()` succeeds,
@@ -305,7 +310,7 @@ section 8 notes as each task lands.
       destinations; its card is the same Vue component pattern as the source
       example, bundled with Vue.
 
-- [ ] 6.6 Finish the documentation (2h).
+- [x] 6.6 Finish the documentation (2h).
       Component: Documentation. Requirements: R11.AC6.
       Done when: `tool-cards.md` covers portable cards, manifest, embeds, review and
       browser support; `overview.md`, `add-features.md`, `plugin-sdk.md` and
@@ -331,13 +336,34 @@ section 8 notes as each task lands.
       passes; failures are recorded as blocking decisions, never as a trust
       fallback.
 
-- [ ] 7.3 Run the full verification (2h).
+- [x] 7.3 Run the full verification (2h).
       Component: Testing strategy. Requirements: R9, R12.AC1.
       Done when: `bun run test:e2e:tool-cards` passes including case 7 on each
       qualified engine; timings for in-page and frame mounts and the 30-card scroll
       check are in the receipt; `bun run type-check`,
       `bun run test:plugin-compatibility` and `bun run check:docs` pass; the docs'
       browser support table matches the qualified engines.
+
+## Review corrections
+
+- [x] Share same-call save ordering across panes and remounted bridges.
+- [x] Reconcile pending optimistic saves with authoritative remote and normalized state.
+- [x] Include all source examples in compilation and review built card-package artifacts.
+- [x] Preserve saved state across theme changes and virtualization; observe persisted updates.
+- [x] Finish admitted saves on their original thread during same-workspace navigation.
+- [x] Serialize same-call writes through asynchronous hooks; flush active and queued saves.
+- [x] Declare React development dependencies and synchronize both reproducible locks.
+- [x] Preserve visible frames, defer preloads at capacity, and resume waiting frames.
+- [x] Separate containment evidence by run and project, including mobile Safari identity.
+
+See `implementation-status.md` for regression results and the retained containment gates.
+
+## Live walkthrough and documentation follow-up
+
+- [x] Register nested source examples explicitly for development and verify real tool calls.
+- [x] Polish Quiz and Map using the existing Vue adapter, UI kit and theme tokens; surface action errors.
+- [x] Check scrolling and saved state at five Chrome viewport sizes; preserve findings and repeat steps in `responsive-review.md`.
+- [x] Audit authoring/setup, styling, lifecycle, action failures, SDK/CLI references and message metadata documentation; clarify portable gates and automated evidence revisions.
 
 ## Requirement traceability
 

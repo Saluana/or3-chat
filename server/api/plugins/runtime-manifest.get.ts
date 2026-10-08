@@ -37,6 +37,7 @@ import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../admin/plugins/v2-host-cap
 import {
     PluginPackageClientEntryError,
     readPackageClientEntry,
+    readPackageToolCardEntries,
 } from '../../admin/plugins/package-client-entry';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
@@ -77,34 +78,35 @@ function isLegacyV2Plugin(
     );
 }
 
-export default defineEventHandler(async (event): Promise<PluginRuntimeManifestResponse> => {
-    if (!isSsrAuthEnabled(event)) {
-        return emptyManifest();
-    }
+export default defineEventHandler(
+    async (event): Promise<PluginRuntimeManifestResponse> => {
+        if (!isSsrAuthEnabled(event)) {
+            return emptyManifest();
+        }
 
-    const runtimeConfig = useRuntimeConfig();
-    if (
+        const runtimeConfig = useRuntimeConfig();
+        if (
         isNonCorePluginDiscoveryDisabled(
             runtimeConfig.admin as { disableNonCorePlugins?: boolean } | undefined
         )
     ) {
         return emptyManifest();
     }
-    const runtimeLoaderEnabled =
+        const runtimeLoaderEnabled =
         (runtimeConfig.admin as { pluginRuntimeLoaderEnabled?: boolean } | undefined)
             ?.pluginRuntimeLoaderEnabled !== false;
-    if (!runtimeLoaderEnabled) {
-        return emptyManifest();
-    }
+        if (!runtimeLoaderEnabled) {
+            return emptyManifest();
+        }
 
-    const session = await resolveSessionContext(event);
-    const workspaceId = session.workspace?.id ?? null;
-    if (!workspaceId) {
-        return emptyManifest();
-    }
+        const session = await resolveSessionContext(event);
+        const workspaceId = session.workspace?.id ?? null;
+        if (!workspaceId) {
+            return emptyManifest();
+        }
 
-    const settingsStore = getWorkspaceSettingsStore(event);
-    const packagePolicy = createModuleV2RuntimePolicy({
+        const settingsStore = getWorkspaceSettingsStore(event);
+        const packagePolicy = createModuleV2RuntimePolicy({
         enabled:
             (runtimeConfig.admin as { pluginModuleLoaderV2Enabled?: boolean } | undefined)
                 ?.pluginModuleLoaderV2Enabled === true,
@@ -113,8 +115,8 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             (runtimeConfig.admin as { pluginModuleLoaderV2WorkspaceIds?: string[] } | undefined)
                 ?.pluginModuleLoaderV2WorkspaceIds ?? [],
     });
-    const packageCatalog = new PluginPackageRouteCatalog();
-    const [installedExtensions, enabledConfigured, selectedPackageCatalogs] = await Promise.all([
+        const packageCatalog = new PluginPackageRouteCatalog();
+        const [installedExtensions, enabledConfigured, selectedPackageCatalogs] = await Promise.all([
         listInstalledExtensions(),
         getEnabledPlugins(settingsStore, workspaceId),
         // This is metadata-only pointer/manifest inspection. Policy still
@@ -123,33 +125,33 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         packageCatalog.listSelected(),
     ]);
 
-    // A recorded V2 pointer owns the plugin identity even when it currently
-    // selects nothing (candidate-only or cleared). Such an id must not be
-    // served by the legacy V1 loader with the same id.
-    const v2OwnedPluginIds = new Set(
+        // A recorded V2 pointer owns the plugin identity even when it currently
+        // selects nothing (candidate-only or cleared). Such an id must not be
+        // served by the legacy V1 loader with the same id.
+        const v2OwnedPluginIds = new Set(
         selectedPackageCatalogs.map((catalog) => catalog.pluginId)
     );
-    const installedPlugins = installedExtensions
+        const installedPlugins = installedExtensions
         .filter(
             (entry) =>
                 entry.kind === 'plugin' && !v2OwnedPluginIds.has(entry.id)
         )
         .sort((a, b) => a.id.localeCompare(b.id));
-    const bundledV1Plugins = installedPlugins.filter((plugin) => !isLegacyV2Plugin(plugin));
-    const legacyV2Plugins = installedPlugins.filter(isLegacyV2Plugin);
-    const selectedPackages = selectedPackageCatalogs.filter(
+        const bundledV1Plugins = installedPlugins.filter((plugin) => !isLegacyV2Plugin(plugin));
+        const legacyV2Plugins = installedPlugins.filter(isLegacyV2Plugin);
+        const selectedPackages = selectedPackageCatalogs.filter(
         (catalog): catalog is Extract<typeof catalog, { status: 'ready' }> =>
             catalog.status === 'ready'
     );
-    const blockedPackageCatalogs = selectedPackageCatalogs.filter(
+        const blockedPackageCatalogs = selectedPackageCatalogs.filter(
         (catalog): catalog is Extract<typeof catalog, { status: 'blocked' }> =>
             catalog.status === 'blocked'
     );
-    const inactivePackageCatalogs = selectedPackageCatalogs.filter(
+        const inactivePackageCatalogs = selectedPackageCatalogs.filter(
         (catalog): catalog is Extract<typeof catalog, { status: 'inactive' }> =>
             catalog.status === 'inactive'
     );
-    const installedPluginIds = Array.from(
+        const installedPluginIds = Array.from(
         new Set([
             ...installedPlugins.map((plugin) => plugin.id),
             ...selectedPackages.map((catalog) => catalog.pluginId),
@@ -157,15 +159,15 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             ...inactivePackageCatalogs.map((catalog) => catalog.pluginId),
         ])
     ).sort((a, b) => a.localeCompare(b));
-    const installedSet = new Set(installedPluginIds);
-    const configuredEnabled = Array.from(
+        const installedSet = new Set(installedPluginIds);
+        const configuredEnabled = Array.from(
         new Set(enabledConfigured.filter((id) => installedSet.has(id)))
     ).sort((a, b) => a.localeCompare(b));
 
-    const runtime: PluginRuntimeManifestResponse['runtime'] = {};
-    const enabledPluginIds: string[] = [];
+        const runtime: PluginRuntimeManifestResponse['runtime'] = {};
+        const enabledPluginIds: string[] = [];
 
-    const resolvedPlugins = await Promise.all(
+        const resolvedPlugins = await Promise.all(
         bundledV1Plugins.map(async (plugin) => {
             const configured = configuredEnabled.includes(plugin.id);
             let loadAllowed = false;
@@ -261,16 +263,16 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         })
     );
 
-    // Promise.all preserves input order, so the response and revision remain
-    // deterministic while provider lookups and descriptor hashing run in parallel.
-    for (const resolved of resolvedPlugins) {
+        // Promise.all preserves input order, so the response and revision remain
+        // deterministic while provider lookups and descriptor hashing run in parallel.
+        for (const resolved of resolvedPlugins) {
         runtime[resolved.id] = resolved.entry;
         if (resolved.loadAllowed) enabledPluginIds.push(resolved.id);
     }
 
-    // A V2 archive accepted by the former ZIP installer is not an executable
-    // V1 module. Preserve it on disk and make the recovery action explicit.
-    for (const plugin of legacyV2Plugins) {
+        // A V2 archive accepted by the former ZIP installer is not an executable
+        // V1 module. Preserve it on disk and make the recovery action explicit.
+        for (const plugin of legacyV2Plugins) {
         runtime[plugin.id] = {
             clientEntry: plugin.runtime.client?.entry,
             hasServerRoutes: Boolean(plugin.runtime.server?.routes.length),
@@ -282,8 +284,8 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         };
     }
 
-    const packageRuntimeDecision = packagePolicy(workspaceId);
-    for (const catalog of blockedPackageCatalogs) {
+        const packageRuntimeDecision = packagePolicy(workspaceId);
+        for (const catalog of blockedPackageCatalogs) {
         runtime[catalog.pluginId] = {
             hasServerRoutes: false,
             loadAllowed: false,
@@ -293,10 +295,10 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             blockCode: catalog.blockCode,
         };
     }
-    // A candidate-only or cleared pointer is V2-owned but selects nothing to
-    // run. Report it as unavailable rather than letting a legacy directory with
-    // the same id supply a different release.
-    for (const catalog of inactivePackageCatalogs) {
+        // A candidate-only or cleared pointer is V2-owned but selects nothing to
+        // run. Report it as unavailable rather than letting a legacy directory with
+        // the same id supply a different release.
+        for (const catalog of inactivePackageCatalogs) {
         runtime[catalog.pluginId] = {
             hasServerRoutes: false,
             loadAllowed: false,
@@ -307,10 +309,10 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         };
     }
 
-    const selectedPackageById = new Map(
+        const selectedPackageById = new Map(
         selectedPackages.map((catalog) => [catalog.pluginId, catalog] as const)
     );
-    const packageEligibility = await evaluateSelectedPackageRuntimeEligibility({
+        const packageEligibility = await evaluateSelectedPackageRuntimeEligibility({
         event,
         workspaceId,
         settingsStore,
@@ -318,11 +320,11 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         packageRuntimeDecision,
         enabledPluginIds: configuredEnabled,
     });
-    const resolvedPackages = await Promise.all(
-        packageEligibility.map(async (eligibility) => {
-            const { catalog, access } = eligibility;
-            const manifest = catalog.manifest;
-            const base = {
+        const resolvedPackages = await Promise.all(
+            packageEligibility.map(async (eligibility) => {
+                const { catalog, access } = eligibility;
+                const manifest = catalog.manifest;
+                const base = {
                 clientEntry: manifest.runtime.client?.entry,
                 hasServerRoutes: Boolean(manifest.runtime.server?.routes.length),
                 loadAllowed: eligibility.status === 'ready',
@@ -334,7 +336,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                           : access.reasons[0] ?? eligibility.blockCode,
                 lifecycleCoverage: 'managed-v2' as const,
             };
-            if (eligibility.status === 'blocked') {
+                if (eligibility.status === 'blocked') {
                 const blockCode = eligibility.blockCode ?? 'package-dependency-blocked';
                 return {
                     id: catalog.pluginId,
@@ -347,18 +349,27 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 };
             }
 
-            // A client package is only executable once the host has hashed the
-            // exact entry bytes it will serve. A missing or unreadable entry is a
-            // block, never a silently absent descriptor.
-            let clientEntryIdentity: PackageV2ClientEntry | undefined;
-            if (manifest.runtime.client) {
-                try {
-                    clientEntryIdentity = await readPackageClientEntry({
+                // A client package is only executable once the host has hashed the
+                // exact entry bytes it will serve. A missing or unreadable entry is a
+                // block, never a silently absent descriptor.
+                let toolCards: Awaited<
+                    ReturnType<typeof readPackageToolCardEntries>
+                > = [];
+                let clientEntryIdentity: PackageV2ClientEntry | undefined;
+                if (manifest.runtime.client) {
+                    try {
+                        if (manifest.toolCards?.length)
+                            toolCards = await readPackageToolCardEntries({
                         pluginId: catalog.pluginId,
                         packageDigest: catalog.packageDigest,
                         manifest,
                     });
-                } catch (error) {
+                        clientEntryIdentity = await readPackageClientEntry({
+                        pluginId: catalog.pluginId,
+                        packageDigest: catalog.packageDigest,
+                        manifest,
+                    });
+                    } catch (error) {
                     return {
                         id: catalog.pluginId,
                         loadAllowed: false,
@@ -372,21 +383,22 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                         },
                     };
                 }
-            }
+                }
 
-            const identity: PluginDescriptorIdentity = {
-                id: catalog.pluginId,
-                version: manifest.version,
-                manifestVersion: 2,
-                pluginApiVersion: OR3_PLUGIN_V2_HOST_CAPABILITIES.pluginApiVersion,
-                source: 'package',
-                trust: manifest.trust,
-                workspaceId,
-                name: manifest.name,
-                ...(manifest.description === undefined
+                const identity: PluginDescriptorIdentity = {
+                    id: catalog.pluginId,
+                    version: manifest.version,
+                    manifestVersion: 2,
+                    pluginApiVersion:
+                        OR3_PLUGIN_V2_HOST_CAPABILITIES.pluginApiVersion,
+                    source: 'package',
+                    trust: manifest.trust,
+                    workspaceId,
+                    name: manifest.name,
+                    ...(manifest.description === undefined
                     ? {}
                     : { description: manifest.description }),
-                ...(manifest.icon === undefined
+                    ...(manifest.icon === undefined
                     ? {}
                     : {
                           icon: {
@@ -396,16 +408,19 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                                   : ('image/webp' as const),
                           },
                       }),
-                authoritySha256: eligibility.grants.authoritySha256 ? parseSha256(eligibility.grants.authoritySha256) : null,
-                policyRevision: createPluginPolicyRevision(access.effectivePolicy),
-                grantsRevision: eligibility.grantsRevision,
-                effectiveGrants: [...eligibility.grants.approvedGrants],
-                // A descriptor only includes dependencies that passed the same
-                // workspace/request readiness gate as the package itself.
-                resolvedDependencyKeys: eligibility.resolvedDependencyIds.map(
+                    authoritySha256: eligibility.grants.authoritySha256 ? parseSha256(eligibility.grants.authoritySha256) : null,
+                    policyRevision: createPluginPolicyRevision(
+                        access.effectivePolicy,
+                    ),
+                    grantsRevision: eligibility.grantsRevision,
+                    effectiveGrants: [...eligibility.grants.approvedGrants],
+                    ...(toolCards.length ? { toolCards } : {}),
+                    // A descriptor only includes dependencies that passed the same
+                    // workspace/request readiness gate as the package itself.
+                    resolvedDependencyKeys: eligibility.resolvedDependencyIds.map(
                     (dependencyId) => selectedPackageById.get(dependencyId)!.packageDigest
                 ),
-                artifact: {
+                    artifact: {
                     kind: 'package-v2',
                     packageDigest: catalog.packageDigest,
                     ...(clientEntryIdentity
@@ -417,12 +432,12 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                         handler: route.handler,
                     })) ?? [],
                 },
-            };
-            const descriptor: PackageV2PluginDescriptor = {
+                };
+                const descriptor: PackageV2PluginDescriptor = {
                 ...identity,
                 descriptorKey: await createDescriptorKey(identity),
             };
-            return {
+                return {
                 id: catalog.pluginId,
                 loadAllowed: true,
                 entry: {
@@ -431,15 +446,15 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                     descriptor,
                 },
             };
-        })
-    );
-    for (const resolved of resolvedPackages) {
+            }),
+        );
+        for (const resolved of resolvedPackages) {
         runtime[resolved.id] = resolved.entry;
         if (resolved.loadAllowed) enabledPluginIds.push(resolved.id);
     }
-    enabledPluginIds.sort((left, right) => left.localeCompare(right));
+        enabledPluginIds.sort((left, right) => left.localeCompare(right));
 
-    const revision = buildRevision({
+        const revision = buildRevision({
         workspaceId,
         enabledPluginIds,
         // Preserve every input from the opaque V1 revision while adding the
@@ -466,11 +481,12 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         runtime,
     });
 
-    return {
+        return {
         workspaceId,
         enabledPluginIds,
         installedPluginIds,
         runtime,
         revision,
     };
-});
+    },
+);

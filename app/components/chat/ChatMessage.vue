@@ -21,21 +21,42 @@
             @view-related-thread="emit('view-related-thread', $event)"
         />
 
-        <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
-            <div class="font-medium">{{ props.message.workflowState?.workflowName || 'Workflow' }}</div>
+        <section
+            v-else-if="props.message.isWorkflow"
+            class="space-y-2"
+            aria-label="Workflow run"
+        >
+            <div class="font-medium">
+                {{ props.message.workflowState?.workflowName || 'Workflow' }}
+            </div>
             <p class="text-sm opacity-70">
-                Status: {{ props.message.workflowState?.executionState || 'unavailable' }}
+                Status:
+                {{
+                    props.message.workflowState?.executionState || 'unavailable'
+                }}
             </p>
-            <p v-if="props.message.workflowState?.prompt" class="text-sm whitespace-pre-wrap break-words">
+            <p
+                v-if="props.message.workflowState?.prompt"
+                class="text-sm whitespace-pre-wrap break-words"
+            >
                 Prompt: {{ props.message.workflowState.prompt }}
             </p>
-            <p v-if="workflowFallbackError" class="text-sm text-red-600 whitespace-pre-wrap break-words" role="alert">
+            <p
+                v-if="workflowFallbackError"
+                class="text-sm text-red-600 whitespace-pre-wrap break-words"
+                role="alert"
+            >
                 {{ workflowFallbackError }}
             </p>
-            <p v-if="props.message.workflowState?.finalOutput" class="whitespace-pre-wrap break-words">
+            <p
+                v-if="props.message.workflowState?.finalOutput"
+                class="whitespace-pre-wrap break-words"
+            >
                 {{ props.message.workflowState.finalOutput }}
             </p>
-            <p v-else class="text-sm opacity-70">Open Workflows to view run details.</p>
+            <p v-else class="text-sm opacity-70">
+                Open Workflows to view run details.
+            </p>
         </section>
 
         <!-- Regular Chat Message Handling -->
@@ -181,8 +202,13 @@
                 >
                     {{ responseError }}
                 </p>
-                <p v-else-if="responseStopped" role="status" class="mb-3 text-sm opacity-70">
-                    Response stopped. You can retry or continue the conversation.
+                <p
+                    v-else-if="responseStopped"
+                    role="status"
+                    class="mb-3 text-sm opacity-70"
+                >
+                    Response stopped. You can retry or continue the
+                    conversation.
                 </p>
                 <!-- Retro loader extracted to component -->
                 <LoadingGenerating
@@ -210,8 +236,17 @@
                     />
                 </div>
 
+                <span
+                    v-if="
+                        props.message.role === 'user' &&
+                        props.message.cardOrigin
+                    "
+                    class="text-xs opacity-60"
+                    data-card-origin
+                    >via {{ props.message.cardOrigin.label }}</span
+                >
                 <!-- Tool Call Indicators -->
-                <ChatToolCallIndicator
+                <ChatToolBlock
                     v-if="
                         props.message.role === 'assistant' &&
                         !hasOrderedAssistantParts &&
@@ -219,6 +254,7 @@
                         props.message.toolCalls.length > 0
                     "
                     :tool-calls="props.message.toolCalls"
+                    :message="props.message"
                     @resize="emit('content-resize')"
                 />
 
@@ -280,9 +316,10 @@
                                 code-block-show-line-numbers
                                 class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
                             />
-                            <ChatToolCallIndicator
+                            <ChatToolBlock
                                 v-else
                                 :tool-calls="part.toolCalls"
+                                :message="props.message"
                                 @resize="emit('content-resize')"
                             />
                         </template>
@@ -302,6 +339,11 @@
                     />
                     <!-- legacy rendered html path removed -->
                 </div>
+                <ChatToolCardsEnd
+                    v-if="props.message.role === 'assistant'"
+                    :message="props.message"
+                    @resize="emit('content-resize')"
+                />
             </div>
             <!-- Editing surface -->
             <div
@@ -342,10 +384,7 @@
             <!-- Desktop actions overlap the border; narrow panes keep them in flow. -->
             <div
                 v-if="!editing && interactive"
-                :class="[
-                    'cm-actions flex z-10',
-                    `cm-actions-${roleVariant}`,
-                ]"
+                :class="['cm-actions flex z-10', `cm-actions-${roleVariant}`]"
             >
                 <UFieldGroup
                     class="bg-(--md-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))] cm-action-group"
@@ -395,7 +434,9 @@
                         <UButton
                             v-bind="branchButtonProps"
                             aria-label="Branch conversation"
-                            :disabled="props.message.pending === true || branching"
+                            :disabled="
+                                props.message.pending === true || branching
+                            "
                             @click="onBranch"
                         ></UButton>
                     </UTooltip>
@@ -414,14 +455,20 @@
                     <template v-for="action in extraActions" :key="action.id">
                         <UTooltip
                             :delay-duration="500"
-                            :text="action.disabledReason?.(messageActionContext()) || action.tooltip"
+                            :text="
+                                action.disabledReason?.(
+                                    messageActionContext()
+                                ) || action.tooltip
+                            "
                             :teleport="true"
                         >
                             <UButton
                                 v-bind="pluginActionButtonProps"
                                 :icon="action.icon"
                                 :aria-label="action.tooltip || action.id"
-                                :disabled="action.disabled?.(messageActionContext())"
+                                :disabled="
+                                    action.disabled?.(messageActionContext())
+                                "
                                 @click="() => runExtraAction(action)"
                             ></UButton>
                         </UTooltip>
@@ -429,12 +476,19 @@
                 </UFieldGroup>
             </div>
         </template>
-        <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id" :tool-result-message-ids="props.message.toolResultMessageIds"
-            @navigate="emit('view-related-thread', $event)" />
+        <ThreadChildLinks
+            v-if="props.message.id && !props.message.pending"
+            :thread-id="props.threadId"
+            :message-id="props.message.id"
+            :tool-result-message-ids="props.message.toolResultMessageIds"
+            @navigate="emit('view-related-thread', $event)"
+        />
     </div>
 </template>
 
 <script setup lang="ts">
+import ChatToolBlock from './tool-cards/ChatToolBlock.vue';
+import ChatToolCardsEnd from './tool-cards/ChatToolCardsEnd.vue';
 import ThreadChildLinks from './ThreadChildLinks.vue';
 import {
     computed,

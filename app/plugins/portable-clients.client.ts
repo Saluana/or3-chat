@@ -1,3 +1,4 @@
+import { registerPortableToolCards } from '~/composables/plugins/portable-tool-cards';
 /**
  * @module app/plugins/portable-clients.client
  *
@@ -138,7 +139,10 @@ export default defineNuxtPlugin(() => {
         await deactivatePortableClient(pluginId);
     };
 
-    const syncManifest = async (manifest: PluginRuntimeManifestResponse, isCurrent: () => boolean): Promise<void> => {
+    const syncManifest = async (
+        manifest: PluginRuntimeManifestResponse,
+        isCurrent: () => boolean
+    ): Promise<void> => {
         const workspaceId = manifest.workspaceId!;
         // Ready isolated-client descriptors, keyed by plugin id.
         const wanted = new Map<string, PackageV2PluginDescriptor>();
@@ -206,16 +210,31 @@ export default defineNuxtPlugin(() => {
                 descriptorKey: descriptor.descriptorKey,
                 workspaceId,
             });
-            if (descriptor.effectiveGrants.includes("tools.register.client")) {
-                void registerPortableTools(pluginId).then(dispose => {
-                    if (disposed) dispose(); else disposeTools = dispose;
-                    if (!disposed) {
+            if (descriptor.effectiveGrants.includes('tools.register.client')) {
+                void registerPortableTools(pluginId)
+                    .then((dispose) => {
+                        if (disposed) dispose();
+                        else {
+                            try {
+                                const disposeCards =
+                                    registerPortableToolCards(pluginId);
+                                disposeTools = () => {
+                                    disposeCards();
+                                    dispose();
+                                };
+                            } catch (error) {
+                                dispose();
+                                throw error;
+                            }
+                        }
+                        if (!disposed) {
                         reportPortableContributionReadiness(pluginId, 'tools', 'ready', {
                             descriptorKey: descriptor.descriptorKey,
                             workspaceId,
                         });
                     }
-                }).catch(error => {
+                    })
+                    .catch(error => {
                     console.warn("[portable-clients] tool registration failed", pluginId, error);
                     reportPortableContributionReadiness(pluginId, 'tools', 'failed', {
                         descriptorKey: descriptor.descriptorKey,
@@ -236,7 +255,6 @@ export default defineNuxtPlugin(() => {
                 pages: [createSurfacePage(descriptor)],
             });
         }
-
     };
 
     const unregister = getWorkspacePluginCoordinator().register({
@@ -250,5 +268,8 @@ export default defineNuxtPlugin(() => {
         },
         reconcile: syncManifest,
     });
-    if (import.meta.hot) import.meta.hot.dispose(() => { void unregister(); });
+    if (import.meta.hot)
+        import.meta.hot.dispose(() => {
+            void unregister();
+        });
 });

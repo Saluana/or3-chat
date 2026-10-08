@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.or3-pack/
+.or3-pack-validate/

@@ -1,0 +1,43 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.trusted-card-fixture",
+  "name": "Trusted Card Fixture",
+  "version": "0.1.0",
+  "description": "Forecast cards backed by Open-Meteo",
+  "engines": {
+    "or3": "^0.3.0",
+    "pluginApi": "^2.0.0"
+  },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "host"
+    }
+  },
+  "requestedGrants": [
+    "tools.register.client",
+    "chat.tool.card"
+  ],
+  "features": {
+    "required": [
+      "or3-trusted-host-v1",
+      "or3-trusted-ui-kit-v1"
+    ],
+    "optional": []
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "trust": "trusted-host",
+  "stateCompatibility": {
+    "version": 1,
+    "reads": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "rollback": "safe"
+  }
+}

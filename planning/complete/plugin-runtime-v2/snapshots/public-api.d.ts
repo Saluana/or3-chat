@@ -1551,7 +1551,7 @@ import type { LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope'
  * this full set because their `register(api)` path already had ungated
  * registry access. SDK context methods still check the grant they need.
  */
-export declare const TRUSTED_HOST_GRANTS: readonly ["ui.workspace-profile.register", "ai.provider", "tools.use", "jobs.background", "hooks.emit", "ui.dashboard.register", "ui.sidebar.register", "ui.pane.register", "ui.card.register", "ui.action.register", "ui.command-palette.register", "ui.toast", "ui.confirm", "ui.progress", "panes.open", "commands.register", "commands.run.public", "chat.create", "chat.read", "chat.message.write", "chat.message.renderer", "chat.editor.extension", "workspace.read", "workspace.switch", "workspace.connections.read", "workspace.connections.manage", "events.register", "ai.models", "ai.complete", "secrets.read", "secrets.write", "secrets.use", "files.pick", "files.read", "files.write", "files.catalog.read", "files.catalog.write", "files.actions.register", "network.stream", "activity.register", "documents.read", "documents.write", "tools.register.client", "tools.register.server", "tools.model.register", "posts.read", "posts.write", "hooks.register", "network.http", "storage.read", "storage.write", "settings.read", "settings.write"];
+export declare const TRUSTED_HOST_GRANTS: readonly ["ui.workspace-profile.register", "ai.provider", "tools.use", "jobs.background", "hooks.emit", "ui.dashboard.register", "ui.sidebar.register", "ui.pane.register", "ui.card.register", "ui.action.register", "ui.command-palette.register", "ui.toast", "ui.confirm", "ui.progress", "panes.open", "commands.register", "commands.run.public", "chat.create", "chat.read", "chat.message.write", "chat.message.renderer", "chat.tool.card", "chat.tool.card.embed", "chat.editor.extension", "workspace.read", "workspace.switch", "workspace.connections.read", "workspace.connections.manage", "events.register", "ai.models", "ai.complete", "secrets.read", "secrets.write", "secrets.use", "files.pick", "files.read", "files.write", "files.catalog.read", "files.catalog.write", "files.actions.register", "network.stream", "activity.register", "documents.read", "documents.write", "tools.register.client", "tools.register.server", "tools.model.register", "posts.read", "posts.write", "hooks.register", "network.http", "storage.read", "storage.write", "settings.read", "settings.write"];
 export interface TrustedPluginToolsClient {
     register(definition: ExtendedToolDefinition, handler: ToolHandler): PluginRegistrationHandle;
     registerModel(input: TrustedModelContribution): PluginRegistrationHandle;
@@ -1617,6 +1617,7 @@ export interface TrustedHostContext {
 export declare function createTrustedHostContext(input: CreateTrustedHostContextInput): TrustedHostContext;
 
 // ---- app/composables/plugins/workspace-runtime.ts ----
+import type { PluginToolCardDefinition } from '@or3/plugin-sdk/cards';
 import type { DashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import type { SidebarPageDef } from '~/composables/sidebar/useSidebarPages';
 import type { PaneAppDef } from '~/composables/core/usePaneApps';
@@ -1632,6 +1633,7 @@ export interface Or3WorkspacePluginApi {
     registerSidebarPage: (def: SidebarPageDef) => () => void;
     registerPaneApp: (def: PaneAppDef) => RegistrationHandle;
     registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;
+    registerToolCard: (definition: PluginToolCardDefinition) => RegistrationHandle;
     registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
     registerCommandPalettePostSource: (definition: PalettePostSourceDefinition) => RegistrationHandle;
     registerCommandPaletteCommand: (definition: PaletteCommandDefinition, handler: PaletteCommandHandler) => RegistrationHandle;
@@ -3350,7 +3352,7 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
  * Constraints:
  * - Keep this list stable; add only after a hook name is widely adopted
  */
-export type KnownHookKey = 'workspace.files:action:before' | 'workspace.files:action:after' | 'workspace.files:filter:policy' | 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:filter:prepare' | 'ai.chat.send:filter:commit' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ai.document.edit:filter:request' | 'ai.document.edit:action:before' | 'ai.document.edit:action:after' | 'ai.document.edit:action:error' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
+export type KnownHookKey = 'workspace.files:action:before' | 'workspace.files:action:after' | 'workspace.files:filter:policy' | 'ui.chat.tool-card:action:mounted' | 'ui.chat.tool-card:action:failed' | 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:filter:prepare' | 'ai.chat.send:filter:commit' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ai.document.edit:filter:request' | 'ai.document.edit:action:before' | 'ai.document.edit:action:after' | 'ai.document.edit:action:error' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
 /**
  * Purpose:
  * Enumerates Dexie tables that may emit DB-related hooks.
@@ -3713,6 +3715,23 @@ export type FilterHookName = CoreFilterHookName | DbFilterHookName | ExtensionFi
 /** All known hooks (actions + filters). */
 export type HookName = ActionHookName | FilterHookName;
 export type CoreHookPayloadMap = {
+    'ui.chat.tool-card:action:mounted': [
+        {
+            pluginId: string | null;
+            tool: string;
+            callId: string;
+            runtime: 'page' | 'frame';
+        }
+    ];
+    'ui.chat.tool-card:action:failed': [
+        {
+            pluginId: string | null;
+            tool: string;
+            callId: string;
+            runtime: 'page' | 'frame';
+            code?: string;
+        }
+    ];
     'ai.chat.send:action:before': [AiSendBeforePayload];
     'ai.chat.send:action:after': [AiSendAfterPayload];
     'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];
@@ -3843,7 +3862,9 @@ export type CoreHookPayloadMap = {
     'storage.files.download:action:before': [StorageFileDownloadBeforePayload];
     'storage.files.download:action:after': [StorageFileDownloadAfterPayload];
     'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];
-    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];
+    'storage.files.upload:filter:policy': [
+        StorageFileUploadPolicyPayload | false
+    ];
     'storage.files.gc:action:run': [StorageFileGcPayload];
     'storage:action:error': [{
         message?: string;
@@ -3938,10 +3959,12 @@ export type CoreHookPayloadMap = {
     'sync.rescan:action:starting': [{
         scope: SyncScopePayload;
     }];
-    'sync.rescan:action:progress': [{
-        scope: SyncScopePayload;
-        progress: number;
-    }];
+    'sync.rescan:action:progress': [
+        {
+            scope: SyncScopePayload;
+            progress: number;
+        }
+    ];
     'sync.rescan:action:completed': [{
         scope: SyncScopePayload;
     }];
@@ -4219,6 +4242,7 @@ export interface RegisteredTool {
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
     available?: (context: ToolAvailabilityContext) => boolean;
+    ownerPluginId?: string;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
@@ -4229,7 +4253,8 @@ export interface ToolAvailabilityContext {
     workspaceId: string | null;
     threadId: string | null;
 }
-interface RegisterOptions {
+export interface RegisterOptions {
+    ownerPluginId?: string;
     override?: boolean;
     enabled?: boolean;
     runtime?: ToolRuntime;
@@ -4259,6 +4284,7 @@ export declare function useToolRegistry(): {
     unregisterTool: (name: string) => void;
     listTools: import("vue").ComputedRef<RegisteredTool[]>;
     getTool: (name: string) => RegisteredTool | undefined;
+    ownerOf: (name: string) => string | undefined;
     setEnabled: (name: string, enabled: boolean) => void;
     hydrate: (states: Record<string, boolean>) => void;
     getEnabledDefinitions: (context?: ToolAvailabilityContext) => ToolDefinition[];
@@ -4269,7 +4295,6 @@ export declare function useToolRegistry(): {
         timedOut: boolean;
     }>;
 };
-export {};
 
 // ---- app/utils/chat/tools-public.ts ----
 /**

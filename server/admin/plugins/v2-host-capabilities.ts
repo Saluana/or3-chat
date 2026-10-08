@@ -57,6 +57,29 @@ function sdkMethodsForGrant(grant: string): readonly string[] {
 
 export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualification[] =
     Object.freeze([
+        { grant: 'chat.tool.card',
+            status: 'unqualified',
+            trustModes: ['isolated-client'],
+            registration: {
+                kind: 'adapter',
+                module: 'app/components/chat/tool-cards/ToolCardFrameHost.vue',
+                exportName: 'default',
+            },
+            reviewDescription:
+                TRUSTED_PLUGIN_GRANT_DESCRIPTIONS['chat.tool.card'],
+        },
+        {
+            grant: 'chat.tool.card.embed',
+            status: 'unqualified',
+            trustModes: ['isolated-client'],
+            registration: {
+                kind: 'adapter',
+                module: 'shared/plugins/isolation/contained-view-policy.ts',
+                exportName: 'containedViewCsp',
+            },
+            reviewDescription:
+                TRUSTED_PLUGIN_GRANT_DESCRIPTIONS['chat.tool.card.embed'],
+        },
         { grant: 'tools.register.client', status: 'qualified', registration: {kind: 'test', id: 'portable-tools.workspace-grant-and-teardown'} },
         {
             grant: 'ui.dashboard.register',
@@ -155,6 +178,10 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'hooks.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'commands.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'activity.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'chat.tool.card': [
+                'app/composables/chat/tool-cards.ts',
+                'registerToolCardBinding',
+            ],
             'chat.message.renderer': ['app/composables/chat/message-renderers.ts', 'registerMessageRenderer'],
             'chat.editor.extension': ['app/composables/plugins/trusted-editor.ts', 'registerTrustedEditorExtension'],
             'tools.model.register': ['app/composables/plugins/trusted-models.ts', 'registerTrustedExecutionModel'],

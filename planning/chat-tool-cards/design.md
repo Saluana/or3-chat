@@ -454,10 +454,11 @@ existing CSS selector system.
 
 **Lazy mounting and the frame cap.** `ToolCardSlot` reserves `minHeight` and
 mounts when an `IntersectionObserver` reports the slot within 600 px of the
-viewport. The page keeps a per-pane LRU of live frame cards (cap 12). When the
-cap is exceeded, the least recently visible frame is torn down and replaced by a
-placeholder of its last height; it remounts when visible again. Card state is
-persisted, so this is invisible to users. In-page cards are not capped; they are
+viewport. The page admits at most 12 live frame cards per pane. Offscreen preloads
+wait when capacity is full. A newly visible card can replace the least recently
+visible offscreen frame, preserving its last height. Visible frames keep their
+slots; waiting cards resume when a slot is released or an offscreen slot can be
+reclaimed. Card state is persisted. In-page cards are not capped; they are
 ordinary host components and `Or3Scroll` virtualization already bounds them.
 
 **Resize.** A `ResizeObserver` on the slot emits `resize`, which `ChatMessage`
@@ -659,15 +660,23 @@ writes.
 
 **Card-facing behavior.** `setState(value)` validates JSON-serializability and
 the 16 KiB per-call and 64 KiB per-message limits, then updates the local snapshot
-at once and resolves. The write is coalesced per `(messageId, callId)` with a
+at once and resolves after persistence. The write is coalesced per `(messageId, callId)` with a
 300 ms trailing delay. It is flushed on unmount and on `pagehide`. Writes go
 through the chat bridge, which binds them to the pane's captured workspace DB and
 generation. A write after a workspace switch is dropped and the pending promise
 resolves `stale-context`.
+Already admitted saves finish on their original thread during same-workspace
+navigation. Saves for a call are serialized across asynchronous preparation
+hooks; only the latest queued value is retained while a write is in flight.
+Flush waits for both active and queued writes.
 
 **Read path.** `ensureUiMessage()` copies `data.tool_cards` into
-`UiChatMessage.toolCards`. A synced change re-renders the row, and the context
-diff triggers `onUpdate`.
+`UiChatMessage.toolCards` for the initial snapshot. Each mounted card subscribes
+to its captured message row with Dexie `liveQuery`, scoped by workspace generation
+and thread. This read path observes local and synced state without replacing a
+streaming transcript. Successful saves update the local state reference; theme
+and status updates cannot replace it with stale message props. Remounts read the
+persisted entry, and subscriptions are disposed on unmount.
 
 **Sync.** State uses existing message sync: row-level last-writer-wins by clock
 and HLC. Cards should treat state as UI memory, not a ledger. The quiz's

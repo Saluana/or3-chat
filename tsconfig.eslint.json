@@ -25,6 +25,7 @@
     "convex/**/*.ts",
     "extensions/**/*.ts",
     "packages/**/*.ts",
+    "examples/**/*.ts",
     "config.or3.ts",
     "config.or3cloud.ts"
   ],

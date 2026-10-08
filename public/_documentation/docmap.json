@@ -939,6 +939,15 @@
                     "categoryOrder": 4,
                     "order": 1,
                     "summary": "Separate trusted extension API for administrator pages and overview widgets, with install, rebuild, and lifecycle limitations."
+                },
+                {
+                    "name": "tool-cards.md",
+                    "path": "/plugins/tool-cards",
+                    "title": "Interactive tool cards",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 3,
+                    "summary": "Build source and trusted tool cards, try the examples, and understand portable authoring and its containment qualification gate."
                 }
             ]
         }

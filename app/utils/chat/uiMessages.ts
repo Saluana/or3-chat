@@ -1,3 +1,9 @@
+import {
+    readToolCardStates,
+    readCardOrigin,
+    type ToolCardStateMap,
+    type CardOrigin,
+} from '~~/shared/chat/tool-card-data';
 /**
  * @module app/utils/chat/uiMessages
  *
@@ -89,6 +95,8 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    toolCards?: ToolCardStateMap;
+    cardOrigin?: CardOrigin;
     /** Canonically associated stored tool-result IDs, for reverse navigation only. */
     toolResultMessageIds?: string[];
     /**
@@ -281,6 +289,8 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         stream_id: raw.stream_id,
         pending,
         toolCalls,
+        toolCards: readToolCardStates(raw.data?.tool_cards),
+        cardOrigin: readCardOrigin(raw.data?.card_origin),
         error: errorValue,
         errorEnvelope:
             typeof raw.data?.error_envelope === 'string'

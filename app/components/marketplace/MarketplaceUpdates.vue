@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ToolCardAuthorityReview from '~/components/plugins/ToolCardAuthorityReview.vue';
 import { describePluginGrant } from '~~/shared/plugins/grant-description';
 /**
  * Dashboard > Marketplace > Updates.
@@ -684,7 +685,8 @@ async function activate(entry: {
                         <p><strong>Data scopes:</strong> {{ entry.release.authority.dataScopes.join(', ') || 'none' }}</p>
                         <p><strong>Writes:</strong> {{ entry.release.authority.writes.join(', ') || 'none' }}</p>
                         <p><strong>Setup hooks:</strong> {{ entry.release.authority.setupHooks.join(', ') || 'none' }}</p>
-                        <p><strong>Dependencies:</strong> {{ entry.release.authority.dependencies.join(', ') || 'none' }}</p>
+                        <ToolCardAuthorityReview :dependencies="entry.release.authority.dependencies" />
+<p><strong>Dependencies:</strong> {{ entry.release.authority.dependencies.join(', ') || 'none' }}</p>
                     </div>
                 </details>
                 <p v-else-if="entry.release?.requestedGrants.length" class="text-xs text-(--ui-text-error)">
