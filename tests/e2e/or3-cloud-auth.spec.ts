@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
@@ -114,12 +115,14 @@ test.describe('OR3 Cloud Auth Integration', () => {
         const sessionPayload = await sessionResponse.json();
         expect(sessionPayload.authenticated).toBe(true);
         expect(['super_admin', 'workspace_admin']).toContain(sessionPayload.kind);
+        const evidencePath = info.outputPath('admin-auth-session.json');
+        writeFileSync(evidencePath, JSON.stringify({
+            authenticated: sessionPayload.authenticated,
+            kind: sessionPayload.kind,
+            localProvider: process.env.OR3_SYNC_PROVIDER,
+        }, null, 2));
         await info.attach('admin-auth-session', {
-            body: Buffer.from(JSON.stringify({
-                authenticated: sessionPayload.authenticated,
-                kind: sessionPayload.kind,
-                localProvider: process.env.OR3_SYNC_PROVIDER,
-            }, null, 2)),
+            path: evidencePath,
             contentType: 'application/json',
         });
     });
