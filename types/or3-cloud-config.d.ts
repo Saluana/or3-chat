@@ -462,8 +462,8 @@ export interface Or3CloudConfig {
         disableNonCorePlugins?: boolean;
 
         /**
-         * Enables the read-only Plugin Runtime V2 shadow observer. Disabling
-         * this startup flag leaves the authoritative V1 loader active.
+         * @deprecated Accepted for existing configurations but ignored.
+         * The runtime inspector reads directly from the lifecycle manager.
          * @env OR3_PLUGIN_RUNTIME_SHADOW_ENABLED
          * @default true
          */
@@ -476,15 +476,16 @@ export interface Or3CloudConfig {
         pluginRuntimeLoaderEnabled?: boolean;
 
         /**
-         * Selects the generation-safe bundled V1 manager at client startup.
+         * Enables trusted-host package clients. Bundled plugins always use
+         * the shared lifecycle manager, independently of this package flag.
          * @env OR3_PLUGIN_RUNTIME_V2_ENABLED
          * @default true
          */
         pluginRuntimeV2Enabled?: boolean;
 
         /**
-         * Optional workspace allowlist for the V2 manager canary. An empty
-         * list selects every workspace when the manager flag is enabled.
+         * @deprecated Accepted for existing configurations but ignored.
+         * Bundled plugins use the shared lifecycle manager in every workspace.
          * @env OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS
          * @default []
          */

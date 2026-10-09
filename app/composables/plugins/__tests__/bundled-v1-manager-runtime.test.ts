@@ -34,7 +34,6 @@ vi.mock('../workspace-runtime', () => ({
 import {
     createBundledV1WorkspaceManager,
     desiredStateFromManifest,
-    createWorkspaceManagerCanarySelector,
 } from '../bundled-v1-manager-runtime';
 
 function catalog(): BundledPluginCatalog {
@@ -180,15 +179,4 @@ describe('bundled V1 workspace manager runtime', () => {
         expect(manager.listActivePluginIds()).toEqual(['alpha']);
     });
 
-    it('snapshots workspace canary flags so live mutation cannot switch kernels', () => {
-        const flags = { enabled: true, workspaceIds: ['workspace-1'] };
-        const select = createWorkspaceManagerCanarySelector(flags);
-
-        flags.enabled = false;
-        flags.workspaceIds.splice(0, 1, 'workspace-2');
-
-        expect(select('workspace-1')).toBe(true);
-        expect(select('workspace-2')).toBe(false);
-        expect(select(null)).toBe(false);
-    });
 });

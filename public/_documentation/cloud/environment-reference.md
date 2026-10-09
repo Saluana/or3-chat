@@ -328,9 +328,9 @@ These are startup or deployment controls. Restart after changing them.
 |---|---:|---|
 | `OR3_DISABLE_NON_CORE_PLUGINS` | `false` | Safe mode that skips non-core plugin discovery/routes. |
 | `OR3_PLUGIN_ZIP_INSTALL_ENABLED` | `true` | Enable ZIP extension installation. |
-| `OR3_PLUGIN_RUNTIME_SHADOW_ENABLED` | `true` | Enable the read-only plugin runtime observer. |
-| `OR3_PLUGIN_RUNTIME_V2_ENABLED` | `true` | Select the generation-safe plugin manager. |
-| `OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` | empty | Comma-separated V2 workspace canary allowlist. |
+| `OR3_PLUGIN_RUNTIME_SHADOW_ENABLED` | `true` | Deprecated; accepted but ignored. The inspector reads the lifecycle manager directly. |
+| `OR3_PLUGIN_RUNTIME_V2_ENABLED` | `true` | Enable trusted-host package clients; bundled plugins always use the shared lifecycle manager. |
+| `OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` | empty | Deprecated; accepted but ignored. |
 | `OR3_PLUGIN_CONTRIBUTION_V2_SURFACES` | empty | Comma-separated migrated contribution surfaces. |
 | `OR3_HOOK_ENGINE_V2_ENABLED` | `false` | Select Hook Runtime V2. |
 | `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED` | `false` | Enable immutable package candidate/promotion flow. |

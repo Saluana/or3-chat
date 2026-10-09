@@ -29,7 +29,6 @@ function managerSurface(
 describe('runtime controls', () => {
     it('marks package operations unavailable without server surfaces', () => {
         const context: RuntimeControlContext = {
-            managerV2Enabled: false,
             safeModeEnabled: false,
         };
         const byId = Object.fromEntries(
@@ -51,7 +50,6 @@ describe('runtime controls', () => {
     it('retries and clears quarantine through the manager', async () => {
         const manager = managerSurface();
         const context: RuntimeControlContext = {
-            managerV2Enabled: true,
             safeModeEnabled: false,
             manager,
             descriptorKey: KEY,
@@ -74,7 +72,6 @@ describe('runtime controls', () => {
     it('disables via package lifecycle and keeps retention messaging', async () => {
         const disable = vi.fn(async () => ['other']);
         const result = await executeRuntimeControl('disable', {
-            managerV2Enabled: true,
             safeModeEnabled: false,
             workspaceId: 'ws-1',
             pluginId: 'alpha',
@@ -87,7 +84,6 @@ describe('runtime controls', () => {
 
     it('rolls back through promotion or reports blocked status', async () => {
         const rolled = await executeRuntimeControl('rollback', {
-            managerV2Enabled: true,
             safeModeEnabled: false,
             pluginId: 'alpha',
             storedStateVersion: 1,
@@ -100,7 +96,6 @@ describe('runtime controls', () => {
         expect(rolled.status).toBe('ok');
 
         const blocked = await executeRuntimeControl('rollback', {
-            managerV2Enabled: true,
             safeModeEnabled: false,
             pluginId: 'alpha',
             snapshotState: () => ({}),
@@ -118,7 +113,6 @@ describe('runtime controls', () => {
 
     it('inspects local records without claiming fleet visibility', async () => {
         const result = await executeRuntimeControl('inspect', {
-            managerV2Enabled: true,
             safeModeEnabled: true,
             manager: managerSurface(),
             descriptorKey: KEY,
@@ -134,7 +128,6 @@ describe('runtime controls', () => {
 
     it('returns safe-mode guidance with explicit limitations', async () => {
         const result = await executeRuntimeControl('safe-mode-guidance', {
-            managerV2Enabled: false,
             safeModeEnabled: false,
         });
         expect(result.status).toBe('ok');
@@ -155,7 +148,6 @@ describe('runtime controls', () => {
 
     it('explains unavailable actions instead of throwing', async () => {
         const result = await executeRuntimeControl('disable', {
-            managerV2Enabled: true,
             safeModeEnabled: false,
             manager: managerSurface(),
         });

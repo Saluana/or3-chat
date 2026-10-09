@@ -134,7 +134,7 @@ describe('BundledV1PluginManager', () => {
         expect(manager.listActivePluginIds()).toEqual(['alpha']);
     });
 
-    it('refuses unsafe hot replacement when conservative V1 cleanup times out', async () => {
+    it('refuses unsafe replacement across refreshes when cleanup times out', async () => {
         let desired: BundledV1ManagerDesiredState = {
             descriptors: [descriptor('alpha')],
             revision: '1',
@@ -145,14 +145,18 @@ describe('BundledV1PluginManager', () => {
         const manager = new BundledV1PluginManager({ fetchDesired: async () => desired, load });
         await manager.schedule('boot');
         desired = {
-            descriptors: [descriptor('alpha', 'b', 'build-2')],
+            descriptors: [descriptor('alpha', 'b', 'build-2'), descriptor('beta', 'c')],
             revision: '2',
         };
 
         await manager.schedule('replace');
 
+        // A changed revision must not forget the generation still being cleaned up.
+        desired = { ...desired, revision: '3' };
+        await manager.schedule('focus-refresh');
+
         expect(load).toHaveBeenCalledTimes(1);
-        expect(manager.listActivePluginIds()).toEqual([]);
+        expect(manager.listActivePluginIds()).toEqual(['alpha']);
         expect(manager.listRecords()[0]).toMatchObject({
             status: 'failed',
             lastError: { code: 'unsafe-v1-replacement', retryable: false },
@@ -237,7 +241,7 @@ describe('BundledV1PluginManager', () => {
 
         await manager.schedule('replace');
 
-        expect(manager.listActivePluginIds()).toEqual([]);
+        expect(manager.listActivePluginIds()).toEqual(['alpha']);
         expect(manager.listRecords()[0]).toMatchObject({
             status: 'failed',
             lastError: { code: 'unsafe-v1-replacement' },
@@ -416,6 +420,26 @@ describe('BundledV1PluginManager', () => {
         expect(stopped.sort()).toEqual(['alpha', 'beta']);
         expect(manager.listActivePluginIds()).toEqual([]);
         expect(manager.listRecords()).toEqual([]);
+    });
+
+    it('restarts a quarantined descriptor on explicit retry with an unchanged manifest', async () => {
+        const entry = descriptor('alpha');
+        const load = vi.fn<() => Promise<ManagedBundledV1Instance>>()
+            .mockRejectedValueOnce(new Error('temporary import failure'))
+            .mockResolvedValue(instance());
+        const manager = new BundledV1PluginManager({
+            fetchDesired: async () => ({ descriptors: [entry], revision: 'unchanged' }),
+            load,
+            quarantineThreshold: 1,
+        });
+        await manager.schedule('boot');
+        expect(manager.listRecords()[0]?.status).toBe('quarantined');
+
+        expect(manager.retry(entry.descriptorKey)).toBe(true);
+        await manager.schedule('runtime-control:retry');
+
+        expect(manager.listActivePluginIds()).toEqual(['alpha']);
+        expect(manager.listRecords()[0]).toMatchObject({ status: 'active', failureCount: 0 });
     });
 
     it('quarantines by descriptor key and lets a new descriptor retry independently', async () => {
