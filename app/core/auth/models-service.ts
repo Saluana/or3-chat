@@ -23,7 +23,6 @@
  * @see core/search/useModelSearch for search indexing on top of this catalog
  */
 
-import { Models } from '@openrouter/sdk/sdk/models.js';
 import { fetchOpenRouterCatalog } from '~~/shared/openrouter/sdk-v1-compat';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
 import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
@@ -139,16 +138,16 @@ export async function fetchModelCatalog(opts?: {
     const runtimeConfig = useRuntimeConfig() as {
         public?: { openRouter?: { baseUrl?: string } };
     };
-    const client = {
-        models: new Models({
-            apiKey: key ?? '',
-            serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.public?.openRouter?.baseUrl),
-            httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
-            appTitle: DEFAULT_HEADERS['X-Title'],
-        }),
-    };
-
     try {
+        const { Models } = await import('@openrouter/sdk/sdk/models.js');
+        const client = {
+            models: new Models({
+                apiKey: key ?? '',
+                serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.public?.openRouter?.baseUrl),
+                httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
+                appTitle: DEFAULT_HEADERS['X-Title'],
+            }),
+        };
         const models: OpenRouterModel[] = await fetchOpenRouterCatalog(client);
 
         const fetchedAt = Date.now();

@@ -1,4 +1,3 @@
-import { registerPortableToolCards } from '~/composables/plugins/portable-tool-cards';
 /**
  * @module app/plugins/portable-clients.client
  *
@@ -30,25 +29,14 @@ import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-ma
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
 import {
-    clearPortableSurfaceRegistrations,
-    deactivatePortableClient,
-    listPortableActivations,
-    listPortableClientSources,
-    removePortableClientSource,
-    reportPortableContributionReadiness,
-    setPortableClientSource,
-} from '~/composables/plugins/portable-client-runtime';
-import {
     registerDashboardPlugin,
     unregisterDashboardPlugin,
     type DashboardPluginPage,
 } from '~/composables/dashboard/useDashboardPlugins';
 import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
-import { registerPortableTools, toolDiscoveryCode } from '~/composables/plugins/portable-tools';
 
 import { usePaneApps } from "~/composables/core/usePaneApps";
 import { registerSidebarPage } from "~/composables/sidebar/registerSidebarPage";
-import { portablePaneId } from "~/composables/plugins/portable-pane";
 
 const DASHBOARD_PLUGIN_PREFIX = 'portable:';
 
@@ -116,7 +104,7 @@ export function createSurfacePage(
     };
 }
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
     if (!process.client) return;
 
     const runtimeConfig = useRuntimeConfig();
@@ -125,6 +113,26 @@ export default defineNuxtPlugin(() => {
     if (runtimeConfig.public?.ssrAuthEnabled !== true || !runtimeLoaderEnabled) {
         return;
     }
+
+    const [
+        { registerPortableToolCards },
+        {
+            clearPortableSurfaceRegistrations,
+            deactivatePortableClient,
+            listPortableActivations,
+            listPortableClientSources,
+            removePortableClientSource,
+            reportPortableContributionReadiness,
+            setPortableClientSource,
+        },
+        { registerPortableTools, toolDiscoveryCode },
+        { portablePaneId },
+    ] = await Promise.all([
+        import('~/composables/plugins/portable-tool-cards'),
+        import('~/composables/plugins/portable-client-runtime'),
+        import('~/composables/plugins/portable-tools'),
+        import('~/composables/plugins/portable-pane'),
+    ]);
 
     const registeredPages = new Set<string>();
     const surfaceDisposers = new Map<string, () => void>();

@@ -1,5 +1,5 @@
 <template>
-    <div class="flex flex-col h-full min-h-0 px-2">
+    <div class="sidebar-home-page flex flex-col h-full min-h-0">
         <!-- Single scroll container for all content -->
         <ClientOnly>
             <Or3Scroll
@@ -608,3 +608,10 @@ onUnmounted(() => {
     pendingTimeouts.clear();
 });
 </script>
+
+<style scoped>
+/* Reserve the existing horizontal inset before client-only list content mounts. */
+.sidebar-home-page {
+    padding-inline: 0.5rem;
+}
+</style>

@@ -1,7 +1,7 @@
 import Dexie, { liveQuery } from 'dexie';
 import { shallowRef } from 'vue';
 import { getDb, getWorkspaceGeneration, getActiveWorkspaceId, subscribeActiveWorkspaceDb } from '~/db/client';
-import { createHistoryRetrievalService, type GetHistoryMessageArgs, type SearchParentArgs } from '~~/shared/chat/history-retrieval';
+import type { createHistoryRetrievalService, GetHistoryMessageArgs, SearchParentArgs } from '~~/shared/chat/history-retrieval';
 import { historyToolDefinitions } from '~~/shared/chat/history-tools';
 import { capturedHistoryContext } from './history-reader';
 import { useToolRegistry } from './tool-registry';
@@ -9,7 +9,8 @@ import { trackHistoryRevisions } from './history-revisions';
 
 /** Client placement uses the existing background browser bridge. No server readiness is inferred. */
 export function registerHistoryTools(): () => void {
-    const registry = useToolRegistry(); const service = createHistoryRetrievalService();
+    const registry = useToolRegistry();
+    let service: ReturnType<typeof createHistoryRetrievalService> | undefined;
     let revision = 0; const eligible = shallowRef(new Set<string>());
     const changed = () => { revision++; };
     Dexie.on('storagemutated', changed);
@@ -45,6 +46,10 @@ export function registerHistoryTools(): () => void {
         for (const definition of historyToolDefinitions) handles.push(registry.registerTool(definition, async (args, execution) => {
             const capturedRevisions = scopedRevisions!;
             const context = capturedHistoryContext(execution, (ids) => ids ? `${getWorkspaceGeneration()}:${capturedRevisions.revision(ids)}` : `${getWorkspaceGeneration()}:${revision}`);
+            // Capture the request workspace before loading code; reads still authorize
+            // against that captured workspace after this asynchronous boundary.
+            const { createHistoryRetrievalService } = await import('~~/shared/chat/history-retrieval');
+            service ??= createHistoryRetrievalService();
             return JSON.stringify(definition.function.name === 'get_message'
                 ? await service.getMessage(context, args as unknown as GetHistoryMessageArgs)
                 : await service.searchParent(context, args as unknown as SearchParentArgs));

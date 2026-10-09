@@ -758,6 +758,37 @@ export default defineNuxtConfig({
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
     hooks: {
+        'vite:extendConfig'(config, { isClient }) {
+            if (!isClient) return;
+            const output = config.build?.rolldownOptions?.output;
+            if (!output || Array.isArray(output)) return;
+            const splitting = output.codeSplitting;
+            if (!splitting || typeof splitting !== 'object') return;
+            // Reduce tiny startup requests without merging optional feature roots.
+            // Clone the client output: mutating it also changes Nuxt's SSR config.
+            Object.assign(config, { build: {
+                ...config.build,
+                rolldownOptions: {
+                    ...config.build?.rolldownOptions,
+                    output: {
+                        ...output,
+                        strictExecutionOrder: true,
+                        codeSplitting: {
+                            ...splitting,
+                            groups: [
+                                ...(splitting.groups ?? []),
+                                { name: 'startup', tags: ['$initial'], maxSize: 350_000 },
+                                {
+                                    name: 'chat-shell',
+                                    test: (id: string) => id.replaceAll('\\', '/').includes('/app/components/PageShell.vue'),
+                                    maxSize: 350_000,
+                                },
+                            ],
+                        },
+                    },
+                },
+            } });
+        },
         'build:manifest'(manifest) {
             // Dynamic imports still load on navigation and NuxtLink keeps its
             // interaction prefetch. Avoid fetching every possible route from

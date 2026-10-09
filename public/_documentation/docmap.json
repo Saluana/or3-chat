@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, isolated browser harnesses, and production bundle boundaries for the model catalog and optional SDK features."
+                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, isolated browser harnesses, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, gated plugin and storage startup, and on-demand history/SDK execution."
                 },
                 {
                     "name": "plugin-quickstart.md",

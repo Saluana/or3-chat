@@ -39,7 +39,8 @@ state are request-scoped, and the resolved core projection is serialized in
 the Nuxt payload.
 
 During SSR, the server resolves the selected ID against built-in profiles and
-validated profiles bundled with the active or available themes. It resolves
+validated profiles in the generated theme metadata. Inactive theme modules
+are not loaded just to discover profiles. It resolves
 their referenced navigation, dashboard, pane, and command IDs against the core
 item inventory; client plugin items are not in that inventory. A profile
 contributed only by a client plugin is also unavailable to the server, so SSR

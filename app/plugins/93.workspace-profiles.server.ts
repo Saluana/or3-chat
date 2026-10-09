@@ -7,7 +7,7 @@ import {
   setRequestResolvedWorkspaceProfile,
 } from "~/core/workspace-profiles";
 import { useOr3Config } from "~/composables/useOr3Config";
-import type { ThemePlugin } from "~/theme/_shared/types";
+import { GENERATED_THEME_METADATA } from "~/theme/_shared/theme-manifest.generated";
 import { resolveSessionContext } from "~~/server/auth/session";
 
 export default defineNuxtPlugin(async (nuxtApp) => {
@@ -43,37 +43,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   });
 
   if (selectedId && profile.id !== selectedId) {
-    const theme = nuxtApp.$theme as ThemePlugin | undefined;
-    const bundledProfiles: unknown[] = [];
-    if (theme) {
-      const themeNames = [
-        theme.activeTheme.value,
-        ...(theme.availableThemes ?? [])
-          .map((candidate) => candidate.name)
-          .filter((name) => name !== theme.activeTheme.value),
-      ];
-      for (const themeName of themeNames) {
-        try {
-          const definition =
-            theme.getTheme(themeName) ?? (await theme.loadTheme(themeName));
-          bundledProfiles.push(...(definition?.workspaceProfiles ?? []));
-          if (
-            definition?.workspaceProfiles?.some(
-              (candidate) => candidate.id === selectedId,
-            )
-          ) {
-            break;
-          }
-        } catch (error) {
-          if (import.meta.dev) {
-            console.warn(
-              `[workspace-profiles] Could not inspect theme "${themeName}" during SSR`,
-              error,
-            );
-          }
-        }
-      }
-    }
+    const bundledProfiles = GENERATED_THEME_METADATA.flatMap(
+      (entry) => entry.workspaceProfiles ?? [],
+    );
     profile = selectWorkspaceProfileForBootstrap({
       cookieHeader,
       workspaceId,

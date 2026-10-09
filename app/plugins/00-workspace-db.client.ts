@@ -7,7 +7,6 @@ import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { clearPersistedUserApiKey } from '~/core/auth/useUserApiKey';
-import { logoutCleanup } from '~/utils/logout-cleanup';
 import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
 
@@ -30,6 +29,7 @@ export default defineNuxtPlugin(async () => {
     const { data, refresh } = useSessionContext();
     const nuxtApp = useNuxtApp();
 
+    const { logoutCleanup } = await import('~/utils/logout-cleanup');
     await refresh();
     const initialSession = data.value?.session;
     if (

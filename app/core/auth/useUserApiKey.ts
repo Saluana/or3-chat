@@ -31,6 +31,12 @@ import { state } from '~/state/global';
 
 let kvHydrationStarted = false;
 let kvHydrationGeneration = 0;
+let pendingKvHydration: {
+    generation: number;
+    workspaceGeneration: number;
+    db: ReturnType<typeof getDb>;
+    promise: Promise<void>;
+} | null = null;
 
 /** Capture credential changes so delayed logout work can reject a newer key. */
 export function getUserApiKeyGeneration(): number {
@@ -96,37 +102,50 @@ function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
     return Array.isArray(db.tables) && db.tables.some((t) => t.name === 'kv');
 }
 
-export async function hydrateUserApiKeyFromKv(): Promise<void> {
+export function hydrateUserApiKeyFromKv(): Promise<void> {
     const hydrationGeneration = kvHydrationGeneration;
     const workspaceGeneration = getWorkspaceGeneration();
     let db: ReturnType<typeof getDb>;
     try {
         db = getDb();
     } catch {
-        return;
+        return Promise.resolve();
     }
 
-    if (!hasKvTable(db)) return;
-
-    try {
-        const kv = db.table<KvApiKeyRow, string>('kv');
-        const rec = await kv.where('name').equals('openrouter_api_key').first();
-        if (
-            hydrationGeneration !== kvHydrationGeneration ||
-            workspaceGeneration !== getWorkspaceGeneration()
-        ) {
-            return;
-        }
-        if (rec && typeof rec.value === 'string') {
-            state.value.openrouterKey = rec.value;
-        } else if (rec && rec.value == null) {
-            state.value.openrouterKey = null;
-        }
-    } catch (error) {
-        if (import.meta.dev) {
-            console.warn('[useUserApiKey] kv hydration skipped:', error);
-        }
+    if (!hasKvTable(db)) return Promise.resolve();
+    if (
+        pendingKvHydration?.generation === hydrationGeneration &&
+        pendingKvHydration.workspaceGeneration === workspaceGeneration &&
+        pendingKvHydration.db === db
+    ) {
+        return pendingKvHydration.promise;
     }
+
+    const promise: Promise<void> = (async () => {
+        try {
+            const kv = db.table<KvApiKeyRow, string>('kv');
+            const rec = await kv.where('name').equals('openrouter_api_key').first();
+            if (
+                hydrationGeneration !== kvHydrationGeneration ||
+                workspaceGeneration !== getWorkspaceGeneration()
+            ) {
+                return;
+            }
+            if (rec && typeof rec.value === 'string') {
+                state.value.openrouterKey = rec.value;
+            } else if (rec && rec.value == null) {
+                state.value.openrouterKey = null;
+            }
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn('[useUserApiKey] kv hydration skipped:', error);
+            }
+        }
+    })().finally(() => {
+        if (pendingKvHydration?.promise === promise) pendingKvHydration = null;
+    });
+    pendingKvHydration = { generation: hydrationGeneration, workspaceGeneration, db, promise };
+    return promise;
 }
 
 /**

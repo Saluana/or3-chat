@@ -40,6 +40,10 @@ appearance into the new one. Selector sessions observe added DOM, cancel stale
 jobs, and remove only their owned classes. They do not require a global rerender
 or the obsolete `useThemeClasses()` helper.
 
+Validated workspace profiles and recommendations are included in the generated
+metadata manifest. The client and SSR bootstrap can discover those choices
+without importing and compiling inactive themes.
+
 Packaged workspace profiles are registered as choices by
 `92.workspace-profile-theme.client.ts`. Selecting a theme never silently applies
 one; a recommendation is an explicit action. See

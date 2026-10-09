@@ -1,5 +1,5 @@
 <template>
-    <div id="side-nav-content-header" class="pt-2 pb-2">
+    <div id="side-nav-content-header" class="side-nav-content-header pt-2 pb-2">
         <div class="flex w-full items-center gap-2">
             <div class="relative flex-1">
                 <UInput
@@ -464,3 +464,11 @@ async function submitCreateDocument() {
     }
 }
 </script>
+
+<style scoped>
+/* Match the initial header fallback without constraining taller theme controls. */
+.side-nav-content-header {
+    min-height: 56px;
+    flex-shrink: 0;
+}
+</style>

@@ -8,7 +8,7 @@
         <ClientOnly>
             <SideNavHeader
                 id="nav-header"
-                v-if="activePageDef?.usesDefaultHeader"
+                v-if="activePageDef?.usesDefaultHeader && pageActivated"
                 ref="sideNavHeaderRef"
                 :sidebar-query="sidebarQuery"
                 :active-sections="activeSections"
@@ -28,7 +28,7 @@
                 "
             />
             <template #fallback>
-                <div class="h-12 px-2 py-2" aria-hidden="true">
+                <div class="h-14 px-2 py-2" aria-hidden="true">
                     <div class="h-8 w-full bg-[var(--md-surface-variant)] animate-pulse" />
                 </div>
             </template>
@@ -37,6 +37,7 @@
         <!-- Dynamic page content with suspense and keepalive -->
         <ClientOnly>
             <div
+                v-if="pageActivated"
                 id="nav-scroll-area"
                 ref="scrollAreaRef"
                 class="flex-1 min-h-0 flex flex-col overflow-hidden"
@@ -119,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, type Component } from 'vue';
+import { ref, computed, inject, watch, type Component, type ComputedRef } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import {
@@ -215,6 +216,13 @@ const sidebarMultiPaneApi = multiPaneApi
 const { activePageId, activePageDef, setActivePage, resetToDefault } =
     useActiveSidebarPage();
 const { listSidebarPages } = useSidebarPages();
+const sidebarVisible = inject<ComputedRef<boolean>>(
+    'or3:sidebar-visible', computed(() => true),
+);
+const pageActivated = ref(false);
+watch(sidebarVisible, (visible) => {
+    if (visible) pageActivated.value = true;
+}, { immediate: true });
 
 const projectsRef = computed(() => props.projects);
 const threadsRef = computed(() => props.displayThreads);

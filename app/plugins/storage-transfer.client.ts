@@ -1,13 +1,11 @@
-import { createGatewayStorageProvider } from '~/core/storage/providers/gateway-storage-provider';
 import {
     registerStorageProvider,
     listStorageProviderIds,
 } from '~/core/storage/provider-registry';
-import { getStorageTransferQueue } from '~/core/storage/transfer-queue';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { watch } from 'vue';
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
@@ -19,6 +17,7 @@ export default defineNuxtPlugin(() => {
     }
 
     try {
+        const { createGatewayStorageProvider } = await import('~/core/storage/providers/gateway-storage-provider');
         const providerId = runtimeConfig.public.storage.provider ?? 'gateway';
         if (!listStorageProviderIds().includes(providerId)) {
             registerStorageProvider({
@@ -35,6 +34,7 @@ export default defineNuxtPlugin(() => {
         return;
     }
 
+    const { getStorageTransferQueue } = await import('~/core/storage/transfer-queue');
     const queue = getStorageTransferQueue();
     const { data: sessionData } = useSessionContext();
 

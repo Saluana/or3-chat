@@ -3,7 +3,7 @@ import { watch } from 'vue';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { WorkspacePluginCoordinator } from '~~/shared/plugins/workspace-plugin-coordinator';
 import { installWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
-import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/workspace-plugin-coordinator';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const config = useRuntimeConfig();

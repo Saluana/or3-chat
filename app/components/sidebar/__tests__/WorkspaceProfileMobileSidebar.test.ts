@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { defineComponent, h, nextTick, ref } from 'vue';
+import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResizableSidebarLayout from '../../ResizableSidebarLayout.vue';
 import SideNavContent from '../SideNavContent.vue';
@@ -19,7 +19,7 @@ vi.mock('@vueuse/core', async (importOriginal) => {
     return {
         ...actual,
         useEventListener: vi.fn(),
-        useMediaQuery: () => ref(false),
+        useMediaQuery: () => computed(() => !isMobile.value),
         useResizeObserver: vi.fn(),
     };
 });
@@ -112,8 +112,9 @@ function registerPages(): Array<() => void> {
     ];
 }
 
-function mountRealExpandedSidebar() {
+function mountRealExpandedSidebar(open = true) {
     return mount(ResizableSidebarLayout, {
+        props: { modelValue: open },
         slots: {
             'sidebar-expanded': () => h(SideNavContent, sideNavProps),
             'sidebar-collapsed': () =>
@@ -170,7 +171,8 @@ describe('workspace profile mobile expanded sidebar', () => {
     });
 
     it('keeps the initially closed mobile drawer off-canvas', () => {
-        const wrapper = mountRealExpandedSidebar();
+        isMobile.value = true;
+        const wrapper = mountRealExpandedSidebar(false);
 
         expect(wrapper.get('[data-testid="sidebar"]').classes()).toContain(
             'max-md:-translate-x-full'

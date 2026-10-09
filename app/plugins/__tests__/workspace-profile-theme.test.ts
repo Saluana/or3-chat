@@ -66,6 +66,12 @@ describe("theme workspace profile plugin lifecycle", () => {
       }
     ).defineNuxtPlugin = (plugin) => plugin(nuxtApp);
 
+    vi.doMock("~/theme/_shared/theme-manifest.generated", () => ({
+      GENERATED_THEME_METADATA: Object.entries(definitions).map(([name, bundle]) => ({
+        name,
+        ...bundle,
+      })),
+    }));
     await import("~/plugins/92.workspace-profile-theme.client");
     await vi.waitFor(() => {
       expect(getWorkspaceProfile("theme-a-profile")).toBeDefined();

@@ -1,5 +1,5 @@
-import { Editor, getSchema, type JSONContent } from '@tiptap/core';
-import { Markdown, type MarkdownStorage } from 'tiptap-markdown';
+import type { JSONContent } from '@tiptap/core';
+import type { MarkdownStorage } from 'tiptap-markdown';
 import { loadDocumentEditorExtensions } from './document-editor-schema';
 
 function hasMarkdownSerializer(storage: unknown): storage is Pick<MarkdownStorage, 'getMarkdown'> {
@@ -9,6 +9,10 @@ function hasMarkdownSerializer(storage: unknown): storage is Pick<MarkdownStorag
 
 /** Export with the same registered nodes and marks used by native documents. */
 export async function documentToMarkdown(content: JSONContent): Promise<string> {
+    const [{ Editor, getSchema }, { Markdown }] = await Promise.all([
+        import('@tiptap/core'),
+        import('tiptap-markdown'),
+    ]);
     const extensions = [...await loadDocumentEditorExtensions(), Markdown];
     getSchema(extensions).nodeFromJSON(content).check();
     const editor = new Editor({ extensions, content, editable: false });
