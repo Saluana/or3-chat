@@ -35,7 +35,7 @@ const modalUi = computed<ModalProps['ui']>(() => ({
         widths[props.size],
         props.size === 'workspace' && 'h-[min(800px,calc(100dvh-2rem))] max-sm:w-[100dvw] max-sm:h-[100dvh] max-sm:max-w-none max-sm:max-h-[100dvh]! max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
     ].filter(Boolean).join(' '),
-    header: [props.ui?.header, 'relative flex shrink-0 items-center justify-between gap-4 min-h-0! p-6! pb-0! border-0! bg-transparent! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
+    header: [props.ui?.header, 'relative flex shrink-0 items-center justify-between gap-4 min-h-0! px-6! py-5! bg-transparent! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
     wrapper: 'min-w-0 flex-1',
     title: [props.ui?.title, 'line-clamp-2 wrap-anywhere text-[20px]! font-semibold! leading-7! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
     description: 'sr-only!',
@@ -97,6 +97,12 @@ const modalUi = computed<ModalProps['ui']>(() => ({
 }
 
 @layer utilities {
+.app-modal > [data-slot='header'] {
+    padding: 20px 24px !important;
+    border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
+    align-items: center;
+}
+
 @media (max-width: 767px), (pointer: coarse) {
     .app-modal[role=dialog] button:not([role='switch']) {
         min-height: 44px !important;
@@ -113,13 +119,13 @@ const modalUi = computed<ModalProps['ui']>(() => ({
     }
 }
 
-.app-modal[data-compact-viewport] [data-slot='header'] { padding: 16px 16px 0 !important; gap: 8px; }
+.app-modal[data-compact-viewport] [data-slot='header'] { padding: 16px !important; gap: 8px; }
 .app-modal[data-compact-viewport] > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell)) { padding: 16px !important; }
 .app-modal[data-compact-viewport] [data-slot='footer'] { padding: 4px 16px max(16px, env(safe-area-inset-bottom)) !important; }
 
 @media (max-width: 639px), (max-height: 500px) {
     .app-modal [data-slot='header'] {
-        padding: 16px 16px 0 !important;
+        padding: 16px !important;
         gap: 8px;
     }
     .app-modal > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell)) {

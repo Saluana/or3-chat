@@ -295,11 +295,11 @@ export default defineTheme({
                 overlay:
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
-                body: 'border-y-[length:var(--md-border-width-subtle,var(--md-border-width))] border-y-[color:var(--md-border-color)]  p-4',
-                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center gap-2 text-[var(--md-on-primary)]!',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none ',
+                body: 'p-4',
+                header: 'relative flex shrink-0 items-center justify-between gap-4 px-6 py-5 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
                 // Press Start wraps poorly at modal widths; keep the readable retro face and clip overflow.
-                title: 'text-[var(--md-on-primary)] font-vt323 font-semibold text-base! leading-tight min-w-0 flex-1 truncate',
+                title: 'text-[var(--md-on-surface)] font-vt323 font-semibold text-base! leading-tight min-w-0 flex-1 truncate',
                 description: 'hidden',
                 close: 'relative! top-auto! end-auto! flex items-center justify-center shrink-0',
             },

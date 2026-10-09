@@ -577,22 +577,3 @@
         padding-left: 48px;
     }
 }
-
-/* Shared modal geometry is enforced by AppModal; keep Cyberpunk headers consistent. */
-@layer utilities {
-    [data-theme='cyberpunk'] .app-modal > [data-slot='header'] {
-        padding: 20px 24px !important;
-        border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
-        align-items: center;
-    }
-
-    [data-theme='cyberpunk'] .app-modal[data-compact-viewport] > [data-slot='header'] {
-        padding: 16px !important;
-    }
-
-    @media (max-width: 639px), (max-height: 500px) {
-        [data-theme='cyberpunk'] .app-modal > [data-slot='header'] {
-            padding: 16px !important;
-        }
-    }
-}

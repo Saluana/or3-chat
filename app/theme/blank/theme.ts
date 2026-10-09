@@ -245,7 +245,7 @@ export default defineTheme({
                 content:
                     'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[var(--app-elevation-high,0_12px_28px_rgba(0,0,0,0.12))] overflow-hidden bg-[var(--md-surface)]',
                 body: 'p-5',
-                header: 'border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.1)] bg-transparent px-5! py-0 min-h-[52px] w-full justify-between flex items-center',
+                header: 'relative flex shrink-0 items-center justify-between gap-4 px-6 py-5 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
                 title: 'text-[var(--md-on-surface)] font-normal text-lg!',
                 description: 'hidden',
                 close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[var(--app-control-height-medium,36px)] w-[var(--app-control-height-medium,36px)] p-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
