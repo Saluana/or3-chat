@@ -797,7 +797,7 @@ describe('project memory classification proxy admission', () => {
         getHeaderMock.mockImplementation((event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()]);
         requireCanMock.mockReset();
         resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'user-1' }, workspace: { id: 'workspace-1' }, role: 'editor' });
-        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
             answers: { memory_kind: { type: 'choice', choice: 'decision', probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } } },
             usage: { input_tokens: 30, output_tokens: 0 } }), { headers: { 'Content-Type': 'application/json' } })));
     });
@@ -807,7 +807,7 @@ describe('project memory classification proxy admission', () => {
         expect(await classify(requestEvent())).toMatchObject({ kind: 'decision' });
         const fetcher = vi.mocked(fetch); const req = fetcher.mock.calls[0]![0] as Request;
         expect(req.url).toBe('https://openrouter.ai/api/alpha/decisions');
-        expect((await req.json()).model).toBe('typesafe/jev-1.13');
+        expect((await req.json()).model).toBe('perplexity/pplx-decider-v1.1-27b');
         fetcher.mockRejectedValueOnce(new Error('secret upstream failure'));
         expect(await classify(requestEvent())).toMatchObject({ kind: 'fact' });
     });
@@ -824,7 +824,9 @@ describe('project memory classification proxy admission', () => {
     it.each([
         { workspaceId: 'workspace-1', state: { memory: 'text', messages: [] }, model: 'attacker/model' },
         { workspaceId: 'workspace-1', state: { memory: 'text', messages: Array(7).fill({ role: 'user', text: 'text' }) } },
-        { workspaceId: 'workspace-1', state: { memory: 'text', messages: [{ role: 'user', text: 'x'.repeat(17000) }] } },
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: [{ role: 'user', text: 'x'.repeat(240 * 1024) }] } },
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: Array(2).fill({ role: 'user', text: 'x'.repeat(130000) }) } },
+        { workspaceId: 'workspace-1', state: { memory: 'text', messages: [{ role: 'user', text: '界'.repeat(90000) }] } },
     ])('rejects unbounded or caller-configured input %#', async body => {
         readBodyMock.mockResolvedValue(body);
         await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 400 });
@@ -845,15 +847,18 @@ describe('automatic memory proxy', () => {
         requireCanMock.mockReset();
         getHeaderMock.mockImplementation((event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()]);
         readBodyMock.mockResolvedValue({ workspaceId: 'workspace-1', capture: {
+            project: { name: 'Atlas', brief: 'Team planning app.' },
             messages: [{ id: 'u', role: 'user', text: 'What is SQLite?', fresh: true }], existing: [] } });
-        const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
             answers: { worth_saving: { type: 'choice', choice: 'skip', probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } } })));
         vi.stubGlobal('fetch', fetcher);
         const event = () => makeEvent({ host: 'chat.test', origin: 'https://chat.test',
             'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' });
         expect(await capture(event())).toEqual({ memories: [] });
         expect(fetcher).toHaveBeenCalledTimes(1);
-        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).model).toBe('typesafe/jev-1.13');
+        const dispatched = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+        expect(dispatched.model).toBe('perplexity/pplx-decider-v1.1-27b');
+        expect(dispatched.state.project).toEqual({ name: 'Atlas', brief: 'Team planning app.' });
         requireCanMock.mockImplementation(() => { throw forbidden(403); });
         await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
         expect(fetcher).toHaveBeenCalledTimes(1);

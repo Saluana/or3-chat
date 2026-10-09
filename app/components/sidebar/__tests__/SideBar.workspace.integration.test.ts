@@ -65,6 +65,30 @@ afterEach(async () => {
 describe('mounted sidebar workspace isolation', () => {
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
+    // The live activity projection and project-filtered pagination must agree
+    // with Files visibility; deleted=false alone does not mean a doc is active.
+    it('hides Trash from activity, search and project pagination, and returns restored documents', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
+        const id = `sidebar-trash-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        workspaces.push({ id, name: db.name });
+        const doc = await createDocumentInDb(db, { title: 'Trash regression document' });
+        await db.projects.put({ id: 'trash-project', name: 'Trash project', data: [{ kind: 'doc', id: doc.id }],
+            clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+        await db.posts.update(doc.id, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) });
+        wrapper = mount(SidebarTimeGroupedList, { props: { type: 'document', query: '', activeIds: [] },
+            global: { stubs: { SidebarUnifiedItem: true } } });
+        await vi.waitFor(() => expect(wrapper!.text()).toContain('Nothing here yet'));
+        expect(wrapper.findComponent({ name: 'SidebarUnifiedItem' }).exists()).toBe(false);
+        for (const filter of [{}, { query: 'Trash regression' }, { projectId: 'trash-project' }]) {
+            expect((await readFamilyPage(db, { type: 'document', limit: 50, filter })).items).toHaveLength(0);
+        }
+        await db.posts.update(doc.id, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }) });
+        await vi.waitFor(() => expect(wrapper!.findComponent({ name: 'SidebarUnifiedItem' }).props('item').id).toBe(doc.id));
+        expect((await readFamilyPage(db, { type: 'document', limit: 50, filter: { projectId: 'trash-project' } })).items.map(item => item.id)).toEqual([doc.id]);
+    });
+
     it('pauses kept-alive activity reads and refreshes when shown again', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
@@ -218,7 +242,8 @@ describe('mounted sidebar workspace isolation', () => {
         testRuntimeConfig.value.public.ssrAuthEnabled = ssr;
         try {
             setHookEngine(createTypedHookEngine(createHookEngine()));
-            const id = `sidebar-trash-${crypto.randomUUID()}`;
+            vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
+        const id = `sidebar-trash-${crypto.randomUUID()}`;
             const db = setActiveWorkspaceDb(id);
             workspaces.push({ id, name: db.name });
             session.payload = { appAccessAllowed: true, workspaceItemCapability: 'v1', session: { authenticated: true, user: { id: 'owner' }, workspace: { id }, role: 'owner' } };

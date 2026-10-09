@@ -26,7 +26,7 @@
             >
                 <UIcon
                     v-if="isRunning"
-                    :name="useIcon('chat.tool.loader').value"
+                    :name="loaderIcon"
                     class="size-4 shrink-0 animate-spin"
                 />
                 <UIcon
@@ -81,17 +81,27 @@
             </div>
         </component>
         <div v-if="sources.length" class="mt-1 flex max-w-full flex-wrap items-center gap-2">
-            <button
+            <UButton
                 v-for="receipt in visibleSources"
                 :key="`${receipt.workspaceId}:${receipt.source.kind}:${receipt.source.id}`"
+                v-bind="sourceButtonProps"
+                v-theme="{ identifier: 'message.workspace-source', context: 'message' }"
                 type="button"
                 :aria-label="`Open source: ${receipt.source.title}`"
-                class="min-h-[44px] max-w-full rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] px-3 text-left text-xs text-[var(--md-on-surface)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="workspace-source-button max-w-full"
                 @click="openSource(receipt)"
-            >{{ receipt.action === 'created' ? 'Open document · ' : '' }}{{ receipt.source.title }}</button>
-            <button v-if="sources.length > 3" type="button" class="min-h-[44px] px-2 text-xs" @click="showAllSources = !showAllSources">
+            ><span class="min-w-0 whitespace-normal break-words">{{ receipt.action === 'created' ? 'Open document · ' : '' }}{{ receipt.source.title }}</span></UButton>
+            <UButton
+                v-if="sources.length > 3"
+                v-bind="sourcesToggleProps"
+                v-theme="{ identifier: 'message.workspace-sources-toggle', context: 'message' }"
+                type="button"
+                :aria-expanded="showAllSources"
+                class="workspace-source-button"
+                @click="showAllSources = !showAllSources"
+            >
                 {{ showAllSources ? 'Show fewer' : `Show all (${sources.length})` }}
-            </button>
+            </UButton>
         </div>
         <p v-if="sourceError || hasPartialSources" role="status" class="mt-1 text-xs text-[var(--md-on-surface-variant)]">
             {{ sourceError || 'Partial source coverage · Read the next page for more.' }}
@@ -103,6 +113,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
 import { useIcon } from '~/composables/useIcon';
 import { workspaceDocumentChangeReceipt, workspaceSourceReceipts, type WorkspaceSourceReceipt } from '~/utils/chat/workspace-source-receipts';
 
@@ -126,6 +137,17 @@ const emit = defineEmits<{
     resize: [];
 }>();
 
+const loaderIcon = useIcon('chat.tool.loader');
+const searchIcon = useIcon('ui.search');
+
+const sourceButtonProps = useButtonOverrides(
+    { component: 'button', context: 'message', identifier: 'message.workspace-source' },
+    { variant: 'outline', color: 'on-surface', size: 'workspace' }
+);
+const sourcesToggleProps = useButtonOverrides(
+    { component: 'button', context: 'message', identifier: 'message.workspace-sources-toggle' },
+    { variant: 'ghost', color: 'on-surface', size: 'workspace' }
+);
 const showAllSources = ref(false);
 const WorkspaceDocumentChangeCard = defineAsyncComponent(() => import('./WorkspaceDocumentChangeCard.vue'));
 const documentChanges = computed(() => props.toolCalls.map(workspaceDocumentChangeReceipt).filter((receipt) => receipt !== null));
@@ -242,7 +264,7 @@ const groupIcon = computed(() => {
     if (kinds.value.has('edit')) return 'i-lucide-pencil';
     if (kinds.value.has('read')) return 'i-lucide-file-search';
     if (kinds.value.has('command')) return 'i-lucide-square-terminal';
-    if (kinds.value.has('search')) return 'i-lucide-search';
+    if (kinds.value.has('search')) return searchIcon.value;
     if (kinds.value.has('tests')) return 'i-lucide-badge-check';
     return 'i-lucide-activity';
 });
@@ -289,7 +311,7 @@ function iconForCall(call: ToolCall): string {
     if (kind === 'edit') return 'i-lucide-pencil';
     if (kind === 'read') return 'i-lucide-file-search';
     if (kind === 'command') return 'i-lucide-square-terminal';
-    if (kind === 'search') return 'i-lucide-search';
+    if (kind === 'search') return searchIcon.value;
     if (kind === 'tests') return 'i-lucide-badge-check';
     return 'i-lucide-activity';
 }
@@ -300,6 +322,29 @@ function onToggle() {
 </script>
 
 <style scoped>
+.workspace-source-button {
+    height: auto !important;
+    transition-duration: var(--app-motion-duration-fast, 150ms);
+    transition-timing-function: var(--app-motion-easing-standard, ease);
+}
+
+.workspace-source-button:focus-visible {
+    outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary)) !important;
+    outline-offset: var(--app-focus-ring-offset, 2px);
+}
+
+@media (pointer: coarse) {
+    .workspace-source-button {
+        min-height: 44px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .workspace-source-button {
+        transition: none;
+    }
+}
+
 .tool-call-indicator summary {
     list-style: none;
 }

@@ -233,7 +233,7 @@
                         </template>
                     </USelectMenu>
                 </div>
-                <button v-if="registeredTools.length" ref="toolsButton" type="button" class="chat-settings-row-trigger" @click="openTools">
+                <button v-if="registeredTools.length" ref="toolsButton" type="button" class="chat-settings-row-trigger chat-settings-row-item" @click="openTools">
                     <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
                     <span class="chat-settings-row-title">Tools</span>
                     <span class="chat-settings-option-value">{{ registeredTools.length }}</span>

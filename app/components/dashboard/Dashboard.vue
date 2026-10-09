@@ -42,7 +42,7 @@
             <div
                 v-if="state.view === 'page'"
                 id="dashboard-page-view"
-                class="h-[min(640px,calc(100dvh-12rem))] flex flex-col min-h-0 min-w-0 max-w-full"
+                class="flex flex-1 flex-col min-h-0 min-w-0 max-w-full"
             >
                 <div
                     id="dashboard-page-header"
@@ -83,7 +83,7 @@
                 <div
                     v-if="!state.activePageId && landingPages.length > 1"
                     id="dashboard-landing-grid"
-                    class="p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                    class="min-h-0 overflow-y-auto p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                 >
                     <button
                         v-for="p in landingPages"
@@ -253,6 +253,20 @@ const landingPageButtonProps = computed(() => {
 </script>
 
 <style scoped>
+/* Dashboard pages own scrolling; the modal body must not add a second inset viewport. */
+@layer utilities {
+    :global(.app-modal:has(#dashboard-page-view)) {
+        height: min(800px, calc(100dvh - 2rem));
+    }
+
+    :global(.app-modal:has(#dashboard-page-view) > [data-slot='body']) {
+        display: flex;
+        flex-direction: column;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+}
+
 #dashboard-grid-view {
     display: flex;
     justify-content: center;

@@ -226,14 +226,6 @@ export default defineNuxtConfig({
             : {}),
     },
     compatibilityDate: '2025-07-15',
-    // Nuxt does not auto-scan individual plugins in nested example folders.
-    plugins: process.env.NODE_ENV !== 'production'
-        ? [
-              '~/plugins/examples/quiz-card-example.client',
-              '~/plugins/examples/weather-card-example.client',
-              '~/plugins/examples/map-card-example.client',
-          ]
-        : [],
     runtimeConfig: {
         ...applicationPlan.runtimeConfig,
         public: {

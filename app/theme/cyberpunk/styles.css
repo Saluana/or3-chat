@@ -468,3 +468,131 @@
 [data-theme="cyberpunk"] .sidebar-scroll {
 	@apply pr-3 pt-4;
 }
+
+/* Thread families share one header and a continuous timeline gutter. */
+[data-theme='cyberpunk'] .sidebar-scroll.or3-scroll .or3-scroll-item {
+    overflow: visible;
+    display: flow-root;
+    position: relative;
+}
+
+[data-theme='cyberpunk'] {
+    .sidebar-family-header {
+        position: relative;
+        margin-bottom: 8px;
+    }
+
+    .sidebar-family-header > .unified-sb-item {
+        margin-bottom: 0;
+        padding-left: 40px;
+    }
+
+    .sidebar-family-header .sb-btn-icon {
+        display: none;
+    }
+
+    .sidebar-family-toggle {
+        position: absolute;
+        left: 4px;
+        top: 50%;
+        z-index: 1;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
+        padding: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        background: transparent;
+        transform: translateY(-50%) !important;
+    }
+
+    .sidebar-family-toggle:hover {
+        background: var(--md-surface-hover);
+    }
+
+    .sidebar-family-member {
+        padding-left: 32px;
+    }
+
+    [data-family-kind] .unified-sb-item {
+        transform: none;
+    }
+
+    .sidebar-family-member .family-timeline-marker {
+        position: absolute;
+        left: calc(-20px - var(--md-border-width));
+        top: calc(0px - var(--md-border-width));
+        /* Include the card's 8px margin and the family's mb-0.5 row gap. */
+        bottom: calc(-8px - 0.125rem - var(--md-border-width));
+        width: 18px;
+        pointer-events: none;
+    }
+
+    .sidebar-family-member .family-timeline-line {
+        left: 8px;
+        top: 0;
+        bottom: 0;
+        width: var(--md-border-width-subtle, 1px);
+        background: color-mix(in srgb, var(--md-outline) 65%, transparent);
+    }
+
+    .sidebar-family-member .family-timeline-line.is-first {
+        top: 20px;
+    }
+
+    .sidebar-family-member .family-timeline-line.is-last {
+        bottom: calc(100% - 20px);
+    }
+
+    .sidebar-family-member .family-timeline-dot {
+        left: 4px;
+        top: 16px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--md-outline);
+    }
+
+    .sidebar-family-member .family-timeline-dot.is-latest {
+        background: var(--md-primary);
+    }
+
+    .sidebar-family-member .sidebar-family-subtitle {
+        margin-right: 0;
+        margin-top: 4px;
+        line-height: 1.4;
+    }
+}
+
+@media (pointer: coarse) {
+    [data-theme='cyberpunk'] .sidebar-family-toggle {
+        left: 0;
+        width: 44px;
+        height: 44px;
+    }
+
+    [data-theme='cyberpunk'] .sidebar-family-header > .unified-sb-item {
+        min-height: 44px;
+        padding-left: 48px;
+    }
+}
+
+/* Shared modal geometry is enforced by AppModal; keep Cyberpunk headers consistent. */
+@layer utilities {
+    [data-theme='cyberpunk'] .app-modal > [data-slot='header'] {
+        padding: 20px 24px !important;
+        border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
+        align-items: center;
+    }
+
+    [data-theme='cyberpunk'] .app-modal[data-compact-viewport] > [data-slot='header'] {
+        padding: 16px !important;
+    }
+
+    @media (max-width: 639px), (max-height: 500px) {
+        [data-theme='cyberpunk'] .app-modal > [data-slot='header'] {
+            padding: 16px !important;
+        }
+    }
+}

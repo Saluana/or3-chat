@@ -1,6 +1,16 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
-        <p v-if="itemReadOnly" role="status">This document is read-only. Restore it from Files Trash to edit it.</p>
+        <div v-if="documentLoaded && itemReadOnly" class="document-status-banner" role="status">
+            <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
+            <p>{{ availabilityMessage }}</p>
+        </div>
+        <div v-if="!documentLoaded" class="document-unavailable" role="status">
+            <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
+            <h2>{{ loadingDocument ? 'Loading document…' : availability === 'trashed' ? 'Document in Trash' : 'Document unavailable' }}</h2>
+            <p>{{ loadingDocument ? 'Your saved content is loading.' : availabilityMessage }}</p>
+            <UButton v-if="state.status === 'error'" color="neutral" variant="soft" label="Try again" @click="loadActiveDocument(documentId)" />
+        </div>
+        <template v-if="documentLoaded">
         <div
             v-theme="'document.toolbar'"
             class="editor-toolbar document-editor-toolbar"
@@ -279,6 +289,7 @@
                 </div>
             </template>
         </AppModal>
+        </template>
     </div>
 </template>
 
@@ -299,7 +310,7 @@ import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import { liveQuery } from 'dexie';
-import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { isVisibleWorkspaceItem, workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import {
     registerDocumentEditorSession,
     type DocumentEditorFocusedRegion,
@@ -429,13 +440,28 @@ const inspectorTransitionsReady = ref(false);
 let suppressFindAutofocus = false;
 let loadedDocumentId: string | undefined;
 let loadGeneration = 0;
-const itemReadOnly = ref(false);
+const documentLoaded = ref(false);
+const loadingDocument = ref(true);
+const availability = ref<'loading' | 'active' | 'trashed' | 'unavailable'>('loading');
+const itemReadOnly = computed(() => availability.value !== 'active');
+const availabilityMessage = computed(() => {
+    if (availability.value === 'trashed') return 'This document is read-only. Restore it from Files Trash to edit it.';
+    if (state.value.status === 'error' && !documentLoaded.value) return 'This document could not be loaded. Try again.';
+    return 'This document is unavailable in this workspace.';
+});
 let itemSubscription: { unsubscribe(): void } | undefined;
 watch([documentId, editorDb], ([id, db]) => {
     itemSubscription?.unsubscribe();
+    availability.value = 'loading';
     itemSubscription = liveQuery(() => db.posts.get(id)).subscribe({ next: row => {
         if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
-        itemReadOnly.value = !row || !isVisibleWorkspaceItem(row);
+        const previous = availability.value;
+        availability.value = row?.postType === 'doc' && isVisibleWorkspaceItem(row) ? 'active'
+            : row?.postType === 'doc' && !row.deleted && workspaceItemMetadata(row.meta)?.trashed_at != null ? 'trashed' : 'unavailable';
+        if (availability.value === 'active' && (previous === 'trashed' || previous === 'unavailable')
+            && !documentLoaded.value && state.value.status !== 'loading') {
+            void loadActiveDocument(id);
+        }
         if (itemReadOnly.value) ai.abort();
     } });
 }, { immediate: true });
@@ -446,7 +472,8 @@ const documentAiActions = useDocumentAiActions();
 const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh } = useDocumentInsights(editor);
 
 function captureContent(id = props.documentId, db = editorDb.value): void {
-    if (itemReadOnly.value) return;
+    // Capture edits made before the item became read-only; storage still refuses
+    // writes to Trash, and the pending buffer must keep navigation blocked.
     if (db !== editorDb.value || loadedDocumentId !== id) return;
     const current = editor.value;
     if (!current || current.isDestroyed) return;
@@ -468,7 +495,8 @@ async function ensureLocalDurability(id = props.documentId, db = editorDb.value)
     captureContent(id, db);
     await flush(id, db);
     const currentState = useDocumentState(id, db);
-    if (currentState.status === 'error') {
+    // A failed read is not a failed save. Only staged edits can block navigation.
+    if (currentState.pendingTitle !== undefined || currentState.pendingContent !== undefined) {
         throw currentState.lastError instanceof Error
             ? currentState.lastError
             : new Error('Document could not be saved locally.');
@@ -830,10 +858,21 @@ function registerActiveSession(id: string): void {
 async function loadActiveDocument(id: string) {
     const db = editorDb.value;
     const generation = ++loadGeneration;
+    documentLoaded.value = false;
+    loadingDocument.value = true;
     const isCurrent = () => !didUnmount && props.documentId === id &&
         editorDb.value === db && loadGeneration === generation;
-    await loadDocument(id, db);
+    const record = await loadDocument(id, db);
     if (!isCurrent()) return;
+    if (!record) {
+        loadingDocument.value = false;
+        editor.value?.destroy();
+        editor.value = null;
+        loadedDocumentId = id;
+        registerActiveSession(id);
+        emit('ready', id);
+        return;
+    }
     titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
     capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
         ? state.value.pendingContent : state.value.record?.content);
@@ -848,6 +887,8 @@ async function loadActiveDocument(id: string) {
         ? state.value.pendingContent : state.value.record?.content);
     editor.value?.commands.setContent(capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
     loadedDocumentId = id;
+    documentLoaded.value = true;
+    loadingDocument.value = false;
     registerActiveSession(id);
     emit('ready', id);
 }
@@ -888,6 +929,7 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     revisionTimer = undefined;
     editor.value?.destroy();
     editor.value = null;
+    documentLoaded.value = false;
     loadedDocumentId = undefined;
     const generation = ++loadGeneration;
     lastAutomaticRevisionAt = 0;

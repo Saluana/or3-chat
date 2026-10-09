@@ -58,7 +58,7 @@ afterEach(async () => {
     vi.unstubAllGlobals();
 });
 
-async function mountedWorkspaces() {
+async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing') {
     const hooks = createTypedHookEngine(createHookEngine());
     setHookEngine(hooks);
     let editor!: Editor;
@@ -81,6 +81,8 @@ async function mountedWorkspaces() {
     // A legitimate earlier visit has already hydrated the B cache.
     await loadDocument(documentId);
     setActiveWorkspaceDb(idA);
+    if (initialAvailability === 'trashed') await dbA.posts.update(documentId, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) });
+    if (initialAvailability === 'missing') await dbA.posts.delete(documentId);
     wrapper = shallowMount(DocumentEditorRoot, {
         props: { documentId, paneId: 'fixture-pane', tabId: 'fixture-tab' },
         global: { directives: { theme: () => {} }, stubs: {
@@ -88,12 +90,64 @@ async function mountedWorkspaces() {
         } },
     });
     await vi.waitFor(() => expect(wrapper!.emitted('ready')).toEqual([[documentId]]));
-    expect(wrapper.getComponent(Title).props('modelValue')).toBe('A private title');
-    expect(JSON.stringify(editor.getJSON())).toContain('A original body');
+    if (!initialAvailability) {
+        expect(wrapper.getComponent(Title).props('modelValue')).toBe('A private title');
+        expect(JSON.stringify(editor.getJSON())).toContain('A original body');
+    }
     return { dbA, dbB, idA, idB, editor, hooks, currentEditor: () => editor };
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    // Cold unavailable loads must not become blank editors or block tab-close
+    // durability; restoring a cold Trash tab must hydrate the actual saved body.
+    it.each(['trashed', 'missing'] as const)('keeps a cold %s document closable without pretending it loaded', async (availability) => {
+        const { dbA } = await mountedWorkspaces(availability);
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        const session = getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' });
+        expect(session).toBeDefined();
+        await expect(session!.ensureLocalDurability()).resolves.toBeUndefined();
+        expect(wrapper!.findComponent(Title).exists()).toBe(false);
+        expect(wrapper!.get('[role="status"]').text()).toContain(availability === 'trashed' ? 'Trash' : 'unavailable');
+        if (availability === 'missing') {
+            expect(wrapper!.text()).not.toContain('Restore');
+        } else {
+            const row = (await dbA.posts.get(documentId))!;
+            expect(row.content).toContain('A original body');
+            await dbA.posts.update(documentId, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }) });
+            await vi.waitFor(() => expect(wrapper!.getComponent(Title).props('modelValue')).toBe('A private title'));
+            expect(wrapper!.text()).not.toContain('Restore it');
+            expect((await dbA.posts.get(documentId))?.content).toBe(row.content);
+        }
+    });
+
+    it('still blocks tab-close durability when real unsaved edits fail to persist', async () => {
+        const { dbA, editor } = await mountedWorkspaces();
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        editor.commands.setContent(content('Keep this unsaved body'), { emitUpdate: true });
+        const put = vi.spyOn(dbA.posts, 'put').mockRejectedValue(new Error('Disk unavailable'));
+        const session = getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' });
+        await expect(session!.ensureLocalDurability()).rejects.toThrow();
+        expect(JSON.stringify(useDocumentState(documentId, dbA).pendingContent)).toContain('Keep this unsaved body');
+        put.mockRestore();
+        await session!.ensureLocalDurability();
+        expect((await dbA.posts.get(documentId))?.content).toContain('Keep this unsaved body');
+    });
+
+    it('preserves an edit made immediately before Trash instead of allowing it to be lost on close', async () => {
+        const { dbA, editor } = await mountedWorkspaces();
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        editor.commands.setContent(content('Edit before Trash'), { emitUpdate: true });
+        await dbA.posts.update(documentId, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) });
+        await vi.waitFor(() => expect(editor.isEditable).toBe(false));
+        const session = getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' });
+        await expect(session!.ensureLocalDurability()).rejects.toThrow();
+        expect(JSON.stringify(useDocumentState(documentId, dbA).pendingContent)).toContain('Edit before Trash');
+        await dbA.posts.update(documentId, { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }) });
+        await vi.waitFor(() => expect(editor.isEditable).toBe(true));
+        await session!.ensureLocalDurability();
+        expect((await dbA.posts.get(documentId))?.content).toContain('Edit before Trash');
+    });
+
     it('makes retained trashed documents read-only and restores editing without deleting content', async () => {
         const { dbA, editor } = await mountedWorkspaces();
         const { updateWorkspaceFile } = await import('~/db/workspace-files');

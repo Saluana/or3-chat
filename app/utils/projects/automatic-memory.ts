@@ -26,8 +26,8 @@ import {
 } from '~~/shared/projects/automatic-memory';
 import type { AiStreamCompletePayload } from '~/core/hooks/hook-types';
 import { messageText } from './memory';
+import { MEMORY_CONTEXT_MAX_BYTES } from '~~/shared/projects/memory-classification';
 
-const STATE_BYTES = 16384;
 const OMITTED_ASSISTANT_TEXT = '[assistant reply omitted: too long]';
 const normalized = (text: string) =>
     text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -222,13 +222,17 @@ export async function captureAutomaticMemories(
     const candidates = rows.flatMap((row) => {
         const text = messageText(row);
         const message = { id: row.id, role: row.role as 'user' | 'assistant', text, fresh: row.index > lastIndex };
-        if (text.length <= 4000) return [message];
+        if (new TextEncoder().encode(text).byteLength <= MEMORY_CONTEXT_MAX_BYTES) return [message];
         return row.role === 'assistant' ? [{ ...message, text: OMITTED_ASSISTANT_TEXT }] : [];
     });
-    const state: AutomaticMemoryState = { messages: [], existing: [] };
+    const state: AutomaticMemoryState = {
+        project: { name: policy.project.name, brief: policy.settings.brief },
+        messages: [],
+        existing: [],
+    };
     const add = <T>(list: T[], item: T) => {
         list.push(item);
-        if (new TextEncoder().encode(JSON.stringify(state)).byteLength > STATE_BYTES) list.pop();
+        if (new TextEncoder().encode(JSON.stringify(state)).byteLength > MEMORY_CONTEXT_MAX_BYTES) list.pop();
     };
     // Fresh user statements first (newest first), then dedupe references, then older context.
     const freshUsers = candidates.filter((message) => message.fresh && message.role === 'user');
@@ -245,9 +249,11 @@ export async function captureAutomaticMemories(
         const freshPolicy = await readProjectPolicy(scope.db, projectId);
         if (
             freshPolicy.settings.excluded_chat_ids.includes(threadId) ||
-            (await resolveChatProject(scope.db, threadId)) !== projectId
+            (await resolveChatProject(scope.db, threadId)) !== projectId ||
+            freshPolicy.project.name !== state.project.name ||
+            freshPolicy.settings.brief !== state.project.brief
         )
-            throw new Error('Memory evidence moved or was excluded.');
+            throw new Error('Memory evidence or project context changed.');
         const current = await scope.db.messages.bulkGet(
             rows.map((row) => row.id),
         );

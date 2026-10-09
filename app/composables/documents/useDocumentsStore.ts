@@ -7,7 +7,7 @@ import {
     getDocumentInDb,
     type Document,
 } from '~/db/documents';
-import { useToast } from '#imports';
+import { reportError } from '~/utils/errors';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { getDb, type Or3DB } from '~/db/client';
 
@@ -15,7 +15,7 @@ import type { TipTapDocument } from '~/types/database';
 
 interface DocState {
     record: Document | null;
-    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
+    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading' | 'unavailable';
     lastError?: unknown;
     pendingTitle?: string; // Added this back as it was missing in the diff but used in flush
     pendingContent?: TipTapDocument | null; // TipTap JSON
@@ -149,6 +149,7 @@ async function flushInDb(db: Or3DB, id: string) {
             if (updated) {
                 st.record = updated;
                 st.status = 'saved';
+                st.lastError = undefined;
                 saveSucceeded = true;
             } else {
                 st.status = 'error';
@@ -156,7 +157,7 @@ async function flushInDb(db: Or3DB, id: string) {
         } catch (e) {
             st.status = 'error';
             st.lastError = e;
-            useToast().add({ color: 'error', title: 'Document: save failed' });
+            reportError(e, { message: 'Document could not be saved locally.', tags: { domain: 'documents' } });
         } finally {
             // Clear only the exact generations that were persisted. New edits
             // made during the write remain staged for the next flush.
@@ -240,14 +241,12 @@ export async function loadDocument(id: string, db = getDb()) {
     try {
         const rec = await getDocumentInDb(db, id);
         st.record = rec || null;
-        st.status = rec ? 'idle' : 'error';
-        if (!rec) {
-            useToast().add({ color: 'error', title: 'Document: not found' });
-        }
+        st.status = rec ? 'idle' : 'unavailable';
+        st.lastError = undefined;
     } catch (e) {
         st.status = 'error';
         st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: load failed' });
+        reportError(e, { message: 'Document could not be loaded.', tags: { domain: 'documents' } });
     }
     return st.record;
 }
@@ -296,7 +295,7 @@ export async function newDocument(initial?: {
         st.status = 'idle';
         return rec;
     } catch (e) {
-        useToast().add({ color: 'error', title: 'Document: create failed' });
+        reportError(e, { message: 'Document could not be created.', tags: { domain: 'documents' } });
         throw e;
     }
 }

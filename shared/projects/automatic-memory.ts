@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MEMORY_CLASSIFIER_MODEL, memoryInferenceOrigin } from './memory-classification';
+import { MEMORY_CLASSIFIER_MODEL, MEMORY_CONTEXT_MAX_BYTES, memoryInferenceOrigin } from './memory-classification';
 import { DEFAULT_HEADERS } from '../openrouter/client';
 
 export const MEMORY_ANALYSIS_MODEL = '~openai/gpt-luna-latest';
@@ -11,7 +11,7 @@ export const AutomaticMemoryStateSchema = z
                     .object({
                         id: z.string().min(1).max(200),
                         role: z.enum(['user', 'assistant']),
-                        text: z.string().min(1).max(4000),
+                        text: z.string().min(1).max(MEMORY_CONTEXT_MAX_BYTES),
                         fresh: z.boolean(),
                     })
                     .strict(),
@@ -33,7 +33,7 @@ export const AutomaticMemoryStateSchema = z
     .strict()
     .refine(
         (state) =>
-            new TextEncoder().encode(JSON.stringify(state)).length <= 16384,
+            new TextEncoder().encode(JSON.stringify(state)).length <= MEMORY_CONTEXT_MAX_BYTES,
     );
 export type AutomaticMemoryState = z.infer<typeof AutomaticMemoryStateSchema>;
 export const AutomaticMemoryOutputSchema = z

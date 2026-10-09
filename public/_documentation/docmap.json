@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, revision-aware associations, captured execution boundaries and distinct installed/development provider qualification."
+                    "summary": "Project CRUD, revision-aware associations, captured execution boundaries, 240 KiB Decider memory inference with project context and preference capture and installed/development provider qualification."
                 },
                 {
                     "name": "posts.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, and recoverable Files Trash."
+                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, and safe tab closing."
                 },
                 {
                     "name": "prompts.md",
@@ -956,7 +956,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Build source and trusted tool cards, try the examples, and understand portable authoring and its containment qualification gate."
+                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate."
                 }
             ]
         }

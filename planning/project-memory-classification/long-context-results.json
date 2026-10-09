@@ -1,0 +1,23 @@
+{
+  "evaluatedAt": "2026-10-08T23:36:46.355Z",
+  "synthetic": true,
+  "stateBytes": 218125,
+  "maxBytes": 245760,
+  "classification": {
+    "kind": "decision",
+    "model": "perplexity/pplx-decider-v1.1-27b",
+    "probabilities": {
+      "fact": 0.0006407040175697741,
+      "decision": 0.9984632796474296,
+      "uncertain": 0.0008960163350007093
+    },
+    "latencyMs": 5185,
+    "cost": 0.0011251
+  },
+  "automaticCapture": {
+    "count": 1,
+    "supported": true,
+    "savedDecision": true,
+    "latencyMs": 6526
+  }
+}

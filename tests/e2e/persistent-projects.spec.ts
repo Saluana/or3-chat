@@ -9,7 +9,7 @@ test.skip(
 // Keep project journeys deterministic and prevent paid auxiliary inference.
 test.beforeEach(async ({ page }) => {
     await page.route('https://openrouter.ai/api/alpha/decisions', route => route.fulfill({
-        json: { model: 'typesafe/jev-1.13',
+        json: { model: 'perplexity/pplx-decider-v1.1-27b',
             answers: { memory_kind: { type: 'choice', choice: 'uncertain', probabilities: { fact: 0.01, decision: 0.01, uncertain: 0.98 } } },
             usage: { input_tokens: 20, output_tokens: 0 } },
     }));

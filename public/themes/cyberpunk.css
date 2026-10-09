@@ -129,9 +129,10 @@
 }
 
 [data-theme="cyberpunk"] .tool-call-indicator {
-  border-radius: var(--md-border-radius);
-  border: var(--md-border-width) solid var(--md-border-color);
-  overflow: hidden;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
   margin-top: 8px;
   margin-bottom: 8px;
 }
@@ -143,9 +144,11 @@
 
 [data-theme="cyberpunk"] .tool-call-indicator-summary {
   background: transparent !important;
-  padding: 10px 12px;
+  padding: 6px 10px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
+  width: fit-content;
+  border-radius: var(--md-border-radius-small, var(--md-border-radius));
   align-items: center;
   gap: 10px;
 }
@@ -155,7 +158,9 @@
 }
 
 [data-theme="cyberpunk"] .tool-call-expanded-content {
-  border-top: var(--md-border-width) solid var(--md-border-color);
+  border: var(--md-border-width) solid var(--md-border-color) !important;
+  border-radius: var(--md-border-radius-small, var(--md-border-radius));
+  margin-left: 0;
   padding: 12px;
   background-color: var(--md-surface-container-lowest);
 }

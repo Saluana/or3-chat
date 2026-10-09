@@ -395,6 +395,7 @@
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
@@ -684,7 +685,7 @@ const workspaceTabs = useWorkspaceTabs({
         const availableDocuments = new Set(
             documents.flatMap((document) =>
                 document &&
-                !document.deleted &&
+                isVisibleWorkspaceItem(document) &&
                 document.postType === 'doc'
                     ? [document.id]
                     : []
@@ -708,8 +709,8 @@ const workspaceTabs = useWorkspaceTabs({
     onError(error, context) {
         console.error(`[workspace-tabs] ${context.action} failed`, error);
         toast.add({
-            title: 'Tab switch failed',
-            description: 'Your current content remains open. Please try again.',
+            title: context.action === 'close' ? 'Could not close tab' : 'Tab switch failed',
+            description: 'Your current content remains open. ' + (error instanceof Error ? error.message : 'Please try again.'),
             color: 'error',
         });
     },

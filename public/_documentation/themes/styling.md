@@ -70,6 +70,12 @@ pass `context` explicitly to both the resolver and directive. An arbitrary
 `data-context` wrapper alone does not enable detection. The directive supplies
 `state: 'default'`; use CSS for actual hover/focus states.
 
+Workspace source buttons in assistant messages use Nuxt UI and the reactive button
+resolver. Target `button.message#message.workspace-source` for chat/document source
+links and `button.message#message.workspace-sources-toggle` for Show all/Show fewer.
+Their defaults use the compact `workspace` size, theme surface hover/active colors,
+and focus tokens, with 44px touch targets and wrapping for long source titles.
+
 ## Generic control recipes
 
 A `ui` field patches Nuxt UI's slots/variants. This fragment gives inputs a

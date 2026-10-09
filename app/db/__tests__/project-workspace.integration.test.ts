@@ -1189,21 +1189,23 @@ describe('persistent project workspace', () => {
 // Chrome journeys own the absence of taxonomy controls and usable save forms.
 describe('nonblocking project memory classification', () => {
     afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); useUserApiKey().clearKey(); });
-    async function start() {
+    async function start(sourceText = 'We chose SQLite.') {
         vi.spyOn(projectContext, 'captureProjectOperation').mockImplementation(() => scope());
         useUserApiKey().setKey('sk-or-classification-fixture');
         await db.threads.put({ id: 'memory-chat', project_id: 'a', status: 'ready', deleted: false,
             pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
         await db.messages.put({ id: 'memory-source', thread_id: 'memory-chat', index: 0, role: 'user',
-            data: { content: 'We chose SQLite.' }, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+            data: { content: [{ type: 'text', text: sourceText },
+                { type: 'image_url', image_url: { url: 'data:image/png;base64,image-fixture' } }] },
+            deleted: false, clock: 1, created_at: 1, updated_at: 1 });
         let reply!: (response: Response) => void;
-        let dispatchedSignal!: AbortSignal;
+        let dispatchedRequest!: Request;
         let requested!: (body: Record<string, any>) => void;
         const request = new Promise<Record<string, any>>(resolve => { requested = resolve; });
         const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
             const req = input instanceof Request ? input : new Request(input, init);
             expect(req.url).toBe('https://openrouter.ai/api/alpha/decisions');
-            dispatchedSignal = req.signal;
+            dispatchedRequest = req;
             requested(await req.json());
             return await new Promise<Response>(resolve => { reply = resolve; });
         });
@@ -1212,22 +1214,30 @@ describe('nonblocking project memory classification', () => {
             source_thread_id: 'memory-chat', source_message_id: 'memory-source' });
         const body = await request;
         const finish = (answer: unknown = { type: 'choice', choice: 'decision',
-            probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } }, model = 'typesafe/jev-1.13') => reply(new Response(JSON.stringify({
+            probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } }, model = 'perplexity/pplx-decider-v1.1-27b') => reply(new Response(JSON.stringify({
                 model, answers: { memory_kind: answer },
                 usage: { input_tokens: 30, output_tokens: 0, cost: 0.000003 },
             }), { headers: { 'Content-Type': 'application/json' } }));
-        return { saved, body, fetcher, finish, get dispatchedSignal() { return dispatchedSignal; },
+        return { saved, body, fetcher, finish, get dispatchedSignal() { return dispatchedRequest.signal; },
             fail: () => reply(new Response('Provider unavailable', { status: 503 })) };
     }
-    it.each(['typesafe/jev-1.13', 'typesafe/jev-1.13-20260917'])(
+    it.each(['perplexity/pplx-decider-v1.1-27b', 'perplexity/pplx-decider-v1.1-27b-20260917'])(
         'saves immediately, bounds owning-chat context, then accepts resolved model %s', async model => {
         const { saved, body, finish } = await start();
         expect(JSON.parse((await db.posts.get(saved.row.id))!.content).kind).toBe('fact');
         expect(JSON.stringify(body.state)).toContain('We chose SQLite.');
-        expect(new TextEncoder().encode(JSON.stringify(body.state)).length).toBeLessThanOrEqual(16384);
+        expect(JSON.stringify(body.state)).not.toContain('image-fixture');
+        expect(new TextEncoder().encode(JSON.stringify(body.state)).length).toBeLessThanOrEqual(240 * 1024);
         finish(undefined, model);
         await vi.waitFor(async () => expect(JSON.parse((await db.posts.get(saved.row.id))!.content)).toMatchObject({
             text: 'Use SQLite.', kind: 'decision', source_message_id: 'memory-source' }));
+    });
+    it('classifies a saved memory with a long complete source message', async () => {
+        const text = 'Project background. '.repeat(10000) + 'We chose SQLite.';
+        const { saved, body, finish } = await start(text);
+        expect(body.state.messages[0].text).toBe(text);
+        finish();
+        await vi.waitFor(async () => expect(JSON.parse((await db.posts.get(saved.row.id))!.content).kind).toBe('decision'));
     });
     it.each(['edit', 'delete', 'move', 'evidence', 'revoke', 'project-delete', 'credentials', 'exclude', 'evidence-revision'] as const)(
         'discards a classification after %s', async change => {
@@ -1247,7 +1257,7 @@ describe('nonblocking project memory classification', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
             expect(await db.posts.get(saved.row.id)).toEqual(before);
         });
-    it.each(['attacker/model', 'typesafe/jev-1.13-other', 'typesafe/jev-1.13-20260917-extra'])(
+    it.each(['attacker/model', 'perplexity/pplx-decider-v1.1-27b-other', 'perplexity/pplx-decider-v1.1-27b-20260917-extra'])(
         'refuses unrelated resolved model %s', async model => {
             const { saved, finish } = await start();
             const before = await db.posts.get(saved.row.id);
@@ -1266,18 +1276,39 @@ describe('nonblocking project memory classification', () => {
         expect(await db.posts.get(saved.row.id)).toEqual(before);
     });
     it('aborts after the deadline and refuses a late successful response', async () => {
-        const pending = await start();
-        const before = await db.posts.get(pending.saved.row.id);
-        await vi.waitFor(() => expect(pending.dispatchedSignal.aborted).toBe(true), { timeout: 3500 });
-        pending.finish(); await new Promise(resolve => setTimeout(resolve, 100));
-        expect(await db.posts.get(pending.saved.row.id)).toEqual(before);
-        expect(pending.fetcher).toHaveBeenCalledTimes(1);
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+            const pending = await start();
+            const before = await db.posts.get(pending.saved.row.id);
+            await vi.advanceTimersByTimeAsync(10000);
+            expect(pending.dispatchedSignal.aborted).toBe(true);
+            pending.finish();
+            await vi.advanceTimersByTimeAsync(100);
+            expect(await db.posts.get(pending.saved.row.id)).toEqual(before);
+            expect(pending.fetcher).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
     });
     it('keeps a saved reference after provider failure without retries', async () => {
         const pending = await start(); const before = await db.posts.get(pending.saved.row.id);
         pending.fail(); await new Promise(resolve => setTimeout(resolve, 100));
         expect(await db.posts.get(pending.saved.row.id)).toEqual(before);
         expect(pending.fetcher).toHaveBeenCalledTimes(1);
+    });
+    it('keeps an explicit save and skips inference when source text exceeds the bound', async () => {
+        vi.spyOn(projectContext, 'captureProjectOperation').mockImplementation(() => scope());
+        useUserApiKey().setKey('sk-or-classification-fixture');
+        await db.threads.put({ id: 'oversized-chat', project_id: 'a', status: 'ready', deleted: false,
+            pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+        await db.messages.put({ id: 'oversized-source', thread_id: 'oversized-chat', index: 0, role: 'user',
+            data: { content: 'x'.repeat(240 * 1024) }, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+        const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+        const saved = await saveClassifiedProjectMemory(scope(), 'a', { text: 'We chose SQLite.',
+            source_thread_id: 'oversized-chat', source_message_id: 'oversized-source' });
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(JSON.parse((await db.posts.get(saved.row.id))!.content)).toMatchObject({ text: 'We chose SQLite.', kind: 'fact' });
+        expect(fetcher).not.toHaveBeenCalled();
     });
     it('persists without credentials and does not start an inference', async () => {
         vi.spyOn(projectContext, 'captureProjectOperation').mockImplementation(() => scope());
@@ -1312,11 +1343,20 @@ describe('automatic project memory capture', () => {
     const reply = (memories = [candidate]) => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ memories }) } }],
     }), { status: 200 });
-    const gate = () => new Response(JSON.stringify({ model: 'typesafe/jev-1.13',
+    const gate = (save = 0.99) => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
         answers: { worth_saving: { type: 'choice', choice: 'save',
-            probabilities: { save: 0.99, skip: 0.005, uncertain: 0.005 } } },
+            probabilities: { save, skip: (1 - save) / 2, uncertain: (1 - save) / 2 } } },
         usage: { cost: 0.00001 } }), { status: 200 });
     afterEach(() => vi.unstubAllGlobals());
+    it.each([[0.79, false], [0.8, true], [0.85, true]] as const)(
+        'extracts automatic memory at save probability %s only when the 0.8 gate passes', async (probability, accepted) => {
+        await seed();
+        const fetcher = vi.fn().mockResolvedValueOnce(gate(probability)).mockResolvedValueOnce(reply());
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(fetcher).toHaveBeenCalledTimes(accepted ? 2 : 1);
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(accepted ? 1 : 0);
+    });
     // A healthy cold gate can exceed three seconds. Instant-response fixtures
     // miss the observed Chrome failure: no memory or cursor is ever committed.
     it('saves grounded automatic memory after a slow successful gate', async () => {
@@ -1354,6 +1394,33 @@ describe('automatic project memory capture', () => {
         expect(JSON.parse((await db.kv.where('name').equals('project-memory-cursor:auto-chat').first())!.value!))
             .toEqual({ projectId: 'a', index: 1 });
     });
+    it('sends project context and long complete messages to both the automatic gate and extraction', async () => {
+        await seed();
+        await db.projects.update('a', { name: 'Atlas' });
+        await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), brief: 'Build an accessible team planning app.' }, null);
+        const userText = 'Project background. '.repeat(11000) + candidate.source_quote;
+        const assistantText = 'Detailed response. '.repeat(1000);
+        await db.messages.update('auto-user', { data: { content: userText } });
+        await db.messages.update('auto-assistant', { data: { content: assistantText, generation_state: 'complete' } });
+        const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply());
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        const gateBody = JSON.parse(fetcher.mock.calls[0]![1].body);
+        expect(gateBody.state.project).toEqual({ name: 'Atlas', brief: 'Build an accessible team planning app.' });
+        expect(gateBody.state.messages.map((message: { text: string }) => message.text)).toEqual([userText, assistantText]);
+        const extractionBody = JSON.parse(fetcher.mock.calls[1]![1].body);
+        expect(JSON.parse(extractionBody.messages[1].content)).toEqual(gateBody.state);
+        expect((await readProjectWorkspace(db, 'a')).memories[0]?.value.text).toBe(candidate.text);
+    });
+    it.each(['x'.repeat(240 * 1024), '界'.repeat(90000)])(
+        'keeps automatic inference bounded for oversized text %#', async text => {
+        await seed();
+        await db.messages.update('auto-user', { data: { content: text } });
+        const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(fetcher).not.toHaveBeenCalled();
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
+    });
     it('saves grounded memory, advances the cursor, and never revives a deleted capture', async () => {
         await seed();
         const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply());
@@ -1367,7 +1434,7 @@ describe('automatic project memory capture', () => {
         expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
         expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
     });
-    it.each(['owner', 'evidence', 'exclusion', 'revocation'])(
+    it.each(['owner', 'evidence', 'exclusion', 'revocation', 'name', 'brief'])(
         'rejects a result after %s changes during inference', async change => {
             await seed();
             vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockImplementationOnce(async () => {
@@ -1375,6 +1442,8 @@ describe('automatic project memory capture', () => {
                 if (change === 'evidence') await db.messages.update('auto-user', { data: { content: 'Do not use SQLite.' }, clock: 2 });
                 if (change === 'exclusion') await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), excluded_chat_ids: ['auto-chat'] }, null);
                 if (change === 'revocation') revoked = true;
+                if (change === 'name') await db.projects.update('a', { name: 'Changed project' });
+                if (change === 'brief') await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), brief: 'Changed project scope.' }, null);
                 return reply();
             }));
             await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant').catch(() => {});
@@ -1390,7 +1459,7 @@ describe('automatic project memory capture', () => {
         expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
         await db.kv.clear();
         fetcher.mockReset().mockResolvedValue(new Response(JSON.stringify({
-            model: 'typesafe/jev-1.13', answers: { worth_saving: { type: 'choice', choice: 'skip',
+            model: 'perplexity/pplx-decider-v1.1-27b', answers: { worth_saving: { type: 'choice', choice: 'skip',
                 probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } },
         })));
         await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');

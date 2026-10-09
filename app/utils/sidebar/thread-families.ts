@@ -7,6 +7,8 @@ import { getKvByName, tombstoneKvByName } from '~/db/kv';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
 
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+
 export const FAMILY_PAGE_SIZE = 50;
 export const familyExpansionPreferenceName = (rootId: string) => 'compaction-family:expanded:' + encodeURIComponent(rootId);
 export interface FamilyFilter { query?: string; projectId?: string; pinned?: boolean }
@@ -137,7 +139,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         }
         if (projectDocuments) {
             for (const row of await db.posts.bulkGet([...projectDocuments])) {
-                if (row && row.postType === "doc" && !row.deleted && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
+                if (row && row.postType === "doc" && isVisibleWorkspaceItem(row) && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
             }
             documents.sort(compare);
             documents.splice(options.limit + 1);
@@ -146,7 +148,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             while (documents.length <= options.limit) {
                 const query = before ? db.posts.where('[updated_at+created_at+id]').below(before) : db.posts.orderBy('[updated_at+created_at+id]');
                 const page = await query.reverse().limit(100).toArray(); if (!page.length) break;
-                for (const row of page) if (row.postType === 'doc' && !row.deleted
+                for (const row of page) if (row.postType === 'doc' && isVisibleWorkspaceItem(row)
                     && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
                 const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
                 if (page.length < 100) break;

@@ -9,9 +9,14 @@ has not passed. See [Browser qualification](#browser-qualification).
 
 ## Try the source examples
 
-1. From the source checkout, install dependencies with `bun install` and start
-   `bun run dev`. Quiz, Weather and Map register automatically in development;
-   their tools start disabled and are excluded from production builds.
+Quiz, Weather and Map are kept under `app/plugins/examples/` as reference code.
+They are not registered automatically in development or production.
+
+1. To try them locally, temporarily add their entries to the `plugins` array in
+   `nuxt.config.ts`: `~/plugins/examples/quiz-card-example.client`,
+   `~/plugins/examples/weather-card-example.client`, and
+   `~/plugins/examples/map-card-example.client`. Install dependencies with
+   `bun install` and start `bun run dev`. Remove these entries when finished.
 2. Connect OpenRouter through the app, choose a model that supports tools, then
    open the chat composer's **Chat settings → Tools → Other** category and enable
    Quiz, Weather and Map. Example requests use the connected account's credits.
@@ -35,8 +40,8 @@ The returned registration handle owns both the tool and its card; dispose it
 on plugin teardown or HMR. registerToolCard binds an existing tool.
 
 For a Vue source plugin, put its entry directly under `app/plugins/` so Nuxt
-discovers it. Nested example entries in this repository are explicitly listed in
-`nuxt.config.ts`; copying another nested entry does not register it automatically.
+discovers it. Nested example entries in this repository are not registered;
+trying one requires explicitly listing it in `nuxt.config.ts`.
 For example, `app/plugins/my-card.client.ts` can register a component:
 
 ```ts
@@ -249,7 +254,8 @@ under test-results/tool-cards. Harness routes exist only in development with
 OR3_TOOL_CARDS_TEST_HARNESS=true.
 
 Managed package cards require the `chat-tool-cards` contribution surface to be selected.
-The source examples remain development-only and their tools are disabled by default.
+The source examples are unregistered by default. When explicitly registered,
+their tools start disabled.
 
 ## Troubleshooting
 

@@ -1,5 +1,12 @@
 .document-editor-root { --editor-canvas: 780px; position: relative; container-type: inline-size; height: 100%; width: 100%; display: flex; flex-direction: column; overflow: hidden; color: var(--md-on-surface); background: var(--md-surface); font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); }
 
+.document-status-banner { display: flex; align-items: center; gap: 0.65rem; flex-shrink: 0; padding: 0.75rem 1rem; border-bottom: var(--md-border-width-subtle, 1px) solid var(--md-border-color); background: var(--md-surface-variant); color: var(--md-on-surface-variant); font-size: 0.875rem; line-height: 1.5; }
+.document-status-banner p { margin: 0; }
+.document-status-icon { flex-shrink: 0; width: 1.25rem; height: 1.25rem; }
+.document-unavailable { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem; text-align: center; color: var(--md-on-surface-variant); }
+.document-unavailable h2 { margin: 0; color: var(--md-on-surface); font-size: 1.25rem; font-weight: 600; }
+.document-unavailable p { margin: 0; max-width: 32rem; line-height: 1.5; }
+
 .editor-toolbar {
     --doc-toolbar-surface: color-mix(in oklab, var(--md-surface), transparent 2%);
     --doc-toolbar-fade: 1.1rem;

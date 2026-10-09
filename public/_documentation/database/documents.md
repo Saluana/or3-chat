@@ -2,7 +2,7 @@
 
 In local mode, native documents also appear in Files. Logical Trash hides them
 from ordinary browsing, project membership, mentions, and assistant tools while
-retaining rows and checkpoints. Open editors become read-only until Restore.
+retaining rows and checkpoints. Open editors become read-only until Restore. A cold load of a trashed or unavailable document shows an explicit status view instead of an empty editable document. Restoring a cold Trash tab reloads its saved title and body. Sidebar activity, document search, and restored tab admission exclude trashed documents.
 Permanent removal from Files releases the document's ownership while preserving
 retained history and shared file references. Chat validates native content with
 the same lazy extension/schema loader as the mounted editor, including enabled
@@ -83,7 +83,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 ## Live editor content and autosave
 
-Source editors use `app/composables/documents/useDocumentsStore.ts` to stage title/content changes and debounce writes (currently 750 ms). Cached content and a scheduled save are not evidence of local durability. Explicitly flush and confirm the saved/error state before a workflow depends on that content being persisted.
+Source editors use `app/composables/documents/useDocumentsStore.ts` to stage title/content changes and debounce writes (currently 750 ms). Cached content and a scheduled save are not evidence of local durability. Explicitly flush and confirm the saved/error state before a workflow depends on that content being persisted. The store reports missing or hidden records as `unavailable`, separately from storage errors. A tab with no staged edits can close after an unavailable or failed load; pending title/content changes still block navigation until they are saved, including edits captured just before the item entered Trash. Async document errors use the setup-captured error toast bridge rather than invoking Vue injection composables after an await.
 
 The document cache and staged writes belong to the originating workspace database. Copied or imported documents with the same ID in different workspaces have separate state. A pending save or read completion after a workspace switch stays in its original database; it cannot replace the active workspace's cached document or save notification. Failed saves retain their staged changes for retry in the original workspace, including after its DB handle is evicted and reopened. Only unsaved state is retained across handle replacement; successful saves and explicit release remove that retention.
 

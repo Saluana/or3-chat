@@ -271,14 +271,26 @@ The form does not await inference. Existing records retain their kinds until exp
 there is no migration, backfill or additional memory store. Automatic capture uses the same records as described below.
 
 One OpenRouter Decisions choice question classifies a saved reference. The pinned model is
-`typesafe/jev-1.13`, with a 0.9 decision threshold. It passed a real OpenRouter comparison
-on 40 labeled examples and a separate 50-case verification including ten held-out examples;
-none promoted an unapproved choice. Luna failed the clear-adoption acceptance bar.
+`perplexity/pplx-decider-v1.1-27b`, with a 0.9 decision threshold. The live comparison
+with Jev on 40 labeled examples is recorded below and in the evaluation receipt.
 The fixtures, text-free results and comparison command are under
-`planning/project-memory-classification/`. This finite evaluation does not guarantee classification accuracy on every memory.
+`planning/project-memory-classification/`. On October 8, 2026, Jev matched 40/40
+labels and Decider matched 39/40: Decider labeled the current-database/unapproved-migration
+case uncertain instead of fact. Both produced the expected stored kind on 40/40 cases,
+accepted all twelve adopted decisions and promoted no unapproved choices. Four live
+Decider automatic-capture smoke cases also passed, including supported extraction and
+skipping a question and an unapproved brainstorm. This finite synthetic evaluation does
+not guarantee classification accuracy on every memory.
 Canonical model IDs and their dated provider snapshots are accepted; other models are rejected.
 State contains only the saved text and at most six preceding messages from the source's
-owning chat, with a 16 KiB UTF-8 bound. Oversized evidence skips classification rather than losing caveats through clipping. Attachments and other chats are never sent.
+owning chat, with a 240 KiB UTF-8 bound. Oversized evidence skips classification rather than losing caveats through clipping. Attachments and other chats are never sent.
+The shared `MEMORY_CONTEXT_MAX_BYTES` limit is 245,760 bytes (240 KiB) of serialized
+UTF-8 JSON, roughly 60K tokens for ordinary English; it is not an exact token limit.
+Source messages can use the full aggregate budget rather than a 4,000-character cap.
+Saved memory entries and existing references retain their 4,000-character limit. The
+shared schemas validate the aggregate bound before dispatch and again at the SSR boundary.
+The fixed rubric adds a small amount of request overhead outside the state budget. Mixed-media messages contribute
+only text parts; image-only messages supply no visual evidence, even though Decider supports images.
 
 Static/BYOK uses the installed SDK directly. Authenticated SSR
 uses `POST /api/openrouter/classify-memory`, requiring mutation intent, workspace write access,
@@ -290,7 +302,7 @@ uses OpenRouter-only APIs, so it runs only when the configured OpenRouter base U
 `openrouter.ai`; with a gateway/proxy base URL, classification and capture are skipped rather
 than sending that key to another host.
 
-A three-second total deadline and disabled retries bound classification. Missing credentials,
+A ten-second total deadline and disabled retries bound classification. Missing credentials,
 network failures, malformed probabilities and uncertainty leave the saved reference intact.
 Only kind metadata can change, in an expected-clock transaction after fresh workspace,
 project, thread and evidence checks. Sidebar navigation does not cancel the operation;
@@ -301,8 +313,10 @@ includes model, probabilities, latency and cost, never memory text or credential
 
 The workspace-projects client plugin subscribes to `ai.chat.stream:action:complete`. Browser foreground completion and successfully persisted canonical/tracker background completion supply captured `workspaceId` and `projectId`. The listener returns immediately and owns a bounded batching helper (at most sixteen active chats), disposed on workspace switch and plugin HMR. No inference runs in the send path. Capture processes three completed exchanges or an idle batch after ten seconds. It requires the browser to remain open.
 
-`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 16 KiB aggregate bound including up to twenty existing references. The state is built per message, never clipped: fresh user messages come first, then existing references, then older context newest-first while the bound allows. A user message over 4,000 characters is skipped whole and an oversized assistant reply becomes a fixed omission marker. Older context can explain an approval; only fresh user messages can establish new memory. Without a processable fresh user message the cursor advances without inference. One `typesafe/jev-1.13` Decisions choice must return save with probability at least 0.9 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are three and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key, base-URL and memory rate-limit policies as explicit classification; a 429/503 leaves the cursor for a later batch. Callers cannot choose models or prompts.
+`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 240 KiB aggregate bound including up to twenty existing references. The state is built per message, never clipped: fresh user messages come first, then existing references, then older context newest-first while the bound allows. A user message exceeding the 240 KiB budget is skipped whole and an oversized assistant reply becomes a fixed omission marker. Messages that fit individually can still be omitted when the combined JSON state fills the budget. Older context can explain an approval; only fresh user messages can establish new memory. Without a processable fresh user message the cursor advances without inference. One `perplexity/pplx-decider-v1.1-27b` Decisions choice must return save with probability at least 0.8 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are ten and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key, base-URL and memory rate-limit policies as explicit classification; a 429/503 leaves the cursor for a later batch. Callers cannot choose models or prompts.
 
-The expected-clock transaction rechecks workspace authority, owning project, chat exclusion, evidence revisions and batch cursor. Every candidate must cite an exact quote from a fresh user message. Stable project/text-derived IDs, existing records and tombstones prevent exact duplicates and revival of deleted captures. Existing references include dismissed memories for semantic deduplication. An explicit correction may replace an unchanged automatic record; user edits remove its optional `origin: automatic` marker and cannot be overwritten. At most twenty live automatic memories are saved. Additional new captures are skipped at capacity, while explicit corrections and manual memory remain available.
+Automatic state also includes `project: { name, brief }` from the captured owning project, within the same 240 KiB budget. The project name is bounded by that budget and the brief retains its 8,000-character settings limit. Both the decision gate and extraction use the Broader recall rubric recorded in `planning/project-memory-classification/prompt-comparison-results.json`: directly stated recurring preferences and workflow constraints can be remembered without an explicit memory request, while one-time requests and inferred preferences are excluded. Project metadata explains relevance; only fresh user messages establish new information or adoption. Metadata is treated as untrusted data. The SSR capture schema requires this project context. Explicit fact/decision classification retains its separate 0.9 decision threshold.
+
+The expected-clock transaction rechecks workspace authority, owning project, chat exclusion, evidence revisions, unchanged project name/brief and batch cursor. Every candidate must cite an exact quote from a fresh user message. Stable project/text-derived IDs, existing records and tombstones prevent exact duplicates and revival of deleted captures. Existing references include dismissed memories for semantic deduplication. An explicit correction may replace an unchanged automatic record; user edits remove its optional `origin: automatic` marker and cannot be overwritten. At most twenty live automatic memories are saved. Additional new captures are skipped at capacity, while explicit corrections and manual memory remain available.
 
 The existing workspace KV table holds `project-memory-cursor:<threadId>` with the processed project/index, committed atomically with memories. Reloads and repeated completion events do not reprocess successful batches. Failures never roll back messages or manual memories and do not schedule retries; a later completed turn can try a new bounded batch. No historical backfill, durable inference queue, embeddings or new database table is introduced. Request context selects at most four matching automatic memories (or four recent entries for a handoff) plus explicit memories ranked by query match and recency within a 12 KiB budget. The receipt's `omitted_memory_count` counts explicit memories left out of the request, whether the budget or context admission removed them. Memories travel in their own context message, which context admission may drop after optional sources and chat summaries; instructions and the brief stay required. A project holds at most 500 live memories. Query terms ignore common stop words for memories, sources and chat continuity. All automatic memories remain editable/deletable in the normal Memory list and retain source-chat links.

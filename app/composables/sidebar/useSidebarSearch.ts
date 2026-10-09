@@ -12,6 +12,7 @@
  * - Does not render search UI
  * - Does not provide server-side search
  */
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
 import { useDebounceFn, watchDebounced } from '@vueuse/core';
 import type { Thread, Project, Post } from '~/db';
@@ -65,7 +66,7 @@ const QUERY_DEBOUNCE_MS = 120;
  */
 function isDocPost(post: Post): boolean {
     const record = post as Record<string, unknown>;
-    return record.postType === 'doc' && !record.deleted;
+    return record.postType === 'doc' && isVisibleWorkspaceItem(post);
 }
 
 /**

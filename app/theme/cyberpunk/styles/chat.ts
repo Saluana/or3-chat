@@ -23,6 +23,17 @@ export const chatOverrides = {
     'button.message': {
         class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80 shadow-none!',
     },
+    // Keep source receipts quieter than message action buttons.
+    'button#message.workspace-source': {
+        variant: 'outline',
+        color: 'on-surface',
+        class: 'justify-start bg-transparent! text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! shadow-none! hover:shadow-none! font-normal',
+    },
+    'button#message.workspace-sources-toggle': {
+        variant: 'ghost',
+        color: 'on-surface',
+        class: 'bg-transparent! text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! shadow-none! font-normal',
+    },
     'button#message.reasoning-toggle': {
         class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80',
     },
@@ -94,9 +105,10 @@ export const chatCssSelectors = {
     /* --- Tool Call Indicators --- */
     '.tool-call-indicator': {
         style: {
-            borderRadius: 'var(--md-border-radius)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            overflow: 'hidden',
+            backgroundColor: 'transparent',
+            border: 'none',
+            boxShadow: 'none',
+            overflow: 'visible',
             marginTop: '8px',
             marginBottom: '8px',
         },
@@ -110,9 +122,11 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary': {
         style: {
             background: 'transparent !important',
-            padding: '10px 12px',
+            padding: '6px 10px',
             cursor: 'pointer',
-            display: 'flex',
+            display: 'inline-flex',
+            width: 'fit-content',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             alignItems: 'center',
             gap: '10px',
         },
@@ -124,7 +138,9 @@ export const chatCssSelectors = {
     },
     '.tool-call-expanded-content': {
         style: {
-            borderTop: 'var(--md-border-width) solid var(--md-border-color)',
+            border: 'var(--md-border-width) solid var(--md-border-color) !important',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
+            marginLeft: '0',
             padding: '12px',
             backgroundColor: 'var(--md-surface-container-lowest)',
         },

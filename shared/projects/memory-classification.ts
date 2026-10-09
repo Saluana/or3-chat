@@ -10,10 +10,13 @@ export function memoryInferenceOrigin(baseUrl: unknown): string | null {
     return origin === new URL(DEFAULT_OPENROUTER_BASE_URL).origin ? origin : null;
 }
 
-// Qualified against labeled and held-out adoption cases using the real Decisions API.
-export const MEMORY_CLASSIFIER_MODEL = 'typesafe/jev-1.13';
-export const MEMORY_CLASSIFIER_TIMEOUT_MS = 3000;
+// Compared with Jev on labeled cases using the real Decisions API; see planning receipts.
+export const MEMORY_CLASSIFIER_MODEL = 'perplexity/pplx-decider-v1.1-27b';
+export const MEMORY_CLASSIFIER_TIMEOUT_MS = 10000;
 export const MEMORY_DECISION_THRESHOLD = 0.9;
+// Roughly 60K tokens of ordinary English, not an exact tokenizer limit.
+// Shared by explicit classification, automatic capture and SSR validation.
+export const MEMORY_CONTEXT_MAX_BYTES = 240 * 1024;
 export const MemoryClassificationStateSchema = z
     .object({
         memory: z.string().min(1).max(4000),
@@ -22,7 +25,7 @@ export const MemoryClassificationStateSchema = z
                 z
                     .object({
                         role: z.enum(['user', 'assistant']),
-                        text: z.string().max(4000),
+                        text: z.string().max(MEMORY_CONTEXT_MAX_BYTES),
                     })
                     .strict(),
             )
@@ -31,8 +34,8 @@ export const MemoryClassificationStateSchema = z
     .strict()
     .refine(
         (state) =>
-            new TextEncoder().encode(JSON.stringify(state)).length <= 16384,
-        'Memory context exceeds 16 KiB.',
+            new TextEncoder().encode(JSON.stringify(state)).length <= MEMORY_CONTEXT_MAX_BYTES,
+        'Memory context exceeds 240 KiB.',
     );
 export type MemoryClassificationState = z.infer<
     typeof MemoryClassificationStateSchema
