@@ -142,11 +142,11 @@ const searchIcon = useIcon('ui.search');
 
 const sourceButtonProps = useButtonOverrides(
     { component: 'button', context: 'message', identifier: 'message.workspace-source' },
-    { variant: 'outline', color: 'on-surface', size: 'workspace' }
+    { variant: 'outline', color: 'neutral', size: 'md', class: 'h-9 min-h-9 px-3 py-1.5 text-[17px] leading-5 gap-2 max-md:h-11 max-md:min-h-11' }
 );
 const sourcesToggleProps = useButtonOverrides(
     { component: 'button', context: 'message', identifier: 'message.workspace-sources-toggle' },
-    { variant: 'ghost', color: 'on-surface', size: 'workspace' }
+    { variant: 'ghost', color: 'neutral', size: 'md', class: 'h-9 min-h-9 px-3 py-1.5 text-[17px] leading-5 gap-2 max-md:h-11 max-md:min-h-11' }
 );
 const showAllSources = ref(false);
 const WorkspaceDocumentChangeCard = defineAsyncComponent(() => import('./WorkspaceDocumentChangeCard.vue'));

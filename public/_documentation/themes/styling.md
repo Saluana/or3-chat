@@ -200,7 +200,9 @@ files and define `@font-face` in your scoped stylesheet.
 The shared `AppModal` uses theme surface/text, border, radius, elevation, and
 focus tokens while owning its geometry. Sizes are `sm` (560px), `md` (700px),
 `lg` (880px), and `workspace` (1280px with bounded height). Respect its scrolling
-body, accessible title, close control, and footer; do not replace geometry through
+body, accessible title, close control, and footer. Shared headers use 20px vertical
+and 24px horizontal padding, reduced to 16px in compact viewports, with a
+theme-token divider across Blank, Retro and Cyberpunk. Do not replace geometry through
 generic modal slot recipes. See
 [Replace app components](/documentation/themes/component-overrides#dialogs-and-accessibility).
 
