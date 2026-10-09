@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.81",
+    "version": "0.1.82",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"
@@ -141,6 +141,7 @@
     },
     "dependencies": {
         "exsolve": "^1.1.0",
+        "@cfworker/json-schema": "4.1.1",
         "@noble/hashes": "^2.4.0",
         "@nuxt/ui": "4.11.1",
         "@openrouter/sdk": "^1.2.145",

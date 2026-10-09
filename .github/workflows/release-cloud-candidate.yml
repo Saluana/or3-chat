@@ -478,6 +478,21 @@ jobs:
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
           echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify browser hydration under the production CSP
+        run: |
+          npm install --prefix "$RUNNER_TEMP/or3-browser" --no-save --ignore-scripts playwright@1.63.0
+          "$RUNNER_TEMP/or3-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
+          cp scripts/release/smoke-browser.mjs "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
+          OR3_SMOKE_URL=http://127.0.0.1:3017 OR3_SMOKE_HYDRATION_ONLY=1 \
+            OR3_SMOKE_CADDYFILE="$GITHUB_WORKSPACE/packages/or3-cloud/assets/Caddyfile" \
+            OR3_SMOKE_ARTIFACT_DIR="$GITHUB_WORKSPACE/output/browser-smoke" \
+            node "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: or3-cloud-browser-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: output/browser-smoke
+          if-no-files-found: ignore
       - name: Verify operator bridge and persisted data
         run: |
           set -euo pipefail

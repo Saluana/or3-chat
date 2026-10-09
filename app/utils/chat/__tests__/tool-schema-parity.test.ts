@@ -85,11 +85,15 @@ describe('shared tool JSON Schema validation', () => {
         await expect(executeServerTool(name, args)).resolves.toMatchObject({ result: 'server' });
     });
 
-    it('rejects malformed parameter schemas in both registries', () => {
+    it.each([
+        { value: { type: 'definitely-not-a-json-schema-type' } },
+        { value: { type: 'string', minLength: -1 } },
+        { value: { type: 'string', pattern: '[' } },
+        { value: { type: 'string', misspelledKeyword: true } },
+        { value: { $ref: '#/definitions/missing' } },
+    ])('rejects malformed parameter schemas in both registries: %j', (properties) => {
         const clientDef = definition('malformed_client');
-        clientDef.function.parameters.properties = {
-            value: { type: 'definitely-not-a-json-schema-type' },
-        };
+        clientDef.function.parameters.properties = properties;
         const serverDef = structuredClone(clientDef);
         serverDef.function.name = 'malformed_server';
 
@@ -97,5 +101,32 @@ describe('shared tool JSON Schema validation', () => {
             .toThrow(/Invalid JSON Schema/);
         expect(() => registerServerTool(serverDef, () => 'nope'))
             .toThrow(/Invalid JSON Schema/);
+    });
+
+    it('preserves references, alternatives, arrays and format annotations in both runtimes', async () => {
+        const name = 'schema_parity_draft7';
+        names.add(name);
+        const def = definition(name);
+        def.function.parameters = {
+            type: 'object', additionalProperties: false, required: ['values', 'literal'],
+            definitions: { value: { anyOf: [{ type: 'integer', minimum: 1 }, { type: 'string', pattern: '^ok$' }] } },
+            properties: {
+                values: { type: 'array', minItems: 1, uniqueItems: true, items: { $ref: '#/definitions/value' } },
+                literal: { enum: [{ format: 'literal', type: 'literal' }] },
+                note: { type: 'string', format: 'email' },
+            },
+        };
+        useToolRegistry().registerTool(def, () => 'client', { override: true });
+        registerServerTool(def, () => 'server', { override: true });
+        const args = JSON.stringify({ values: [1, 'ok'], literal: { format: 'literal', type: 'literal' }, note: 'annotation only' });
+        await expect(useToolRegistry().executeTool(name, args)).resolves.toMatchObject({ result: 'client' });
+        await expect(executeServerTool(name, args)).resolves.toMatchObject({ result: 'server' });
+        for (const values of [[], [1, 1], [0], ['bad']]) {
+            const json = JSON.stringify({ values, literal: { format: 'literal', type: 'literal' } });
+            const client = await useToolRegistry().executeTool(name, json);
+            const server = await executeServerTool(name, json);
+            expect(client.error).toContain('Invalid tool arguments');
+            expect(client.error).toBe(server.error);
+        }
     });
 });

@@ -389,7 +389,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Register trusted client and server tools with owned lifecycle, runtime admission, and request authorization."
+                    "summary": "Register trusted client and server tools with CSP-compatible draft-07 validation, owned lifecycle, runtime admission, and request authorization."
                 },
                 {
                     "name": "manual-context-compaction.md",
@@ -938,7 +938,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, package verification, permission review, browser checks, containment, budgets, safe mode, and recovery."
+                    "summary": "Operator configuration, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery."
                 },
                 {
                     "name": "admin-plugins.md",

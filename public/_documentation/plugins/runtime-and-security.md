@@ -82,6 +82,10 @@ checks verify entry bytes, host Vue ABI/import mapping, and import without
 running `setup`; normal activation runs `setup` after promotion and enablement.
 A server check alone does not prove client startup.
 
+The live host Vue render proof loads a precompiled same-origin module through
+the host import map. It runs under the managed production CSP without `blob:`
+scripts or `unsafe-eval`.
+
 Installed, workspace-enabled, and browser-running are separate states. The UI
 checks the exact package digest, not just a version string. An activation check
 never proves a paid feature or workflow succeeded. Portable code starts when its

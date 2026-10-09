@@ -108,7 +108,10 @@ and the digest-bound tarball, then runs manifest/anonymous-pull checks, security
 scans, ARM runtime checks, and upgrade/rollback/restart/persistence checks as
 independent jobs. The final job records immutable source/image/tarball
 identities in `candidate-receipt.json` only after every required verifier
-passes. It publishes only source-qualified candidate evidence; it cannot
+passes. The lifecycle job also checks fresh desktop Chromium, mobile Chromium
+and mobile WebKit hydration and a UI interaction under the shipped production
+CSP, fails on browser errors, and retains screenshots, traces and JSON results.
+It publishes only source-qualified candidate evidence; it cannot
 publish npm or the public version images.
 
 The manifest contract also starts the exact operator image as an unprivileged,

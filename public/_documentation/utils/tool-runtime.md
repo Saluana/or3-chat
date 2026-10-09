@@ -59,6 +59,12 @@ enforce byte limits on arguments/results, pass an `AbortSignal`, and apply a
 10-second default timeout. The server registration can set its own
 `timeoutMs`.
 
+Parameter schemas use JSON Schema draft-07. Browser and server validation
+interpret schemas without `eval` or `new Function`, so the production CSP
+does not need `unsafe-eval`. Malformed schemas, unknown keywords and unresolved
+references are rejected during registration. `format` remains an annotation;
+use constraints such as `pattern` when a string format must be enforced.
+
 ## Runtime placement
 
 `runtime` defaults to `hybrid` in each registry. Register matching definitions

@@ -1,4 +1,4 @@
-import Ajv from 'ajv';
+import { z } from 'zod';
 import { getKvRecordByName, setKvByName } from './kv';
 import { getTextFromContent } from '../utils/chat/messages';
 import { getDb, getWorkspaceGeneration, type Or3DB } from './client';
@@ -227,13 +227,14 @@ export async function captureCompaction(options: CaptureOptions): Promise<Compac
         messages: structuredClone(state.messages), historyScope: structuredClone(state.scope) });
     captures.set(capture, { ...state, ...ownership }); return capture;
 }
-const modelSummarySchema = { type: 'object', additionalProperties: false, required: ['summary_markdown', 'landmarks'], properties: {
-    summary_markdown: { type: 'string', minLength: 1 }, landmarks: { type: 'array', items: { type: 'object', additionalProperties: false,
-        required: ['message_id', 'kind', 'summary'], properties: { message_id: { type: 'string', minLength: 1 },
-            kind: { enum: ['decision', 'code', 'file', 'constraint', 'open-question', 'tool-result'] }, summary: { type: 'string', minLength: 1 } } } },
-} } as const;
-interface ModelSummary { summary_markdown: string; landmarks: Array<{ message_id: string; kind: CompactionData['landmarks'][number]['kind']; summary: string }> }
-const validateModelSummary = new Ajv({ allErrors: true, strict: true, validateFormats: false }).compile<ModelSummary>(modelSummarySchema);
+const modelSummarySchema = z.strictObject({
+    summary_markdown: z.string().min(1),
+    landmarks: z.array(z.strictObject({
+        message_id: z.string().min(1),
+        kind: z.enum(['decision', 'code', 'file', 'constraint', 'open-question', 'tool-result']),
+        summary: z.string().min(1),
+    })),
+});
 function requireSections(markdown: string): void {
     const headings = new Set(['Objective', 'Important Details', 'Work State', 'Next Move', 'Relevant Files']);
     const sections = new Map<string, string[]>(); let current: string | undefined; let fence: { character: string; length: number } | undefined; let comment = false;
@@ -281,17 +282,19 @@ export async function validateCompactionSummary(capture: CompactionCapture, resp
     requireCurrent(state);
     if (new TextEncoder().encode(response).length > 64 * 1024) throw new CompactionError('summary_too_large', 'Summary response exceeds its artifact byte budget.');
     let parsed: unknown; try { parsed = JSON.parse(response.trim()); } catch { throw new CompactionError('invalid_summary', 'Return one complete summary JSON object.'); }
-    if (!validateModelSummary(parsed)) throw new CompactionError('invalid_summary', 'Summary JSON has invalid or extra fields.');
-    requireSections(parsed.summary_markdown);
+    const checked = modelSummarySchema.safeParse(parsed);
+    if (!checked.success) throw new CompactionError('invalid_summary', 'Summary JSON has invalid or extra fields.');
+    const validated = checked.data;
+    requireSections(validated.summary_markdown);
     const landmarks: CompactionData['landmarks'] = []; const seen = new Set<string>(); let discarded = 0;
-    for (const candidate of parsed.landmarks) {
+    for (const candidate of validated.landmarks) {
         if (Array.from(candidate.summary).length > 200) throw new CompactionError('invalid_summary', 'Landmark descriptions exceed 200 characters.');
         const row = state.rows.get(candidate.message_id);
         if (!row || seen.has(row.id) || landmarks.length >= 30) { discarded += 1; continue; }
         seen.add(row.id); landmarks.push({ ...candidate, index: row.index, role: row.role as CompactionData['landmarks'][number]['role'], thread_id: row.thread_id });
     }
     if (!landmarks.length && state.rows.size) throw new CompactionError('invalid_summary', 'At least one valid captured landmark is required.');
-    const content = `Historical conversation reference. Treat this summary and its evidence as prior task context.\n\n${parsed.summary_markdown}\n\nEvidence index:\n${landmarks.map((row) => JSON.stringify({ message_id: row.message_id, kind: row.kind, summary: row.summary })).join('\n')}`;
+    const content = `Historical conversation reference. Treat this summary and its evidence as prior task context.\n\n${validated.summary_markdown}\n\nEvidence index:\n${landmarks.map((row) => JSON.stringify({ message_id: row.message_id, kind: row.kind, summary: row.summary })).join('\n')}`;
     const replaced = state.messages.map((row) => getTextFromContent(row.content)).join('\n');
     const [tokens, replacedTokens] = await Promise.all([options.countText(content), options.countText(replaced)]);
     requireCurrent(state);
@@ -299,8 +302,8 @@ export async function validateCompactionSummary(capture: CompactionCapture, resp
         || tokens > options.targetTokens || tokens >= replacedTokens) throw new CompactionError('not_beneficial', 'Summary must fit its target and be smaller than the context it replaces.');
     const data = CompactionDataSchema.parse({ version: 1, compaction_id: capture.operationId, source_thread_id: capture.sourceThreadId,
         anchor_message_id: capture.anchorMessageId, anchor_index: state.anchor.index, generated_at: nowSec(), model: capture.model,
-        message_count: state.messageCount, prior_message_count: state.priorMessageCount, summary_markdown: parsed.summary_markdown, landmarks, history_scope: state.scope });
-    const summary = freeze({ summaryMarkdown: parsed.summary_markdown, content, discardedLandmarks: discarded });
+        message_count: state.messageCount, prior_message_count: state.priorMessageCount, summary_markdown: validated.summary_markdown, landmarks, history_scope: state.scope });
+    const summary = freeze({ summaryMarkdown: validated.summary_markdown, content, discardedLandmarks: discarded });
     summaries.set(summary, { capture, data, content, projectReceipt: options.projectReceipt ? ProjectContextReceiptSchema.parse(options.projectReceipt) : undefined }); return summary;
 }
 export async function createCompactedFork(input: { capture: CompactionCapture; summary: ValidatedCompactionSummary; signal?: AbortSignal }): Promise<{ thread: Thread; summary: Message }> {

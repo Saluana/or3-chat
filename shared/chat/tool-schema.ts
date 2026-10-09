@@ -1,4 +1,5 @@
-import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
+import { Validator, dereference, type OutputUnit, type Schema } from '@cfworker/json-schema';
+import draft7 from 'ajv/dist/refs/json-schema-draft-07.json';
 
 export type JsonSchemaObject = Record<string, unknown> & {
     type: 'object';
@@ -19,64 +20,78 @@ export type ToolValidationResult<T> =
     | { valid: true; value: T }
     | { valid: false; error: string };
 
-// One validator instance is shared by browser and server imports. Ajv's default
-// dialect is JSON Schema draft-07, which is the dialect accepted by the tool API.
-const ajv = new Ajv({
-    allErrors: true,
-    strict: true,
-    validateFormats: false,
-});
-
-const compiledSchemas = new WeakMap<object, ValidateFunction>();
+// Interpret schemas in both runtimes; runtime code generation violates the
+// production CSP. Only the static draft-07 metadata is imported from Ajv.
+let metaValidator: Validator | undefined;
+const validators = new WeakMap<object, Validator>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function formatPath(error: ErrorObject): string {
-    const path = error.instancePath || '/';
-    if (error.keyword === 'required') {
-        const missing = (error.params as { missingProperty?: string }).missingProperty;
-        return missing ? `${path === '/' ? '' : path}/${missing}` || '/' : path;
-    }
-    if (error.keyword === 'additionalProperties') {
-        const extra = (error.params as { additionalProperty?: string }).additionalProperty;
-        return extra ? `${path === '/' ? '' : path}/${extra}` || '/' : path;
-    }
-    return path;
+function formatErrors(errors: OutputUnit[]): string {
+    if (!errors.length) return 'value does not match the JSON Schema';
+    return errors.map((error) => `${error.instanceLocation.replace(/^#/, '') || '/'} ${error.error}`).join('; ');
 }
 
-function formatErrors(errors: ErrorObject[] | null | undefined): string {
-    if (!errors?.length) return 'value does not match the JSON Schema';
-    return errors
-        .map((error) => `${formatPath(error)} ${error.message ?? error.keyword}`)
-        .join('; ');
-}
-
-function compileSchema(schema: JsonSchemaObject): ToolValidationResult<ValidateFunction> {
-    const cached = compiledSchemas.get(schema);
-    if (cached) return { valid: true, value: cached };
-
-    try {
-        const validSchema = ajv.validateSchema(schema);
-        if (!validSchema) {
-            return {
-                valid: false,
-                error: `Invalid JSON Schema: ${formatErrors(ajv.errors)}`,
-            };
+/** Check schema keywords, visiting only schema locations, never enum/default data. */
+function prepareSchema(schema: Schema | boolean): void {
+    if (typeof schema === 'boolean') return;
+    for (const key of Object.keys(schema)) {
+        if (!Object.hasOwn(draft7.properties, key) && key !== '$defs') {
+            throw new Error(`Unknown JSON Schema keyword "${key}".`);
         }
-        const validate = ajv.compile(schema);
-        compiledSchemas.set(schema, validate);
-        return { valid: true, value: validate };
-    } catch (error) {
-        return {
-            valid: false,
-            error: `Invalid JSON Schema: ${error instanceof Error ? error.message : String(error)}`,
-        };
+    }
+    if (schema.$schema && schema.$schema.replace(/#$/, '') !== draft7.$id.replace(/#$/, '')) {
+        throw new Error('Tool schemas must use JSON Schema draft-07.');
+    }
+    if (schema.pattern !== undefined) new RegExp(schema.pattern, 'u');
+    for (const pattern of Object.keys(schema.patternProperties ?? {})) new RegExp(pattern, 'u');
+    // Preserve the existing validateFormats:false contract. Formats annotate
+    // tool inputs; constraints such as pattern/minLength still validate them.
+    delete schema.format;
+    for (const key of ['definitions', '$defs', 'properties', 'patternProperties', 'dependencies']) {
+        for (const child of Object.values(schema[key] ?? {})) {
+            if (Array.isArray(child)) continue;
+            if (key === '$defs' && !metaValidator!.validate(child).valid) {
+                throw new Error('Invalid JSON Schema in $defs.');
+            }
+            prepareSchema(child as Schema | boolean);
+        }
+    }
+    for (const key of ['additionalItems', 'items', 'contains', 'additionalProperties', 'propertyNames', 'not', 'if', 'then', 'else', 'allOf', 'anyOf', 'oneOf']) {
+        const child = schema[key] as Schema | boolean | (Schema | boolean)[] | undefined;
+        if (Array.isArray(child)) child.forEach(prepareSchema);
+        else if (child !== undefined) prepareSchema(child);
     }
 }
 
-/** Validate a provider-visible tool definition and compile its parameter schema. */
+function getValidator(schema: JsonSchemaObject): ToolValidationResult<Validator> {
+    const cached = validators.get(schema);
+    if (cached) return { valid: true, value: cached };
+    try {
+        metaValidator ??= new Validator(draft7 as Schema, '7', false);
+        const checked = metaValidator.validate(schema);
+        if (!checked.valid) return { valid: false, error: `Invalid JSON Schema: ${formatErrors(checked.errors)}` };
+        // The interpreter resolves references by annotating schemas. Clone so
+        // frozen plugin definitions and admission snapshots remain untouched.
+        const prepared = structuredClone(schema) as Schema;
+        prepareSchema(prepared);
+        const lookup = dereference(prepared);
+        for (const child of Object.values(lookup)) {
+            if (typeof child === 'object' && child.__absolute_ref__ && lookup[child.__absolute_ref__] === undefined) {
+                throw new Error(`Unresolved $ref "${child.$ref}".`);
+            }
+        }
+        const validator = new Validator(prepared, '7', false);
+        validators.set(schema, validator);
+        return { valid: true, value: validator };
+    } catch (error) {
+        return { valid: false, error: `Invalid JSON Schema: ${error instanceof Error ? error.message : String(error)}` };
+    }
+}
+
+/** Validate a provider-visible tool definition and its parameter schema. */
 export function validateToolDefinition(
     value: unknown
 ): ToolValidationResult<ToolDefinitionShape> {
@@ -99,9 +114,9 @@ export function validateToolDefinition(
     }
 
     const schema = fn.parameters as JsonSchemaObject;
-    const compiled = compileSchema(schema);
-    if (!compiled.valid) {
-        return { valid: false, error: `Tool "${fn.name}": ${compiled.error}` };
+    const validator = getValidator(schema);
+    if (!validator.valid) {
+        return { valid: false, error: `Tool "${fn.name}": ${validator.error}` };
     }
 
     return { valid: true, value: value as unknown as ToolDefinitionShape };
@@ -151,12 +166,13 @@ export function validateToolArguments(
         return { valid: false, error: 'Arguments must be a JSON object.' };
     }
 
-    const compiled = compileSchema(schema);
-    if (!compiled.valid) return compiled;
-    if (!compiled.value(value)) {
+    const validator = getValidator(schema);
+    if (!validator.valid) return validator;
+    const checked = validator.value.validate(value);
+    if (!checked.valid) {
         return {
             valid: false,
-            error: `Invalid tool arguments: ${formatErrors(compiled.value.errors)}`,
+            error: `Invalid tool arguments: ${formatErrors(checked.errors)}`,
         };
     }
     return { valid: true, value };

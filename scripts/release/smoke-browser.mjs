@@ -22,9 +22,9 @@
  * Exits non-zero with a clear message on any failed assertion.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, devices, webkit } from 'playwright';
 
 const baseUrl = (process.env.OR3_SMOKE_URL ?? 'http://127.0.0.1:3017').replace(/\/$/, '');
 const NAV_TIMEOUT = 30_000;
@@ -539,7 +539,86 @@ async function signOutOwner(page) {
     await waitForHidden(accountMenu, 'account menu remained visible after sign-out');
 }
 
+async function verifyHydration() {
+    const caddyfile = await readFile(
+        process.env.OR3_SMOKE_CADDYFILE ?? new URL('../../packages/or3-cloud/assets/Caddyfile', import.meta.url),
+        'utf8',
+    );
+    const policy = caddyfile.match(/Content-Security-Policy "([^"]+)"/)?.[1];
+    assert(policy && !policy.includes("'unsafe-eval'"), 'shipped CSP must prohibit dynamic code evaluation');
+    const artifactDir = resolve(process.env.OR3_SMOKE_ARTIFACT_DIR ?? 'output/browser-smoke');
+    await mkdir(artifactDir, { recursive: true });
+    for (const [name, engine, options] of [
+        ['desktop-chromium', chromium, {}],
+        ['mobile-chromium', chromium, devices['Pixel 7']],
+        ['mobile-webkit', webkit, devices['iPhone 13']],
+    ]) {
+        const browser = await engine.launch({ headless: true });
+        const context = await browser.newContext({ ...options, serviceWorkers: 'block' });
+        await context.tracing.start({ screenshots: true, snapshots: true });
+        const page = await context.newPage();
+        const errors = [];
+        page.on('pageerror', (error) => errors.push(error.message.slice(0, 2000)));
+        page.on('console', (message) => {
+            if (message.type() === 'error') errors.push(message.text().slice(0, 2000));
+        });
+        let browserBaseUrl = baseUrl;
+        const origin = new URL(baseUrl);
+        // Exercise a secure browser origin and the full shipped CSP while the
+        // disposable deployment's transport stays on loopback HTTP. This also
+        // honors WebKit's upgrade-insecure-requests behavior without weakening
+        // the policy or changing the deployment's generated assets.
+        if (origin.hostname === '127.0.0.1' || origin.hostname === 'localhost') {
+            const secureOrigin = new URL(baseUrl);
+            secureOrigin.protocol = 'https:';
+            browserBaseUrl = secureOrigin.href.replace(/\/$/, '');
+            await page.route('**/*', async (route) => {
+                const requestUrl = new URL(route.request().url());
+                if (requestUrl.host !== origin.host) return route.continue();
+                requestUrl.protocol = origin.protocol;
+                const response = await route.fetch({ url: requestUrl.href });
+                await route.fulfill({ response, ...(route.request().isNavigationRequest()
+                    ? { headers: { ...response.headers(), 'content-security-policy': policy } }
+                    : {}) });
+            });
+        }
+        let passed = false;
+        try {
+            const response = await page.goto(`${browserBaseUrl}/`, { waitUntil: 'networkidle', timeout: NAV_TIMEOUT });
+            assert(response?.ok(), `${name}: root did not return HTTP 200`);
+            assert(response.headers()['content-security-policy'] === policy, `${name}: root must use the production CSP`);
+            assert(errors.length === 0, `${name}: ${errors.length} browser errors: ${errors.slice(0, 5).join('; ')}`);
+            await dismissWelcomeCard(page);
+            const theme = page.getByRole('button', { name: /^Switch to (light|dark) mode$/ }).first();
+            const sidebar = page.getByRole('button', { name: 'Open sidebar', exact: true }).first();
+            if (await theme.isVisible()) {
+                const previousLabel = await theme.getAttribute('aria-label');
+                await theme.click();
+                await page.waitForFunction((label) => !Array.from(document.querySelectorAll('button')).some(
+                    (button) => button.getAttribute('aria-label') === label,
+                ), previousLabel, { timeout: SHELL_TIMEOUT });
+            } else if (await sidebar.isVisible()) {
+                await sidebar.click();
+                await waitForVisible(page.getByRole('dialog', { name: 'Navigation' }), `${name}: navigation did not open`);
+            } else {
+                await openSignInModal(page);
+            }
+            assert(errors.length === 0, `${name}: ${errors.length} browser errors: ${errors.slice(0, 5).join('; ')}`);
+            passed = true;
+            console.log(`PASS ${name}: hydration and UI interaction under production CSP`);
+        } finally {
+            await page.screenshot({ path: resolve(artifactDir, `${name}.png`), fullPage: true });
+            await context.tracing.stop({ path: resolve(artifactDir, `${name}-trace.zip`) });
+            await writeFile(resolve(artifactDir, `${name}.json`), JSON.stringify({ baseUrl, browserBaseUrl, name, passed, policy, errors }, null, 2));
+            await context.close();
+            await browser.close();
+        }
+    }
+}
+
 async function main() {
+    await verifyHydration();
+    if (process.env.OR3_SMOKE_HYDRATION_ONLY === '1') return;
     const {
         ownerEmail: email,
         ownerPassword: password,

@@ -13,19 +13,11 @@ import {
 
 type FacadeModule = Record<string, unknown>;
 
-const COMPILED_RENDER = `
-import { toDisplayString as _toDisplayString, openBlock as _openBlock, createElementBlock as _createElementBlock } from "vue";
-const _hoisted_1 = { id: "or3-host-abi-proof" };
-export function render(_ctx) {
-  return (_openBlock(), _createElementBlock("p", _hoisted_1, _toDisplayString(_ctx.label), 1));
-}
-`;
-
 async function compiledRenderMatchesHost(): Promise<boolean> {
-    if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return false;
-    const blob = new Blob([COMPILED_RENDER], { type: 'text/javascript' });
-    const url = URL.createObjectURL(blob);
     try {
+        // Keep the compiled module external so its Vue import exercises the
+        // host import map, using a same-origin asset allowed by production CSP.
+        const url = '/_plugins/host-render-proof.mjs';
         const compiled = (await import(/* @vite-ignore */ url)) as {
             render: (ctx: { label: string }) => unknown;
         };
@@ -41,8 +33,6 @@ async function compiledRenderMatchesHost(): Promise<boolean> {
         return matched;
     } catch {
         return false;
-    } finally {
-        URL.revokeObjectURL(url);
     }
 }
 
