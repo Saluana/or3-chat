@@ -25,6 +25,17 @@ test.skip(
     'Performance budgets require OR3_E2E_PERFORMANCE=true'
 );
 
+test.beforeEach(async ({ context }) => {
+    // The release budget fixture is local and synthetic. Never contact a live
+    // model/provider while exercising its first-run UI or recovery controls.
+    await context.route('**/*', (route) => {
+        const host = new URL(route.request().url()).hostname;
+        return host === '127.0.0.1' || host === 'localhost'
+            ? route.continue()
+            : route.abort('blockedbyclient');
+    });
+});
+
 for (const [name, viewport] of [
     ['desktop', { width: 1280, height: 720 }],
     ['mobile', { width: 390, height: 844 }],
@@ -226,6 +237,7 @@ test('browser Core Web Vitals stay inside release budgets', async ({
             totalBlockingTimeMs: 0,
             observerErrors: [] as string[],
             layoutShifts: [] as unknown[],
+            lcpEntries: [] as unknown[],
         };
         Object.defineProperty(window, '__or3PerformanceMetrics', {
             value: state,
@@ -256,6 +268,18 @@ test('browser Core Web Vitals stay inside release budgets', async ({
         observe('largest-contentful-paint', (entries) => {
             for (const entry of entries) {
                 state.lcpMs = entry.startTime;
+                const candidate = entry as PerformanceEntry & {
+                    element?: Element; size?: number; renderTime?: number; loadTime?: number;
+                };
+                state.lcpEntries.push({
+                    startTime: entry.startTime,
+                    size: candidate.size,
+                    renderTime: candidate.renderTime,
+                    loadTime: candidate.loadTime,
+                    tag: candidate.element?.tagName,
+                    id: candidate.element?.id,
+                    text: candidate.element?.textContent?.trim().slice(0, 120),
+                });
             }
         });
         observe('layout-shift', (entries) => {

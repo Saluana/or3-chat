@@ -34,6 +34,17 @@ const isolatedAdminHarnessReady =
     Boolean(adminCredentials.username && adminCredentials.password);
 
 test.describe('OR3 Cloud Auth Integration', () => {
+    test.beforeEach(async ({ context }) => {
+        if (!isolatedAdminHarnessReady) return;
+        // This lane uses disposable local stores and never needs a provider API.
+        await context.route('**/*', (route) => {
+            const host = new URL(route.request().url()).hostname;
+            return host === '127.0.0.1' || host === 'localhost'
+                ? route.continue()
+                : route.abort('blockedbyclient');
+        });
+    });
+
     test('Base app exposes auth session endpoint and login UI', async ({ page }) => {
         const response = await page.request.get('/api/auth/session');
         expect(response.ok()).toBeTruthy();
@@ -63,7 +74,7 @@ test.describe('OR3 Cloud Auth Integration', () => {
         await expect(page.getByRole('heading', { name: /admin login/i })).toBeVisible();
     });
 
-    test('Admin login establishes a session', async ({ page }) => {
+    test('Admin login establishes a session', async ({ page }, info) => {
         test.skip(
             !isolatedAdminHarnessReady,
             'Requires OR3_ADMIN_AUTH_E2E_HARNESS=true, credentials, and an absolute temporary OR3_ADMIN_DATA_DIR'
@@ -103,6 +114,14 @@ test.describe('OR3 Cloud Auth Integration', () => {
         const sessionPayload = await sessionResponse.json();
         expect(sessionPayload.authenticated).toBe(true);
         expect(['super_admin', 'workspace_admin']).toContain(sessionPayload.kind);
+        await info.attach('admin-auth-session', {
+            body: Buffer.from(JSON.stringify({
+                authenticated: sessionPayload.authenticated,
+                kind: sessionPayload.kind,
+                localProvider: process.env.OR3_SYNC_PROVIDER,
+            }, null, 2)),
+            contentType: 'application/json',
+        });
     });
 });
 

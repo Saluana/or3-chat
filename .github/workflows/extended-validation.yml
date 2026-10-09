@@ -18,6 +18,7 @@ on:
         options:
           - all
           - tests
+          - admin-auth
           - lint
           - performance
           - plugin-runtime
@@ -43,7 +44,28 @@ jobs:
       - run: bun run test:full
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e:storage
+
+  admin-auth:
+    name: Admin authentication browser fixture
+    if: github.event_name == 'schedule' || inputs.suite == 'all' || inputs.suite == 'tests' || inputs.suite == 'admin-auth'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e:admin-auth
+      - name: Preserve admin fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-auth-${{ github.sha }}
+          path: test-results/**
+          if-no-files-found: warn
+          retention-days: 30
 
   lint:
     name: Full-project ESLint
@@ -57,6 +79,11 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run lint
+        env:
+          # Typed lint retains the Nuxt app/server/shared and fallback programs.
+          # 4 GiB aborts before reporting diagnostics; keep every rule and the
+          # zero-warning policy while giving this scheduled lane enough heap.
+          NODE_OPTIONS: --max-old-space-size=6144
 
   performance:
     name: Strict performance budgets
