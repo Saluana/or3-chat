@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 import { getKvRecordByName, setKvByName } from './kv';
 import { getTextFromContent } from '../utils/chat/messages';
 import { getDb, getWorkspaceGeneration, type Or3DB } from './client';
@@ -175,8 +176,7 @@ async function inspectCompactionRevision(sourceThreadId: string, captureRevision
     if (getDb() !== db || getWorkspaceGeneration() !== generation)
         throw new CompactionError('stale_source', 'Workspace changed while checking this conversation.');
     if (!captureRevision) return '';
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(revision));
-    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    return sha256Hex(revision);
 }
 
 /** Durable CAS claim before paid work; one bounded record per workspace conversation. */

@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { HTTPClient } from '@openrouter/sdk';
-import { createOpenRouterClient } from '../openrouter/client';
 import { normalizeOpenRouterBaseUrl } from '../openrouter/url';
 import { DEFAULT_OPENROUTER_BASE_URL } from '../config/constants';
 
@@ -105,6 +103,8 @@ export async function classifyMemoryReference(
         // Gateways may not implement Decisions: keep the saved fact unclassified.
         const origin = memoryInferenceOrigin(baseUrl);
         if (!origin) return result;
+        const { HTTPClient } = await import('@openrouter/sdk/lib/http.js');
+        const { createOpenRouterClient } = await import('../openrouter/client');
         const httpClient = new HTTPClient();
         if (beforeDispatch)
             httpClient.addHook('beforeRequest', async () => {

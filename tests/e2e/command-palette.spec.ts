@@ -85,3 +85,17 @@ test('fits the mobile viewport without horizontal overflow', async ({ page }) =>
     );
     expect(scrollWidth).toBeLessThanOrEqual(390);
 });
+
+test('typing a new query cannot execute a stale result with Enter', async ({ page }, info) => {
+    await openPalette(page);
+    await expect(page.getByRole('option', { name: 'New chat Start a new chat thread', exact: true })).toBeVisible();
+    const tabsBefore = await page.getByRole('tab').count();
+    await query(page).fill('zzzz-no-result-browser-qa');
+    await query(page).press('Enter');
+    await expect(palette(page)).toBeVisible();
+    await expect(page.getByRole('option')).toHaveCount(0);
+    await expect(page.getByRole('tab')).toHaveCount(tabsBefore);
+    const path = info.outputPath('palette-immediate-enter.png');
+    await page.screenshot({ path, animations: 'disabled' });
+    await info.attach('palette-immediate-enter', { path, contentType: 'image/png' });
+});

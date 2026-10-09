@@ -717,7 +717,12 @@ async function deleteThread() {
         if (error instanceof ThreadHasDescendantsError && deleteId.value === id && deleteWorkspaceGeneration === getWorkspaceGeneration()) {
             threadHasDescendants.value = true; return;
         }
-        throw error;
+        toast.add({
+            title: 'Could not delete chat',
+            description: 'The delete operation could not be completed. Please try again.',
+            color: 'error',
+        });
+        return;
     }
     if (deleteId.value !== id || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
     showDeleteModal.value = false;
@@ -727,7 +732,15 @@ async function deleteThread() {
 async function softDeleteThread() {
     if (!deleteId.value || !threadHasDescendants.value || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
     const id = deleteId.value;
-    await dbDel.soft.thread(id);
+    try { await dbDel.soft.thread(id); }
+    catch {
+        toast.add({
+            title: 'Could not move chat to Trash',
+            description: 'The operation could not be completed. Please try again.',
+            color: 'error',
+        });
+        return;
+    }
     if (deleteId.value !== id || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
     showDeleteModal.value = false; deleteId.value = null; threadHasDescendants.value = false;
 }

@@ -65,10 +65,6 @@ describe('AutocompleteExtension decorations', () => {
     });
 
     it('does not resurrect a legacy localStorage key after logout', async () => {
-        openRouterStream.mockImplementation(async function* (params: { apiKey?: string | null }) {
-            expect(params.apiKey).toBeNull();
-            yield { type: 'text', text: '<next_line> suggestion</next_line>' };
-        });
         AutocompleteState.value.isEnabled = true;
         globalState.value.openrouterKey = null;
         localStorage.setItem('openrouter_api_key', 'legacy-key');
@@ -78,6 +74,6 @@ describe('AutocompleteExtension decorations', () => {
         current.commands.insertContent('A');
 
         await new Promise((resolve) => setTimeout(resolve, 700));
-        expect(openRouterStream).toHaveBeenCalledTimes(1);
+        expect(openRouterStream).not.toHaveBeenCalled();
     });
 });

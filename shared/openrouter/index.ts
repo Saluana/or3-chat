@@ -8,10 +8,9 @@
 // Client factory and configuration
 export {
     createOpenRouterClient,
-    getRequestOptions,
-    DEFAULT_HEADERS,
     type OpenRouterClientConfig,
 } from './client';
+export { getRequestOptions, DEFAULT_HEADERS } from './request-options';
 
 // Error handling utilities
 export {

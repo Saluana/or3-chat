@@ -25,6 +25,9 @@ Type to search. Results are grouped by category and ordered by relevance, with
 the most recently updated items winning ties. Matching text is shown as a
 snippet under each row, so you can tell *why* something matched.
 
+Changing the query immediately retires the previous results. During the search
+debounce, Enter cannot execute a command belonging to the old query.
+
 Search runs over full content, not just titles:
 
 | Category | What is searched |

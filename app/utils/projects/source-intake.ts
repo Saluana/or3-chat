@@ -19,6 +19,12 @@ import { parseFileHashes } from '~/db/files-util';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
+interface ProjectUploadOptions {
+    background?: boolean;
+    /** Captured owner for extraction that outlives the cancellable binding. */
+    backgroundScope?: WorkspaceOperationScope;
+}
+
 type Extraction =
     | {
           ok: true;
@@ -88,15 +94,19 @@ export async function addProjectUpload(
     projectId: string,
     file: File,
     replace?: ProjectRecord<ProjectSource>,
-    options: { background?: boolean } = {},
+    options: ProjectUploadOptions = {},
 ): Promise<ProjectRecord<ProjectSource>> {
     scope.assertCurrent('write');
     const imported = await importWorkspaceFile(scope, file, file.name);
     scope.assertCurrent('write');
     const hash = parseFileHashes(imported.post.file_hashes)[0]!;
-    const existing = (
-        await readProjectWorkspace(scope.db, projectId)
-    ).sources.find((source) => source.value.item_id === imported.post.id);
+    const findExisting = async () => {
+        const workspace = await readProjectWorkspace(scope.db, projectId);
+        scope.assertCurrent('write');
+        return workspace.sources.find(source => source.value.item_id === imported.post.id ||
+            source.value.revisions.some(revision => revision.original_hash === hash));
+    };
+    const existing = await findExisting();
     if (!replace && existing) return existing;
     const revision: SourceRevision = {
         id: newId(),
@@ -107,31 +117,42 @@ export async function addProjectUpload(
         coverage: 'none',
         locations: [],
     };
-    let saved = await saveProjectSource(
-        scope,
-        projectId,
-        {
-            version: 1,
-            item_id:
-                revision.status === 'ready'
-                    ? imported.post.id
-                    : (replace?.value.item_id ?? imported.post.id),
-            kind: 'file',
-            title: replace?.value.title ?? imported.post.title,
-            mode: replace?.value.mode ?? 'relevant',
-            current_revision_id:
-                revision.status === 'ready'
-                    ? revision.id
-                    : (replace?.value.current_revision_id ?? revision.id),
-            revisions: [...(replace?.value.revisions ?? []), revision],
-        },
-        replace?.row.id,
-        replace?.row ?? null,
-    );
+    let saved: ProjectRecord<ProjectSource>;
+    try {
+        saved = await saveProjectSource(
+            scope,
+            projectId,
+            {
+                version: 1,
+                item_id:
+                    revision.status === 'ready'
+                        ? imported.post.id
+                        : (replace?.value.item_id ?? imported.post.id),
+                kind: 'file',
+                title: replace?.value.title ?? imported.post.title,
+                mode: replace?.value.mode ?? 'relevant',
+                current_revision_id:
+                    revision.status === 'ready'
+                        ? revision.id
+                        : (replace?.value.current_revision_id ?? revision.id),
+                revisions: [...(replace?.value.revisions ?? []), revision],
+            },
+            replace?.row.id,
+            replace?.row ?? null,
+        );
+    } catch (error) {
+        // The transaction refuses duplicate bindings. A concurrent intake of
+        // these same bytes may have won since the initial read; reuse its row.
+        if (!replace) {
+            const concurrent = await findExisting();
+            if (concurrent) return concurrent;
+        }
+        throw error;
+    }
     if (revision.status === 'ready') return saved;
     if (options.background) {
         // The Processing lease makes an interrupted extraction retryable.
-        void processProjectSource(scope, projectId, saved, revision.id).catch((error) =>
+        void processProjectSource(options.backgroundScope ?? scope, projectId, saved, revision.id).catch((error) =>
             console.warn('[projects] Source bound; background extraction failed', error));
         return saved;
     }
@@ -280,6 +301,7 @@ export async function addExistingProjectFile(
     scope: WorkspaceOperationScope,
     projectId: string,
     itemId: string,
+    options: ProjectUploadOptions = {},
 ) {
     const item = await scope.db.posts.get(itemId);
     if (!item || item.postType !== 'or3:file' || !isVisibleWorkspaceItem(item))
@@ -295,5 +317,7 @@ export async function addExistingProjectFile(
         scope,
         projectId,
         new File([blob], meta.name, { type: meta.mime_type }),
+        undefined,
+        options,
     );
 }

@@ -22,7 +22,7 @@
         />
         <div class="welcome-card-body relative min-h-0 overflow-y-auto overscroll-contain">
             <div class="welcome-card-intro">
-                <img src="/logos/icon-logo.png" alt="" aria-hidden="true" class="welcome-card-brand-logo" />
+                <img src="/logos/app-icon-192.png" width="192" height="192" alt="" aria-hidden="true" class="welcome-card-brand-logo" />
                 <h2 :id="titleId" class="welcome-card-title wrap-anywhere">
                     Welcome to {{ siteName }}
                 </h2>

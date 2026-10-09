@@ -36,10 +36,12 @@ useHead({
         lang: 'en',
     },
     title: appName,
-    link: [
-        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
-    ],
     meta: [
+        {
+            name: 'description',
+            content: runtimeConfig.public.or3.site.description ||
+                'Chat with AI models, write documents, and organize your projects in a local-first workspace.',
+        },
         // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
         { name: 'theme-color', content: themeColor },
         // Enable iOS PWA full-screen and control status bar style

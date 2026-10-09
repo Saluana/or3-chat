@@ -1012,7 +1012,6 @@ type UploadedImage = {
 };
 
 type ChatInputSendPayload = {
-    knowledge_project_id?: string;
     editorDoc?: Record<string, unknown>;
     text: string;
     images: UploadedImage[];
@@ -1191,7 +1190,6 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
-        knowledge_project_id: payload.knowledge_project_id,
         editorDoc: payload.editorDoc,
         content: payload.text,
         model: payload.model || model.value,
@@ -1401,5 +1399,20 @@ defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThrea
 </script>
 
 <style>
-/* Optional custom styles placeholder */
+@media (max-width: 767px), (pointer: coarse) {
+    /* The application frame already ends above Safari's keyboard. Collapse
+       theme/home-indicator spacing to one small gap while it is visible. */
+    #page-container[data-keyboard-open] .chat-input-wrapper {
+        min-height: 0 !important;
+        padding-bottom: 8px !important;
+    }
+
+    #page-container[data-keyboard-open] .chat-inner-input-container {
+        padding-bottom: 0 !important;
+    }
+
+    #page-container[data-keyboard-open] #chat-input-main {
+        margin-bottom: 0 !important;
+    }
+}
 </style>

@@ -246,6 +246,7 @@
             <Transition
                 name="document-inspector"
                 :css="inspectorTransitionsReady"
+                @after-leave="onInspectorClosed"
             >
                 <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :read-only="itemReadOnly" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
             </Transition>
@@ -1487,9 +1488,23 @@ function toggleInspector(tab = inspectorTab.value) {
     inspectorOpen.value = !inspectorOpen.value;
 }
 
-function onOutlineSelect(item: DocumentOutlineItem) {
-    scrollTo(item);
-    if (isCompactToolbar.value) inspectorOpen.value = false;
+let pendingOutlineSelection: DocumentOutlineItem | undefined;
+async function onOutlineSelect(item: DocumentOutlineItem) {
+    if (isCompactToolbar.value && inspectorOpen.value) {
+        pendingOutlineSelection = item;
+        inspectorOpen.value = false;
+        return;
+    }
+    await nextTick();
+    scrollTo(item, editorScroll.value);
+}
+
+async function onInspectorClosed() {
+    const item = pendingOutlineSelection;
+    pendingOutlineSelection = undefined;
+    if (!item) return;
+    await nextTick();
+    scrollTo(item, editorScroll.value);
 }
 
 async function onInspectorRestore(revision: CompleteDocumentRevision) {

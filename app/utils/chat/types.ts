@@ -50,7 +50,7 @@ export interface ChatMessage {
 
 export interface SendMessageParams {
     cardOrigin?: import('~~/shared/chat/tool-card-data').CardOrigin;
-    /** Explicit promotion of this turn’s attachments into its captured project. */
+    /** @deprecated Project-chat attachments are added automatically; this field is ignored. */
     knowledge_project_id?: string;
     /** Explicit read-only omission inspection, followed by a one-use confirmation. */
     inspectLossyRequest?: boolean;

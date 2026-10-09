@@ -14,7 +14,7 @@ import type { Model as SDKModel } from '@openrouter/sdk/models';
 import type { ExchangeAuthCodeForAPIKeyRequest } from '@openrouter/sdk/models/operations';
 import type { SendChatCompletionRequestRequest } from '@openrouter/sdk/models/operations';
 import type { OpenRouter } from '@openrouter/sdk';
-import { getRequestOptions } from './client';
+import { getRequestOptions } from './request-options';
 import { sdkModelToLocal, type OpenRouterModel } from './types';
 
 type UnknownRecord = Record<string, unknown>;

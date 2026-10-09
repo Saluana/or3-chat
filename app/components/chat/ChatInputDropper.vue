@@ -37,9 +37,6 @@
                 </details>
             </div>
             <ChatProjectChoice :thread-id="props.threadId" />
-            <label v-if="attachments.length && attachmentProject" class="flex items-center gap-2 text-xs">Attachment destination
-                <select v-model="attachmentDestination" aria-label="Attachment destination" class="rounded border border-current/20 p-1 bg-transparent"><option value="chat">This chat</option><option value="project">Add to project knowledge</option></select>
-            </label>
             <!-- Main Input Area -->
             <div class="relative">
                 <div
@@ -100,7 +97,7 @@
                                 :content="{ side: 'top', collisionPadding: 16 }"
                                 :ui="{
                                     content:
-                                        'data-[state=open]:animate-[scale-in_170ms_ease-out] data-[state=closed]:animate-[scale-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+                                        'data-[state=open]:animate-[fade-in_170ms_ease-out] data-[state=closed]:animate-[fade-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
                                 }"
                             >
                                 <UButton
@@ -767,7 +764,6 @@ const emit = defineEmits<{
             modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
-            knowledge_project_id?: string;
             editorDoc?: Record<string, unknown>;
             registerResult: RegisterSendResult;
             inspectLossyRequest?: boolean;
@@ -803,15 +799,11 @@ const {
     onChange: (modelId) => emit('model-change', modelId),
 });
 
-const attachmentDestination = ref<'chat'|'project'>('chat');
 async function resetModel() {
     try { await useInheritedModel(); }
     catch (error) { reportError(error, { message: 'Could not restore the default model.', toast: true }); }
 }
 const attachmentProject = useChatProjectOwner(() => props.threadId);
-watch([() => props.threadId, attachmentProject], () => {
-    attachmentDestination.value = 'chat';
-}, { immediate: true });
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -1050,7 +1042,6 @@ watch(
     }
 );
 
-watch(() => attachments.value.length, length => { if (!length) attachmentDestination.value = 'chat'; });
 watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
 });
@@ -1257,7 +1248,6 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         emit('send', {
             ...decision,
             ...submittedSettings,
-            knowledge_project_id: attachmentDestination.value === 'project' ? attachmentProject.value ?? undefined : undefined,
             editorDoc: submittedEditorDoc,
             text: submittedText,
             images: submittedAttachments, // backward compatibility
@@ -1412,6 +1402,11 @@ import { useResizeObserver } from '@vueuse/core';
 
 const componentRootRef = ref<HTMLElement | null>(null);
 let lastHeight: number | null = null;
+let pendingHeight: number | null = null;
+let resizeFrame: number | null = null;
+onBeforeUnmount(() => {
+    if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+});
 
 const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
     const target = entry.target as HTMLElement;
@@ -1449,9 +1444,16 @@ if (import.meta.client) {
         if (nextHeight == null) return;
         // Round to whole px so we don't emit micro-deltas that cause extra renders
         const normalized = Math.round(nextHeight);
-        if (lastHeight === normalized) return;
-        lastHeight = normalized;
-        emit('resize', { height: normalized });
+        pendingHeight = normalized;
+        if (resizeFrame !== null) return;
+        // Parent scroll padding changes layout. Commit outside the observer's
+        // delivery cycle so measuring the composer cannot cause a resize loop.
+        resizeFrame = requestAnimationFrame(() => {
+            resizeFrame = null;
+            if (pendingHeight === null || lastHeight === pendingHeight) return;
+            lastHeight = pendingHeight;
+            emit('resize', { height: pendingHeight });
+        });
     });
 }
 </script>

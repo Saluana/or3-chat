@@ -1,6 +1,6 @@
 <template>
     <section
-        class="grid h-full min-h-[70dvh] md:grid-cols-[22rem_minmax(0,1fr)]"
+        class="grid h-full min-h-[70dvh] grid-cols-[minmax(0,1fr)] md:grid-cols-[22rem_minmax(0,1fr)]"
         aria-label="Activity Center"
     >
         <aside

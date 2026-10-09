@@ -1,22 +1,15 @@
 <template>
-    <PageShell v-if="ready" :initial-thread-id="routeId" validate-initial />
-    <div v-else class="flex min-h-dvh items-center justify-center bg-[var(--md-surface)] text-[var(--md-on-surface-variant)]" role="status">
-        Opening chat…
-    </div>
+    <PageShell :initial-thread-id="routeId" validate-initial />
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
-import { getThread } from '~/db/threads';
-import { useValidatedEntityPageShell } from '~/composables/useValidatedEntityPageShell';
+import { computed } from 'vue';
+import { useRoute } from '#imports';
 
 definePageMeta({
     lockPageProtected: true,
 });
 
-const { ready, routeId } = useValidatedEntityPageShell({
-    loadEntity(routeId) {
-        return getThread(routeId);
-    },
-    redirectTo: '/chat',
-});
+const route = useRoute();
+const routeId = computed(() => (route.params.id as string) || '');
 </script>

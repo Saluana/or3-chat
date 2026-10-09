@@ -17,6 +17,32 @@ Open the URL printed by the startup banner. Local-first development needs no acc
 
 The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
 
+## Open development on a phone or over Tailscale
+
+To reach the dev server from another device, bind it to the network interface:
+
+```bash
+bun run dev -- --host 0.0.0.0 --port 3000
+```
+
+HTTP LAN and Tailscale IP addresses do not get localhost's secure-context exception.
+OR3 uses the existing SHA-256 implementation when Web Crypto is unavailable, including
+document revisions, chat fingerprints, plugin digests, and signed history cursors.
+OpenRouter PKCE remains S256. Optional history-tool initialization failures leave
+the rest of the app available and emit a `[history-tools]` console diagnostic.
+
+Use HTTPS for browser features that require a secure context, such as service workers
+and clipboard access. Tailscale Serve can proxy the existing dev server within your tailnet:
+
+```bash
+tailscale serve --bg --https=3443 http://localhost:3000
+```
+
+Open the HTTPS hostname and port printed by Tailscale on your phone. Choose a free Serve
+port when other apps already use it. Browser data belongs to each origin: the IP URL
+and HTTPS hostname have separate local workspaces. Export a Workspace Backup when
+transferring local data to another origin.
+
 ## Choose a development mode
 
 | Command | Purpose |
@@ -71,6 +97,12 @@ baseline includes the extraction worker while retaining the initial-load limit.
 Preview screenshots and unused icon variants are served on demand rather than
 cached during PWA installation.
 
+The browser model catalog uses the SDK's Models entry point. The full SDK loads
+when OAuth exchange, memory classification, or a trusted plugin needs it.
+Request headers, model pagination, API URL configuration, and cached catalog
+fallback remain shared. App metadata respects the configured site description;
+the default favicon comes from the base configuration.
+
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 
 | Directory | Responsibility |
@@ -105,3 +137,13 @@ Inspect IndexedDB in browser developer tools. Local-first storage uses `or3-db`;
 Export **Workspace Backup** before clearing site data. Clearing localStorage alone does not reset Dexie data, and deleting an IndexedDB database removes local workspace records and blobs. Check the active profile, origin, workspace, and dev-server URL before concluding that data has disappeared.
 
 If a PWA serves old assets, inspect Cache Storage and service-worker registration. If HMR becomes stuck, stop your own dev process, remove generated `.nuxt/` and `node_modules/.vite/` caches, and restart. For model connection errors, follow [OpenRouter troubleshooting](/documentation/auth/connect#troubleshooting).
+
+A local module request returning **504 Outdated Optimize Dep** means Vite
+invalidated an optimized dependency URL; it does not establish an OpenRouter or
+internet outage. Mobile WebKit may report this as **Importing a module script failed**
+and leave the server-rendered shell visible. The source dev configuration pre-optimizes
+the lazy tool validator, HMAC, and SDK Models/HTTP entry points to avoid invalidating
+in-flight module URLs during the first load. Reload the tab after dependency optimization completes. If it
+persists, restart the source dev server and reload. Production browser journeys and scroll canaries
+use separate build directories and Vite caches so their config cannot invalidate an active source
+dev server's dependency cache.

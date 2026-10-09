@@ -36,13 +36,17 @@ Always include for essential references; those sources must still fit completely
 
 Replacing a source retains originals and extraction revisions. A failed replacement leaves the previous working revision current. Preview or download previous revisions from Knowledge. Changes made to an OR3 document are read from its current saved version.
 
-Chat attachments default to **This chat**. Choose **Add to project knowledge** explicitly to make them reusable. A temporary attachment never becomes project knowledge merely because the chat belongs to a project.
+Files sent in a project chat automatically become reusable project sources, including uploaded images, PDFs, and saved-file references. No destination selection or separate add action is required. Re-uploading identical bytes, even under another filename, reuses the existing source and preserves its settings and revisions. You can remove a source from Knowledge later. Files sent outside a project remain chat attachments.
 
 Knowledge promotion waits until request preparation and any omission
 confirmation succeed. Inspecting, cancelling or rejecting that preparation does
 not promote attachments. Notes and their knowledge bindings save together; a
 failed save retains your draft. Completing an add action preserves any newer
 note or picker selection you made while it was running.
+
+Stopping a chat while attachment intake is waiting cancels unfinished source
+bindings and releases the composer. Sources already saved keep extracting in
+the originating project independently of the stopped or completed response.
 
 ## Memory and continuity
 

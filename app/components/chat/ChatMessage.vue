@@ -494,7 +494,7 @@
                 </UFieldGroup>
             </div>
         </template>
-        <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
+        <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" />
         <ThreadChildLinks
             v-if="props.message.id && !props.message.pending"
             :thread-id="props.threadId"

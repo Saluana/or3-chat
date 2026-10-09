@@ -5,6 +5,7 @@ import { useDebounceFn } from '@vueuse/core';
 import { state, isMobile } from '~/state/global';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import AutocompleteState from './state';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { normalizeAutocompleteSuggestion } from './suggestion-utils';
 
 interface AutocompletePluginState {
@@ -33,6 +34,9 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     // localStorage reads could resurrect a key after logout and bypass the
     // canonical KV/state lifecycle.
     const orKey = state.value.openrouterKey || null;
+    // Optional suggestions must stay local for guests without credentials.
+    // Signed-in users can still use the instance key through the server route.
+    if (!orKey && !getCachedSessionContext()?.user?.id) return { completion: '' };
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);

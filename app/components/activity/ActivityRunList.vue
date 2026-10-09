@@ -25,6 +25,7 @@
                     v-for="option in filterOptions"
                     :key="option.id"
                     size="xs"
+                    class="shrink-0 whitespace-nowrap"
                     :color="filter === option.id ? 'primary' : 'neutral'"
                     :variant="filter === option.id ? 'soft' : 'ghost'"
                     :aria-pressed="filter === option.id"

@@ -10,11 +10,10 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { DEFAULT_AI_SETTINGS, useAiSettings } from '~/composables/chat/useAiSettings';
 import { MODELS_CACHE_KEY, useModelStore } from '~/composables/chat/useModelStore';
 
-vi.mock('~~/shared/openrouter', async (original) => ({
-    ...await original<typeof import('~~/shared/openrouter')>(),
-    createOpenRouterClient: () => ({ models: { list: async () => ({
+vi.mock('@openrouter/sdk/sdk/models.js', () => ({
+    Models: class { list = async () => ({
         async *[Symbol.asyncIterator]() { yield { result: { data: [] } }; },
-    }) } }),
+    }); },
 }));
 import AiPage from '../AiPage.vue';
 

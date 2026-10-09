@@ -14,7 +14,7 @@
  *
  * Constraints:
  * - Client-only (accesses `window`, `sessionStorage`, `localStorage`)
- * - PKCE prefers S256 but falls back to "plain" when SubtleCrypto is unavailable
+ * - PKCE uses S256 with a SHA-256 fallback when SubtleCrypto is unavailable
  * - Stores verifier in both sessionStorage and localStorage as fallback
  * - Redirect URL is configurable via `OPENROUTER_REDIRECT_URI` runtime config
  *
@@ -29,18 +29,13 @@ import { ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { clearPersistedUserApiKey } from './useUserApiKey';
+import { sha256Bytes } from '~~/shared/runtime-crypto';
 
 function base64urlencode(str: ArrayBuffer) {
     return btoa(String.fromCharCode(...new Uint8Array(str)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-}
-
-async function sha256(plain: string) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(plain);
-    return await crypto.subtle.digest('SHA-256', data);
 }
 
 /**
@@ -105,23 +100,8 @@ export function useOpenRouterAuth() {
         )
             .map((b) => ('0' + b.toString(16)).slice(-2))
             .join('');
-        // Compute PKCE code_challenge. Prefer S256, but fall back to "plain"
-        // when SubtleCrypto is unavailable (e.g., iOS Safari on non-HTTPS).
-        let codeChallenge = codeVerifier;
-        let codeChallengeMethod: 'S256' | 'plain' = 'plain';
-        try {
-            const subtle =
-                typeof crypto !== 'undefined' ? crypto.subtle : undefined;
-            if (subtle && typeof subtle.digest === 'function') {
-                const challengeBuffer = await sha256(codeVerifier);
-                codeChallenge = base64urlencode(challengeBuffer);
-                codeChallengeMethod = 'S256';
-            }
-        } catch {
-            // Keep plain fallback
-            codeChallenge = codeVerifier;
-            codeChallengeMethod = 'plain';
-        }
+        const codeChallenge = base64urlencode((await sha256Bytes(codeVerifier)).buffer);
+        const codeChallengeMethod = 'S256';
         // store the method so the callback knows how to exchange
         try {
             sessionStorage.setItem(

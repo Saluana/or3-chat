@@ -23,11 +23,8 @@
  * @see shared/openrouter/errors for SDK error normalization
  */
 import { type ErrorCode } from '~/utils/errors';
-import {
-    createOpenRouterClient,
-    normalizeSDKError,
-    wrapLegacyOAuthExchangeArgs,
-} from '~~/shared/openrouter';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import { wrapLegacyOAuthExchangeArgs } from '~~/shared/openrouter/sdk-v1-compat';
 import { useRuntimeConfig } from '#imports';
 
 /** Successful code exchange: contains the user's API key. */
@@ -112,12 +109,12 @@ export async function exchangeOpenRouterCode(
     const runtimeConfig = useRuntimeConfig() as {
         public?: { openRouter?: { baseUrl?: string } };
     };
-    const client = createOpenRouterClient({
-        apiKey: '',
-        serverURL: runtimeConfig.public?.openRouter?.baseUrl,
-    });
-
     try {
+        const { createOpenRouterClient } = await import('~~/shared/openrouter/client');
+        const client = createOpenRouterClient({
+            apiKey: '',
+            serverURL: runtimeConfig.public?.openRouter?.baseUrl,
+        });
         const response = await client.oAuth.exchangeAuthCodeForAPIKey(
             wrapLegacyOAuthExchangeArgs({
                 code: p.code,

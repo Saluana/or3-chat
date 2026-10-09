@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { registerToolCardBinding } from '~/composables/chat/tool-cards';
 import type { PluginToolCardDefinition } from '@or3/plugin-sdk/cards';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
@@ -122,7 +123,7 @@ export function createManagedWorkspacePluginRuntime(options?: {
             }
         },
     });
-    const activityOwner = { namespace: `plugin.${crypto.randomUUID()}`, signal: scope.signal };
+    const activityOwner = { namespace: `plugin.${createRuntimeUuid()}`, signal: scope.signal };
     const { registerPaneApp } = usePaneApps();
     const tools = useToolRegistry();
 

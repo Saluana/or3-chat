@@ -1,4 +1,5 @@
 import type { TipTapDocument } from '~/types/database';
+import { sha256Hex as sha256 } from '~~/shared/runtime-crypto';
 
 export const REVISION_CHUNK_MAX_CHARS = 48 * 1024;
 export const REVISION_SYNC_PAYLOAD_MAX_BYTES = 56 * 1024;
@@ -39,13 +40,6 @@ function base64UrlToBytes(value: string): Uint8Array {
         bytes[index] = binary.charCodeAt(index);
     }
     return bytes;
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer);
-    return [...new Uint8Array(digest)]
-        .map((part) => part.toString(16).padStart(2, '0'))
-        .join('');
 }
 
 async function gzip(bytes: Uint8Array): Promise<Uint8Array | null> {

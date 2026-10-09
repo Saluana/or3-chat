@@ -4,18 +4,14 @@
 
 import { OpenRouter, type HTTPClient } from '@openrouter/sdk';
 import { normalizeOpenRouterBaseUrl } from './url';
+import { DEFAULT_HEADERS } from './request-options';
+export { DEFAULT_HEADERS, getRequestOptions } from './request-options';
 
 export interface OpenRouterClientConfig {
     apiKey?: string;
     serverURL?: string;
     httpClient?: HTTPClient;
 }
-
-// Default headers for all requests
-export const DEFAULT_HEADERS = {
-    'HTTP-Referer': 'https://or3.chat',
-    'X-Title': 'or3.chat',
-};
 
 /**
  * Create a configured OpenRouter SDK client.
@@ -33,17 +29,4 @@ export function createOpenRouterClient(
         appTitle: DEFAULT_HEADERS['X-Title'],
         httpClient: config.httpClient,
     });
-}
-
-/**
- * Get request options with common headers.
- * Use this when calling SDK methods to inject referer/title headers.
- */
-export function getRequestOptions(signal?: AbortSignal) {
-    return {
-        fetchOptions: {
-            headers: DEFAULT_HEADERS,
-            ...(signal && { signal }),
-        },
-    };
 }

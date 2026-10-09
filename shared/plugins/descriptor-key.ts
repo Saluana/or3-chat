@@ -1,3 +1,4 @@
+import { sha256Hex } from '../runtime-crypto';
 import type {
     BundledV1ArtifactIdentity,
     PackageV2ArtifactIdentity,
@@ -115,10 +116,6 @@ export function descriptorIdentityPayload(identity: PluginDescriptorIdentity): C
 }
 
 export async function createDescriptorKey(identity: PluginDescriptorIdentity): Promise<Sha256> {
-    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
-    if (!subtle) throw new Error('Web Crypto SHA-256 is unavailable');
     const source = canonicalJson(descriptorIdentityPayload(identity));
-    const digest = await subtle.digest('SHA-256', new TextEncoder().encode(source));
-    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-    return `sha256-${hex}`;
+    return `sha256-${await sha256Hex(source)}`;
 }

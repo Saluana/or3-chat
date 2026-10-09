@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
 import type { Or3DB, SnapshotStageRow } from '~/db/client';
 import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
@@ -102,7 +103,7 @@ export async function applyPendingOp(
 
 /** Persists bounded pages before an atomic install. No target row changes during staging. */
 export class SnapshotStager {
-    private readonly generation = crypto.randomUUID();
+    private readonly generation = createRuntimeUuid();
     private readonly tableNames = new Set<string>();
     private readonly localOnlyKv = getLocalOnlyKvNames();
     private snapshotId: string | null = null;

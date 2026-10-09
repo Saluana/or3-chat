@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { computed, readonly, ref, watch, type Ref } from 'vue';
 import type { Editor, JSONContent } from '@tiptap/core';
 
@@ -409,7 +410,7 @@ export function useDocumentAiAgent(options: {
         const scope = resolveAutomaticDocumentAiScope(editor);
         const seed = seedEditableContext(editor, snapshot, scope, settings.value.chunkWordLimit);
         const run = {
-            snapshotId: crypto.randomUUID(),
+            snapshotId: createRuntimeUuid(),
             documentId: options.documentId.value,
             version: options.contentVersion.value,
             snapshot,

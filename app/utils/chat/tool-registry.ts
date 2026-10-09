@@ -490,6 +490,8 @@ export function useToolRegistry() {
         const assertToolAuthorized = async () => {
             if (context?.assertToolAuthorized) await context.assertToolAuthorized();
             context?.abortSignal.throwIfAborted();
+            if (context?.threadId && getDb() !== chatDb)
+                throw new Error('The originating workspace is no longer available.');
             if (getTool(toolName) !== tool
                 || !toolDefinitionEquals(tool.definition, capturedDefinition)
                 || (tool.available && !tool.available(context ?? { workspaceId: null, threadId: null }))
@@ -499,7 +501,6 @@ export function useToolRegistry() {
             }
             if (!context?.threadId) return;
             projectScope?.assertCurrent();
-            if (getDb() !== chatDb) throw new Error('The originating workspace is no longer available.');
             if (await resolveChatProject(chatDb, context.threadId) !== projectOwner)
                 throw new Error('The chat’s owning project changed before execution.');
             if (JSON.stringify(parsed.value) !== argumentsSnapshot)

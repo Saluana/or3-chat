@@ -20,6 +20,8 @@
                     <img
                         :src="logoUrl"
                         :alt="appName"
+                        :width="runtimeConfig.public?.branding?.logoUrl ? undefined : 1632"
+                        :height="runtimeConfig.public?.branding?.logoUrl ? undefined : 344"
                         class="h-7 w-auto"
                     />
                     <span v-if="!logoUrl" class="header-title ml-2 text-[9px]">

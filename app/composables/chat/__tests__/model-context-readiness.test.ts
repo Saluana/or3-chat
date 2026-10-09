@@ -7,9 +7,8 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }));
-vi.mock('~~/shared/openrouter', async (original) => ({
-    ...await original<typeof import('~~/shared/openrouter')>(),
-    createOpenRouterClient: () => ({ models: { list } }),
+vi.mock('@openrouter/sdk/sdk/models.js', () => ({
+    Models: class { list = list; },
 }));
 import { sdkModelToLocal } from '~~/shared/openrouter';
 import * as service from '~/core/auth/models-service';

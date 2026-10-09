@@ -878,7 +878,7 @@ function toolCannotScope(name: string) {
                             {{ entry.heading }}
                         </p>
                         <div
-                            class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item"
+                            class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item theme-btn"
                         >
                             <button
                                 class="min-w-0 flex-1 flex items-center gap-2.5 text-left"

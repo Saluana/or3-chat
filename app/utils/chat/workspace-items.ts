@@ -6,6 +6,7 @@ import type { WorkspaceOperationScope } from './workspace-access';
 import type { ToolExecutionContext } from './types';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 
 export type WorkspaceItemKind = 'chat' | 'document' | 'project' | 'file';
 export interface WorkspaceItemRef { kind: WorkspaceItemKind; id: string }
@@ -20,9 +21,7 @@ export async function workspaceRevision(row: unknown): Promise<string> {
         const { document_reference_key: _localIndex, ...fields } = row as Record<string, unknown>;
         canonical = fields;
     }
-    const bytes = new TextEncoder().encode(JSON.stringify(canonical));
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return sha256Hex(JSON.stringify(canonical));
 }
 
 export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: WorkspaceItemRef): Promise<{

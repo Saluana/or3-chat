@@ -71,3 +71,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 -   When cleaning up, call `softDeleteThread` first so UI consumers can offer undo before executing destructive `hardDeleteThread`.
 
 Central hard deletion checks retained descendants before hooks and again inside the deletion transaction. A newly inserted descendant blocks deletion and rolls back that transaction. Offer soft deletion when descendants remain: compacted summaries stay usable, and historical tools report unavailable content rather than silently reparenting. Family expansion is retired only after the last member is gone. See [manual context compaction](/documentation/utils/manual-context-compaction).
+
+Thread deletion keeps before-hooks inside the write transaction so their database writes roll back if a descendant blocks deletion. Before-hooks must use database operations rather than await network or lazy imports. Deletion rechecks the row and descendant constraints and emits after-hooks only after commit. UI navigation and lazy loading in after-hooks
+must not extend an IndexedDB write transaction. The sidebar keeps deletion
+errors in the dialog so they cannot replace the entire app with its fatal view.

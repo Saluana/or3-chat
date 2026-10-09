@@ -920,27 +920,27 @@ html[data-theme='blank']
         font-size: 22px !important;
     }
 
-    /* Keep separate 44px targets; expanded pseudo-elements overlap adjacent
-       controls in the narrow composer. */
+    /* 32px squares; ChatInput.vue pseudo-elements extend the touch targets
+       without overlapping neighbours. */
     @layer utilities {
         html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
             .chat-input-bottom-controls-left
             :is(.chat-input-attachment-btn, .chat-input-settings-btn)
             button {
-            width: 44px !important;
-            height: 44px !important;
-            min-width: 44px !important;
-            min-height: 44px !important;
+            width: 32px !important;
+            height: 32px !important;
+            min-width: 32px !important;
+            min-height: 32px !important;
             padding: 0 !important;
         }
 
         html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
             .chat-input-bottom-controls-right
             :is(.chat-input-send-btn, .chat-input-stop-btn) {
-            width: 44px !important;
-            height: 44px !important;
-            min-width: 44px !important;
-            min-height: 44px !important;
+            width: 32px !important;
+            height: 32px !important;
+            min-width: 32px !important;
+            min-height: 32px !important;
             padding: 0 !important;
         }
     }

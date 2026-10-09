@@ -1,4 +1,5 @@
 import { normalizeProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
+import { sha256Hex as digest } from '../runtime-crypto';
 import { readRequestUsage, type RequestUsage } from './compaction';
 import { estimateChatRequest, type CountableChatMessage, type ContextEstimate } from './context-budget';
 
@@ -23,10 +24,6 @@ function fingerprintConfiguration(configuration?: Record<string, unknown>): Reco
     // input-affecting routing, tools, cache and reasoning configuration remains.
     const { max_tokens: _reply, ...rest } = configuration;
     return rest;
-}
-async function digest(value: string | Uint8Array): Promise<string> {
-    const bytes = await crypto.subtle.digest('SHA-256', typeof value === 'string' ? new TextEncoder().encode(value) : value as Uint8Array<ArrayBuffer>);
-    return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 /** Match persisted SHA-256 attachment refs to provider bytes without loading files in the preview. */
 async function fingerprintMessages(messages: readonly CountableChatMessage[]): Promise<string> {

@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { captureUsagePrefix, attachRequestUsage, estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from './tokens';
@@ -341,7 +342,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     // before asynchronous provenance work so later view/tool mutations cannot
     // change the sent prefix after its fingerprint was captured.
     const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
-    const usageRequestId = crypto.randomUUID();
+    const usageRequestId = createRuntimeUuid();
     let recordRequestState: ((state: 'dispatched' | 'accepted' | 'failed') => Promise<void>) | undefined;
     await assertDispatchOwner(params);
     if (params.projectContext && params.threadId && !params.messageId) {
@@ -950,7 +951,7 @@ export async function startBackgroundStream(params: {
         _backgroundAdmissionId:
             params.admissionId && params.admissionId.length > 0
                 ? params.admissionId
-                : crypto.randomUUID(),
+                : createRuntimeUuid(),
         _history: params.history,
         _clientDeviceId: getDeviceId(),
     };

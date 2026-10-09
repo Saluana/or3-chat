@@ -1,6 +1,7 @@
 import { readCompactionData, type CompactionData } from './compaction';
 import type { CanonicalHistoryRecord } from './background-history';
 import { encodeCanonicalChatSeek, type CanonicalChatQuery, type CanonicalChatReadResult } from './history-reader';
+import { sha256Hex } from '../runtime-crypto';
 
 type Row = CanonicalHistoryRecord;
 type Kind = CompactionData['landmarks'][number]['kind'];
@@ -30,8 +31,7 @@ const excerpt = (text: string, limit: number) => {
     return { text: characters.join(''), truncated: false };
 };
 async function hash(value: unknown) {
-    const data = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
-    return [...new Uint8Array(data)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    return sha256Hex(JSON.stringify(value));
 }
 async function guard(ctx: HistoryRetrievalContext) {
     if (ctx.signal.aborted) throw new DOMException('History retrieval canceled.', 'AbortError');
@@ -125,19 +125,34 @@ function describe(state: Awaited<ReturnType<typeof scope>>, row: Row, limit: num
 /** One registered tool service owns its cursor signing key; no history cache is introduced. */
 export function createHistoryRetrievalService() {
     const secret = crypto.getRandomValues(new Uint8Array(32));
-    const key = crypto.subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    const subtle = globalThis.crypto?.subtle;
+    let key: Promise<CryptoKey> | undefined;
+    const signingKey = () => key ??= subtle!.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    async function sign(body: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+        if (subtle) return new Uint8Array(await subtle.sign('HMAC', await signingKey(), body));
+        const [{ hmac }, { sha256 }] = await Promise.all([import('@noble/hashes/hmac.js'), import('@noble/hashes/sha2.js')]);
+        return Uint8Array.from(hmac(sha256, secret, body));
+    }
+    async function verify(signature: Uint8Array<ArrayBuffer>, body: Uint8Array<ArrayBuffer>): Promise<boolean> {
+        if (subtle) return subtle.verify('HMAC', await signingKey(), signature, body);
+        const expected = await sign(body);
+        if (signature.length !== expected.length) return false;
+        let difference = 0;
+        for (let index = 0; index < expected.length; index++) difference |= expected[index]! ^ signature[index]!;
+        return difference === 0;
+    }
     const encode = (value: Uint8Array) => btoa(String.fromCharCode(...value)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
     const decode = (value: string) => Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/')), (character) => character.charCodeAt(0));
     async function cursor(payload: Record<string, unknown>) {
         const body = new TextEncoder().encode(JSON.stringify(payload));
-        const signature = new Uint8Array(await crypto.subtle.sign('HMAC', await key, body));
+        const signature = await sign(body);
         const token = `${encode(body)}.${encode(signature)}`; if (bytes(token) > 2048) throw new ScopeError('History continuation is too large.'); return token;
     }
     async function openCursor(token: string) {
         if (bytes(token) > 2048) throw new ScopeError('History cursor is invalid.');
         try {
             const [body, signature, extra] = token.split('.');
-            if (!body || !signature || extra || !await crypto.subtle.verify('HMAC', await key, decode(signature), decode(body))) throw new Error();
+            if (!body || !signature || extra || !await verify(decode(signature), decode(body))) throw new Error();
             return object(JSON.parse(new TextDecoder().decode(decode(body))));
         } catch { throw new ScopeError('History cursor changed or expired. Start a new search.'); }
     }

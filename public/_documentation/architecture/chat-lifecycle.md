@@ -10,6 +10,10 @@ The native composer clears submitted text and attachments after provider accepta
 
 Create `useChat()` during component setup and dispose it on unmount. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `streaming` state with `providerAccepted`, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` only identifies a saved user row; it is useful for durability reporting, not draft-clearing authority.
 
+History synchronization and background-job recovery use browser-local storage.
+They must remain client-only even when a native chat route renders its shell on
+the server. Server rendering must never start IndexedDB reads or stream recovery.
+
 ## Streaming, stopping, and teardown
 
 The default message renderer loads through the theme registry when a message
@@ -95,6 +99,13 @@ Use the admitted tool registry, schema validation, request-scoped authority, and
 
 ## Tabs and drafts
 
+Sidebar and tab resource selection stays within the mounted workspace shell.
+Direct chat/document URLs mount that shell immediately and use its initial
+resource validation, rather than hiding the entire UI behind a second database
+lookup. Missing or deleted initial chats and documents return to their base
+route before opening an unavailable resource. Development pre-optimization includes lazy Markdown and editor entry
+points so opening them does not trigger a Vite dependency reload.
+
 The tab session owns the open-tab manifest and active bindings. The pane adapter owns the mounted panes; chat and document controllers own content. Changing an active tab should not create a second content store.
 
 Tab manifests persist to localStorage by workspace and profile. Composer drafts—including unsent text, editor JSON, attachment references, and settings—remain in memory and are not saved in that manifest. Reloading loses them. Draft discard revokes owned blob URLs; short deferred discard supports reopening a recently closed tab.
@@ -104,3 +115,5 @@ The pane loader reconciles separate canonical tool-result rows into their assist
 A newer activation supersedes older work. Editor sessions are resolved by pane/tab identity, which matters when a document appears in more than one split. Capture outgoing edits and verify local durability before rebinding; do not assume the saved database snapshot contains everything currently visible in an editor.
 
 See [source map](/documentation/start/source-map), [documents](/documentation/database/documents), and [workspace-safe writes](/documentation/database/safe-changes#workspace-safe-operations).
+
+Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.

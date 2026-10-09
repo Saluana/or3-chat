@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 import { useRuntimeConfig } from '#imports';
 import {
     useUserApiKey,
@@ -328,12 +329,7 @@ export async function captureAutomaticMemories(
                   )
                 : undefined;
             if (candidate.replace_id && !prior) return null;
-            const digest = await crypto.subtle.digest(
-                'SHA-256',
-                new TextEncoder().encode(
-                    projectId + '\0' + normalized(candidate.text),
-                ),
-            );
+            const digest = await sha256Hex(projectId + '\0' + normalized(candidate.text));
             return {
                 candidate,
                 source,
@@ -341,9 +337,7 @@ export async function captureAutomaticMemories(
                 id:
                     prior?.row.id ??
                     'project-auto-memory-' +
-                        Array.from(new Uint8Array(digest), (byte) =>
-                            byte.toString(16).padStart(2, '0'),
-                        ).join(''),
+                        digest,
             };
         }),
     );

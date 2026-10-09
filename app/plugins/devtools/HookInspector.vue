@@ -1,9 +1,9 @@
 <template>
-    <div class="space-y-4 p-6">
+    <div class="space-y-4 p-4 sm:p-6">
         <!-- Header -->
-        <div class="flex items-center justify-between">
-            <div>
-                <h2 class="text-lg font-semibold flex items-center gap-2">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-[12rem] flex-1">
+                <h2 class="text-lg font-semibold flex items-center gap-2 whitespace-nowrap">
                     <UIcon :name="useIcon('ui.sync').value" class="w-5 h-5" />
                     Hook Inspector
                 </h2>
@@ -11,10 +11,11 @@
                     Monitor hook performance, execution counts, and errors
                 </p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex shrink-0 items-center gap-2">
                 <UButton
                     size="sm"
                     variant="outline"
+                    class="whitespace-nowrap"
                     :icon="useIcon('ui.refresh').value"
                     :disabled="autoRefresh"
                     @click="refresh"
@@ -23,6 +24,7 @@
                 </UButton>
                 <UButton
                     size="sm"
+                    class="whitespace-nowrap"
                     :variant="autoRefresh ? 'solid' : 'outline'"
                     :icon="
                         autoRefresh
@@ -36,6 +38,7 @@
                 <UButton
                     size="sm"
                     variant="outline"
+                    class="whitespace-nowrap"
                     :icon="useIcon('ui.trash').value"
                     color="error"
                     @click="clearTimings"
@@ -58,11 +61,11 @@
                     <span class="opacity-80">
                         See the
                         <a
-                            href="/docs/core-hook-map.md"
+                            href="/documentation/hooks/hook-catalog"
                             target="_blank"
                             class="underline hover:opacity-100"
                         >
-                            Core Hook Map
+                            Hook catalog
                         </a>
                         documentation for a complete list of available hooks and
                         their payloads.
@@ -72,27 +75,27 @@
         </div>
 
         <!-- Summary Cards -->
-        <div class="grid sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-2 sm:gap-4">
             <div
-                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="min-w-0 p-3 sm:p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
-                <div class="text-xs opacity-60 mb-1">Total Actions</div>
+                <div class="text-xs opacity-60 mb-1 truncate">Total Actions</div>
                 <div class="text-2xl font-bold tracking-tight">
                     {{ stats.totalActions }}
                 </div>
             </div>
             <div
-                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="min-w-0 p-3 sm:p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
-                <div class="text-xs opacity-60 mb-1">Total Filters</div>
+                <div class="text-xs opacity-60 mb-1 truncate">Total Filters</div>
                 <div class="text-2xl font-bold tracking-tight">
                     {{ stats.totalFilters }}
                 </div>
             </div>
             <div
-                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="min-w-0 p-3 sm:p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
-                <div class="text-xs opacity-60 mb-1">Total Errors</div>
+                <div class="text-xs opacity-60 mb-1 truncate">Total Errors</div>
                 <div
                     class="text-2xl font-bold tracking-tight"
                     :class="stats.totalErrors > 0 ? 'text-red-500' : ''"
@@ -112,38 +115,38 @@
                 <h3 class="text-sm font-semibold">Hook Details</h3>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+                <table class="w-full min-w-max text-sm">
                     <thead
                         class="bg-[var(--md-surface-container)] border-b-[length:var(--md-border-width-subtle)] border-[var(--md-outline-variant)]"
                     >
                         <tr>
                             <th
-                                class="px-4 py-2 text-left font-medium opacity-70"
+                                class="sticky left-0 bg-[var(--md-surface-container)] px-3 py-2 sm:px-4 whitespace-nowrap text-left font-medium"
                             >
-                                Hook Name
+                                <span class="opacity-70">Hook Name</span>
                             </th>
                             <th
-                                class="px-4 py-2 text-right font-medium opacity-70"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right font-medium opacity-70"
                             >
-                                Invocations
+                                Calls
                             </th>
                             <th
-                                class="px-4 py-2 text-right font-medium opacity-70"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right font-medium opacity-70"
                             >
                                 Avg (ms)
                             </th>
                             <th
-                                class="px-4 py-2 text-right font-medium opacity-70"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right font-medium opacity-70"
                             >
                                 P95 (ms)
                             </th>
                             <th
-                                class="px-4 py-2 text-right font-medium opacity-70"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right font-medium opacity-70"
                             >
                                 Max (ms)
                             </th>
                             <th
-                                class="px-4 py-2 text-right font-medium opacity-70"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right font-medium opacity-70"
                             >
                                 Errors
                             </th>
@@ -155,23 +158,25 @@
                             :key="hook.name"
                             class="border-b-[length:var(--md-border-width-subtle)] border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-container-low)]"
                         >
-                            <td class="px-4 py-2 font-mono text-xs">
-                                {{ hook.name }}
+                            <td class="sticky left-0 bg-[var(--md-surface)] px-3 py-2 sm:px-4 whitespace-nowrap font-mono text-xs">
+                                <div class="max-w-[45vw] truncate sm:max-w-none" :title="hook.name">
+                                    {{ hook.name }}
+                                </div>
                             </td>
-                            <td class="px-4 py-2 text-right tabular-nums">
+                            <td class="px-3 py-2 sm:px-4 whitespace-nowrap text-right tabular-nums">
                                 {{ hook.count }}
                             </td>
-                            <td class="px-4 py-2 text-right tabular-nums">
+                            <td class="px-3 py-2 sm:px-4 whitespace-nowrap text-right tabular-nums">
                                 {{ hook.avg }}
                             </td>
-                            <td class="px-4 py-2 text-right tabular-nums">
+                            <td class="px-3 py-2 sm:px-4 whitespace-nowrap text-right tabular-nums">
                                 {{ hook.p95 }}
                             </td>
-                            <td class="px-4 py-2 text-right tabular-nums">
+                            <td class="px-3 py-2 sm:px-4 whitespace-nowrap text-right tabular-nums">
                                 {{ hook.max }}
                             </td>
                             <td
-                                class="px-4 py-2 text-right tabular-nums"
+                                class="px-3 py-2 sm:px-4 whitespace-nowrap text-right tabular-nums"
                                 :class="hook.errors > 0 ? 'text-red-500' : ''"
                             >
                                 {{ hook.errors }}

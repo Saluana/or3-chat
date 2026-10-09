@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MEMORY_CLASSIFIER_MODEL, MEMORY_CONTEXT_MAX_BYTES, memoryInferenceOrigin } from './memory-classification';
-import { DEFAULT_HEADERS } from '../openrouter/client';
+import { DEFAULT_HEADERS } from '../openrouter/request-options';
 
 export const MEMORY_ANALYSIS_MODEL = '~openai/gpt-luna-latest';
 export const AutomaticMemoryStateSchema = z

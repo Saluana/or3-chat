@@ -3,6 +3,7 @@
 .data
 .nuxt
 .nuxt-e2e-journeys
+.nuxt-e2e-scroll
 .nitro
 .cache
 dist

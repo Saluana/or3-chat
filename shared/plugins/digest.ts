@@ -7,21 +7,22 @@
  * scripts.
  *
  * Behavior:
- * - Uses Web Crypto (`crypto.subtle`), available in browsers and Node 24.
+ * - Prefers Web Crypto and uses the existing noble SHA-256 dependency on HTTP origins.
  * - Accepts strings, byte arrays or an already-encoded `sha256-` digest.
  * - Returns lowercase hex (no prefix) from `sha256Hex` and a prefixed
  *   `sha256-<hex>` identity from `sha256Identity`.
  *
  * Constraints:
  * - No new dependency and no second hashing algorithm.
- * - Throws when Web Crypto is unavailable rather than silently skipping a
- *   verification step (fail closed).
+ * - Always computes the digest; verification is never skipped.
  *
  * Non-Goals:
  * - Streaming hash of large files (the file-hash utility owns that path).
  */
 
 import type { Sha256 } from './runtime-descriptor';
+import { sha256Bytes, sha256Hex } from '../runtime-crypto';
+export { sha256Hex };
 
 export type HashInput = string | ArrayBuffer | ArrayBufferView;
 
@@ -35,43 +36,6 @@ export function parseSha256(value: string): Sha256 | null {
         return `sha256-${trimmed}` as Sha256;
     }
     return null;
-}
-
-/**
- * Copy the input into a plain `Uint8Array<ArrayBuffer>`.
- * Web Crypto's `BufferSource` parameter does not accept a `SharedArrayBuffer`
- * backed view, so the bytes are normalised here rather than at each call site.
- */
-function toBytes(input: HashInput): Uint8Array<ArrayBuffer> {
-    if (typeof input === 'string') {
-        return new TextEncoder().encode(input) as Uint8Array<ArrayBuffer>;
-    }
-    if (input instanceof ArrayBuffer) {
-        return new Uint8Array(input);
-    }
-    return new Uint8Array(
-        input.buffer as ArrayBuffer,
-        input.byteOffset,
-        input.byteLength
-    );
-}
-
-function hex(bytes: Uint8Array): string {
-    let out = '';
-    for (const byte of bytes) {
-        out += byte.toString(16).padStart(2, '0');
-    }
-    return out;
-}
-
-/** Lowercase SHA-256 hex of the input bytes. */
-export async function sha256Hex(input: HashInput): Promise<string> {
-    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
-    if (!subtle) {
-        throw new Error('Web Crypto SHA-256 is unavailable');
-    }
-    const digest = await subtle.digest('SHA-256', toBytes(input));
-    return hex(new Uint8Array(digest));
 }
 
 const BASE64_ALPHABET =
@@ -98,12 +62,7 @@ function toBase64(bytes: Uint8Array): string {
  * hex identity used elsewhere.
  */
 export async function sha256CspHash(input: HashInput): Promise<string> {
-    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
-    if (!subtle) {
-        throw new Error('Web Crypto SHA-256 is unavailable');
-    }
-    const digest = await subtle.digest('SHA-256', toBytes(input));
-    return `sha256-${toBase64(new Uint8Array(digest))}`;
+    return `sha256-${toBase64(await sha256Bytes(input))}`;
 }
 
 /** `sha256-<hex>` identity for the input bytes. */

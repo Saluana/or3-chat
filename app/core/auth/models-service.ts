@@ -19,16 +19,16 @@
  * - Client-only (guards against SSR via `typeof window` checks)
  * - localStorage may be unavailable in private browsing; cache writes fail silently
  *
- * @see shared/openrouter/client for SDK client factory
+ * @see shared/openrouter/sdk-v1-compat for catalog pagination
  * @see core/search/useModelSearch for search indexing on top of this catalog
  */
 
-import {
-    fetchOpenRouterCatalog,
-    createOpenRouterClient,
-    normalizeSDKError,
-    type OpenRouterModel,
-} from '~~/shared/openrouter';
+import { Models } from '@openrouter/sdk/sdk/models.js';
+import { fetchOpenRouterCatalog } from '~~/shared/openrouter/sdk-v1-compat';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
+import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import { useRuntimeConfig } from '#imports';
 import { openRouterModelListSchema } from '~~/shared/openrouter/types';
 
@@ -139,10 +139,14 @@ export async function fetchModelCatalog(opts?: {
     const runtimeConfig = useRuntimeConfig() as {
         public?: { openRouter?: { baseUrl?: string } };
     };
-    const client = createOpenRouterClient({
-        apiKey: key ?? '',
-        serverURL: runtimeConfig.public?.openRouter?.baseUrl,
-    });
+    const client = {
+        models: new Models({
+            apiKey: key ?? '',
+            serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.public?.openRouter?.baseUrl),
+            httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
+            appTitle: DEFAULT_HEADERS['X-Title'],
+        }),
+    };
 
     try {
         const models: OpenRouterModel[] = await fetchOpenRouterCatalog(client);

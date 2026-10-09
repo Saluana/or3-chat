@@ -61,6 +61,7 @@ interface UseChatInputAttachmentsOptions {
 export function useChatInputAttachments(
     options: UseChatInputAttachmentsOptions
 ) {
+    const toast = useToast();
     const attachments = ref<UploadedImage[]>([]);
     const uploadedImages = computed(() => attachments.value);
     const largeTextBlocks = ref<LargeTextBlock[]>([]);
@@ -121,7 +122,6 @@ export function useChatInputAttachments(
         } catch {
             return;
         }
-        const toast = useToast();
         const mime = file.type || '';
         if (
             options.onTextFile &&
@@ -200,7 +200,7 @@ export function useChatInputAttachments(
                 break;
             }
             if (attachments.value.length >= options.maxFiles) {
-                useToast().add({
+                toast.add({
                     title: 'Attachment limit reached',
                     description: `Maximum ${options.maxFiles} files per message.`,
                     color: 'warning',

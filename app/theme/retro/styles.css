@@ -1228,12 +1228,8 @@
 		padding: 0 !important;
 		border: 0 !important;
 		box-shadow: none !important;
-		background: transparent;
+		background: transparent !important;
 		transform: none !important;
-	}
-
-	.sidebar-family-toggle:hover {
-		background: var(--md-surface-hover);
 	}
 
 	.sidebar-family-toggle[aria-expanded='true'] .iconify {
@@ -1291,6 +1287,12 @@
 		margin-right: 0;
 		margin-top: 4px;
 		line-height: 1.4;
+	}
+}
+
+@media (hover: hover) and (pointer: fine) {
+	[data-theme='retro'] .sidebar-family-toggle:hover {
+		background: var(--md-surface-hover) !important;
 	}
 }
 

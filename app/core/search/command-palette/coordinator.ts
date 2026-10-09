@@ -397,14 +397,23 @@ export function createPaletteCoordinator(options?: {
     }
 
     function setQuery(raw: string): void {
+        if (disposed) return;
         rawQuery = raw;
         if (debounceTimer) clearTimeout(debounceTimer);
+        // Invalidate the old search immediately, including during the debounce.
+        // Its rows must not remain actionable under a different query.
+        queryGeneration += 1;
+        queryAbortController.abort();
+        results = [];
+        loading = true;
+        emitSnapshot();
         if (!raw) {
             debounceTimer = null;
             void runSearch(raw, true);
             return;
         }
         debounceTimer = setTimeout(() => {
+            debounceTimer = null;
             void runSearch(rawQuery, false);
         }, debounceMs);
     }

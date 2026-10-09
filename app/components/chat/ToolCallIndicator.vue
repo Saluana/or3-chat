@@ -333,7 +333,7 @@ function onToggle() {
     outline-offset: var(--app-focus-ring-offset, 2px);
 }
 
-@media (pointer: coarse) {
+@media (max-width: 767px), (pointer: coarse) {
     .workspace-source-button {
         min-height: 44px !important;
     }

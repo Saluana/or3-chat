@@ -614,7 +614,7 @@ const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 const selectMenuUi = {
     trailing: 'hidden',
     content:
-        'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)]',
+        'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)] data-[state=open]:animate-[fade-in_170ms_ease-out] data-[state=closed]:animate-[fade-out_120ms_ease-in]',
 } as const;
 
 const iconReasoning = useIcon('chat.reasoning');

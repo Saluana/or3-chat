@@ -1,4 +1,5 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
+import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, recoverySourceFingerprint, recoveryProjectFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
@@ -874,6 +875,7 @@ export function useChat(
      * - Safe to call repeatedly
      */
     async function ensureHistorySynced() {
+        if (typeof window === 'undefined') return;
         if (historySyncInFlight) {
             historySyncQueued = true;
             logBgStream('history-sync-skip-in-flight', {
@@ -1239,7 +1241,7 @@ export function useChat(
                 update.status.attempt < request.lastAttempt
             )
                 return;
-            if (request.ownsView() && !request.finalization) {
+            if (request.ownsView()) {
                 request.message = resolveUiMessage(params.messageId);
                 syncTailAccumulator(
                     params.messageId,
@@ -1579,9 +1581,8 @@ export function useChat(
                     latest.error ??
                     (finalizedHere ? 'stream_interrupted' : undefined);
                 if (terminalError === undefined) return;
-                // finalizedHere means the durable row just left pending behind;
-                // otherwise mirror the durable row's own pending flag.
-                const leftPending = !finalizedHere && latest.pending === true;
+                // The captured row is pending; successful finalization retires it.
+                const leftPending = !finalizedHere;
                 const raw = rawMessages.value.find(
                     (message) => message.id === row.id
                 );
@@ -1914,9 +1915,15 @@ export function useChat(
         const { resolveChatProject, readProjectWorkspace, moveChatToProject } = await import('~/db/project-workspace');
         const initialProjectId = requestScope.threadId ? await resolveChatProject(requestScope.originDb, requestScope.threadId) : null;
         requestScope.expectedProjectId = initialProjectId;
+        let projectAttachmentScope: WorkspaceOperationScope | undefined;
+        let projectExtractionScope: WorkspaceOperationScope | undefined;
         if (requestScope.threadId && initialProjectId) {
             const { captureProjectOperation } = await import('~/utils/projects/context');
-            const scope = captureProjectOperation(preparationSignal, requestScope.threadId);
+            // Capture the owner before any asynchronous preparation/dispatch.
+            // Source extraction may outlive the stream, so it has its own signal.
+            projectAttachmentScope = captureProjectOperation(preparationSignal, requestScope.threadId);
+            projectExtractionScope = captureProjectOperation(undefined, requestScope.threadId);
+            const scope = projectAttachmentScope;
             if (scope.writable && !(await scope.db.threads.get(requestScope.threadId))?.project_id)
                 await moveChatToProject(scope, requestScope.threadId, initialProjectId, { family: false });
         }
@@ -2319,9 +2326,6 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
-        const knowledgeProjectId = !sendMessagesParams.inspectLossyRequest ? sendMessagesParams.knowledge_project_id : undefined;
-        if (knowledgeProjectId && (!requestScope.threadId || initialProjectId !== knowledgeProjectId))
-            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Attachment destination changed. Choose the project again.' };
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2387,24 +2391,65 @@ export function useChat(
                 : undefined,
         });
         requestScope.userMessageId = userDbMsg.id;
+        // Show the durable turn even if attachment intake is subsequently stopped.
+        const rawUser: ChatMessage = {
+            role: 'user',
+            content: parts,
+            id: userDbMsg.id,
+            data: userDbMsg.data as ChatMessage['data'],
+            file_hashes: userDbMsg.file_hashes,
+        };
+        if (requestScope.ownsView()) {
+            rawMessages.value.push(rawUser);
+            messages.value.push(ensureUiMessage(rawUser));
+        }
+        // Save source bindings before acknowledging the committed turn. Only
+        // extraction runs in the background (the intake lease covers crashes).
+        if (initialProjectId && projectAttachmentScope) {
+            const scope = projectAttachmentScope;
+            preparationSignal.throwIfAborted();
+            let rejectCancellation!: (reason: unknown) => void;
+            const cancellation = new Promise<never>((_resolve, reject) => { rejectCancellation = reject; });
+            const onAbort = () => rejectCancellation(preparationSignal.reason);
+            preparationSignal.addEventListener('abort', onAbort, { once: true });
+            try {
+                // Hooks may keep awaiting their own work after Stop. Release the
+                // send immediately; the canceled scope fences any late writes.
+                await Promise.race([cancellation, (async () => {
+                    scope.assertCurrent('write');
+                    const { addProjectUpload, addExistingProjectFile } = await import('~/utils/projects/source-intake');
+                    const { getFileBlob } = await import('~/db/files');
+                    scope.assertCurrent('write');
+                    if (await resolveChatProject(scope.db, requestThreadId) !== initialProjectId)
+                        throw new Error('This chat changed projects before its attachments were added.');
+                    const options = { background: true, backgroundScope: projectExtractionScope };
+                    for (const hash of new Set(file_hashes)) {
+                        const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
+                        if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
+                        await addProjectUpload(scope, initialProjectId, new File([blob], meta.name, { type: meta.mime_type }), undefined, options);
+                    }
+                    // Text uploads and Files handoffs enter the composer as references.
+                    if (sendMessagesParams.editorDoc) {
+                        const { collectMentions } = await import('~/plugins/ChatMentions/useChatMentions');
+                        const references = collectMentions(sendMessagesParams.editorDoc as unknown as Parameters<typeof collectMentions>[0]);
+                        for (const reference of references.filter(item => item.source === 'file')) {
+                            await addExistingProjectFile(scope, initialProjectId, reference.id, options);
+                        }
+                    }
+                })()]);
+            } catch (error) {
+                if (preparationSignal.aborted) throw error;
+                reportError(error, { message: 'Message sent, but its attachments could not be added to project knowledge.', toast: true });
+            } finally {
+                preparationSignal.removeEventListener('abort', onAbort);
+            }
+        }
+        preparationSignal.throwIfAborted();
         publishRequest(requestScope, {
             status: 'persisted',
             requestId,
             userMessageId: userDbMsg.id,
         });
-        // Promotion follows the committed turn and never delays dispatch: bind
-        // each file now, extract in the background (the intake lease covers crashes).
-        if (knowledgeProjectId) void (async () => {
-            const { captureProjectOperation } = await import('~/utils/projects/context');
-            const { addProjectUpload } = await import('~/utils/projects/source-intake');
-            const { getFileBlob } = await import('~/db/files');
-            const scope = captureProjectOperation(undefined, requestThreadId);
-            for (const hash of sendMessagesParams.file_hashes ?? []) {
-                const meta = await scope.db.file_meta.get(hash); const blob = await getFileBlob(hash, scope.db); scope.assertCurrent('write');
-                if (!meta || !blob || meta.deleted) throw new Error('An attachment is unavailable.');
-                await addProjectUpload(scope, knowledgeProjectId, new File([blob], meta.name, { type: meta.mime_type }), undefined, { background: true });
-            }
-        })().catch((error) => reportError(error, { message: 'Message sent, but its attachments could not be added to project knowledge.', toast: true }));
         if (sendMessagesParams.onUserPersisted) {
             try {
                 await sendMessagesParams.onUserPersisted(userDbMsg.id);
@@ -2419,16 +2464,6 @@ export function useChat(
                 if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', errorDiagnostics(error));
             }
         }
-        const rawUser: ChatMessage = {
-            role: 'user',
-            content: parts,
-            id: userDbMsg.id,
-            data: userDbMsg.data as ChatMessage['data'],
-            file_hashes: userDbMsg.file_hashes,
-        };
-        rawMessages.value.push(rawUser);
-        messages.value.push(ensureUiMessage(rawUser));
-
         try {
             const ctx = getActivePaneContext();
             if (ctx) {
@@ -4024,15 +4059,19 @@ export function useChat(
         messages.value = associateUiToolResultMessages(nextUi, nextRaw);
     }
 
-    void reattachBackgroundJobs();
-    // Seeded histories skip ensureHistorySynced, so recover abandoned
-    // foreground generations on attach (e.g. refresh mid-stream).
-    if (threadIdRef.value) {
-        void reconcileForegroundGenerations().catch((error) => {
-            if (import.meta.dev) {
-                console.warn('[useChat] attach-time recovery failed', errorDiagnostics(error));
-            }
-        });
+    // Recovery reads browser-local storage. Direct chat routes also create this
+    // controller during SSR, where IndexedDB is unavailable.
+    if (typeof window !== 'undefined') {
+        void reattachBackgroundJobs();
+        // Seeded histories skip ensureHistorySynced, so recover abandoned
+        // foreground generations on attach (e.g. refresh mid-stream).
+        if (threadIdRef.value) {
+            void reconcileForegroundGenerations().catch((error) => {
+                if (import.meta.dev) {
+                    console.warn('[useChat] attach-time recovery failed', errorDiagnostics(error));
+                }
+            });
+        }
     }
 
     if (getCurrentScope()) {

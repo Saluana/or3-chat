@@ -7,6 +7,181 @@ test.skip(
 
 const chatPage = '/__or3-chat-journey-test';
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+
+test('missing chat deep links return to a usable workspace', async ({ page }, info) => {
+    await page.goto(`${chatPage}?workspace=1`);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    const missingId = 'journey-chat-does-not-exist';
+    await page.goto(`/chat/${missingId}`);
+    await expect(page).toHaveURL(/\/chat$/);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    await info.attach('missing-chat-recovery', {
+        contentType: 'application/json', body: JSON.stringify({ missingId, recoveredUrl: page.url() }),
+    });
+});
+
+test('project chat uploads become sources automatically without duplicate bindings', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.goto(`${chatPage}?project=1`);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    const sources = () => page.evaluate(async () => {
+        for (const { name } of await indexedDB.databases()) {
+            if (!name) continue;
+            const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); });
+            if (!db.objectStoreNames.contains('posts')) { db.close(); continue; }
+            const rows = await new Promise<Array<{ id: string; title: string; postType: string; content: string; deleted: boolean }>>(resolve => {
+                const request = db.transaction('posts', 'readonly').objectStore('posts').getAll();
+                request.onsuccess = () => resolve(request.result);
+            });
+            db.close();
+            const result = rows.filter(row => !row.deleted && row.postType === 'or3:project-source' && row.title === 'workspace-journey-project')
+                .map(row => ({ id: row.id, ...JSON.parse(row.content) }));
+            if (result.length) return result;
+        }
+        return [];
+    });
+    const original = await sources();
+    expect(original.length).toBeGreaterThan(0);
+    const freshImage = { name: 'automatic-project.png', mimeType: 'image/png', buffer: Buffer.concat([fixturePng.buffer, Buffer.from('automatic source fixture')]) };
+    for (const [index, upload] of [freshImage, { ...freshImage, name: 'same-bytes-renamed.png' }, fixturePng].entries()) {
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(upload);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await send(page, `Project upload ${index + 1}`);
+        await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+        await expect.poll(async () => (await sources()).length).toBe(original.length + 1);
+        await expect(page.getByLabel('Attachment destination')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Add attachments to project knowledge', exact: true })).toHaveCount(0);
+    }
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+    await (await chooser).setFiles({ name: 'automatic-project.txt', mimeType: 'text/plain', buffer: Buffer.from('Automatically reusable project text source.') });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toContainText('automatic-project.txt');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(async () => (await sources()).length).toBe(original.length + 2);
+    await expect.poll(async () => (await sources()).find(source => source.title === 'automatic-project.txt')?.revisions[0]?.status, { timeout: 45_000 }).toBe('ready');
+    const finalSources = await sources();
+    expect(new Set(finalSources.map(source => source.item_id)).size).toBe(finalSources.length);
+    for (const source of original) expect(finalSources.find(row => row.id === source.id)).toEqual(source);
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    expect(await sources()).toEqual(finalSources);
+    await info.attach('automatic-project-sources', { contentType: 'application/json', body: JSON.stringify(finalSources) });
+    const shot = info.outputPath('automatic-project-attachments.png');
+    await page.screenshot({ path: shot, animations: 'disabled' });
+    await info.attach('automatic-project-attachments', { path: shot, contentType: 'image/png' });
+});
+
+for (const theme of ['blank', 'retro', 'cyberpunk']) {
+    test(`${theme} mobile keyboard keeps the composer close to the visible bottom`, async ({ page }, info) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.context().addCookies([{ name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' }]);
+        await page.addInitScript((theme) => {
+            localStorage.setItem('activeTheme', theme);
+            // Model Safari's visual viewport shrinking without resizing layout/dvh.
+            const viewport = window.visualViewport!;
+            Object.defineProperty(viewport, 'height', {
+                get: () => innerHeight - (document.activeElement instanceof HTMLElement &&
+                    (document.activeElement.isContentEditable || document.activeElement.matches('input, textarea')) ? 320 : 0),
+            });
+            for (const event of ['focusin', 'focusout']) {
+                window.addEventListener(event, () => viewport.dispatchEvent(new Event('resize')));
+            }
+        }, theme);
+        await page.goto(chatPage);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+        await page.goto('/chat');
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        const gap = () => page.evaluate(() => {
+            const frame = document.querySelector('#page-container')!.getBoundingClientRect();
+            const composer = document.querySelector('.chat-input')!.getBoundingClientRect();
+            return frame.bottom - composer.bottom;
+        });
+        const closedGap = await gap();
+        await input.click();
+        await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(524);
+        await expect.poll(gap).toBeLessThanOrEqual(10);
+        expect(await gap()).toBeGreaterThanOrEqual(6);
+        const path = info.outputPath(`keyboard-gap-${theme}.png`);
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('keyboard-gap', { path, contentType: 'image/png' });
+        await input.fill('Keyboard spacing draft');
+        await input.blur();
+        await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(844);
+        await expect.poll(gap).toBeCloseTo(closedGap, 0);
+        await expect(input).toHaveText('Keyboard spacing draft');
+        await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+        const nav = page.getByRole('navigation', { name: 'Sidebar navigation' });
+        await expect(nav).toBeVisible();
+        const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+        await search.fill('Sidebar typing remains visible');
+        await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(524);
+        await expect(nav).toBeHidden();
+        await expect(search).toBeInViewport();
+        const sidebarPath = info.outputPath(`sidebar-keyboard-${theme}.png`);
+        await page.locator('#page-container').screenshot({ path: sidebarPath, animations: 'disabled' });
+        await info.attach('sidebar-keyboard', { path: sidebarPath, contentType: 'image/png' });
+        await search.blur();
+        await expect(nav).toBeVisible();
+        await expect(search).toHaveValue('Sidebar typing remains visible');
+    });
+}
+
+test('sidebar chat and document switching keeps the workspace mounted without a page reload', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const serverRenderErrors: string[] = [];
+    page.on('console', message => {
+        if (message.type() === 'error' && message.text().includes('ssr:error')) serverRenderErrors.push(message.text());
+    });
+    await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto(`${chatPage}?project=1`);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    // Use the real entry route after seeding the local workspace.
+    await page.goto('/chat');
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    await page.evaluate(() => {
+        Object.assign(window, { __navigationSession: 'preserved' });
+        document.querySelector('#main-content')!.setAttribute('data-navigation-session', 'preserved');
+    });
+    const navigations: string[] = [];
+    page.on('request', request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations.push(request.url());
+    });
+    const sidebar = page.locator('.unified-sb-item');
+    for (let index = 0; index < 3; index++) {
+        await sidebar.filter({ hasText: 'Saffron project chat' }).first().click();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await expect(input).toBeVisible();
+        if (index === 0) await input.fill('Preserve this unsent navigation draft.');
+        await sidebar.filter({ hasText: 'Workspace evidence' }).first().click();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 30_000 });
+        expect(navigations).toEqual([]);
+        expect(await page.evaluate(() => (window as unknown as { __navigationSession?: string }).__navigationSession)).toBe('preserved');
+        await expect(page.locator('#main-content')).toHaveAttribute('data-navigation-session', 'preserved');
+        await sidebar.filter({ hasText: 'Saffron project chat' }).first().click();
+        await expect(input).toHaveText('Preserve this unsent navigation draft.');
+        expect(await page.evaluate(() => (window as unknown as { __navigationSession?: string }).__navigationSession)).toBe('preserved');
+        await expect(page.getByRole('status').filter({ hasText: /Opening (chat|document)/ })).toHaveCount(0);
+    }
+    expect(navigations).toEqual([]);
+    const path = info.outputPath('sidebar-navigation-preserved.png');
+    await page.screenshot({ path, animations: 'disabled' });
+    await info.attach('sidebar-navigation-preserved', { path, contentType: 'image/png' });
+    // Explicit deep-link reloads must render the shell without trying to read
+    // browser-only storage on the server.
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    expect(serverRenderErrors).toEqual([]);
+    await sidebar.filter({ hasText: 'Workspace evidence' }).first().click();
+    await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('saffron');
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('saffron');
+    expect(serverRenderErrors).toEqual([]);
+});
+
 test('compaction chat memory lives under system prompt in settings, with working version history', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', route => route.abort());
@@ -50,8 +225,11 @@ test('compaction chat memory lives under system prompt in settings, with working
 });
 test('compaction composer meter updates configuration, media and accessible warning thresholds', async ({ page }, info) => {
     test.setTimeout(120_000);
+    const injectionWarnings: string[] = [];
+    page.on('console', message => {
+        if (message.text().includes('[Vue warn]')) injectionWarnings.push(message.text());
+    });
     await page.route('**openrouter.ai/**', (route) => route.abort());
-    await page.addInitScript(() => window.addEventListener('error', event => { if (event.message.includes('ResizeObserver loop')) event.stopImmediatePropagation(); }));
     await page.goto(`${chatPage}?compaction=1&meter=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
     const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
@@ -103,6 +281,7 @@ test('compaction composer meter updates configuration, media and accessible warn
     await settle(); await expect.poll(percent).toBeLessThan(originalModel);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
     await info.attach('composer-meter-receipt', { contentType: 'application/json', body: JSON.stringify({ colors, assertions: ['69/70/89/90 computed theme colors', 'reply aria text', 'optional maximum', 'prompt', 'tool schema', 'add/remove image', 'larger model', 'zero inference'] }) });
+    expect(injectionWarnings).toEqual([]);
     const screenshot = info.outputPath('composer-meter.png'); await page.screenshot({ path: screenshot, animations: 'disabled' }); await info.attach('composer-meter', { path: screenshot, contentType: 'image/png' });
 });
 test('compaction media meter estimates inherited historical image cost without a current attachment', async ({ page }, info) => {
@@ -376,13 +555,27 @@ test('compaction history and families use production scope and deletion policies
     expect(result.scale.memberP95).toBeLessThan(500);
 });
 
-test.beforeEach(async ({ page }) => {
+const unexpectedDiagnostics = new WeakMap<Page, string[]>();
+test.beforeEach(async ({ page, context }) => {
+    await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+    const messages: string[] = []; unexpectedDiagnostics.set(page, messages);
+    await context.exposeBinding('__journeyWindowError', (_source, message: string) => { messages.push(message); });
+    await context.addInitScript(() => {
+        window.addEventListener('error', event => {
+            if (event.message.includes('ResizeObserver loop')) {
+                void (window as typeof window & { __journeyWindowError: (message: string) => Promise<void> }).__journeyWindowError(event.message);
+            }
+        });
+    });
+    page.on('pageerror', error => { if (error.message.includes('ResizeObserver loop')) messages.push(error.message); });
+    page.on('console', message => { if (message.text().includes('[Vue warn]')) messages.push(message.text()); });
     page.on('console', (message) => {
         if (message.type() === 'error' && message.text().includes('[production-chat-journey]')) console.error(message.text());
     });
 });
 
 test.afterEach(async ({ page }, info) => {
+    expect(unexpectedDiagnostics.get(page) ?? [], 'Unexpected Vue and resize diagnostics').toEqual([]);
     if (info.status === info.expectedStatus) return;
     const details = page.getByRole('button', { name: 'Details', exact: true });
     if (await details.isVisible().catch(() => false)) {
@@ -469,7 +662,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
             await page.evaluate(zoom => { document.documentElement.style.zoom = zoom; }, width === 640 ? '2' : '1');
             await open.focus();
             await page.keyboard.press('Enter');
-            const preview = page.getByRole('dialog', { name: 'File preview' });
+            const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
             await expect(preview).toContainText('Keyboard and layout proof.');
             await page.keyboard.press('Escape');
             await expect(preview).toHaveCount(0);
@@ -477,7 +670,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
             expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
             for (const control of await files.locator('button').all()) {
                 const bounds = await control.boundingBox();
-                if (bounds) expect(bounds.height).toBeGreaterThanOrEqual(44);
+                if (bounds) expect(bounds.height, await control.getAttribute('aria-label') ?? await control.innerText()).toBeGreaterThanOrEqual(44);
             }
             const path = info.outputPath(`files-${theme}-${width}.png`);
             await page.screenshot({ path, animations: 'disabled' });
@@ -723,7 +916,7 @@ test('Files management preserves content when removing project associations and 
     await files.getByRole('button', { name: 'Files options', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Show active files', exact: true }).click();
     await item('Managed original').getByRole('button', { name: 'Open Managed original', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'File preview' })).toContainText('saffron,preserved');
+    await expect(page.getByRole('complementary', { name: 'File preview', exact: true })).toContainText('saffron,preserved');
     await page.keyboard.press('Escape');
     await item('Managed original').getByRole('button', { name: 'More actions for Managed original', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
@@ -756,7 +949,7 @@ test('Files stores active content as download-only bytes without rendering it', 
     ]) {
         await files.getByLabel('Upload files', { exact: true }).setInputFiles({ name: name!, mimeType: mimeType!, buffer: Buffer.from(content!) });
         await files.getByRole('button', { name: `Open ${name}`, exact: true }).click();
-        const preview = page.getByRole('dialog', { name: 'File preview' });
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
         await expect(preview.locator('.preview-note')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
         await expect(preview.locator('img, iframe, object, embed, svg, script')).toHaveCount(0);
@@ -1145,6 +1338,15 @@ test.describe('production chat journey', () => {
                 viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
             });
             const page = await context.newPage();
+            await page.addInitScript(() => {
+                const errors: string[] = [];
+                Object.assign(window, { __responsiveErrors: errors });
+                // Observe before Vite handles browser ErrorEvents, which can
+                // otherwise disappear from Playwright's pageerror stream.
+                window.addEventListener('error', event => {
+                    errors.push(event.message);
+                });
+            });
             try {
                 await context.addCookies([
                     { name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' },
@@ -1182,8 +1384,10 @@ test.describe('production chat journey', () => {
                     await page.screenshot({ path, animations: 'disabled' });
                     await info.attach('responsive-message', { path, contentType: 'image/png' });
                 }
+                expect(await page.evaluate(() => (window as unknown as { __responsiveErrors: string[] }).__responsiveErrors)).toEqual([]);
                 await page.reload();
                 await expect(page.getByText('End of layout sample.')).toBeVisible();
+                expect(await page.evaluate(() => (window as unknown as { __responsiveErrors: string[] }).__responsiveErrors)).toEqual([]);
             } finally {
                 await context.close();
             }
@@ -1380,6 +1584,38 @@ test.describe('production chat journey', () => {
             .toBeVisible();
         await expect(page.getByText(/Late response that must be ignored/))
             .toHaveCount(0);
+    });
+
+    test('deletes a chat after a mid-stream failure without crashing the workspace', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        const componentErrors: string[] = [];
+        page.on('pageerror', error => componentErrors.push(error.stack ?? error.message));
+        page.on('console', message => {
+            if (message.type() === 'error' && message.text().includes('[production-chat-journey] captured component error')) componentErrors.push(message.text());
+        });
+        await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+        await send(page, 'journey:error');
+        await expect(page.getByRole('alert', { name: 'Response failed', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Stop generation' })).toHaveCount(0);
+        const item = page.locator('.unified-sb-item-active').filter({ has: page.getByRole('button', { name: 'Open actions', exact: true }) }).first();
+        await item.getByRole('button', { name: 'Open actions', exact: true }).click();
+        await page.getByRole('button', { name: 'Delete', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Delete thread', exact: true });
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        expect(componentErrors).toEqual([]);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+        await expect(page.getByText('journey:error', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('heading', { name: 'Something went wrong', exact: true })).toHaveCount(0);
+        expect(componentErrors).toEqual([]);
+        await send(page, 'journey:complete');
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+        const path = info.outputPath('delete-failed-chat-recovered.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('delete-failed-chat-recovered', { path, contentType: 'image/png' });
     });
 
     for (const prompt of ['journey:error', 'journey:error-empty']) test(`surfaces ${prompt} after reload and retries the persisted user turn`, async ({ page }, info) => {

@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
 import { HTTPClient } from '@openrouter/sdk';
@@ -105,7 +106,7 @@ export function createTrustedRuntimeServices(input: {
         list: () => run('tools.use', async () => registry.listTools.value.map(tool => ({ definition: tool.definition, enabled: tool.enabled.value, workflowPolicy: tool.workflowPolicy }))),
         execute: (name, args, options) => run('tools.use', async () => {
             if (options?.signal?.aborted) throw Object.assign(new Error('Tool cancelled'), { code: 'aborted' });
-            const result = await registry.executeTool(name, JSON.stringify(args), { subject: session.data.value?.session?.user?.id ?? null, workspaceId: session.data.value?.session?.workspace?.id ?? null, threadId: null, messageId: null, callId: crypto.randomUUID(), requestId: crypto.randomUUID(), abortSignal: options?.signal ?? new AbortController().signal });
+            const result = await registry.executeTool(name, JSON.stringify(args), { subject: session.data.value?.session?.user?.id ?? null, workspaceId: session.data.value?.session?.workspace?.id ?? null, threadId: null, messageId: null, callId: createRuntimeUuid(), requestId: createRuntimeUuid(), abortSignal: options?.signal ?? new AbortController().signal });
             if (result.error) throw new Error(result.error); return result.result ?? '';
         }),
     };

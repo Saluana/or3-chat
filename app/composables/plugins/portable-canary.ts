@@ -22,6 +22,7 @@
  */
 
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 import type { PackageV2ClientEntry } from '~~/shared/plugins/runtime-descriptor';
 import { getTrustedHostUiDecision } from '~~/shared/plugins/host-esm-facade-runtime';
 import {
@@ -91,9 +92,7 @@ async function runTrustedHostCandidateCanary(
             throw new Error(`Candidate entry unavailable (${response.status})`);
         }
         const bytes = await response.arrayBuffer();
-        const digest = await crypto.subtle.digest('SHA-256', bytes);
-        const actual = `sha256-${[...new Uint8Array(digest)]
-            .map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+        const actual = `sha256-${await sha256Hex(bytes)}`;
         if (actual !== ticket.clientEntry.digest) {
             return { status: 'blocked', code: 'client-entry-digest-mismatch', diagnostics: {} };
         }

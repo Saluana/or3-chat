@@ -112,7 +112,7 @@ async function qualifyHistory() {
 }
 const contextJourney = useRoute().query.context === '1';
 onErrorCaptured((error) => {
-    console.error('[production-chat-journey] captured component error', error instanceof Error ? error.stack : String(error));
+    console.error('[production-chat-journey] captured component error', error instanceof Error ? error.stack ?? `${error.name}: ${error.message}` : String(error));
 });
 const fixtureSourceThread = ref('');
 const fixtureViewThread = ref('');

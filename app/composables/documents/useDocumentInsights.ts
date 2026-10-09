@@ -100,10 +100,19 @@ export function useDocumentInsights(editor: Ref<Editor | null>) {
         serializedBytes: serializedBytes.value,
     }));
 
-    function scrollTo(item: DocumentOutlineItem) {
+    function scrollTo(item: DocumentOutlineItem, viewport?: HTMLElement) {
         const current = editor.value;
         if (!current) return;
-        current.chain().focus().setTextSelection(item.position + 1).scrollIntoView().run();
+        // Caret scrolling only guarantees visibility and can leave the heading
+        // behind the composer. Align the heading in this pane's scroll viewport.
+        current.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(item.position + 1).run();
+        const heading = current.view.nodeDOM(item.position);
+        if (!viewport || !(heading instanceof HTMLElement)) return;
+        viewport.scrollTo({
+            top: viewport.scrollTop + heading.getBoundingClientRect().top
+                - viewport.getBoundingClientRect().top - viewport.clientTop - 24,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+        });
     }
 
     return {

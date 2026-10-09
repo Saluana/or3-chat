@@ -1,5 +1,6 @@
 import { trimOrMessagesByTokenBudget } from './messages';
 import { countTokensApprox } from './tokens';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 import { buildOpenRouterRequestBody, prepareOpenRouterRequest, type OpenRouterStreamParams } from './openrouterStream';
 import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { admitChatContext, ChatContextAdmissionError } from '~~/shared/chat/context-budget';
@@ -11,8 +12,7 @@ type Body = ReturnType<typeof buildOpenRouterRequestBody>;
 const previews = new WeakMap<LossyRequestPreview, { scope: Scope; original: string; policy: string;
     messages: Body['messages']; omission: { version: 1; omitted_positions: number[]; original_digest: string; candidate_digest: string; protected_digest: string } }>();
 async function digest(value: unknown) {
-    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
-    return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    return sha256Hex(JSON.stringify(value));
 }
 function policyKey(params: OpenRouterStreamParams) {
     const { measuredUsage: _usage, ...policy } = params.contextPolicy ?? {};

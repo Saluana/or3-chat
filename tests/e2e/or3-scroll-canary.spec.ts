@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 test.skip(
     process.env.OR3_SCROLL_TEST_HARNESS !== 'true',
@@ -62,6 +62,34 @@ const canary = (page: Page) =>
             .__or3ScrollCanary.getSnapshot()
     );
 
+type BrowsingPosition = Awaited<ReturnType<typeof canary>>;
+
+// A wheel jump renders new rows, whose measured heights can legitimately
+// change the raw offset. Establish the settled viewport before mutating the tail.
+async function settledBrowsingPosition(page: Page): Promise<BrowsingPosition> {
+    let previous: BrowsingPosition | undefined;
+    await expect.poll(async () => {
+        const next = await canary(page);
+        const stable = previous !== undefined && next.hasVisibleRows
+            && next.scrollTop === previous.scrollTop
+            && next.scrollHeight === previous.scrollHeight
+            && next.visibleAnchor === previous.visibleAnchor
+            && next.anchorOffset === previous.anchorOffset;
+        previous = next;
+        return stable;
+    }, { intervals: [100], timeout: 5000 }).toBe(true);
+    expect(previous!.visibleAnchor).not.toBeNull();
+    return previous!;
+}
+
+async function assertBrowsingPosition(page: Page, before: BrowsingPosition, info: TestInfo, gesture: string) {
+    const after = await canary(page);
+    expect(after.scrollTop).toBeCloseTo(before.scrollTop, 0);
+    expect(after.visibleAnchor).toBe(before.visibleAnchor);
+    expect(after.anchorOffset).toBeCloseTo(before.anchorOffset!, 0);
+    await info.attach(`browsing-${gesture}`, { contentType: 'application/json', body: JSON.stringify({ before, after }) });
+}
+
 test.beforeEach(async ({ page }) => {
     await page.goto('/__or3-scroll-test');
     await expect(page.getByTestId('ready')).toHaveText('ready', {
@@ -114,7 +142,7 @@ test('prefetches every decoded image before mounting its row', async ({
 
 test('follows streaming at the bottom but never snaps back while browsing', async ({
     page,
-}) => {
+}, info) => {
     const bottomResult = await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.scrollToBottom()
@@ -127,7 +155,7 @@ test('follows streaming at the bottom but never snaps back while browsing', asyn
     );
     await expect.poll(async () => (await canary(page)).bottomDistance).toBeLessThanOrEqual(5);
 
-    const browsingTop = await page.evaluate(() => {
+    await page.evaluate(() => {
         const api = (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary;
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
@@ -136,14 +164,15 @@ test('follows streaming at the bottom but never snaps back while browsing', asyn
         element.dispatchEvent(new Event('scroll'));
         return element.scrollTop;
     });
+    const browsingTop = await settledBrowsingPosition(page);
     await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.appendMessage()
     );
     await page.waitForTimeout(200);
-    expect((await canary(page)).scrollTop).toBeCloseTo(browsingTop, 0);
+    await assertBrowsingPosition(page, browsingTop, info, 'browsingTop');
 
-    const keyboardTop = await page.evaluate(() => {
+    await page.evaluate(() => {
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
         element.dispatchEvent(
             new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true })
@@ -152,40 +181,43 @@ test('follows streaming at the bottom but never snaps back while browsing', asyn
         element.dispatchEvent(new Event('scroll'));
         return element.scrollTop;
     });
+    const keyboardTop = await settledBrowsingPosition(page);
     await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.appendMessage()
     );
     await page.waitForTimeout(200);
-    expect((await canary(page)).scrollTop).toBeCloseTo(keyboardTop, 0);
+    await assertBrowsingPosition(page, keyboardTop, info, 'keyboardTop');
 
-    const scrollbarTop = await page.evaluate(() => {
+    await page.evaluate(() => {
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
         element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
         element.scrollTop = Math.max(0, element.scrollTop - 350);
         element.dispatchEvent(new Event('scroll'));
         return element.scrollTop;
     });
+    const scrollbarTop = await settledBrowsingPosition(page);
     await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.appendMessage()
     );
     await page.waitForTimeout(200);
-    expect((await canary(page)).scrollTop).toBeCloseTo(scrollbarTop, 0);
+    await assertBrowsingPosition(page, scrollbarTop, info, 'scrollbarTop');
 
-    const touchTop = await page.evaluate(() => {
+    await page.evaluate(() => {
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
         element.dispatchEvent(new TouchEvent('touchstart', { bubbles: true }));
         element.scrollTop = Math.max(0, element.scrollTop - 350);
         element.dispatchEvent(new Event('scroll'));
         return element.scrollTop;
     });
+    const touchTop = await settledBrowsingPosition(page);
     await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.appendMessage()
     );
     await page.waitForTimeout(200);
-    expect((await canary(page)).scrollTop).toBeCloseTo(touchTop, 0);
+    await assertBrowsingPosition(page, touchTop, info, 'touchTop');
 });
 
 test('streams in place through the row revision while following the bottom', async ({
@@ -276,7 +308,7 @@ test('streams in place through the row revision while following the bottom', asy
 
 test('keeps a browsing viewport anchored while an offscreen tail streams in place', async ({
     page,
-}) => {
+}, info) => {
     await page.evaluate(() =>
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.setMutationMode('append-prepend')
@@ -297,13 +329,14 @@ test('keeps a browsing viewport anchored while an offscreen tail streams in plac
         .poll(async () => (await canary(page)).bottomDistance, { timeout: 5_000 })
         .toBeLessThanOrEqual(5);
 
-    const browsingTop = await page.evaluate(() => {
+    await page.evaluate(() => {
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
         element.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 }));
         element.scrollTop = Math.max(0, element.scrollTop - 2500);
         element.dispatchEvent(new Event('scroll'));
         return element.scrollTop;
     });
+    const browsingTop = await settledBrowsingPosition(page);
     await expect
         .poll(
             () =>
@@ -325,7 +358,7 @@ test('keeps a browsing viewport anchored while an offscreen tail streams in plac
             .__or3ScrollCanary.updateTailText('offscreen chunk')
     );
     await page.waitForTimeout(200);
-    expect((await canary(page)).scrollTop).toBeCloseTo(browsingTop, 0);
+    await assertBrowsingPosition(page, browsingTop, info, 'browsingTop');
 
     await page.evaluate(
         (index) =>
@@ -516,8 +549,7 @@ test('restores a browsing anchor and keeps it through later row growth', async (
                 .__or3ScrollCanary.restoreScrollState(value),
         state!
     );
-    await page.waitForTimeout(150);
-    const restored = await canary(page);
+    const restored = await settledBrowsingPosition(page);
     expect(restored.bottomDistance).toBeGreaterThan(5);
     expect(restored.visibleAnchor).not.toBeNull();
 
@@ -568,7 +600,8 @@ test('restores a browsing anchor and keeps it through later row growth', async (
             );
         })
         .toBeGreaterThan(growthTarget!.height);
-    const afterGrowth = await canary(page);
+    // DOM growth precedes ResizeObserver's next-frame model/anchor commit.
+    const afterGrowth = await settledBrowsingPosition(page);
     expect(afterGrowth.visibleAnchor).toBe(restored.visibleAnchor);
     expect(afterGrowth.anchorOffset).toBeCloseTo(restored.anchorOffset ?? 0, 0);
     expect(afterGrowth.bottomDistance).toBeGreaterThan(5);

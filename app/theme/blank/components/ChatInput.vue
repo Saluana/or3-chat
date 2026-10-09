@@ -416,17 +416,29 @@ function forwardResize(payload: ResizePayload) {
         animation: blank-mobile-caret-blink 1.05s steps(1, end) infinite;
     }
 
-    :deep(.blank2-chat-dropper .chat-input-editor-container) {
-        min-height: 2.5rem !important;
-        padding: 0 3.75rem 0 7rem !important;
+    :deep(.blank2-chat-dropper .chat-input-editor) {
+        min-height: 2.25rem !important;
     }
 
+    /* Buttons own their touch targets; wrappers must not add width. */
+    :deep(.blank2-chat-dropper .chat-input-attachment-btn),
+    :deep(.blank2-chat-dropper .chat-input-settings-btn),
+    :deep(.blank2-chat-dropper .chat-input-bottom-controls-right) {
+        min-width: 0;
+    }
+
+    :deep(.blank2-chat-dropper .chat-input-editor-container) {
+        min-height: 2.25rem !important;
+        padding: 0 3rem 0 5.25rem !important;
+    }
+
+    /* Single-line pill is 3rem; controls fill it so icons center vertically. */
     :deep(.blank2-chat-dropper .chat-input-bottom-controls) {
-        height: 3.5rem;
+        height: 3rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-inner-container) {
-        padding: 0.5rem 0 !important;
+        padding: 0.375rem 0 !important;
     }
 
     :deep(.blank2-chat-dropper .chat-input-bottom-controls-left) {
@@ -434,6 +446,7 @@ function forwardResize(payload: ResizePayload) {
         gap: 0.25rem;
     }
 
+    /* (3rem - 32px) / 2: same 8px inset on every side of the pill. */
     :deep(.blank2-chat-dropper .chat-input-bottom-controls-right) {
         right: 0.5rem;
     }
@@ -445,32 +458,37 @@ function forwardResize(payload: ResizePayload) {
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-attachment-btn > button),
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-settings-btn button) {
         position: relative;
-        min-width: 44px !important;
-        min-height: 44px !important;
-        width: 44px !important;
-        height: 44px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
         padding: 0 !important;
     }
 
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-attachment-btn > button::before),
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-settings-btn button::before) {
-        content: none;
+        content: '';
+        position: absolute;
+        inset: -6px -2px;
     }
 
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-send-btn),
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-stop-btn) {
         position: relative;
-        flex-basis: 44px;
-        min-width: 44px !important;
-        min-height: 44px !important;
-        width: 44px !important;
-        height: 44px !important;
+        flex-basis: 32px;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
         padding: 0 !important;
     }
 
+    /* Edge control: extend the 32px circle to a 44px touch target. */
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-send-btn::before),
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-stop-btn::before) {
-        content: none;
+        content: '';
+        position: absolute;
+        inset: -6px;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachment-btn .iconify),

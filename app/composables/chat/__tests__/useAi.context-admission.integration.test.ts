@@ -43,9 +43,8 @@ vi.mock('#imports', async (original) => ({
 vi.mock('~/core/auth/useOpenrouter', () => ({ useOpenRouterAuth: () => ({ startLogin() {} }) }));
 vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => external.background ? { authenticated: true, user: { id: 'fixture-user' }, workspace: { id: external.workspace }, role: external.role } : null, getCachedSessionPayload: () => null, useSessionContext: () => ({ data: ref(external.background
     ? { session: { authenticated: true, workspace: { id: 'scripted-workspace' } } } : null) }) }));
-vi.mock('~~/shared/openrouter', async (original) => ({
-    ...await original<typeof import('~~/shared/openrouter')>(),
-    createOpenRouterClient: () => ({ models: { list: async () => ({
+vi.mock('@openrouter/sdk/sdk/models.js', () => ({
+    Models: class { list = async () => ({
         async *[Symbol.asyncIterator]() { external.catalogEntered?.(); await external.catalogGate; yield { result: { data: [{
             id: 'fixture/model', name: 'Fixture', canonicalSlug: 'fixture/model', contextLength: external.capacity,
             // Image-capable: the attachment-retention case sends image bytes.
@@ -53,7 +52,7 @@ vi.mock('~~/shared/openrouter', async (original) => ({
             topProvider: { contextLength: external.capacity, maxCompletionTokens: 4096, isModerated: false },
             pricing: { prompt: '0', completion: '0' }, supportedParameters: ['tools'],
         }] } }; },
-    }) } }),
+    }); },
 }));
 import { useChat } from '../useAi';
 
@@ -92,6 +91,83 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    // Failure inventory: a stalled file-policy hook strands Stop/thread switches;
+    // its late completion writes knowledge or starts inference after cancellation;
+    // coupling extraction to send cancellation strands an already-bound source.
+    it.each(['stop', 'switch'] as const)('settles %s while project attachment intake is stalled', async action => {
+        vi.stubGlobal('Blob', NodeBlob);
+        vi.stubGlobal('File', NodeFile);
+        const db = getDb();
+        await db.projects.put({ id: 'knowledge', name: 'Knowledge', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Intake', project_id: 'knowledge' });
+        const destination = await createThreadInDb(db, { title: 'Destination' });
+        const file = await createOrRefFile(new NodeBlob(['Delayed attachment'], { type: 'text/plain' }) as Blob, 'delayed.txt');
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const entered = vi.fn();
+        useHooks().addFilter('files.attach:filter:input', async value => {
+            entered();
+            await gate;
+            return value;
+        });
+        const owner = chat(thread.id);
+        const sending = owner.sendMessage('Use my attachment', { model: 'fixture/model', file_hashes: [file.hash] });
+        let switching: Promise<void> | undefined;
+        try {
+            await vi.waitFor(() => expect(entered).toHaveBeenCalledOnce());
+            if (action === 'switch') switching = owner.switchThread(destination.id);
+            else owner.abort();
+            await vi.waitFor(() => expect(owner.loading.value).toBe(false), { timeout: 500 });
+            expect(await sending).toMatchObject({ status: 'aborted' });
+            if (action === 'stop') {
+                expect(owner.messages.value.map(message => message.role)).toEqual(['user']);
+            }
+            if (switching) {
+                await switching;
+                expect(owner.threadId.value).toBe(destination.id);
+            }
+            expect(external.bodies).toEqual([]);
+        } finally {
+            release();
+            await sending;
+            await switching;
+        }
+        // Let the held hook resume: the canceled scope must fence its writes.
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(await db.posts.where('postType').equals(PROJECT_POST_TYPES.source).count()).toBe(0);
+        const rows = await db.messages.where('thread_id').equals(thread.id).toArray();
+        expect(rows.map(row => row.role)).toEqual(['user']);
+        expect(external.bodies).toEqual([]);
+    });
+
+    it('finishes bound project source extraction after its send has settled', async () => {
+        vi.stubGlobal('Blob', NodeBlob);
+        vi.stubGlobal('File', NodeFile);
+        let finishExtraction: (() => void) | undefined;
+        vi.stubGlobal('Worker', class {
+            onmessage?: (event: { data: unknown }) => void;
+            postMessage() {
+                finishExtraction = () => this.onmessage?.({ data: {
+                    ok: true, text: 'Reusable attachment', partial: false, locations: [],
+                } });
+            }
+            terminate() {}
+        });
+        const db = getDb();
+        await db.projects.put({ id: 'knowledge', name: 'Knowledge', data: [], clock: 1, created_at: 1, updated_at: 1, deleted: false });
+        const thread = await createThreadInDb(db, { title: 'Extraction', project_id: 'knowledge' });
+        const file = await createOrRefFile(new NodeBlob(['Reusable attachment'], { type: 'text/plain' }) as Blob, 'reusable.txt');
+        expect(await chat(thread.id).sendMessage('Use my attachment', { model: 'fixture/model', file_hashes: [file.hash] }))
+            .toMatchObject({ status: 'complete' });
+        try {
+            await vi.waitFor(() => expect(finishExtraction).toBeTypeOf('function'));
+        } finally { finishExtraction?.(); }
+        await vi.waitFor(async () => {
+            const source = await db.posts.where('postType').equals(PROJECT_POST_TYPES.source).first();
+            expect(JSON.parse(source!.content).revisions[0]).toMatchObject({ status: 'ready', coverage: 'full' });
+        });
+    });
+
     // A required failed source must explain how to unblock the preserved draft,
     // without persisting a turn or contacting the model.
     it('presents actionable required-source failures before model dispatch', async () => {

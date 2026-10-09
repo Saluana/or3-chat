@@ -4,14 +4,11 @@ import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner'
 import { captureProjectOperation } from '~/utils/projects/context';
 import { resolveChatProject } from '~/db/project-workspace';
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
-import { addProjectUpload } from '~/utils/projects/source-intake';
-import { getFileBlob } from '~/db/files';
 import AppModal from '~/components/ui/AppModal.vue';
 const props = defineProps<{
     threadId?: string;
     messageId?: string;
     text?: string;
-    hashes?: string[];
 }>();
 const remember = ref(false);
 const memory = ref('');
@@ -112,52 +109,12 @@ async function save() {
         busy.value = false;
     }
 }
-async function promote() {
-    busy.value = true;
-    error.value = '';
-    try {
-        const scope = captureProjectOperation();
-        const projectId = await owningProject(scope, props.threadId);
-        const hashes = [...(props.hashes ?? [])];
-        for (const hash of hashes) {
-            const blob = await getFileBlob(hash, scope.db);
-            const meta = await scope.db.file_meta.get(hash);
-            scope.assertCurrent();
-            if (!blob || !meta) throw new Error('Attachment unavailable.');
-            await addProjectUpload(
-                scope,
-                projectId,
-                new File([blob], meta.name, { type: meta.mime_type }),
-            );
-        }
-        saved.value = true;
-    } catch (cause) {
-        error.value =
-            cause instanceof Error ? cause.message : 'Could not add knowledge.';
-    } finally {
-        busy.value = false;
-    }
-}
 </script>
 <template>
     <div
-        v-if="(projectId && hashes?.length) || remember || saved || error"
+        v-if="remember || saved || error"
         class="mt-2 text-xs space-y-2"
     >
-        <div
-            v-if="projectId && threadId && messageId && hashes?.length"
-            class="flex gap-2"
-        >
-            <UButton
-                v-if="hashes?.length"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                label="Add attachments to project knowledge"
-                :disabled="busy"
-                @click="promote"
-            />
-        </div>
         <AppModal
             v-model:open="remember"
             title="Save project memory"

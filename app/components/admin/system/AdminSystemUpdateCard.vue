@@ -98,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
@@ -223,7 +224,7 @@ async function start() {
         status.value = await $fetch<DashboardUpdateStatus>('/api/admin/update/start', {
             method: 'POST',
             headers: ADMIN_HEADERS,
-            body: { requestId: crypto.randomUUID(), targetVersion },
+            body: { requestId: createRuntimeUuid(), targetVersion },
         });
         preview.value = undefined;
         previewError.value = '';

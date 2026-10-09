@@ -2,6 +2,7 @@
     <div
         id="page-container"
         :style="visualViewportStyle"
+        :data-keyboard-open="keyboardOpen || undefined"
         class="resizable-sidebar-layout relative w-full h-dvh [container:app-viewport/size] overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
         <!-- Backdrop (mobile) -->
@@ -176,6 +177,7 @@ type Side = 'left' | 'right';
 // Safari's software keyboard changes the visual viewport without resizing dvh.
 // Keep the application frame inside the visible area, including Safari's pan.
 const visualViewportStyle = ref<CSSProperties>({});
+const keyboardOpen = ref(false);
 let viewportFrame: number | undefined;
 onMounted(() => {
     const viewport = window.visualViewport;
@@ -183,6 +185,15 @@ onMounted(() => {
     const touchScreen = window.matchMedia('(pointer: coarse)');
     const update = () => {
         viewportFrame = undefined;
+        // Browser chrome can shrink this viewport slightly; a software keyboard
+        // removes substantially more space. Its top edge needs no home-bar inset.
+        // iOS WebKit may shrink innerHeight with the keyboard too, so a focused
+        // text field on a touch screen also counts as an open keyboard.
+        const active = document.activeElement as HTMLElement | null;
+        const editing = touchScreen.matches && !!active &&
+            (active.isContentEditable || /^(INPUT|TEXTAREA)$/.test(active.tagName));
+        keyboardOpen.value = Math.abs(viewport.scale - 1) <= 0.01 &&
+            (editing || window.innerHeight - viewport.height > 120);
         // Let browser pinch zoom pan the normal page instead of reflowing it.
         if (Math.abs(viewport.scale - 1) > 0.01 ||
             (!touchScreen.matches && window.innerWidth >= 768 &&
@@ -204,6 +215,7 @@ onMounted(() => {
     };
     useEventListener(viewport, ['resize', 'scroll'], queueUpdate, { passive: true });
     useEventListener(window, 'resize', queueUpdate, { passive: true });
+    useEventListener(document, ['focusin', 'focusout'], queueUpdate);
     useEventListener(touchScreen, 'change', queueUpdate);
     update();
 });

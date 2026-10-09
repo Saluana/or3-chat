@@ -173,22 +173,16 @@ export default defineNuxtConfig({
         ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
         : process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true'
             ? { buildDir: resolve(__dirname, '.nuxt-e2e-journeys') }
-            : {}),
+            : isScrollTestHarnessEnabled
+                ? { buildDir: resolve(__dirname, '.nuxt-e2e-scroll') }
+                : {}),
     app: {
         head: {
             script: [hostEsmFacadeImportMapScript()],
             link: [
                 {
                     rel: 'icon',
-                    type: 'image/svg+xml',
-                    href:
-                        or3Config.site.faviconUrl || '/logos/icon-logo-svg.svg',
-                },
-                {
-                    rel: 'icon',
-                    type: 'image/x-icon',
                     href: or3Config.site.faviconUrl || '/favicon.ico',
-                    sizes: '32x32',
                 },
                 {
                     rel: 'apple-touch-icon',
@@ -631,6 +625,13 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        // Browser harnesses can run beside a source dev server. Their different
+        // config must not invalidate dependencies already loaded by its tabs.
+        ...(isProductionJourneyTestHarnessEnabled
+            ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-journeys') }
+            : isScrollTestHarnessEnabled
+                ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-scroll') }
+                : {}),
         resolve: {
             // Math renderers accept the root KaTeX patch release. Share it
             // instead of bundling rehype's older copy alongside Mermaid's.
@@ -648,18 +649,27 @@ export default defineNuxtConfig({
             // responses make Vue's async ChatInput component fail fatally on
             // a cold dev-server start.
             include: [
+                '@cfworker/json-schema',
+                '@noble/hashes/hmac.js',
                 '@noble/hashes/sha2.js',
                 '@noble/hashes/utils.js',
                 '@openrouter/sdk',
                 '@openrouter/sdk/models/errors',
+                '@openrouter/sdk/lib/http.js',
+                '@openrouter/sdk/sdk/models.js',
                 '@orama/orama',
                 '@tiptap/core',
+                '@tiptap/extension-list',
                 '@tiptap/extension-mention',
+                '@tiptap/extension-table',
                 '@tiptap/extensions/placeholder',
+                '@tiptap/pm/model',
                 '@tiptap/pm/state',
+                '@tiptap/pm/view',
                 '@tiptap/starter-kit',
                 '@tiptap/suggestion',
                 '@tiptap/vue-3',
+                '@tiptap/vue-3/menus',
                 '@vue/devtools-core',
                 '@vue/devtools-kit',
                 '@vueuse/core',
@@ -669,6 +679,7 @@ export default defineNuxtConfig({
                 'gpt-tokenizer',
                 'lru-cache',
                 'spark-md5',
+                'streamdown-vue',
                 'tiptap-markdown',
                 'zod',
             ],

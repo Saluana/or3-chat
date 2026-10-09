@@ -64,7 +64,7 @@
                 @copy-link="copyWorkspaceTabLink($event)"
             >
                 <template #sidebar>
-                    <UTooltip :delay-duration="0" text="Open sidebar">
+                    <UTooltip :delay-duration="0" :disabled="isMobile" text="Open sidebar">
                         <UButton
                             v-theme="'shell.sidebar-toggle'"
                             v-bind="sidebarToggleButtonProps"
@@ -176,7 +176,7 @@
                     class="h-full items-center justify-center px-4 pointer-events-auto md:hidden"
                     :class="{ flex: isMobile, hidden: !isMobile }"
                 >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
+                    <UTooltip :delay-duration="0" :disabled="isMobile" text="Open sidebar">
                         <UButton
                             v-bind="sidebarToggleButtonProps"
                             :square="true"
@@ -1297,7 +1297,7 @@ async function initInitial(preserveWorkspaceRestore = false) {
                 if (token !== validateToken) {
                     return; // Newer validation in flight
                 }
-                if (result === 'deleted') {
+                if (result !== 'found') {
                     redirectNotFound('chat');
                     return;
                 }
@@ -1338,7 +1338,7 @@ async function initInitial(preserveWorkspaceRestore = false) {
                 if (token !== validateToken) {
                     return; // Newer validation in flight
                 }
-                if (result === 'deleted') {
+                if (result !== 'found') {
                     redirectNotFound('doc');
                     return;
                 }

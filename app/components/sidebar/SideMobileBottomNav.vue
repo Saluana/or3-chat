@@ -926,6 +926,12 @@ const createItemProps = computed(() => {
 </script>
 
 <style scoped>
+/* The app frame follows Safari's visible viewport. Navigation is unnecessary
+   while typing and must not consume the space left above the keyboard. */
+:global(#page-container[data-keyboard-open] .mobile-bottom-nav-root) {
+    display: none !important;
+}
+
 .mobile-bottom-nav-root {
     /* Respect device safe areas so the bar never collides with OS UI */
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));

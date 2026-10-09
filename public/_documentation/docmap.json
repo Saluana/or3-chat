@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Install with Bun, choose a development mode, set build memory limits, understand production asset budgets and on-demand loading, and launch source output with the supported runtime."
+                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, isolated browser harnesses, and production bundle boundaries for the model catalog and optional SDK features."
                 },
                 {
                     "name": "plugin-quickstart.md",

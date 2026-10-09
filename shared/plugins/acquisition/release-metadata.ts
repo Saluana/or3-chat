@@ -28,6 +28,7 @@
  */
 
 import { satisfies } from 'semver';
+import { sha256Hex } from '../../runtime-crypto';
 import type { Sha256 } from '../runtime-descriptor';
 import type { EffectiveAuthority } from '../authority/effective-authority';
 
@@ -146,13 +147,7 @@ export function encodeReleaseMetadata(document: unknown): Uint8Array {
 }
 
 export async function releaseMetadataSha256(document: unknown): Promise<Sha256> {
-    const digest = await crypto.subtle.digest(
-        'SHA-256',
-        encodeReleaseMetadata(document) as unknown as BufferSource
-    );
-    return `sha256-${[...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')}`;
+    return `sha256-${await sha256Hex(encodeReleaseMetadata(document))}`;
 }
 
 export interface ParseReleaseMetadataResult {

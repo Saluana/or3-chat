@@ -11,7 +11,7 @@ A local-first OR3 session needs an OpenRouter key to generate responses. A Cloud
 3. Complete the OpenRouter authorization flow in the browser.
 4. Return through OR3's callback page, then select a model and send a message.
 
-OR3 uses PKCE to exchange the returned code for a key. The verifier is kept in browser session storage, with a localStorage fallback for redirect recovery. Use the same browser and OR3 origin throughout the flow.
+OR3 uses S256 PKCE to exchange the returned code for a key, including on HTTP development origins where Web Crypto is unavailable. The verifier is kept in browser session storage, with a localStorage fallback for redirect recovery. Use the same browser and OR3 origin throughout the flow.
 
 ## Paste an existing key
 

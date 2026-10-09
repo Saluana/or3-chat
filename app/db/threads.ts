@@ -310,7 +310,9 @@ export function childThreads(parentThreadId: string) {
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
+    const existing = await db.threads.get(id);
+    if (!existing || existing.deleted) return;
+    const deleted = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'threads', { include: ['kv', 'chat_request_recoveries'], includeTombstones: true }),
         async () => {
@@ -321,28 +323,28 @@ export async function softDeleteThread(id: string): Promise<void> {
         });
         if (!t) return;
         if (t.deleted) return;
-        const rootId = await resolveSidebarFamilyId(db, t);
+        // Before hooks share the write transaction; after hooks run after commit.
         await hooks.doAction('db.threads.delete:action:soft:before', {
-            entity: t,
-            id: t.id,
-            tableName: 'threads',
+            entity: t, id, tableName: 'threads',
         });
+        const current = await db.threads.get(id);
+        if (!current || current.deleted) return;
+        const rootId = await resolveSidebarFamilyId(db, current);
         await db.threads.put({
-            ...t,
+            ...current,
             deleted: true,
             updated_at: nowSec(),
-            clock: nextClock(t.clock),
+            clock: nextClock(current.clock),
             hlc: generateHLC(),
-        });
-        await hooks.doAction('db.threads.delete:action:soft:after', {
-            entity: t,
-            id: t.id,
-            tableName: 'threads',
         });
         await db.chat_request_recoveries.delete(id);
         await pruneRetiredFamilyPreference(db, rootId);
+        return t;
         }
     );
+    if (deleted) await hooks.doAction('db.threads.delete:action:soft:after', {
+        entity: deleted, id, tableName: 'threads',
+    });
 }
 
 /**
@@ -369,7 +371,10 @@ export class ThreadHasDescendantsError extends Error {
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
+    const source = await db.threads.get(id);
+    if (!source) return;
+    if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
+    const deleted = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'threads', {
             include: ['messages', 'kv', 'chat_request_recoveries'],
@@ -382,25 +387,24 @@ export async function hardDeleteThread(id: string): Promise<void> {
             action: 'get',
         });
         if (!existing) return;
+        await hooks.doAction('db.threads.delete:action:hard:before', {
+            entity: existing, id, tableName: 'threads',
+        });
+        if (!await db.threads.get(id)) return;
         const rootId = await resolveSidebarFamilyId(db, existing);
         // Include soft-deleted children: their retained links still depend on
         // this parent. The same transaction prevents a concurrent local fork.
-        if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
-        await hooks.doAction('db.threads.delete:action:hard:before', {
-            entity: existing,
-            id,
-            tableName: 'threads',
-        });
-        if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
+        if (await db.threads.where('parent_thread_id').equals(id).first()) {
+            throw new ThreadHasDescendantsError(id);
+        }
         await db.messages.where('thread_id').equals(id).delete();
         await db.threads.delete(id);
         await db.chat_request_recoveries.delete(id);
-        await hooks.doAction('db.threads.delete:action:hard:after', {
-            entity: existing,
-            id,
-            tableName: 'threads',
-        });
         await pruneRetiredFamilyPreference(db, rootId);
+        return existing;
+    });
+    if (deleted) await hooks.doAction('db.threads.delete:action:hard:after', {
+        entity: deleted, id, tableName: 'threads',
     });
 }
 

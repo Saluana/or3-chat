@@ -83,6 +83,11 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 ## Live editor content and autosave
 
+Selecting an outline heading moves the caret there and aligns the heading near
+the top of that document pane, with space below the toolbar. Compact layouts
+close the inspector before navigating; reduced-motion preferences disable the
+scroll animation.
+
 Source editors use `app/composables/documents/useDocumentsStore.ts` to stage title/content changes and debounce writes (currently 750 ms). Cached content and a scheduled save are not evidence of local durability. Explicitly flush and confirm the saved/error state before a workflow depends on that content being persisted. The store reports missing or hidden records as `unavailable`, separately from storage errors. A tab with no staged edits can close after an unavailable or failed load; pending title/content changes still block navigation until they are saved, including edits captured just before the item entered Trash. Async document errors use the setup-captured error toast bridge rather than invoking Vue injection composables after an await.
 
 The document cache and staged writes belong to the originating workspace database. Copied or imported documents with the same ID in different workspaces have separate state. A pending save or read completion after a workspace switch stays in its original database; it cannot replace the active workspace's cached document or save notification. Failed saves retain their staged changes for retry in the original workspace, including after its DB handle is evicted and reopened. Only unsaved state is retained across handle replacement; successful saves and explicit release remove that retention.
@@ -102,3 +107,5 @@ The request separates the user prompt, frozen editable document context, and esc
 Reference content counts toward context limits but does not grant editable block references. Proposed operations must validate against the frozen snapshot and enter the review UI. Only accepting the proposal writes the edit. Changes to the document, stale snapshots, workspace switches, and another pending proposal can invalidate edit authority.
 
 Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:before` expose editable context and separate referenceContext; preserve that distinction. The implementation is `app/composables/documents/useDocumentAiAgent.ts`. Its live editor bridge also serves [document tools in chat](/documentation/utils/chat-tools).
+
+Optional editor autocomplete does not start inference requests for guests without a personal API key. Signed-in users can use the instance key through the server route. Local editing and autosave remain available without credentials.

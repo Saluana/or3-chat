@@ -66,7 +66,7 @@
                     @keydown="handlePopoverTriggerKey"
                 />
                 <template #content>
-                    <div class="p-1 w-44 space-y-1">
+                    <div class="p-1 w-56 max-w-[calc(100vw-2rem)] space-y-1">
                         <slot name="family-actions" />
                         <UButton
                             v-if="canOpenInNewTab"

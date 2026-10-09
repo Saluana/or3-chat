@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     REVISION_CHUNK_MAX_CHARS,
     REVISION_SYNC_PAYLOAD_MAX_BYTES,
@@ -7,7 +7,12 @@ import {
     encodeDocumentRevision,
 } from '../revision-codec';
 
-describe('document revision codec', () => {
+afterEach(() => vi.unstubAllGlobals());
+
+describe.each(['native', 'http'] as const)('document revision codec in %s contexts', (context) => {
+    beforeEach(() => {
+        if (context === 'http') vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    });
     it('round trips, hashes, and chunks a large snapshot', async () => {
         const text = Array.from({ length: 70_000 }, (_, index) => String.fromCharCode(33 + (index % 80))).join('');
         const snapshot = {

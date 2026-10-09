@@ -6,12 +6,17 @@
         ]"
     >
         <div
+            class="sr-only"
+            role="tablist"
+            aria-label="Open workspace tabs"
+            :aria-owns="tabs.map(tab => `workspace-tab-${tab.id}`).join(' ')"
+            @keydown="onKeydown"
+        />
+        <div
             v-theme="'shell.tab-overflow'"
             v-bind="barProps"
             ref="strip"
             :class="['workspace-tab-bar', barProps?.class ?? '']"
-            role="tablist"
-            aria-label="Open workspace tabs"
             @keydown="onKeydown"
         >
             <div

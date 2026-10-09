@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { ref } from 'vue';
 
 const toastAdd = vi.fn();
@@ -10,6 +11,9 @@ describe('useOpenRouterAuth', () => {
     const kvDelete = vi.fn();
 
     beforeEach(() => {
+        runtimeConfig.public.ssrAuthEnabled = true;
+        sessionStorage.clear();
+        localStorage.clear();
         vi.resetModules();
         toastAdd.mockClear();
         refresh.mockReset().mockResolvedValue({ session: null });
@@ -23,6 +27,23 @@ describe('useOpenRouterAuth', () => {
         vi.doMock('~/composables/auth/useSessionContext', () => ({
             useSessionContext: () => ({ data: sessionData, refresh }),
         }));
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it.each(['native', 'http'] as const)('uses S256 PKCE in %s contexts', async (context) => {
+        runtimeConfig.public.ssrAuthEnabled = false;
+        const assign = vi.fn();
+        vi.stubGlobal('window', { location: { origin: 'http://100.83.26.18:3000', assign } });
+        if (context === 'http') vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+        const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+        await useOpenRouterAuth().startLogin();
+        const url = new URL(assign.mock.calls[0]![0] as string);
+        const verifier = sessionStorage.getItem('openrouter_code_verifier')!;
+        expect(verifier).toMatch(/^[a-f0-9]{128}$/);
+        expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+        expect(url.searchParams.get('code_challenge')).toBe(createHash('sha256').update(verifier).digest('base64url'));
+        expect(url.searchParams.get('state')).toBe(sessionStorage.getItem('openrouter_state'));
     });
 
     it('requires a workspace session before starting cloud-mode OpenRouter OAuth', async () => {
