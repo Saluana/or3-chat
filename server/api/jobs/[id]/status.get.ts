@@ -1,3 +1,4 @@
+import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 /**
  * @module server/api/jobs/[id]/status.get
  *
@@ -215,7 +216,7 @@ export default defineEventHandler(async (event) => {
             completedAt: effectiveCompletedAt,
             error: effectiveError,
             tool_calls: effectiveToolCalls,
-            workflow_state: effectiveWorkflowState,
+            workflow_state: projectBackgroundWorkflowState(effectiveStatus, effectiveWorkflowState),
             usage: effectiveUsage,
             content_delta: contentDelta,
             content_length: contentLength,
@@ -255,7 +256,7 @@ export default defineEventHandler(async (event) => {
         completedAt: effectiveCompletedAt,
         error: effectiveError,
         tool_calls: effectiveToolCalls,
-        workflow_state: effectiveWorkflowState,
+        workflow_state: projectBackgroundWorkflowState(effectiveStatus, effectiveWorkflowState),
         usage: effectiveUsage,
         content: effectiveContent,
         reasoning_text: effectiveReasoning,

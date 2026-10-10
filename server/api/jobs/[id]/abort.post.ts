@@ -4,41 +4,24 @@
  * Purpose:
  * Cancels a running background streaming job.
  */
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
+import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { emitJobStatus } from '../../../utils/background-jobs/viewers';
 import { logBackgroundEvent } from '../../../utils/background-jobs/logging';
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
-
-function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowMessageData | undefined {
-    if (!state || (state.executionState !== 'running' && state.executionState !== 'idle')) {
-        return state;
-    }
-    return {
-        ...state,
-        executionState: 'stopped',
-        currentNodeId: null,
-        failedNodeId: state.failedNodeId ?? state.currentNodeId ?? state.lastActiveNodeId ?? null,
-        result: {
-            ...state.result,
-            success: false,
-            duration: state.result?.duration ?? 0,
-            error: 'Workflow stopped by user'
-        },
-        version: (state.version ?? 0) + 1
-    };
-}
+import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 
 /**
  * Machine-readable cancellation outcome. The UI must never report
- * "cancelled" unless the provider confirmed the stop: `aborted` is the only
- * state that means the remote execution is known-stopped. Every other state
- * records the uncertainty explicitly instead of silently implying success.
+ * "cancelled" unless the provider confirmed its cancellation transaction.
+ * This does not prove that every upstream service acknowledged the stop or
+ * that an already-dispatched tool side effect was rolled back.
  */
 export type AbortOutcomeState =
-    /** Provider confirmed the upstream execution stopped. */
+    /** Provider committed cancellation of the job. */
     | 'aborted'
     /** No such job for this user (or it already aged out of retention). */
     | 'not_found'
@@ -53,15 +36,13 @@ export function resolveAbortOutcome(
     job: Pick<BackgroundJob, 'status'> | null,
     providerResult: 'aborted' | 'rejected' | 'threw'
 ): { state: AbortOutcomeState; httpStatus: number } {
+    if (providerResult === 'aborted') return { state: 'aborted', httpStatus: 200 };
     if (!job) return { state: 'not_found', httpStatus: 200 };
     if (job.status !== 'streaming') {
         return { state: 'already_terminal', httpStatus: 200 };
     }
     if (providerResult === 'threw') return { state: 'abort_error', httpStatus: 500 };
-    if (providerResult === 'rejected') {
-        return { state: 'abort_rejected', httpStatus: 502 };
-    }
-    return { state: 'aborted', httpStatus: 200 };
+    return { state: 'abort_rejected', httpStatus: 502 };
 }
 
 /**
@@ -79,6 +60,8 @@ export function resolveAbortOutcome(
  * - Only the job owner can abort their job.
  */
 export default defineEventHandler(async (event) => {
+    setHeader(event, 'Cache-Control', 'no-store, private');
+    requireCloudMutation(event);
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
@@ -88,8 +71,9 @@ export default defineEventHandler(async (event) => {
 
     // Resolve user ID for authorization
     let userId: string | null = null;
+    let session: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     if (isSsrAuthEnabled(event)) {
-        const session = await resolveSessionContext(event);
+        session = await resolveSessionContext(event);
         if (session.authenticated && session.user?.id) {
             userId = session.user.id;
         }
@@ -110,10 +94,7 @@ export default defineEventHandler(async (event) => {
             message: 'Job not found or already complete',
         };
     }
-    const workflowState = stoppedWorkflowState(job.workflow_state);
-    if (workflowState !== job.workflow_state) {
-        await provider.updateJob(jobId, { workflow_state: workflowState });
-    }
+    await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.write');
 
     let providerResult: 'aborted' | 'rejected' | 'threw' = 'rejected';
     try {
@@ -129,7 +110,9 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const outcome = resolveAbortOutcome(job, providerResult);
+    // Completion may win between the initial read and the stop transaction.
+    const latest = providerResult === 'aborted' ? job : await provider.getJob(jobId, userId).catch(() => job);
+    const outcome = resolveAbortOutcome(latest, providerResult);
     if (outcome.state !== 'aborted') {
         setResponseStatus(event, outcome.httpStatus);
         return {
@@ -144,6 +127,7 @@ export default defineEventHandler(async (event) => {
         };
     }
 
+    const workflowState = projectBackgroundWorkflowState('aborted', job.workflow_state);
     emitJobStatus(jobId, 'aborted', {
         content: job.content,
         contentLength: job.content.length,

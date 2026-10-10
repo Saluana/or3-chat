@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getRouterParamMock = vi.fn();
+const getQueryMock = vi.fn(() => ({ workspaceId: 'workspace-1' }));
+const requireAccessMock = vi.fn();
+vi.mock('../../../utils/background-jobs/access', () => ({ requireJobWorkspaceAccess: requireAccessMock }));
 const setResponseStatusMock = vi.fn();
 const setHeaderMock = vi.fn();
 
@@ -9,6 +12,7 @@ const setHeaderMock = vi.fn();
 const globalAny = globalThis as typeof globalThis & Record<string, unknown>;
 globalAny.defineEventHandler = (handler: unknown) => handler;
 globalAny.getRouterParam = getRouterParamMock;
+globalAny.getQuery = getQueryMock;
 globalAny.setResponseStatus = setResponseStatusMock;
 globalAny.setHeader = setHeaderMock;
 
@@ -31,6 +35,8 @@ let handler: (event: unknown) => Promise<unknown>;
 
 beforeEach(async () => {
     vi.clearAllMocks();
+    requireAccessMock.mockReset();
+    getQueryMock.mockReturnValue({ workspaceId: 'workspace-1' });
     isSsrAuthEnabledMock.mockReturnValue(true);
     resolveSessionContextMock.mockResolvedValue({
         authenticated: true,
@@ -49,6 +55,7 @@ describe('GET /api/jobs/admission/:admissionId', () => {
                 status: 'streaming',
                 threadId: 'thread-1',
                 messageId: 'message-1',
+                execution: { workspaceId: 'workspace-1', history: { version: 1 } },
             })),
         });
 
@@ -58,6 +65,10 @@ describe('GET /api/jobs/admission/:admissionId', () => {
             status: 'streaming',
         });
         expect(setResponseStatusMock).not.toHaveBeenCalled();
+        const provider = await getJobProviderMock.mock.results[0]!.value;
+        expect(provider.findJobByIdempotencyKey).toHaveBeenCalledWith(
+            JSON.stringify(['or3-admission-v1', 'user-1', 'workspace-1', 'admission-1']), 'user-1');
+        expect(requireAccessMock).toHaveBeenCalledWith({}, expect.anything(), 'workspace-1', 'workspace.read');
     });
 
     it('returns 404 when no job was committed for the admission', async () => {
@@ -116,4 +127,20 @@ describe('GET /api/jobs/admission/:admissionId', () => {
             501
         );
     });
+    it('refuses revoked originating workspace access before provider lookup', async () => {
+        getRouterParamMock.mockReturnValue('admission-1');
+        requireAccessMock.mockRejectedValueOnce(new Error('Forbidden'));
+        await expect(handler({})).rejects.toThrow('Forbidden');
+        expect(getJobProviderMock).not.toHaveBeenCalled();
+    });
+
+    it('does not turn a provider outage into evidence that admission never committed', async () => {
+        getRouterParamMock.mockReturnValue('admission-1');
+        getJobProviderMock.mockResolvedValue({
+            findJobByIdempotencyKey: vi.fn().mockRejectedValue(new Error('database unavailable')),
+        });
+        await expect(handler({})).rejects.toThrow('database unavailable');
+        expect(setResponseStatusMock).not.toHaveBeenCalledWith(expect.anything(), 404);
+    });
+
 });

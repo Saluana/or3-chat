@@ -513,7 +513,13 @@ export function useToolRegistry() {
             if (JSON.stringify(checkedArgs) !== argumentsSnapshot)
                 throw new Error('The authorized tool arguments changed before execution.');
         };
-        try { await assertToolAuthorized(); }
+        try {
+            await assertToolAuthorized();
+            await admission?.beforeExecute?.();
+            // The network guard may await; recheck local ownership/definition
+            // and cancellation before entering any handler transaction.
+            await assertToolAuthorized();
+        }
         catch (error) {
             return { result: null, toolName, error: error instanceof Error ? error.message : 'Tool authorization changed.', timedOut: false };
         }

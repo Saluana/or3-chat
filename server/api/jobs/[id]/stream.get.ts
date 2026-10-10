@@ -1,3 +1,4 @@
+import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 /**
  * @module server/api/jobs/[id]/stream.get
  *
@@ -121,7 +122,7 @@ export function serializeJobStatus(
         completedAt: job.completedAt,
         error: job.error,
         tool_calls: overrides?.tool_calls ?? job.tool_calls,
-        workflow_state: overrides?.workflow_state ?? job.workflow_state,
+        workflow_state: projectBackgroundWorkflowState(job.status, overrides?.workflow_state ?? job.workflow_state),
         usage: readRequestUsage(job.usage),
         content_reset: overrides?.content_reset,
         content_delta: overrides?.content_delta,
