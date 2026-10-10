@@ -21,7 +21,7 @@ async function artifactStatus(path: string) {
     return { absent: false, detail: `Still present: ${path}.` };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { absent: true, detail: `Confirmed absent: ${path}.` };
-    return { absent: false, detail: `Could not inspect ${path}: ${asError(error).message}. Its removal is unverified.` };
+    return { absent: false, detail: `Could not inspect ${path}: ${asError(error).message}. Its presence or absence is unverified.` };
   }
 }
 
@@ -193,6 +193,21 @@ export async function createBackup(
     throw new Error(`Verified backup retained at ${backupDir}. ${serviceDetail} Could not record backup completion: ${asError(error).message}. ${RECOVERY_STEPS}`, { cause: error });
   }
   return { backupId, backupDir, manifest: verifiedManifest! };
+}
+
+/** Read-only diagnosis: an unrecorded mkdir is indistinguishable from a collision. */
+export async function inspectUnclaimedBackupArtifacts(directory: string, backupId?: string, backupPath?: string) {
+  if (!backupId || !backupPath || !BACKUP_ID_PATTERN.test(backupId)) return;
+  const expectedPath = resolve(backupDirectory(directory, backupId));
+  if (resolve(backupPath) !== expectedPath) return;
+  const statuses = await Promise.all([
+    artifactStatus(expectedPath),
+    artifactStatus(join(deploymentPaths(directory).exports, `${backupId}.json`)),
+  ]);
+  const detail = statuses.map((status) => status.detail).join(' ');
+  return statuses.every((status) => status.absent)
+    ? detail
+    : `Maintenance warning: backup artifact ownership was not recorded. ${detail} This recovery did not verify or remove these paths. Inspect them with "npx @or3/cloud backup list".`;
 }
 
 export async function cleanupJournaledPartialBackup(directory: string, backupId?: string, backupPath?: string) {

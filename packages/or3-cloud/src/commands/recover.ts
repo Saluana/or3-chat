@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { restoreVolumeArchive } from '../backup/archive';
-import { cleanupJournaledPartialBackup } from '../backup/create';
+import { cleanupJournaledPartialBackup, inspectUnclaimedBackupArtifacts } from '../backup/create';
 import { readManifest, resolveBackup } from '../backup/manifests';
 import { restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
@@ -152,6 +152,7 @@ async function runRecovery(
       const failures: Error[] = [];
       let service: 'stopped' | 'healthy' | 'unknown' = pending.initialAppRunning === false ? 'stopped' : 'unknown';
       let artifact = pending.backupProgress?.artifact ?? 'unknown';
+      let artifactDetail = '';
       if (pending.initialAppRunning !== false) {
         report('Restart: recovering OR3 and checking deep health before backup cleanup.');
         try {
@@ -163,7 +164,12 @@ async function runRecovery(
         }
       }
       try {
-        if (artifact !== 'not-created') {
+        if (artifact === 'not-created') {
+          // A crash before the mkdir milestone and a pre-existing collision
+          // have the same journal. Observation must never grant deletion rights,
+          // including when a failed service restart keeps this operation pending.
+          artifactDetail = await inspectUnclaimedBackupArtifacts(loaded.directory, pending.backupId, pending.backupPath) ?? '';
+        } else {
           const cleanup = await cleanupJournaledPartialBackup(loaded.directory, pending.backupId, pending.backupPath);
           if (cleanup) {
             artifact = cleanup.artifact;
@@ -171,21 +177,21 @@ async function runRecovery(
           }
         }
       } catch (error) {
-        artifact = 'unknown';
+        if (artifact !== 'not-created') artifact = 'unknown';
         failures.push(error instanceof Error ? error : new Error(String(error)));
       }
       const serviceDetail = service === 'healthy' ? 'OR3 is deeply healthy.'
         : service === 'stopped' ? 'The intentionally stopped OR3 service was preserved.'
           : 'Service recovery is unverified; OR3 may be unavailable.';
       if (failures.length > 0) {
-        const message = `${failures.map((error) => error.message).join(' ')} ${serviceDetail}`;
+        const message = [failures.map((error) => error.message).join(' '), serviceDetail, artifactDetail].filter(Boolean).join(' ');
         pending.backupProgress = { stage: 'failed', service, artifact, message: redact(message, secretValues(loaded.env)) };
         throw new AggregateError(failures, message);
       }
       const completed = structuredClone(loaded.state);
       completed.lastError = undefined;
       await clearPending(loaded.directory, completed);
-      const detail = `Recovered the incomplete backup operation. ${serviceDetail}`;
+      const detail = [`Recovered the incomplete backup operation. ${serviceDetail}`, artifactDetail].filter(Boolean).join(' ');
       report(detail);
       return { kind: 'recovered', operation: 'backup', detail };
     }

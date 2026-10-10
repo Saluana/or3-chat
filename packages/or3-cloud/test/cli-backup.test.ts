@@ -525,9 +525,9 @@ test('verification uses captured configuration and assets even after live files 
   const originalCompose = await readFile(join(fixture.directory, 'compose.yaml'), 'utf8');
   await inProcess(fixture, async () => {
     const result = await captureBackup(fixture.directory, fixture.state, fixture.env, { onProgress: async (progress) => {
-      if (progress.stage === 'verifying') {
-        await writeFile(join(fixture.directory, '.env'), 'changed after capture');
-        await writeFile(join(fixture.directory, 'compose.yaml'), 'changed after capture');
+      if (progress.stage === 'restarting') {
+        await writeFile(join(fixture.directory, '.env'), `${originalEnv}\n# changed after capture\n`);
+        await writeFile(join(fixture.directory, 'compose.yaml'), `${originalCompose}\n# changed after capture\n`);
       }
     } });
     expect(result.manifest.configSha256).toBe(sha256(originalEnv));
@@ -573,4 +573,77 @@ test('failed terminal state write preserves the verified artifact and backup rec
   });
   const recovered = await fixture.cli(['recover']);
   expect(recovered.exitCode, recovered.output).toBe(0);
+});
+
+// A crash after exclusive mkdir but before the maintenance milestone leaves
+// the same journal as a name collision. Recovery may inspect, never delete.
+async function recordUnclaimedBackup(fixture: Sandbox, backupId: string) {
+  const state = await fixture.readState();
+  state.incompleteOperation = {
+    id: 'backup-operation-fixture', operation: 'backup', startedAt: state.updatedAt,
+    message: 'Preflight: preparing a stopped-volume backup', phase: 'prepared',
+    backupId, backupPath: join(fixture.cloud, 'backups', backupId), initialAppRunning: true,
+    backupProgress: { stage: 'preflight', service: 'running', artifact: 'not-created', message: 'Preflight' },
+  };
+  await fixture.writeState(state);
+}
+
+test('recovery reports the retained directory from a crash before ownership was journaled', async () => {
+  const fixture = await sandbox();
+  const id = 'backup-crash-window';
+  const path = join(fixture.cloud, 'backups', id);
+  await recordUnclaimedBackup(fixture, id);
+  await mkdir(path, { mode: 0o700 });
+  const recovered = await fixture.cli(['recover', '--json']);
+  expect(recovered.exitCode, recovered.output).toBe(0);
+  const result = JSON.parse(recovered.stdout).outcome;
+  expect(result.kind).toBe('recovered');
+  expect(result.detail).toContain('Maintenance warning: backup artifact ownership was not recorded.');
+  expect(result.detail).toContain(`Still present: ${path}.`);
+  expect(result.detail).toContain(`Confirmed absent: ${join(fixture.cloud, 'exports', `${id}.json`)}.`);
+  expect(await readdir(path)).toEqual([]);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  const inventory = JSON.parse((await fixture.cli(['backup', 'list', '--json'])).stdout);
+  expect(inventory.backups).toEqual([]);
+  expect(inventory.findings).toEqual([expect.objectContaining({ entryName: id, code: 'backup-unsigned' })]);
+});
+
+test('unclaimed collision artifacts remain untouched through failed and successful recovery', async () => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const manifestPath = join(fixture.cloud, 'backups', id, 'manifest.json');
+  const manifest = await readFile(manifestPath, 'utf8');
+  const receiptPath = join(fixture.cloud, 'exports', `${id}.json`);
+  await mkdir(join(fixture.cloud, 'exports'), { recursive: true });
+  await writeFile(receiptPath, 'pre-existing receipt');
+  await recordUnclaimedBackup(fixture, id);
+  await fixture.configure({ failures: [{ match: 'up -d', message: 'fixture restart failure' }] });
+  const failed = await fixture.cli(['recover']);
+  expect(failed.exitCode).toBe(1);
+  expect(failed.stderr).toContain('fixture restart failure');
+  expect(failed.stderr).toContain(`Still present: ${receiptPath}.`);
+  expect((await fixture.readState()).incompleteOperation?.backupProgress?.artifact).toBe('not-created');
+  await fixture.configure({ failures: [] });
+  const recovered = await fixture.cli(['recover', '--json']);
+  expect(recovered.exitCode, recovered.output).toBe(0);
+  expect(JSON.parse(recovered.stdout).outcome.detail).toContain(`Still present: ${receiptPath}.`);
+  expect(await readFile(manifestPath, 'utf8')).toBe(manifest);
+  expect(await readFile(receiptPath, 'utf8')).toBe('pre-existing receipt');
+});
+
+test('unclaimed recovery distinguishes absent paths from uninspectable export receipts', async () => {
+  const fixture = await sandbox();
+  const id = 'backup-unclaimed';
+  await recordUnclaimedBackup(fixture, id);
+  const absent = await fixture.cli(['recover', '--json']);
+  expect(absent.exitCode, absent.output).toBe(0);
+  expect(JSON.parse(absent.stdout).outcome.detail).toContain('Confirmed absent:');
+  expect(JSON.parse(absent.stdout).outcome.detail).not.toContain('Maintenance warning:');
+  await writeFile(join(fixture.cloud, 'exports'), 'not a directory');
+  await recordUnclaimedBackup(fixture, id);
+  const uninspectable = await fixture.cli(['recover', '--json']);
+  expect(uninspectable.exitCode, uninspectable.output).toBe(0);
+  expect(JSON.parse(uninspectable.stdout).outcome.detail).toContain(`Could not inspect ${join(fixture.cloud, 'exports', `${id}.json`)}:`);
+  expect(JSON.parse(uninspectable.stdout).outcome.detail).toContain('Maintenance warning:');
+  expect(await readFile(join(fixture.cloud, 'exports'), 'utf8')).toBe('not a directory');
 });

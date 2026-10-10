@@ -159,6 +159,10 @@ Backup verification and service recovery can fail independently:
   backup directory and export receipt is reported as present, confirmed absent,
   or uninspectable; removal is never inferred from an attempted delete. A failed
   streaming cleanup also names its temporary `.partial` file.
+- If interruption precedes the recorded artifact-creation milestone, recovery
+  only inspects the named backup directory and export receipt. Existing or
+  uninspectable paths are preserved and reported for inspection, because a
+  pre-existing name collision cannot be distinguished from an interrupted mkdir.
 - Retention runs after the new backup is committed. Retention failure is a
   maintenance warning and does not invalidate the backup or re-open the operation.
 
