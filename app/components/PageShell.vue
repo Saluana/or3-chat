@@ -462,7 +462,10 @@ import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
-import { setWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
+import {
+    setWorkspaceResourceNavigationApi,
+    type WorkspaceResourceNavigationResult,
+} from '~/utils/workspaceResourceNavigation';
 import {
     dashboardDeepLinkPageId,
     parseDashboardDeepLink,
@@ -1473,10 +1476,10 @@ async function applyInitialPaneRequest(): Promise<void> {
             for (const [index, pane] of requestedPanes.slice(1).entries()) {
                 const resource = resourceForProfilePane(pane, index + 1);
                 if (!resource) continue;
-                const tabId = await workspaceTabs.openResource(resource, {
+                const opened = await workspaceTabs.openResource(resource, {
                     target: 'background',
                 });
-                if (tabId) workspaceTabs.reorderTab(tabId, index + 1);
+                if (opened.tabId) workspaceTabs.reorderTab(opened.tabId, index + 1);
             }
             setActive(0);
             await acknowledgeInitialPanes(request.token);
@@ -1659,7 +1662,8 @@ async function onCompactionSourceSelected(target: { threadId: string; messageId:
         if (!originTab || !await workspaceTabs.activateTab(originTab, 'pointer')) return;
         if (getWorkspaceGeneration() !== target.generation || panes.value[paneIndex]?.id !== pane.id
             || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex) return;
-        if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) return;
+        const opened = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId });
+        if (opened.status !== 'activated') return;
     } else {
         setActive(paneIndex);
         await setPaneThread(paneIndex, target.threadId);
@@ -1681,7 +1685,7 @@ async function onCompactionCommitted(target: { threadId: string; messageId: stri
         const draft = workspaceTabDrafts.read(originTab);
         if (draft) {
             const childTab = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId }, { target: 'background' });
-            if (childTab) workspaceTabDrafts.write(childTab, { ...draft,
+            if (childTab.status === 'created') workspaceTabDrafts.write(childTab.tabId, { ...draft,
                 editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
                 attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
                 largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
@@ -1737,26 +1741,26 @@ async function openWorkspaceResource(
     resource: WorkspaceResource,
     destination: 'new-tab' | 'new-pane',
     options: { reuseExisting?: boolean } = {}
-): Promise<boolean> {
+): Promise<WorkspaceResourceNavigationResult> {
     if (destination === 'new-tab') {
-        if (!workspaceTabsEnabled.value) return false;
-        return !!(await workspaceTabs.openResource(resource, {
+        if (!workspaceTabsEnabled.value) return { status: 'failed' };
+        return workspaceTabs.openResource(resource, {
             target: 'active',
             allowDuplicate: !options.reuseExisting,
             reuseActiveBlank: false,
-        }));
+        });
     }
 
     if (workspaceTabsEnabled.value) {
-        return !!(await workspaceTabs.openResource(resource, {
+        return workspaceTabs.openResource(resource, {
             target: 'split',
             allowDuplicate: false,
-        }));
+        });
     }
 
-    if (!canAddPane.value) return false;
+    if (!canAddPane.value) return { status: 'failed' };
     const index = panes.value.length;
-    if (!addPane()) return false;
+    if (!addPane()) return { status: 'failed' };
 
     if (resource.kind === 'chat') {
         updatePane(index, {
@@ -1765,7 +1769,7 @@ async function openWorkspaceResource(
             messages: [],
         });
         await setPaneThread(index, resource.threadId ?? '');
-        return true;
+        return { status: 'activated' };
     }
 
     if (resource.kind === 'document') {
@@ -1775,11 +1779,11 @@ async function openWorkspaceResource(
             threadId: '',
             messages: [],
         });
-        return true;
+        return { status: 'activated' };
     }
 
     await setPaneApp(index, resource.appId, { recordId: resource.recordId });
-    return true;
+    return { status: 'activated' };
 }
 
 // --------------- Theme ---------------
@@ -2309,7 +2313,10 @@ useEventListener(window, 'or3:compact-thread', async (event: Event) => {
     const request = ++compactionRequestRevision;
     try {
         if (workspaceTabsEnabled.value) {
-            if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) throw new Error('Conversation could not be opened.');
+            const opened = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId });
+            // Superseded means the user navigated elsewhere; that is not a failure.
+            if (opened.status === 'superseded') return;
+            if (opened.status !== 'activated') throw new Error('Conversation could not be opened.');
         } else {
             const index = activePaneIndex.value;
             await setPaneThread(index, target.threadId);

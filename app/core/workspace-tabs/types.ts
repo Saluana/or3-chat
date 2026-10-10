@@ -33,6 +33,17 @@ export type WorkspaceTabStatus =
     | 'attention'
     | 'error';
 
+/**
+ * Outcome of a navigation request. `created`: the tab is in the session but
+ * activation was not requested (background open). `superseded`: a newer
+ * request for the pane, a closed pane or a workspace switch took over, so
+ * callers should stay quiet. `failed`: the view was not shown; `tabId` is null
+ * when no tab exists to point at.
+ */
+export type WorkspaceNavigationResult =
+    | { status: 'created' | 'activated'; tabId: string }
+    | { status: 'failed' | 'superseded'; tabId: string | null };
+
 export interface WorkspaceTabScrollAnchor {
     key: string;
     withinItem: number;

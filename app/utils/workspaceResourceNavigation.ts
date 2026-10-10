@@ -1,7 +1,15 @@
 import { readonly, shallowRef } from 'vue';
-import type { WorkspaceResource } from '~/core/workspace-tabs/types';
+import type {
+    WorkspaceNavigationResult,
+    WorkspaceResource,
+} from '~/core/workspace-tabs/types';
 
 export type WorkspaceResourceDestination = 'new-tab' | 'new-pane';
+/** Legacy panes have no tab ID, but preserve the same navigation outcomes. */
+export type WorkspaceResourceNavigationResult = Pick<
+    WorkspaceNavigationResult,
+    'status'
+>;
 
 /**
  * Narrow navigation bridge for UI surfaces that open workspace resources.
@@ -15,7 +23,7 @@ export interface WorkspaceResourceNavigationApi {
         resource: WorkspaceResource,
         destination: WorkspaceResourceDestination,
         options?: { reuseExisting?: boolean }
-    ): Promise<boolean>;
+    ): Promise<WorkspaceResourceNavigationResult>;
 }
 
 const api = shallowRef<WorkspaceResourceNavigationApi | null>(null);

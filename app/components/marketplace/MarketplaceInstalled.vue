@@ -77,8 +77,7 @@ function openConfigure(pluginId: string): void {
 async function openPlugin(pluginId: string): Promise<void> {
     if (!hasCurrentWorkspace.value) return;
     try {
-        await openInstalledPluginPane(pluginId);
-        closeDashboard();
+        if (await openInstalledPluginPane(pluginId)) closeDashboard();
     } catch (error) {
         toast.add({title: 'Could not open plugin', description: error instanceof Error ? error.message : 'The workspace pane is unavailable.', color: 'warning'});
     }

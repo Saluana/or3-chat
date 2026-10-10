@@ -863,7 +863,10 @@ export function createTrustedHostContext(
                                 let index = typeof target === 'object' ? api.getPaneIndexById(target.pane) : api.activePaneIndex.value;
                                 if (target === 'new') {
                                     const navigation = getWorkspaceResourceNavigationApi();
-                                    if (!navigation || !await navigation.openResource(validated.value.app === 'chat' ? { kind: 'chat', threadId: recordId ?? null } : { kind: 'document', documentId: recordId ?? '' }, 'new-tab')) return pluginError('host-unavailable', 'Resource navigation unavailable');
+                                    if (!navigation) return pluginError('host-unavailable', 'Resource navigation unavailable');
+                                    const opened = await navigation.openResource(validated.value.app === 'chat' ? { kind: 'chat', threadId: recordId ?? null } : { kind: 'document', documentId: recordId ?? '' }, 'new-tab');
+                                    if (opened.status === 'superseded') return pluginError('aborted', 'Resource navigation was superseded');
+                                    if (opened.status !== 'activated') return pluginError('host-unavailable', 'Resource navigation unavailable');
                                     index = api.activePaneIndex.value;
                                 }
                                 if (index < 0) return pluginError('not-found', 'Target pane not found');

@@ -67,7 +67,7 @@ async function showPluginInChat(pluginId: string): Promise<void> {
         // becomes available just after its own mounted hook runs.
         for (let attempt = 0; attempt < 30 && !stopped; attempt++) {
             try {
-                await openPortablePane(pluginId);
+                if (!await openPortablePane(pluginId)) return;
                 paneOpened = true;
                 paneOpenError.value = null;
                 return;

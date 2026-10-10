@@ -114,6 +114,8 @@ The pane loader reconciles separate canonical tool-result rows into their assist
 
 A newer activation supersedes older work. Editor sessions are resolved by pane/tab identity, which matters when a document appears in more than one split. Capture outgoing edits and verify local durability before rebinding; do not assume the saved database snapshot contains everything currently visible in an editor.
 
+Tab commands resolve to a status (`activated`, `created`, `failed`, or `superseded`) instead of a bare tab ID, so a failed activation cannot look like success and a superseded one is not reported as an error. Navigation bridges preserve that status; superseded palette, plugin, and version-history requests leave newer UI and feedback intact. Closing a tab waits for that save and then closes against the current tab state, and a failed activation restores only its own pane binding and focus. A close of the still-mounted outgoing tab waits for activation to finish, keeping the rollback target available if its save fails, and is cancelled if the workspace changes. Unrelated tabs opened, renamed, or closed while the save ran are kept.
+
 See [source map](/documentation/start/source-map), [documents](/documentation/database/documents), and [workspace-safe writes](/documentation/database/safe-changes#workspace-safe-operations).
 
 Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.

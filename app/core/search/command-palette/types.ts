@@ -87,7 +87,12 @@ export type PaletteActionErrorCode =
     | 'execution-failed';
 
 export type PaletteActionResult =
-    | { ok: true; closeOnSuccess?: boolean }
+    | {
+          ok: true;
+          closeOnSuccess?: boolean;
+          /** Quiet completion: leave the newer action's UI and feedback intact. */
+          superseded?: true;
+      }
     | {
           ok: false;
           error: {

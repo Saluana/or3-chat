@@ -3,6 +3,7 @@ import type { WorkspaceResource } from '~/core/workspace-tabs/types';
 import {
     useWorkspaceResourceNavigationApi,
     type WorkspaceResourceDestination,
+    type WorkspaceResourceNavigationResult,
 } from '~/utils/workspaceResourceNavigation';
 
 /**
@@ -25,12 +26,14 @@ export function useWorkspaceResourceActions(
             (navigation.value?.canOpenInNewPane() ?? false)
     );
 
-    async function open(destination: WorkspaceResourceDestination) {
+    async function open(
+        destination: WorkspaceResourceDestination
+    ): Promise<WorkspaceResourceNavigationResult> {
         const target = toValue(resource);
         const api = navigation.value;
-        if (!target || !api) return false;
-        if (destination === 'new-tab' && !api.canOpenInNewTab()) return false;
-        if (destination === 'new-pane' && !api.canOpenInNewPane()) return false;
+        if (!target || !api) return { status: 'failed' };
+        if (destination === 'new-tab' && !api.canOpenInNewTab()) return { status: 'failed' };
+        if (destination === 'new-pane' && !api.canOpenInNewPane()) return { status: 'failed' };
         return api.openResource(target, destination);
     }
 
