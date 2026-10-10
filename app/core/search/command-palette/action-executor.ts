@@ -130,6 +130,7 @@ export async function executePaletteAction(
 
     try {
         const result = await dispatch(host, action);
+        if (result.ok && result.superseded) return result;
         emitPaletteTelemetry({
             kind: 'action',
             durationMs: performance.now() - started,

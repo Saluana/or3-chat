@@ -34,7 +34,8 @@ import {
 } from '~/utils/projects/context';
 
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
-import { captureAutomaticMemories } from '~/utils/projects/automatic-memory';
+import { captureAutomaticMemories, createAutomaticMemoryCapture } from '~/utils/projects/automatic-memory';
+import { reportError } from '~/utils/errors';
 import * as projectContext from '~/utils/projects/context';
 import { defaultProjectSettings } from '~~/shared/projects/workspace';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
@@ -1449,6 +1450,85 @@ describe('automatic project memory capture', () => {
             await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant').catch(() => {});
             expect(await db.posts.where('postType').equals('or3:project-memory').count()).toBe(0);
         });
+    // Admission failures considered before implementation: two tabs finishing one
+    // turn both reach the model; a crashed or failed holder keeps the batch locked;
+    // an inference failure vanishes in production; expected invalidations (stale
+    // evidence, revoked scope) are reported as failures.
+    describe('batch admission and outcomes', () => {
+        const fakeLocks = () => {
+            const held = new Set<string>();
+            vi.stubGlobal('navigator', { locks: {
+                request: async (name: string, _options: unknown, run: (lock: object | null) => Promise<unknown>) => {
+                    if (held.has(name)) return run(null);
+                    held.add(name);
+                    try { return await run({ name }); } finally { held.delete(name); }
+                } } });
+            return held;
+        };
+        it('dispatches a batch from one tab only and releases the lock afterwards', async () => {
+            await seed();
+            const held = fakeLocks();
+            let answerGate!: () => void;
+            const fetcher = vi.fn()
+                .mockImplementationOnce(() => new Promise<Response>((resolve) => { answerGate = () => resolve(gate()); }))
+                .mockResolvedValueOnce(reply());
+            vi.stubGlobal('fetch', fetcher);
+            const first = captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+            await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+            await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+            expect(fetcher).toHaveBeenCalledTimes(1);
+            answerGate(); await first;
+            expect(fetcher).toHaveBeenCalledTimes(2);
+            expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(1);
+            expect(held.size).toBe(0);
+        });
+        it('releases the lock when inference fails so a later batch can run', async () => {
+            await seed();
+            const held = fakeLocks();
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{}', { status: 503 })));
+            await expect(captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant')).rejects.toMatchObject({ status: 503 });
+            expect(held.size).toBe(0);
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+            await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+            expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(1);
+        });
+        const completeThroughPlugin = async () => {
+            vi.spyOn(projectContext, 'captureProjectOperation').mockImplementation(() => scope());
+            const capture = createAutomaticMemoryCapture();
+            // Three completions flush the batch immediately instead of waiting for the idle timer.
+            for (const assistantId of ['earlier-1', 'earlier-2', 'auto-assistant'])
+                capture.notify({ threadId: 'auto-chat', projectId: 'a', workspaceId: 'local', assistantId } as never);
+            return capture;
+        };
+        it('reports an unavailable inference silently with its status and retry delay', async () => {
+            await seed();
+            vi.mocked(reportError).mockClear();
+            const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 429, headers: { 'Retry-After': '7' } }));
+            vi.stubGlobal('fetch', fetcher);
+            const capture = await completeThroughPlugin();
+            await vi.waitFor(() => expect(reportError).toHaveBeenCalledTimes(1));
+            expect(reportError).toHaveBeenCalledWith(
+                expect.objectContaining({ status: 429, retryAfterMs: 7000 }),
+                expect.objectContaining({ silent: true, severity: 'warn', tags: { domain: 'memory', op: 'capture' } }));
+            expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeUndefined();
+            capture.dispose();
+        });
+        it.each(['evidence', 'revocation'])('does not report %s changes during inference as a failure', async (change) => {
+            await seed();
+            vi.mocked(reportError).mockClear();
+            const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockImplementationOnce(async () => {
+                if (change === 'evidence') await db.messages.update('auto-user', { data: { content: 'Do not use SQLite.' }, clock: 2 });
+                else revoked = true;
+                return reply();
+            });
+            vi.stubGlobal('fetch', fetcher);
+            const capture = await completeThroughPlugin();
+            await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(reportError).not.toHaveBeenCalled();
+            capture.dispose();
+        });
+    });
     it('discards assistant-only evidence and makes no extraction call after a skip', async () => {
         await seed();
         const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply([

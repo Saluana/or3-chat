@@ -41,7 +41,7 @@ describe('createPaletteHostContext', () => {
     });
 
     it('routes resource results through the workspace tab host when supplied', async () => {
-        const openWorkspaceResource = vi.fn(async () => 'tab-1');
+        const openWorkspaceResource = vi.fn(async () => ({ status: 'activated' as const }));
         const host = createPaletteHostContext({
             openWorkspaceResource,
             getMultiPaneApi: () => undefined,
@@ -81,7 +81,7 @@ describe('createPaletteHostContext', () => {
     });
 
     it('gives record-less pane apps a valid tab instance identity', async () => {
-        const openWorkspaceResource = vi.fn(async () => 'tab-app');
+        const openWorkspaceResource = vi.fn(async () => ({ status: 'activated' as const }));
         const host = createPaletteHostContext({
             openWorkspaceResource,
             getMultiPaneApi: () => undefined,
@@ -102,6 +102,19 @@ describe('createPaletteHostContext', () => {
             }),
             { target: 'active' }
         );
+    });
+
+    it('preserves superseded navigation without falling back to the legacy host', async () => {
+        const getMultiPaneApi = vi.fn();
+        const host = createPaletteHostContext({
+            openWorkspaceResource: async () => ({ status: 'superseded' as const }),
+            getMultiPaneApi,
+        });
+        const superseded = { ok: true, superseded: true, closeOnSuccess: false };
+        await expect(host.openChat('chat-1', 'active')).resolves.toEqual(superseded);
+        await expect(host.openDocument('doc-1', 'new-pane')).resolves.toEqual(superseded);
+        await expect(host.openPaneApp('example:app', 'record-1', 'active')).resolves.toEqual(superseded);
+        expect(getMultiPaneApi).not.toHaveBeenCalled();
     });
 
     it('reveals projects and selects images via pending state', async () => {

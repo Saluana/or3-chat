@@ -10,6 +10,7 @@ import {
 } from './image-selection';
 import { requestPaletteProjectReveal } from './project-reveal';
 import type { WorkspaceResource } from '~/core/workspace-tabs/types';
+import type { WorkspaceResourceNavigationResult } from '~/utils/workspaceResourceNavigation';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type {
     PaletteActionErrorCode,
@@ -34,7 +35,7 @@ export interface PaletteHostContextDeps {
     openWorkspaceResource?: (
         resource: WorkspaceResource,
         options: { target: 'active' | 'split' }
-    ) => Promise<string | null>;
+    ) => Promise<WorkspaceResourceNavigationResult>;
     activateWorkspaceTab?: (tabId: string) => Promise<boolean>;
     getMultiPaneApi?: typeof getGlobalMultiPaneApi;
     getDashboardNavigation?: () => {
@@ -92,17 +93,15 @@ export function createPaletteHostContext(
     ): Promise<PaletteActionResult | null> {
         if (!deps.openWorkspaceResource) return null;
         try {
-            const tabId = await deps.openWorkspaceResource(resource, {
+            const opened = await deps.openWorkspaceResource(resource, {
                 target: destination === 'new-pane' ? 'split' : 'active',
             });
-            return tabId
+            if (opened.status === 'superseded') {
+                return { ok: true, superseded: true, closeOnSuccess: false };
+            }
+            return opened.status === 'activated'
                 ? { ok: true }
-                : failure(
-                      'disabled',
-                      destination === 'new-pane'
-                          ? 'Pane capacity reached'
-                          : 'Unable to open resource'
-                  );
+                : failure('navigation-failed', 'Unable to open resource');
         } catch (error) {
             return failure(
                 'navigation-failed',
@@ -335,8 +334,8 @@ export function createPaletteHostContext(
                 const result = await command.handler();
                 if (result.ok) {
                     return {
-                        ok: true,
-                        closeOnSuccess: command.closeOnSuccess !== false,
+                        ...result,
+                        closeOnSuccess: result.closeOnSuccess !== false && command.closeOnSuccess !== false,
                     };
                 }
                 return result;

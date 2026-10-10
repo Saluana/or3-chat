@@ -21,10 +21,36 @@ import {
     MEMORY_CLASSIFIER_TIMEOUT_MS,
     MEMORY_CLASSIFIER_MODEL,
     MEMORY_DECISION_THRESHOLD,
+    inferenceHttpError,
     type MemoryClassificationState,
     type MemoryClassificationResult,
 } from '~~/shared/projects/memory-classification';
 import type { Message, Thread } from '~/db/schema';
+import { reportError } from '~/utils/errors';
+
+/** An expected invalidation (edit, move, new credentials): the result is dropped, not a failure. */
+export class StaleMemoryError extends Error {}
+
+/**
+ * Auxiliary memory inference runs behind ordinary chat, so its failures are
+ * reported through the central diagnostics path (log and `error:*` hooks) with
+ * a silent severity: no toast, no retry affordance, no effect on the chat.
+ */
+export function reportMemoryInferenceFailure(
+    error: unknown,
+    op: 'capture' | 'classify',
+) {
+    reportError(error, {
+        silent: true,
+        severity: 'warn',
+        code:
+            error instanceof Error && error.name === 'TimeoutError'
+                ? 'ERR_TIMEOUT'
+                : undefined,
+        fallbackMessage: 'Project memory inference is unavailable.',
+        tags: { domain: 'memory', op },
+    });
+}
 
 export function messageText(message: Message): string {
     const data = message.data as { content?: unknown; text?: unknown } | null;
@@ -69,12 +95,26 @@ export async function saveClassifiedProjectMemory(
         expected,
     );
     const timeout = setTimeout(
-        () => controller.abort(),
+        () =>
+            controller.abort(
+                new DOMException('Memory classification deadline.', 'TimeoutError'),
+            ),
         MEMORY_CLASSIFIER_TIMEOUT_MS,
     );
     void classifySavedMemory(classificationScope, projectId, saved)
-        .catch(() => {
-            // The saved reference remains intact when authorization/evidence changes.
+        .catch((error) => {
+            // The saved reference stays intact. Stale evidence or a revoked scope
+            // is expected; a failed inference is reported without a toast.
+            if (error instanceof StaleMemoryError) return;
+            // Hitting the deadline is a failure; any other abort means the scope was revoked.
+            if (!(error instanceof Error && error.name === 'TimeoutError')) {
+                try {
+                    classificationScope.assertCurrent('write');
+                } catch {
+                    return;
+                }
+            }
+            reportMemoryInferenceFailure(error, 'classify');
         })
         .finally(() => clearTimeout(timeout));
     return saved;
@@ -156,7 +196,7 @@ async function classifySavedMemory(
     const validate = async () => {
         scope.assertCurrent('write');
         if (getUserApiKeyGeneration() !== keyGeneration || apiKey.value !== key)
-            throw new Error('Credentials changed.');
+            throw new StaleMemoryError('Credentials changed.');
         const current = await scope.db.posts.get(saved.row.id);
         if (
             !current ||
@@ -164,7 +204,7 @@ async function classifySavedMemory(
             current.clock !== saved.row.clock ||
             current.content !== saved.row.content
         )
-            throw new Error('Memory changed.');
+            throw new StaleMemoryError('Memory changed.');
         const fresh = await readProjectPolicy(scope.db, projectId);
         if (
             fresh.project.clock !== policy.project.clock ||
@@ -173,7 +213,7 @@ async function classifySavedMemory(
             fresh.settingsRow?.hlc !== policy.settingsRow?.hlc ||
             fresh.settingsRow?.content !== policy.settingsRow?.content
         )
-            throw new Error('Project context changed.');
+            throw new StaleMemoryError('Project context changed.');
         if (thread) {
             const currentThread = await scope.db.threads.get(thread.id);
             if (
@@ -183,7 +223,7 @@ async function classifySavedMemory(
                 currentThread.hlc !== thread.hlc ||
                 (await resolveChatProject(scope.db, thread.id)) !== projectId
             )
-                throw new Error('Evidence moved.');
+                throw new StaleMemoryError('Evidence moved.');
         }
         const rows = await scope.db.messages.bulkGet(
             evidence.map((message) => message.id),
@@ -194,7 +234,7 @@ async function classifySavedMemory(
                     !row || row.deleted || JSON.stringify(row) !== JSON.stringify(evidence[i]),
             )
         )
-            throw new Error('Evidence changed.');
+            throw new StaleMemoryError('Evidence changed.');
         scope.assertCurrent('write');
     };
     await validate();
@@ -212,11 +252,13 @@ async function classifySavedMemory(
             body: JSON.stringify({ workspaceId: scope.workspaceId, state }),
             signal: scope.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok)
+            throw inferenceHttpError('Memory classification unavailable.', response);
         const parsed = MemoryClassificationResultSchema.safeParse(
             await response.json(),
         );
-        if (!parsed.success) return;
+        if (!parsed.success)
+            throw new Error('Invalid memory classification response.');
         result = parsed.data;
     } else
         result = await classifyMemoryReference(

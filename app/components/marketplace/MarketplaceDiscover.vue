@@ -373,8 +373,7 @@ async function openSelectedPlugin(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
     try {
-        await openInstalledPluginPane(pluginId);
-        closeDashboard();
+        if (await openInstalledPluginPane(pluginId)) closeDashboard();
     } catch (error) {
         toast.add({
             title: 'Could not open plugin',

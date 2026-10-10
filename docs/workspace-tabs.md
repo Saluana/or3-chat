@@ -19,7 +19,13 @@ await workspaceTabs.openResource(
 
 The command deduplicates chats, documents, and app records by default, reuses an untouched blank chat, and focuses an already-visible tab in its existing split. Pass `allowDuplicate: true` only when an explicit duplicate view is intended. Legacy plugin pane mutations remain supported: `PageShell` reconciles them into the local tab session.
 
+`openResource`, `newTab`, `newSplit`, `openInSplit`, `openTabInSplit`, and `reopenClosedTab` resolve to `{ status, tabId }` rather than a bare tab ID. `activated` means the view is bound and ready, `created` means a background tab exists without being activated, `superseded` means a newer request, a closed pane, or a workspace switch took over (quiet, not an error), and `failed` means nothing was shown. `tabId` is `null` only when no tab exists. Compare `status`; the result object is always truthy. `activateTab` still resolves to a boolean.
+
+Tab operations may overlap, for example a close that waits for a document save while the user opens a tab, renames one, or switches workspace. Closing a tab applies to the tab state at the end of that save, and a failed activation undoes only its own pane binding and focus, so changes made in the meantime are kept. A close of the still-mounted outgoing tab waits for its activation to finish before removing it; a failed save keeps the rollback target available. A workspace switch cancels that deferred close.
+
 Sidebar and plugin surfaces can use `useWorkspaceResourceActions(resource)` for the same explicit duplicate views. It accepts any `WorkspaceResource` (chat, document, or pane app) and exposes `openInNewTab()` and `openInNewPane()`. The latter reports unavailable when the workspace profile’s pane limit has been reached; callers should hide that action on mobile.
+
+These actions and the `WorkspaceResourceNavigationApi` bridge return `{ status }`, preserving `superseded` through the host even when legacy panes have no tab ID. Callers finish quietly on supersession, without showing an error or dismissing a newer palette, version-history panel, or dashboard. Plugin pane launch helpers return `false` for supersession and throw for actual failures.
 
 `useWorkspaceTabHost()` is deliberately narrow. It translates stable pane IDs to the existing index-based `useMultiPane` methods, binds the resource, and leaves chat loading and document storage in their current owners.
 

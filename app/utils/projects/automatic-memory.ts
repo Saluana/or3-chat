@@ -21,17 +21,51 @@ import {
 } from '~~/shared/projects/workspace';
 import {
     analyzeAutomaticMemory,
+    automaticMemoryBatchId,
     AutomaticMemoryStateSchema,
     AutomaticMemoryOutputSchema,
     type AutomaticMemoryState,
 } from '~~/shared/projects/automatic-memory';
 import type { AiStreamCompletePayload } from '~/core/hooks/hook-types';
-import { messageText } from './memory';
-import { MEMORY_CONTEXT_MAX_BYTES } from '~~/shared/projects/memory-classification';
+import {
+    messageText,
+    reportMemoryInferenceFailure,
+    StaleMemoryError,
+} from './memory';
+import { MEMORY_CONTEXT_MAX_BYTES, inferenceHttpError } from '~~/shared/projects/memory-classification';
 
 const OMITTED_ASSISTANT_TEXT = '[assistant reply omitted: too long]';
 const normalized = (text: string) =>
     text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Cross-tab admission for one batch. Exactly one tab of this browser profile
+ * dispatches it; the others return without a request because the holder either
+ * advances the shared cursor or leaves the batch for the next completion. The
+ * browser frees the lock if its holder crashes, and a browser without Web
+ * Locks falls back to the cursor check alone. Returns null when declined.
+ */
+async function claimBatch(batchId: string): Promise<(() => void) | null> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (!locks) return () => {};
+    return new Promise((resolve) => {
+        locks
+            .request('or3-project-memory:' + batchId, { ifAvailable: true }, (lock) => {
+                if (!lock) return void resolve(null);
+                return new Promise<void>((release) => resolve(release));
+            })
+            .catch(() => resolve(() => {}));
+    });
+}
+
+const isCurrent = (scope: WorkspaceOperationScope) => {
+    try {
+        scope.assertCurrent('write');
+        return true;
+    } catch {
+        return false;
+    }
+};
 
 /** Called only by the client plugin's completion listener; the hook never awaits inference. */
 export function createAutomaticMemoryCapture() {
@@ -63,11 +97,15 @@ export function createAutomaticMemoryCapture() {
                 assistantId,
             );
         } catch (error) {
-            if (import.meta.dev && !job.controller.signal.aborted)
-                console.debug(
-                    '[project-memory] automatic capture skipped',
-                    error instanceof Error ? error.message : 'Unavailable',
-                );
+            // Stale evidence and revoked scopes are expected invalidations; real
+            // inference failures are reported silently and never reach the chat.
+            if (error instanceof StaleMemoryError || job.controller.signal.aborted || !isCurrent(job.scope)) {
+                if (import.meta.dev && !job.controller.signal.aborted)
+                    console.debug(
+                        '[project-memory] automatic capture skipped',
+                        error instanceof Error ? error.message : 'Unavailable',
+                    );
+            } else reportMemoryInferenceFailure(error, 'capture');
         } finally {
             job.running = false;
             if (jobs.get(key) !== job) return;
@@ -246,7 +284,7 @@ export async function captureAutomaticMemories(
     const validate = async () => {
         scope.assertCurrent('write');
         if (apiKey.value !== key || getUserApiKeyGeneration() !== keyGeneration)
-            throw new Error('Credentials changed.');
+            throw new StaleMemoryError('Credentials changed.');
         const freshPolicy = await readProjectPolicy(scope.db, projectId);
         if (
             freshPolicy.settings.excluded_chat_ids.includes(threadId) ||
@@ -254,7 +292,7 @@ export async function captureAutomaticMemories(
             freshPolicy.project.name !== state.project.name ||
             freshPolicy.settings.brief !== state.project.brief
         )
-            throw new Error('Memory evidence or project context changed.');
+            throw new StaleMemoryError('Memory evidence or project context changed.');
         const current = await scope.db.messages.bulkGet(
             rows.map((row) => row.id),
         );
@@ -264,158 +302,167 @@ export async function captureAutomaticMemories(
                     !row || JSON.stringify(row) !== JSON.stringify(rows[i]),
             )
         )
-            throw new Error('Memory evidence changed.');
+            throw new StaleMemoryError('Memory evidence changed.');
         const freshCursor = await scope.db.kv
             .where('name')
             .equals(cursorName)
             .first();
         if (freshCursor?.clock !== cursor?.clock)
-            throw new Error('Memory batch already processed.');
+            throw new StaleMemoryError('Memory batch already processed.');
     };
-    await validate();
-    let result = { memories: [] } as ReturnType<
-        typeof AutomaticMemoryOutputSchema.parse
-    >;
-    // With no processable fresh user statement the cursor advances without inference.
-    if (state.messages.some((message) => message.fresh && message.role === 'user')
-        && AutomaticMemoryStateSchema.safeParse(state).success) {
-        if (server) {
-            const response = await fetch('/api/openrouter/classify-memory', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-or3-cloud-intent': 'mutation',
-                    ...(key ? { 'x-or3-openrouter-key': key } : {}),
-                },
-                body: JSON.stringify({
-                    workspaceId: scope.workspaceId,
-                    capture: state,
-                }),
-                signal: AbortSignal.any([
+    // Admission comes after the snapshot and before any request: a duplicate
+    // tab spends nothing, and an interrupted holder leaves the cursor unmoved so
+    // the next completed turn forms a superset batch from the same evidence.
+    const release = await claimBatch(await automaticMemoryBatchId(scope.workspaceId, state));
+    if (!release) return;
+    try {
+        await validate();
+        let result = { memories: [] } as ReturnType<
+            typeof AutomaticMemoryOutputSchema.parse
+        >;
+        // With no processable fresh user statement the cursor advances without inference.
+        if (state.messages.some((message) => message.fresh && message.role === 'user')
+            && AutomaticMemoryStateSchema.safeParse(state).success) {
+            if (server) {
+                const response = await fetch('/api/openrouter/classify-memory', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-or3-cloud-intent': 'mutation',
+                        ...(key ? { 'x-or3-openrouter-key': key } : {}),
+                    },
+                    body: JSON.stringify({
+                        workspaceId: scope.workspaceId,
+                        capture: state,
+                    }),
+                    signal: AbortSignal.any([
+                        scope.signal,
+                        AbortSignal.timeout(20000),
+                    ]),
+                });
+                if (!response.ok)
+                    throw inferenceHttpError('Automatic memory inference unavailable.', response);
+                result = AutomaticMemoryOutputSchema.parse(await response.json());
+            } else
+                result = await analyzeAutomaticMemory(
+                    state,
+                    key!,
                     scope.signal,
-                    AbortSignal.timeout(20000),
-                ]),
-            });
-            if (!response.ok)
-                throw new Error('Automatic memory inference unavailable.');
-            result = AutomaticMemoryOutputSchema.parse(await response.json());
-        } else
-            result = await analyzeAutomaticMemory(
-                state,
-                key!,
-                scope.signal,
-                useRuntimeConfig().public.openRouter?.baseUrl,
-                validate,
-            );
-    }
-    const prepared = await Promise.all(
-        result.memories.map(async (candidate) => {
-            const source = state.messages.find(
-                (message) =>
-                    message.id === candidate.source_message_id &&
-                    message.role === 'user' &&
-                    message.fresh &&
-                    message.text.includes(candidate.source_quote),
-            );
-            if (!source) return null;
-            const prior = candidate.replace_id
-                ? existing.find(
-                      (m) =>
-                          m.row.id === candidate.replace_id &&
-                          state.existing.some((sent) => sent.id === m.row.id) &&
-                          !m.row.deleted &&
-                          m.value.origin === 'automatic',
-                  )
-                : undefined;
-            if (candidate.replace_id && !prior) return null;
-            const digest = await sha256Hex(projectId + '\0' + normalized(candidate.text));
-            return {
-                candidate,
-                source,
-                prior,
-                id:
-                    prior?.row.id ??
-                    'project-auto-memory-' +
-                        digest,
-            };
-        }),
-    );
-    await scope.db.transaction(
-        'rw',
-        getWriteTxTableNames(
-            scope.db,
-            ['projects', 'posts', 'threads', 'messages', 'file_meta', 'kv'],
-            { includeTombstones: true },
-        ),
-        async () => {
-            await validate();
-            const currentMemories = await scope.db.posts
-                .where('[postType+title]')
-                .equals([PROJECT_POST_TYPES.memory, projectId])
-                .limit(501)
-                .toArray();
-            if (currentMemories.length > 500)
-                throw new Error('Memory catalog changed.');
-            const currentValues = currentMemories.map((row) => ({
-                row,
-                value: readPersistedProjectRecord(ProjectMemorySchema, row.content),
-            }));
-            let automaticCount = currentValues.filter(
-                ({ row, value }) => !row.deleted && value?.origin === 'automatic',
-            ).length;
-            const known = new Set(
-                currentValues.flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
-            );
-            for (const item of prepared) {
-                if (!item || known.has(normalized(item.candidate.text)))
-                    continue;
-                if (item.prior) {
-                    const current = await scope.db.posts.get(item.id);
-                    if (
-                        !current ||
-                        current.deleted ||
-                        current.clock !== item.prior.row.clock ||
-                        current.content !== item.prior.row.content
-                    )
-                        continue;
-                } else {
-                    if (
-                        automaticCount >= 20 ||
-                        (await scope.db.posts.get(item.id)) ||
-                        (await scope.db.tombstones.get('posts:' + item.id))
-                    )
-                        continue;
-                    automaticCount++;
-                }
-                await saveProjectMemory(
-                    scope,
-                    projectId,
-                    {
-                        text: item.candidate.text,
-                        kind: item.candidate.kind,
-                        origin: 'automatic',
-                        source_message_id: item.source.id,
-                        source_thread_id: threadId,
-                    },
-                    item.id,
-                    item.prior?.row ?? null,
+                    useRuntimeConfig().public.openRouter?.baseUrl,
+                    validate,
                 );
-                known.add(normalized(item.candidate.text));
-            }
-            await setKvByName(
-                cursorName,
-                JSON.stringify({ projectId, index: assistant.index }),
+        }
+        const prepared = await Promise.all(
+            result.memories.map(async (candidate) => {
+                const source = state.messages.find(
+                    (message) =>
+                        message.id === candidate.source_message_id &&
+                        message.role === 'user' &&
+                        message.fresh &&
+                        message.text.includes(candidate.source_quote),
+                );
+                if (!source) return null;
+                const prior = candidate.replace_id
+                    ? existing.find(
+                          (m) =>
+                              m.row.id === candidate.replace_id &&
+                              state.existing.some((sent) => sent.id === m.row.id) &&
+                              !m.row.deleted &&
+                              m.value.origin === 'automatic',
+                      )
+                    : undefined;
+                if (candidate.replace_id && !prior) return null;
+                const digest = await sha256Hex(projectId + '\0' + normalized(candidate.text));
+                return {
+                    candidate,
+                    source,
+                    prior,
+                    id:
+                        prior?.row.id ??
+                        'project-auto-memory-' +
+                            digest,
+                };
+            }),
+        );
+        await scope.db.transaction(
+            'rw',
+            getWriteTxTableNames(
                 scope.db,
-                {
-                    ifClock: cursor?.clock ?? null,
-                    signal: scope.signal,
-                    isValid: () => {
-                        scope.assertCurrent('write');
-                        return true;
+                ['projects', 'posts', 'threads', 'messages', 'file_meta', 'kv'],
+                { includeTombstones: true },
+            ),
+            async () => {
+                await validate();
+                const currentMemories = await scope.db.posts
+                    .where('[postType+title]')
+                    .equals([PROJECT_POST_TYPES.memory, projectId])
+                    .limit(501)
+                    .toArray();
+                if (currentMemories.length > 500)
+                    throw new StaleMemoryError('Memory catalog changed.');
+                const currentValues = currentMemories.map((row) => ({
+                    row,
+                    value: readPersistedProjectRecord(ProjectMemorySchema, row.content),
+                }));
+                let automaticCount = currentValues.filter(
+                    ({ row, value }) => !row.deleted && value?.origin === 'automatic',
+                ).length;
+                const known = new Set(
+                    currentValues.flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
+                );
+                for (const item of prepared) {
+                    if (!item || known.has(normalized(item.candidate.text)))
+                        continue;
+                    if (item.prior) {
+                        const current = await scope.db.posts.get(item.id);
+                        if (
+                            !current ||
+                            current.deleted ||
+                            current.clock !== item.prior.row.clock ||
+                            current.content !== item.prior.row.content
+                        )
+                            continue;
+                    } else {
+                        if (
+                            automaticCount >= 20 ||
+                            (await scope.db.posts.get(item.id)) ||
+                            (await scope.db.tombstones.get('posts:' + item.id))
+                        )
+                            continue;
+                        automaticCount++;
+                    }
+                    await saveProjectMemory(
+                        scope,
+                        projectId,
+                        {
+                            text: item.candidate.text,
+                            kind: item.candidate.kind,
+                            origin: 'automatic',
+                            source_message_id: item.source.id,
+                            source_thread_id: threadId,
+                        },
+                        item.id,
+                        item.prior?.row ?? null,
+                    );
+                    known.add(normalized(item.candidate.text));
+                }
+                await setKvByName(
+                    cursorName,
+                    JSON.stringify({ projectId, index: assistant.index }),
+                    scope.db,
+                    {
+                        ifClock: cursor?.clock ?? null,
+                        signal: scope.signal,
+                        isValid: () => {
+                            scope.assertCurrent('write');
+                            return true;
+                        },
                     },
-                },
-            );
-        },
-    );
+                );
+            },
+        );
+    } finally {
+        release();
+    }
 }

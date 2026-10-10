@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { normalizeOpenRouterBaseUrl } from '../openrouter/url';
 import { DEFAULT_OPENROUTER_BASE_URL } from '../config/constants';
+import { parseRetryAfter } from '../errors';
+
+/** A failed inference response, keeping the status and Retry-After for error reporting. */
+export function inferenceHttpError(message: string, response: Response): Error {
+    return Object.assign(new Error(message), {
+        status: response.status,
+        retryAfterMs: parseRetryAfter(response.headers.get('retry-after')),
+    });
+}
 
 /** Memory inference uses OpenRouter-only APIs; a key configured for another base URL never goes there. */
 export function memoryInferenceOrigin(baseUrl: unknown): string | null {

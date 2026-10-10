@@ -9,7 +9,7 @@ describe('useWorkspaceResourceActions', () => {
     });
 
     it('opens a duplicate tab for any workspace resource', async () => {
-        const openResource = vi.fn(async () => true);
+        const openResource = vi.fn(async () => ({ status: 'activated' as const }));
         setWorkspaceResourceNavigationApi({
             canOpenInNewTab: () => true,
             canOpenInNewPane: () => true,
@@ -19,12 +19,12 @@ describe('useWorkspaceResourceActions', () => {
         const actions = useWorkspaceResourceActions(resource);
 
         expect(actions.canOpenInNewTab.value).toBe(true);
-        await expect(actions.openInNewTab()).resolves.toBe(true);
+        await expect(actions.openInNewTab()).resolves.toEqual({ status: 'activated' });
         expect(openResource).toHaveBeenCalledWith(resource.value, 'new-tab');
     });
 
     it('reflects pane capacity and prevents a blocked split action', async () => {
-        const openResource = vi.fn(async () => true);
+        const openResource = vi.fn(async () => ({ status: 'activated' as const }));
         setWorkspaceResourceNavigationApi({
             canOpenInNewTab: () => true,
             canOpenInNewPane: () => false,
@@ -35,7 +35,7 @@ describe('useWorkspaceResourceActions', () => {
         );
 
         expect(actions.canOpenInNewPane.value).toBe(false);
-        await expect(actions.openInNewPane()).resolves.toBe(false);
+        await expect(actions.openInNewPane()).resolves.toEqual({ status: 'failed' });
         expect(openResource).not.toHaveBeenCalled();
     });
 });

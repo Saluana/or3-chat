@@ -824,7 +824,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions and composer drafts."
+                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions, safe closing, quiet navigation supersession and composer drafts."
                 },
                 {
                     "name": "ai-preferences.md",

@@ -236,6 +236,38 @@ export function activateTab(
     return repairState(state, factory);
 }
 
+/**
+ * Undoes only what a failed activation changed, the pane's binding and focus,
+ * against the live state. Anything committed while it ran (titles, tabs opened
+ * or closed, other panes) is kept, and focus the user has since moved stays.
+ */
+export function revertActivation(
+    input: WorkspaceTabsState,
+    before: WorkspaceTabsState,
+    applied: WorkspaceTabsState,
+    paneId: string,
+    factory?: TransitionFactory
+): WorkspaceTabsState {
+    const state = repairState(input, factory);
+    const previousTabId = before.paneBindings.get(paneId);
+    if (
+        previousTabId &&
+        state.paneBindings.get(paneId) === applied.paneBindings.get(paneId) &&
+        state.tabs.some((tab) => tab.id === previousTabId) &&
+        !findPaneForTab(state, previousTabId)
+    ) {
+        state.paneBindings.set(paneId, previousTabId);
+    }
+    if (
+        before.activePaneId &&
+        state.activePaneId === applied.activePaneId &&
+        state.paneBindings.has(before.activePaneId)
+    ) {
+        state.activePaneId = before.activePaneId;
+    }
+    return repairState(state, factory);
+}
+
 export function openTab(
     input: WorkspaceTabsState,
     resource: WorkspaceResource,

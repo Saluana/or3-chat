@@ -461,6 +461,7 @@ async function runAction(
         sourceId,
         expectedPluginGeneration,
     });
+    if (result.ok && result.superseded) return;
     if (result.ok) {
         errorMessage.value = null;
         const shouldClose =

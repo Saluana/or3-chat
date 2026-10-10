@@ -108,7 +108,8 @@ async function loadVersions(limit = 50) {
 }
 async function openVersion(id: string) {
     const opened = await getWorkspaceResourceNavigationApi()?.openResource({ kind: 'chat', threadId: id }, 'new-tab', { reuseExisting: true });
-    if (opened) { historyOpen.value = false; emit('close'); } else historyError.value = 'Could not open this version.';
+    if (opened?.status === 'superseded') return;
+    if (opened?.status === 'activated') { historyOpen.value = false; emit('close'); } else historyError.value = 'Could not open this version.';
 }
 </script>
 

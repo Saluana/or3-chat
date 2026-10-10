@@ -1,5 +1,6 @@
 import { computed, shallowRef, type ComputedRef, type Ref } from 'vue';
 import type {
+    WorkspaceNavigationResult,
     WorkspaceResource,
     WorkspaceTab,
     WorkspaceTabRuntime,
@@ -18,6 +19,7 @@ import {
     reopenClosedTab as transitionReopenClosedTab,
     reorderTab as transitionReorderTab,
     restoreSnapshot,
+    revertActivation,
 } from './workspace-tab-transitions';
 import {
     useWorkspaceTabPersistence,
@@ -30,6 +32,9 @@ import {
 } from './useWorkspaceTabHost';
 
 type ActivationReason = 'pointer' | 'keyboard' | 'restore' | 'command';
+type ActivationOutcome = 'activated' | 'failed' | 'superseded';
+
+const NO_TAB: WorkspaceNavigationResult = { status: 'failed', tabId: null };
 
 function measureWorkspaceTabAction(action: string): () => void {
     if (
@@ -125,6 +130,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         createInitialState({ paneId: firstPaneId })
     );
     const coordinator = createPaneActivationCoordinator();
+    const outgoingActivations = new Map<string, Promise<void>>();
     let scopeGeneration = 0;
     let persistenceSuspensions = 0;
     const persistence = useWorkspaceTabPersistence({
@@ -183,50 +189,79 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         }
     }
 
-    async function activateTab(
+    function paneShowing(tabId: string): string | undefined {
+        return [...state.value.paneBindings.entries()].find(
+            ([, boundTabId]) => boundTabId === tabId
+        )?.[0];
+    }
+
+    /** A newer request owns the pane; don't leave the abandoned tab spinning. */
+    function abandonActivation(tabId: string): ActivationOutcome {
+        if (
+            !paneShowing(tabId) &&
+            state.value.runtime.get(tabId)?.status === 'loading'
+        ) {
+            updateRuntime(tabId, { status: 'idle' });
+        }
+        return 'superseded';
+    }
+
+    async function activate(
         tabId: string,
-        reason: ActivationReason = 'pointer',
-        forceBind = false
-    ): Promise<boolean> {
+        _reason: ActivationReason,
+        forceBind: boolean
+    ): Promise<ActivationOutcome> {
         const finishMeasure = measureWorkspaceTabAction('activate');
         try {
             const before = state.value;
             const target = before.tabs.find((tab) => tab.id === tabId);
-            if (!target) return false;
-            const visiblePane = [...before.paneBindings.entries()].find(
-                ([, boundTabId]) => boundTabId === tabId
-            )?.[0];
+            if (!target) return 'failed';
+            const visiblePane = paneShowing(tabId);
             const next = transitionActivateTab(before, tabId);
             const paneId = next.activePaneId;
-            if (!paneId) return false;
+            if (!paneId) return 'failed';
             const activation = coordinator.begin(paneId);
             commit(next);
             options.host.focusPane(paneId);
 
             // A tab visible in another split already owns its component tree.
-            if (visiblePane === paneId && !forceBind) return true;
+            if (visiblePane === paneId && !forceBind) return 'activated';
 
             updateRuntime(tabId, { status: 'loading', errorMessage: undefined });
 
             const outgoingTabId = before.paneBindings.get(paneId);
+            let settleOutgoing: (() => void) | undefined;
+            let outgoingSettled: Promise<void> | undefined;
+            if (outgoingTabId && outgoingTabId !== tabId) {
+                // The manifest already points at the incoming tab, but the
+                // outgoing view is still mounted until its save/bind finishes.
+                outgoingSettled = new Promise<void>((resolve) => {
+                    settleOutgoing = resolve;
+                });
+                outgoingActivations.set(outgoingTabId, outgoingSettled);
+            }
             try {
                 if (outgoingTabId && outgoingTabId !== tabId) {
                     await options.captureOutgoing?.(outgoingTabId, paneId, activation);
-                    if (!activation.isCurrent()) return false;
+                    if (!activation.isCurrent()) return abandonActivation(tabId);
                 }
                 await bindResourceToPane(
                     paneId,
                     target.resource,
                     activation
                 );
-                if (!activation.isCurrent()) return false;
+                if (!activation.isCurrent()) return abandonActivation(tabId);
                 await options.restoreIncoming?.(tabId, paneId, activation);
-                if (!activation.isCurrent()) return false;
+                if (!activation.isCurrent()) return abandonActivation(tabId);
                 updateRuntime(tabId, { status: 'idle' });
-                return true;
+                return 'activated';
             } catch (error) {
-                if (isAbortError(error) || !activation.isCurrent()) return false;
-                commit(before);
+                if (isAbortError(error) || !activation.isCurrent()) {
+                    return abandonActivation(tabId);
+                }
+                // Other operations may have committed while this one awaited,
+                // so undo only this pane's binding and focus.
+                commit(revertActivation(state.value, before, next, paneId));
                 updateRuntime(tabId, {
                     status: 'error',
                     errorMessage:
@@ -235,11 +270,31 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
                             : 'Unable to open tab',
                 });
                 options.onError?.(error, { tabId, action: 'activate' });
-                return false;
+                return 'failed';
+            } finally {
+                settleOutgoing?.();
+                if (outgoingTabId && outgoingActivations.get(outgoingTabId) === outgoingSettled) {
+                    outgoingActivations.delete(outgoingTabId);
+                }
             }
         } finally {
             finishMeasure();
         }
+    }
+
+    async function activateTab(
+        tabId: string,
+        reason: ActivationReason = 'pointer',
+        forceBind = false
+    ): Promise<boolean> {
+        return (await activate(tabId, reason, forceBind)) === 'activated';
+    }
+
+    function navigated(
+        tabId: string,
+        outcome: ActivationOutcome
+    ): WorkspaceNavigationResult {
+        return { status: outcome, tabId };
     }
 
     async function openResource(
@@ -249,7 +304,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             allowDuplicate?: boolean;
             reuseActiveBlank?: boolean;
         } = {}
-    ): Promise<string | null> {
+    ): Promise<WorkspaceNavigationResult> {
         const finishMeasure = measureWorkspaceTabAction('open');
         try {
         if (options_.target === 'split') return openInSplit(resource, options_);
@@ -258,77 +313,83 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             reuseActiveBlank: options_.reuseActiveBlank,
         });
         commit(opened.state);
-        if (!opened.tabId || options_.target === 'background') return opened.tabId;
-        await activateTab(opened.tabId, 'command', true);
-        return opened.tabId;
+        if (!opened.tabId) return NO_TAB;
+        if (options_.target === 'background') {
+            return { status: 'created', tabId: opened.tabId };
+        }
+        return navigated(opened.tabId, await activate(opened.tabId, 'command', true));
         } finally {
             finishMeasure();
         }
     }
 
-    async function newTab(): Promise<string | null> {
+    async function newTab(): Promise<WorkspaceNavigationResult> {
         const finishMeasure = measureWorkspaceTabAction('new');
         try {
         // A user explicitly pressed New tab: do not reuse the current blank
         // composer, even when it has not received any text yet.
         const opened = newBlankTab(state.value, { reuseActiveBlank: false });
         commit(opened.state);
-        if (opened.tabId) await activateTab(opened.tabId, 'command');
-        return opened.tabId;
+        if (!opened.tabId) return NO_TAB;
+        return navigated(opened.tabId, await activate(opened.tabId, 'command', false));
         } finally {
             finishMeasure();
         }
     }
 
-    async function newSplit(): Promise<string | null> {
+    async function newSplit(): Promise<WorkspaceNavigationResult> {
         const paneId = options.host.addPane();
-        if (!paneId) return null;
+        if (!paneId) return NO_TAB;
         const opened = newBlankTab(state.value, { reuseActiveBlank: false });
-        if (!opened.tabId) return null;
+        if (!opened.tabId) return NO_TAB;
         commit(bindTabToPane(opened.state, paneId, opened.tabId));
-        await activateTab(opened.tabId, 'command', true);
-        return opened.tabId;
+        return navigated(opened.tabId, await activate(opened.tabId, 'command', true));
     }
 
-    async function openTabInSplit(tabId: string): Promise<string | null> {
-        if (!state.value.tabs.some((tab) => tab.id === tabId)) return null;
+    async function openTabInSplit(tabId: string): Promise<WorkspaceNavigationResult> {
+        if (!state.value.tabs.some((tab) => tab.id === tabId)) return NO_TAB;
         // Visible tabs already own a pane; focus it without duplicating the tab.
-        if ([...state.value.paneBindings.values()].includes(tabId)) {
-            return await activateTab(tabId, 'command') ? tabId : null;
+        if (paneShowing(tabId)) {
+            return navigated(tabId, await activate(tabId, 'command', false));
         }
         const paneId = options.host.addPane();
-        if (!paneId) return null;
+        if (!paneId) return { status: 'failed', tabId };
         commit(bindTabToPane(state.value, paneId, tabId));
-        return await activateTab(tabId, 'command', true) ? tabId : null;
+        return navigated(tabId, await activate(tabId, 'command', true));
     }
 
     async function openInSplit(
         resource: WorkspaceResource,
         options_: { allowDuplicate?: boolean } = {}
-    ): Promise<string | null> {
+    ): Promise<WorkspaceNavigationResult> {
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate ?? false,
             reuseActiveBlank: false,
         });
-        if (!opened.tabId) return null;
+        if (!opened.tabId) return NO_TAB;
         if (opened.existing) {
             commit(opened.state);
             return openTabInSplit(opened.tabId);
         }
         const paneId = options.host.addPane();
-        if (!paneId) return null;
+        if (!paneId) return NO_TAB;
         commit(bindTabToPane(opened.state, paneId, opened.tabId));
-        await activateTab(opened.tabId, 'command', true);
-        return opened.tabId;
+        return navigated(opened.tabId, await activate(opened.tabId, 'command', true));
     }
 
     async function closeTab(tabId: string): Promise<boolean> {
         const finishMeasure = measureWorkspaceTabAction('close');
         try {
-        const before = state.value;
-        const paneId = [...before.paneBindings.entries()].find(
-            ([, boundTabId]) => boundTabId === tabId
-        )?.[0];
+        const generation = scopeGeneration;
+        // Closing an apparently hidden outgoing tab must not remove the only
+        // safe rollback target while its view is still mounted and saving.
+        let outgoing = outgoingActivations.get(tabId);
+        while (outgoing) {
+            await outgoing;
+            if (generation !== scopeGeneration) return false;
+            outgoing = outgoingActivations.get(tabId);
+        }
+        const paneId = paneShowing(tabId);
         const activation = paneId ? coordinator.begin(paneId) : null;
         try {
             if (paneId && activation) {
@@ -340,7 +401,10 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             return false;
         }
 
-        const closed = transitionCloseTab(before, tabId);
+        // Saving the outgoing view awaits, and other tab operations may have
+        // committed meanwhile; close against the live state, not a snapshot.
+        const livePaneId = paneShowing(tabId);
+        const closed = transitionCloseTab(state.value, tabId);
         if (!closed.closed) return false;
         commit(closed.state);
         if (closed.paneToClose) {
@@ -348,8 +412,8 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             await options.host.closePane(closed.paneToClose);
             return true;
         }
-        if (paneId) {
-            const replacementId = closed.state.paneBindings.get(paneId);
+        if (livePaneId) {
+            const replacementId = closed.state.paneBindings.get(livePaneId);
             const replacement = replacementId
                 ? closed.state.tabs.find((tab) => tab.id === replacementId)
                 : undefined;
@@ -384,15 +448,14 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         }
     }
 
-    async function reopenClosedTab(): Promise<string | null> {
+    async function reopenClosedTab(): Promise<WorkspaceNavigationResult> {
         const previous = state.value;
-        if (!previous.recentlyClosed.length) return null;
+        if (!previous.recentlyClosed.length) return NO_TAB;
         const next = transitionReopenClosedTab(previous);
         const tabId = next.activeTabId;
-        if (next === previous || !next.tabs.some((tab) => tab.id === tabId)) return null;
+        if (next === previous || !next.tabs.some((tab) => tab.id === tabId)) return NO_TAB;
         commit(next);
-        await activateTab(tabId, 'command', true);
-        return tabId;
+        return navigated(tabId, await activate(tabId, 'command', true));
     }
 
     function reorderTab(tabId: string, index: number): void {

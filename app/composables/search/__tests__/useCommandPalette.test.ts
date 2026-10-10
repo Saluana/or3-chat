@@ -357,6 +357,25 @@ describe('useCommandPalette', () => {
         expect(palette.activeKey.value).toBe('chat:a');
     });
 
+    it('does not change the palette after a superseded navigation completes', async () => {
+        const palette = useCommandPalette();
+        palette.open();
+        await Promise.resolve();
+        emitSnapshot({ results: [result({ key: 'chat:a' })] });
+        await nextTick();
+        executePaletteAction.mockResolvedValueOnce({
+            ok: false,
+            error: { code: 'navigation-failed', message: 'Newer failure' },
+        });
+        await palette.runPrimary();
+        const announcement = palette.announcement.value;
+        executePaletteAction.mockResolvedValueOnce({ ok: true, superseded: true, closeOnSuccess: false });
+        await palette.runPrimary();
+        expect(palette.isOpen.value).toBe(true);
+        expect(palette.errorMessage.value).toBe('Newer failure');
+        expect(palette.announcement.value).toBe(announcement);
+    });
+
     it('respects closeOnSuccess: false', async () => {
         const palette = useCommandPalette();
         palette.open();
