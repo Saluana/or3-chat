@@ -208,11 +208,13 @@ For backend-specific credentials, persistence, URL lifetime, and limitations, us
 
 Storage lifecycle decisions use the sync provider's materialized workspace state;
 they never replay the retained sync change log. A sync gateway may expose bounded,
-opaque-cursor pages for three views:
+opaque-cursor pages for these views:
 
 - live `file_meta` rows (`hash`, `sizeBytes`, optional `storageId`);
 - live reference edges from `messages.file_hashes` and `posts.file_hashes`;
-- unexpired upload quota reservations.
+- unexpired upload quota reservations;
+- deleted materialized metadata when the provider advertises
+  `capabilities.retainedStorageMetadata: 'v1'` (read-only accounting).
 
 Quota is the sum of canonical live metadata plus active reservations. If the active
 sync provider does not implement this query, quota enforcement fails closed instead
@@ -223,3 +225,42 @@ with the canonical backend. Canonical queries and pre-delete rechecks alone cann
 prevent concurrent restores or new reference writes. They return
 `deletion_coordination_required` without scanning or deleting objects. SQLite and
 Convex implement the bounded canonical query contract; there is no fallback to `pull()`.
+
+### Read-only filesystem usage observation
+
+With the matching filesystem provider, **Admin → System → Provider actions →
+Observe Storage Usage** returns a bounded observation. It does not reclaim bytes
+or supply GC candidates. Each result includes start/end timestamps, warnings,
+completion flags, and `consistency: "non_atomic_observation"`.
+
+- `canonical.activeMetadataBytes` is logical live metadata, not disk allocation.
+- `canonical.retainedDeletedMetadataBytes` covers deleted materialized rows.
+  An older provider or a delete-before-put row with unknown size yields unknown
+  accounting (`null`), never an invented zero. Log pruning does not erase it.
+- `canonical.reservedUploadBytes` represents active upload reservations, not
+  bytes proven present on disk.
+- Filesystem categories distinguish observed active blobs, retained deleted
+  blobs, incomplete transfers, sidecars, and unclassified files.
+- `apparentFileBytes` sums observed file lengths. `allocatedFileBytes` counts
+  observed filesystem blocks and deduplicates hard-linked inodes; it excludes
+  directory/DB/other workspace overhead. Neither is a promise of reclaimable space.
+- Volume totals describe the containing filesystem, not a workspace quota.
+
+Scans and canonical pages can change during observation. Partial, unavailable,
+ambiguous, unsupported, and malformed results stay explicit. A bounded scan may
+leave files unclassified; unknown is not zero. An observation is not an atomic
+inventory and must never authorize deletion.
+
+Quota policy remains logical live metadata plus reservations. Deleting metadata
+can release logical quota while the bytes remain on disk. Quota traversal rejects
+malformed pages, repeated cursors, conflicting aliases/identities, and unsafe
+integer totals instead of returning an understated value. It does not introduce a
+cross-provider transactional snapshot or replace provider-owned atomic admission.
+
+### Physical cleanup remains incomplete
+
+The accounting changes do **not** implement or activate filesystem reclamation.
+The provider still returns `deletion_coordination_required`. Existing
+restore/reference/hash-reuse tests verify this refusal only, not a deleting
+collector. See [the coordination design](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/storage-cleanup-coordination.md)
+for the remaining implementation and acceptance gates.
