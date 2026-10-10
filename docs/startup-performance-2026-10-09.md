@@ -27,13 +27,19 @@ Final follow-up validation:
   the resulting hash change; public API and auto-import snapshots are unchanged.
 - **Eight production Chrome E2E checks pass**, covering the repaired cold start,
   typing/undo/redo/settings, sidebar resizing and command-palette behavior.
-- The standard disposable Basic Auth + SQLite + filesystem browser harness has
-  **one pass and one failure**, on both candidate and baseline. The persistence
-  case times out at `or3-cloud-auth.spec.ts:258`, waiting for the absent
-  `Dismiss welcome` button; the rest of that journey remains unverified.
-  The optional `--journeys` invocation instead failed during startup because
+- The standard disposable Basic Auth + SQLite + filesystem Chrome harness now
+  has **two passing tests**. The persistence case previously failed on candidate
+  and baseline because it required an optional welcome prompt. Palette opening
+  now dismisses that prompt only when present, using the existing readiness
+  retry. All original assertions remain: queued files recover to synced state;
+  catalog search survives reload; original bytes, project settings and source
+  revisions round-trip; duplicate delivery is idempotent; foreign workspace,
+  viewer writes and revoked-member access are denied. Traces, screenshots and
+  canonical snapshots are retained under `layout-fix/cloud-fixed/`. This named
+  harness uses a disposable development server, not the audited production build.
+  The optional `--journeys` invocation failed during startup because
   its alternate build directory does not match the copied TypeScript references.
-  Neither failure was hidden by raising a timeout or changing assertions.
+  No timeout or persistence/security assertion was relaxed.
 
 Receipts and screenshots are under `output/startup-performance/layout-fix/`;
 the refreshed user preview on port 4189 serves this production build. The
