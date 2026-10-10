@@ -264,3 +264,11 @@ export function createMockDb<T extends Record<string, unknown>>(tables: T) {
     (global as Record<string, unknown>).__MOCK_DB__ = db;
     return db;
 }
+
+/** Deterministic RFC 4122 v4 UUID per label. Real op ids are always UUIDs; the push schema rejects anything else. */
+export function testUuid(label: string): string {
+    let hash = 0x811c9dc5;
+    for (const char of label) hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    const hex = hash.toString(16).padStart(8, '0');
+    return `${hex}-0000-4000-8000-${hex}0000`;
+}

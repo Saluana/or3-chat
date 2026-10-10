@@ -16,6 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 import { installHistoryRevisionTracking } from '~/utils/chat/history-revisions';
 import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
+import type { PersistedWorkspaceTabDraft } from '~/components/chat/chat-input/types';
 import { LRUCache } from 'lru-cache';
 import type {
     Attachment,
@@ -73,6 +74,36 @@ export interface SnapshotStageRow {
     item: SnapshotItem | null;
 }
 
+/** Corrupt outbox operation set aside with its diagnostics; local-only, never synchronized. */
+export interface SyncQuarantineRow {
+    /** The original outbox row id, so quarantining the same row twice is idempotent. */
+    id: string;
+    tableName: string;
+    pk: string;
+    status: 'quarantined' | 'repaired' | 'discarded';
+    source: 'snapshot_apply' | 'manual';
+    /** The operation exactly as found. */
+    op: unknown;
+    diagnostics: string[];
+    /** Local content captured at quarantine time, so export never depends on the live row. */
+    localRow?: unknown;
+    localTombstone?: unknown;
+    quarantinedAt: number;
+    resolvedAt?: number;
+    resolution?: string;
+    /** Outbox row created by a successful reconstruction. */
+    repairedOpId?: string;
+}
+
+/** Unsent composer draft. The database is per workspace; `account_key` separates accounts within it. */
+export interface WorkspaceTabDraftRow {
+    id: string;
+    account_key: string;
+    tab_id: string;
+    updated_at: number;
+    draft: PersistedWorkspaceTabDraft;
+}
+
 // Dexie database versioning & schema
 /**
  * Purpose:
@@ -106,6 +137,8 @@ export class Or3DB extends Dexie {
     sync_state!: Table<SyncState, string>;
     sync_runs!: Table<SyncRun, string>;
     snapshot_staging!: Table<SnapshotStageRow, string>;
+    sync_quarantine!: Table<SyncQuarantineRow, string>;
+    workspace_tab_drafts!: Table<WorkspaceTabDraftRow, string>;
 
     constructor(name = 'or3-db') {
         super(name);
@@ -364,6 +397,13 @@ export class Or3DB extends Dexie {
         }).upgrade(tx => tx.table('projects').toCollection().modify(row => {
             row.chat_ids = computeProjectChatIds(row);
         }));
+
+        // Local-only recovery state: corrupt outbox operations set aside for
+        // repair/export, and unsent composer drafts. Neither is synchronized.
+        this.version(27).stores({
+            sync_quarantine: 'id, status, [tableName+pk], quarantinedAt',
+            workspace_tab_drafts: 'id, account_key, updated_at',
+        });
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

@@ -310,6 +310,115 @@ test('sidebar chat and document switching keeps the workspace mounted without a 
     expect(serverRenderErrors).toEqual([]);
 });
 
+test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', route => route.abort());
+    const savedDrafts = () => page.evaluate(async () => {
+        const saved: Array<{ text: string; hashes: string[]; account: string }> = [];
+        for (const { name } of await indexedDB.databases()) {
+            if (!name) continue;
+            const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); });
+            if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                const rows = await new Promise<Array<{ account_key: string; draft: { text: string; attachments: Array<{ hash: string }> } }>>(resolve => {
+                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    request.onsuccess = () => resolve(request.result);
+                });
+                for (const row of rows) saved.push({ text: row.draft.text, hashes: row.draft.attachments.map(item => item.hash), account: row.account_key });
+            }
+            db.close();
+        }
+        return saved;
+    });
+    await page.goto('/chat');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible({ timeout: 60_000 });
+    await input.fill('Draft that must survive a reload');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+    await (await chooser).setFiles(fixturePng);
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    // Saved shortly after the last edit, with the attachment as a file reference.
+    await expect.poll(async () => (await savedDrafts()).map(row => [row.text, row.hashes.length])).toEqual([['Draft that must survive a reload', 1]]);
+
+    await page.reload();
+    await expect(input).toHaveText('Draft that must survive a reload', { timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    await info.attach('draft-after-reload', { contentType: 'application/json', body: JSON.stringify(await savedDrafts()) });
+
+    // A reload straight after a keystroke, inside the capture debounce, must not lose it.
+    await input.click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' plus the last words');
+    await page.reload();
+    await expect(input).toHaveText('Draft that must survive a reload plus the last words', { timeout: 30_000 });
+
+    // Clearing the composer removes the saved copy rather than leaving a stale draft.
+    await page.getByRole('button', { name: 'Remove image', exact: true }).click();
+    await input.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Backspace');
+    await expect(input).toHaveText('');
+    await expect.poll(async () => (await savedDrafts()).length).toBe(0);
+    await page.reload();
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    await expect(input).toHaveText('');
+});
+
+test('an unreadable saved tab layout is kept aside, can be downloaded or discarded, and the workspace stays usable', async ({ page, context }) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto('/chat');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible({ timeout: 60_000 });
+    const layoutKey = () => page.evaluate(() => Object.keys(localStorage).find(key => /^or3:workspace-tabs:v1:[^:]+:[^:]+$/.test(key)) ?? '');
+    await expect.poll(layoutKey).not.toBe('');
+    const key = await layoutKey();
+
+    // The next load finds a truncated layout where the saved one used to be.
+    const unreadable = '{"schemaVersion":1,"tabs":[{"id":"tab-1","resource":';
+    await context.addInitScript(([storageKey, value]) => {
+        if (sessionStorage.getItem('or3-test-layout-seeded')) return;
+        sessionStorage.setItem('or3-test-layout-seeded', '1');
+        localStorage.setItem(storageKey!, value!);
+    }, [key, unreadable]);
+    await page.reload();
+
+    const toast = page.getByText('Saved tab layout was unreadable', { exact: true });
+    await expect(toast).toBeVisible({ timeout: 30_000 });
+    await expect(input).toBeVisible();
+    // The original was copied aside before anything could replace it.
+    expect(await page.evaluate(storageKey => localStorage.getItem(`${storageKey}:corrupt`), key)).toBe(unreadable);
+
+    const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Download original' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('or3-tab-layout-backup.txt');
+    expect(await (await import('node:fs/promises')).readFile(await download.path(), 'utf8')).toBe(unreadable);
+    // Choosing an action closes the notice; the copy stays until it is discarded.
+    await expect(toast).toHaveCount(0);
+    expect(await page.evaluate(storageKey => localStorage.getItem(`${storageKey}:corrupt`), key)).toBe(unreadable);
+
+    // A second unreadable layout is reported again, and this time the user discards the copy.
+    await expect.poll(() => page.evaluate(storageKey => {
+        try { return JSON.parse(localStorage.getItem(storageKey) ?? '').schemaVersion; } catch { return null; }
+    }, key)).toBe(1);
+    await page.evaluate(([storageKey, value]) => localStorage.setItem(storageKey!, value!), [key, unreadable]);
+    await page.reload();
+    await expect(toast).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Discard original' }).click();
+    await expect(toast).toHaveCount(0);
+    expect(await page.evaluate(storageKey => localStorage.getItem(`${storageKey}:corrupt`), key)).toBeNull();
+
+    // A fresh layout replaces the unreadable one, and the composer still works.
+    await expect(input).toBeVisible();
+    await input.fill('Still usable');
+    await expect(input).toHaveText('Still usable');
+    await expect.poll(() => page.evaluate(storageKey => {
+        try { return JSON.parse(localStorage.getItem(storageKey) ?? '').schemaVersion; } catch { return null; }
+    }, key)).toBe(1);
+});
+
 test('compaction chat memory lives under system prompt in settings, with working version history', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', route => route.abort());

@@ -356,12 +356,13 @@ export async function setupSyncEngine(): Promise<void> {
                 await engineState.outboxManager.retryFailed();
             }
         },
-        purgeCorruptOps: async () => {
-            if (engineState?.outboxManager) {
-                return engineState.outboxManager.purgeCorruptOps();
-            }
-            return 0;
+        /** Set aside corrupt queued ops (preserved, and rebuilt from local rows where unambiguous). */
+        quarantineCorruptOps: async () => {
+            return engineState?.outboxManager.quarantineCorruptOps() ?? { quarantined: 0, repaired: 0 };
         },
+        getQuarantined: async () => engineState?.outboxManager.getQuarantined() ?? [],
+        exportQuarantined: async () => engineState?.outboxManager.exportQuarantined() ?? null,
+        discardQuarantined: async (id: string) => engineState?.outboxManager.discardQuarantined(id) ?? false,
     });
 
     // Handle HMR cleanup

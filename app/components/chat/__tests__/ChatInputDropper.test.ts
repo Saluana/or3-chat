@@ -512,6 +512,125 @@ describe('ChatInputDropper', () => {
         expect(root.classes()).not.toContain('border-blue-500');
     });
 
+    it('keeps text typed while an older send was being prepared, even if it is retyped to the submitted text', async () => {
+        const accepted = deferred<SendResult>();
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'test-thread', tabId: 'revision-tab' },
+            attrs: { onSend: (payload: { registerResult: (terminal: Promise<SendResult>, acceptance: Promise<SendResult>) => void }) => {
+                payload.registerResult(Promise.resolve({ status: 'accepted', requestId: 'old', userMessageId: 'old' }), accepted.promise);
+            } },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        const vm = wrapper.vm as unknown as { setText: (text: string) => void; triggerSend: () => Promise<SendResult> };
+        try {
+            await flushPromises();
+            vm.setText('Same words');
+            const send = vm.triggerSend();
+            await vi.waitFor(() => expect(wrapper.emitted('send')).toHaveLength(1));
+            // The user keeps writing while the first request is still being admitted,
+            // and ends up with text identical to what was submitted.
+            vm.setText('Same words, and more');
+            vm.setText('Same words');
+            accepted.resolve({ status: 'accepted', requestId: 'old', userMessageId: 'old' });
+            await send;
+            await flushPromises();
+
+            await vm.triggerSend();
+            expect(wrapper.emitted('send')).toHaveLength(2);
+            expect(wrapper.emitted('send')?.[1]?.[0]).toMatchObject({ text: 'Same words' });
+        } finally {
+            accepted.resolve({ status: 'accepted', requestId: 'old', userMessageId: 'old' });
+            wrapper.unmount();
+        }
+    });
+
+    it('keeps text typed while a saved draft is still loading instead of replacing it', async () => {
+        const client = process.client; process.client = true;
+        const blobRead = deferred<undefined>();
+        const reading = vi.spyOn(getDb().file_blobs, 'get').mockImplementation(() => blobRead.promise as never);
+        // A saved attachment forces the asynchronous load path, which we hold open.
+        useWorkspaceTabDrafts().write('loading-tab', {
+            version: 1, text: 'saved text', attachments: [], largeTextBlocks: [], updatedAt: Date.now(),
+            attachmentRefs: [{ hash: 'held-blob', name: 'held.png', mime: 'image/png', kind: 'image' }],
+        });
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'test-thread', tabId: 'loading-tab' },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => payload.registerResult(Promise.resolve({ status: 'rejected', reason: 'unavailable' })) },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        const vm = wrapper.vm as unknown as { setText: (text: string) => void; triggerSend: () => Promise<SendResult> };
+        try {
+            await vi.waitFor(() => expect(reading).toHaveBeenCalled());
+            vm.setText('typed while loading');
+            blobRead.resolve(undefined);
+            await flushPromises();
+
+            await vm.triggerSend();
+            expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'typed while loading' });
+            // What the user typed, not the older saved text, is what gets saved.
+            await vi.waitFor(() => expect(useWorkspaceTabDrafts().read('loading-tab')?.text).toBe('typed while loading'));
+        } finally {
+            blobRead.resolve(undefined);
+            reading.mockRestore();
+            wrapper.unmount();
+            useWorkspaceTabDrafts().discard('loading-tab');
+            process.client = client;
+        }
+    });
+
+    it('saves the composer immediately when the page is hidden, without waiting for the capture debounce', async () => {
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'test-thread', tabId: 'hide-tab' },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        const vm = wrapper.vm as unknown as { setText: (text: string) => void };
+        try {
+            await flushPromises();
+            vm.setText('typed just before reload');
+            // No debounce has fired yet, exactly as when a reload follows a keystroke.
+            window.dispatchEvent(new Event('pagehide'));
+            expect(useWorkspaceTabDrafts().read('hide-tab')?.text).toBe('typed just before reload');
+            await vi.waitFor(async () => expect((await getDb().workspace_tab_drafts.toArray())
+                .some((row) => row.tab_id === 'hide-tab' && row.draft.text === 'typed just before reload')).toBe(true));
+        } finally {
+            wrapper.unmount();
+            useWorkspaceTabDrafts().discard('hide-tab');
+        }
+    });
+
+    it('tells the user when a draft cannot be saved, keeps retrying, and clears the notice once it is', async () => {
+        const client = process.client; process.client = true;
+        const imports = await import('#imports');
+        const add = vi.fn(); const remove = vi.fn();
+        vi.spyOn(imports, 'useToast').mockReturnValue({ add, remove } as never);
+        const failing = vi.spyOn(getDb().workspace_tab_drafts, 'put').mockRejectedValue(new DOMException('full', 'QuotaExceededError'));
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'test-thread', tabId: 'quota-tab' },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        const vm = wrapper.vm as unknown as { setText: (text: string) => void };
+        const drafts = useWorkspaceTabDrafts();
+        try {
+            await flushPromises();
+            vm.setText('cannot be stored yet');
+            await vi.waitFor(() => expect(drafts.read('quota-tab')?.text).toBe('cannot be stored yet'));
+            await drafts.flush();
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ id: 'draft-save-failed' })));
+
+            failing.mockRestore();
+            await drafts.flush();
+            await vi.waitFor(() => expect(remove).toHaveBeenCalledWith('draft-save-failed'));
+            expect((await getDb().workspace_tab_drafts.toArray()).some((row) => row.tab_id === 'quota-tab')).toBe(true);
+        } finally {
+            failing.mockRestore();
+            wrapper.unmount();
+            drafts.discard('quota-tab');
+            await drafts.flush();
+            vi.restoreAllMocks();
+            process.client = client;
+        }
+    });
+
     it('clears the draft after durable acceptance without waiting for the stream', async () => {
         const terminal = deferred<SendResult>();
         const accepted = deferred<SendResult>();

@@ -281,19 +281,22 @@ describe('message file ref_count integrity', () => {
         expect(await storedHashes('shared-message')).toEqual([TEST_HASH]);
     });
 
-    it.each(['message', 'catalog', 'trashed catalog', 'revision'])('refuses physical deletion retained by a %s', async (owner) => {
+    it.each(['message', 'catalog', 'trashed catalog', 'revision', 'unsent draft'])('refuses physical deletion retained by a %s', async (owner) => {
         const { hardDeleteMany, softDeleteFile } = await import('../files');
         const db = getDb();
         await db.file_meta.put(fileMeta(TEST_HASH, 0));
         await db.file_blobs.put({ hash: TEST_HASH, blob: new Blob(['retained']) });
         if (owner === 'message') await db.messages.put(message('retaining-message', [TEST_HASH]));
+        else if (owner === 'unsent draft') await db.workspace_tab_drafts.put({ id: 'user-1\u0000tab-1', account_key: 'user-1', tab_id: 'tab-1',
+            updated_at: 1, draft: { version: 1, text: '', largeTextBlocks: [], updatedAt: 1,
+                attachments: [{ hash: TEST_HASH, name: 'kept.png', mime: 'image/png', kind: 'image' }] } });
         else await db.posts.put({ id: 'retaining-post', title: 'Retained', content: '',
             postType: owner === 'revision' ? 'or3:document-revision' : 'or3:file',
             file_hashes: JSON.stringify([TEST_HASH]), meta: owner === 'trashed catalog'
                 ? JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) : null,
             created_at: 1, updated_at: 1, deleted: false, clock: 1 });
-        await expect(softDeleteFile(TEST_HASH)).rejects.toThrow(/referenced/);
-        await expect(hardDeleteMany([TEST_HASH])).rejects.toThrow(/referenced/);
+        await expect(softDeleteFile(TEST_HASH)).rejects.toThrow(/referenced|unsent draft/);
+        await expect(hardDeleteMany([TEST_HASH])).rejects.toThrow(/referenced|unsent draft/);
         expect((await db.file_meta.get(TEST_HASH))?.deleted).toBe(false);
         expect((await db.file_blobs.get(TEST_HASH))?.blob).toBeDefined();
     });

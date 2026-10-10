@@ -134,6 +134,64 @@ Selection interleaves the streams starting with the manager's turn (initially `r
 
 Startup recovery resets stale `syncing`/`in_flight` rows to `pending` with no positive scheduling delay (`readyAt` 0), so a sustained same-status backlog cannot postpone them behind every fresh row. When a push returns `applied: false` with a server winner, the winner is applied only if it is newer than the local materialized row/tombstone under `compareSyncRevision` (fail closed on ambiguous ties); a stale winner never overwrites newer local state, the pushed operation is still acknowledged, and deferred newer rows are preserved for later convergence.
 
+### Quarantine and snapshot recovery of unsynced content
+
+Replacing local tables from a snapshot (expired cursor, rescan) restores every
+unsynced operation on top of the remote state: `pending`, `retry_wait`,
+`in_flight`, `failed_retryable`, and also `failed_permanent` and legacy `failed`
+rows, because once the table is replaced their payload may be the only copy.
+`discarded` (an explicit user decision) and `applied` operations are never
+restored, and restored operations keep their status so they can still be retried
+or discarded.
+
+An operation that cannot be replayed or pushed (no payload object, a message
+missing `thread_id`/`role`/`index`, a payload that fails the table schema, or a
+stamp the push schema rejects such as a non-UUID `op_id` or a missing
+`deviceId`) is **quarantined** instead of deleted or aborting the snapshot:
+
+- The original operation, diagnostics, and the targeted local row/tombstone are
+  stored in the local-only `sync_quarantine` table (never synchronized), in the
+  same transaction that removes it from `pending_ops`.
+- If the matching local row is valid and carries exactly the operation's
+  revision, a replacement `put` is queued with a **new** `op_id`/HLC (the
+  content differs from the corrupt payload, so the old `op_id` is never reused),
+  and the row is re-stamped with the same tuple. A malformed delete is rebuilt
+  from its complete tombstone under a new revision, and the tombstone is
+  re-stamped to match, because a server that already processed the original
+  `op_id` rejects the same id with different content. Content that cannot be
+  sanitized for sync (for example an oversized message) stays quarantined; it
+  never aborts the surrounding snapshot transaction.
+- If a newer queued operation or tombstone already covers the record, the entry
+  is resolved without new work.
+- Anything else (no row, newer unexplained row, invalid row) stays `quarantined`
+  and exportable until the user discards it.
+
+Resolved (`repaired`/`discarded`) entries are pruned after 30 days or beyond the
+newest 200, after a committed snapshot or rescan recovery, a manual run, a
+discard, and when the outbox starts. Unresolved entries are never pruned
+automatically.
+
+Advanced callers use `$syncEngine`:
+
+```ts
+const { $syncEngine } = useNuxtApp();
+await $syncEngine.quarantineCorruptOps(); // { quarantined, repaired }; throws while a push is running
+await $syncEngine.getQuarantined();       // entries, oldest first
+await $syncEngine.exportQuarantined();    // JSON string for support/manual recovery
+await $syncEngine.discardQuarantined(id); // explicit give-up for an unresolved entry
+```
+
+`purgeCorruptOps()` was removed: it deleted malformed operations without
+preserving them or the content they described.
+
+Browser coverage lives in `tests/e2e/cloud-sync-recovery.e2e.ts` (part of
+`bun run test:e2e:cloud`). It drives the real capture hooks, snapshot installer
+and outbox in Chromium's IndexedDB through the `/_tests/_test-cloud-sync-recovery`
+harness page with an in-page provider, injects corruption and permanent failures
+through the raw IndexedDB API, and verifies the surviving records, quarantine
+entries, rebuilt operations and what is eventually pushed after reconnect. The
+provider is a stub: no server snapshot or expired cursor is involved.
+
 ### Read Path (Remote to Local)
 
 1.  **Subscription**: `SubscriptionManager` listens for changes since the last known cursor (`query: sync.watchChanges`).

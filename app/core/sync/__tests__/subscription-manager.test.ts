@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+    PendingOp,
     PullRequest,
     PullResponse,
     SyncChange,
@@ -10,7 +11,7 @@ import type {
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { SubscriptionManager } from '../subscription-manager';
 import { Or3DB } from '~/db/client';
-import { createMemoryTable, createMockDb, createPendingOpsTable } from './sync-test-utils';
+import { createMemoryTable, createMockDb, createPendingOpsTable, testUuid } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
 import { markRecentOpId } from '../recent-op-cache';
 
@@ -29,8 +30,10 @@ vi.mock('~/core/hooks/useHooks', () => ({
 }));
 
 vi.mock('~/core/sync/hook-bridge', () => ({
+    SYNCED_TABLES: ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'],
     getHookBridge: () => ({
         markSyncTransaction: hookBridgeState.markSyncTransaction,
+        getDeviceId: () => 'device-1',
     }),
     getLocalOnlyKvNames: () => new Set(['openrouter_api_key', 'MODELS_CATALOG', 'workspace.manager.cache']),
 }));
@@ -1042,53 +1045,34 @@ describe('SubscriptionManager', () => {
         }
     });
 
-    it('reapplies in_flight and retry_wait ops after snapshot replacement', async () => {
-        const pendingOps = createPendingOpsTable([
-            {
-                id: 'pending-inflight',
-                tableName: 'messages',
-                operation: 'put',
-                pk: 'm-local',
-                payload: {
-                    id: 'm-local',
-                    thread_id: 't1',
-                    role: 'user',
-                    index: 0,
-                    order_key: '1',
-                    deleted: false,
-                    created_at: 1,
-                    updated_at: 1,
-                    clock: 3,
-                },
-                stamp: {
-                    deviceId: 'device-1',
-                    opId: 'op-local',
-                    hlc: '0000000000003:0000:node',
-                    clock: 3,
-                },
-                createdAt: 1,
-                attempts: 1,
-                status: 'in_flight',
-            },
-        ]);
-        const messages = createMemoryTable('id');
-        const db = createMockDb({
-            messages,
-            tombstones: createMemoryTable('id'),
-            pending_ops: pendingOps,
+    it('reapplies unsynced ops after a rescan, including permanently failed and corrupt ones', async () => {
+        const db = new Or3DB(`subscription-reapply-${crypto.randomUUID()}`);
+        await db.open();
+        const stamp = (clock: number, opId: string) => ({
+            deviceId: 'device-1', opId: testUuid(opId), hlc: `${String(clock).padStart(13, '0')}:0000:node`, clock,
         });
+        const message = (id: string, clock: number) => ({
+            id, thread_id: 't1', role: 'user' as const, index: 0, order_key: `${clock}`,
+            data: { content: id }, deleted: false, created_at: 1, updated_at: 1, clock,
+            hlc: stamp(clock, `op-${id}`).hlc, op_id: testUuid(`op-${id}`),
+        });
+        const op = (id: string, status: PendingOp['status'], payload?: unknown): PendingOp => ({
+            id: `pending-${id}`, tableName: 'messages', operation: 'put', pk: id,
+            payload, stamp: stamp(3, `op-${id}`), createdAt: 1, attempts: 1, status,
+        });
+        await db.messages.put(message('m-corrupt', 3));
+        await db.pending_ops.bulkPut([
+            op('m-inflight', 'in_flight', message('m-inflight', 3)),
+            op('m-failed', 'failed_permanent', message('m-failed', 3)),
+            op('m-corrupt', 'pending', undefined),
+        ]);
         const manager = new SubscriptionManager(
-            db as any,
+            db,
             {
                 id: 'reapply',
                 mode: 'direct',
                 subscribe: vi.fn(async () => () => undefined),
-                pull: vi.fn(async () => ({
-                    changes: [],
-                    nextCursor: 0,
-                    hasMore: false,
-                    ...FULL_HISTORY_PULL_RETENTION,
-                })),
+                pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false, ...FULL_HISTORY_PULL_RETENTION })),
                 push: vi.fn(async () => { throw new Error('unused'); }),
                 updateCursor: vi.fn(async () => undefined),
                 dispose: vi.fn(async () => undefined),
@@ -1096,7 +1080,14 @@ describe('SubscriptionManager', () => {
             { workspaceId: 'ws-1' }
         );
 
-        await (manager as unknown as { reapplyPendingOps: () => Promise<void> }).reapplyPendingOps();
-        expect(messages.__rows.get('m-local')).toMatchObject({ id: 'm-local', clock: 3 });
+        try {
+            await (manager as unknown as { reapplyPendingOps: () => Promise<void> }).reapplyPendingOps();
+            expect(await db.messages.get('m-inflight')).toMatchObject({ clock: 3 });
+            expect(await db.messages.get('m-failed')).toMatchObject({ clock: 3 });
+            expect(await db.messages.get('m-corrupt')).toMatchObject({ data: { content: 'm-corrupt' } });
+            expect(await db.sync_quarantine.get('pending-m-corrupt')).toMatchObject({ status: 'repaired' });
+        } finally {
+            await db.delete();
+        }
     });
 });

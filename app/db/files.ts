@@ -59,6 +59,11 @@ async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: str
     if (await db.messages.filter(retained).first() || await db.posts.filter(retained).first()) {
         throw new Error('This file is still referenced by retained workspace content.');
     }
+    // An unsent draft keeps its attachments only as hash references.
+    if (db.workspace_tab_drafts && await db.workspace_tab_drafts
+        .filter(row => row.draft?.attachments?.some(attachment => targets.has(attachment.hash)) ?? false).first()) {
+        throw new Error('This file is attached to an unsent draft. Send or discard the draft first.');
+    }
 }
 
 // Default max file size (20MB) - can be overridden by config
@@ -511,7 +516,7 @@ export async function softDeleteFile(hash: string): Promise<void> {
     const db = getDb();
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages'], includeTombstones: true }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages', 'workspace_tab_drafts'], includeTombstones: true }),
         async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
@@ -553,7 +558,7 @@ export async function softDeleteMany(hashes: string[]): Promise<string[]> {
     const db = getDb();
     return db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages'], includeTombstones: true }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages', 'workspace_tab_drafts'], includeTombstones: true }),
         async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
@@ -670,7 +675,7 @@ export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta', {
-            include: ['file_blobs', 'posts', 'messages'],
+            include: ['file_blobs', 'posts', 'messages', 'workspace_tab_drafts'],
             includeTombstones: true,
         }),
         async () => {

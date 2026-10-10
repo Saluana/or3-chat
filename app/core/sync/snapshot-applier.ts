@@ -5,11 +5,9 @@ import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/sh
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
+import { QUARANTINE_SUPPORT_TABLES, collectReplayableOps, pruneResolvedQuarantineBestEffort } from './sync-quarantine';
 
 const STAGE_BATCH_SIZE = 300;
-const ACTIVE_PENDING_STATUSES = [
-    'pending', 'in_flight', 'retry_wait', 'failed_retryable', 'syncing',
-] as const;
 
 function abortSnapshotApply(): never {
     const error = new Error('Snapshot apply was cancelled');
@@ -186,10 +184,9 @@ export class SnapshotStager {
         ])];
         const transactionTables = [
             ...tableNames.map((name) => this.db.table(name)),
-            this.db.tombstones,
             this.db.sync_state,
-            this.db.pending_ops,
             this.db.snapshot_staging,
+            ...QUARANTINE_SUPPORT_TABLES.map((name) => this.db.table(name)),
         ];
         const localOnlyKv = getLocalOnlyKvNames();
 
@@ -202,12 +199,15 @@ export class SnapshotStager {
 
             // Read the outbox inside this transaction. Writes made while pages
             // were fetched are included, and the cursor cannot commit before
-            // the matching local intent is restored.
-            const pendingOps: PendingOp[] = [];
-            for (const status of ACTIVE_PENDING_STATUSES) {
-                pendingOps.push(...await tx.table('pending_ops').where('status').equals(status).toArray());
-            }
-            pendingOps.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+            // the matching local intent is restored. Permanently failed work is
+            // restored too: replacing the table would otherwise erase the only
+            // copy of that content. Corrupt operations are quarantined and
+            // rebuilt from the still-present local rows before anything is cleared.
+            const pendingOps = await collectReplayableOps(
+                tx,
+                (tableName) => tableNames.includes(tableName),
+                deviceId
+            );
             const fileRefCounts = new Map<string, number>();
             for (const op of pendingOps) {
                 if (
@@ -304,9 +304,7 @@ export class SnapshotStager {
 
             for (const op of pendingOps) {
                 if (!shouldContinue()) abortSnapshotApply();
-                if (tableNames.includes(op.tableName)) {
-                    await applyPendingOp(tx, op, fileRefCounts.get(op.pk));
-                }
+                await applyPendingOp(tx, op, fileRefCounts.get(op.pk));
             }
             if (!shouldContinue()) abortSnapshotApply();
             await tx.table('sync_state').put({
@@ -317,6 +315,8 @@ export class SnapshotStager {
             });
         });
 
+        // Recovery itself resolves quarantine entries, so retention runs here too.
+        await pruneResolvedQuarantineBestEffort(this.db);
         return this.highWatermark;
     }
 

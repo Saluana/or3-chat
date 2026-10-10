@@ -29,7 +29,7 @@ type OutboxInstance = {
     stop: ReturnType<typeof vi.fn>;
     flush: ReturnType<typeof vi.fn>;
     retryFailed: ReturnType<typeof vi.fn>;
-    purgeCorruptOps: ReturnType<typeof vi.fn>;
+    quarantineCorruptOps: ReturnType<typeof vi.fn>;
 };
 
 type SubscriptionInstance = {
@@ -171,7 +171,7 @@ vi.mock('~/core/sync/outbox-manager', () => ({
             stop: vi.fn(),
             flush: vi.fn(async () => true),
             retryFailed: vi.fn(async () => undefined),
-            purgeCorruptOps: vi.fn(async () => 0),
+            quarantineCorruptOps: vi.fn(async () => ({ quarantined: 0, repaired: 0 })),
         };
         outboxInstances.push(instance);
         return instance;

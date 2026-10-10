@@ -28,7 +28,7 @@ import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/er
  * @see shared/sync/circuit-breaker for circuit breaker implementation
  * @see shared/sync/sanitize for payload sanitization
  */
-import type { Or3DB } from '~/db/client';
+import type { Or3DB, SyncQuarantineRow } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp, PushWinner } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
@@ -42,6 +42,14 @@ import { getHookBridge } from './hook-bridge';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
+import {
+    discardQuarantined,
+    exportQuarantined,
+    listQuarantined,
+    pruneResolvedQuarantineBestEffort,
+    quarantineCorruptOps,
+    type QuarantineSummary,
+} from './sync-quarantine';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -323,6 +331,9 @@ export class OutboxManager {
                     .where('status')
                     .equals('in_flight')
                     .modify({ status: 'pending', nextAttemptAt: undefined });
+                if (generation !== this.lifecycleGeneration) return false;
+                // Startup is the one place that sees quarantine growth from earlier sessions.
+                await pruneResolvedQuarantineBestEffort(this.db);
                 if (generation !== this.lifecycleGeneration) return false;
                 this.needsSyncingRecovery = false;
             }
@@ -1112,44 +1123,38 @@ export class OutboxManager {
     }
 
     /**
-     * Purge corrupt ops that have empty or invalid payloads.
-     * These ops cannot be synced and will continuously fail with validation errors.
-     * Returns the count of deleted ops.
+     * Set aside queued ops that can no longer be pushed or replayed, preserving
+     * each original with diagnostics, and rebuild the sync intent from the
+     * matching local row where that is unambiguous. Never deletes user content.
+     * Refuses while a push is running so an in-flight result cannot resurrect
+     * a quarantined row.
      */
-    async purgeCorruptOps(): Promise<number> {
-        const allPending = await this.db.pending_ops.toArray();
-        const corruptIds: string[] = [];
-
-        for (const op of allPending) {
-            // Check for delete ops (which don't need full payload)
-            if (op.operation === 'delete') continue;
-
-            // Check if payload is missing or empty
-            if (!op.payload || typeof op.payload !== 'object') {
-                corruptIds.push(op.id);
-                continue;
-            }
-
-            // For message ops, check required fields
-            if (op.tableName === 'messages') {
-                const requiredFields = ['thread_id', 'role', 'index'];
-                const hasAllRequired = requiredFields.every(
-                    (field) => (op.payload as Record<string, unknown>)[field] !== undefined
-                );
-                if (!hasAllRequired) {
-                    corruptIds.push(op.id);
-                }
-            }
+    async quarantineCorruptOps(): Promise<QuarantineSummary> {
+        if (this.flushOwner) {
+            throw new Error('A sync push is running; try again in a moment');
         }
-
-        if (corruptIds.length > 0) {
-            await this.db.pending_ops.where('id').anyOf(corruptIds).delete();
-            if (import.meta.dev) {
-                console.log(`[OutboxManager] Purged ${corruptIds.length} corrupt ops`);
-            }
+        const owner = Symbol('outbox-quarantine');
+        this.flushOwner = owner;
+        try {
+            return await quarantineCorruptOps(this.db, 'manual');
+        } finally {
+            if (this.flushOwner === owner) this.flushOwner = null;
         }
+    }
 
-        return corruptIds.length;
+    /** Quarantine entries, oldest first, for inspection. */
+    getQuarantined(): Promise<SyncQuarantineRow[]> {
+        return listQuarantined(this.db);
+    }
+
+    /** Self-contained JSON of every quarantine entry for support or manual recovery. */
+    exportQuarantined(): Promise<string> {
+        return exportQuarantined(this.db);
+    }
+
+    /** Give up on one unresolved entry. Returns false when it is missing or already resolved. */
+    discardQuarantined(id: string): Promise<boolean> {
+        return discardQuarantined(this.db, id);
     }
 
 }
