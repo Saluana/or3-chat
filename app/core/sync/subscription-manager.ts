@@ -34,16 +34,16 @@ import type {
     SyncScope,
     SyncChange,
     PullResponse,
-    PendingOp,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
-import { getHookBridge } from './hook-bridge';
+import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
 import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { SnapshotStager, applyPendingOp } from './snapshot-applier';
+import { QUARANTINE_SUPPORT_TABLES, collectReplayableOps, pruneResolvedQuarantineBestEffort } from './sync-quarantine';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
@@ -641,37 +641,19 @@ export class SubscriptionManager {
     }
 
     private async reapplyPendingOps(): Promise<void> {
-        const statuses = [
-            'pending',
-            'in_flight',
-            'retry_wait',
-            'failed_retryable',
-            'syncing',
-        ] as const;
-        const pendingOps: PendingOp[] = [];
-        for (const status of statuses) {
-            pendingOps.push(
-                ...(await this.db.pending_ops.where('status').equals(status).toArray())
-            );
-        }
-        if (!pendingOps.length) return;
-
-        pendingOps.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-
         const hookBridge = getHookBridge(this.db);
-        const tableNames = Array.from(
-            new Set([
-                ...pendingOps.map((op) => op.tableName),
-                'tombstones',
-            ])
-        );
-
-        await this.db.transaction('rw', tableNames, async (tx) => {
+        const tables = [...SYNCED_TABLES, ...QUARANTINE_SUPPORT_TABLES]
+            .map((name) => this.db.table(name));
+        await this.db.transaction('rw', tables, async (tx) => {
             hookBridge.markSyncTransaction(tx);
-            for (const op of pendingOps) {
+            // Includes permanently failed work, and sets corrupt operations
+            // aside (rebuilding them from local rows) rather than aborting.
+            const ops = await collectReplayableOps(tx, () => true, hookBridge.getDeviceId());
+            for (const op of ops) {
                 await applyPendingOp(tx, op);
             }
         });
+        await pruneResolvedQuarantineBestEffort(this.db);
     }
 
     /**

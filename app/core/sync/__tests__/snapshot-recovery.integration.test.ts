@@ -16,6 +16,7 @@ import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { _resetCursorManagers } from '../cursor-manager';
 import { _resetHookBridge } from '../hook-bridge';
 import { SubscriptionManager } from '../subscription-manager';
+import { testUuid } from './sync-test-utils';
 
 const hookState = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -48,7 +49,7 @@ function messagePayload(
         updated_at: clock,
         clock,
         hlc: `${clock}:0:${deviceId}`,
-        op_id: `op-${id}-${clock}`,
+        op_id: testUuid(`op-${id}-${clock}`),
     };
 }
 
@@ -104,7 +105,7 @@ function pendingDelete(id: string, clock: number): PendingOp {
             clock,
             hlc: `${clock}:0:local`,
             deviceId: 'local',
-            opId: `op-delete-${id}-${clock}`,
+            opId: testUuid(`op-delete-${id}-${clock}`),
         },
         createdAt: 2,
         attempts: 0,
@@ -299,7 +300,7 @@ describe('expired-cursor snapshot recovery', () => {
         expect(await db.tombstones.get('messages:pending-delete')).toMatchObject({
             clock: 61,
             hlc: '61:0:local',
-            opId: 'op-delete-pending-delete-61',
+            opId: testUuid('op-delete-pending-delete-61'),
         });
         expect(
             (await db.pending_ops.toArray()).sort(

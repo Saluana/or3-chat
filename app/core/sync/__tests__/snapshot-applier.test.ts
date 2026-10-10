@@ -3,6 +3,9 @@ import { Or3DB } from '~/db/client';
 import type { SnapshotResponse } from '~~/shared/sync/types';
 import { applySnapshotChain, SnapshotStager } from '../snapshot-applier';
 import { setHookEngine } from '~/core/hooks/useHooks';
+import { testUuid } from './sync-test-utils';
+import type { PendingOp } from '~~/shared/sync/types';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 
 const databases: Or3DB[] = [];
 
@@ -361,13 +364,13 @@ describe('applySnapshotChain', () => {
         expect(await db.posts.get('post-1')).toBeUndefined();
         const localPost = {
             ...remotePost, title: 'Edited locally', postType: 'doc',
-            clock: 2, hlc: '2:0:local', op_id: 'local-post',
+            clock: 2, hlc: '2:0:local', op_id: testUuid('local-post'),
         };
         await db.posts.put(localPost);
         await db.pending_ops.put({
             id: 'pending-post', tableName: 'posts', operation: 'put', pk: 'post-1',
             payload: { ...remotePost, title: 'Edited locally', clock: 2 },
-            stamp: { clock: 2, hlc: '2:0:local', opId: 'local-post', deviceId: 'local' },
+            stamp: { clock: 2, hlc: '2:0:local', opId: testUuid('local-post'), deviceId: 'local' },
             createdAt: 2, attempts: 0, status: 'pending',
         });
         try {
@@ -377,7 +380,7 @@ describe('applySnapshotChain', () => {
         }
         expect(await db.posts.get('post-1')).toMatchObject({
             title: 'Edited locally', postType: 'doc', clock: 2,
-            hlc: '2:0:local', op_id: 'local-post',
+            hlc: '2:0:local', op_id: testUuid('local-post'),
         });
         expect(await db.posts.where('postType').equals('doc').count()).toBe(1);
         expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 10 });
@@ -397,20 +400,20 @@ describe('applySnapshotChain', () => {
             id: 'local-message', thread_id: 'thread-1', role: 'user' as const,
             index: 0, order_key: '2:0:local', data: { content: 'local' },
             deleted: false, created_at: 1, updated_at: 2, clock: 2,
-            hlc: '2:0:local', op_id: 'local-message-op',
+            hlc: '2:0:local', op_id: testUuid('local-message-op'),
         };
         await db.messages.put(local);
         await db.pending_ops.bulkPut([
             {
                 id: 'pending-local-put', tableName: 'messages', operation: 'put',
                 pk: 'local-message', payload: local,
-                stamp: { clock: 2, hlc: '2:0:local', opId: 'local-message-op', deviceId: 'local' },
+                stamp: { clock: 2, hlc: '2:0:local', opId: testUuid('local-message-op'), deviceId: 'local' },
                 createdAt: 1, attempts: 0, status: 'pending',
             },
             {
                 id: 'pending-local-delete', tableName: 'messages', operation: 'delete',
                 pk: 'deleted-message', payload: { deleted_at: 2 },
-                stamp: { clock: 3, hlc: '3:0:local', opId: 'local-delete-op', deviceId: 'local' },
+                stamp: { clock: 3, hlc: '3:0:local', opId: testUuid('local-delete-op'), deviceId: 'local' },
                 createdAt: 2, attempts: 0, status: 'pending',
             },
         ]);
@@ -421,7 +424,7 @@ describe('applySnapshotChain', () => {
         }
         expect(await db.messages.get('local-message')).toMatchObject({ data: { content: 'local' } });
         expect(await db.tombstones.get('messages:deleted-message')).toMatchObject({
-            clock: 3, opId: 'local-delete-op',
+            clock: 3, opId: testUuid('local-delete-op'),
         });
         expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 10 });
     });
@@ -463,5 +466,172 @@ describe('applySnapshotChain', () => {
         expect(await db.messages.get('message-2')).toBeDefined();
         expect(await db.sync_state.get('sync_state:workspace-1:default'))
             .toMatchObject({ cursor: 12, deviceId: 'device-new' });
+    });
+});
+
+
+describe('snapshot recovery of unsynced local content', () => {
+    const scope = { workspaceId: 'workspace-1' };
+
+    function localMessage(id: string, content: string) {
+        return {
+            id, thread_id: 'thread-1', role: 'user' as const, index: 0,
+            order_key: '2:0:local', data: { content }, deleted: false,
+            created_at: 1, updated_at: 2, clock: 2, hlc: '2:0:local', op_id: testUuid(`${id}-op`),
+        };
+    }
+
+    function localDocument(id: string, title: string) {
+        return {
+            id, title, content: '{"type":"doc"}', postType: 'doc', deleted: false,
+            created_at: 1, updated_at: 2, clock: 2, hlc: '2:0:local', op_id: testUuid(`${id}-op`),
+        };
+    }
+
+    function putOp(
+        tableName: 'messages' | 'posts',
+        row: { id: string; clock: number; hlc: string; op_id: string },
+        overrides: Partial<PendingOp> = {}
+    ): PendingOp {
+        return {
+            id: `pending-${row.id}`, tableName, operation: 'put', pk: row.id,
+            payload: sanitizePayloadForSync(tableName, row, 'put'),
+            stamp: { clock: row.clock, hlc: row.hlc, opId: row.op_id, deviceId: 'local' },
+            createdAt: 5, attempts: 0, status: 'pending', ...overrides,
+        };
+    }
+
+    async function recoverFromEmptySnapshot(db: Or3DB): Promise<void> {
+        const stager = new SnapshotStager(db, scope, ['messages', 'posts']);
+        await stager.start();
+        await stager.appendPage({
+            workspaceId: scope.workspaceId, snapshotId: 'empty', highWatermark: 20,
+            items: [], nextPageToken: null,
+        });
+        try {
+            await stager.apply('device-1', () => true, ['messages', 'posts']);
+        } finally {
+            await stager.dispose();
+        }
+    }
+
+    it('keeps the message and document behind permanently failed operations', async () => {
+        const db = createDb();
+        await db.open();
+        const message = localMessage('message-failed', 'unsent words');
+        const document = localDocument('doc-failed', 'Unsent draft');
+        await db.messages.put(message);
+        await db.posts.put(document);
+        await db.pending_ops.bulkPut([
+            putOp('messages', message, { status: 'failed_permanent', failureKind: 'permanent' }),
+            putOp('posts', document, { status: 'failed' }),
+        ]);
+
+        await recoverFromEmptySnapshot(db);
+
+        expect(await db.messages.get('message-failed')).toMatchObject({ data: { content: 'unsent words' } });
+        expect(await db.posts.get('doc-failed')).toMatchObject({ title: 'Unsent draft' });
+        // The operations stay terminal so the user can still retry or discard them.
+        expect((await db.pending_ops.get('pending-message-failed'))?.status).toBe('failed_permanent');
+        expect((await db.pending_ops.get('pending-doc-failed'))?.status).toBe('failed');
+    });
+
+    it('does not resurrect content whose failed operation the user discarded', async () => {
+        const db = createDb();
+        await db.open();
+        const message = localMessage('message-discarded', 'dropped on purpose');
+        await db.messages.put(message);
+        await db.pending_ops.put(putOp('messages', message, { status: 'discarded' }));
+
+        await recoverFromEmptySnapshot(db);
+
+        expect(await db.messages.get('message-discarded')).toBeUndefined();
+    });
+
+    it('quarantines corrupt operations and rebuilds them from the local rows', async () => {
+        const db = createDb();
+        await db.open();
+        const message = localMessage('message-corrupt', 'still here');
+        const document = localDocument('doc-corrupt', 'Still here too');
+        await db.messages.put(message);
+        await db.posts.put(document);
+        const corruptMessage = putOp('messages', message, { payload: undefined });
+        const corruptDocument = putOp('posts', document, { payload: { id: 'doc-corrupt' } });
+        await db.pending_ops.bulkPut([corruptMessage, corruptDocument]);
+
+        await recoverFromEmptySnapshot(db);
+
+        expect(await db.messages.get('message-corrupt')).toMatchObject({ data: { content: 'still here' } });
+        expect(await db.posts.get('doc-corrupt')).toMatchObject({ title: 'Still here too' });
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 20 });
+
+        const entries = await db.sync_quarantine.toArray();
+        expect(entries.map((entry) => entry.id).sort()).toEqual(['pending-doc-corrupt', 'pending-message-corrupt']);
+        for (const entry of entries) {
+            expect(entry.status).toBe('repaired');
+            expect(entry.source).toBe('snapshot_apply');
+            expect(entry.diagnostics.length).toBeGreaterThan(0);
+            expect(entry.repairedOpId).toBeTruthy();
+        }
+        // The original operation is preserved verbatim, not merely counted.
+        expect(entries.find((entry) => entry.id === 'pending-doc-corrupt')?.op).toMatchObject({ payload: { id: 'doc-corrupt' } });
+
+        // Recovery work replaces the corrupt operation and never reuses its identity.
+        const queued = await db.pending_ops.toArray();
+        expect(queued.map((op) => op.id)).not.toContain('pending-message-corrupt');
+        expect(queued).toHaveLength(2);
+        for (const op of queued) {
+            expect(op.status).toBe('pending');
+            expect(op.stamp.opId).not.toBe(testUuid(`${op.pk}-op`));
+            const row = op.tableName === 'messages'
+                ? await db.messages.get(op.pk)
+                : await db.posts.get(op.pk);
+            expect(row?.op_id).toBe(op.stamp.opId);
+            expect(row?.hlc).toBe(op.stamp.hlc);
+        }
+    });
+
+    it('keeps ambiguous corrupt operations quarantined and exportable without blocking the snapshot', async () => {
+        const db = createDb();
+        await db.open();
+        const message = localMessage('message-orphan', 'no local row');
+        await db.pending_ops.put(putOp('messages', message, { payload: undefined }));
+
+        await recoverFromEmptySnapshot(db);
+
+        const entry = await db.sync_quarantine.get('pending-message-orphan');
+        expect(entry).toMatchObject({ status: 'quarantined', tableName: 'messages', pk: 'message-orphan' });
+        expect(entry?.op).toMatchObject({ id: 'pending-message-orphan', operation: 'put' });
+        expect(await db.pending_ops.get('pending-message-orphan')).toBeUndefined();
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 20 });
+    });
+
+    it('applies quarantine retention after a committed recovery', async () => {
+        const db = createDb();
+        await db.open();
+        const now = Date.now();
+        await db.sync_quarantine.bulkPut(Array.from({ length: 205 }, (_, i) => ({
+            id: `resolved-${i}`, tableName: 'messages', pk: `resolved-${i}`, status: 'repaired' as const,
+            source: 'snapshot_apply' as const, op: {}, diagnostics: ['x'], quarantinedAt: 1, resolvedAt: now - i,
+        })));
+
+        await recoverFromEmptySnapshot(db);
+
+        expect(await db.sync_quarantine.count()).toBe(200);
+    });
+
+    it('leaves intact operations exactly as queued', async () => {
+        const db = createDb();
+        await db.open();
+        const message = localMessage('message-intact', 'fine');
+        await db.messages.put(message);
+        const op = putOp('messages', message);
+        await db.pending_ops.put(op);
+
+        await recoverFromEmptySnapshot(db);
+
+        expect(await db.pending_ops.get(op.id)).toMatchObject({ stamp: op.stamp, status: 'pending' });
+        expect(await db.sync_quarantine.count()).toBe(0);
+        expect(await db.messages.get('message-intact')).toMatchObject({ op_id: testUuid('message-intact-op') });
     });
 });

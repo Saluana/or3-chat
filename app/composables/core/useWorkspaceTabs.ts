@@ -23,6 +23,7 @@ import {
 } from './workspace-tab-transitions';
 import {
     useWorkspaceTabPersistence,
+    type WorkspaceTabPersistenceIssue,
     type WorkspaceTabStorage,
 } from './useWorkspaceTabPersistence';
 import {
@@ -117,6 +118,8 @@ export interface WorkspaceTabsOptions {
         tabs: readonly WorkspaceTab[]
     ) => Promise<readonly string[]>;
     onError?: (error: unknown, context: { tabId: string; action: string }) => void;
+    /** Called once per local tab-layout storage failure episode. */
+    onPersistenceIssue?: (issue: WorkspaceTabPersistenceIssue) => void;
 }
 
 /**
@@ -139,6 +142,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         workspaceId: options.workspaceId,
         profileId: options.profileId,
         storage: options.storage,
+        onIssue: options.onPersistenceIssue,
     });
 
     function commit(next: WorkspaceTabsState): void {
@@ -721,5 +725,9 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         updateRuntime,
         updateCachedTitle,
         flushPersistence: persistence.flush,
+        persistenceStatus: persistence.status,
+        retryPersistence: persistence.retry,
+        getCorruptLayoutBackup: persistence.getCorruptBackup,
+        discardCorruptLayoutBackup: persistence.discardCorruptBackup,
     };
 }

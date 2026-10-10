@@ -452,7 +452,8 @@ import {
     type RegisterSendResult,
     type SendResult,
 } from '~/utils/chat/types';
-import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
+import { useWorkspaceTabDrafts, type WorkspaceChatTabDraft } from '~/composables/core/useWorkspaceTabDrafts';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import {
     sanitizeModelVariant,
@@ -618,6 +619,7 @@ async function initializeEditor(replaceExisting = false) {
                 },
             },
             onUpdate: ({ editor: ed }) => {
+                composerRevision++;
                 promptText.value = ed.getText();
                 if (!restoringDraft.value) scheduleDraftCapture(props.tabId);
                 autoResize();
@@ -658,6 +660,8 @@ async function initializeEditor(replaceExisting = false) {
 }
 
 onMounted(async () => {
+    window.addEventListener('pagehide', saveDraftNow);
+    document.addEventListener('visibilitychange', saveDraftWhenHidden);
     await initializeEditor();
     if (props.paneId && !componentDisposed) {
         registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
@@ -668,6 +672,8 @@ watch(trustedEditorRevision, () => {
 });
 
 onBeforeUnmount(() => {
+    window.removeEventListener('pagehide', saveDraftNow);
+    document.removeEventListener('visibilitychange', saveDraftWhenHidden);
     componentDisposed = true;
     disposeAttachmentIntake();
     editorBuild++;
@@ -914,6 +920,16 @@ const contextPreview = useContextPreview({ threadId: () => props.threadId, model
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const tabDrafts = useWorkspaceTabDrafts();
+// Whose draft this composer is editing, captured at restore so a late capture
+// after a workspace or account change still lands with its original owner.
+let draftScope = tabDrafts.scope();
+const draftAccountId = computed(() => getCachedSessionContext()?.user?.id ?? 'local');
+// Bumped by every change to what the user sees in the composer. A send clears
+// only the revision it submitted, so text typed while it was being prepared
+// survives even if it later matches the submitted text.
+let composerRevision = 0;
+watch([promptText, () => attachments.value.slice(), () => largeTextBlocks.value.slice()],
+    () => { composerRevision++; }, { flush: 'sync' });
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
 let autoCompactionAttempt: string | undefined;
@@ -948,6 +964,7 @@ async function compactFromSettings() {
     await props.compactThread?.();
 }
 const restoringDraft = ref(false);
+let draftContentLoading = false;
 let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -966,7 +983,9 @@ function scheduleDraftCapture(tabId = props.tabId): void {
 }
 
 function captureDraft(tabId = props.tabId): void {
-    if (!tabId) return;
+    // Until saved content is applied the composer holds nothing the user wrote;
+    // capturing now would overwrite the saved draft with an empty one.
+    if (!tabId || draftContentLoading) return;
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
@@ -981,8 +1000,34 @@ function captureDraft(tabId = props.tabId): void {
             imageSettings: { ...imageSettings.value },
         },
         updatedAt: Date.now(),
-    });
+    }, draftScope);
 }
+
+/** Page hide can land inside the capture debounce, so save what the composer holds right now. */
+function saveDraftNow(): void {
+    clearDraftCaptureTimer();
+    captureDraft();
+    void tabDrafts.flush();
+}
+function saveDraftWhenHidden(): void {
+    if (document.visibilityState === 'hidden') saveDraftNow();
+}
+
+// Local storage refused a draft: it is still in this tab and being retried.
+watch(tabDrafts.saveFailed, (failed) => {
+    if (!failed) {
+        toast.remove('draft-save-failed');
+        return;
+    }
+    toast.add({
+        id: 'draft-save-failed',
+        title: 'Draft could not be saved',
+        description: 'Your unsent message is still here, but it will not survive a reload. Browser storage may be full or blocked.',
+        color: 'warning',
+        duration: 0,
+        actions: [{ label: 'Retry', onClick: () => void tabDrafts.flush() }],
+    });
+});
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revision = ++draftRestoreRevision;
@@ -990,15 +1035,39 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
         restoringDraft.value = false;
         return;
     }
-    const draft = tabDrafts.read(tabId);
     restoringDraft.value = true;
+    // The editor stays editable while saved content loads; anything typed meanwhile wins.
+    const revisionBeforeLoad = composerRevision;
+    let keptTypedText = false;
     try {
-        promptText.value = draft?.text ?? '';
-        replaceDraft(draft?.attachments ?? [], draft?.largeTextBlocks ?? []);
-        editor.value?.commands.setContent(
-            draft?.editorJson ?? draft?.text ?? '',
-            { emitUpdate: false }
-        );
+        const scope = tabDrafts.scope();
+        let draft: WorkspaceChatTabDraft | undefined;
+        if (tabDrafts.isLoaded(tabId, scope)) {
+            draft = tabDrafts.read(tabId, scope);
+        } else {
+            draftContentLoading = true;
+            draft = await tabDrafts.load(tabId, scope);
+            if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
+        }
+        draftContentLoading = false;
+        draftScope = scope;
+        keptTypedText = composerRevision !== revisionBeforeLoad;
+        if (!keptTypedText) {
+            promptText.value = draft?.text ?? '';
+            replaceDraft(draft?.attachments ?? [], draft?.largeTextBlocks ?? []);
+            editor.value?.commands.setContent(
+                draft?.editorJson ?? draft?.text ?? '',
+                { emitUpdate: false }
+            );
+            if (draft?.missingAttachments?.length) {
+                toast.add({
+                    title: 'Attach these files again',
+                    description: `${draft.missingAttachments.map((item) => item.name).join(', ')} could not be restored after the reload.`,
+                    color: 'warning',
+                    duration: 8000,
+                });
+            }
+        }
         if (draft?.composer) {
             // Migrate legacy drafts that stored the web-search toggle.
             restoreDraftModel(draft.composer.model, sanitizeModelVariant(
@@ -1025,10 +1094,14 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             ));
         }
     } finally {
+        // A newer restore owns the flag; only the latest one may release it.
+        if (revision === draftRestoreRevision) draftContentLoading = false;
         await nextTick();
         if (!componentDisposed && revision === draftRestoreRevision) {
             restoringDraft.value = false;
             autoResize();
+            // Capture was paused while loading; what the user typed must still reach the store.
+            if (keptTypedText) scheduleDraftCapture(tabId);
         }
     }
 }
@@ -1041,6 +1114,12 @@ watch(
         await restoreDraft(next);
     }
 );
+// A different account in the same workspace must not see, or inherit, this text.
+watch(draftAccountId, () => {
+    clearDraftCaptureTimer();
+    captureDraft(props.tabId);
+    void restoreDraft(props.tabId);
+});
 
 watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
@@ -1219,6 +1298,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         const submittedAttachments = attachments.value.slice();
         const submittedLargeTexts = largeTextBlocks.value.slice();
         const submittedTabId = props.tabId; const submittedThreadId = props.threadId;
+        const submittedRevision = composerRevision;
         const submittedWorkspaceGeneration = getWorkspaceGeneration();
         const submittedSettings = {
             model: selectedModel.value,
@@ -1283,14 +1363,12 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         // Admission can await model/server preparation while the user edits or
         // navigates. Clear only the exact submitted draft in its owning view.
         if (getWorkspaceGeneration() !== submittedWorkspaceGeneration || props.tabId !== submittedTabId
-            || submittedThreadId && props.threadId !== submittedThreadId || promptText.value !== submittedText
-            || JSON.stringify(editor.value?.getJSON?.()) !== JSON.stringify(submittedEditorDoc)
-            || attachments.value.length !== submittedAttachments.length || attachments.value.some((row, index) => row !== submittedAttachments[index])
-            || largeTextBlocks.value.length !== submittedLargeTexts.length || largeTextBlocks.value.some((row, index) => row !== submittedLargeTexts[index])) {
+            || submittedThreadId && props.threadId !== submittedThreadId
+            || composerRevision !== submittedRevision || draftScope.key !== tabDrafts.scope().key) {
             return await sendResult;
         }
         clearDraftCaptureTimer();
-        tabDrafts.discard(props.tabId);
+        tabDrafts.discard(props.tabId, draftScope);
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';
         try {

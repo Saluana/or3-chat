@@ -21,7 +21,7 @@ import { markRecentOpId } from './recent-op-cache';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 /** Tables that should be captured for sync */
-const SYNCED_TABLES = [
+export const SYNCED_TABLES = [
     'threads',
     'messages',
     'projects',

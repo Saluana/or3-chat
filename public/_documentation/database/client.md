@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `26` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `27` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -71,6 +71,12 @@ and due-range indexes, reducing index maintenance during capture and draining.
 Version 20 removes the unused standalone `snapshot_staging.generation` index.
 Staged rows and the active-generation sentinel are preserved; page reads keep
 using `[generation+sequence]`.
+
+Version 27 adds two local-only recovery tables that are never synchronized or
+captured: `sync_quarantine` (corrupt outbox operations set aside with
+diagnostics; see the [sync layer](/documentation/cloud/sync-layer)) and
+`workspace_tab_drafts` (unsent composer drafts, scoped by account within the
+workspace database).
 
 ---
 

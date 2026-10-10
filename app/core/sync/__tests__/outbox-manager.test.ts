@@ -17,10 +17,12 @@ import { OutboxManager } from '../outbox-manager';
 import { _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
 import { Or3DB } from '~/db/client';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import {
     createMemoryTable,
     createMockDb,
     createPendingOpsTable,
+    testUuid,
 } from './sync-test-utils';
 
 const hookState = vi.hoisted(() => ({
@@ -1615,5 +1617,261 @@ describe('OutboxManager fairness (real Dexie)', () => {
         } finally {
             nowSpy.mockRestore();
         }
+    });
+});
+
+
+describe('OutboxManager quarantine (real Dexie)', () => {
+    const databases: Or3DB[] = [];
+    const scope = { workspaceId: 'quarantine-ws' };
+
+    beforeEach(() => {
+        hookState.doAction.mockClear();
+        _resetSyncCircuitBreaker();
+    });
+
+    afterEach(async () => {
+        for (const db of databases.splice(0)) {
+            db.close();
+            await Dexie.delete(db.name);
+        }
+        vi.restoreAllMocks();
+    });
+
+    async function freshDb(): Promise<Or3DB> {
+        const db = new Or3DB(`or3-test-quarantine-${crypto.randomUUID()}`);
+        await db.open();
+        databases.push(db);
+        return db;
+    }
+
+    function message(id: string, content: string) {
+        return {
+            id, thread_id: 'thread-1', role: 'user' as const, index: 0, order_key: '2:0:local',
+            data: { content }, deleted: false, created_at: 1, updated_at: 2,
+            clock: 2, hlc: '2:0:local', op_id: testUuid(`${id}-op`),
+        };
+    }
+
+    function document(id: string, title: string) {
+        return {
+            id, title, content: '{"type":"doc"}', postType: 'doc', deleted: false,
+            created_at: 1, updated_at: 2, clock: 2, hlc: '2:0:local', op_id: testUuid(`${id}-op`),
+        };
+    }
+
+    function corruptPut(tableName: 'messages' | 'posts', id: string, overrides: Partial<PendingOp> = {}): PendingOp {
+        return {
+            id: `pending-${id}`, tableName, operation: 'put', pk: id, payload: undefined,
+            stamp: { clock: 2, hlc: '2:0:local', opId: testUuid(`${id}-op`), deviceId: 'local' },
+            createdAt: 5, attempts: 0, status: 'pending', ...overrides,
+        };
+    }
+
+    function manager(db: Or3DB, provider = new SpyProvider()) {
+        return new OutboxManager(db, provider, scope);
+    }
+
+    it('preserves corrupt operations, rebuilds them from local rows and pushes the recovered content', async () => {
+        const db = await freshDb();
+        await db.messages.put(message('m1', 'my unsent reply'));
+        await db.posts.put(document('d1', 'My notes'));
+        const originals = [corruptPut('messages', 'm1'), corruptPut('posts', 'd1', { status: 'failed_permanent' })];
+        await db.pending_ops.bulkPut(originals);
+
+        const provider = new SpyProvider();
+        const pushed: PushBatch['ops'] = [];
+        provider.push = vi.fn(async (batch: PushBatch) => {
+            pushed.push(...batch.ops);
+            return { results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })), serverVersion: 1 };
+        });
+        const outbox = manager(db, provider);
+
+        await expect(outbox.quarantineCorruptOps()).resolves.toEqual({ quarantined: 2, repaired: 2 });
+
+        // Nothing was lost: originals and local content are retained.
+        const quarantined = await outbox.getQuarantined();
+        expect(quarantined.map((entry) => entry.op)).toEqual(expect.arrayContaining(originals));
+        expect(quarantined.every((entry) => entry.diagnostics.length > 0 && entry.localRow)).toBe(true);
+        expect(await db.messages.get('m1')).toMatchObject({ data: { content: 'my unsent reply' } });
+
+        // A second run finds nothing new and creates no duplicate recovery work.
+        await expect(outbox.quarantineCorruptOps()).resolves.toEqual({ quarantined: 0, repaired: 0 });
+        const queued = await db.pending_ops.toArray();
+        expect(queued).toHaveLength(2);
+        expect(queued.every((op) => op.status === 'pending' && !originals.some((o) => o.stamp.opId === op.stamp.opId))).toBe(true);
+
+        // The rebuilt operations actually reach the provider with the real content.
+        await outbox.flush();
+        const byPk = new Map(pushed.map((op) => [op.pk, op]));
+        expect(byPk.get('m1')?.payload).toMatchObject({ data: { content: 'my unsent reply' } });
+        expect(byPk.get('d1')?.payload).toMatchObject({ title: 'My notes' });
+        expect(byPk.get('m1')?.stamp.opId).toBe((await db.messages.get('m1'))?.op_id);
+    });
+
+    it('keeps ambiguous operations unresolved and exportable until explicitly discarded', async () => {
+        const db = await freshDb();
+        const orphan = corruptPut('messages', 'orphan');
+        const stale = corruptPut('messages', 'stale');
+        await db.messages.put({ ...message('stale', 'edited on another device'), clock: 9, hlc: '9:0:remote', op_id: testUuid('remote-op') });
+        await db.pending_ops.bulkPut([orphan, stale]);
+        const outbox = manager(db);
+
+        await expect(outbox.quarantineCorruptOps()).resolves.toEqual({ quarantined: 2, repaired: 0 });
+
+        expect(await db.pending_ops.count()).toBe(0);
+        const exported = JSON.parse(await outbox.exportQuarantined()) as { entries: Array<{ id: string; status: string; op: PendingOp; localRow?: unknown }> };
+        expect(exported.entries.map((entry) => [entry.id, entry.status]).sort()).toEqual([
+            ['pending-orphan', 'quarantined'], ['pending-stale', 'quarantined'],
+        ]);
+        expect(exported.entries.find((entry) => entry.id === 'pending-stale')?.localRow).toMatchObject({ op_id: testUuid('remote-op') });
+        // The local row is untouched by an ambiguous outcome.
+        expect(await db.messages.get('stale')).toMatchObject({ op_id: testUuid('remote-op'), clock: 9 });
+
+        await expect(outbox.discardQuarantined('pending-orphan')).resolves.toBe(true);
+        await expect(outbox.discardQuarantined('pending-orphan')).resolves.toBe(false);
+        expect((await db.sync_quarantine.get('pending-orphan'))?.status).toBe('discarded');
+        expect((await db.sync_quarantine.get('pending-stale'))?.status).toBe('quarantined');
+    });
+
+    it('rebuilds a malformed delete under a new revision, re-stamps the tombstone, and leaves intact operations alone', async () => {
+        const db = await freshDb();
+        await db.tombstones.put({
+            id: 'messages:gone', tableName: 'messages', pk: 'gone', deletedAt: 7,
+            clock: 4, hlc: '4:0:local', opId: testUuid('gone-delete-op'),
+        });
+        const intact = {
+            ...corruptPut('messages', 'fine'),
+            payload: sanitizePayloadForSync('messages', message('fine', 'ok'), 'put'),
+        };
+        await db.pending_ops.bulkPut([
+            { ...corruptPut('messages', 'gone'), operation: 'delete', stamp: { clock: 4, hlc: '', opId: testUuid('gone-delete-op'), deviceId: 'local' } },
+            intact,
+        ]);
+
+        await expect(manager(db).quarantineCorruptOps()).resolves.toEqual({ quarantined: 1, repaired: 1 });
+
+        const queued = await db.pending_ops.toArray();
+        expect(queued.find((op) => op.id === intact.id)).toEqual(intact);
+        const rebuilt = queued.find((op) => op.pk === 'gone')!;
+        // The payload is rebuilt, so a server that already saw the original op_id must not see it again.
+        expect(rebuilt).toMatchObject({ operation: 'delete', status: 'pending', stamp: { clock: 4 } });
+        expect(rebuilt.stamp.opId).not.toBe(testUuid('gone-delete-op'));
+        expect(rebuilt.stamp.hlc).not.toBe('');
+        // The tombstone carries the same tuple, as live capture would leave it.
+        expect(await db.tombstones.get('messages:gone')).toMatchObject({
+            clock: 4, hlc: rebuilt.stamp.hlc, opId: rebuilt.stamp.opId,
+        });
+    });
+
+    it('treats a stamp the push schema rejects as corrupt and rebuilds it from the local row', async () => {
+        const db = await freshDb();
+        const row = { ...message('m-legacy', 'legacy identity'), op_id: 'legacy-not-a-uuid' };
+        await db.messages.put(row);
+        const stamp = { clock: 2, hlc: '2:0:local', opId: 'legacy-not-a-uuid', deviceId: 'local' };
+        const payload = sanitizePayloadForSync('messages', row, 'put');
+        await db.pending_ops.bulkPut([
+            { ...corruptPut('messages', 'm-legacy'), payload, stamp },
+            { ...corruptPut('messages', 'm-nodevice'), payload: sanitizePayloadForSync('messages', message('m-nodevice', 'x'), 'put'),
+                stamp: { clock: 2, hlc: '2:0:local', opId: testUuid('m-nodevice-op') } as never },
+        ]);
+        await db.messages.put(message('m-nodevice', 'no device on the stamp'));
+
+        await expect(manager(db).quarantineCorruptOps()).resolves.toEqual({ quarantined: 2, repaired: 2 });
+
+        const queued = await db.pending_ops.toArray();
+        expect(queued).toHaveLength(2);
+        for (const op of queued) {
+            expect(op.stamp.opId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+            expect(op.stamp.deviceId).toBeTruthy();
+        }
+        expect(await db.messages.get('m-legacy')).toMatchObject({ data: { content: 'legacy identity' } });
+    });
+
+    it('keeps an oversized message quarantined instead of failing the whole run', async () => {
+        const db = await freshDb();
+        await db.messages.put(message('m-huge', 'x'.repeat(300 * 1024)));
+        await db.messages.put(message('m-fine', 'fine'));
+        await db.pending_ops.bulkPut([corruptPut('messages', 'm-huge'), corruptPut('messages', 'm-fine')]);
+
+        // Sanitizing the oversized row throws; that must not roll back the healthy repair next to it.
+        await expect(manager(db).quarantineCorruptOps()).resolves.toEqual({ quarantined: 2, repaired: 1 });
+
+        const huge = await db.sync_quarantine.get('pending-m-huge');
+        expect(huge).toMatchObject({ status: 'quarantined' });
+        expect(huge?.resolution).toMatch(/not valid for sync/);
+        expect((huge?.localRow as { data: { content: string } }).data.content).toHaveLength(300 * 1024);
+        expect(await db.messages.get('m-huge')).toBeDefined();
+    });
+
+    it('resolves a corrupt operation without new work when a newer queued operation already covers the record', async () => {
+        const db = await freshDb();
+        await db.messages.put({ ...message('m-newer', 'second edit'), clock: 3, hlc: '3:0:local', op_id: testUuid('second-op') });
+        const newer: PendingOp = {
+            ...corruptPut('messages', 'm-newer'), id: 'pending-newer',
+            payload: sanitizePayloadForSync('messages', { ...message('m-newer', 'second edit'), clock: 3, hlc: '3:0:local', op_id: testUuid('second-op') }, 'put'),
+            stamp: { clock: 3, hlc: '3:0:local', opId: testUuid('second-op'), deviceId: 'local' },
+        };
+        await db.pending_ops.bulkPut([corruptPut('messages', 'm-newer'), newer]);
+
+        await expect(manager(db).quarantineCorruptOps()).resolves.toEqual({ quarantined: 1, repaired: 0 });
+
+        expect(await db.pending_ops.toArray()).toEqual([newer]);
+        expect(await db.sync_quarantine.get('pending-m-newer')).toMatchObject({ status: 'repaired' });
+    });
+
+    it('bounds resolved history but never prunes unresolved entries', async () => {
+        const db = await freshDb();
+        const now = Date.now();
+        const entry = (id: string, status: 'repaired' | 'quarantined', resolvedAt?: number) => ({
+            id, tableName: 'messages', pk: id, status, source: 'manual' as const, op: {}, diagnostics: ['x'],
+            quarantinedAt: 1, resolvedAt,
+        });
+        await db.sync_quarantine.bulkPut([
+            ...Array.from({ length: 205 }, (_, i) => entry(`resolved-${i}`, 'repaired', now - i)),
+            entry('expired', 'repaired', now - 31 * 24 * 60 * 60 * 1000),
+            entry('unresolved-old', 'quarantined'),
+        ]);
+        await db.pending_ops.put(corruptPut('messages', 'trigger'));
+
+        await manager(db).quarantineCorruptOps();
+
+        const ids = new Set((await db.sync_quarantine.toArray()).map((row) => row.id));
+        expect(ids.has('unresolved-old')).toBe(true);
+        expect(ids.has('expired')).toBe(false);
+        expect([...ids].filter((id) => id.startsWith('resolved-'))).toHaveLength(200);
+        expect(ids.has('resolved-0')).toBe(true);
+        expect(ids.has('resolved-204')).toBe(false);
+    });
+
+    it('prunes resolved history after a discard and at startup, not only after a manual run', async () => {
+        const db = await freshDb();
+        const now = Date.now();
+        const entry = (id: string, status: 'repaired' | 'quarantined', resolvedAt?: number) => ({
+            id, tableName: 'messages', pk: id, status, source: 'manual' as const, op: {}, diagnostics: ['x'],
+            quarantinedAt: 1, resolvedAt,
+        });
+        await db.sync_quarantine.bulkPut([
+            ...Array.from({ length: 205 }, (_, i) => entry(`resolved-${i}`, 'repaired', now - i)),
+            entry('open', 'quarantined'),
+        ]);
+        const resolved = async () => (await db.sync_quarantine.where('status').anyOf('repaired', 'discarded').count());
+        const outbox = manager(db);
+
+        await expect(outbox.discardQuarantined('open')).resolves.toBe(true);
+        expect(await resolved()).toBe(200);
+
+        // A later session starts with more resolved history than the bound allows.
+        await db.sync_quarantine.bulkPut(Array.from({ length: 30 }, (_, i) => entry(`later-${i}`, 'repaired', now + 1 + i)));
+        expect(await resolved()).toBe(230);
+        await outbox.flush();
+        expect(await resolved()).toBe(200);
+    });
+
+    it('refuses to run while a push owns the queue', async () => {
+        const db = await freshDb();
+        const outbox = manager(db);
+        (outbox as unknown as { flushOwner: symbol | null }).flushOwner = Symbol('busy');
+        await expect(outbox.quarantineCorruptOps()).rejects.toThrow(/push is running/);
     });
 });

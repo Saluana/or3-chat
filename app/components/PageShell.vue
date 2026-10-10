@@ -717,7 +717,60 @@ const workspaceTabs = useWorkspaceTabs({
             color: 'error',
         });
     },
+    onPersistenceIssue(issue) {
+        const id = `workspace-tabs-persistence-${issue.kind}`;
+        if (issue.kind === 'corrupt_layout') {
+            // Stays until the user decides what to do with the unreadable original.
+            toast.add({
+                id,
+                title: 'Saved tab layout was unreadable',
+                description: issue.message,
+                color: 'warning',
+                duration: 0,
+                // The notice can outlive a workspace or profile switch, so its actions
+                // are bound to the layout it was raised for, not the active one.
+                actions: issue.backupKept
+                    ? [
+                          { label: 'Download original', onClick: () => downloadCorruptLayoutBackup(issue.key) },
+                          {
+                              label: 'Discard original',
+                              onClick: () => {
+                                  workspaceTabs.discardCorruptLayoutBackup(issue.key);
+                                  toast.remove(id);
+                              },
+                          },
+                      ]
+                    : [],
+            });
+            return;
+        }
+        toast.add({
+            id,
+            title: 'Tab layout could not be saved',
+            description: 'Your open tabs will not be restored after a reload. Storage may be full or blocked.',
+            color: 'warning',
+            actions: [
+                {
+                    label: 'Retry',
+                    onClick: () => {
+                        if (workspaceTabs.retryPersistence()) toast.remove(id);
+                    },
+                },
+            ],
+        });
+    },
 });
+/** Saves the unreadable tab layout the persistence layer copied aside, so it can be inspected or reported. */
+function downloadCorruptLayoutBackup(layoutKey: string): void {
+    const raw = workspaceTabs.getCorruptLayoutBackup(layoutKey);
+    if (!raw) return;
+    const url = URL.createObjectURL(new Blob([raw], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'or3-tab-layout-backup.txt';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 const workspaceScopeId = ref<string | null>(
     process.client ? getActiveWorkspaceId() : null
 );
