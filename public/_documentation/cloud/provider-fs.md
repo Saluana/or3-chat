@@ -65,6 +65,21 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
   octet-stream attachment with `X-Content-Type-Options: nosniff`; supported
   raster images and PDFs may remain inline.
 
+## Usage accounting
+
+The matching provider adds **Observe Storage Usage** to the System provider
+actions. It reports logical active/deleted metadata separately from observed
+active/deleted blobs, incomplete transfers, sidecars, unclassified files and
+allocated filesystem blocks. Results are bounded, non-atomic observations:
+inspect completion flags, nullable values and warnings before interpreting them.
+No category is a deletion candidate list. Logical Trash can reduce logical quota
+without reclaiming disk bytes.
+
+Retained metadata accounting requires the sync provider's
+`retainedStorageMetadata: 'v1'` capability. Older providers keep that field
+unknown; the observer does not probe unsupported queries or replay history.
+Physical deletion stays disabled regardless of this accounting capability.
+
 ## Related
 
 - [Choose and wire providers](/documentation/cloud/providers)

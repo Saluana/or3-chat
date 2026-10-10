@@ -28,6 +28,10 @@
                 </UButton>
             </div>
         </div>
+        <section v-if="result" role="status" class="mt-4 space-y-2 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] p-4">
+            <h4 class="font-medium">{{ result.label }} result</h4>
+            <pre class="max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs">{{ JSON.stringify(result.value, null, 2) }}</pre>
+        </section>
     </div>
 </template>
 
@@ -44,6 +48,7 @@ interface Action {
 defineProps<{
     actions: Action[];
     isOwner: boolean;
+    result?: { label: string; value: unknown } | null;
 }>();
 
 const emit = defineEmits<{
