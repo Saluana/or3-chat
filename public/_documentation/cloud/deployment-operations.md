@@ -127,6 +127,57 @@ points at the compatible exact-target CLI. Unknown future schemas are refused
 before mutation. `status --json` emits a public projection that excludes
 credential-reset recovery payloads and raw configuration.
 
+## Backup progress, downtime, and recovery
+
+Standalone `npx @or3/cloud backup` reports separate preflight, maintenance,
+capture, restart, verification, and retention steps. The pending operation's
+`backupProgress` in `status --json` records the last observed service and
+artifact states separately; a recorded milestone is not a fresh health probe.
+
+The service is stopped while the complete `/data` archive, configuration, and
+managed assets are captured. This includes the separate Basic Auth and sync
+databases, their remaining SQLite journals/WAL files, and filesystem blobs.
+After capture, a previously running service is restarted and deep-health
+checked **before** archive/configuration hashing, manifest authentication, and
+restore-reader validation. Those checks use only the captured files. The
+reported maintenance interval covers the stop request through successful
+restart/deep health, not the total backup duration. Archive compression still
+takes place during downtime, so larger volumes can still take substantial time.
+
+This is a shorter stopped-volume backup, not an online snapshot. Pre-update,
+restore, and rollback safety snapshots keep the source stopped through
+verification so target mutation never overlaps resumed source writes. A
+standalone backup never starts a service that was intentionally stopped.
+
+Backup verification and service recovery can fail independently:
+
+- Verification failure means the new artifact is not a trusted restore point,
+  even if OR3 has already restarted successfully.
+- Restart failure does not discard a backup that passes verification. The
+  diagnostic names the retained verified path and leaves recovery pending.
+- Cleanup errors are reported alongside the original error. Each operation-owned
+  backup directory and export receipt is reported as present, confirmed absent,
+  or uninspectable; removal is never inferred from an attempted delete. A failed
+  streaming cleanup also names its temporary `.partial` file.
+- If interruption precedes the recorded artifact-creation milestone, recovery
+  only inspects the named backup directory and export receipt. Existing or
+  uninspectable paths are preserved and reported for inspection, because a
+  pre-existing name collision cannot be distinguished from an interrupted mkdir.
+- Retention runs after the new backup is committed. Retention failure is a
+  maintenance warning and does not invalidate the backup or re-open the operation.
+
+From the deployment directory, inspect `npx @or3/cloud status`,
+`npx @or3/cloud backup list`, and `npx @or3/cloud recover --dry-run`. Inspect the
+exact paths and permissions named in the error, then run `npx @or3/cloud recover`
+to retry standalone-backup recovery. Recovery attempts the required service
+restart independently of artifact cleanup; if either fails the operation stays
+pending. It preserves verified backups and the intentionally stopped state.
+Do not manually remove recovery locks or use an unverified partial artifact.
+
+See the [backup consistency design](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-backup-consistency.md)
+for the barriers and restore evidence required before online database-plus-file
+backups can replace this stopped-volume boundary.
+
 ## Dashboard updates
 
 For managed Linux deployments using a local Docker socket, super admins can

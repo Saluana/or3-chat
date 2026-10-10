@@ -359,7 +359,10 @@ test('lifecycle commands are deadline-bound and power-loss durable', () => {
 
 test('updates and recovery use journaled snapshots rather than resuming a partial target', () => {
   const cli = cloudCliSource();
-  expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');
+  const backup = cloudModule('backup/create.ts');
+  const captureAssets = backup.indexOf('await snapshotManagedAssets(directory, state.mode, backupDir)');
+  expect(captureAssets).toBeGreaterThan(-1);
+  expect(captureAssets).toBeLessThan(backup.indexOf('await startProject(directory, state.mode, env)'));
   expect(cli).toContain('await copyAssets(loaded.directory, state.mode);');
   expect(cli).toContain('async function restorePreMutationSnapshot(');
   expect(cli).toContain("phase: 'target-mutating'");
