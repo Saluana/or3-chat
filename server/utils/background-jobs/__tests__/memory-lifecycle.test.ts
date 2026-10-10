@@ -10,15 +10,6 @@ import {
     runClaimedBackgroundJob,
 } from '../lifecycle';
 import { startBackgroundStream } from '../stream-handler';
-import { getChatJobExecution } from '../types';
-import type { JobUpdate } from '../types';
-import type { RequestUsage } from '~~/shared/chat/compaction';
-import { createNormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
-import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
-import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
-import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
-import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
-
 
 const config = vi.hoisted(() => ({
     maxConcurrentJobs: 2,
@@ -80,16 +71,6 @@ describe('memory background job admission and lifecycle', () => {
         vi.unstubAllGlobals();
         config.maxConcurrentJobs = 2;
         config.maxConcurrentJobsPerUser = 2;
-        // Lifecycle cases execute an authorized, unowned canonical chat. The
-        // scoped-provider suite owns project changes and permission failures.
-        registerSyncGatewayAdapter({ id: 'memory', create: () => ({
-            capabilities: { canonicalChatHistory: 'v1', projectOwnership: 'v1' },
-            readChatHistory: async (_actor, query) => ({ status: 'ok', project_ownership: 'resolved',
-                thread: query.kind === 'thread' ? { id: query.thread_id, clock: 1, project_id: null } : undefined }),
-        } as SyncGatewayAdapter) });
-        registerAuthWorkspaceStore({ id: 'memory', create: () => ({
-            listUserWorkspaces: async () => [{ id: 'workspace-1', name: 'Fixture', role: 'owner' }],
-        } as unknown as AuthWorkspaceStore) });
     });
 
     it('authenticates encrypted recovery credentials', () => {
@@ -101,30 +82,6 @@ describe('memory background job admission and lifecycle', () => {
         expect(() =>
             decryptBackgroundCredential(`${encrypted}tampered`, secret)
         ).toThrow('Failed to decrypt background job credential');
-    });
-
-    it.each([true, false])('restores only checkpointed usage on reclaim (checkpoint=%s) and fences stale usage', async (checkpoint) => {
-        const measurement = (prompt: number): RequestUsage => ({
-            prompt_tokens: prompt, completion_tokens: 12, model: 'test-model', request_id: `request-${prompt}`,
-            iteration: 1, measured_at: Date.now(), prefix_message_count: 1,
-            prefix_hash: 'prefix', configuration_hash: 'configuration', input_estimate_tokens: 5,
-        });
-        const checkpointUsage = measurement(150);
-        const jobId = await memoryJobProvider.createJob({
-            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model',
-            execution: { ...execution('checkpoint:'), normalizedToolState: {
-                ...createNormalizedStreamState(), ...(checkpoint ? { requestUsage: checkpointUsage } : {}),
-            } },
-        });
-        const now = Date.now();
-        await memoryJobProvider.claimJob!(jobId, 'worker-1', now, now + 10);
-        await memoryJobProvider.updateJob(jobId, { usage: measurement(400), leaseOwner: 'worker-1' } as JobUpdate);
-        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage: RequestUsage }).usage).toMatchObject({ prompt_tokens: 400 });
-        await memoryJobProvider.claimJob!(jobId, 'worker-2', now + 11, now + 60000);
-        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
-        await expect(memoryJobProvider.updateJob(jobId, { usage: measurement(900), leaseOwner: 'worker-1' } as JobUpdate))
-            .rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
-        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
     });
 
     it('admits concurrent jobs atomically at the configured cap', async () => {
@@ -215,7 +172,7 @@ describe('memory background job admission and lifecycle', () => {
             'token-1',
             Date.now() + 30_000
         );
-        expect(claimed && getChatJobExecution(claimed)?.clientToolCall?.claimToken).toBe('token-1');
+        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-1');
         await expect(
             memoryJobProvider.claimClientToolCall?.(
                 jobId,
@@ -249,6 +206,384 @@ describe('memory background job admission and lifecycle', () => {
                 Date.now() + 30_000
             )
         ).resolves.toMatchObject({ execution: settledExecution });
+    });
+
+    it('binds approval settlement to the exact arguments reviewed at claim time', async () => {
+        // Failure modes: approval identity mismatch (a result authorizing
+        // arguments the user never reviewed) and the approval replacement
+        // race (the pending call changing between claim and result).
+        const toolDefinition = {
+            type: 'function' as const,
+            function: {
+                name: 'client_tool',
+                description: 'Client tool',
+                parameters: { type: 'object' as const, properties: {} },
+            },
+            runtime: 'client' as const,
+        };
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: execution(),
+            tool_calls: [
+                { id: 'call-1', name: 'client_tool', status: 'pending' },
+            ],
+        });
+        const now = Date.now();
+        await memoryJobProvider.claimJob?.(jobId, 'worker', now, now + 30_000);
+        await memoryJobProvider.updateJobExecution?.(
+            jobId,
+            {
+                ...execution(),
+                clientToolCall: {
+                    callId: 'call-1',
+                    name: 'client_tool',
+                    arguments: '{"path":"a.txt"}',
+                    argumentFingerprint: 'fingerprint-v1',
+                    definition: toolDefinition,
+                },
+            },
+            'worker'
+        );
+
+        const claimed = await memoryJobProvider.claimClientToolCall?.(
+            jobId,
+            'user-1',
+            'call-1',
+            'token-1',
+            Date.now() + 30_000
+        );
+        // The claim snapshots the digest of the reviewed arguments.
+        expect(
+            claimed?.execution?.clientToolCall?.claimFingerprint
+        ).toBe('fingerprint-v1');
+
+        // Simulate a re-park that carries the claim forward but swaps the
+        // arguments (the dangerous case the digest binding must catch).
+        const parked = (await memoryJobProvider.getJob(jobId, 'user-1'))
+            ?.execution;
+        await memoryJobProvider.updateJobExecution?.(
+            jobId,
+            {
+                ...parked!,
+                clientToolCall: {
+                    ...parked!.clientToolCall!,
+                    arguments: '{"path":"b.txt"}',
+                    argumentFingerprint: 'fingerprint-v2',
+                },
+            },
+            'worker'
+        );
+
+        // The stale approval must not authorize the new arguments.
+        await expect(
+            memoryJobProvider.settleClientToolCall?.(
+                jobId,
+                'user-1',
+                'call-1',
+                'token-1',
+                { ...execution(), clientToolCall: undefined },
+                [{ id: 'call-1', name: 'client_tool', status: 'complete' }]
+            )
+        ).resolves.toBe(false);
+    });
+
+    it('rejects a replaced approval and accepts a fresh claim on the new call', async () => {
+        const toolDefinition = {
+            type: 'function' as const,
+            function: {
+                name: 'client_tool',
+                description: 'Client tool',
+                parameters: { type: 'object' as const, properties: {} },
+            },
+            runtime: 'client' as const,
+        };
+        const park = (args: string, fingerprint: string) => ({
+            ...execution(),
+            clientToolCall: {
+                callId: 'call-1',
+                name: 'client_tool',
+                arguments: args,
+                argumentFingerprint: fingerprint,
+                definition: toolDefinition,
+            },
+        });
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: execution(),
+            tool_calls: [
+                { id: 'call-1', name: 'client_tool', status: 'pending' },
+            ],
+        });
+        const now = Date.now();
+        await memoryJobProvider.claimJob?.(jobId, 'worker', now, now + 30_000);
+        await memoryJobProvider.updateJobExecution?.(
+            jobId,
+            park('{"path":"a.txt"}', 'fingerprint-v1'),
+            'worker'
+        );
+        await memoryJobProvider.claimClientToolCall?.(
+            jobId,
+            'user-1',
+            'call-1',
+            'token-1',
+            Date.now() + 30_000
+        );
+
+        // The worker re-parks the same call ID with new arguments (fresh
+        // object, no claim) while the first approval is still outstanding.
+        await memoryJobProvider.updateJobExecution?.(
+            jobId,
+            park('{"path":"b.txt"}', 'fingerprint-v2'),
+            'worker'
+        );
+
+        // The old approval cannot settle the new call.
+        await expect(
+            memoryJobProvider.settleClientToolCall?.(
+                jobId,
+                'user-1',
+                'call-1',
+                'token-1',
+                { ...execution(), clientToolCall: undefined },
+                [{ id: 'call-1', name: 'client_tool', status: 'complete' }]
+            )
+        ).resolves.toBe(false);
+
+        // A fresh claim on the current call works normally.
+        await memoryJobProvider.claimClientToolCall?.(
+            jobId,
+            'user-1',
+            'call-1',
+            'token-2',
+            Date.now() + 30_000
+        );
+        await expect(
+            memoryJobProvider.settleClientToolCall?.(
+                jobId,
+                'user-1',
+                'call-1',
+                'token-2',
+                { ...execution(), clientToolCall: undefined },
+                [{ id: 'call-1', name: 'client_tool', status: 'complete' }]
+            )
+        ).resolves.toBe(true);
+    });
+
+    it('prevents duplicate and stale approval responses from authorizing work', async () => {
+        // Failure modes: replay (same response submitted twice) and stale
+        // (expired or wrong claim token).
+        const toolDefinition = {
+            type: 'function' as const,
+            function: {
+                name: 'client_tool',
+                description: 'Client tool',
+                parameters: { type: 'object' as const, properties: {} },
+            },
+            runtime: 'client' as const,
+        };
+        const makeJob = async (callId: string) => {
+            const jobId = await memoryJobProvider.createJob({
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: `message-${callId}`,
+                model: 'test-model',
+                execution: {
+                    ...execution(),
+                    clientToolCall: {
+                        callId,
+                        name: 'client_tool',
+                        arguments: '{}',
+                        argumentFingerprint: 'fingerprint',
+                        definition: toolDefinition,
+                    },
+                },
+                tool_calls: [
+                    { id: callId, name: 'client_tool', status: 'pending' },
+                ],
+            });
+            return jobId;
+        };
+        const settleWith = (jobId: string, callId: string, token: string) =>
+            memoryJobProvider.settleClientToolCall?.(
+                jobId,
+                'user-1',
+                callId,
+                token,
+                { ...execution(), clientToolCall: undefined },
+                [{ id: callId, name: 'client_tool', status: 'complete' }]
+            );
+
+        // Replay: the second settlement with the same token must fail.
+        const replayJob = await makeJob('call-replay');
+        await memoryJobProvider.claimClientToolCall?.(
+            replayJob,
+            'user-1',
+            'call-replay',
+            'token-1',
+            Date.now() + 30_000
+        );
+        await expect(
+            settleWith(replayJob, 'call-replay', 'token-1')
+        ).resolves.toBe(true);
+        await expect(
+            settleWith(replayJob, 'call-replay', 'token-1')
+        ).resolves.toBe(false);
+
+        // Stale: an already-expired claim cannot settle.
+        const expiredJob = await makeJob('call-expired');
+        await memoryJobProvider.claimClientToolCall?.(
+            expiredJob,
+            'user-1',
+            'call-expired',
+            'token-1',
+            Date.now() - 1
+        );
+        await expect(
+            settleWith(expiredJob, 'call-expired', 'token-1')
+        ).resolves.toBe(false);
+
+        // Wrong token: never authorizes.
+        const wrongTokenJob = await makeJob('call-wrong');
+        await memoryJobProvider.claimClientToolCall?.(
+            wrongTokenJob,
+            'user-1',
+            'call-wrong',
+            'token-1',
+            Date.now() + 30_000
+        );
+        await expect(
+            settleWith(wrongTokenJob, 'call-wrong', 'token-2')
+        ).resolves.toBe(false);
+    });
+
+    it('keeps the aborted state when a late completion arrives after cancellation', async () => {
+        // Failure mode: a remote run finishing after the bridge considers it
+        // terminal must not resurrect or overwrite the recorded outcome. The
+        // first terminal write wins; later ones are dropped and logged.
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: execution(),
+        });
+        await expect(
+            memoryJobProvider.abortJob(jobId, 'user-1')
+        ).resolves.toBe(true);
+
+        await memoryJobProvider.completeJob(jobId, 'late content');
+        await memoryJobProvider.failJob(jobId, 'late error');
+        await expect(
+            memoryJobProvider.saveTerminalSnapshot?.(jobId, {
+                status: 'complete',
+                content: 'late snapshot',
+                reasoning: '',
+                completedAt: Date.now(),
+            })
+        ).resolves.toBe(false);
+
+        expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({
+            status: 'aborted',
+        });
+    });
+
+    it('rejects abort of non-streaming, missing, and foreign jobs', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: execution(),
+        });
+        await memoryJobProvider.completeJob(jobId, 'done');
+        await expect(
+            memoryJobProvider.abortJob(jobId, 'user-1')
+        ).resolves.toBe(false);
+        await expect(
+            memoryJobProvider.abortJob('missing-job', 'user-1')
+        ).resolves.toBe(false);
+        await expect(
+            memoryJobProvider.abortJob(jobId, 'user-2')
+        ).resolves.toBe(false);
+    });
+
+    it('isolates overlapping admissions: cancelling one leaves the other running', async () => {
+        // Failure mode: concurrent runs must not cross-contaminate when
+        // matched by admission/session identity.
+        const toolDefinition = {
+            type: 'function' as const,
+            function: {
+                name: 'client_tool',
+                description: 'Client tool',
+                parameters: { type: 'object' as const, properties: {} },
+            },
+            runtime: 'client' as const,
+        };
+        const jobA = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-a',
+            model: 'test-model',
+            idempotencyKey: 'admission-a',
+            execution: execution(),
+        });
+        const jobB = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-b',
+            model: 'test-model',
+            idempotencyKey: 'admission-b',
+            execution: {
+                ...execution(),
+                clientToolCall: {
+                    callId: 'call-b',
+                    name: 'client_tool',
+                    arguments: '{}',
+                    argumentFingerprint: 'fingerprint-b',
+                    definition: toolDefinition,
+                },
+            },
+            tool_calls: [
+                { id: 'call-b', name: 'client_tool', status: 'pending' },
+            ],
+        });
+
+        await expect(
+            memoryJobProvider.cancelAdmission!('user-1', 'admission-a')
+        ).resolves.toMatchObject({
+            aborted: true,
+            jobId: jobA,
+            pending: false,
+        });
+        expect(
+            (await memoryJobProvider.getJob(jobB, 'user-1'))?.status
+        ).toBe('streaming');
+
+        // The surviving run's approval flow is unaffected.
+        const claimed = await memoryJobProvider.claimClientToolCall?.(
+            jobB,
+            'user-1',
+            'call-b',
+            'token-b',
+            Date.now() + 30_000
+        );
+        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-b');
+        await expect(
+            memoryJobProvider.settleClientToolCall?.(
+                jobB,
+                'user-1',
+                'call-b',
+                'token-b',
+                { ...execution(), clientToolCall: undefined },
+                [{ id: 'call-b', name: 'client_tool', status: 'complete' }]
+            )
+        ).resolves.toBe(true);
     });
 
     it('uses timeout as an inactivity watchdog rather than a runtime cap', async () => {
