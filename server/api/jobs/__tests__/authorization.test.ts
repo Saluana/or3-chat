@@ -3,6 +3,8 @@ import * as h3 from 'h3';
 import { memoryJobProvider, clearAllJobs } from '../../../utils/background-jobs/providers/memory';
 import { resetJobProvider } from '../../../utils/background-jobs/store';
 import type { BackgroundJobExecution } from '../../../utils/background-jobs/types';
+import { backgroundClientToolDigest } from '../../../../shared/chat/background-client-tool-claim';
+import { backgroundJobClientToolIdentity } from '../../../utils/background-jobs/client-tool-identity';
 import type { RequestUsage } from '../../../../shared/chat/compaction';
 import { emitJobDelta, emitJobStatus, hasJobViewers, resetJobViewersForTests } from '../../../utils/background-jobs/viewers';
 import { createTrustedPluginServerServices } from '../../../utils/background-jobs/plugin-server-services';
@@ -88,6 +90,86 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             execution: { workspaceId: 'revoked-workspace' } as BackgroundJobExecution,
         });
     }
+
+    async function createBoundToolJob() {
+        membership.role = 'editor';
+        const execution: BackgroundJobExecution = { version: 1, workspaceId: 'revoked-workspace',
+            body: { _clientDeviceId: 'device', messages: [] }, referer: 'http://chat.example.test', apiKeyCiphertext: 'test',
+            clientToolCall: { callId: 'call', name: 'client-tool', arguments: '{}', argumentFingerprint: 'unchanged-diagnostic',
+                definition: { type: 'function', function: { name: 'client-tool', description: 'Client tool', parameters: { type: 'object' } } } } };
+        const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'test', execution });
+        const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+        const digest = backgroundClientToolDigest(backgroundJobClientToolIdentity(job)!);
+        const claimToken = `or3ct1.${digest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`;
+        return { jobId, execution, claimToken };
+    }
+
+    async function postTool(jobId: string, operation: 'claim' | 'validate' | 'result', body: Record<string, unknown>) {
+        const handler = operation === 'claim' ? (await import('../[id]/client-tool/claim.post')).default
+            : operation === 'validate' ? (await import('../[id]/client-tool/validate.post')).default
+                : (await import('../[id]/client-tool/result.post')).default;
+        const server = createServer(h3.toNodeListener(h3.createApp().use(h3.createRouter().post('/api/jobs/:id/client-tool/' + operation, handler))));
+        await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+        const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        try {
+            const response = await fetch(`${origin}/api/jobs/${jobId}/client-tool/${operation}`, {
+                method: 'POST', headers: { origin, 'content-type': 'application/json', 'x-or3-tool-intent': operation }, body: JSON.stringify(body),
+            });
+            return { status: response.status, body: await response.json() };
+        } finally {
+            server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+        }
+    }
+
+    it('rejects a changed snapshot returned by the atomic claim before giving it to the browser', async () => {
+        const { jobId, execution } = await createBoundToolJob();
+        const original = memoryJobProvider.claimClientToolCall!.bind(memoryJobProvider);
+        vi.spyOn(memoryJobProvider, 'claimClientToolCall').mockImplementation(async (...args) => {
+            execution.clientToolCall!.arguments = '{"destination":"different"}';
+            return original(...args);
+        });
+        const response = await postTool(jobId, 'claim', { callId: 'call', deviceId: 'device' });
+        expect(response.status).toBe(409);
+        expect(response.body).not.toHaveProperty('claimToken');
+    });
+
+    it.each(['expired', 'replaced', 'aborted', 'arguments', 'name'] as const)(
+        'refuses pre-execution validation when the claim is %s', async (changed) => {
+            const { jobId, execution, claimToken } = await createBoundToolJob();
+            await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);
+            if (changed === 'expired') execution.clientToolCall!.claimExpiresAt = Date.now() - 1;
+            if (changed === 'replaced') execution.clientToolCall!.claimToken = 'replacement-token';
+            if (changed === 'aborted') await memoryJobProvider.abortJob(jobId, 'former-member');
+            if (changed === 'arguments') execution.clientToolCall!.arguments = '{"changed":true}';
+            if (changed === 'name') execution.clientToolCall!.name = 'other-tool';
+            expect((await postTool(jobId, 'validate', { callId: 'call', claimToken })).status).toBe(409);
+        }
+    );
+
+    it('rechecks a claim replaced while workspace authorization is awaiting', async () => {
+        const { jobId, claimToken } = await createBoundToolJob();
+        await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);
+        membership.onLookup = async () => { await memoryJobProvider.abortJob(jobId, 'former-member'); };
+        expect((await postTool(jobId, 'validate', { callId: 'call', claimToken })).status).toBe(409);
+    });
+
+    it('validates a live payload-bound claim without changing its state', async () => {
+        const { jobId, execution, claimToken } = await createBoundToolJob();
+        await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);
+        const before = structuredClone(execution);
+        expect(await postTool(jobId, 'validate', { callId: 'call', claimToken })).toMatchObject({ status: 200, body: { valid: true } });
+        expect(execution).toEqual(before);
+    });
+
+    it('rejects a result for changed actual arguments even when the diagnostic fingerprint is stale', async () => {
+        const { jobId, execution, claimToken } = await createBoundToolJob();
+        await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);
+        execution.clientToolCall!.arguments = '{"changed":true}';
+        const settle = vi.spyOn(memoryJobProvider, 'settleClientToolCall');
+        expect((await postTool(jobId, 'result', { callId: 'call', claimToken, result: 'old-result' })).status).toBe(409);
+        expect(settle).not.toHaveBeenCalled();
+        expect(execution.clientToolCall?.argumentFingerprint).toBe('unchanged-diagnostic');
+    });
 
     it.each(['status', 'status?offset=25', 'stream'])(
         'carries only validated usage through authorized %s snapshots', async (endpoint) => {
@@ -534,6 +616,9 @@ describe('background job workspace authorization at the HTTP boundary', () => {
                 ...(operation === 'result' ? { claimToken: 'token', claimExpiresAt: Date.now() + 30_000 } : {}),
             } };
         const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'test', execution });
+        const claimDigest = backgroundClientToolDigest(backgroundJobClientToolIdentity((await memoryJobProvider.getJob(jobId, 'former-member'))!)!);
+        const claimToken = `or3ct1.${claimDigest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`;
+        if (operation === 'result') execution.clientToolCall!.claimToken = claimToken;
         vi.stubGlobal('useRuntimeConfig', () => ({ sync: { provider: 'sqlite' }, backgroundJobs: { storageProvider: 'memory', encryptionKey: 'test-background-encryption-key-with-32-characters' }, security: { proxy: {}, allowedOrigins: [] } }));
         const handler = operation === 'claim' ? (await import('../[id]/client-tool/claim.post')).default
             : (await import('../[id]/client-tool/result.post')).default;
@@ -543,7 +628,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         try {
             const response = await fetch(`${origin}/api/jobs/${jobId}/client-tool/${operation}`, {
                 method: 'POST', headers: { origin, 'content-type': 'application/json', 'x-or3-tool-intent': operation },
-                body: JSON.stringify({ callId: 'call', deviceId: 'device', claimToken: 'token', result: 'result' }),
+                body: JSON.stringify({ callId: 'call', deviceId: 'device', claimToken, result: 'result' }),
             });
             expect(response.status).toBe(status);
             const current = await memoryJobProvider.getJob(jobId, 'former-member');
@@ -562,6 +647,37 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         })));
         expect((await send(new Request('http://chat.example.test/workflow'))).status).toBe(403);
         expect(await memoryJobProvider.getActiveJobCount!()).toBe(0);
+    });
+
+    it('round-trips payload-bound claims through the published SQLite provider and HTTP routes', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'or3-bound-tool-'));
+        try {
+            const path = join(directory, 'jobs.sqlite');
+            await runMigrations(await initializeSqliteDb({ path, driver: 'better-sqlite3' }));
+            const { execution } = await createBoundToolJob();
+            const provider = new SqliteBackgroundJobProvider();
+            registerBackgroundJobProvider('sqlite', provider);
+            vi.stubGlobal('useRuntimeConfig', () => ({ auth: { enabled: true }, sync: { provider: 'sqlite' },
+                backgroundJobs: { storageProvider: 'sqlite', encryptionKey: 'test-background-encryption-key-with-32-characters' },
+                security: { proxy: {}, allowedOrigins: [] } }));
+            const jobId = await provider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'test', execution });
+            const claimed = await postTool(jobId, 'claim', { callId: 'call', deviceId: 'device' });
+            expect(claimed.status).toBe(200);
+            expect(claimed.body.claimToken).toMatch(/^or3ct1\.[a-f0-9]{64}\./);
+            await destroySqliteDb();
+            await initializeSqliteDb({ path, driver: 'better-sqlite3' });
+            const persisted = await provider.getJob(jobId, 'former-member');
+            expect((persisted?.execution as BackgroundJobExecution).clientToolCall?.claimToken).toBe(claimed.body.claimToken);
+            expect((await postTool(jobId, 'validate', { callId: 'call', claimToken: claimed.body.claimToken })).status).toBe(200);
+            expect((await postTool(jobId, 'result', { callId: 'call', claimToken: claimed.body.claimToken, result: 'verified-result' })).status).toBe(200);
+            const settled = (await provider.getJob(jobId, 'former-member'))!.execution as BackgroundJobExecution;
+            expect(settled.clientToolCall).toBeUndefined();
+            expect(settled.body.messages).toContainEqual(expect.objectContaining({ role: 'tool', tool_call_id: 'call' }));
+            expect((await postTool(jobId, 'result', { callId: 'call', claimToken: claimed.body.claimToken, result: 'duplicate' })).status).toBe(409);
+        } finally {
+            await destroySqliteDb(); resetJobProvider(); resetBackgroundJobProviders();
+            await rm(directory, { recursive: true, force: true });
+        }
     });
 
     it('persists canonical workflow scope in published SQLite and excludes it from chat recovery', async () => {
@@ -688,5 +804,24 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         await loaded.exports.cleanup!._handler(ctx, { retention_ms: 1 });
         expect(documents.has('workflow')).toBe(false);
         expect(documents.has('chat')).toBe(true);
+
+        // Existing provider token transport must remain opaque, including the
+        // new digest prefix. Exercise the actual shipped claim/settle handlers.
+        const pending = { callId: 'call', name: 'client-tool', arguments: '{}', argumentFingerprint: 'diagnostic',
+            definition: { type: 'function', function: { name: 'client-tool', parameters: { type: 'object' } } } };
+        const boundExecution = { version: 1, workspaceId: 'revoked-workspace', body: {}, clientToolCall: pending };
+        documents.set('bound-tool', { _id: 'bound-tool', user_id: 'former-member', thread_id: 't', message_id: 'm',
+            status: 'streaming', execution: boundExecution, started_at: now, last_activity_at: now });
+        const digest = backgroundClientToolDigest({ jobId: 'bound-tool', userId: 'former-member', workspaceId: 'revoked-workspace',
+            threadId: 't', messageId: 'm', call: { id: pending.callId, name: pending.name, arguments: pending.arguments, definition: pending.definition } });
+        const token = `or3ct1.${digest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`;
+        const claimArgs = { job_id: 'bound-tool', user_id: 'former-member', call_id: 'call', claim_token: token, claim_expires_at: Date.now() + 30_000 };
+        expect(await loaded.exports.claimClientTool!._handler(ctx, claimArgs))
+            .toMatchObject({ execution: { clientToolCall: { claimToken: token } } });
+        expect(await loaded.exports.claimClientTool!._handler(ctx, claimArgs)).toBeNull();
+        const settleArgs = { ...claimArgs, execution: { ...boundExecution, clientToolCall: undefined }, tool_calls: [] };
+        expect(await loaded.exports.settleClientTool!._handler(ctx, { ...settleArgs, claim_token: `${token}altered` })).toBe(false);
+        expect(await loaded.exports.settleClientTool!._handler(ctx, settleArgs)).toBe(true);
+        expect(await loaded.exports.settleClientTool!._handler(ctx, settleArgs)).toBe(false);
     });
 });

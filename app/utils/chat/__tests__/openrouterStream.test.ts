@@ -6,6 +6,7 @@ import {
     openRouterStream,
     openRouterStreamWithRetry,
     startBackgroundStream,
+    BackgroundAdmissionUncertainError,
     isBackgroundStreamingEnabled,
     waitForJobCompletion,
     pollJobStatus,
@@ -687,9 +688,12 @@ describe('background streaming helpers', () => {
             history: testHistory(),
             responseTimeoutMs: 20,
         });
-        const assertion = expect(start).rejects.toBeInstanceOf(
-            OpenRouterTimeoutError
-        );
+        const assertion = expect(start).rejects.toMatchObject({
+            name: 'BackgroundAdmissionUncertainError',
+            backgroundAdmissionUncertain: true,
+            admissionId: expect.any(String),
+            cause: expect.any(OpenRouterTimeoutError),
+        });
 
         await vi.advanceTimersByTimeAsync(600);
 
@@ -734,6 +738,64 @@ describe('background streaming helpers', () => {
         );
     });
 
+
+    it.each(['streaming', 'complete', 'error', 'aborted'] as const)(
+        'recovers a committed %s job after all start responses are lost', async (status) => {
+            vi.useRealTimers();
+            const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+                if (url.startsWith('/api/jobs/admission/')) return createJsonResponse({
+                    jobId: 'recovered-job', status, historyVersion: 1,
+                    threadId: 't1', messageId: 'm1',
+                });
+                throw new TypeError('response lost');
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            const result = await startBackgroundStream({
+                apiKey: 'key', model: 'model-1', threadId: 't1', messageId: 'm1',
+                admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'],
+            });
+            expect(result).toEqual({ jobId: 'recovered-job', status: 'streaming', historyVersion: 1 });
+            expect(fetchMock).toHaveBeenCalledTimes(4);
+            expect(fetchMock.mock.calls[3]![0]).toBe('/api/jobs/admission/admission-1?workspaceId=workspace-1');
+        }
+    );
+
+    it('does not recover an admission into another thread or message', async () => {
+        vi.useRealTimers();
+        const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+            if (url.startsWith('/api/jobs/admission/')) return createJsonResponse({
+                jobId: 'wrong-job', status: 'streaming', historyVersion: 1,
+                threadId: 'other-thread', messageId: 'm1',
+            });
+            throw new TypeError('response lost');
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(startBackgroundStream({
+            apiKey: 'key', model: 'model-1', threadId: 't1', messageId: 'm1',
+            admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'],
+        })).rejects.toMatchObject({ name: 'BackgroundAdmissionUncertainError', admissionId: 'admission-1' });
+    });
+
+
+    it.each(['transport', 'json', 'non-json', 'shape'] as const)(
+        'keeps the original admission identity uncertain after %s failure and lookup outage', async (kind) => {
+            vi.useRealTimers();
+            const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+                if (url.startsWith('/api/jobs/admission/')) return createJsonResponse({ error: 'unavailable' }, 503);
+                if (kind === 'transport') throw new TypeError('response lost');
+                if (kind === 'json') return new Response('{', { headers: { 'content-type': 'application/json' } });
+                if (kind === 'non-json') return new Response('<html>proxy</html>');
+                return createJsonResponse({ jobId: 'maybe-committed' });
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            await expect(startBackgroundStream({
+                apiKey: 'key', model: 'model-1', threadId: 't1', messageId: 'm1',
+                admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'],
+            })).rejects.toMatchObject({ name: 'BackgroundAdmissionUncertainError',
+                admissionId: 'admission-1', workspaceId: 'workspace-1', backgroundAdmissionRetryable: false });
+            expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/jobs/admission/'))).toHaveLength(1);
+        }
+    );
     it('lets caller abort cancel background admission before a job ID exists', async () => {
         vi.stubGlobal(
             'fetch',
@@ -844,7 +906,7 @@ describe('background streaming helpers', () => {
         }
     );
 
-    it('rejects a non-JSON admission response instead of switching modes', async () => {
+    it('preserves uncertain admission after non-JSON start and failed recovery instead of switching modes', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
             new Response('data: some-sse-payload\n\n', {
                 status: 200,
@@ -863,8 +925,8 @@ describe('background streaming helpers', () => {
                 messageId: 'm1',
                 history: testHistory(),
             })
-        ).rejects.toMatchObject({ backgroundAdmissionRetryable: false });
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        ).rejects.toMatchObject({ backgroundAdmissionRetryable: false, backgroundAdmissionUncertain: true, admissionId: expect.any(String) });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('treats a background capability rejection as terminal and disables the session', async () => {

@@ -122,6 +122,30 @@ to the in-process marker, which is best-effort and logged.
 Admissions created before scoped keys were introduced remain cancellable by their
 known job ID; the new admission-cancellation route does not target their raw keys.
 
+### Admission recovery and cancellation outcomes
+
+After an uncertain start exhausts transport retries, the browser probes
+`GET /api/jobs/admission/:admissionId?workspaceId=...` using the original
+workspace and admission ID. The route requires fresh workspace read access and
+the same scoped key as creation. A provider outage is not reported as a missing
+admission. The browser verifies canonical history, thread, and message identity
+before attaching; completed jobs attach too, so a lost response does not invite
+another paid generation. If recovery cannot establish the result (including a
+malformed successful start response), an explicit uncertain-admission error retains
+the original admission ID. Send and Continue leave canonical rows pending and
+warn against resubmission instead of turning uncertainty into a failed generation.
+
+Cancellation responses distinguish `aborted`, `cancel_requested`,
+`already_terminal`, `abort_rejected`, and `abort_error` (known-job abort also
+returns `not_found`). A recorded admission marker is shown as Stop requested,
+not as confirmed execution termination. The browser only projects an aborted
+assistant row after confirmation; otherwise canonical history stays
+authoritative. A provider's aborted status confirms its cancellation transaction,
+not rollback of a tool side effect or acknowledgement from every remote service.
+Workflow stopped snapshots are projected only from authoritative aborted status;
+refused/failed stops cannot pre-write a stopped workflow. Polling and SSE derive
+the same stopped view after reconnect without mutating terminal provider records.
+
 ### Terminal retention and transport errors
 
 Terminal jobs are retained for 24 hours (`completedJobRetentionMs`) as the
@@ -220,6 +244,25 @@ When tools are included in the background request, the server switches to `consu
   pending rows are restored so browser calls can resume after reload. A local
   execution journal retries completed delivery and reports an unknown outcome
   instead of repeating an interrupted mutation.
+- Browser claims bind a SHA-256 digest of the actual call, admitted definition,
+  and originating user/job/workspace/thread/message to the existing opaque claim
+  token. Diagnostic argument fingerprints do not authorize execution. The claim
+  response, browser snapshot, journal and result route verify this binding.
+  Legacy or mismatched journals report an unknown outcome rather than replaying
+  an old result or automatically repeating a side effect. Corrupt journals fail
+  closed, and age-based cleanup drops retained output while preserving execution
+  tombstones until authoritative terminal cleanup. Logout also scrubs payloads
+  into identity-free tombstones, since signing out does not prove remote jobs
+  stopped; a later sign-in must not repeat a possibly executed mutation.
+- Immediately before entering a browser handler, a bounded validation request
+  checks fresh workspace access, claim token, expiry and current payload. This
+  asynchronous guard runs outside Dexie transactions; transaction-local guards
+  only recheck local identity, expiry and authorization. Normal re-parking uses
+  a fresh claim, so the provider's atomic token comparison fences replacement.
+  These checks cannot roll back a side effect already started, or guarantee
+  revalidation after arbitrary delays inside a third-party tool handler. Manual
+  browser-storage clearing or storage destruction removes replay evidence and
+  remains outside these at-most-once recovery guarantees.
 - Tool outputs are appended as tool messages for follow-on turns.
 - Safety cap: max 10 tool loop iterations per job.
 

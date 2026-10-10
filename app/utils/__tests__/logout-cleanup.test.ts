@@ -118,6 +118,15 @@ describe('logoutCleanup', () => {
         );
     });
 
+    it.each(['running', 'settled'])('scrubs %s tool journals without forgetting possible execution', async (status) => {
+        const key = 'or3:bg-client-tool:opaque-job:opaque-call';
+        localStorage.setItem(key, JSON.stringify({ state: status, claimDigest: 'prior-identity',
+            result: 'private tool result', error: 'private detail', createdAt: Date.now() }));
+        const { logoutCleanup } = await import('~/utils/logout-cleanup');
+        await logoutCleanup();
+        expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ state: 'running' });
+    });
+
     it('preserves transient PKCE markers while an OpenRouter callback is completing', async () => {
         localStorage.setItem('openrouter_code_verifier', 'verifier');
         localStorage.setItem('openrouter_state', 'state');

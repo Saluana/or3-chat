@@ -3248,6 +3248,14 @@ export function useChat(
                         // provider failure leaves a false error row behind.
                         throw error;
                     }
+                    if (error instanceof Error && 'backgroundAdmissionUncertain' in error && error.backgroundAdmissionUncertain === true) {
+                        const candidate = nativeRecoveryCandidates.get(requestScope);
+                        if (candidate) candidate.providerAccepted = true;
+                        if (ownsCurrentView(requestScope)) notifyBackgroundAdmissionUncertain();
+                        requestScope.attached.value = false;
+                        return { status: 'detached', requestId, reason: 'detached',
+                            userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+                    }
                     const errMessage =
                         error instanceof Error
                             ? error.message
@@ -3718,6 +3726,9 @@ export function useChat(
                         backgroundStreamingAllowed.value,
                     workspaceId: request.workspaceId,
                     userId: notificationUserId.value,
+                    onBackgroundAdmissionUncertain: () => {
+                        if (request.ownsView()) notifyBackgroundAdmissionUncertain();
+                    },
                     beginBackgroundAdmission: (admissionId, assistantId) => {
                         backgroundJobMode.value = 'background';
                         const continuationScope = activeContinuationScope;
@@ -4099,11 +4110,20 @@ export function useChat(
      * Constraints:
      * - No-op if no active stream is present
      */
+    function notifyBackgroundAdmissionUncertain(): void {
+        toast.add({
+            title: 'Response status unknown',
+            description: 'The server may still be running this response. Wait for it to reconnect before sending again.',
+            color: 'warning',
+            duration: 8000,
+        });
+    }
+
     const backgroundStopsInFlight = new Set<string>();
 
     /**
      * Projects a confirmed stop into UI and durable state. Only call after the
-     * server acknowledged cancellation (job or admission marker). Shared UI
+     * server confirmed the job was aborted. Shared UI
      * state is only touched while the stopped job/admission still owns the
      * visible view, so a late confirmation cannot abort a newer request.
      */
@@ -4140,7 +4160,9 @@ export function useChat(
             messageId: info?.messageId ?? null,
         });
         try {
-            const aborted = await abortBackgroundJob(jobId);
+            const aborted = await abortBackgroundJob(jobId, (state) => {
+                logBgStream('abort-background-outcome', { jobId, state });
+            });
             if (aborted) {
                 logBgStream('abort-background-confirmed', { jobId });
                 await markBackgroundStopped(request);
@@ -4208,9 +4230,7 @@ export function useChat(
         }
         try {
             const result = await abortBackgroundAdmission(admissionId, scope?.workspaceId ?? continuation?.workspaceId);
-            if (result.aborted || result.pending) {
-                // `pending` means the server recorded a cancellation marker that
-                // the admission commit must honor, so projecting stopped is safe.
+            if (result.aborted && (!result.state || result.state === 'aborted')) {
                 await markBackgroundStopped(scope ?? continuation ?? undefined);
                 logBgStream('abort-admission-confirmed', {
                     admissionId,
@@ -4220,7 +4240,19 @@ export function useChat(
                 });
                 return true;
             }
-            logBgStream('abort-admission-unconfirmed', { admissionId });
+            if (result.pending || result.state === 'cancel_requested') {
+                logBgStream('abort-admission-requested', { admissionId, state: result.state, jobId: result.jobId });
+                toast.add({
+                    title: 'Stop requested',
+                    description: 'Cancellation was recorded. The server has not confirmed that execution stopped.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                // Keep canonical history authoritative; a pending marker alone
+                // must not finalize the assistant row as aborted.
+                return false;
+            }
+            logBgStream('abort-admission-unconfirmed', { admissionId, state: result.state });
             toast.add({
                 title: 'Stop not confirmed',
                 description:

@@ -1,3 +1,4 @@
+import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '~~/shared/chat/background-client-tool-claim';
 /**
  * @module app/utils/chat/useAi-internal/backgroundJobs.ts
  *
@@ -41,6 +42,7 @@ import {
     subscribeBackgroundJobStream,
     abortBackgroundJob,
     claimBackgroundClientTool,
+    validateBackgroundClientToolClaim,
     submitBackgroundClientToolResult,
     BackgroundJobPollError,
     type BackgroundJobStatus,
@@ -84,9 +86,10 @@ const CLIENT_TOOL_JOURNAL_PREFIX = 'or3:bg-client-tool:';
 const CLIENT_TOOL_JOURNAL_TTL_MS = 24 * 60 * 60 * 1000;
 let lastClientToolJournalPruneAt = 0;
 
-type ClientToolJournal =
+type ClientToolJournal = (
     | { state: 'running'; createdAt?: number }
-    | { state: 'settled'; result?: string; error?: string; createdAt?: number };
+    | { state: 'settled'; result?: string; error?: string; createdAt?: number }
+) & { claimDigest?: string };
 
 function clientToolJournalKey(jobId: string, callId: string): string {
     return `${CLIENT_TOOL_JOURNAL_PREFIX}${jobId}:${callId}`;
@@ -112,12 +115,18 @@ function pruneClientToolJournals(): void {
             const key = localStorage.key(index);
             if (!key?.startsWith(CLIENT_TOOL_JOURNAL_PREFIX)) continue;
             const journal = readClientToolJournal(key);
-            if (!journal || (journal.createdAt && Date.now() - journal.createdAt > CLIENT_TOOL_JOURNAL_TTL_MS)) {
+            if (!journal) {
                 clearClientToolJournal(key);
+            } else if (journal.createdAt && Date.now() - journal.createdAt > CLIENT_TOOL_JOURNAL_TTL_MS) {
+                // Age is not evidence that the server call finished: provider
+                // timeouts are configurable. Drop retained output, but keep a
+                // tombstone until authoritative terminal cleanup so a
+                // still-pending call cannot repeat a previous side effect.
+                writeClientToolJournal(key, { state: 'running', claimDigest: journal.claimDigest, createdAt: Date.now() });
             }
         }
     } catch {
-        // Journals are also removed at settlement and logout.
+        // Journals are removed only at authoritative settlement/termination.
     }
 }
 
@@ -157,9 +166,17 @@ function readClientToolJournal(key: string): ClientToolJournal | null {
     if (typeof localStorage === 'undefined') return null;
     try {
         const value = localStorage.getItem(key);
-        return value ? (JSON.parse(value) as ClientToolJournal) : null;
+        if (value === null) return null;
+        const parsed: unknown = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && 'state' in parsed &&
+            (parsed.state === 'running' || parsed.state === 'settled')) {
+            return parsed as ClientToolJournal;
+        }
+        // An existing but unreadable record may describe a dispatched mutation.
+        // Preserve an unbound running sentinel so recovery fails closed.
+        return { state: 'running' };
     } catch {
-        return null;
+        return { state: 'running' };
     }
 }
 
@@ -205,8 +222,37 @@ async function executePendingClientTool(
     const abortController = new AbortController();
     const canDispatch = (): boolean => tracker.active && !abortController.signal.aborted;
     const dispatch = (async () => {
-        const claim = await claimBackgroundClientTool(tracker.jobId, callId);
-        if (!claim) return;
+        const returned = await claimBackgroundClientTool(tracker.jobId, callId);
+        if (!returned) return;
+        const claim = structuredClone(returned);
+        if (!claim.call || !claim.context || claim.call.id !== callId || claim.call.name !== toolName ||
+            claim.context.workspaceId !== tracker.workspaceId || claim.context.threadId !== tracker.threadId ||
+            claim.context.messageId !== tracker.messageId || !Number.isFinite(claim.claimExpiresAt)) {
+            throw new Error('Tool claim does not match the originating request.');
+        }
+        const identity = { jobId: tracker.jobId, userId: tracker.userId ?? '',
+            ...claim.context, call: claim.call };
+        // Only documented call fields are identity: the legacy diagnostic digest
+        // is not authorization and must not affect the cryptographic binding.
+        const reviewedIdentity = { ...identity, call: { id: claim.call.id, name: claim.call.name,
+            arguments: claim.call.arguments, definition: claim.call.definition } };
+        const claimDigest = backgroundClientToolDigest(reviewedIdentity);
+        if (claim.claimDigest !== claimDigest || backgroundClientToolTokenDigest(claim.claimToken) !== claimDigest)
+            throw new Error('Tool claim payload does not match its approval binding.');
+        const freeze = (value: unknown): void => {
+            if (!value || typeof value !== 'object') return;
+            for (const child of Object.values(value)) freeze(child);
+            Object.freeze(value);
+        };
+        freeze(claim);
+        const assertLocalClaim = () => {
+            if (!canDispatch() || Date.now() >= claim.claimExpiresAt ||
+                (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
+                getCachedSessionContext()?.user?.id !== tracker.userId ||
+                backgroundClientToolDigest(reviewedIdentity) !== claimDigest) {
+                throw new Error('Tool approval expired or the originating context changed.');
+            }
+        };
         // The claim route can renew the access cookie while the browser still
         // holds the previous session expiry. Refresh before a workspace tool
         // captures authorization, then recheck the originating identity below.
@@ -221,22 +267,31 @@ async function executePendingClientTool(
             claim.context.workspaceId !== tracker.workspaceId
         ) return;
         const journalKey = clientToolJournalKey(tracker.jobId, callId);
+        assertLocalClaim();
         let settled = readClientToolJournal(journalKey);
+        if (settled && settled.claimDigest !== claimDigest) {
+            settled = { state: 'settled', claimDigest,
+                error: 'A previous execution has a different or unknown approval identity. Its outcome is unknown; retry explicitly if needed.' };
+            writeClientToolJournal(journalKey, { ...settled, createdAt: Date.now() });
+        }
         if (settled?.state === 'running') {
             settled = {
                 state: 'settled',
+                claimDigest,
                 error: 'The browser closed while this tool was running, so its outcome is unknown. Retry explicitly if needed.',
             };
             writeClientToolJournal(journalKey, { ...settled, createdAt: Date.now() });
         }
         if (!settled) {
-            if (!writeClientToolJournal(journalKey, { state: 'running', createdAt: Date.now() })) {
+            if (!writeClientToolJournal(journalKey, { state: 'running', claimDigest, createdAt: Date.now() })) {
                 settled = {
                     state: 'settled',
+                    claimDigest,
                     error: 'The browser could not create a durable tool execution journal.',
                 };
             } else {
                 const registry = useToolRegistry();
+                let validationFailed = false;
                 const execution = await registry.executeTool(
                     claim.call.name,
                     claim.call.arguments,
@@ -248,11 +303,28 @@ async function executePendingClientTool(
                         callId: claim.call.id,
                         requestId: tracker.jobId,
                         abortSignal: abortController.signal,
+                        assertToolAuthorized: async () => { assertLocalClaim(); },
                     },
-                    { definition: claim.call.definition }
+                    { definition: claim.call.definition, beforeExecute: async () => {
+                        assertLocalClaim();
+                        try {
+                            await validateBackgroundClientToolClaim({ jobId: tracker.jobId, callId,
+                                claimToken: claim.claimToken, signal: abortController.signal });
+                            assertLocalClaim();
+                        } catch (error) {
+                            validationFailed = true;
+                            throw error;
+                        }
+                    } }
                 );
+                if (validationFailed) throw new Error('Tool approval could not be revalidated; execution remains unconfirmed.');
+                // Logout may have scrubbed the journal while the handler was
+                // finishing. Never put its result back into signed-out storage.
+                if (!canDispatch() || (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
+                    getCachedSessionContext()?.user?.id !== tracker.userId) return;
                 settled = {
                     state: 'settled',
+                    claimDigest,
                     result: execution.error ? undefined : execution.result ?? '',
                     error: execution.error,
                 };
@@ -264,6 +336,7 @@ async function executePendingClientTool(
             (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
             getCachedSessionContext()?.user?.id !== tracker.userId
         ) return;
+        assertLocalClaim();
         await submitBackgroundClientToolResult({
             jobId: tracker.jobId,
             callId,

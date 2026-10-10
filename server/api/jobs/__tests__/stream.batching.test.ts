@@ -339,7 +339,12 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             content: 'full answer', content_length: 11,
             reasoning_text: 'full reasoning', reasoning_length: 14,
             chunksReceived: 3, usage: latestUsage,
-            tool_calls: tools, workflow_state: workflow,
+            tool_calls: tools,
+            workflow_state: {
+                ...workflow,
+                executionState: 'stopped', currentNodeId: null, failedNodeId: 'a', version: 3,
+                result: { success: false, duration: 0, error: 'Workflow stopped by user' },
+            },
         });
         await stream.reader.cancel();
         await stream.consumed;

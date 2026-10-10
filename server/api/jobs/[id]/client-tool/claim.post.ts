@@ -1,6 +1,10 @@
+import { backgroundClientToolDigest } from '~~/shared/chat/background-client-tool-claim';
+import { backgroundJobClientToolIdentity } from '../../../../utils/background-jobs/client-tool-identity';
 import { randomUUID } from 'node:crypto';
+import { getChatJobExecution } from '../../../../utils/background-jobs/types';
 import { createError, defineEventHandler, setHeader } from 'h3';
-import { requireCan, requireSession } from '../../../../auth/can';
+import { requireSession } from '../../../../auth/can';
+import { requireJobWorkspaceAccess } from '../../../../utils/background-jobs/access';
 import { resolveSessionContext } from '../../../../auth/session';
 import { getJobProvider } from '../../../../utils/background-jobs/store';
 import { readLimitedJsonBody } from '../../../../utils/security/limited-json-body';
@@ -24,7 +28,6 @@ export default defineEventHandler(async (event) => {
     requireSession(session);
     const userId = session.user?.id;
     if (!userId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
-    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
     const jobId = getRouterParam(event, 'id');
     const body = await readLimitedJsonBody<{
         callId?: unknown;
@@ -42,45 +45,54 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid tool claim' });
     }
 
+    // Reserve the request after validation but before provider work so
+    // concurrent calls cannot share one slot and invalid requests are free.
+    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
+    recordSyncRequest(userId, 'chat-tool:claim');
     const provider = await getJobProvider();
     if (!provider.claimClientToolCall) {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });
     }
     const current = await provider.getJob(jobId, userId);
-    const workspaceId = current?.execution?.workspaceId;
+    const execution = current ? getChatJobExecution(current) : undefined;
+    const workspaceId = execution?.workspaceId;
     if (!current || !workspaceId) {
         throw createError({ statusCode: 404, statusMessage: 'Job not found' });
     }
-    if (current.execution?.body._clientDeviceId !== deviceId) {
+    if (execution.body._clientDeviceId !== deviceId) {
         throw createError({
             statusCode: 409,
             statusMessage: 'Tool call belongs to another browser device',
         });
     }
-    requireCan(session, 'workspace.write', { kind: 'workspace', id: workspaceId });
+    await requireJobWorkspaceAccess(event, session, workspaceId, 'workspace.write');
 
-    const claimToken = randomUUID();
+    const identity = backgroundJobClientToolIdentity(current);
+    if (!identity || identity.call.id !== callId) throw createError({ statusCode: 409, statusMessage: 'Tool call no longer pending' });
+    const claimDigest = backgroundClientToolDigest(identity);
+    const claimToken = `or3ct1.${claimDigest}.${randomUUID()}`;
+    const claimExpiresAt = Date.now() + CLAIM_TTL_MS;
     const claimed = await provider.claimClientToolCall(
         jobId,
         userId,
         callId,
         claimToken,
-        Date.now() + CLAIM_TTL_MS
+        claimExpiresAt
     );
-    const pending = claimed?.execution?.clientToolCall;
-    if (!claimed || !pending || pending.callId !== callId) {
+    const pending = claimed ? getChatJobExecution(claimed)?.clientToolCall : undefined;
+    const claimedIdentity = claimed ? backgroundJobClientToolIdentity(claimed) : null;
+    if (!claimed || !pending || pending.callId !== callId || !claimedIdentity ||
+        pending.claimToken !== claimToken || backgroundClientToolDigest(claimedIdentity) !== claimDigest) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call already claimed' });
     }
-    recordSyncRequest(userId, 'chat-tool:claim');
     return {
         claimToken,
+        claimExpiresAt,
+        claimDigest,
         call: {
             id: pending.callId,
             name: pending.name,
             arguments: pending.arguments,
-            // Digest of the exact arguments under review. The settlement
-            // binds this approval to this digest; if the parked arguments
-            // change before the result arrives, the approval is rejected.
             argumentFingerprint: pending.argumentFingerprint,
             definition: pending.definition,
         },

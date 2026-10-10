@@ -10,6 +10,17 @@ import {
     runClaimedBackgroundJob,
 } from '../lifecycle';
 import { startBackgroundStream } from '../stream-handler';
+import { backgroundJobClientToolIdentity } from '../client-tool-identity';
+import { backgroundClientToolDigest } from '~~/shared/chat/background-client-tool-claim';
+import { getChatJobExecution } from '../types';
+import type { JobUpdate } from '../types';
+import type { RequestUsage } from '~~/shared/chat/compaction';
+import { createNormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
+import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
+import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
+import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
+import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
+
 
 const config = vi.hoisted(() => ({
     maxConcurrentJobs: 2,
@@ -71,6 +82,16 @@ describe('memory background job admission and lifecycle', () => {
         vi.unstubAllGlobals();
         config.maxConcurrentJobs = 2;
         config.maxConcurrentJobsPerUser = 2;
+        // Lifecycle cases execute an authorized, unowned canonical chat. The
+        // scoped-provider suite owns project changes and permission failures.
+        registerSyncGatewayAdapter({ id: 'memory', create: () => ({
+            capabilities: { canonicalChatHistory: 'v1', projectOwnership: 'v1' },
+            readChatHistory: async (_actor, query) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: query.kind === 'thread' ? { id: query.thread_id, clock: 1, project_id: null } : undefined }),
+        } as SyncGatewayAdapter) });
+        registerAuthWorkspaceStore({ id: 'memory', create: () => ({
+            listUserWorkspaces: async () => [{ id: 'workspace-1', name: 'Fixture', role: 'owner' }],
+        } as unknown as AuthWorkspaceStore) });
     });
 
     it('authenticates encrypted recovery credentials', () => {
@@ -82,6 +103,30 @@ describe('memory background job admission and lifecycle', () => {
         expect(() =>
             decryptBackgroundCredential(`${encrypted}tampered`, secret)
         ).toThrow('Failed to decrypt background job credential');
+    });
+
+    it.each([true, false])('restores only checkpointed usage on reclaim (checkpoint=%s) and fences stale usage', async (checkpoint) => {
+        const measurement = (prompt: number): RequestUsage => ({
+            prompt_tokens: prompt, completion_tokens: 12, model: 'test-model', request_id: `request-${prompt}`,
+            iteration: 1, measured_at: Date.now(), prefix_message_count: 1,
+            prefix_hash: 'prefix', configuration_hash: 'configuration', input_estimate_tokens: 5,
+        });
+        const checkpointUsage = measurement(150);
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model',
+            execution: { ...execution('checkpoint:'), normalizedToolState: {
+                ...createNormalizedStreamState(), ...(checkpoint ? { requestUsage: checkpointUsage } : {}),
+            } },
+        });
+        const now = Date.now();
+        await memoryJobProvider.claimJob!(jobId, 'worker-1', now, now + 10);
+        await memoryJobProvider.updateJob(jobId, { usage: measurement(400), leaseOwner: 'worker-1' } as JobUpdate);
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage: RequestUsage }).usage).toMatchObject({ prompt_tokens: 400 });
+        await memoryJobProvider.claimJob!(jobId, 'worker-2', now + 11, now + 60000);
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
+        await expect(memoryJobProvider.updateJob(jobId, { usage: measurement(900), leaseOwner: 'worker-1' } as JobUpdate))
+            .rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
     });
 
     it('admits concurrent jobs atomically at the configured cap', async () => {
@@ -172,7 +217,7 @@ describe('memory background job admission and lifecycle', () => {
             'token-1',
             Date.now() + 30_000
         );
-        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-1');
+        expect(claimed && getChatJobExecution(claimed)?.clientToolCall?.claimToken).toBe('token-1');
         await expect(
             memoryJobProvider.claimClientToolCall?.(
                 jobId,
@@ -257,13 +302,13 @@ describe('memory background job admission and lifecycle', () => {
         );
         // The claim snapshots the digest of the reviewed arguments.
         expect(
-            claimed?.execution?.clientToolCall?.claimFingerprint
+            (claimed ? getChatJobExecution(claimed) : undefined)?.clientToolCall?.claimFingerprint
         ).toBe('fingerprint-v1');
 
         // Simulate a re-park that carries the claim forward but swaps the
         // arguments (the dangerous case the digest binding must catch).
-        const parked = (await memoryJobProvider.getJob(jobId, 'user-1'))
-            ?.execution;
+        const parkedJob = await memoryJobProvider.getJob(jobId, 'user-1');
+        const parked = parkedJob ? getChatJobExecution(parkedJob) : undefined;
         await memoryJobProvider.updateJobExecution?.(
             jobId,
             {
@@ -573,7 +618,7 @@ describe('memory background job admission and lifecycle', () => {
             'token-b',
             Date.now() + 30_000
         );
-        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-b');
+        expect((claimed ? getChatJobExecution(claimed) : undefined)?.clientToolCall?.claimToken).toBe('token-b');
         await expect(
             memoryJobProvider.settleClientToolCall?.(
                 jobB,
@@ -584,6 +629,29 @@ describe('memory background job admission and lifecycle', () => {
                 [{ id: 'call-b', name: 'client_tool', status: 'complete' }]
             )
         ).resolves.toBe(true);
+    });
+
+    it.each(['arguments', 'name', 'definition'] as const)('atomically rejects changed %s even when diagnostic digest and token are retained', async (field) => {
+        const jobId = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'thread-1',
+            messageId: 'message-1', model: 'test-model', execution: execution() });
+        const now = Date.now();
+        await memoryJobProvider.claimJob!(jobId, 'worker', now, now + 30_000);
+        await memoryJobProvider.updateJobExecution!(jobId, { ...execution(), clientToolCall: {
+            callId: 'call-bound', name: 'client_tool', arguments: '{"path":"a"}', argumentFingerprint: 'unchanged-diagnostic',
+            definition: { type: 'function', function: { name: 'client_tool', description: 'Original', parameters: { type: 'object' } } },
+        } }, 'worker');
+        const before = (await memoryJobProvider.getJob(jobId, 'user-1'))!;
+        const digest = backgroundClientToolDigest(backgroundJobClientToolIdentity(before)!);
+        const token = `or3ct1.${digest}.00000000-0000-4000-8000-000000000000`;
+        const claimed = (await memoryJobProvider.claimClientToolCall!(jobId, 'user-1', 'call-bound', token, now + 30_000))!;
+        const changed = getChatJobExecution(claimed)!;
+        const call = changed.clientToolCall!;
+        if (field === 'arguments') call.arguments = '{"path":"b"}';
+        if (field === 'name') call.name = 'other_tool';
+        if (field === 'definition') call.definition.function.description = 'Replaced';
+        await memoryJobProvider.updateJobExecution!(jobId, changed, 'worker');
+        await expect(memoryJobProvider.settleClientToolCall!(jobId, 'user-1', 'call-bound', token,
+            { ...execution(), clientToolCall: undefined }, [])).resolves.toBe(false);
     });
 
     it('uses timeout as an inactivity watchdog rather than a runtime cap', async () => {

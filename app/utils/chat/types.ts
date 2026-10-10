@@ -152,6 +152,8 @@ export interface ToolExecutionContext {
 /** Immutable admission decision associated with a provider-visible tool call. */
 export interface ToolExecutionAdmission {
     definition: ToolDefinition;
+    /** Async pre-handler revalidation, outside storage transactions. Never forwarded into local authorization guards. */
+    beforeExecute?: () => Promise<void>;
     /**
      * When true, skip the chat-global enablement check.
      * Used by Document AI, which gates tools via its own `enabledTools` map.

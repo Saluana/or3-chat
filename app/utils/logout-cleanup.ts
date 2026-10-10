@@ -117,7 +117,12 @@ export async function logoutCleanup(
         }
         for (let index = 0; index < localStorage.length; index += 1) {
             const key = localStorage.key(index);
-            if (key?.startsWith('or3:bg-client-tool:') || (!options.preservePluginSecrets && key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.')))) keys.push(key);
+            if (key?.startsWith('or3:bg-client-tool:')) {
+                // Logout does not atomically cancel server jobs. Remove all
+                // result/identity data while retaining evidence that this
+                // opaque call may have executed before a later sign-in.
+                localStorage.setItem(key, JSON.stringify({ state: 'running' }));
+            } else if (!options.preservePluginSecrets && key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.'))) keys.push(key);
         }
         keys.forEach((key) => localStorage.removeItem(key));
     }

@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHookEngine, type HookEngine } from '~/core/hooks/hooks';
 import type { RequestUsage } from '~~/shared/chat/compaction';
+import { backgroundClientToolDigest } from '~~/shared/chat/background-client-tool-claim';
 
 const pollJobStatusMock = vi.fn();
 const subscribeBackgroundJobStreamMock = vi.fn();
 const abortBackgroundJobMock = vi.fn();
 const claimBackgroundClientToolMock = vi.fn();
+const validateBackgroundClientToolClaimMock = vi.fn();
 const submitBackgroundClientToolResultMock = vi.fn();
 const executeToolMock = vi.fn();
 const refreshCachedSessionContextMock = vi.fn();
@@ -25,6 +27,18 @@ const BackgroundJobPollErrorMock = vi.hoisted(
 );
 
 let sessionValue: any = null;
+
+async function makeClientToolClaim() {
+    const call = {
+        id: 'call-1', name: 'client_tool', arguments: '{}',
+        definition: { type: 'function' as const, runtime: 'client' as const,
+            function: { name: 'client_tool', description: 'Client tool', parameters: { type: 'object' as const, properties: {} } } },
+    };
+    const context = { workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1' };
+    const claimDigest = await backgroundClientToolDigest({ jobId: 'job-1', userId: 'user-1', ...context, call });
+    return { claimToken: `or3ct1.${claimDigest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`, claimDigest,
+        claimExpiresAt: Date.now() + 30_000, call, context };
+}
 
 const dbMock = {
     name: 'or3-db-workspace-a',
@@ -79,6 +93,8 @@ vi.mock('~/utils/chat/openrouterStream', () => ({
     abortBackgroundJob: (...args: unknown[]) => abortBackgroundJobMock(...args),
     claimBackgroundClientTool: (...args: unknown[]) =>
         claimBackgroundClientToolMock(...args),
+    validateBackgroundClientToolClaim: (...args: unknown[]) =>
+        validateBackgroundClientToolClaimMock(...args),
     submitBackgroundClientToolResult: (...args: unknown[]) =>
         submitBackgroundClientToolResultMock(...args),
     BackgroundJobPollError: BackgroundJobPollErrorMock,
@@ -147,6 +163,7 @@ describe('backgroundJobs reattach + notifications', () => {
         upsertMessageMock.mockResolvedValue(undefined);
         notificationCreateMock.mockResolvedValue(null);
         claimBackgroundClientToolMock.mockResolvedValue(null);
+        validateBackgroundClientToolClaimMock.mockResolvedValue(undefined);
         submitBackgroundClientToolResultMock.mockResolvedValue(undefined);
         executeToolMock.mockResolvedValue({
             result: 'ok',
@@ -334,28 +351,8 @@ describe('backgroundJobs reattach + notifications', () => {
             streamParams = params;
             return () => {};
         });
-        claimBackgroundClientToolMock.mockResolvedValue({
-            claimToken: 'claim-1',
-            call: {
-                id: 'call-1',
-                name: 'client_tool',
-                arguments: '{}',
-                definition: {
-                    type: 'function',
-                    function: {
-                        name: 'client_tool',
-                        description: 'Client tool',
-                        parameters: { type: 'object', properties: {} },
-                    },
-                    runtime: 'client',
-                },
-            },
-            context: {
-                workspaceId: 'workspace-1',
-                threadId: 'thread-1',
-                messageId: 'msg-1',
-            },
-        });
+        const claim = await makeClientToolClaim();
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
         const tracker = mod.ensureBackgroundJobTracker({
             jobId: 'job-1',
@@ -383,7 +380,7 @@ describe('backgroundJobs reattach + notifications', () => {
             expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith({
                 jobId: 'job-1',
                 callId: 'call-1',
-                claimToken: 'claim-1',
+                claimToken: claim.claimToken,
                 result: 'ok',
                 error: undefined,
             });
@@ -398,6 +395,141 @@ describe('backgroundJobs reattach + notifications', () => {
         );
         expect(refreshCachedSessionContextMock).toHaveBeenCalledTimes(expired ? 1 : 0);
 
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it.each(['arguments', 'name', 'callId', 'threadId', 'messageId'] as const)(
+        'refuses a claimed tool whose %s changed without a new binding', async (changed) => {
+            sessionValue = { user: { id: 'user-1' } };
+            const claim = await makeClientToolClaim();
+            if (changed === 'arguments') claim.call.arguments = '{"destination":"unexpected"}';
+            if (changed === 'name') claim.call.name = 'unexpected_tool';
+            if (changed === 'callId') claim.call.id = 'other-call';
+            if (changed === 'threadId') claim.context.threadId = 'other-thread';
+            if (changed === 'messageId') claim.context.messageId = 'other-message';
+            claimBackgroundClientToolMock.mockResolvedValue(claim);
+            let streamParams: any;
+            subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+            const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+                threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+            streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+                { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
+            ] }));
+            await vi.waitFor(() => expect(claimBackgroundClientToolMock).toHaveBeenCalledTimes(1));
+            // Digest validation is asynchronous; drain its promise chain before
+            // asserting that no registry handler or result was authorized.
+            await new Promise((resolve) => setTimeout(resolve, 30));
+            expect(executeToolMock).not.toHaveBeenCalled();
+            expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+            mod.stopBackgroundJobTracking(tracker);
+            mod.backgroundJobTrackers.clear();
+        }
+    );
+
+    it.each([
+        ['running', undefined], ['settled', undefined],
+        ['running', 'different-digest'], ['settled', 'different-digest'],
+        ['corrupt-json', undefined], ['invalid-shape', undefined],
+        ['expired-running', undefined], ['expired-settled', undefined],
+    ] as const)('does not replay a %s journal bound to %s', async (state, claimDigest) => {
+        sessionValue = { user: { id: 'user-1' } };
+        claimBackgroundClientToolMock.mockResolvedValue(await makeClientToolClaim());
+        localStorage.setItem('or3:bg-client-tool:job-1:call-1', state === 'corrupt-json' ? '{' : state === 'invalid-shape' ? 'null' : JSON.stringify({
+            state: state.replace('expired-', ''), claimDigest, result: 'result-for-old-arguments',
+            createdAt: Date.now() - (state.startsWith('expired-') ? 25 * 60 * 60 * 1000 : 0),
+        }));
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+            { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
+        ] }));
+        await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledTimes(1));
+        expect(executeToolMock).not.toHaveBeenCalled();
+        expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith(expect.objectContaining({
+            result: undefined, error: expect.any(String),
+        }));
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('keeps a durable running journal when pre-execution revalidation fails', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        const claim = await makeClientToolClaim();
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
+        validateBackgroundClientToolClaimMock.mockRejectedValue(new Error('Tool claim replaced'));
+        executeToolMock.mockImplementation(async (_name, _args, _context, admission) => {
+            try { await admission.beforeExecute(); }
+            catch (error) { return { result: null, error: (error as Error).message, timedOut: false }; }
+            throw new Error('Rejected revalidation must not reach the tool handler');
+        });
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+            { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
+        ] }));
+        await vi.waitFor(() => expect(validateBackgroundClientToolClaimMock).toHaveBeenCalledTimes(1));
+        await Promise.resolve();
+        expect(JSON.parse(localStorage.getItem('or3:bg-client-tool:job-1:call-1')!))
+            .toMatchObject({ state: 'running', claimDigest: claim.claimDigest });
+        expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('does not restore a late private result after logout scrubbed the journal', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        claimBackgroundClientToolMock.mockResolvedValue(await makeClientToolClaim());
+        let finish!: (value: any) => void;
+        executeToolMock.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+            { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
+        ] }));
+        await vi.waitFor(() => expect(executeToolMock).toHaveBeenCalledOnce());
+        sessionValue = null;
+        const key = 'or3:bg-client-tool:job-1:call-1';
+        localStorage.setItem(key, JSON.stringify({ state: 'running' }));
+        finish({ result: 'private late result', error: undefined });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ state: 'running' });
+        expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('delivers a settled result with the same binding under a fresh claim without reexecution', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        const claim = await makeClientToolClaim();
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
+        localStorage.setItem('or3:bg-client-tool:job-1:call-1', JSON.stringify({
+            state: 'settled', claimDigest: claim.claimDigest, result: 'previously-executed-result', createdAt: Date.now(),
+        }));
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+            { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
+        ] }));
+        await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith({
+            jobId: 'job-1', callId: 'call-1', claimToken: claim.claimToken,
+            result: 'previously-executed-result', error: undefined,
+        }));
+        expect(executeToolMock).not.toHaveBeenCalled();
+        expect(localStorage.getItem('or3:bg-client-tool:job-1:call-1')).toBeNull();
         mod.stopBackgroundJobTracking(tracker);
         mod.backgroundJobTrackers.clear();
     });
