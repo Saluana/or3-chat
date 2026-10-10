@@ -8,8 +8,8 @@ import {
 export const CONNECT_PUBLIC_BODY_LIMIT_BYTES = 8 * 1024;
 
 /**
- * Storage presign requests are small control messages: a workspace id, a hash,
- * a MIME type and a few numbers. The largest valid one is well under 2 KiB.
+ * Storage presign and commit requests are small control messages: identifiers,
+ * a MIME type, a filename and a few numbers. File bytes use a separate upload.
  */
 export const STORAGE_CONTROL_BODY_LIMIT_BYTES = 16 * 1024;
 

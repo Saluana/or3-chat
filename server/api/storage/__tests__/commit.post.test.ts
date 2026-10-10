@@ -1,16 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { testRuntimeConfig } from '../../../../tests/setup';
+import { STORAGE_CONTROL_BODY_LIMIT_BYTES } from '../../../utils/security/limited-json-body';
 
-const readBodyMock = vi.fn();
-const setResponseHeaderMock = vi.fn();
-const setHeaderMock = vi.fn();
+const { readBodyMock, setResponseHeaderMock, setHeaderMock, requireCloudMutationMock } = vi.hoisted(() => ({
+    readBodyMock: vi.fn(),
+    setResponseHeaderMock: vi.fn(),
+    setHeaderMock: vi.fn(),
+    requireCloudMutationMock: vi.fn(),
+}));
 
-vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: requireCloudMutationMock }));
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: (event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()],
+    getRequestHeader: (event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()],
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
@@ -86,6 +92,7 @@ describe('POST /api/storage/commit', () => {
         resetSyncRateLimits();
         testRuntimeConfig.value.limits.operationRateLimits = {};
         readBodyMock.mockReset();
+        requireCloudMutationMock.mockReset();
         setResponseHeaderMock.mockReset();
         setHeaderMock.mockReset();
         resolveSessionContextMock.mockReset().mockResolvedValue({
@@ -173,6 +180,71 @@ describe('POST /api/storage/commit', () => {
         readBodyMock.mockResolvedValue({ workspace_id: 'ws-1' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    describe('bounded commit control body', () => {
+        function streamed(chunks: string[], headers: Record<string, string> = {}): H3Event {
+            return {
+                context: {},
+                method: 'POST',
+                node: { req: { headers, async *[Symbol.asyncIterator]() {
+                    for (const chunk of chunks) yield Buffer.from(chunk);
+                } } },
+            } as unknown as H3Event;
+        }
+
+        it('rejects declared oversize before parsing or authentication', async () => {
+            const handler = (await import('../commit.post')).default;
+            const event = streamed([], { 'content-length': String(STORAGE_CONTROL_BODY_LIMIT_BYTES + 1) });
+            await expect(handler(event)).rejects.toMatchObject({ statusCode: 413 });
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+            expect(commitMock).not.toHaveBeenCalled();
+        });
+
+        it.each([undefined, '1'])('bounds actual streamed bytes with declared length %s', async (length) => {
+            const handler = (await import('../commit.post')).default;
+            const event = streamed(['{"name":"', 'x'.repeat(STORAGE_CONTROL_BODY_LIMIT_BYTES), '"}'],
+                length ? { 'content-length': length } : {});
+            await expect(handler(event)).rejects.toMatchObject({ statusCode: 413 });
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+            expect(commitMock).not.toHaveBeenCalled();
+        });
+
+        it('rejects malformed streamed JSON before authentication', async () => {
+            const handler = (await import('../commit.post')).default;
+            await expect(handler(streamed(['{"workspace_id":']))).rejects.toMatchObject({ statusCode: 400 });
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+        });
+
+        it.each([undefined, 'text/plain', 'application/x-www-form-urlencoded'])('retains real mutation guard rejection for content type %s', async (contentType) => {
+            const actual = await vi.importActual<typeof import('../../../utils/security/cloud-mutation')>('../../../utils/security/cloud-mutation');
+            requireCloudMutationMock.mockImplementation(actual.requireCloudMutation);
+            const handler = (await import('../commit.post')).default;
+            const headers: Record<string, string> = { 'x-or3-cloud-intent': 'mutation', authorization: 'Bearer test-only' };
+            if (contentType) headers['content-type'] = contentType;
+            await expect(handler(streamed([JSON.stringify(makeValidBody())], headers))).rejects.toMatchObject({ statusCode: 415 });
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(resolveSessionContextMock).not.toHaveBeenCalled();
+        });
+
+        it('preserves valid streamed JSON, including exact-limit bodies', async () => {
+            const actual = await vi.importActual<typeof import('../../../utils/security/cloud-mutation')>('../../../utils/security/cloud-mutation');
+            requireCloudMutationMock.mockImplementation(actual.requireCloudMutation);
+            const handler = (await import('../commit.post')).default;
+            const body = makeValidBody();
+            const raw = JSON.stringify(body);
+            const padded = raw + ' '.repeat(STORAGE_CONTROL_BODY_LIMIT_BYTES - Buffer.byteLength(raw));
+            await expect(handler(streamed([padded], {
+                'x-or3-cloud-intent': 'mutation', authorization: 'Bearer test-only',
+                'content-type': 'application/json; charset=utf-8',
+                'content-length': String(STORAGE_CONTROL_BODY_LIMIT_BYTES),
+            }))).resolves.toEqual({ ok: true });
+            expect(readBodyMock).not.toHaveBeenCalled();
+            expect(commitMock).toHaveBeenCalledWith(expect.anything(), body);
+        });
     });
 
     it('returns 401 when user id is missing', async () => {
