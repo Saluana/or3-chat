@@ -146,8 +146,51 @@ async function runRecovery(
   // may have replaced data requires the explicit `--restore --yes` choice.
   const requiresExplicitRestore = decision.action === 'require-explicit-restore';
   try {
+    if (pending.operation === 'backup') {
+      // A failed artifact deletion must not strand a known-good deployment in
+      // maintenance. Recover the service independently, then retry cleanup.
+      const failures: Error[] = [];
+      let service: 'stopped' | 'healthy' | 'unknown' = pending.initialAppRunning === false ? 'stopped' : 'unknown';
+      let artifact = pending.backupProgress?.artifact ?? 'unknown';
+      if (pending.initialAppRunning !== false) {
+        report('Restart: recovering OR3 and checking deep health before backup cleanup.');
+        try {
+          await pullAndRequireImage(loaded.state.image, loaded.state.imageDigest, 'Current deployment');
+          await startProject(loaded.directory, loaded.state.mode, loaded.env);
+          service = 'healthy';
+        } catch (error) {
+          failures.push(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      try {
+        if (artifact !== 'not-created') {
+          const cleanup = await cleanupJournaledPartialBackup(loaded.directory, pending.backupId, pending.backupPath);
+          if (cleanup) {
+            artifact = cleanup.artifact;
+            report(cleanup.detail);
+          }
+        }
+      } catch (error) {
+        artifact = 'unknown';
+        failures.push(error instanceof Error ? error : new Error(String(error)));
+      }
+      const serviceDetail = service === 'healthy' ? 'OR3 is deeply healthy.'
+        : service === 'stopped' ? 'The intentionally stopped OR3 service was preserved.'
+          : 'Service recovery is unverified; OR3 may be unavailable.';
+      if (failures.length > 0) {
+        const message = `${failures.map((error) => error.message).join(' ')} ${serviceDetail}`;
+        pending.backupProgress = { stage: 'failed', service, artifact, message: redact(message, secretValues(loaded.env)) };
+        throw new AggregateError(failures, message);
+      }
+      const completed = structuredClone(loaded.state);
+      completed.lastError = undefined;
+      await clearPending(loaded.directory, completed);
+      const detail = `Recovered the incomplete backup operation. ${serviceDetail}`;
+      report(detail);
+      return { kind: 'recovered', operation: 'backup', detail };
+    }
     if (pending.phase === 'prepared') {
-      if (pending.operation === 'backup' || pending.operation === 'update' || pending.operation === 'adopt') {
+      if (pending.operation === 'update' || pending.operation === 'adopt') {
         await cleanupJournaledPartialBackup(loaded.directory, pending.backupId, pending.backupPath);
       }
       if (pending.operation === 'restore' || pending.operation === 'rollback') {
@@ -247,15 +290,7 @@ async function runRecovery(
       await restoreVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, sourceBackupPath);
     }
 
-    if (pending.operation === 'backup' && pending.initialAppRunning === false) {
-      loaded.state.lastError = undefined;
-      await clearPending(loaded.directory, loaded.state);
-      const detail = 'Recovered the incomplete backup operation and preserved the intentionally stopped OR3 service.';
-      report(detail);
-      return { kind: 'recovered', operation: 'backup', detail };
-    }
-
-    // Init and backup keep the current .env as the intended deployment.
+    // Init keeps the current .env as the intended deployment.
     // Starting is idempotent and commits only its observed image digest after
     // deep health passes. Adoption additionally replays its verified source
     // archive before starting, so a crash cannot silently adopt an empty or
@@ -264,8 +299,7 @@ async function runRecovery(
     await startProject(loaded.directory, loaded.state.mode, loaded.env);
     let recoveredEnv = loaded.env;
     if (
-      (pending.operation === 'init' || pending.operation === 'adopt')
-      && loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL
+      loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL
       && loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD
       && loaded.env.OR3_ADMIN_PASSWORD
     ) {

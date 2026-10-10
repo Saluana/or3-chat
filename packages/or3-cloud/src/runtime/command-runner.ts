@@ -156,10 +156,11 @@ export async function streamCommandToFile(
     child.once('error', reject);
     child.once('close', resolvePromise);
   });
+  const transfer = pipeline(child.stdout, createWriteStream(temporary, { flags: 'wx', mode: 0o600 }));
   try {
     const [exitCode] = await Promise.all([
       exit,
-      pipeline(child.stdout, createWriteStream(temporary, { flags: 'wx', mode: 0o600 })),
+      transfer,
     ]);
     if (hasTimedOut()) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
@@ -169,9 +170,22 @@ export async function streamCommandToFile(
     await durableRename(temporary, destination);
   } catch (error) {
     terminateChildProcess(child);
-    await rm(temporary, { force: true }).catch(() => undefined);
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
+    // Wait for both producer and destination handles before deleting. In
+    // particular, Windows cannot unlink an output still held by the pipeline.
+    // The existing archive deadline remains active until settlement completes.
+    await Promise.allSettled([exit, transfer]);
+    const detail = redact(error instanceof Error ? error.message : String(error), secrets);
+    const message = `${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`;
+    try {
+      await lifecycleFaults.beforeTemporaryArchiveDelete?.();
+      await rm(temporary, { force: true });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        `${message}\nTemporary archive cleanup failed: ${redact(cleanupError instanceof Error ? cleanupError.message : String(cleanupError), secrets)}. Removal is unverified for ${temporary}; inspect this path and its permissions before retrying.`,
+      );
+    }
+    throw new Error(message, { cause: error });
   } finally {
     clearTimeout(timeout);
   }

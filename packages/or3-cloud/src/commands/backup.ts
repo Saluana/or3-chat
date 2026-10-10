@@ -11,6 +11,7 @@ import {
   clearPending,
   loadManaged,
   markPending,
+  updatePending,
   writeState,
 } from '../deployment/state-store';
 import { ensureDocker } from '../runtime/docker';
@@ -34,29 +35,58 @@ async function backupCreateCommand(directory: string) {
     id: id('backup-operation'),
     operation: 'backup',
     startedAt: now(),
-    message: 'Creating a stopped-volume backup',
+    message: 'Preflight: preparing a stopped-volume backup',
     backupId,
     backupPath: backupDirectory(loaded.directory, backupId),
     initialAppRunning,
     phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
+  let result: Awaited<ReturnType<typeof createBackup>> | undefined;
   try {
-    const result = await createBackup(loaded.directory, loaded.state, loaded.env, { backupId, initiallyRunning: initialAppRunning });
-    await clearPending(loaded.directory, loaded.state);
-    // Retention is deliberately after the verified snapshot is committed and
-    // OR3 is healthy. A corrupt older artifact must not turn a successful
-    // backup into an incomplete operation or cause the new copy to be lost.
+    result = await createBackup(loaded.directory, loaded.state, loaded.env, {
+      backupId,
+      initiallyRunning: initialAppRunning,
+      onProgress: async (progress) => {
+        const message = redact(progress.message, secretValues(loaded.env));
+        console.error(message);
+        await updatePending(loaded.directory, loaded.state, { message, backupProgress: { ...progress, message } });
+      },
+    });
+    // Keep the recoverable in-memory state until the terminal write succeeds;
+    // clearPending removes its pending field before attempting that write.
+    const completed = structuredClone(loaded.state);
+    completed.lastError = undefined;
+    await clearPending(loaded.directory, completed);
+    loaded.state = completed;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    loaded.state.lastError = redact(result
+      ? `Verified backup retained at ${result.backupDir}. Completion recording failed: ${detail}. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover".`
+      : detail, secretValues(loaded.env));
+    if (result && loaded.state.incompleteOperation?.backupProgress) {
+      loaded.state.incompleteOperation.backupProgress = {
+        ...loaded.state.incompleteOperation.backupProgress, stage: 'failed', message: loaded.state.lastError,
+      };
+    }
+    try { await writeState(loaded.directory, loaded.state); }
+    catch (stateError) {
+      throw new AggregateError([error, stateError], `${loaded.state.lastError} Could not record the backup failure: ${redact(stateError instanceof Error ? stateError.message : String(stateError), secretValues(loaded.env))}. Keep the existing operation record and run "npx @or3/cloud recover --dry-run".`);
+    }
+    if (result) throw new Error(loaded.state.lastError, { cause: error });
+    throw error;
+  }
+  console.log(`Backup ${result.backupId} created at ${result.backupDir}`);
+  console.log(`SHA-256: ${result.manifest.dataSha256}`);
+  // Retention cannot turn a committed backup into an incomplete operation.
+  console.error('Maintenance: checking backup retention after snapshot verification and service recovery.');
+  try {
     const prune = await pruneBackups(loaded.directory, loaded.state, BACKUP_RETENTION_KEEP, false, { automatic: true });
-    console.log(`Backup ${result.backupId} created at ${result.backupDir}`);
-    console.log(`SHA-256: ${result.manifest.dataSha256}`);
     if (prune.deferred.length > 0) {
       console.warn(`Maintenance warning: ${prune.deferred.length} backup entr${prune.deferred.length === 1 ? 'y' : 'ies'} need inspection; all backups were preserved. Run "npx @or3/cloud backup list" for details.`);
     }
   } catch (error) {
-    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
-    await writeState(loaded.directory, loaded.state);
-    throw error;
+    console.warn(`Maintenance warning: backup ${result.backupId} is verified and committed, but retention did not complete: ${redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env))}. Run "npx @or3/cloud backup list" to inspect the remaining backups.`);
   }
 }
 

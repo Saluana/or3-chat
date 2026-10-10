@@ -392,3 +392,185 @@ crossDevice('a tampered export on another filesystem cannot authorize a purge', 
     await rm(destination, { recursive: true, force: true });
   }
 });
+
+// Failure matrix: capture/delete/restart may fail independently; verification
+// must use captured bytes after restart; progress/terminal writes must never
+// discard a verified artifact or its recovery journal. Exercise the production
+// commands with the same fake Docker processes as the CLI cases above.
+async function inProcess(fixture: Sandbox, run: () => Promise<unknown>) {
+  const previous = process.env.PATH;
+  process.env.PATH = `${join(fixture.root, 'bin')}:${previous}`;
+  try { return await run(); }
+  finally {
+    process.env.PATH = previous;
+    for (const key of Object.keys(lifecycleFaults)) delete lifecycleFaults[key as keyof typeof lifecycleFaults];
+  }
+}
+
+import { createBackup as captureBackup } from '../src/backup/create';
+import { backupCommand } from '../src/commands/backup';
+import { recoverCommand } from '../src/commands/recover';
+import { lifecycleFaults } from '../src/lifecycle-faults';
+import { streamCommandToFile } from '../src/runtime/command-runner';
+import type { BackupProgress } from '../src/deployment/contracts';
+
+for (const restartFails of [false, true]) test(`capture and cleanup errors survive${restartFails ? ' alongside restart failure' : ' service recovery'}`, async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [
+    { match: 'tar czf', message: 'fixture capture failure' },
+    ...(restartFails ? [{ match: 'up -d', message: 'fixture restart failure' }] : []),
+  ] });
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeArtifactDelete = () => { throw new Error('fixture cleanup failure'); };
+    await expect(backupCommand(fixture.directory, [], {})).rejects.toThrow('fixture capture failure');
+    const state = await fixture.readState();
+    expect(state.lastError).toContain('fixture cleanup failure');
+    expect(state.lastError).toContain('Still present:');
+    expect(state.lastError).not.toContain('was removed');
+    expect(state.incompleteOperation?.backupProgress).toMatchObject({ stage: 'failed', artifact: 'unknown', service: restartFails ? 'unknown' : 'healthy' });
+    if (restartFails) expect(state.lastError).toContain('fixture restart failure');
+    expect(await fixture.backupIds()).toHaveLength(1);
+  });
+});
+
+test('cleanup distinguishes a removed backup from an export receipt still present', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: 'tar czf', message: 'fixture capture failure' }] });
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeArtifactDelete = async () => {
+      const [id] = await fixture.backupIds();
+      await rm(join(fixture.cloud, 'backups', id), { recursive: true });
+      await mkdir(join(fixture.cloud, 'exports'), { recursive: true });
+      await writeFile(join(fixture.cloud, 'exports', `${id}.json`), 'receipt');
+      throw new Error('fixture receipt cleanup failure');
+    };
+    await expect(backupCommand(fixture.directory, [], {})).rejects.toThrow('fixture receipt cleanup failure');
+    const state = await fixture.readState();
+    expect(state.lastError).toContain('Confirmed absent:');
+    expect(state.lastError).toContain('Still present:');
+    expect(state.lastError).toContain('.json');
+    expect(state.incompleteOperation?.backupProgress?.artifact).toBe('unknown');
+  });
+});
+
+for (const restartAfter of [true, false]) test(`verification observes ${restartAfter ? 'restarted' : 'stopped pre-mutation'} service`, async () => {
+  const fixture = await sandbox();
+  await inProcess(fixture, async () => {
+    let verified = false;
+    lifecycleFaults.beforeArchiveRead = async () => {
+      verified = true;
+      expect(/compose .* up -d/.test(await fixture.traceText())).toBe(restartAfter);
+    };
+    const phases: BackupProgress[] = [];
+    await captureBackup(fixture.directory, fixture.state, fixture.env, { restartAfter, onProgress: (progress) => { phases.push(progress); } });
+    expect(verified).toBe(true);
+    expect(phases.at(-1)).toMatchObject({ stage: 'complete', artifact: 'verified', service: restartAfter ? 'healthy' : 'stopped' });
+    if (restartAfter) expect(phases.at(-1)!.downtimeMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+test('verification failure happens after restart and leaves no usable backup', async () => {
+  const fixture = await sandbox();
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeArchiveRead = async () => {
+      expect(await fixture.traceText()).toMatch(/compose .* up -d/);
+      throw new Error('fixture verification failure');
+    };
+    await expect(backupCommand(fixture.directory, [], {})).rejects.toThrow('fixture verification failure');
+    expect(await fixture.backupIds()).toEqual([]);
+    expect((await fixture.readState()).incompleteOperation?.backupProgress).toMatchObject({ service: 'healthy', artifact: 'removed', stage: 'failed' });
+  });
+});
+
+test('restart failure retains the verified backup and recovery preserves it', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: 'up -d', message: 'fixture restart failure' }] });
+  await inProcess(fixture, async () => {
+    await expect(backupCommand(fixture.directory, [], {})).rejects.toThrow('Verified backup retained');
+    expect((await fixture.readState()).incompleteOperation?.backupProgress).toMatchObject({ service: 'unknown', artifact: 'verified' });
+  });
+  const ids = await fixture.backupIds();
+  await fixture.configure({ failures: [] });
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(0);
+  expect(await fixture.backupIds()).toEqual(ids);
+});
+
+test('recovery attempts restart even when partial artifact cleanup fails', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: 'tar czf', message: 'fixture archive failure' }] });
+  await fixture.cli(['backup']);
+  await fixture.configure({ failures: [] });
+  await fixture.reset();
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeArtifactDelete = () => { throw new Error('fixture recovery cleanup failure'); };
+    await expect(recoverCommand(fixture.directory)).rejects.toThrow('fixture recovery cleanup failure');
+    expect(await fixture.traceText()).toMatch(/compose .* up -d/);
+    expect((await fixture.readState()).incompleteOperation?.backupProgress).toMatchObject({ service: 'healthy', stage: 'failed' });
+  });
+});
+
+test('stream cleanup retains producer failure and identifies the remaining temporary archive', async () => {
+  const fixture = await sandbox();
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeTemporaryArchiveDelete = () => { throw new Error('fixture temp deletion failure'); };
+    await expect(streamCommandToFile(process.execPath, ['-e', 'console.error("fixture producer failure"); process.exit(1)'], join(fixture.root, 'archive.tgz'))).rejects.toThrow('fixture temp deletion failure');
+    expect((await readdir(fixture.root)).some((name) => name.endsWith('.partial'))).toBe(true);
+  });
+});
+
+test('verification uses captured configuration and assets even after live files change on restart', async () => {
+  const fixture = await sandbox();
+  const originalEnv = await fixture.readEnvText();
+  const originalCompose = await readFile(join(fixture.directory, 'compose.yaml'), 'utf8');
+  await inProcess(fixture, async () => {
+    const result = await captureBackup(fixture.directory, fixture.state, fixture.env, { onProgress: async (progress) => {
+      if (progress.stage === 'verifying') {
+        await writeFile(join(fixture.directory, '.env'), 'changed after capture');
+        await writeFile(join(fixture.directory, 'compose.yaml'), 'changed after capture');
+      }
+    } });
+    expect(result.manifest.configSha256).toBe(sha256(originalEnv));
+    expect(result.manifest.managedAssetSha256?.['compose.yaml']).toBe(sha256(originalCompose));
+  });
+});
+
+test('completion progress failure retains a verified artifact and recovery context', async () => {
+  const fixture = await sandbox();
+  await inProcess(fixture, async () => {
+    await expect(captureBackup(fixture.directory, fixture.state, fixture.env, { onProgress: (progress) => {
+      if (progress.stage === 'complete') throw new Error('fixture completion failure');
+    } })).rejects.toThrow('Verified backup retained');
+    expect(await fixture.backupIds()).toHaveLength(1);
+  });
+});
+
+test('an existing backup ID is never overwritten or cleaned up', async () => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const manifest = await readFile(join(fixture.cloud, 'backups', id, 'manifest.json'), 'utf8');
+  await fixture.reset();
+  await inProcess(fixture, async () => {
+    await expect(captureBackup(fixture.directory, fixture.state, fixture.env, { backupId: id })).rejects.toThrow('EEXIST');
+    expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+    expect(await readFile(join(fixture.cloud, 'backups', id, 'manifest.json'), 'utf8')).toBe(manifest);
+  });
+});
+
+test('failed terminal state write preserves the verified artifact and backup recovery journal', async () => {
+  const fixture = await sandbox();
+  await inProcess(fixture, async () => {
+    lifecycleFaults.beforeStateWrite = async () => {
+      const state = await fixture.readState();
+      if (state.incompleteOperation?.backupProgress?.stage === 'complete') {
+        delete lifecycleFaults.beforeStateWrite;
+        throw new Error('fixture terminal write failure');
+      }
+    };
+    await expect(backupCommand(fixture.directory, [], {})).rejects.toThrow('Completion recording failed');
+    expect((await fixture.readState()).incompleteOperation?.backupProgress).toMatchObject({ stage: 'failed', artifact: 'verified' });
+    expect(await fixture.backupIds()).toHaveLength(1);
+  });
+  const recovered = await fixture.cli(['recover']);
+  expect(recovered.exitCode, recovered.output).toBe(0);
+});
