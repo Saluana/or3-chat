@@ -22,6 +22,67 @@ malformed proof must block collection. Registration accepts only independently
 verified server-owned publication evidence; public authenticated dispatch and
 generation-bound upload intent handling remain separate integration requirements.
 
+### Dormant generation-bound upload extension
+
+`server/storage/gateway/generation-upload.ts` adds a separate, optional upload
+trait without changing the original generation-v1 states. The qualifier in
+`server/utils/storage/generation-upload-coordination.ts` checks the explicit
+version, provider identity and every required method. Neither registers a
+provider, adds a route, advertises a runtime capability or enables cleanup.
+
+The companion implementation is scoped to explicitly constructed, default-off
+factories and isolated tests:
+
+1. The current session and `workspace.write` authorize a permanent, owner-bound
+   allocation. The canonical backend reserves quota in the shared legacy-visible
+   ledger and fences its pending hash against unbound older writers.
+2. Only the exclusive filesystem slot creator can initialize a durable payload
+   and readiness receipt. A signed generation token is issued only after this
+   receipt is recorded. Distinct operation/audience/version claims prevent token
+   replay against legacy mutable-path upload endpoints; the token also binds the
+   user, workspace, namespace, provider, generation, intent, hash, size and MIME.
+3. Server-owned verification, not a client receipt, permits atomic canonical
+   publication. Credential expiry is separate from the accounting hold. The
+   hold persists until exact live canonical metadata transfers it atomically,
+   including when a message/post references the generation before metadata.
+   Older consume/cancel/expiry/delete/replace writes cannot release that hold.
+4. Ready-but-abandoned uploads require a distinct irreversible claim and durable
+   authorization read. If already published, the same transaction also claims
+   the real generation after proving no live metadata or references. An
+   incomplete/pre-ready allocation remains retained: a paused initializer could
+   otherwise resume after an absence observation and create new bytes.
+
+Recovery listing is bounded observation, never unlink authority. Exact historical
+replays must not revive expired credentials, a claimed generation or a retired
+payload. `reserveGenerationRestore` admits a fresh quota hold for the exact
+verified target after its old charge transferred to metadata; it creates no
+upload credentials or new blob. A matching guarded metadata write consumes this
+hold atomically. Without it, a restore must fail closed only for these newly
+enrolled bindings. The current client restore does not yet make this authenticated
+ticket roundtrip, so runtime integration remains incomplete and disabled.
+Existing unmanaged behavior is unchanged.
+
+This is an upload-admission guarantee, not an absolute quota guarantee across
+unmanaged legacy writers. Legacy/raw metadata restoration can still change that
+workspace's usage outside the new reservation path. Full activation requires an
+explicit compatible writer/cutover policy, generation-aware restore admission,
+all upload-serving instances upgraded, and outstanding legacy tokens accounted
+for. A capability flag cannot stop an older filesystem server issuing tokens or
+writing legacy paths. No auto-adoption, live migration or runtime activation is
+part of this extension.
+
+The inspected download consumers remain session-authorized: the browser transfer
+queue sends credentials, cloud verification forwards its session cookie, and
+model attachment preparation downloads to local blobs before encoding data URLs.
+Background generation reuses those prepared request messages. No anonymous
+external-model fetch or unauthenticated server fetch of a filesystem URL is
+qualified. Generation download credentials bind the current reader, not the
+original uploader; the handler must recheck live metadata and `workspace.read`
+through the provider-aware session resolver rather than require a particular
+cookie implementation. Upload authorization is checked at request entry;
+canonical publication requires a fresh authenticated commit request. Cached
+request sessions are not an immediate mid-stream role-revocation guarantee.
+
 Current filesystem uploads atomically rename temporary bytes onto a reusable
 workspace/hash pathname. Commit writes a sidecar; canonical file metadata arrives
 later through client sync. A database scan or lease plus a final reference recheck
