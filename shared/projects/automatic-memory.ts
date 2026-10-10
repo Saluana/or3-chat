@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { MEMORY_CLASSIFIER_MODEL, MEMORY_CONTEXT_MAX_BYTES, memoryInferenceOrigin } from './memory-classification';
+import { MEMORY_CLASSIFIER_MODEL, MEMORY_CONTEXT_MAX_BYTES, inferenceHttpError, memoryInferenceOrigin } from './memory-classification';
 import { DEFAULT_HEADERS } from '../openrouter/request-options';
+import { sha256Hex } from '../runtime-crypto';
 
 export const MEMORY_ANALYSIS_MODEL = '~openai/gpt-luna-latest';
 export const AutomaticMemoryStateSchema = z
@@ -42,6 +43,30 @@ export const AutomaticMemoryStateSchema = z
             new TextEncoder().encode(JSON.stringify(state)).length <= MEMORY_CONTEXT_MAX_BYTES,
     );
 export type AutomaticMemoryState = z.infer<typeof AutomaticMemoryStateSchema>;
+
+/**
+ * Stable identity of one paid capture request. Tabs and Cloud sessions that
+ * hold the same workspace state derive the same id, so each side can admit a
+ * batch once instead of racing to the model. Field order is fixed here, and
+ * the models are included so a model change never replays an older answer.
+ */
+export function automaticMemoryBatchId(
+    workspaceId: string,
+    state: AutomaticMemoryState,
+): Promise<string> {
+    return sha256Hex(
+        JSON.stringify([
+            MEMORY_CLASSIFIER_MODEL,
+            MEMORY_ANALYSIS_MODEL,
+            workspaceId,
+            state.project.name,
+            state.project.brief,
+            state.messages.map((m) => [m.id, m.role, m.text, m.fresh]),
+            state.existing.map((m) => [m.id, m.text, m.replaceable]),
+        ]),
+    );
+}
+
 export const AutomaticMemoryOutputSchema = z
     .object({
         memories: z
@@ -92,7 +117,8 @@ export async function analyzeAutomaticMemory(
             body: JSON.stringify(body),
             signal: AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
         });
-        if (!response.ok) throw new Error('Memory inference unavailable.');
+        if (!response.ok)
+            throw inferenceHttpError('Memory inference unavailable.', response);
         return response.json();
     };
     const gate = await request(

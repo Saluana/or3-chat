@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { H3Event } from 'h3';
+import { setResponseHeader, type H3Event } from 'h3';
+import { checkAndRecordLlmRequest } from '../../../utils/llm/rate-limiter';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { registerServerTool, unregisterServerTool } from '../../../utils/chat/tool-registry';
 
@@ -862,5 +863,84 @@ describe('automatic memory proxy', () => {
         requireCanMock.mockImplementation(() => { throw forbidden(403); });
         await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
         expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+});
+
+// Failure inventory for batch admission: two sessions finishing one turn both
+// reach the model; a replay skips auth/key checks or spends the rate budget; a
+// failed batch is redispatched by every caller; a closed tab discards an answer
+// another session could use; batches leak across users or workspaces.
+describe('automatic memory batch admission', () => {
+    let capture: (event: H3Event) => Promise<unknown>;
+    const gateSkip = () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
+        answers: { worth_saving: { type: 'choice', choice: 'skip', probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } } }));
+    const body = (text: string, workspaceId = 'workspace-1') => ({ workspaceId, capture: {
+        project: { name: 'Atlas', brief: 'Team planning app.' },
+        messages: [{ id: 'u-' + text, role: 'user', text, fresh: true }], existing: [] } });
+    const event = () => makeEvent({ host: 'chat.test', origin: 'https://chat.test',
+        'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' });
+    let user = 0;
+    beforeEach(async () => {
+        capture = (await import('../classify-memory.post')).default as typeof capture;
+        // A fresh user per test keeps process-local batches from leaking between cases.
+        user++;
+        runtimeConfig = { auth: { enabled: true }, security: { proxy: {}, allowedOrigins: [] },
+            openrouterApiKey: 'managed-fixture', openrouterAllowUserOverride: true,
+            openrouterRequireUserKey: false, limits: { enabled: false } };
+        vi.stubGlobal('useRuntimeConfig', () => runtimeConfig);
+        vi.stubGlobal('readBody', readBodyMock);
+        vi.stubGlobal('getHeader', getHeaderMock);
+        getHeaderMock.mockImplementation((e: H3Event, name: string) => e.node.req.headers[name.toLowerCase()]);
+        requireCanMock.mockReset();
+        vi.mocked(setResponseHeader).mockClear();
+        resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'batch-user-' + user },
+            workspace: { id: 'workspace-1' }, role: 'editor' });
+    });
+
+    it('lets concurrent sessions share one inference and replays the answer afterwards', async () => {
+        let release!: () => void;
+        const fetcher = vi.fn(() => new Promise<Response>((resolve) => { release = () => resolve(gateSkip()); }));
+        vi.stubGlobal('fetch', fetcher);
+        readBodyMock.mockResolvedValue(body('Concurrent tabs share one request.'));
+        const first = capture(event()); const second = capture(event());
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+        release();
+        expect(await Promise.all([first, second])).toEqual([{ memories: [] }, { memories: [] }]);
+        expect(await capture(event())).toEqual({ memories: [] });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
+    it('replays without spending the rate budget but never without admission', async () => {
+        runtimeConfig = { ...runtimeConfig, limits: { enabled: true, requestsPerMinute: 5, maxMessagesPerDay: 0 } };
+        vi.mocked(checkAndRecordLlmRequest).mockClear().mockReturnValue({ allowed: true } as never);
+        const fetcher = vi.fn(async () => gateSkip()); vi.stubGlobal('fetch', fetcher);
+        readBodyMock.mockResolvedValue(body('Replay spends nothing.'));
+        await capture(event()); await capture(event());
+        expect(checkAndRecordLlmRequest).toHaveBeenCalledTimes(1);
+        requireCanMock.mockImplementation(() => { throw forbidden(403); });
+        await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
+        requireCanMock.mockReset();
+        readBodyMock.mockResolvedValue(body('Replay spends nothing.', 'foreign'));
+        await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
+    it('holds a failed batch back for the cooldown instead of redispatching it', async () => {
+        const fetcher = vi.fn(async () => new Response('{}', { status: 502 })); vi.stubGlobal('fetch', fetcher);
+        readBodyMock.mockResolvedValue(body('A failing batch is not hammered.'));
+        await expect(capture(event())).rejects.toMatchObject({ statusCode: 503 });
+        await expect(capture(event())).rejects.toMatchObject({ statusCode: 503 });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(setResponseHeader)).toHaveBeenLastCalledWith(expect.anything(), 'Retry-After', expect.any(Number));
+    });
+
+    it('does not share a batch between users', async () => {
+        const fetcher = vi.fn(async () => gateSkip()); vi.stubGlobal('fetch', fetcher);
+        readBodyMock.mockResolvedValue(body('Users never share batches.'));
+        await capture(event());
+        resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'someone-else' },
+            workspace: { id: 'workspace-1' }, role: 'editor' });
+        await capture(event());
+        expect(fetcher).toHaveBeenCalledTimes(2);
     });
 });
