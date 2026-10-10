@@ -21,7 +21,6 @@ import type { CanonicalToolResult } from '~~/shared/chat/canonical-tool-transcri
 import type { ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
 import type { ToolDefinition } from '~/utils/chat/types';
 import type { NormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
-import type { RequestUsage } from '~~/shared/chat/compaction';
 
 export type BackgroundClientToolCall = {
     callId: string;
@@ -31,6 +30,13 @@ export type BackgroundClientToolCall = {
     definition: ToolDefinition;
     claimToken?: string;
     claimExpiresAt?: number;
+    /**
+     * Argument fingerprint snapshotted when the claim was granted. Settlement
+     * requires the parked call's current fingerprint to still match, so an
+     * approval response can never authorize arguments different from the ones
+     * the user reviewed (approval identity binding).
+     */
+    claimFingerprint?: string;
 };
 
 export type BackgroundPendingToolCall = {
@@ -76,7 +82,6 @@ export type TerminalGenerationSnapshot = {
     content: string;
     reasoning: string;
     toolCalls?: BackgroundJob['tool_calls'];
-    usage?: RequestUsage;
     error?: string;
     completedAt: number;
 };
@@ -106,8 +111,6 @@ export interface BackgroundJob {
     content: string;
     /** Accumulated model reasoning, kept distinct from request reasoning config. */
     reasoning: string;
-    /** Last measured provider request; prompt counts are never accumulated. */
-    usage?: RequestUsage;
     /** One user-requested generation; stable across worker attempts. */
     generationId?: string;
     /** Where the canonical history write stands for this generation. */
@@ -137,13 +140,11 @@ export interface BackgroundJob {
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
         runtime?: 'client' | 'server' | 'hybrid';
-        /** Length of the assistant text when this call's results arrived. */
-        text_offset?: number;
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;
-    /** Server-only chat recovery input or immutable workflow authorization scope. */
-    execution?: BackgroundJobExecution | BackgroundWorkflowScope;
+    /** Encrypted, server-only input required to resume a chat job. */
+    execution?: BackgroundJobExecution;
     /** Current durable worker lease owner. Never exposed by job API routes. */
     leaseOwner?: string;
     /** Unix timestamp when the current worker lease expires. */
@@ -164,7 +165,6 @@ export interface BackgroundJobExecution {
     workspaceId: string;
     referer: string;
     apiKeyCiphertext: string;
-    credentialSource?: 'personal' | 'server';
     /** Immutable canonical-history admission captured before paid execution. */
     history?: ChatGenerationAdmissionEnvelope;
     /** Text that is already represented by a durable tool-loop checkpoint. */
@@ -216,20 +216,10 @@ export function isAdmissionCancelledError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AdmissionCancelledError';
 }
 
-/** Immutable workflow authorization scope; this is never chat recovery input. */
-export interface BackgroundWorkflowScope {
-    version: 1;
-    kind: 'workflow';
-    workspaceId: string;
-}
-
-export function getChatJobExecution(job: Pick<BackgroundJob, 'execution' | 'kind'>): BackgroundJobExecution | undefined {
-    const execution = job.execution;
-    if (!execution || job.kind === 'workflow' || 'kind' in execution) return undefined;
-    return execution;
-}
-
-/** Input for creating a new streaming job. */
+/**
+ * Purpose:
+ * Input for creating a new streaming job.
+ */
 export interface CreateJobParams {
     userId: string;
     threadId: string;
@@ -250,8 +240,8 @@ export interface CreateJobParams {
     initialContent?: string;
     /** Seed reasoning for a continuation. */
     initialReasoning?: string;
-    /** Chat recovery input or immutable workflow authorization scope. */
-    execution?: BackgroundJobExecution | BackgroundWorkflowScope;
+    /** Server-only execution input used by the durable worker. */
+    execution?: BackgroundJobExecution;
 }
 
 /**
@@ -262,8 +252,6 @@ export interface CreateJobParams {
  * - Updates are incremental and should be append-only for `contentChunk`.
  */
 export interface JobUpdate {
-    /** Validated last-request measurement, owned by the current worker lease. */
-    usage?: RequestUsage;
     /** Content chunk to append */
     contentChunk?: string;
     /** Reasoning chunk to append (distinct from request reasoning config). */
