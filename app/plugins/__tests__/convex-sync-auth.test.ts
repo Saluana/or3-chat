@@ -333,7 +333,7 @@ describe('sync engine plugin', () => {
     });
 
     it('starts sync engine when provider and workspace are available', async () => {
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         expect(outboxInstances).toHaveLength(1);
@@ -352,7 +352,7 @@ describe('sync engine plugin', () => {
             },
         };
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         expect(outboxInstances).toHaveLength(0);
@@ -368,7 +368,7 @@ describe('sync engine plugin', () => {
             },
         };
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
 
         providerRegistryState.active = null;
         sessionState.value = {
@@ -399,7 +399,7 @@ describe('sync engine plugin', () => {
             .mockResolvedValueOnce(null)
             .mockResolvedValue('token');
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await Promise.resolve();
 
         expect(outboxInstances).toHaveLength(0);
@@ -423,7 +423,7 @@ describe('sync engine plugin', () => {
             },
         };
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
 
         providerRegistryState.active = null;
         sessionState.value = {
@@ -449,7 +449,7 @@ describe('sync engine plugin', () => {
     });
 
     it('stops current engine and starts a new one when workspace changes', async () => {
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         const firstProvider = providerRegistryState.active;
@@ -466,7 +466,7 @@ describe('sync engine plugin', () => {
     });
 
     it('stops sync without clobbering active workspace DB on admin route transitions', async () => {
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         routeState.value = { path: '/admin/extensions' };
@@ -482,7 +482,7 @@ describe('sync engine plugin', () => {
 
     it('starts OutboxManager only after subscription bootstrap resolves', async () => {
         pluginControl.blockStart();
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await Promise.resolve();
 
         expect(subscriptionInstances).toHaveLength(1);
@@ -500,7 +500,7 @@ describe('sync engine plugin', () => {
         pluginControl.runtime.ssrAuthEnabled = false;
         providerRegistryState.active = createProvider('convex', 'direct');
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         expect(createGatewaySyncProvider).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('sync engine plugin', () => {
         pluginControl.runtime.ssrAuthEnabled = false;
         providerRegistryState.active = null;
 
-        await import('~/plugins/convex-sync.client');
+        await (await import('~/plugins/convex-sync.client')).default;
         await flushPluginAsyncWork();
 
         expect(outboxInstances).toHaveLength(0);

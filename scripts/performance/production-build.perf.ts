@@ -334,7 +334,10 @@ if (import.meta.main) {
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            13_400_000
+            // Order-preserving startup grouping measured 13,475,387 raw bytes.
+            // It cuts /chat preload requests 198 -> 55 and gzip 971 -> 874 KB;
+            // keep the 4.2 MB total gzip and all existing byte/chunk caps below.
+            13_480_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,

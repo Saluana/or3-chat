@@ -1,26 +1,12 @@
 import { useRuntimeConfig } from '#imports';
 import { bundledPluginCatalog } from '#build/or3/bundled-plugin-catalog';
-import {
-    createManagedWorkspacePluginRuntime,
-    registerWorkspacePluginInstance,
-    unregisterWorkspacePluginInstance,
-} from '~/composables/plugins/workspace-runtime';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
-import { createWorkspacePluginShadowObserver } from '~/composables/plugins/workspace-plugin-shadow-observer';
-import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
-import {
-    createWorkspaceManagerCanarySelector,
-    createStartupSelectedWorkspaceManager,
-    createBundledV1WorkspaceManager,
-    parseWorkspacePluginModule,
-    desiredStateFromManifest,
-} from '~/composables/plugins/bundled-v1-manager-runtime';
 
 import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
 import type { LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
     if (!process.client) return;
 
     const runtimeConfig = useRuntimeConfig();
@@ -29,6 +15,28 @@ export default defineNuxtPlugin(() => {
     if (runtimeConfig.public?.ssrAuthEnabled !== true || !runtimeLoaderEnabled) {
         return;
     }
+
+    const [
+        {
+            createManagedWorkspacePluginRuntime,
+            registerWorkspacePluginInstance,
+            unregisterWorkspacePluginInstance,
+        },
+        { createWorkspacePluginShadowObserver },
+        { BundledV1Loader },
+        {
+            createWorkspaceManagerCanarySelector,
+            createStartupSelectedWorkspaceManager,
+            createBundledV1WorkspaceManager,
+            parseWorkspacePluginModule,
+            desiredStateFromManifest,
+        },
+    ] = await Promise.all([
+        import('~/composables/plugins/workspace-runtime'),
+        import('~/composables/plugins/workspace-plugin-shadow-observer'),
+        import('~~/shared/plugins/bundled-v1-loader'),
+        import('~/composables/plugins/bundled-v1-manager-runtime'),
+    ]);
 
     const modules = discoverNonCorePlugins(runtimeConfig.public?.admin, () => ({
         ...import.meta.glob('../../extensions/plugins/*/**/*.client.ts'),

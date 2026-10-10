@@ -13,7 +13,7 @@ import type { SessionContext } from '~/core/hooks/hook-types';
 
 const session = vi.hoisted(() => ({ current: null as SessionContext | null }));
 const inference = vi.hoisted(() => ({ send: vi.fn(async () => ({ choices: [{ message: { content: 'caption' } }] })) }));
-vi.mock('~~/shared/openrouter', async load => ({
+vi.mock('~~/shared/openrouter/client', async load => ({
     ...(await load<Record<string, unknown>>()),
     createOpenRouterClient: (config: { httpClient?: { request(request: Request): Promise<Response> } }) => ({ chat: { send: async () => {
         // Exercise the actual SDK HTTP client, including its last fetch fence.

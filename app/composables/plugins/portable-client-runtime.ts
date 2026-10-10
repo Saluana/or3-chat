@@ -55,7 +55,7 @@ import {
     createHttpCapabilityTransport,
     createRemoteCapabilityMethods,
 } from '~~/shared/plugins/isolation/capability-bridge';
-import { requestWorkspacePluginReconcile } from './bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from './workspace-plugin-coordinator';
 import { resolvePackageDescriptor } from '~~/shared/plugins/descriptor-resolver';
 import { getKvByName, getKvRecordByName, setKvByName, tombstoneKvByName } from '~/db/kv';
 import { getDb } from '~/db/client';

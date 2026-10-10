@@ -26,7 +26,9 @@ async function waitForPaletteHydration(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    // Complete first-run onboarding before testing pointer events beneath it.
+    await page.goto('/?welcome=1');
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
     await waitForPaletteHydration(page);
 });
 

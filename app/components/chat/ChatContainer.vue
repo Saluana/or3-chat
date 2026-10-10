@@ -351,6 +351,15 @@ const authSessionState = useState<{ session?: { authenticated?: boolean } } | nu
 const { apiKey } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
+// Start the independent reads while this component is being set up. Commit only
+// after mount so SSR and client hydration still begin with the same hidden card.
+const welcomeWorkspaceGeneration = getWorkspaceGeneration();
+const welcomeStateReady = import.meta.client
+    ? Promise.allSettled([
+        hydrateUserApiKeyFromKv(),
+        kv.get(WELCOME_DISMISS_KV_KEY),
+    ])
+    : null;
 const dashboardModalOpen = inject<Ref<boolean>>('or3:dashboard-modal-open', ref(false));
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
@@ -383,17 +392,10 @@ function onWelcomeDismiss(): void {
 }
 
 onMounted(async () => {
-    try {
-        await hydrateUserApiKeyFromKv();
-    } catch {
-        // Key hydration failure is non-critical.
-    }
-    try {
-        const record = await kv.get(WELCOME_DISMISS_KV_KEY);
-        welcomeDismissed.value = record?.value === 'true';
-    } catch {
-        welcomeDismissed.value = false;
-    }
+    const results = await welcomeStateReady;
+    if (welcomeWorkspaceGeneration !== getWorkspaceGeneration()) return;
+    const dismissal = results?.[1];
+    welcomeDismissed.value = dismissal?.status === 'fulfilled' && dismissal.value?.value === 'true';
     keyStateReady.value = true;
 });
 

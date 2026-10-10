@@ -30,7 +30,7 @@ import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-d
  * - Abort always finalizes stream accumulator state
  */
 
-import { prepareLossyRequest, confirmLossyRequest } from '~/utils/chat/lossy-request';
+import type { prepareLossyRequest, confirmLossyRequest } from '~/utils/chat/lossy-request';
 import {
     ref,
     shallowRef,
@@ -133,25 +133,17 @@ import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import {
-    type BackgroundJobSubscriber,
-    type BackgroundJobTracker,
     backgroundJobTrackers,
     primeBackgroundJobUpdate,
     stopBackgroundJobTracking,
     ensureBackgroundJobTracker,
     subscribeBackgroundJob,
-    runForegroundStreamLoop,
-    resolveSystemPromptText,
-    buildSystemPromptMessage,
-    buildOpenRouterMessagesForSend,
-    retryMessageImpl,
-    continueMessageImpl,
-    makeAssistantPersister,
-    updateMessageRecord,
-    projectCanonicalBackgroundMessage,
-    reloadTurnIntoRawMessages,
-} from '~/utils/chat/useAi-internal';
-import { startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
+} from '~/utils/chat/useAi-internal/backgroundJobs';
+import type { BackgroundJobSubscriber, BackgroundJobTracker } from '~/utils/chat/useAi-internal/types';
+import { resolveSystemPromptText, buildSystemPromptMessage, buildOpenRouterMessagesForSend } from '~/utils/chat/useAi-internal/messageBuild';
+import { makeAssistantPersister, updateMessageRecord, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
+import { projectCanonicalBackgroundMessage } from '~/utils/chat/useAi-internal/backgroundJobPersistence';
+import { reloadTurnIntoRawMessages } from '~/utils/chat/useAi-internal/turnWriteback';
 import {
     assistantTranscriptData,
     userTranscriptData,
@@ -2305,6 +2297,8 @@ export function useChat(
         let contextOmission: Awaited<ReturnType<typeof confirmLossyRequest>>['omission'] | undefined;
         let reviewedLossyMessages: string | undefined;
         if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation) {
+            const { prepareLossyRequest, confirmLossyRequest } = await import('~/utils/chat/lossy-request');
+            if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
             if (prepared.delegation) return { status: 'rejected', requestId, reason: 'unavailable',
                 error: 'Delegated requests cannot omit native history. Edit the request or compact the conversation.' };
             if (sendMessagesParams.inspectLossyRequest) lossyPreview = await prepareLossyRequest(providerPreparation, lossyScope);
@@ -3306,8 +3300,13 @@ export function useChat(
                 requestScope.originDb, assistantDbMsg.id, requestId,
                 requestScope.abortController.signal
             );
+            const streamApiKey = effectiveApiKey.value;
+            const streamGeneration = getWorkspaceGeneration();
+            const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
+            if (isRequestCancelled(requestScope) || getDb() !== requestScope.originDb
+                || getWorkspaceGeneration() !== streamGeneration) throw new DOMException('Chat request cancelled.', 'AbortError');
             await runForegroundStreamLoop({
-                apiKey: effectiveApiKey.value,
+                apiKey: streamApiKey,
                 modelId,
                 orMessages,
                 modalities,
@@ -3616,6 +3615,7 @@ export function useChat(
      */
     async function retryMessage(messageId: string, modelOverride?: string, options: { afterEdit?: boolean } = {}) {
         const retryRevision = navigationRevision;
+        const retryDb = getDb(); const retryGeneration = getWorkspaceGeneration();
         if (threadIdRef.value) {
             const db = getDb(); const generation = getWorkspaceGeneration(); const threadId = threadIdRef.value;
             const checkpoint = await db.chat_request_recoveries.get(threadId);
@@ -3636,6 +3636,9 @@ export function useChat(
                 return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
             }
         }
+        const { retryMessageImpl } = await import('~/utils/chat/useAi-internal/retry');
+        if (disposed || retryRevision !== navigationRevision || getDb() !== retryDb || getWorkspaceGeneration() !== retryGeneration)
+            return { status: 'rejected' as const, reason: 'unavailable' as const };
         return await retryMessageImpl(
             {
                 ownsView: () => !disposed && navigationRevision === retryRevision,
@@ -3674,7 +3677,11 @@ export function useChat(
         const request = admitRequest('continue');
         const requestId = request.requestId;
         activeContinuationScope = request;
+        const continuationGeneration = getWorkspaceGeneration();
         try {
+            const { continueMessageImpl } = await import('~/utils/chat/useAi-internal/continue');
+            if (isRequestCancelled(request) || getDb() !== request.originDb
+                || getWorkspaceGeneration() !== continuationGeneration) return;
             await continueMessageImpl(
                 {
                     request,

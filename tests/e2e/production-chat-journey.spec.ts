@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 
 test.skip(
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
@@ -6,7 +7,125 @@ test.skip(
 );
 
 const chatPage = '/__or3-chat-journey-test';
+
+test('disconnected welcome keeps editor history and loads settings on first opening', async ({ page }, info) => {
+    let catalogRequests = 0;
+    await page.route('**/api/v1/models**', async route => {
+        catalogRequests++;
+        await route.fulfill({ json: { data: [{ id: 'openai/gpt-4o-mini', name: 'GPT-4o mini',
+            context_length: 128000, architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            supported_parameters: ['tools'], pricing: { prompt: '0', completion: '0' } }] } });
+    });
+    await page.goto('/chat');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible();
+    await input.fill('Immediate typing stays smooth');
+    await input.press('ControlOrMeta+z');
+    await expect(input).toBeEmpty();
+    await input.press('ControlOrMeta+Shift+z');
+    await expect(input).toHaveText('Immediate typing stays smooth');
+    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+    expect(catalogRequests).toBe(0);
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Close chat settings', exact: true })).toBeVisible();
+    await expect.poll(() => catalogRequests).toBeGreaterThan(0);
+    await page.screenshot({ path: info.outputPath('first-settings-and-editor.png'), animations: 'disabled' });
+    await info.attach('first-settings-and-editor', {
+        path: info.outputPath('first-settings-and-editor.png'), contentType: 'image/png',
+    });
+});
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+
+for (const savedWidth of [null, 'NaN']) {
+    test(`desktop startup reserves the sidebar through hydration and viewport changes (${savedWidth ?? 'fresh'})`, async ({ page }, info) => {
+        await page.setViewportSize({ width: 1350, height: 940 });
+        if (savedWidth !== null) {
+            await page.addInitScript(value => localStorage.setItem('sidebar:width', value), savedWidth);
+        }
+        let release!: () => void;
+        const scriptsReady = new Promise<void>(resolve => { release = resolve; });
+        await page.route('**/_nuxt/*.js', async route => {
+            await scriptsReady;
+            await route.continue();
+        });
+        const bounds = () => page.locator('#sidebar').evaluate(element => {
+            const sidebar = element.getBoundingClientRect();
+            const rail = element.querySelector('#sidebar-content-collapsed')?.getBoundingClientRect();
+            const bottom = element.querySelector('#bottom-nav')?.getBoundingClientRect();
+            return { width: sidebar.width, height: sidebar.height, railHeight: rail?.height, bottom: bottom?.bottom };
+        });
+        try {
+            await page.goto('/chat', { waitUntil: 'commit' });
+            await expect(page.locator('#sidebar')).toBeVisible();
+            const initial = await bounds();
+            expect(initial.width).toBe(320);
+            expect(initial.height).toBe(940);
+            expect(initial.railHeight).toBeGreaterThan(800);
+            release();
+            await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+            await expect(page.locator('#nav-scroll-area')).toBeVisible();
+            const hydrated = await bounds();
+            expect(hydrated.width).toBe(320);
+            if (initial.bottom !== undefined && hydrated.bottom !== undefined) {
+                expect(Math.abs(hydrated.bottom - initial.bottom)).toBeLessThanOrEqual(2);
+            }
+            await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+            await page.setViewportSize({ width: 390, height: 740 });
+            await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+            await expect(page.locator('#sidebar')).toBeVisible();
+            await page.setViewportSize({ width: 1350, height: 940 });
+            await expect.poll(async () => (await bounds()).width).toBe(320);
+            await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+            await info.attach('sidebar-startup-bounds', { body: JSON.stringify({ initial, hydrated, resized: await bounds() }), contentType: 'application/json' });
+            const shot = info.outputPath('sidebar-startup.png');
+            await page.screenshot({ path: shot, animations: 'disabled' });
+            await info.attach('sidebar-startup', { path: shot, contentType: 'image/png' });
+        } finally {
+            release();
+        }
+    });
+}
+
+test('cold desktop startup keeps the navigation rail stable', async ({ page }, info) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1350, height: 940 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', {
+        offline: false, latency: 40,
+        downloadThroughput: 1_500_000, uploadThroughput: 750_000,
+    });
+    await page.addInitScript(() => {
+        const proof = { shifts: [] as Array<{ value: number; sources: unknown[] }> };
+        Object.assign(window, { __or3SidebarStartupProof: proof });
+        new PerformanceObserver(list => {
+            for (const entry of list.getEntries()) {
+                const shift = entry as PerformanceEntry & { value: number; hadRecentInput: boolean; sources: Array<{ node: HTMLElement; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }> };
+                if (shift.hadRecentInput) continue;
+                proof.shifts.push({ value: shift.value, sources: shift.sources.map(source => ({
+                    id: source.node?.id, tag: source.node?.tagName,
+                    class: source.node?.className,
+                    previous: source.previousRect.toJSON(), current: source.currentRect.toJSON(),
+                })) });
+            }
+        }).observe({ type: 'layout-shift', buffered: true });
+    });
+    await page.goto('/chat');
+    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+    await expect(page.locator('#bottom-nav')).toBeVisible();
+    await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
+    await expect.poll(() => page.locator('#bottom-nav').evaluate(node => node.getBoundingClientRect().bottom)).toBe(940);
+    const proof = await page.evaluate(() => (window as unknown as { __or3SidebarStartupProof: { shifts: Array<{ value: number; sources: unknown[] }> } }).__or3SidebarStartupProof);
+    const proofPath = info.outputPath('cold-sidebar-layout.json');
+    await writeFile(proofPath, JSON.stringify(proof, null, 2));
+    await info.attach('cold-sidebar-layout', { path: proofPath, contentType: 'application/json' });
+    const screenshot = info.outputPath('cold-sidebar.png');
+    await page.screenshot({ path: screenshot });
+    await info.attach('cold-sidebar', { path: screenshot, contentType: 'image/png' });
+    expect(proof.shifts.reduce((total, shift) => total + shift.value, 0)).toBeLessThan(0.03);
+});
 
 test('missing chat deep links return to a usable workspace', async ({ page }, info) => {
     await page.goto(`${chatPage}?workspace=1`);
@@ -107,6 +226,15 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         const path = info.outputPath(`keyboard-gap-${theme}.png`);
         await page.screenshot({ path, animations: 'disabled' });
         await info.attach('keyboard-gap', { path, contentType: 'image/png' });
+        await input.fill('Keyboard spacing draft');
+        await input.press('End');
+        await input.press('Enter');
+        await input.pressSequentially('Second line');
+        await expect(input).toContainText('Second line');
+        await input.press('ControlOrMeta+z');
+        await expect(input).not.toContainText('Second line');
+        await input.press('ControlOrMeta+Shift+z');
+        await expect(input).toContainText('Second line');
         await input.fill('Keyboard spacing draft');
         await input.blur();
         await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(844);

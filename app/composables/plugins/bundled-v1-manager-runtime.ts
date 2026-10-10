@@ -17,32 +17,8 @@ import {
     TRUSTED_HOST_GRANTS,
 } from './trusted-host-context';
 
-export const WORKSPACE_PLUGIN_RECONCILE_EVENT = 'or3:workspace-plugin-reconcile';
-
-export type WorkspacePluginReconcileReason =
-    | 'workspace-session-change'
-    | 'local-admin-change'
-    | 'focus-refresh'
-    | 'manifest-revision-change'
-    | 'boot';
-
-export interface WorkspacePluginReconcileEventDetail {
-    readonly reason: Extract<
-        WorkspacePluginReconcileReason,
-        'local-admin-change' | 'manifest-revision-change'
-    >;
-}
-
-export function requestWorkspacePluginReconcile(
-    reason: WorkspacePluginReconcileEventDetail['reason'] = 'local-admin-change'
-): void {
-    if (!import.meta.client) return;
-    window.dispatchEvent(
-        new CustomEvent<WorkspacePluginReconcileEventDetail>(WORKSPACE_PLUGIN_RECONCILE_EVENT, {
-            detail: { reason },
-        })
-    );
-}
+export { WORKSPACE_PLUGIN_RECONCILE_EVENT, requestWorkspacePluginReconcile } from './workspace-plugin-coordinator';
+export type { WorkspacePluginReconcileReason, WorkspacePluginReconcileEventDetail } from './workspace-plugin-coordinator';
 
 export function parseWorkspacePluginModule(
     mod: unknown,

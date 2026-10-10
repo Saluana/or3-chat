@@ -485,6 +485,7 @@ export function useModelStore() {
         searchQuery,
         filters,
         fetchModels,
+        loadCachedModels: () => loadFromDexie(MODELS_TTL_MS),
         resolveContextModel,
         refreshModels,
         invalidate,

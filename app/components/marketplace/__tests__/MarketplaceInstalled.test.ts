@@ -21,11 +21,11 @@ vi.mock('~/composables/auth/useSessionContext', async () => {
  * "no version selected" a guessed `pointer.selected.version` produced.
  */
 const fetchMock = vi.fn();
-const openPageMock = vi.fn(async () => true);
+const openPageMock = vi.fn<(pluginId: string) => Promise<boolean>>(async () => true);
 const reconcileMock = vi.fn();
 vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({ requestWorkspacePluginReconcile: (...args: unknown[]) => reconcileMock(...args) }));
 const sourceMock = vi.fn(() => ({}));
-vi.mock('~/composables/plugins/portable-pane', () => ({openInstalledPluginPane: (...args: unknown[]) => openPageMock(...args)}));
+vi.mock('~/composables/plugins/portable-pane', () => ({openInstalledPluginPane: (pluginId: string) => openPageMock(pluginId)}));
 const { activationsState, trustedActivationsState } = vi.hoisted(() => ({
     activationsState: { current: new Map() as Map<string, unknown> },
     trustedActivationsState: { current: new Map() as Map<string, unknown> },

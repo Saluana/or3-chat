@@ -255,9 +255,11 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                 await expect(newDevice.getByRole('button', { name: 'Open command palette' }).first()).toBeVisible({ timeout: 5_000 });
             }).toPass({ timeout: 45_000 });
             await info.attach('cloud-browser-module-loads', { body: JSON.stringify(moduleFailures), contentType: 'application/json' });
-            await newDevice.getByRole('button', { name: 'Dismiss welcome', exact: true }).click({ timeout: 30_000 });
             const openPalette = async () => {
                 await expect(async () => {
+                    // Onboarding is optional after workspace state hydrates.
+                    const welcome = newDevice.getByRole('button', { name: 'Dismiss welcome', exact: true });
+                    if (await welcome.isVisible()) await welcome.click();
                     await newDevice.getByRole('button', { name: 'Open command palette' }).first().click();
                     await expect(newDevice.locator('[data-test="command-palette-input"]')).toBeVisible({ timeout: 1_000 });
                 }).toPass({ timeout: 30_000 });

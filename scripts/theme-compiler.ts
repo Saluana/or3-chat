@@ -407,9 +407,13 @@ export type ThemeDirectiveValue = ThemeIdentifier | ThemeDirective;
                 isDefault: Boolean(result.theme.isDefault),
                 stylesheets: result.theme.stylesheets ?? [],
                 hasCssSelectorStyles: Boolean(result.theme.hasStyleSelectors),
+                workspaceProfiles: result.theme.workspaceProfiles,
+                recommendedWorkspaceProfileId: result.theme.recommendedWorkspaceProfileId,
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
         const source = `/** Auto-generated metadata-only theme manifest. Do not edit manually. */
+import type { WorkspaceProfileV1 } from '../../core/workspace-profiles/schema';
+
 export interface GeneratedThemeMetadata {
     name: string;
     dirName: string;
@@ -418,6 +422,8 @@ export interface GeneratedThemeMetadata {
     isDefault: boolean;
     stylesheets: readonly string[];
     hasCssSelectorStyles: boolean;
+    workspaceProfiles?: readonly WorkspaceProfileV1[];
+    recommendedWorkspaceProfileId?: string;
 }
 
 export const GENERATED_THEME_METADATA: readonly GeneratedThemeMetadata[] = ${JSON.stringify(metadata, null, 4)} as const;

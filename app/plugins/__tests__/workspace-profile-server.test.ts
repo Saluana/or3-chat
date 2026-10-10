@@ -104,6 +104,13 @@ describe('workspace profile server plugin request bootstrap', () => {
         vi.stubGlobal('useRuntimeConfig', () => ({
             public: { ssrAuthEnabled: false },
         }));
+        vi.doMock('~/theme/_shared/theme-manifest.generated', () => ({
+            GENERATED_THEME_METADATA: [{
+                name: 'installed-theme',
+                workspaceProfiles: [installedThemeProfile],
+                recommendedWorkspaceProfileId: installedThemeProfile.id,
+            }],
+        }));
         serverPlugin = (
             await import('~/plugins/93.workspace-profiles.server')
         ).default as unknown as WorkspaceProfileServerPlugin;
@@ -111,6 +118,7 @@ describe('workspace profile server plugin request bootstrap', () => {
 
     afterAll(() => {
         vi.unstubAllGlobals();
+        vi.doUnmock('~/theme/_shared/theme-manifest.generated');
     });
 
     it('isolates built-in and installed-theme payloads through initial client resolution', async () => {

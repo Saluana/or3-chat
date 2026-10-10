@@ -1,4 +1,6 @@
 /** Auto-generated metadata-only theme manifest. Do not edit manually. */
+import type { WorkspaceProfileV1 } from '../../core/workspace-profiles/schema';
+
 export interface GeneratedThemeMetadata {
     name: string;
     dirName: string;
@@ -7,6 +9,8 @@ export interface GeneratedThemeMetadata {
     isDefault: boolean;
     stylesheets: readonly string[];
     hasCssSelectorStyles: boolean;
+    workspaceProfiles?: readonly WorkspaceProfileV1[];
+    recommendedWorkspaceProfileId?: string;
 }
 
 export const GENERATED_THEME_METADATA: readonly GeneratedThemeMetadata[] = [

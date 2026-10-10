@@ -1,4 +1,3 @@
-import * as Sdk from '@or3/plugin-sdk';
 import { createApp } from 'vue';
 import * as Vue from 'vue';
 import {
@@ -38,9 +37,17 @@ async function compiledRenderMatchesHost(): Promise<boolean> {
 
 /** Measure the live import map and publish the kill-gate decision for ModuleV2Loader. */
 export default defineNuxtPlugin(async () => {
+    const config = useRuntimeConfig();
+    // Runtime adapters are disabled in local-only builds. Development previews
+    // still need the host proof even without a managed workspace session.
+    if (config.public.ssrAuthEnabled !== true && config.public.pluginDevelopment !== true) return;
+    const Sdk = await import('@or3/plugin-sdk');
     const html = document.documentElement.innerHTML;
-    const vueFacade = (await import(/* @vite-ignore */ HOST_ESM_FACADE_IMPORTS.vue)) as FacadeModule;
-    const sdkFacade = (await import(/* @vite-ignore */ HOST_ESM_FACADE_IMPORTS['@or3/plugin-sdk'])) as FacadeModule;
+    const [vueFacade, sdkFacade, vueComponentRendering] = await Promise.all([
+        import(/* @vite-ignore */ HOST_ESM_FACADE_IMPORTS.vue) as Promise<FacadeModule>,
+        import(/* @vite-ignore */ HOST_ESM_FACADE_IMPORTS['@or3/plugin-sdk']) as Promise<FacadeModule>,
+        compiledRenderMatchesHost(),
+    ]);
     const hostVue = Vue as unknown as FacadeModule;
     const evidence: HostEsmFacadeEvidence = {
         generatedFacade: true,
@@ -55,7 +62,7 @@ export default defineNuxtPlugin(async () => {
             count.value = 2;
             return Vue.isRef(count) && count.value === 2;
         })(),
-        vueComponentRendering: await compiledRenderMatchesHost(),
+        vueComponentRendering,
         cspCompatible: true,
     };
     publishTrustedHostUiEvidence(evidence);

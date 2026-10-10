@@ -1,11 +1,9 @@
-import * as Sdk from '@or3/plugin-sdk';
 import type { PluginJsonValue, PluginGrant, Or3PluginDefinition } from '@or3/plugin-sdk';
 import * as Vue from 'vue';
 import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useHooks } from '~/core/hooks/useHooks';
-import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
 import { applyTrustedEditorExtensions } from '~/composables/plugins/trusted-editor';
 import {
     TrustedV2ClientManager,
@@ -70,7 +68,7 @@ async function attachStylesheet(
     return () => link.remove();
 }
 
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(async (nuxtApp) => {
     const config = useRuntimeConfig();
     if (
         config.public.ssrAuthEnabled !== true ||
@@ -78,6 +76,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         config.public.admin?.pluginRuntimeV2Enabled !== true
     ) return;
 
+    const Sdk = await import('@or3/plugin-sdk');
     const loader = createProductionModuleV2Loader({
         assetUrl: buildPluginPackageAssetUrl,
         hostExternals: { vue: Vue, '@or3/plugin-sdk': Sdk },
@@ -108,9 +107,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             const definition = pluginDefinition(loaded.module, descriptor);
             // The UI kit includes Markdown and editor components. Load it only
             // for an activated trusted plugin, inside the existing lifecycle.
-            const { createTrustedRuntimeServices } = await import(
-                '~/composables/plugins/trusted-runtime-services'
-            );
+            const [{ createTrustedRuntimeServices }, { createTrustedHostContext }] = await Promise.all([
+                import('~/composables/plugins/trusted-runtime-services'),
+                import('~/composables/plugins/trusted-host-context'),
+            ]);
             if (!isCurrent()) throw new Error('Plugin activation cancelled');
             const manifestDefaults: Record<string, PluginJsonValue> = {};
             if (definition.manifest.settings.schema) {

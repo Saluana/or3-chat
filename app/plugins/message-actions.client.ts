@@ -3,7 +3,8 @@ import { useToast } from '#imports';
 import { createDocument, type CreateDocumentInput } from '~/db/documents';
 import { registerMessageAction } from '~/composables/chat/useMessageActions';
 import { isMobile } from '~/state/global';
-import { markdownToTipTapDoc } from '~/utils/chat/markdownToTipTapDoc';
+import type { markdownToTipTapDoc } from '~/utils/chat/markdownToTipTapDoc';
+import { getWorkspaceGeneration } from '~/db/client';
 import type { JSONContent } from '@tiptap/core';
 
 const MAX_TITLE_CHARS = 80;
@@ -32,6 +33,7 @@ export default defineNuxtPlugin(() => {
         showOn: 'assistant', // 'user' | 'assistant' | 'both'
         order: 300, // optional; after built-ins ( <200 reserved )
         async handler({ message }) {
+            const workspaceGeneration = getWorkspaceGeneration();
             if (import.meta.dev)
                 console.debug('Create document action invoked', message);
 
@@ -40,6 +42,8 @@ export default defineNuxtPlugin(() => {
 
             let tiptapDoc: ReturnType<typeof markdownToTipTapDoc>;
             try {
+                const { markdownToTipTapDoc } = await import('~/utils/chat/markdownToTipTapDoc');
+                if (getWorkspaceGeneration() !== workspaceGeneration) return;
                 tiptapDoc = markdownToTipTapDoc(markdownSource);
             } catch (conversionError) {
                 console.error(

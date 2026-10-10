@@ -1,7 +1,6 @@
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
-import { HTTPClient } from '@openrouter/sdk';
 import { useAppConfig, useRuntimeConfig, useToast } from '#imports';
 import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue } from '@or3/plugin-sdk';
 import { createTrustedUiKit } from './trusted-ui-kit';
@@ -10,7 +9,7 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { createOpenRouterClient, DEFAULT_HEADERS } from '~~/shared/openrouter';
+import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
 import { setActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
 import { registerWorkspaceProfile } from '~/core/workspace-profiles/registry';
@@ -88,6 +87,12 @@ export function createTrustedRuntimeServices(input: {
                 });
             };
             await authorize();
+            const [{ HTTPClient }, { createOpenRouterClient }] = await Promise.all([
+                import('@openrouter/sdk/lib/http.js'),
+                import('~~/shared/openrouter/client'),
+            ]);
+            await authorize();
+            if (!apiKey.value) throw Object.assign(new Error('Sign in to OpenRouter'), { code: 'not-signed-in' });
             const httpClient = new HTTPClient({ fetcher: async (request, init) => {
                 await authorize();
                 if (!origin && await input.db.projects.filter(project => !project.deleted).count())

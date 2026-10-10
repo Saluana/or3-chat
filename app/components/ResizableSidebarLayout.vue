@@ -305,6 +305,8 @@ const sidebarStyle = computed(() => ({
 // responsive: assume mobile on SSR; determine real value on client
 // Use useMediaQuery for reactive responsive state
 const isDesktop = useMediaQuery('(min-width: 768px)');
+// The drawer retains its page after first opening; desktop navigation is eager.
+provide('or3:sidebar-visible', computed(() => isDesktop.value || open.value));
 
 // CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
 // After first paint, enable transitions for smooth user interactions
@@ -384,7 +386,8 @@ onMounted(() => {
     // Restore persisted width (after hydration for parity)
     try {
         const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
+        const savedWidth = saved ? parseInt(saved, 10) : NaN;
+        if (Number.isFinite(savedWidth)) width.value = clamp(savedWidth);
     } catch {}
     // Enable transitions after a delay to allow initial layout to settle
     // Use double rAF to ensure layout is fully painted before transitions activate

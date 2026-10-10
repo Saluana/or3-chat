@@ -319,19 +319,21 @@ vi.mock('~/utils/chat/history', () => ({
     ensureThreadHistoryLoaded: vi.fn(async () => undefined),
 }));
 
-vi.mock('~/utils/chat/useAi-internal', async () => ({
+vi.mock('~/utils/chat/useAi-internal/backgroundJobs', () => ({
     backgroundJobTrackers,
     primeBackgroundJobUpdate: vi.fn(),
     stopBackgroundJobTracking: stopBackgroundJobTrackingMock,
     ensureBackgroundJobTracker: ensureBackgroundJobTrackerMock,
     subscribeBackgroundJob: subscribeBackgroundJobMock,
-    runForegroundStreamLoop: runForegroundStreamLoopMock,
+}));
+vi.mock('~/utils/chat/useAi-internal/messageBuild', () => ({
     resolveSystemPromptText: vi.fn(async () => ''),
     buildSystemPromptMessage: vi.fn(async () => null),
     buildOpenRouterMessagesForSend: buildOpenRouterMessagesForSendMock,
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
-    retryMessageImpl: (await import('~/utils/chat/useAi-internal/retry')).retryMessageImpl,
-    continueMessageImpl: vi.fn(),
+}));
+vi.mock('~/utils/chat/useAi-internal/persistence', async (importOriginal) => ({
+    ...await importOriginal<typeof import('~/utils/chat/useAi-internal/persistence')>(),
     makeAssistantPersister:
         (_db: unknown, message: any) => async (patch: any) => {
             if (patch.finalize && terminalPersistFailure.value) {
@@ -363,6 +365,8 @@ vi.mock('~/utils/chat/useAi-internal', async () => ({
             data: { ...(existing.data ?? {}), ...(patch.data ?? {}) },
         });
     },
+}));
+vi.mock('~/utils/chat/useAi-internal/backgroundJobPersistence', () => ({
     projectCanonicalBackgroundMessage: async (
         _db: unknown,
         id: string,
@@ -376,6 +380,13 @@ vi.mock('~/utils/chat/useAi-internal', async () => ({
             data: { ...(existing.data ?? {}), ...(patch.data ?? {}) },
         });
     },
+}));
+
+vi.mock('~/utils/chat/useAi-internal/foregroundStream', () => ({
+    runForegroundStreamLoop: runForegroundStreamLoopMock,
+}));
+vi.mock('~/utils/chat/useAi-internal/continue', () => ({
+    continueMessageImpl: vi.fn(),
 }));
 
 vi.unmock('~/composables/chat/useAi');

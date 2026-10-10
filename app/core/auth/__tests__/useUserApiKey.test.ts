@@ -126,6 +126,23 @@ describe('personal key lifecycle', () => {
         return { promise, resolve };
     }
 
+    it('shares an in-flight workspace key read between startup consumers', async () => {
+        await storage.kv.set('openrouter_api_key', oldKey);
+        const pending = deferred<{ value: string }>();
+        const first = vi.fn(() => pending.promise);
+        vi.spyOn(db, 'table').mockReturnValue({ where: () => ({ equals: () => ({ first }) }) } as never);
+        try {
+            const consumers = [auth.hydrateUserApiKeyFromKv(), auth.hydrateUserApiKeyFromKv()];
+            expect(first).toHaveBeenCalledTimes(1);
+            pending.resolve({ value: oldKey });
+            await Promise.all(consumers);
+            expect(stateRef.value.openrouterKey).toBe(oldKey);
+        } finally {
+            pending.resolve({ value: oldKey });
+            first.mockRestore();
+        }
+    });
+
     beforeEach(async () => {
         vi.resetModules();
         vi.doUnmock('~/core/auth/useUserApiKey');

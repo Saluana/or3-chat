@@ -1,22 +1,17 @@
 import { shallowRef, toValue, watch, onScopeDispose, type MaybeRefOrGetter } from 'vue';
 import { getDb, getWorkspaceGeneration, getActiveWorkspaceId, subscribeActiveWorkspaceDb } from '~/db/client';
-import { resolveThreadProjection } from '~/utils/chat/compaction/history';
-import { storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter } from '~/utils/chat/transcript';
-import { buildSystemPromptMessage } from '~/utils/chat/useAi-internal/messageBuild';
 import { countTokensApprox } from '~/utils/chat/tokens';
 import { useAiSettings } from './useAiSettings';
 import { useModelStore } from './useModelStore';
 import { admitChatContext, type ContextAdmission, type CountableChatMessage } from '~~/shared/chat/context-budget';
-import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { buildOpenRouterRequestBody, isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
-import { selectOpenRouterImageCandidates } from '~/core/auth/openrouter-build';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { parseFileHashes } from '~/db/files-util';
 
 /** Read-only advisory preview. It never resolves media bytes or invokes send hooks. */
 export function useContextPreview(options: {
     threadId: MaybeRefOrGetter<string | undefined>;
+    enabled?: MaybeRefOrGetter<boolean>;
     model: MaybeRefOrGetter<string>;
     text: MaybeRefOrGetter<string>;
     extraText?: MaybeRefOrGetter<string>;
@@ -39,9 +34,13 @@ export function useContextPreview(options: {
     const stop = watch(() => [toValue(options.threadId), toValue(options.model), toValue(options.text),
         toValue(options.extraText), toValue(options.attachments)?.map((file) => [file.kind, file.hash, file.meta?.width, file.meta?.height]), toValue(options.promptSelection),
         toValue(options.revision), toValue(options.reasoning), tools.listTools.value.map((tool) => [tool.definition, tool.enabled.value]),
-        preferences.settings.value, workspaceRevision.value], () => {
+        preferences.settings.value, workspaceRevision.value, toValue(options.enabled)], () => {
         if (import.meta.server) return;
         const token = ++sequence; controller?.abort(); if (timer) clearTimeout(timer);
+        if (toValue(options.enabled) === false) {
+            state.value = { pending: false };
+            return;
+        }
         state.value = { ...state.value, pending: true };
         timer = setTimeout(() => { void refresh(token); }, 120);
     }, { immediate: true });
@@ -53,6 +52,14 @@ export function useContextPreview(options: {
         controller = new AbortController(); const signal = controller.signal;
         const current = () => !signal.aborted && sequence === token && getDb() === db && getWorkspaceGeneration() === generation;
         try {
+            const [{ resolveThreadProjection }, { storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter },
+                { buildSystemPromptMessage }, { estimateMeasuredChatRequest },
+                { buildOpenRouterRequestBody, isBackgroundStreamingEnabled }, { selectOpenRouterImageCandidates }] = await Promise.all([
+                import('~/utils/chat/compaction/history'), import('~/utils/chat/transcript'),
+                import('~/utils/chat/useAi-internal/messageBuild'), import('~~/shared/chat/request-usage'),
+                import('~/utils/chat/openrouterStream'), import('~/core/auth/openrouter-build'),
+            ]);
+            if (!current()) return;
             await preferences.ensureLoaded(); if (!current()) return;
             const settings = { ...preferences.settings.value };
             const projection = threadId ? await resolveThreadProjection(threadId, db, undefined, { projectProvenance: false }) : undefined;

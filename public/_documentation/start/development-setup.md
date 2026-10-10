@@ -97,11 +97,38 @@ baseline includes the extraction worker while retaining the initial-load limit.
 Preview screenshots and unused icon variants are served on demand rather than
 cached during PWA installation.
 
-The browser model catalog uses the SDK's Models entry point. The full SDK loads
-when OAuth exchange, memory classification, or a trusted plugin needs it.
+The browser model catalog uses the SDK's Models entry point only after checking
+its persisted catalog. The full SDK loads when OAuth exchange, memory
+classification, or a trusted plugin requests a provider client; plugin activation
+alone does not load it. Provider authorization is checked again after loading.
 Request headers, model pagination, API URL configuration, and cached catalog
 fallback remain shared. App metadata respects the configured site description;
 the default favicon comes from the base configuration.
+
+Optional document conversion and Cloud sync implementations load on demand.
+Storage transfers and workspace plugin adapters load behind their existing feature
+checks, completing setup before the app mounts when enabled. The plugin development
+controller loads only in development-preview mode. Local-only builds skip the
+trusted-plugin host proof unless plugin development is enabled; managed builds
+still complete the proof before activating trusted plugins. History-tool definitions
+remain available at startup, while retrieval execution code loads on first use
+and rechecks the captured workspace before reading content.
+Production client builds group the existing entry and chat-shell dependency trees
+into bounded chunks to reduce small startup requests. Rolldown's strict execution
+order preserves module initialization order; the server bundle keeps its existing
+configuration. This trades a small increase in complete JavaScript size for fewer
+requests and less compressed JavaScript on the initial chat route. Optional feature
+roots remain lazy, and the composer keeps its existing editor and extensions.
+A closed mobile drawer mounts its page on first opening and retains it afterward.
+The first-run welcome starts its key and dismissal reads together, shares an
+in-flight key read with other startup consumers, and remains hidden until mount
+and the existing authentication checks complete. Credentials stay in Dexie.
+Desktop sidebar width stays bounded during loading; malformed persisted widths
+are ignored in favor of the normal default. The desktop rail footer uses initial
+component CSS to stay anchored while its client-only controls mount; the search
+header reserves its normal minimum height while allowing taller theme controls.
+The document head declares Tailwind's cascade layer order before theme and icon
+stylesheets, keeping utility spacing stable from the first render through hydration.
 
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 

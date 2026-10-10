@@ -157,7 +157,7 @@
                 </div>
             </ClientOnly>
         </div>
-        <div class="mt-auto shrink-0">
+        <div class="sidebar-bottom-section">
             <div
                 id="nav-footer-section"
                 v-if="sidebarFooterActions.length"
@@ -519,3 +519,11 @@ const emit = defineEmits<{
     (e: 'expand-sidebar'): void;
 }>();
 </script>
+
+<style scoped>
+/* Keep the footer anchored before client-only controls finish mounting. */
+.sidebar-bottom-section {
+    margin-top: auto;
+    flex-shrink: 0;
+}
+</style>

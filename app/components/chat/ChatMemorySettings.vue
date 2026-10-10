@@ -25,7 +25,7 @@
                 <USwitch :id="switchId" :model-value="settings.autoCompactContext" color="info" :ui="{ base: 'data-[state=checked]:bg-blue-500! data-[state=unchecked]:bg-gray-300!', thumb: 'bg-white!' }" aria-label="Auto-compact when context is high" :disabled="saving" @update:model-value="setAutomatic" />
             </div>
             <div class="chat-memory-history-section">
-                <UPopover v-model:open="historyOpen" :content="{ align: 'start', sideOffset: 8 }" @update:open="open => open && loadVersions()">
+                <UPopover v-model:open="historyOpen" :content="{ align: 'start', sideOffset: 8 }" @update:open="(open: boolean) => open && loadVersions()">
                     <button type="button" class="chat-memory-history" :disabled="!threadId" aria-label="Version history">
                         <span class="chat-memory-icon" aria-hidden="true"><UIcon name="i-lucide-history" class="size-4" /></span>
                         <span class="min-w-0 flex-1 text-left">
