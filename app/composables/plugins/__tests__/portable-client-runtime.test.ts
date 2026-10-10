@@ -93,7 +93,7 @@ vi.mock('~/db/client', () => ({
 }));
 
 const reconcileMock = vi.fn();
-vi.mock('../bundled-v1-manager-runtime', () => ({
+vi.mock('../workspace-plugin-coordinator', () => ({
     requestWorkspacePluginReconcile: (...args: unknown[]) =>
         reconcileMock(...(args as [])),
 }));

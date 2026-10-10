@@ -4,6 +4,41 @@ This change reduces initial loading work while retaining the existing composer,
 editor extensions, animations, workspace boundaries, and settled layout. It does
 **not** establish performance above 80 on mobile. No public deployment changed.
 
+## Layout stability and full-suite follow-up
+
+The cold-start layout failure is now fixed without changing the settled layout.
+The theme stylesheet introduced Tailwind's utilities layer before its base layer;
+hydration reordered styles, briefly changing empty-state padding from zero to
+32px vertically and 16px horizontally. The document head now declares the cascade
+order before any theme or icon styles. The existing test threshold is unchanged.
+Production Chrome CLS falls from **0.04081266672503867** to
+**0.0002564258821469223**, and three additional fresh sessions pass.
+
+Final follow-up validation:
+
+- `bun run test:full --bail=0 --maxWorkers=4`: **728 files, 6,313 tests pass**,
+  with one existing skip; live external-service tests are excluded by this lane.
+- An obsolete plugin lifecycle mock also failed on isolated `d0127c9c` source.
+  Its module target now matches the production coordinator. A marketplace test
+  mock uses the actual single-plugin-ID argument, fixing its CI type error.
+- Production build, full managed-profile Nuxt typecheck, changed-file lint,
+  documentation and unchanged asset budgets pass.
+- Compatibility ledger regenerated and checked: only declaration locations and
+  the resulting hash change; public API and auto-import snapshots are unchanged.
+- **Eight production Chrome E2E checks pass**, covering the repaired cold start,
+  typing/undo/redo/settings, sidebar resizing and command-palette behavior.
+- The standard disposable Basic Auth + SQLite + filesystem browser harness has
+  **one pass and one failure**, on both candidate and baseline. The persistence
+  case times out at `or3-cloud-auth.spec.ts:258`, waiting for the absent
+  `Dismiss welcome` button; the rest of that journey remains unverified.
+  The optional `--journeys` invocation instead failed during startup because
+  its alternate build directory does not match the copied TypeScript references.
+  Neither failure was hidden by raising a timeout or changing assertions.
+
+Receipts and screenshots are under `output/startup-performance/layout-fix/`;
+the refreshed user preview on port 4189 serves this production build. The
+Lighthouse measurements below predate this cascade fix; no new score is claimed.
+
 ## Follow-up implementation and repeated comparison
 
 This section supersedes the single-run candidate measurements below. The control
@@ -68,9 +103,9 @@ Final verification:
 - Seven production Chrome E2E cases pass, including the new disconnected-catalog,
   immediate typing, undo/redo and first-settings-opening check. That check failed
   on the original build because it fetched the catalog before settings opened.
-- The cold desktop CLS case still fails at **0.04081266672503867** against its 0.03
-  limit, identically on this candidate and the saved control. Its threshold remains
-  unchanged; both reports/screenshots are retained.
+- The initial cold desktop CLS case failed at **0.04081266672503867** against its
+  0.03 limit, identically on candidate and control. The follow-up above fixes it;
+  its threshold is unchanged and the original artifacts are retained.
 - Manual Chrome first-use project/document dialogs open, focus, cancel and restore
   the unchanged 320px sidebar. iPhone 17 / iOS 26.5 Safari loads the final build,
   accepts typing, and keeps the composer above the software keyboard. Settings

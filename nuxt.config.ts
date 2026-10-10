@@ -178,6 +178,13 @@ export default defineNuxtConfig({
                 : {}),
     app: {
         head: {
+            // Establish Tailwind's cascade before theme utilities or icon CSS
+            // introduce individual layers, including during SSR hydration.
+            style: [{
+                key: 'or3-css-layer-order',
+                innerHTML: '@layer properties, theme, base, components, utilities;',
+                tagPriority: -30,
+            }],
             script: [hostEsmFacadeImportMapScript()],
             link: [
                 {

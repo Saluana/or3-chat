@@ -127,6 +127,8 @@ Desktop sidebar width stays bounded during loading; malformed persisted widths
 are ignored in favor of the normal default. The desktop rail footer uses initial
 component CSS to stay anchored while its client-only controls mount; the search
 header reserves its normal minimum height while allowing taller theme controls.
+The document head declares Tailwind's cascade layer order before theme and icon
+stylesheets, keeping utility spacing stable from the first render through hydration.
 
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 
