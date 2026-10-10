@@ -45,6 +45,7 @@ function stripThinkingSuffix(modelId: string): string {
 export function useChatModelSelection(options: {
     threadId: () => string | undefined;
     onChange: (modelId: string) => void;
+    shouldFetchCatalog?: () => boolean;
 }): {
     selectedModel: Ref<string>;
     modelVariant: Ref<OpenRouterModelVariant>;
@@ -59,7 +60,7 @@ export function useChatModelSelection(options: {
     /** Call right before a new-chat composer sends; the chat that send creates keeps an explicit choice. */
     armNewChatSelection: () => void;
 } {
-    const { favoriteModels, getFavoriteModels, catalog, fetchModels } =
+    const { favoriteModels, getFavoriteModels, catalog, fetchModels, loadCachedModels } =
         useModelStore();
     const { settings } = useAiSettings();
     const selectedModel = ref(DEFAULT_MODEL);
@@ -195,9 +196,13 @@ export function useChatModelSelection(options: {
         applySelection(model ?? selectedModel.value, variant);
     }
     let disposed = false;
+    watch(() => options.shouldFetchCatalog?.(), (enabled) => {
+        if (enabled && !disposed) void fetchModels().catch(() => undefined);
+    });
     onMounted(async () => {
         const revision = selectionRevision;
-        const catalogHydration = fetchModels().catch(() => undefined);
+        const catalogHydration = (options.shouldFetchCatalog?.() === false
+            ? loadCachedModels() : fetchModels()).catch(() => undefined);
         await getFavoriteModels();
         if (!process.client || disposed) return;
         if (revision === selectionRevision) await applyChatDefault();

@@ -1,4 +1,3 @@
-import * as Sdk from '@or3/plugin-sdk';
 import type { PluginJsonValue, PluginGrant, Or3PluginDefinition } from '@or3/plugin-sdk';
 import * as Vue from 'vue';
 import { watch } from 'vue';
@@ -69,7 +68,7 @@ async function attachStylesheet(
     return () => link.remove();
 }
 
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(async (nuxtApp) => {
     const config = useRuntimeConfig();
     if (
         config.public.ssrAuthEnabled !== true ||
@@ -77,6 +76,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         config.public.admin?.pluginRuntimeV2Enabled !== true
     ) return;
 
+    const Sdk = await import('@or3/plugin-sdk');
     const loader = createProductionModuleV2Loader({
         assetUrl: buildPluginPackageAssetUrl,
         hostExternals: { vue: Vue, '@or3/plugin-sdk': Sdk },

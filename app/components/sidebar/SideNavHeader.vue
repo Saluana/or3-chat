@@ -58,6 +58,7 @@
         />
 
         <SidebarCreateProjectModal
+            v-if="createProjectModalActivated"
             :modal-props="createProjectModalProps"
             :open="showCreateProjectModal"
             title="New project"
@@ -76,6 +77,7 @@
         />
 
         <SidebarAddToProjectModal
+            v-if="addToProjectModalActivated"
             :modal-props="addToProjectModalProps"
             :open="showAddToProjectModal"
             title="Add thread to project"
@@ -101,6 +103,7 @@
         />
 
         <SidebarCreateDocumentModal
+            v-if="createDocumentModalActivated"
             :modal-props="createDocumentModalProps"
             :open="showCreateDocumentModal"
             title="Name new document"
@@ -119,16 +122,16 @@
     </div>
 </template>
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
-import SidebarAddToProjectModal from '~/components/sidebar/SidebarAddToProjectModal.vue';
-import SidebarCreateDocumentModal from '~/components/sidebar/SidebarCreateDocumentModal.vue';
-import SidebarCreateProjectModal from '~/components/sidebar/SidebarCreateProjectModal.vue';
+const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
+const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
+const SidebarCreateProjectModal = defineAsyncComponent(() => import('./SidebarCreateProjectModal.vue'));
 import SidebarRenameEntityModal from '~/components/sidebar/SidebarRenameEntityModal.vue';
 import SidebarRenameProjectModal from '~/components/sidebar/SidebarRenameProjectModal.vue';
 import type { Project } from '~/db';
@@ -343,6 +346,8 @@ async function saveRenameProject() {
 
 // ---- Project Creation ----
 const showCreateProjectModal = ref(false);
+const createProjectModalActivated = ref(false);
+watch(showCreateProjectModal, open => { if (open) createProjectModalActivated.value = true; });
 const creatingProject = ref(false);
 const createProjectState = ref<{ name: string; description: string }>({
     name: '',
@@ -385,6 +390,8 @@ async function submitCreateProject() {
 
 // ---- Add To Project Flow ----
 const showAddToProjectModal = ref(false);
+const addToProjectModalActivated = ref(false);
+watch(showAddToProjectModal, open => { if (open) addToProjectModalActivated.value = true; });
 const addToProjectThreadId = ref<string | null>(null);
 // Support documents
 const addToProjectDocumentId = ref<string | null>(null);
@@ -434,6 +441,8 @@ async function submitAddToProject() {
 
 // ---- New Document Flow (naming modal) ----
 const showCreateDocumentModal = ref(false);
+const createDocumentModalActivated = ref(false);
+watch(showCreateDocumentModal, open => { if (open) createDocumentModalActivated.value = true; });
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});

@@ -3,7 +3,8 @@ import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { EditorState } from '@tiptap/pm/state';
 import { isAllowedDocumentHref } from './document-href';
 
-export const MAX_DOCUMENT_AI_OPERATIONS = 64;
+import { MAX_DOCUMENT_AI_OPERATIONS } from './document-ai-tool-definitions';
+export { MAX_DOCUMENT_AI_OPERATIONS } from './document-ai-tool-definitions';
 export const MAX_DOCUMENT_AI_OUTPUT_BYTES = 256 * 1024;
 
 export type DocumentAiOperation =

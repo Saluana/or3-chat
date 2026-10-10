@@ -3,9 +3,6 @@ import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
-import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { cleanupHookBridge } from '~/core/sync/hook-bridge';
-import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { clearPersistedUserApiKey } from '~/core/auth/useUserApiKey';
 import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
@@ -28,6 +25,10 @@ export default defineNuxtPlugin(async () => {
 
     const { data, refresh } = useSessionContext();
     const nuxtApp = useNuxtApp();
+
+    const [{ cleanupCursorManager }, { cleanupHookBridge }, { cleanupSubscriptionManager }] = await Promise.all([
+        import('~/core/sync/cursor-manager'), import('~/core/sync/hook-bridge'), import('~/core/sync/subscription-manager'),
+    ]);
 
     const { logoutCleanup } = await import('~/utils/logout-cleanup');
     await refresh();

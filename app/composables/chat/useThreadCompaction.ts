@@ -1,7 +1,6 @@
 import { computed, shallowRef, shallowReactive, toValue, watch, getCurrentScope, onScopeDispose, type MaybeRefOrGetter } from 'vue';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { captureCompaction, createCompactedFork, CompactionError } from '~/db/compaction';
-import { generateCompactionSummary } from '~/utils/chat/compaction/summary';
 import { resolveThreadProjection, CompactionHistoryError } from '~/utils/chat/compaction/history';
 import { newId } from '~/db/util';
 import type { ContextModelMetadata } from '~~/shared/chat/context-budget';
@@ -137,6 +136,7 @@ export function useThreadCompaction(options: ControllerOptions) {
             const capture = await prepareCapture({ sourceThreadId: source, anchorMessageId, model, db, signal: owned.controller.signal, isCurrent: current }); ensure();
             progress('capturing', capture.operationId);
             const [metadata, prompt] = await Promise.all([options.resolveModelMetadata(model), options.getTaskSystemPrompt?.(source) ?? Promise.resolve(null)]); ensure();
+            const { generateCompactionSummary } = await import('~/utils/chat/compaction/summary'); ensure();
             const summary = await generateCompactionSummary(capture, { modelMetadata: metadata, userMaxContextTokens: preferences.maxContextTokens, apiKey,
                 taskSystemPrompt: [preferences.masterSystemPrompt, prompt].filter(Boolean).join('\n\n') || null,
                 signal: owned.controller.signal, isCurrent: current, onPhase: (phase) => progress(phase, capture.operationId) }); ensure();

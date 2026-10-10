@@ -1,4 +1,3 @@
-import * as Sdk from '@or3/plugin-sdk';
 import { createApp } from 'vue';
 import * as Vue from 'vue';
 import {
@@ -42,6 +41,7 @@ export default defineNuxtPlugin(async () => {
     // Runtime adapters are disabled in local-only builds. Development previews
     // still need the host proof even without a managed workspace session.
     if (config.public.ssrAuthEnabled !== true && config.public.pluginDevelopment !== true) return;
+    const Sdk = await import('@or3/plugin-sdk');
     const html = document.documentElement.innerHTML;
     const [vueFacade, sdkFacade, vueComponentRendering] = await Promise.all([
         import(/* @vite-ignore */ HOST_ESM_FACADE_IMPORTS.vue) as Promise<FacadeModule>,

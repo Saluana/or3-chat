@@ -30,14 +30,14 @@ function loadHostPlugin(hooks: ReturnType<typeof createTypedHookEngine>, dispose
         '~~/shared/plugins/host-esm-facade-runtime': { createProductionModuleV2Loader: () => ({}) },
         '~~/shared/plugins/module-v2-loader': { buildPluginPackageAssetUrl: () => '' },
     };
-    const exports: { default?: (app: { runWithContext<T>(callback: () => T): T }) => void } = {};
+    const exports: { default?: (app: { runWithContext<T>(callback: () => T): T }) => void | Promise<void> } = {};
     const require = (name: string) => {
         if (!(name in modules)) throw new Error(`Unexpected plugin dependency: ${name}`);
         return modules[name];
     };
     const evaluate = new Function('require', 'exports', 'defineNuxtPlugin', '__hmr', compiled);
     evaluate(require, exports, (plugin: unknown) => plugin, { dispose: (callback: () => void) => dispose.push(callback) });
-    exports.default!({ runWithContext: (callback) => callback() });
+    return exports.default!({ runWithContext: (callback) => callback() });
 }
 
 describe('trusted editor host bridge lifecycle', () => {
@@ -49,12 +49,12 @@ describe('trusted editor host bridge lifecycle', () => {
         trusted.context.contributions.register({ kind: 'editor.extension', id: 'owned-extension', definition: { extension } });
         const base = { name: 'base' };
         try {
-            loadHostPlugin(hooks, hotDisposers);
+            await loadHostPlugin(hooks, hotDisposers);
             expect(await hooks.applyFilters('ui.chat.editor:filter:extensions', [base])).toEqual([base, extension]);
             hotDisposers[0]!();
             hotDisposers[0]!();
             expect(await hooks.applyFilters('ui.chat.editor:filter:extensions', [base])).toEqual([base]);
-            loadHostPlugin(hooks, hotDisposers);
+            await loadHostPlugin(hooks, hotDisposers);
             expect(await hooks.applyFilters('ui.chat.editor:filter:extensions', [base])).toEqual([base, extension]);
             await trusted.dispose('plugin-disabled');
             expect(await hooks.applyFilters('ui.chat.editor:filter:extensions', [base])).toEqual([base]);

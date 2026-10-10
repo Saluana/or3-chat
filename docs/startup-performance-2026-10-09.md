@@ -4,6 +4,87 @@ This change reduces initial loading work while retaining the existing composer,
 editor extensions, animations, workspace boundaries, and settled layout. It does
 **not** establish performance above 80 on mobile. No public deployment changed.
 
+## Follow-up implementation and repeated comparison
+
+This section supersedes the single-run candidate measurements below. The control
+is the saved production output of `d0127c9cef195775e1f39853c7733e7d507f1fba`;
+the candidate includes the subsequent import/catalog/modal changes on this branch.
+Both used identical local-only feature flags, fresh Chrome profiles, Lighthouse
+13.5.0 standard simulation, and `/chat`. Audits ran sequentially without builds
+or tests. Both local HTTP/1.1 proxies gzip HTML and serve the build's Brotli assets.
+This is a controlled local comparison, not the public deployment's HTTPS/HTTP2
+transport or an authenticated Cloud qualification.
+
+| Three-run result | Control | Candidate |
+| --- | ---: | ---: |
+| Mobile performance runs | 55, 56, 59 | 61, 59, 59 |
+| Mobile performance median | 56 | 59 |
+| Desktop performance runs | 93, 93, 94 | 92, 94, 93 |
+| Desktop performance median | 93 | 93 |
+| Mobile median FCP / Speed Index | 5.427 s | 5.865 s |
+| Mobile median LCP | 7.981 s | 7.519 s |
+| Mobile median TBT | 276 ms | 152 ms |
+| Mobile median CLS | 0.00572 | 0.00572 |
+| Desktop median LCP | 1.619 s | 1.486 s |
+| Desktop median FCP | 0.942 s | 1.056 s |
+| Root JavaScript preloads | 55 | 24 |
+| Root preload gzip bytes | 874,407 | 559,236 |
+| Full JavaScript raw bytes | 13,475,928 | 13,463,869 |
+| Full JavaScript gzip bytes | 4,191,861 | 4,191,230 |
+| Precache entries | 428 | 431 |
+
+Startup preloaded JavaScript fell 36.0%, and all existing asset budgets pass without
+raising a limit. Startup/chat-shell groups now use a 500,000-byte chunk target to
+reduce splitting overhead while preserving execution order. Removing these groups
+was rejected: the experiment produced 609 precache entries and 11.22 s mobile LCP.
+FCP did not improve consistently, and the score remains below the earlier 81 target.
+These changes must not be described as achieving the mobile performance target.
+After reviewing these results, the user lowered expectations: 80 is aspirational,
+and further score improvements must preserve responsive typing and navigation.
+
+The implementation defers compaction/preview/request execution through existing
+async operations; checks captured request/workspace ownership after loading; keeps
+document tool definitions immediately available; and loads their handlers on use.
+The moved document function bodies and tool definitions were compared against the
+control and are unchanged. The host SDK and sync cleanup implementations load only
+after their existing feature gates. Enabled plugin initialization remains awaited.
+
+The native TipTap editor, extensions, chat controller, and expanded sidebar remain
+eager. Closed settings and sidebar create/add dialogs load on use, and the settings
+trigger warms its module on pointer/focus intent. Dialog instances remain mounted
+after first activation to retain existing closing transitions. An empty disconnected
+composer hydrates cached models/preferences and waits for a key, conversation, or
+settings/model-selection intent before fetching a live catalog. Actual send
+admission still resolves required model metadata. No auth probes were removed.
+
+Final verification:
+
+- Production build, unchanged asset gate, and documentation checks pass.
+- Full Nuxt typecheck passes with published Basic Auth, SQLite/better-sqlite3 and
+  filesystem providers and disposable local configuration. A missing template
+  callback type in `ChatMemorySettings` was annotated without changing behavior.
+- Ten affected Vitest suites pass: 150 tests for requests, model selection,
+  compaction, document operations/tools, trusted plugin lifecycle, keys and logout.
+- Seven production Chrome E2E cases pass, including the new disconnected-catalog,
+  immediate typing, undo/redo and first-settings-opening check. That check failed
+  on the original build because it fetched the catalog before settings opened.
+- The cold desktop CLS case still fails at **0.04081266672503867** against its 0.03
+  limit, identically on this candidate and the saved control. Its threshold remains
+  unchanged; both reports/screenshots are retained.
+- Manual Chrome first-use project/document dialogs open, focus, cancel and restore
+  the unchanged 320px sidebar. iPhone 17 / iOS 26.5 Safari loads the final build,
+  accepts typing, and keeps the composer above the software keyboard. Settings
+  opening preserved the draft during the previous candidate check. Subsequent
+  simulator coordinate input stopped resolving its window, so final drawer
+  open/close was not requalified; Chrome responsive drawer checks pass.
+- Authenticated Cloud/browser streaming journeys and physical-device performance
+  were not requalified. Nothing was deployed.
+
+Receipts are local under `output/startup-performance/next-pass/`: `paired-results.json`,
+`paired-*.report.json/html`, trace/devtools logs, `assets4/production-build-assets.json`,
+`e2e-final/`, `e2e-control/`, and `ios-final-keyboard.png`. The rest of this document
+records the earlier pass and its original reproduction instructions.
+
 ## Measured results
 
 The final PR candidate is based on `737dba5ee3018b29503f5b41b0b1b8c25daa0204`.

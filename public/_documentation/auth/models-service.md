@@ -41,6 +41,10 @@ The `modelsService` namespace/default export groups fetch and filter functions. 
 
 ## Cache and errors
 
+The chat composer loads saved preferences and cached models immediately. An empty disconnected chat waits until a connection is available or chat settings/model selection opens before fetching a live catalog. Returning conversations keep their catalog preparation, and sending still resolves the model metadata required for admission.
+
+`useModelStore().loadCachedModels()` hydrates the existing fresh workspace KV cache without a network request. `useChatModelSelection` callers can supply `shouldFetchCatalog` to defer live loading; omitting it preserves eager loading. `useContextPreview` accepts an optional reactive `enabled` flag: `false` cancels pending advisory work, while the default preserves existing preview behavior.
+
 The service stores `{ data, fetchedAt }` under `openrouter_model_catalog_v1` in localStorage. A fresh nonempty validated cache is returned without a request. `force: true` bypasses that initial cache check, but a failed network request can still return a stale nonempty cache. With no usable cache, fetching rejects with a normalized error. Cache writes are best effort when browser storage is unavailable. A missing legacy fetch timestamp is returned as `null`; loading or rewriting cached data does not make it a live response. The existing `fetchModels` list API and `ModelCatalogCache` type remain compatible.
 
 The existing model store retains the fetch timestamp when saving its `MODELS_CATALOG` KV cache as `{ version: 1, data, fetchedAt }`. It also reads legacy lists, whose actual fetch time is unknown. These are the same existing caches, not another catalog. Forced store refreshes wait for an ordinary in-flight network load and then coalesce a genuinely forced request. A delayed KV hydration cannot publish over a newer network request; it returns the currently owned catalog/request instead.

@@ -107,6 +107,7 @@
     />
 
     <SidebarCreateProjectModal
+        v-if="createProjectModalActivated"
         :modal-props="createProjectModalProps"
         :open="showCreateProjectModal"
         title="New Project"
@@ -125,6 +126,7 @@
     />
 
     <SidebarAddToProjectModal
+        v-if="addToProjectModalActivated"
         :modal-props="addToProjectModalProps"
         :open="showAddToProjectModal"
         title="Add to project"
@@ -149,7 +151,7 @@
     />
 
     <SidebarCreateDocumentModal
-        v-if="documentsEnabled"
+        v-if="documentsEnabled && createDocumentModalActivated"
         :modal-props="createDocumentModalProps"
         :open="showCreateDocumentModal"
         title="New Document"
@@ -177,6 +179,7 @@ import {
     watch,
     computed,
     nextTick,
+    defineAsyncComponent,
 } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
@@ -213,9 +216,9 @@ import { relatedChatsNotice } from '~/utils/projects/related-chats';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
-import SidebarAddToProjectModal from './SidebarAddToProjectModal.vue';
-import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
-import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
+const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
+const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
+const SidebarCreateProjectModal = defineAsyncComponent(() => import('./SidebarCreateProjectModal.vue'));
 import {
     isDocumentPost,
     type SidebarRenamePayload,
@@ -918,6 +921,8 @@ async function handleRemoveFromProject(payload: {
 
 // ---- Project Creation ----
 const showCreateProjectModal = ref(false);
+const createProjectModalActivated = ref(false);
+watch(showCreateProjectModal, open => { if (open) createProjectModalActivated.value = true; });
 const creatingProject = ref(false);
 const createProjectState = ref<{ name: string; description: string }>({
     name: '',
@@ -971,6 +976,8 @@ async function submitCreateProject() {
 
 // ---- Add To Project Flow ----
 const showAddToProjectModal = ref(false);
+const addToProjectModalActivated = ref(false);
+watch(showAddToProjectModal, open => { if (open) addToProjectModalActivated.value = true; });
 const addToProjectThreadId = ref<string | null>(null);
 // Support documents
 const addToProjectDocumentId = ref<string | null>(null);
@@ -1088,6 +1095,8 @@ async function submitAddToProject() {
 
 // ---- New Document Flow (naming modal) ----
 const showCreateDocumentModal = ref(false);
+const createDocumentModalActivated = ref(false);
+watch(showCreateDocumentModal, open => { if (open) createDocumentModalActivated.value = true; });
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});

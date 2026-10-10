@@ -7,6 +7,34 @@ test.skip(
 );
 
 const chatPage = '/__or3-chat-journey-test';
+
+test('disconnected welcome keeps editor history and loads settings on first opening', async ({ page }, info) => {
+    let catalogRequests = 0;
+    await page.route('**/api/v1/models**', async route => {
+        catalogRequests++;
+        await route.fulfill({ json: { data: [{ id: 'openai/gpt-4o-mini', name: 'GPT-4o mini',
+            context_length: 128000, architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            supported_parameters: ['tools'], pricing: { prompt: '0', completion: '0' } }] } });
+    });
+    await page.goto('/chat');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible();
+    await input.fill('Immediate typing stays smooth');
+    await input.press('ControlOrMeta+z');
+    await expect(input).toBeEmpty();
+    await input.press('ControlOrMeta+Shift+z');
+    await expect(input).toHaveText('Immediate typing stays smooth');
+    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+    expect(catalogRequests).toBe(0);
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Close chat settings', exact: true })).toBeVisible();
+    await expect.poll(() => catalogRequests).toBeGreaterThan(0);
+    await page.screenshot({ path: info.outputPath('first-settings-and-editor.png'), animations: 'disabled' });
+    await info.attach('first-settings-and-editor', {
+        path: info.outputPath('first-settings-and-editor.png'), contentType: 'image/png',
+    });
+});
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
 for (const savedWidth of [null, 'NaN']) {

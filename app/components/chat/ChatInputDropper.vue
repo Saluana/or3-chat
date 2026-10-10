@@ -105,6 +105,9 @@
                                     label="Open"
                                     type="button"
                                     aria-label="Settings"
+                                    @pointerenter="warmChatSettings"
+                                    @pointerdown="warmChatSettings"
+                                    @focus="warmChatSettings"
                                     :disabled="loading && !compactionInProgress"
                                 >
                                     <UIcon
@@ -463,6 +466,12 @@ const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
 );
 
+const loadChatSettings = () => import('~/components/chat/ChatSettingsPopover.vue');
+const ChatSettingsPopover = defineAsyncComponent(loadChatSettings);
+function warmChatSettings() {
+    void loadChatSettings().catch(() => undefined);
+}
+
 function isEditorExtension(value: unknown): value is Extension | Node {
     if (value instanceof Extension || value instanceof Node) return true;
     if (!value || typeof value !== 'object') return false;
@@ -796,6 +805,7 @@ const {
     armNewChatSelection,
 } = useChatModelSelection({
     threadId: () => props.threadId,
+    shouldFetchCatalog: () => Boolean(props.threadId || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
     onChange: (modelId) => emit('model-change', modelId),
 });
 
@@ -909,6 +919,7 @@ const previewReasoning = computed(() => {
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
+    enabled: () => Boolean(props.threadId || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });

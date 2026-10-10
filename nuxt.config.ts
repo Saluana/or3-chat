@@ -777,11 +777,11 @@ export default defineNuxtConfig({
                             ...splitting,
                             groups: [
                                 ...(splitting.groups ?? []),
-                                { name: 'startup', tags: ['$initial'], maxSize: 350_000 },
+                                { name: 'startup', tags: ['$initial'], maxSize: 500_000 },
                                 {
                                     name: 'chat-shell',
                                     test: (id: string) => id.replaceAll('\\', '/').includes('/app/components/PageShell.vue'),
-                                    maxSize: 350_000,
+                                    maxSize: 500_000,
                                 },
                             ],
                         },

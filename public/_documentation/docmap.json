@@ -356,7 +356,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Fetch and filter current metadata, understand cache fallback and per-token pricing."
+                    "summary": "Fetch and filter metadata, defer disconnected catalog loading, and understand workspace caches and pricing."
                 },
                 {
                     "name": "openrouter-build.md",
