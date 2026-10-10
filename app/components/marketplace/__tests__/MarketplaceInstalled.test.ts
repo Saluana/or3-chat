@@ -21,7 +21,7 @@ vi.mock('~/composables/auth/useSessionContext', async () => {
  * "no version selected" a guessed `pointer.selected.version` produced.
  */
 const fetchMock = vi.fn();
-const openPageMock = vi.fn();
+const openPageMock = vi.fn<(pluginId: string) => Promise<void>>();
 const reconcileMock = vi.fn();
 vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({ requestWorkspacePluginReconcile: (...args: unknown[]) => reconcileMock(...args) }));
 const sourceMock = vi.fn(() => ({}));
