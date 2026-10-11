@@ -1132,6 +1132,80 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
+    for (const delivery of ['fallback', 'hook'] as const) {
+        it.each([[true, false], [false, true], [true, true], [false, false]] as const)(`uses originating workspace mute preferences through ${delivery} when origin=%s and current=%s`, async (originMuted, currentMuted) => {
+            subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+            sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
+            const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user', originDb: dbMock as never,
+                workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+            mod.stopBackgroundJobTracking(tracker);
+            const originLookup = dbMock.kv.get.mockImplementation(async key => key === 'notification_muted_threads:origin-user'
+                ? { value: JSON.stringify(originMuted ? ['thread-1'] : []) } : undefined);
+            const currentLookup = vi.fn(async () => ({ value: JSON.stringify(currentMuted ? ['thread-1'] : []) }));
+            activeDbMock = { ...dbMock, name: 'or3-db-workspace-b', kv: { get: currentLookup } };
+            sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-2' } };
+            const hookDelivery = vi.fn();
+            if (delivery === 'hook') {
+                (globalThis as typeof globalThis & { __NUXT_HOOKS__: HookEngine }).__NUXT_HOOKS__.addAction('notify:action:push', hookDelivery);
+            }
+            try {
+                const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+                await emitBackgroundComplete(tracker, makeStatus('complete'));
+                expect(delivery === 'hook' ? hookDelivery : notificationCreateMock).toHaveBeenCalledTimes(originMuted ? 0 : 1);
+                if (originMuted !== currentMuted) {
+                    expect(originLookup).toHaveBeenCalledWith('notification_muted_threads:origin-user');
+                    expect(currentLookup).not.toHaveBeenCalled();
+                }
+            } finally { mod.backgroundJobTrackers.clear(); }
+        });
+    }
+
+    it('recovers originating mute preferences after a read failure without borrowing current-workspace preferences', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user', originDb: dbMock as never,
+            workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        mod.stopBackgroundJobTracking(tracker);
+        dbMock.kv.get.mockRejectedValueOnce(new Error('synthetic-origin-store-unavailable'))
+            .mockResolvedValue({ value: JSON.stringify(['thread-1']) });
+        const currentLookup = vi.fn(async () => ({ value: JSON.stringify(['thread-1']) }));
+        activeDbMock = { ...dbMock, name: 'or3-db-workspace-b', kv: { get: currentLookup } };
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-2' } };
+        try {
+            const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+            await emitBackgroundComplete(tracker, makeStatus('complete'));
+            expect(notificationCreateMock).toHaveBeenCalledOnce(); // Preserve best-effort delivery on lookup failure.
+            await emitBackgroundComplete(tracker, makeStatus('complete'));
+            expect(notificationCreateMock).toHaveBeenCalledOnce(); // Recovered origin mute suppresses the retry.
+            expect(currentLookup).not.toHaveBeenCalled();
+        } finally { mod.backgroundJobTrackers.clear(); }
+    });
+
+    it.each(['origin-legacy-key', 'missing-origin-db'] as const)('preserves mute compatibility for %s', async compatibility => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user', originDb: dbMock as never,
+            workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        mod.stopBackgroundJobTracking(tracker);
+        dbMock.kv.get.mockImplementation(async key => key === 'notification_muted_threads'
+            ? { value: JSON.stringify(['thread-1']) } : undefined);
+        const currentLookup = vi.fn(async () => ({ value: JSON.stringify(['thread-1']) }));
+        activeDbMock = { ...dbMock, name: 'or3-db-workspace-b', kv: { get: currentLookup } };
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-2' } };
+        try {
+            const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+            await emitBackgroundComplete(compatibility === 'missing-origin-db' ? { ...tracker, originDb: undefined } : tracker, makeStatus('complete'));
+            expect(notificationCreateMock).not.toHaveBeenCalled();
+            if (compatibility === 'origin-legacy-key') {
+                expect(dbMock.kv.get).toHaveBeenCalledWith('notification_muted_threads');
+                expect(currentLookup).not.toHaveBeenCalled();
+            } else expect(currentLookup).toHaveBeenCalledWith('notification_muted_threads:origin-user');
+        } finally { mod.backgroundJobTrackers.clear(); }
+    });
+
     it('preserves detached completion notifications after the same account switches workspaces', async () => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');

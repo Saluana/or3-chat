@@ -7,6 +7,11 @@ the job identifier. A request from another account does not replace that owner
 or its tracker metadata. Same-account reuse and filling a previously unknown
 account remain supported.
 
+Detached completion checks the originating workspace's thread mute settings.
+An identically named thread in the active workspace has independent preferences.
+Same-account completions can still notify after switching workspaces; older
+trackers without an origin DB retain the active-workspace lookup fallback.
+
 Detached chat completions cannot deliver their error details or navigation actions
 to a different authenticated account, including an account change during the
 asynchronous mute lookup. Switching workspaces within the same account retains

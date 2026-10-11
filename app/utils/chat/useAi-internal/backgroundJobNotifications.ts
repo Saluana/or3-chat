@@ -40,7 +40,8 @@ function resolveNotificationHooks(): TypedHookEngine | null {
 
 async function isThreadMuted(
     threadId: string,
-    userId?: string
+    userId?: string,
+    originDb?: BackgroundJobTracker['originDb']
 ): Promise<boolean> {
     if (!isClientRuntime()) return false;
     try {
@@ -48,7 +49,7 @@ async function isThreadMuted(
             userId && userId.length > 0
                 ? `${BACKGROUND_JOB_MUTED_KEY}:${userId}`
                 : null;
-        const db = getDb();
+        const db = originDb ?? getDb();
         const kv =
             (scopedKey ? await db.kv.get(scopedKey) : null) ||
             (await db.kv.get(BACKGROUND_JOB_MUTED_KEY));
@@ -82,7 +83,7 @@ export async function emitBackgroundComplete(
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden';
     if (hasSubscribers && !isTabHidden) return;
-    if (await isThreadMuted(tracker.threadId, tracker.userId)) return;
+    if (await isThreadMuted(tracker.threadId, tracker.userId, tracker.originDb)) return;
     // A completion can outlive the account that admitted it, including while
     // the mute lookup awaits IndexedDB. Never hand its payload to a new user.
     if (!belongsToCurrentAccount()) return;
