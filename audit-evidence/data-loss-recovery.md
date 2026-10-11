@@ -473,3 +473,100 @@ These cover distinct transactions and retained live state. They do not guarantee
 recovery of an unreferenced blob after accepting the warning or killing the
 browser; the existing #234/#238 orphan/reference contracts remain unchanged.
 Pending-save source commits: `9914dcaa` (core/composer), `9ecd832c` (shell guard).
+
+## Delayed composer attachment completion
+
+After the pending attachment's text-only draft had flushed, upload completion
+mutated a raw intake object. Vue's deep composer watcher did not see its ready/hash
+transition, leaving the saved draft without the file reference. Both Chromium
+and a mounted composer regression failed against the pre-fix source:
+`/tmp/or3-recovery-pending-image-unload-browser.log`,
+`/tmp/or3-recovery-delayed-attachment-unit-red.log`.
+
+The intake creates one reactive attachment object shared by persistence, emitted
+callbacks and the composer array. Existing ownership, cancellation, authorization,
+file APIs and schema contracts are unchanged. The complete draft/composer suite
+passed 57 tests (`/tmp/or3-recovery-delayed-attachment-final-unit.log`), including
+current scope/cancellation and send regressions. Source lint passed with no
+output/errors; credential-free type-check passed:
+`/tmp/or3-recovery-delayed-attachment-final-lint.log`,
+`/tmp/or3-recovery-delayed-attachment-final-typecheck.log`.
+
+Actual Chromium qualification passed in 23.2 seconds with no concurrent generated
+checks: a synthetic WebCrypto digest gate held the upload, natural refresh raised
+a beforeunload confirmation, dismissing it retained text and preview, completion
+saved the reference, then reload restored both without another dialog. Native
+row/layout receipts before and after reload are under
+`test-results/recovery-pending-image-unload-qualified/*/pending-image-reload-state.json`;
+final receipt `pending-image-unload.json`; log
+`/tmp/or3-recovery-pending-image-unload-qualified-browser.log`.
+
+The first post-fix browser attempt confirmed the saved reference but failed the
+reload text check while type-check/unit qualification ran concurrently; it is not
+a passing result and its exact cause is not established. A diagnostic harness
+syntax error was corrected before the independent final run. Future browser
+qualification excludes concurrent Nuxt preparation/type-check to avoid possible
+generated-file/HMR interference. Partial image transaction tests were committed
+separately in `a54b68de`.
+
+The final two-case attachment lane passed in 31.2 seconds (one Chromium worker):
+hashing-gate refresh recovery plus first blob-write quota rejection → visible
+Retry → persisted reference without another editor edit → reload with text and
+preview. Log `/tmp/or3-recovery-attachment-completion-retry-browser.log`; receipts
+under `test-results/recovery-attachment-completion-retry`. The later diagnostic
+type-check passed (`/tmp/or3-recovery-delayed-attachment-qualified-typecheck.log`).
+
+## Current completion checkpoint
+
+### Architecture
+Host browser persistence and mounted document/composer consumers; trusted core
+changed where existing persistence contracts required it. Providers, tool
+execution and broad integration were not taken over. File/accounting/restore
+contracts from merged #234–#238 remain in force.
+
+### Changes
+Verified fixes retain document edits after failures, fence stale reads, keep
+unread draft/file references retryable, acknowledge exact save receipts, protect
+unjournaled pending bytes during unload and capture late attachment completion.
+Shared PageShell and unsolicited user-row abort classification changes have
+separate commits for integration review.
+
+### Permissions
+Only fresh cloud-container filesystem, synthetic local instances and local
+127.0.0.1 browser requests used for recovery testing. Repository/package/browser
+downloads established the isolated environment. Production/server access, real
+credentials, paid inference, external scans, communication, deployment, release,
+merging and remote publication: None. Dormant cleanup activation: None.
+
+### Validation
+Counts above are per-run evidence, not summed unique tests. Latest core/composer
+checkpoint: 57 unit/component tests; nine Chromium draft recovery cases; two
+additional document attachment boundaries; two Chromium attachment completion /
+retry cases. Credential-free type checks and scoped source lint passed; existing
+core warnings remain recorded. Every native browser fault uses isolated contexts,
+synthetic data and one worker, with paid/provider requests denied.
+Reproduce using the bounded `test:e2e:recovery` package script. Individual browser
+commands set `OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true PW_SKIP_WEB_SERVER=true
+PW_PORT=3127` and use the isolated configured local server. Unit commands use
+`bunx vitest run` for the cited suites. This is an ongoing overnight checkpoint,
+not a claim that every browser case passed in one combined invocation.
+
+### Artifact or installation
+Local branch `audit/data-loss-recovery-20261011`. Portable bundle, binary patch
+and synthetic evidence archive are refreshed at `/workspace/` for parent review;
+the archive checkpoint records its exact source HEAD and base. Nothing installed
+in production, pushed, published, activated or merged.
+
+### Rollback
+Discard the isolated branch, or revert its source commits in reverse dependency
+order during integration. No database schema migration or cleanup activation
+was introduced. Do not delete user drafts/files as part of rollback.
+
+### Remaining risks
+Competing browser-page drafts still share one canonical row/journal and can
+silently replace each other. A preserve-both design is documented but remains
+open for coordinated implementation. Natural hidden/OS suspension could not be
+established in this environment. Physical IndexedDB quota exhaustion, forced
+browser termination, suppressed/accepted confirmation, eviction and disk
+corruption remain untested. Cloud reconnect evidence is mocked/local, without
+live authenticated sync. Detailed distinctions and blockers appear above.

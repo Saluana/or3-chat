@@ -145,3 +145,8 @@ a confirmed IndexedDB receipt nor a matching synchronous journal protects them.
 This includes valid buffers larger than the unload journal limit and files still
 preparing. Recapturing unchanged durable content does not prompt solely because
 its timestamp changed. Browser confirmations remain best effort.
+
+Selected attachments remain reactive throughout persistence. A ready/hash or
+error transition after the initial draft flush triggers another draft capture,
+so an upload that finishes late still persists its restorable file reference.
+The original intake ownership and cancellation checks apply throughout.

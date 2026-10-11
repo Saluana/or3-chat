@@ -611,6 +611,33 @@ describe('ChatInputDropper', () => {
         }
     });
 
+    it('persists an attachment that becomes ready after the pending draft was already flushed', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-delayed-attachment-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'delayed-attachment-tab';
+        const drafts = useWorkspaceTabDrafts(); const gate = deferred<void>(); const entered = deferred<void>();
+        vi.mocked(persistAttachment).mockImplementationOnce(async attachment => {
+            entered.resolve(); await gate.promise;
+            attachment.hash = 'synthetic-ready-hash'; attachment.status = 'ready';
+        });
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            (wrapper.vm as unknown as { setText: (text: string) => void }).setText('Delayed attachment buffer');
+            mockFiles.value = [new NativeFile(['synthetic delayed bytes'], 'delayed.png', { type: 'image/png' })] as unknown as FileList;
+            await entered.promise;
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            await drafts.flush();
+            expect((await db.workspace_tab_drafts.toArray())[0]?.draft.attachments).toHaveLength(0);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(async () => expect((await db.workspace_tab_drafts.toArray())[0]?.draft.attachments).toHaveLength(1));
+        } finally {
+            gate.resolve(); wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
+        }
+    });
+
     it('captures a final editor change before an earlier bubbling unload guard and removes its listener', async () => {
         const previous = process.client; process.client = true;
         const workspace = `draft-unload-capture-${crypto.randomUUID()}`;

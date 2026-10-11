@@ -77,6 +77,24 @@ test.describe('chat draft storage recovery faults', () => {
         });
     }
 
+    async function savedAttachmentReferences(page: Page): Promise<number> {
+        return page.evaluate(async () => {
+            let count = 0;
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const rows = await new Promise<Array<{ draft: { attachments: unknown[] } }>>((resolve, reject) => {
+                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                count += rows.reduce((sum, row) => sum + row.draft.attachments.length, 0); db.close();
+            }
+            return count;
+        });
+    }
+
     test('an interrupted draft read stays visible and retry restores the saved buffer', async ({ page }, info) => {
         const input = page.getByRole('textbox', { name: 'Message input' });
         const marker = 'Saved buffer before interrupted browser draft read';
@@ -220,6 +238,80 @@ test.describe('chat draft storage recovery faults', () => {
         await writeFile(path, JSON.stringify({ chars: marker.length, dialogs, recoveredChars: (await input.innerText()).length,
             externalRequests: 'denied', fault: 'deferred local Dexie put before native transaction' }, null, 2));
         await info.attach('interrupted-large-draft', { path, contentType: 'application/json' });
+    });
+
+    test('refresh protects an attachment still hashing and reload restores it after completion', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Synthetic pending image draft'; await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const digest = crypto.subtle.digest.bind(crypto.subtle);
+            let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+            const probe = { entered: 0, completed: false, release };
+            crypto.subtle.digest = async (...args: Parameters<typeof digest>) => {
+                if (probe.entered === 0) { probe.entered++; await gate; const result = await digest(...args); probe.completed = true; return result; }
+                return digest(...args);
+            };
+            (window as unknown as { pendingImageDraft: typeof probe }).pendingImageDraft = probe;
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect.poll(() => page.evaluate(() => (window as unknown as { pendingImageDraft: { entered: number } }).pendingImageDraft.entered)).toBe(1);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(input).toHaveText(marker);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await page.evaluate(() => (window as unknown as { pendingImageDraft: { release: () => void } }).pendingImageDraft.release());
+        const references = () => savedAttachmentReferences(page);
+        await expect.poll(references).toBe(1);
+        await expect(input).toHaveText(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        const before = { texts: await savedTexts(page), references: await references(),
+            layout: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('or3:workspace-tabs:v1:')))) };
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 45_000 });
+        const diagnostic = info.outputPath('pending-image-reload-state.json');
+        await writeFile(diagnostic, JSON.stringify({ before, after: { texts: await savedTexts(page), references: await references(),
+            layout: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('or3:workspace-tabs:v1:')))) }, dialogs }, null, 2));
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        expect(dialogs).toEqual(['beforeunload']);
+        const path = info.outputPath('pending-image-unload.json');
+        await writeFile(path, JSON.stringify({ dialogs, savedReferences: await references(), text: await input.innerText(),
+            externalRequests: 'denied', fault: 'deferred local WebCrypto digest' }, null, 2));
+        await info.attach('pending-image-unload', { path, contentType: 'application/json' });
+    });
+
+    test('a failed attachment save stays visible and retry persists its reference without another edit', async ({ page }, info) => {
+        const marker = 'Synthetic retry attachment draft'; const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(marker); await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put; let faults = 0;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs' && faults++ === 0) throw new DOMException('Synthetic first attachment quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        const retry = page.getByRole('button', { name: 'Retry', exact: true });
+        await expect(retry).toBeVisible();
+        expect(await savedAttachmentReferences(page)).toBe(0);
+        await retry.click();
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await expect(input).toHaveText(marker);
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const path = info.outputPath('attachment-save-retry.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page), restoredText: await input.innerText(),
+            externalRequests: 'denied', fault: 'synthetic first native file_blobs put quota', noFurtherEditorEdit: true }, null, 2));
+        await info.attach('attachment-save-retry', { path, contentType: 'application/json' });
     });
 
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
