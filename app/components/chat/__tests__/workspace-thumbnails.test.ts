@@ -101,6 +101,29 @@ describe('mounted thumbnail workspace consumers', () => {
         if (thumbnail?.status === 'ready') expect(thumbnail).toMatchObject({ width: 2, height: 3 });
     });
 
+    it.each(['gallery', 'hook', 'palette'] as const)('preserves recovered current-workspace thumbnails after former metadata fails in the %s', async kind => {
+        let fail!: (error: Error) => void;
+        files.meta.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+        vi.mocked(URL.createObjectURL).mockReturnValue('blob:consumer-recovered');
+        const state = kind === 'hook' ? mountHook() : undefined;
+        const wrapper = kind === 'gallery'
+            ? mount(MessageAttachmentsGallery, { props: { hashes: [hash] } })
+            : kind === 'palette' ? mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic image', fallbackIcon: 'image' } }) : undefined;
+        if (wrapper) wrappers.push(wrapper);
+        const displayedUrl = () => {
+            const thumbnail = state?.thumbnails[hash];
+            if (thumbnail?.status === 'ready') return thumbnail.url;
+            return wrapper?.find('img').exists() ? wrapper.find('img').attributes('src') : undefined;
+        };
+        await vi.waitFor(() => expect(files.meta).toHaveBeenCalledOnce());
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        await vi.waitFor(() => expect(displayedUrl()).toBe('blob:consumer-recovered'));
+        fail(new Error('synthetic old metadata failure'));
+        await flushPromises();
+        expect(displayedUrl()).toBe('blob:consumer-recovered');
+        expect(files.blob).toHaveBeenCalledOnce();
+    });
+
     it('discards a held chat attachment download after a workspace switch', async () => {
         files.meta.mockResolvedValue({ ...originMeta, kind: 'file', mime_type: 'text/plain' });
         const wrapper = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });

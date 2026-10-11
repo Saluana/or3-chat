@@ -104,6 +104,19 @@ describe('useThumbnailUrlCache image readiness', () => {
         expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:current-decode');
     });
 
+    it('preserves recovered same-hash bytes when a former-workspace blob lookup fails late', async () => {
+        const cache = useThumbnailUrlCache();
+        let fail!: (error: Error) => void;
+        const previous = cache.ensure('shared', () => new Promise((_resolve, reject) => { fail = reject; }));
+        setActiveWorkspaceDb('thumbnail-isolation-b');
+        const recovered = await cache.ensure('shared', async () => raster());
+        expect(recovered?.status).toBe('ready');
+        fail(new Error('synthetic old blob failure'));
+        expect(await previous).toBeUndefined();
+        expect(cache.get('shared')).toBe(recovered);
+        expect(revokeObjectURL).not.toHaveBeenCalledWith(recovered?.url);
+    });
+
     it('publishes a ready URL only after decode and includes intrinsic size', async () => {
         const cache = useThumbnailUrlCache();
         cache.setIntrinsicSize('image', 1200, 800);
