@@ -17,7 +17,11 @@
       "behavior": "Refuse canonical committed FS metadata sidecars missing their blob payload entry under the archived FS root; preserve uncommitted uploads, temporary sidecars and opaque generation artifacts; no new format or physical cleanup."
     }
   ],
-  "finalCliSourceRevision": "c2461487d8de922f2457cbb7206f47f680b3cd0f",
+  "finalCliSourceRevision": "7801c3dca57a24baf0409f006adca6ca2b9c8e32",
+  "restoreCapacityFix": {
+    "commit": "7801c3dca57a24baf0409f006adca6ca2b9c8e32",
+    "behavior": "Restore reclaim capacity uses allocated du -sk blocks converted to bytes; backup payload dataBytes remains apparent du -sb bytes. Sparse logical holes cannot authorize an over-capacity destructive restore."
+  },
   "nativeDatabaseFix": {
     "initialCommit": "466994cc842b27cf55384cd89ff1fc1ae39a2e7f",
     "requiredFollowup": "c2461487d8de922f2457cbb7206f47f680b3cd0f",
@@ -1438,6 +1442,273 @@
       }
     ]
   },
+  "actualAppFilesystemCapacity": {
+    "completed": true,
+    "cleanupFailed": false,
+    "qualifiedCliSourceRevision": "c3201f23098af43a7c9cef3dd151e3ca9a1c6b29",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "98b72cfae01ce962f7427bab8efb3f8f1f7ad02a570f1abaf6d5b8fb3ab52325"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "actual 96 MiB filesystem refuses an authenticated 80 MiB payload plus reserve before journal/service/data mutation",
+        "kind": "passed",
+        "detail": {
+          "refusal": "Error: Restore needs at least 153718784 bytes of free space (86609920 required plus reserve headroom) but only 100650726 bytes are available. Free disk space or move backups off-host before retrying.",
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "volatileFixtureOnly": true
+        }
+      },
+      {
+        "name": "actual filesystem restore reclaims 40 MiB allocated pressure and preserves records when initial free bytes alone are insufficient",
+        "kind": "passed",
+        "detail": {
+          "freeBeforeBytes": 55943168,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "volatileFixtureOnly": true
+        }
+      }
+    ],
+    "boundary": "96 MiB volatile tmpfs held mounted across app restarts; actual capacity checks, not hardware or host-reboot durability"
+  },
+  "actualAppSparseCapacityBefore": {
+    "completed": true,
+    "cleanupFailed": false,
+    "qualifiedCliSourceRevision": "c3201f23098af43a7c9cef3dd151e3ca9a1c6b29",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "a674ebfff7550dfb70470695a8da88a0be3cde2d173bc267f859740ded969541"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "BEFORE FIX sparse apparent bytes authorize over-capacity restore; target extraction hits ENOSPC, automatic recovery fails and explicit recovery refuses capacity",
+        "kind": "passed",
+        "detail": {
+          "payloadMiB": 120,
+          "sparseLogicalMiB": 128,
+          "targetCapacityMiB": 96,
+          "mutations": 3,
+          "snapshotDataBytes": 136933186,
+          "verifiedSnapshotRetained": true,
+          "pendingPhase": "restoring-previous",
+          "automaticRecoveryExactErrorNotCaptured": true,
+          "explicitRecoveryCapacityRefusal": true
+        }
+      },
+      {
+        "name": "test-only reset from separate known-good snapshot repairs synthetic records; recorded oversized recovery remains unqualified",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualAppSparseCapacityAfter": {
+    "completed": true,
+    "cleanupFailed": false,
+    "qualifiedCliSourceRevision": "7801c3dca57a24baf0409f006adca6ca2b9c8e32",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "85ce61bc4a505ea971868fd20f51e15b3aa55d8661654dcfa39863ae4bd4fd8b"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "actual 96 MiB filesystem refuses an authenticated 120 MiB payload plus reserve before journal/service/data mutation",
+        "kind": "passed",
+        "detail": {
+          "refusal": "Error: Restore needs at least 195651584 bytes of free space (128542720 required plus reserve headroom) but only 100663296 bytes are available. Free disk space or move backups off-host before retrying.",
+          "sparseLogicalMiB": 128,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "volatileFixtureOnly": true
+        }
+      },
+      {
+        "name": "actual filesystem restore reclaims 40 MiB allocated pressure and preserves records when initial free bytes alone are insufficient",
+        "kind": "passed",
+        "detail": {
+          "freeBeforeBytes": 55951360,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "volatileFixtureOnly": true
+        }
+      }
+    ]
+  },
   "canonicalReferencePreflightAssessment": {
     "completed": true,
     "source": "SQLite 0.0.15 live_metadata query + FS 0.0.11 canonical path contract",
@@ -1645,23 +1916,23 @@
   "automatedChecks": [
     {
       "command": "bun test packages/or3-cloud/test",
-      "result": "241 pass, 0 fail, 1748 assertions across 7 files (95.73 seconds after native pre-start check)",
+      "result": "243 pass, 0 fail, 1762 assertions across 7 files (96.79 seconds after allocated-block reclaim fix)",
       "coverage": "mocked Docker/provider lifecycle and contracts; final POSIX archive reader additionally qualified by actual containers"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts",
-      "result": "34 pass, 0 fail, 256 assertions on 00bc239e"
+      "result": "36 backup tests pass as part of final 243-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-lifecycle.test.ts",
-      "result": "36 lifecycle tests pass as part of final 241-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction"
+      "result": "36 lifecycle tests pass as part of final 243-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction"
     },
     {
       "command": "bun run --cwd packages/or3-cloud typecheck; bun run --cwd packages/or3-cloud build",
       "result": "passed; built CLI, no package publication"
     },
     {
-      "command": "bun x eslint packages/or3-cloud/src/backup/archive.ts packages/or3-cloud/src/backup/restore.ts packages/or3-cloud/src/commands/restore.ts packages/or3-cloud/src/commands/rollback.ts",
+      "command": "bun x eslint packages/or3-cloud/src/backup/archive.ts packages/or3-cloud/src/backup/restore.ts packages/or3-cloud/src/runtime/volumes.ts packages/or3-cloud/src/commands/restore.ts packages/or3-cloud/src/commands/rollback.ts",
       "result": "passed; production source only (test/script paths excluded by project ESLint)"
     },
     {
@@ -1680,6 +1951,7 @@
   "remainingRisksAndNotTested": [
     "Before 1ab5f45e, an authenticated archive missing only the referenced blob passed restore and deep health; actual download returned 404. That case is now refused. When both blob and sidecar are absent while database references remain, restore still reports success and download returns 404; a five-case data-only reference prototype detects the current-provider omission but is not shipped validation; known-good recovery restores bytes. This remaining case requires database-reference validation, not a new manifest format.",
     "Native pre-start quick_check/nonempty-schema checks do not prove every expected application record, canonical reference or correct cross-release schema. Missing-WAL qualification uses a snapshot whose main file has no tables; checkpointed snapshots legitimately omit WAL. Native checks run after extraction, so pre-start refusal relies on verified automatic recovery rather than pre-extraction database inspection.",
+    "Sparse preflight fault: target extraction hit ENOSPC and automatic recovery failed; the exact automatic-recovery error was not separately retained in the first log. Explicit recovery capacity refusal and retained verified snapshot were asserted. A separate raw-primitive fixture/state reset restored the smaller known-good archive; that reset is not an operator recovery procedure. The fixed preflight avoids this mutation. Capacity fixtures use 96 MiB volatile tmpfs with a holder across app restarts; no disk hardware or host-reboot durability qualification.",
     "Seven pushes racing stop were all refused/interrupted; one precommitted atomic pair restored intact. This proves stop-boundary refusal and no split pair in this run, not sustained accepted writes during capture.",
     "Cross-deployment managed restore remains refused. Test-only second-instance transfer uses the raw production archive primitive after source authentication; no production identity-migration procedure is qualified.",
     "Fresh-browser chat and document bodies were qualified with serialized TipTap JSON; complete browser flows/Dexie reconciliation, external provider stacks, the published release image/build graph, ARM64, production-size throughput, disk-full hardware faults and cross-release database downgrades were not qualified. The pinned production distroless base was qualified with locally built SSR output.",

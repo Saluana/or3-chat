@@ -109,6 +109,16 @@ while retaining its main database and authenticating the resulting archive.
 Its schema and records reside in the WAL, so the pre-start check must refuse the
 empty main database and recover the original data. Checkpointed SQLite snapshots
 can legitimately omit WAL/SHM; this is not a blanket WAL presence requirement.
+`--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
+payload plus reserve before any journal, service or data mutation. It then
+allocates 40 MiB of filler and verifies that restore can reclaim those blocks
+when initial free bytes alone are below the reserve. `--sparse-capacity-only`
+adds a largely unallocated 128 MiB file and checks that it cannot falsely
+authorize a 120 MiB restore. Restore uses allocated blocks for reclaim capacity;
+backup payload estimates and `dataBytes` remain logical/apparent bytes.
+The volatile filesystem is held mounted by a separate network-denied helper
+across app restarts and removed after the test. These are real filesystem
+capacity/refusal tests, not host-reboot durability or disk-hardware qualification.
 
 ### Remaining canonical attachment preflight
 

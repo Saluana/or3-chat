@@ -3,7 +3,7 @@
 // never pulls an image, enables physical cleanup, or opens a remote provider.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { appendFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -39,7 +39,9 @@ const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
 const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly;
-assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) <= 1, 'Choose one qualification mode.');
+const sparseOnly = process.argv.includes('--sparse-capacity-only');
+const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
+assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -82,10 +84,13 @@ assert(context.startsWith('unix://'), 'Selected Docker daemon must be local.');
 const digest = await imageDigest(image);
 const sourceRevision = await command(['image', 'inspect', '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}', image]);
 assert(/^[a-f0-9]{40}$/.test(sourceRevision));
+const cliVersion = await run('git', ['rev-parse', 'HEAD'], fileURLToPath(new URL('../../', import.meta.url)));
+assert(cliVersion.ok && /^[a-f0-9]{40}$/.test(cliVersion.stdout.trim()), 'Record the CLI source commit separately from the app image commit.');
+const cliRevision = cliVersion.stdout.trim();
 assert.equal(await command(['image', 'inspect', '--format', '{{index .Config.Labels "org.opencontainers.image.version"}}', image]), PACKAGE_VERSION);
 const password = `Synthetic-${randomUUID()}!Aa1`;
 const email = 'backup-drill@example.test';
-type Instance = { directory: string; env: Record<string, string>; origin: string; state: ReturnType<typeof stateFromEnv> };
+type Instance = { directory: string; env: Record<string, string>; origin: string; state: ReturnType<typeof stateFromEnv>; volumeHolder?: string };
 const instances: Instance[] = [];
 async function instance(name: string): Promise<Instance> {
   const probe = createServer();
@@ -105,8 +110,20 @@ async function instance(name: string): Promise<Instance> {
   await writeFile(join(directory, '.env'), serializeEnv(env), { mode: 0o600 });
   await writeFile(join(directory, '.or3-cloud/backup-auth.key'), `${randomBytes(32).toString('hex')}\n`, { mode: 0o600 });
   await writeState(directory, state);
-  const fixture = { directory, env, state, origin: `http://127.0.0.1:${port}` };
+  const fixture: Instance = { directory, env, state, origin: `http://127.0.0.1:${port}` };
   instances.push(fixture);
+  if (capacityOnly && name === 'target') {
+    await command(['volume', 'create', '--driver', 'local', '--opt', 'type=tmpfs', '--opt', 'device=tmpfs',
+      '--opt', 'o=size=96m,uid=65532,gid=65532',
+      '--label', `com.docker.compose.project=${state.composeProject}`, '--label', 'com.docker.compose.volume=or3-data',
+      '--label', `io.or3.cloud.deployment-id=${env.OR3_DEPLOYMENT_ID}`, state.volumeName]);
+    const holder = `or3-backup-capacity-holder-${randomUUID().slice(0, 8)}`;
+    await command(['run', '-d', '--name', holder, '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges:true', '--memory', '16m', '--pids-limit', '16',
+      '-v', `${state.volumeName}:/probe`, '--entrypoint', 'sh', env.OR3_IMAGE, '-c', 'exec tail -f /dev/null']);
+    // Keep this volatile test filesystem mounted across app/helper restarts.
+    fixture.volumeHolder = holder;
+  }
   await startProject(directory, 'local', env);
   // Managed initialization proves login/workspace provisioning before removing
   // the bootstrap handoff. Removing it earlier blocks invite-only admission.
@@ -370,7 +387,7 @@ try {
   await startProject(target.directory, 'local', target.env);
   evidence('second cold restart preserves chats/documents/attachment/settings and references', await verify(target));
   const targetBackup = await backup(target);
-  for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -408,7 +425,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly) {
+  if (!recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -687,6 +704,53 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       evidence('explicit retry after native validation interruption restores actual records and attachment bytes', await verify(target));
     }
   }
+  if (capacityOnly) {
+    const large = join(root, 'capacity-archive');
+    const tree = join(root, 'capacity-tree');
+    await cp(targetBackup, large, { recursive: true });
+    await mkdir(tree);
+    const unpacked = await run('tar', ['xzf', join(large, 'data.tgz'), '-C', tree]);
+    assert(unpacked.ok, unpacked.stderr);
+    await writeFile(join(tree, 'synthetic-capacity-payload.bin'), '');
+    const payloadMiB = sparseOnly ? 120 : 80;
+    await truncate(join(tree, 'synthetic-capacity-payload.bin'), payloadMiB * 1024 * 1024);
+    const packed = await run('tar', ['czf', join(large, 'data.tgz'), '-C', tree, '.']);
+    assert(packed.ok, packed.stderr);
+    const manifest = JSON.parse(await readFile(join(large, 'manifest.json'), 'utf8'));
+    manifest.dataBytes = (manifest.dataBytes ?? 0) + payloadMiB * 1024 * 1024;
+    manifest.dataSha256 = await sha256File(join(large, 'data.tgz'));
+    const text = `${JSON.stringify(manifest, null, 2)}\n`;
+    await writeFile(join(large, 'manifest.json'), text);
+    await writeBackupAuthentication(target.directory, large, text);
+    if (sparseOnly) await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "const fs=require('node:fs');const fd=fs.openSync('/data/synthetic-sparse.bin','w');fs.ftruncateSync(fd,128*1024*1024);fs.closeSync(fd)"]), target.directory);
+    const before = await readFile(join(target.directory, '.or3-cloud/state.json'), 'utf8');
+    let mutations = 0;
+    lifecycleFaults.beforeCommand = (_command, args) => {
+      if (args.includes('find /data -mindepth 1 -delete') || args[0] === 'compose' && args.some(arg => ['stop', 'down', 'up'].includes(arg))) mutations++;
+    };
+    let refusal = '';
+    try {
+      await assert.rejects(restoreCommand(target.directory, { yes: true }, [large]), error => {
+        refusal = String(error);
+        return /Restore needs at least .* only .* bytes are available/.test(refusal);
+      });
+    } finally { delete lifecycleFaults.beforeCommand; }
+    assert.equal(mutations, 0);
+    assert.equal(await readFile(join(target.directory, '.or3-cloud/state.json'), 'utf8'), before);
+    evidence(`actual 96 MiB filesystem refuses an authenticated ${payloadMiB} MiB payload plus reserve before journal/service/data mutation`, {
+      refusal, sparseLogicalMiB: sparseOnly ? 128 : 0, verification: await verify(target), volatileFixtureOnly: true,
+    });
+    await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "const fs=require('node:fs');const fd=fs.openSync('/data/synthetic-pressure.bin','w');const chunk=Buffer.alloc(65536);for(let i=0;i<640;i++)fs.writeSync(fd,chunk);fs.fsyncSync(fd);fs.closeSync(fd)"]), target.directory);
+    const free = Number(await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', 'sh', '-c', "df -Pk /data | awk 'END { print $4 * 1024 }'"]), target.directory));
+    assert(free < 64 * 1024 * 1024, 'Actual allocated pressure must leave less than the reserve');
+    await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+    await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', 'sh', '-c', 'test ! -e /data/synthetic-pressure.bin']), target.directory);
+    evidence('actual filesystem restore reclaims 40 MiB allocated pressure and preserves records when initial free bytes alone are insufficient', {
+      freeBeforeBytes: free, verification: await verify(target), volatileFixtureOnly: true,
+    });
+  }
   if (browserOnly) evidence('fresh browser reads restored conversation and document through the actual UI', await verifyBrowser(target));
   completed = true;
 } finally {
@@ -694,11 +758,12 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
   for (const fixture of instances.reverse()) {
     try {
       await command(composeArgs(fixture.directory, 'local', ['down']), fixture.directory);
+      if (fixture.volumeHolder) await command(['rm', '--force', fixture.volumeHolder], fixture.directory);
       await command(['volume', 'rm', fixture.state.volumeName], fixture.directory);
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, nodePath, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
