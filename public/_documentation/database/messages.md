@@ -34,7 +34,7 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `createMessage(input)`                            | Validates payload (including array → string conversion for `file_hashes`) and writes a row. |
 | `upsertMessage(value)` / `upsertMessageInDb(db, value)` | Validates and replaces a row; the `InDb` variant targets an explicit DB.              |
-| `patchMessageInDb(db, id, patch, fallback?, ifCurrent?, commitGuard?)` | Merges owned fields into the latest row without replacing concurrent updates. |
+| `patchMessageInDb(db, id, patch, fallback?, ifCurrent?, entryPatch?, commitGuard?)` | Merges owned fields into the latest row without replacing concurrent updates; returns the committed row, or `undefined` when skipped. |
 | `messagesByThread(threadId)`                      | Fetches ordered messages, applying output filters.                                          |
 | `getMessage(id)` / `messageByStream(streamId)`    | Targeted lookups with output filters.                                                       |
 | `softDeleteMessage(id)` / `hardDeleteMessage(id)` | Delete flows with before/after hook actions.                                                |

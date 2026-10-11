@@ -23,6 +23,51 @@ const row = (input: Partial<Message> & Pick<Message, 'id' | 'role' | 'index'>): 
 });
 
 describe('canonical transcript projections', () => {
+    it('sends one result per assistant call while retaining duplicate durable records', async () => {
+        const rows = [row({ id: 'a', role: 'assistant', index: 1, data: { content: '',
+            tool_calls: [{ id: 'replayed', name: 'write', args: '{}', status: 'error' }] } }),
+        row({ id: 'first', role: 'tool', index: 2, data: { parent_assistant_id: 'a',
+            tool_call_id: 'replayed', tool_name: 'write', content: 'Original result' } }),
+        row({ id: 'replay-result', role: 'tool', index: 3, data: { parent_assistant_id: 'a',
+            tool_call_id: 'replayed', tool_name: 'write', content: 'Replay refused', tool_error: 'Conflicting arguments' } }),
+        row({ id: 'u', role: 'user', index: 4, data: { content: 'Recovery message' } })];
+        const before = JSON.stringify(rows);
+        const records = storedMessagesToCanonicalTranscript(rows);
+        const { buildOpenRouterMessages } = await import('~/core/auth/openrouter-build');
+        const wire = await buildOpenRouterMessages(projectTranscriptForOpenRouter(records));
+        expect(wire.map(message => message.role)).toEqual(['assistant', 'tool', 'user']);
+        expect(wire[1]).toMatchObject({ tool_call_id: 'replayed', content: [{ type: 'text', text: 'Replay refused' }] });
+        expect(projectTranscriptForUi(records)[0]?.toolResultMessageIds).toEqual(['first', 'replay-result']);
+        expect(JSON.stringify(rows)).toBe(before);
+    });
+    it.each(['loading', 'error'] as const)('closes a %s call with an uncertainty result without fabricating a durable row', async status => {
+        const rows = [row({ id: 'a', role: 'assistant', index: 1, data: {
+            content: '', tool_calls: [{ id: 'unsaved', name: 'write', args: '{}', status,
+                outcome: 'unresolved', result: 'UNSAVED SUCCESS MUST NOT REACH PROVIDER',
+                executionReceipt: { state: 'unresolved', argumentFingerprint: 'fingerprint', startedAt: 10 } }],
+        } }), row({ id: 'u', role: 'user', index: 2, data: { content: 'Continue chatting' } })];
+        const before = JSON.stringify(rows);
+        const records = storedMessagesToCanonicalTranscript(rows);
+        const { buildOpenRouterMessages } = await import('~/core/auth/openrouter-build');
+        const wire = await buildOpenRouterMessages(projectTranscriptForOpenRouter(records));
+        expect(wire.map(message => message.role)).toEqual(['assistant', 'tool', 'user']);
+        expect(wire[1]?.tool_call_id).toBe('unsaved');
+        expect(JSON.stringify(wire[1]?.content)).toContain('TOOL_OUTCOME_UNRESOLVED');
+        expect(JSON.stringify(wire)).not.toContain('UNSAVED SUCCESS MUST NOT REACH PROVIDER');
+        expect(projectTranscriptForUi(records)[0]?.toolCalls?.[0]).toMatchObject({
+            outcome: 'unresolved', executionReceipt: { state: 'unresolved', argumentFingerprint: 'fingerprint', startedAt: 10 },
+        });
+        expect(projectTranscriptForUi(records)[0]?.toolResultMessageIds).toBeUndefined();
+        expect(JSON.stringify(rows)).toBe(before);
+    });
+    it.each(['completed', 'failed', 'timed_out', 'canceled', 'unresolved'] as const)
+    ('restores the explicit %s tool outcome after reload', outcome => {
+        const records = storedMessagesToCanonicalTranscript([row({ id: 'outcome', role: 'assistant', index: 1,
+            data: { content: '', tool_calls: [{ id: 'call', name: 'echo', status: outcome === 'completed' ? 'complete' : 'error',
+                outcome, args: '{}', error: outcome === 'completed' ? undefined : 'Terminal tool failure' }] } })]);
+        expect(records[0]?.toolCalls[0]).toMatchObject({ outcome });
+        expect(projectTranscriptForUi(records)[0]?.toolCalls?.[0]).toMatchObject({ outcome });
+    });
     it('keeps reused tool-call IDs paired with their own assistant across turns and branches', () => {
         const assistant = (id: string, index: number, result: string) => row({ id, role: 'assistant', index,
             data: { content: id, tool_calls: [{ id: 'call-0', name: 'lookup', args: '{}', status: 'complete', result }] } });

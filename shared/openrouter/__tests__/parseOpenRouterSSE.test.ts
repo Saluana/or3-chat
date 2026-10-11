@@ -183,7 +183,7 @@ describe('parseOpenRouterSSE', () => {
         expect(texts).toEqual(['array ']);
     });
 
-    it('synthesizes tool_call id when provider omits it from streaming deltas', async () => {
+    it('rejects a tool call when the provider omits its identity', async () => {
         const sse = [
             'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"or3_web_search"}}]}}]}',
             '',
@@ -193,17 +193,63 @@ describe('parseOpenRouterSSE', () => {
             '',
         ].join('\n');
 
-        const events: Array<any> = [];
-        for await (const evt of parseOpenRouterSSE(streamFromSSE(sse))) {
-            events.push(evt);
-        }
+        await expect(collect(streamFromSSE(sse))).rejects.toBeInstanceOf(OpenRouterProtocolError);
+    });
 
-        const toolEvents = events.filter((evt) => evt.type === 'tool_call');
-        expect(toolEvents).toHaveLength(1);
-        expect(toolEvents[0].tool_call.function.name).toBe('or3_web_search');
-        expect(toolEvents[0].tool_call.function.arguments).toBe('{"query":"x"}');
-        expect(typeof toolEvents[0].tool_call.id).toBe('string');
-        expect(toolEvents[0].tool_call.id.startsWith('or3_tool_call_')).toBe(true);
+    it('assembles interleaved names and arguments exactly across byte fragments', async () => {
+        const frame = (tool_calls: unknown[], finish_reason: string | null = null) =>
+            `data: ${JSON.stringify({ choices: [{ delta: { tool_calls }, finish_reason }] })}\n\n`;
+        const body = frame([
+            { index: 0, id: 'echo', function: { name: 'test_', arguments: '{"value":' } },
+            { index: 1, id: 'write', function: { arguments: '{"value":"' } },
+        ]) + frame([
+            { index: 1, function: { name: 'test_write_once', arguments: 'café"}' } },
+            { index: 0, function: { name: 'echo', arguments: '"first"}' } },
+        ], 'tool_calls') + 'data: [DONE]\n\n';
+        const bytes = new TextEncoder().encode(body);
+        const events = await collect(streamFromChunks(Array.from(bytes, byte => new Uint8Array([byte]))));
+        expect(events).toEqual([
+            { type: 'tool_call', tool_call: { id: 'echo', type: 'function', function: { name: 'test_echo', arguments: '{"value":"first"}' } } },
+            { type: 'tool_call', tool_call: { id: 'write', type: 'function', function: { name: 'test_write_once', arguments: '{"value":"café"}' } } },
+            { type: 'done' },
+        ]);
+    });
+
+    it.each(['', 'data: [DONE]\n\n', 'data: {broken}\n\n',
+        'data: {"error":{"message":"provider failed","status":503}}\n\n'])
+    ('never emits an executable partial call after interruption %j', async suffix => {
+        const stream = streamFromSSE('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"partial","function":{"name":"test_echo","arguments":"{\\"value\\":"}}]}}]}\n\n' + suffix);
+        const emitted: string[] = [];
+        await expect((async () => {
+            for await (const event of parseOpenRouterSSE(stream)) emitted.push(event.type);
+        })()).rejects.toBeInstanceOf(suffix.includes('provider failed') ? OpenRouterProviderError : OpenRouterProtocolError);
+        expect(emitted).not.toContain('tool_call');
+        expect(emitted).not.toContain('done');
+    });
+
+    it('rejects an identity change within the same streamed call index', async () => {
+        const body = ['first', 'second'].map(id => `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id, function: { name: id === 'first' ? 'test_echo' : undefined, arguments: id === 'first' ? '{' : '}' } }] }, finish_reason: id === 'second' ? 'tool_calls' : null }] })}\n\n`).join('');
+        await expect(collect(streamFromSSE(body))).rejects.toBeInstanceOf(OpenRouterProtocolError);
+    });
+
+    it.each(['', 'data: [DONE]\n\n'].flatMap(suffix => [false, true].map(reverse => ({ suffix, reverse }))))
+    ('rejects an unfinished choice independently of choice order: %j', async ({ suffix, reverse }) => {
+        const choices = [
+            { index: 0, delta: { content: 'First choice finished.' }, finish_reason: 'stop' },
+            { index: 1, delta: { tool_calls: [{ index: 0, id: 'unfinished', function: { name: 'test_echo', arguments: '{' } }] }, finish_reason: null },
+        ];
+        const body = `data: ${JSON.stringify({ choices: reverse ? choices.reverse() : choices })}\n\n` + suffix;
+        const emitted: string[] = [];
+        await expect((async () => {
+            for await (const event of parseOpenRouterSSE(streamFromSSE(body))) emitted.push(event.type);
+        })()).rejects.toBeInstanceOf(OpenRouterProtocolError);
+        expect(emitted).toEqual(['text']);
+    });
+
+    it('retains repeated argument deltas rather than guessing they are transport replays', async () => {
+        const fragments = ['{"value":"', 'ha', 'ha', '"}'];
+        const body = fragments.map((arguments_, index) => `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, ...(index === 0 ? { id: 'repeat', function: { name: 'test_echo', arguments: arguments_ } } : { function: { arguments: arguments_ } }) }] }, finish_reason: index === 3 ? 'tool_calls' : null }] })}\n\n`).join('');
+        expect((await collect(streamFromSSE(body)))[0]).toMatchObject({ tool_call: { id: 'repeat', function: { arguments: '{"value":"haha"}' } } });
     });
 
     it('bounds accumulated streamed tool arguments before emitting them', async () => {

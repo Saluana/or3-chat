@@ -10,6 +10,7 @@ const claimBackgroundClientToolMock = vi.fn();
 const validateBackgroundClientToolClaimMock = vi.fn();
 const submitBackgroundClientToolResultMock = vi.fn();
 const executeToolMock = vi.fn();
+const getToolMock = vi.fn();
 const refreshCachedSessionContextMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const notificationCreateMock = vi.fn();
@@ -102,7 +103,7 @@ vi.mock('~/utils/chat/openrouterStream', () => ({
 
 vi.mock('~/utils/chat/tool-registry', () => ({
     useToolRegistry: () => ({
-        getTool: () => ({ definition: { runtime: 'client' } }),
+        getTool: (...args: unknown[]) => getToolMock(...args),
         executeTool: executeToolMock,
     }),
 }));
@@ -170,6 +171,7 @@ describe('backgroundJobs reattach + notifications', () => {
             toolName: 'client_tool',
             timedOut: false,
         });
+        getToolMock.mockReturnValue({ definition: { runtime: 'client' } });
 
         const g = globalThis as typeof globalThis & {
             __NUXT_HOOKS__?: HookEngine;
@@ -697,6 +699,48 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(tracker.lastContent).toBe('new');
         stopBackgroundJobTracking(tracker);
         backgroundJobTrackers.clear();
+    });
+
+    it.each(['running', 'settled', 'delivery-failed', 'plugin-startup'] as const)
+    ('reconciles a client execution journal without replay after %s', async mode => {
+        sessionValue = { user: { id: 'user-1' } };
+        let streamParams: { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        subscribeBackgroundJobStreamMock.mockImplementation(params => { streamParams = params; return () => {}; });
+        const claim = await makeClientToolClaim();
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
+        const journalKey = 'or3:bg-client-tool:job-1:call-1';
+        if (mode === 'running' || mode === 'settled') localStorage.setItem(journalKey, JSON.stringify({
+            state: mode, claimDigest: claim.claimDigest, createdAt: Date.now(), ...(mode === 'settled' ? { result: 'saved result' } : {}),
+        }));
+        if (mode === 'plugin-startup') getToolMock.mockReturnValue(undefined);
+        if (mode === 'delivery-failed') submitBackgroundClientToolResultMock.mockRejectedValueOnce(new Error('disconnected'));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        const status = makeStatus('streaming', { tool_calls: [{ id: 'call-1', name: 'client_tool',
+            status: 'pending', runtime: 'client', args: '{}' }] });
+        streamParams!.onStatus(status);
+        await tracker.streamChain;
+        if (mode === 'plugin-startup') {
+            expect(claimBackgroundClientToolMock).not.toHaveBeenCalled();
+            expect(executeToolMock).not.toHaveBeenCalled();
+            getToolMock.mockReturnValue({ definition: { runtime: 'client' } });
+            streamParams!.onStatus(status);
+        }
+        await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalled());
+        if (mode === 'delivery-failed') {
+            await vi.waitFor(() => expect(JSON.parse(localStorage.getItem(journalKey)!)).toMatchObject({ state: 'settled', result: 'ok' }));
+            streamParams!.onStatus(status);
+            await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledTimes(2));
+        }
+        await vi.waitFor(() => expect(localStorage.getItem(journalKey)).toBeNull());
+        expect(executeToolMock).toHaveBeenCalledTimes(mode === 'running' || mode === 'settled' ? 0 : 1);
+        expect(submitBackgroundClientToolResultMock.mock.lastCall?.[0]).toMatchObject({
+            callId: 'call-1', ...(mode === 'running' ? { error: expect.stringMatching(/outcome is unknown/) }
+                : { result: mode === 'settled' ? 'saved result' : 'ok' }),
+        });
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
     });
 
     it('does not publish an old terminal snapshot after another tab persisted a newer attempt', async () => {

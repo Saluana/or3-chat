@@ -146,6 +146,21 @@ jobs:
             exit 1
           fi
 
+      - name: Install Chromium for deterministic chat tool tests
+        run: bunx playwright install --with-deps chromium
+      - name: Verify chat tool lifecycle and recovery
+        run: bun run test:e2e:chat-tools
+      - name: Verify authenticated Cloud tools and claim settlement
+        run: bun run test:e2e:chat-tools:cloud
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: chat-tool-reliability
+          path: |
+            test-results/chat-tools
+            test-results/chat-tools-cloud
+          if-no-files-found: error
+
   contracts:
     name: Contracts and compatibility
     runs-on: ubuntu-latest

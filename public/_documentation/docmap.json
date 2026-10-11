@@ -383,6 +383,15 @@
                     "summary": "Use the five scoped workspace tools, source receipts, native review/Undo, file coverage, and browser execution limits."
                 },
                 {
+                    "name": "chat-tool-reliability.md",
+                    "path": "/utils/chat-tool-reliability",
+                    "title": "Test chat tool reliability",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Run deterministic foreground and authenticated Cloud tool tests, inspect redacted lifecycle evidence, and verify failure recovery without live models."
+                },
+                {
                     "name": "tool-runtime.md",
                     "path": "/utils/tool-runtime",
                     "title": "Add tools from source",

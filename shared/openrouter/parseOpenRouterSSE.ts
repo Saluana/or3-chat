@@ -14,7 +14,6 @@ import {
     OpenRouterProviderError,
     OpenRouterStreamError,
 } from './errors';
-import { createRuntimeUuid } from '../runtime-id';
 
 export interface ProviderRequestUsage {
     prompt_tokens: number;
@@ -106,6 +105,7 @@ interface ParsedChunk {
     error?: ProviderErrorEnvelope | string;
 }
 interface AccumulatedToolCall {
+    choiceIndex: number;
     id: string | undefined;
     type: 'function';
     function: { name: string; arguments: string };
@@ -198,16 +198,23 @@ export async function* parseOpenRouterSSE(
     };
 
     const parsePayload = (data: string): ORStreamEvent[] | 'done' => {
-        if (data.trim() === '[DONE]') return 'done';
+        if (data.trim() === '[DONE]') {
+            if ([...toolCallMap.values()].some(call => !call.yielded))
+                throw new OpenRouterProtocolError('OpenRouter stream ended with an unfinished tool call');
+            return 'done';
+        }
         if (data.length === 0) return [];
 
-        let parsed: ParsedChunk;
+        let decoded: unknown;
         try {
-            parsed = JSON.parse(data) as ParsedChunk;
+            decoded = JSON.parse(data);
         } catch {
             throw new OpenRouterProtocolError('Malformed JSON in OpenRouter SSE event');
         }
 
+        if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded))
+            throw new OpenRouterProtocolError('Invalid OpenRouter SSE envelope');
+        const parsed = decoded as ParsedChunk;
         if (parsed.error) throwProviderError(parsed.error);
 
         const events: ORStreamEvent[] = [];
@@ -278,6 +285,7 @@ export async function* parseOpenRouterSSE(
                     let accumulated = toolCallMap.get(mapKey);
                     if (!accumulated) {
                         accumulated = {
+                            choiceIndex,
                             id: undefined,
                             type: 'function',
                             function: { name: '', arguments: '' },
@@ -286,7 +294,10 @@ export async function* parseOpenRouterSSE(
                         };
                         toolCallMap.set(mapKey, accumulated);
                     }
-                    if (toolCallDelta.id && !accumulated.id) {
+                    if (toolCallDelta.id !== undefined) {
+                        if (typeof toolCallDelta.id !== 'string' || !toolCallDelta.id.trim()
+                            || (accumulated.id && accumulated.id !== toolCallDelta.id))
+                            throw new OpenRouterProtocolError('Invalid or conflicting streamed tool call ID');
                         accumulated.id = toolCallDelta.id;
                     }
                     const fn = toolCallDelta.function;
@@ -316,15 +327,14 @@ export async function* parseOpenRouterSSE(
             }
 
             if (finishReason && toolCallMap.size > 0) {
-                for (const [mapKey, toolCall] of toolCallMap) {
-                    if (toolCall.yielded || !toolCall.function.name) continue;
-                    const index = Number(mapKey.split('_').pop() ?? '0');
+                for (const toolCall of toolCallMap.values()) {
+                    if (toolCall.choiceIndex !== choiceIndex || toolCall.yielded) continue;
+                    if (!toolCall.id || !toolCall.function.name.trim())
+                        throw new OpenRouterProtocolError('Tool call is missing its ID or function name');
                     events.push({
                         type: 'tool_call',
                         tool_call: {
-                            id:
-                                toolCall.id ||
-                                `or3_tool_call_${index}_${createRuntimeUuid().slice(0, 8)}`,
+                            id: toolCall.id,
                             type: 'function',
                             function: { ...toolCall.function },
                         },
@@ -451,6 +461,8 @@ export async function* parseOpenRouterSSE(
                     }
                     for (const event of result) yield event;
                 }
+                if ([...toolCallMap.values()].some(call => !call.yielded))
+                    throw new OpenRouterProtocolError('OpenRouter stream ended with an unfinished tool call');
                 if (!termination.verified) {
                     // The transport ended without [DONE] or a recognized finish
                     // reason. Partial output must be treated as interrupted, not

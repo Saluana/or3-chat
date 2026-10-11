@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AssistantPersister } from '../types';
 
 const openRouterStreamMock = vi.fn();
 const appendToolResultMock = vi.hoisted(() =>
@@ -43,6 +44,36 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
+    it.each([true, false])('requires a durable execution receipt before invoking a handler (acknowledged=%s)', async acknowledged => {
+        let iteration = 0;
+        openRouterStreamMock.mockImplementation(async function* () {
+            if (++iteration === 1) yield { type: 'tool_call', tool_call: { id: 'receipt-call', type: 'function', function: { name: 'echo', arguments: '{}' } } };
+            else yield { type: 'text', text: 'Finished' };
+            yield { type: 'done' };
+        });
+        appendToolResultMock.mockResolvedValue({ id: 'tool-msg' });
+        let durableReceipt: unknown;
+        const persistAssistant = vi.fn(async (patch: Parameters<AssistantPersister>[0]) => {
+            if (patch.requireCurrent && !acknowledged) throw new Error('Tool receipt not acknowledged');
+            if (patch.requireCurrent) durableReceipt = structuredClone(patch.toolCalls);
+            return null;
+        });
+        const executeTool = vi.fn(async () => {
+            expect(durableReceipt).toEqual([expect.objectContaining({ executionReceipt: expect.objectContaining({ state: 'running' }) })]);
+            return { result: 'saved', toolName: 'echo', timedOut: false };
+        });
+        const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
+        const ctx = { apiKey: 'key', modelId: 'model', orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            tools: [{ type: 'function' as const, function: { name: 'echo', description: 'echo', parameters: { type: 'object' as const } } }],
+            modalities: ['text'], abortSignal: new AbortController().signal,
+            assistantId: 'assistant-receipt', streamId: 'stream-receipt', threadId: 'thread-1',
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool }, persistAssistant, assistantFileHashes: [], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] } };
+        if (acknowledged) await runForegroundStreamLoop(ctx);
+        else await expect(runForegroundStreamLoop(ctx)).rejects.toThrow('not acknowledged');
+        expect(executeTool).toHaveBeenCalledTimes(acknowledged ? 1 : 0);
+    });
     it('rejects buffered late text when Stop occurs during progress persistence', async () => {
         const entered = deferred<void>(); const release = deferred<void>();
         const controller = new AbortController();
@@ -539,8 +570,9 @@ describe('runForegroundStreamLoop', () => {
         expect(iteration).toBe(10);
     });
 
-    it('does not issue the follow-up request until completed tool state is durable', async () => {
+    it.each(['result', 'assistant'])('does not continue after a failed %s tool persistence write', async failedWrite => {
         appendToolResultMock.mockClear();
+        if (failedWrite === 'result') appendToolResultMock.mockRejectedValueOnce(new Error('simulated persistence crash'));
         let iteration = 0;
         openRouterStreamMock.mockImplementation(async function* () {
             iteration += 1;
@@ -561,12 +593,14 @@ describe('runForegroundStreamLoop', () => {
             '~/utils/chat/useAi-internal/foregroundStream'
         );
         const persistAssistant = vi.fn(async (patch: { toolCalls?: Array<{ status: string }> | null }) => {
-            if (patch.toolCalls?.some((call) => call.status === 'complete')) {
+            if (failedWrite === 'assistant' && patch.toolCalls?.some((call) => call.status === 'complete')) {
                 throw new Error('simulated persistence crash');
             }
             return null;
         });
 
+        const activeToolCalls = new Map();
+        const toolLedger = new Map();
         await expect(runForegroundStreamLoop({
             apiKey: 'key', modelId: 'model',
             orMessages: [{ role: 'user', content: [{ type: 'text', text: 'go' }] }],
@@ -582,7 +616,7 @@ describe('runForegroundStreamLoop', () => {
                 result: 'durable result', toolName: 'echo', timedOut: false,
             })) },
             persistAssistant: persistAssistant as any,
-            assistantFileHashes: [], activeToolCalls: new Map(),
+            assistantFileHashes: [], activeToolCalls, toolLedger,
             tailAssistant: { value: null }, rawMessages: { value: [] },
         })).rejects.toThrow('simulated persistence crash');
 
@@ -594,5 +628,7 @@ describe('runForegroundStreamLoop', () => {
             durableResult: 'durable result',
         }));
         expect(iteration).toBe(1);
+        expect(activeToolCalls.get('crash-call')).toMatchObject({ status: 'error', outcome: 'unresolved', error: expect.stringContaining('result could not be saved') });
+        expect(toolLedger.get('crash-call')).toMatchObject({ state: 'running' });
     });
 });

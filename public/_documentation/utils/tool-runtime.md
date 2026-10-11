@@ -130,3 +130,4 @@ the same owner check.
 - Source example: `app/plugins/examples/demo-calculator-tool.client.ts`
 - Portable authoring: [SDK reference](/documentation/plugins/plugin-sdk), [first plugin](/documentation/plugins/first-plugin), and [feature recipes](/documentation/plugins/add-features)
 - Background chat flow: [Background execution](/documentation/cloud/background-execution)
+- Deterministic failure and recovery tests: [Chat tool reliability](/documentation/utils/chat-tool-reliability)

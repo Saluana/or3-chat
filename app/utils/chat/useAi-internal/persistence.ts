@@ -88,6 +88,7 @@ export function makeAssistantPersister(
         finalize = false, // When true, clears pending flag to trigger sync
         terminalState,
         ifCurrent,
+        requireCurrent = false,
     }: Parameters<AssistantPersister>[0]): Promise<string | null> {
         // Build only the owned delta. The merge against the latest row happens
         // atomically inside patchMessageInDb's write transaction, so concurrent
@@ -119,7 +120,8 @@ export function makeAssistantPersister(
             ...(acceptedUsage ? { usage: acceptedUsage } : {}),
             ...(hasReasoning ? { reasoning_text: reasoning } : {}),
             ...(hasToolCalls
-                ? { tool_calls: (toolCalls ?? []).map((t) => ({ ...t })) }
+                ? { tool_calls: (toolCalls ?? []).map((t) => ({ ...t,
+                    ...(t.executionReceipt ? { executionReceipt: { ...t.executionReceipt } } : {}) })) }
                 : {}),
             ...(finalize
                 ? { generation_state: terminalState ?? 'complete' }
@@ -136,7 +138,7 @@ export function makeAssistantPersister(
             ...(finalize ? { pending: false } : {}),
             updated_at: nowSec(),
         };
-        await patchMessageInDb(
+        const saved = await patchMessageInDb(
             db,
             assistantDbMsg.id,
             patch as Partial<StoredMessage>,
@@ -152,6 +154,7 @@ export function makeAssistantPersister(
                 }
                 : ifCurrent
         );
+        if (requireCurrent && !saved) throw new Error('The tool execution receipt was not acknowledged; the originating generation is no longer current.');
         if (ownedSerialized !== undefined) {
             lastSerialized = ownedSerialized;
             return lastSerialized;

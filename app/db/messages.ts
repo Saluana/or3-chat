@@ -264,7 +264,7 @@ export async function patchMessageInDb(
     ifCurrent?: (message: Message | undefined) => boolean,
     entryPatch?: { field: string; key: string; value: unknown | null },
     commitGuard?: { tables: string[]; assertCurrent: () => void | Promise<void> },
-): Promise<void> {
+): Promise<Message | undefined> {
     const hooks = useHooks();
     // Preparation hooks run outside the write transaction (see upsertMessageInDb:
     // awaiting arbitrary plugin code between Dexie operations can idle-commit it).
@@ -427,6 +427,7 @@ export async function patchMessageInDb(
         entity: toMessageEntity(next),
         tableName: 'messages',
     });
+    return next;
 }
 
 /**

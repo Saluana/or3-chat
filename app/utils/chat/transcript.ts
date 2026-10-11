@@ -62,6 +62,8 @@ export interface CanonicalToolCall {
     arguments: string;
     fingerprint?: string;
     status: ToolCallInfo['status'];
+    outcome?: ToolCallInfo['outcome'];
+    executionReceipt?: ToolCallInfo['executionReceipt'];
     result?: string;
     error?: string;
     completedAt?: number;
@@ -193,6 +195,8 @@ export function messageToCanonicalTranscript(
             arguments: call.args ?? '',
             fingerprint: call.fingerprint,
             status: call.status,
+            outcome: call.outcome,
+            executionReceipt: call.executionReceipt,
             result: call.result,
             error: call.error,
             textOffset: call.text_offset,
@@ -265,10 +269,27 @@ function toolResultKey(threadId: string, parentAssistantId: string | undefined, 
     return JSON.stringify([threadId, parentAssistantId, callId]);
 }
 
+/** Legacy adjacent results omit their parent; infer only a matching call in the same thread. */
+function resolveLegacyToolParents(records: CanonicalTranscriptRecord[]): CanonicalTranscriptRecord[] {
+    const assistantByThread = new Map<string, CanonicalTranscriptRecord>();
+    return records.map(record => {
+        if (record.kind !== 'tool_result') {
+            if (record.kind === 'assistant') assistantByThread.set(record.threadId, record);
+            else assistantByThread.delete(record.threadId);
+            return record;
+        }
+        if (record.parentAssistantId) return record;
+        const assistant = assistantByThread.get(record.threadId);
+        return assistant?.toolCalls.some(call => call.callId === record.callId)
+            ? { ...record, parentAssistantId: assistant.id } : record;
+    });
+}
+
 /** Reconciles completed tool rows into their parent assistant call state. */
 export function reconcileTranscriptToolState(
     records: CanonicalTranscriptRecord[]
 ): CanonicalTranscriptRecord[] {
+    records = resolveLegacyToolParents(records);
     const resultByCall = new Map(
         records
             .filter((record) => record.kind === 'tool_result' && record.callId)
@@ -295,13 +316,16 @@ export function reconcileTranscriptToolState(
 export function projectTranscriptForOpenRouter(
     input: CanonicalTranscriptRecord[]
 ): ChatMessage[] {
-    const durableResults = new Set(input.filter((record) => record.kind === 'tool_result' && record.callId)
-        .map((record) => toolResultKey(record.threadId, record.parentAssistantId, record.callId!)));
+    input = resolveLegacyToolParents(input);
+    const durableResultByCall = new Map(input.filter((record) => record.kind === 'tool_result' && record.callId)
+        .map((record) => [toolResultKey(record.threadId, record.parentAssistantId, record.callId!), record]));
     // A result whose recorded assistant is absent (superseded by a retry or
     // removed) answers no call in this history; providers reject the request.
     const assistantIds = new Set(input.filter((record) => record.kind === 'assistant')
         .map((record) => JSON.stringify([record.threadId, record.id])));
     return reconcileTranscriptToolState(input).flatMap((record) => {
+        if (record.kind === 'tool_result' && record.callId
+            && durableResultByCall.get(toolResultKey(record.threadId, record.parentAssistantId, record.callId)) !== record) return [];
         if (record.kind === 'tool_result' && record.parentAssistantId
             && !assistantIds.has(JSON.stringify([record.threadId, record.parentAssistantId]))) return [];
         const toolCalls: ToolCall[] | undefined = record.toolCalls.length
@@ -344,6 +368,8 @@ export function projectTranscriptForOpenRouter(
                 tool_calls: record.toolCalls.map((call) => ({
                     id: call.callId,
                     name: call.name,
+                    outcome: call.outcome,
+                    executionReceipt: call.executionReceipt,
                     args: call.arguments,
                     status: call.status,
                     result: call.result,
@@ -358,11 +384,16 @@ export function projectTranscriptForOpenRouter(
         // the next request has a closed call/result pair. Never write synthetic
         // rows or duplicate a result already present in the durable transcript.
         const embeddedResults: ChatMessage[] = record.kind === 'assistant'
-            ? record.toolCalls.filter((call) => typeof call.result === 'string'
-                && (call.status === 'complete' || call.status === 'error')
-                && !durableResults.has(toolResultKey(record.threadId, record.id, call.callId)))
+            ? record.toolCalls.filter((call) => !durableResultByCall.has(toolResultKey(record.threadId, record.id, call.callId)))
                 .map((call) => ({ id: `${record.id}:tool-result:${call.callId}`, role: 'tool',
-                    content: call.result!, name: call.name, tool_call_id: call.callId,
+                    // This is provider context only, never a successful save or
+                    // permission to replay an operation with an unknown outcome.
+                    content: call.outcome !== 'unresolved' && call.executionReceipt?.state !== 'running'
+                        && call.executionReceipt?.state !== 'unresolved' && typeof call.result === 'string'
+                        && (call.status === 'complete' || call.status === 'error') ? call.result
+                        : JSON.stringify({ error: { code: 'TOOL_OUTCOME_UNRESOLVED',
+                            message: 'No durable tool result is available. The operation outcome is uncertain. Do not repeat it automatically.' } }),
+                    name: call.name, tool_call_id: call.callId,
                     data: { parent_assistant_id: record.id, tool_call_id: call.callId, tool_name: call.name } }))
             : [];
         return [message, ...embeddedResults];

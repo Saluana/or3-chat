@@ -137,6 +137,18 @@ jobs:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
       - run: bun install --frozen-lockfile
+      - name: Install Chromium for chat tool reliability gate
+        run: bunx playwright install --with-deps chromium
+      - name: Block candidates with chat tool lifecycle failures
+        run: bun run test:chat-tools && bun run test:e2e:chat-tools && bun run test:e2e:chat-tools:cloud
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: candidate-chat-tool-reliability
+          path: |
+            test-results/chat-tools
+            test-results/chat-tools-cloud
+          if-no-files-found: error
       - name: Run candidate source checks without rebuilding the production app
         env:
           VERSION: ${{ needs.identity.outputs.version }}

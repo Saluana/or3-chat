@@ -180,6 +180,29 @@ async function continueMessageImpl(
 }
 
 describe('continue/retry regressions', () => {
+    it.each(['unresolved', 'running-receipt', 'timed_out', 'canceled'] as const)('refuses Retry of an uncertain execution after reload: %s', async mode => {
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'write once' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, data: { content: '', tool_calls: [{
+                id: 'call', name: 'write', args: '{}', status: mode === 'running-receipt' ? 'loading' : 'error',
+                outcome: mode === 'running-receipt' ? undefined : mode,
+                executionReceipt: { state: mode === 'running-receipt' ? 'running' : 'unresolved', argumentFingerprint: 'fingerprint', startedAt: 10 },
+            }] }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[1]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        const sendMessage = vi.fn();
+        const hooks = { doAction: vi.fn() };
+        const rawMessages = ref([{ id: 'u1', role: 'user' as const, content: 'write once' }]);
+        const messages = ref([]);
+        const result = await retryMessageImpl({ loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
+            rawMessages, messages, hooks, sendMessage, defaultModelId: 'model', suppressNextTailFlush: vi.fn() }, 'a1');
+        expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable', error: expect.stringContaining('uncertain') });
+        expect(sendMessage).not.toHaveBeenCalled();
+        expect(hooks.doAction).not.toHaveBeenCalled();
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
+        expect(rawMessages.value).toHaveLength(1);
+    });
     beforeEach(() => {
         reportErrorSpy.mockReset();
         openRouterStreamSpy.mockReset();
