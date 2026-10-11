@@ -36,7 +36,9 @@ const concurrencyOnly = process.argv.includes('--concurrency-only');
 const archiveRaceOnly = process.argv.includes('--archive-race-only');
 const blobContentOnly = process.argv.includes('--blob-content-only');
 const alternateStorageOnly = process.argv.includes('--alternate-storage-only');
-const filesystemCompatOnly = process.argv.includes('--filesystem-compat-only') || alternateStorageOnly;
+const emptyStorageOnly = process.argv.includes('--empty-storage-only');
+const filesystemCompatOnly = process.argv.includes('--filesystem-compat-only') || alternateStorageOnly || emptyStorageOnly;
+assert(!(alternateStorageOnly && emptyStorageOnly), 'Choose either alternate or empty filesystem qualification.');
 const workspaceOmissionOnly = process.argv.includes('--workspace-omission-only');
 const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only') || workspaceOmissionOnly;
 const builtCliOnly = process.argv.includes('--built-cli-only');
@@ -188,7 +190,7 @@ let legacyAttachment: { hash: string; storageId: string; bytes: Buffer } | undef
 const extraFilesystemFiles: Array<{ name: string; sha256: string }> = [];
 const fileBytes = Buffer.from('Synthetic backup document and attachment bytes.\n');
 const hash = `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`;
-let storageId: string;
+let storageId: string | undefined;
 let workspaceId: string;
 let replayBody: unknown;
 let replayReceipt: unknown;
@@ -216,9 +218,17 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
     assert(actual, `Missing ${row.tableName}/${row.pk}`);
     for (const [key, value] of Object.entries(row.payload)) assert.deepEqual(actual.payload[key], value, `${row.tableName}/${row.pk}/${key}`);
   }
-  const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' })).json();
-  const original = await api(download.url);
-  assert.deepEqual(Buffer.from(await original.arrayBuffer()), expectedAttachmentBytes);
+  if (emptyStorageOnly) {
+    assert(!snapshot.items.some((item: { tableName: string }) => item.tableName === 'file_meta'));
+    const exists = await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "console.log(require('node:fs').existsSync(process.env.OR3_STORAGE_FS_ROOT+'/workspaces'))"]), fixture.directory);
+    assert.equal(exists, 'false', 'Legitimate empty-storage fixture must have no workspace object directories');
+  } else {
+    assert.equal(typeof storageId, 'string');
+    const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' })).json();
+    const original = await api(download.url);
+    assert.deepEqual(Buffer.from(await original.arrayBuffer()), expectedAttachmentBytes);
+  }
   if (legacyAttachment) {
     const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash: legacyAttachment.hash,
       storage_id: legacyAttachment.storageId, file_kind_capability: 'v1' })).json();
@@ -262,7 +272,8 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
   const integrity = await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
     "const Database=require('/app/.output/server/node_modules/better-sqlite3');for(const p of ['/data/auth.sqlite','/data/sync.sqlite']){const db=new Database(p,{readonly:true,fileMustExist:true});if(db.pragma('integrity_check',{simple:true})!=='ok'||db.pragma('foreign_key_check').length)process.exit(1);db.close()}console.log('integrity and foreign keys ok')"]), fixture.directory);
   assert.equal(integrity, 'integrity and foreign keys ok');
-  return { rows: fixtureRows.length, attachmentBytes: fileBytes.length, integrity: 'ok', identity: 'owner and workspace preserved', replay: 'idempotent', capturedPairs,
+  return { rows: fixtureRows.length, attachmentBytes: emptyStorageOnly ? 0 : fileBytes.length, integrity: 'ok', identity: 'owner and workspace preserved', replay: 'idempotent', capturedPairs,
+    ...(emptyStorageOnly ? { emptyStorageHasNoCanonicalReferencesOrObjectDirectory: true } : {}),
     ...(secondWorkspace && includeSecondary ? { secondWorkspaceRows: secondWorkspace.rows.length, sharedHashBytesVerifiedPerWorkspace: true, duplicateRecordIdsScoped: true } : {}) };
 }
 async function backup(fixture: Instance) {
@@ -367,22 +378,24 @@ try {
   const source = await instance('source');
   const { api, session } = await authenticated(source);
   workspaceId = session.session.workspace.id;
-  const upload = await (await api('/api/storage/presign-upload', { workspace_id: workspaceId, hash, mime_type: 'text/plain', size_bytes: fileBytes.length, file_kind_capability: 'v1' })).json();
-  const response = await api(upload.url, undefined, { method: upload.method ?? 'PUT', body: fileBytes, headers: { ...upload.headers, 'content-type': 'text/plain' } });
-  const receipt = await response.json();
-  storageId = upload.storageId ?? receipt.storageId;
-  await api('/api/storage/commit', { workspace_id: workspaceId, hash, storage_id: storageId, intent_id: upload.intentId,
-    storage_provider_id: 'fs', mime_type: 'text/plain', size_bytes: fileBytes.length, name: 'drill.txt', kind: 'file', file_kind_capability: 'v1' });
   const base = { deleted: false, clock: 1, created_at: 1, updated_at: 1 };
+  if (!emptyStorageOnly) {
+    const upload = await (await api('/api/storage/presign-upload', { workspace_id: workspaceId, hash, mime_type: 'text/plain', size_bytes: fileBytes.length, file_kind_capability: 'v1' })).json();
+    const response = await api(upload.url, undefined, { method: upload.method ?? 'PUT', body: fileBytes, headers: { ...upload.headers, 'content-type': 'text/plain' } });
+    const receipt = await response.json();
+    storageId = upload.storageId ?? receipt.storageId;
+    await api('/api/storage/commit', { workspace_id: workspaceId, hash, storage_id: storageId, intent_id: upload.intentId,
+      storage_provider_id: 'fs', mime_type: 'text/plain', size_bytes: fileBytes.length, name: 'drill.txt', kind: 'file', file_kind_capability: 'v1' });
+    fixtureRows.push({ tableName: 'file_meta', pk: hash, payload: { ...base, hash, name: 'drill.txt', mime_type: 'text/plain', kind: 'file', size_bytes: fileBytes.length, storage_id: storageId, storage_provider_id: 'fs' } });
+  }
   fixtureRows.push(
-    { tableName: 'file_meta', pk: hash, payload: { ...base, hash, name: 'drill.txt', mime_type: 'text/plain', kind: 'file', size_bytes: fileBytes.length, storage_id: storageId, storage_provider_id: 'fs' } },
     { tableName: 'threads', pk: 'drill-thread', payload: { ...base, id: 'drill-thread', title: 'Synthetic restore conversation', status: 'active', pinned: false } },
-    { tableName: 'messages', pk: 'drill-message', payload: { ...base, id: 'drill-message', thread_id: 'drill-thread', role: 'user', index: 0, order_key: '0000000001', content: 'Synthetic chat body', file_hashes: JSON.stringify([hash]) } },
+    { tableName: 'messages', pk: 'drill-message', payload: { ...base, id: 'drill-message', thread_id: 'drill-thread', role: 'user', index: 0, order_key: '0000000001', content: 'Synthetic chat body', file_hashes: JSON.stringify(emptyStorageOnly ? [] : [hash]) } },
     { tableName: 'posts', pk: 'drill-document', payload: { ...base, id: 'drill-document', title: 'Synthetic document', post_type: 'doc', content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Synthetic restored document' }] }] }), file_hashes: '[]', meta: '{}' } },
     { tableName: 'projects', pk: 'drill-project', payload: { ...base, id: 'drill-project', name: 'Synthetic project', data: [{ kind: 'doc', id: 'drill-document' }] } },
     { tableName: 'kv', pk: 'drill-settings', payload: { id: 'drill-settings', name: 'backup_drill_settings', value: { theme: 'retro', nested: ['retained', 42] }, clock: 1, created_at: 1, updated_at: 1 } },
   );
-  if (filesystemCompatOnly) {
+  if (filesystemCompatOnly && !emptyStorageOnly) {
     const bytes = Buffer.from('Synthetic legacy MD5 attachment bytes.\n');
     const legacyHash = `md5:${createHash('md5').update(bytes).digest('hex')}`;
     legacyAttachment = { hash: legacyHash, storageId: `${workspaceId}:${legacyHash}`, bytes };
@@ -440,7 +453,8 @@ try {
     secondWorkspace = { id: created.id, storageId: secondStorageId, rows };
     await api('/api/workspaces/active', { id: workspaceId });
   }
-  evidence('populated source uses authenticated sync, real SQLite and FS attachment', await verify(source));
+  evidence(emptyStorageOnly ? 'populated source has authenticated chat/document/settings and no attachment references or object directories'
+    : 'populated source uses authenticated sync, real SQLite and FS attachment', await verify(source));
   let racingWrites: Array<Promise<unknown>> = [];
   if (deep || concurrencyOnly) {
     const pairBody = (index: number) => {
@@ -495,8 +509,9 @@ try {
   assert(archive.ok, archive.stderr);
   const entries = archive.stdout.trim().split('\n');
   for (const name of ['./auth.sqlite', './sync.sqlite', './auth.sqlite-wal', './sync.sqlite-wal']) assert(entries.includes(name), `Missing captured ${name}`);
-  assert(entries.some(name => name.endsWith('.meta.json')));
-  evidence('real archive contains both SQLite databases, WALs, blob and sidecar');
+  assert.equal(entries.some(name => name.endsWith('.meta.json')), !emptyStorageOnly);
+  evidence(emptyStorageOnly ? 'real archive contains both SQLite databases and WALs, with no attachment payloads or sidecars'
+    : 'real archive contains both SQLite databases, WALs, blob and sidecar');
   await stopProject(source.directory, 'local');
   const target = await instance('target');
   await assert.rejects(restoreCommand(target.directory, { yes: true }, [sourceBackup]), /authentication failed|different.*identity/);
@@ -1157,7 +1172,8 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     assert(restored.ok, restored.stderr);
     assert.match(restored.stdout, /Restored backup-/);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    evidence(filesystemCompatOnly ? 'built CLI native helper accepts legacy MD5, empty/multi-chunk committed objects and preserves temporary/uncommitted/opaque fixtures'
+    evidence(emptyStorageOnly ? 'built CLI native helper accepts legitimate absent filesystem object directory without inventing attachment references'
+      : filesystemCompatOnly ? 'built CLI native helper accepts legacy MD5, empty/multi-chunk committed objects and preserves temporary/uncommitted/opaque fixtures'
       : 'built CLI dispatcher restores real archive with lease and serialized native database/WAL checks', await verify(target));
     await stopProject(target.directory, 'local');
     await startProject(target.directory, 'local', target.env);
@@ -1192,7 +1208,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, emptyStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

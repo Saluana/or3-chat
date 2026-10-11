@@ -3178,6 +3178,106 @@
     "outcomes": [],
     "explanation": "Fixture setup stopped before backup: managed Compose intentionally hardcodes /data/storage, so changing .env alone left the expected alternate workspace directory absent. Corrected fixture explicitly owns the custom Compose asset too. Not a production restore defect."
   },
+  "actualAppEmptyFilesystem": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "34bc2f6b193f45ef32d1f4fa7031784c948b6d29",
+    "outcomes": [
+      {
+        "name": "populated source has authenticated chat/document/settings and no attachment references or object directories",
+        "kind": "passed",
+        "detail": {
+          "rows": 5,
+          "attachmentBytes": 0,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "emptyStorageHasNoCanonicalReferencesOrObjectDirectory": true
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "226bb9e7abfb63ebfd1ce99f278ed6faecc2dcc17e03eb93e11d58f91954e8e9"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases and WALs, with no attachment payloads or sidecars",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 5,
+          "attachmentBytes": 0,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "emptyStorageHasNoCanonicalReferencesOrObjectDirectory": true
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 5,
+          "attachmentBytes": 0,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "emptyStorageHasNoCanonicalReferencesOrObjectDirectory": true
+        }
+      },
+      {
+        "name": "built CLI native helper accepts legitimate absent filesystem object directory without inventing attachment references",
+        "kind": "passed",
+        "detail": {
+          "rows": 5,
+          "attachmentBytes": 0,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "emptyStorageHasNoCanonicalReferencesOrObjectDirectory": true
+        }
+      },
+      {
+        "name": "built CLI restore survives another actual cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 5,
+          "attachmentBytes": 0,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "emptyStorageHasNoCanonicalReferencesOrObjectDirectory": true
+        }
+      },
+      {
+        "name": "built CLI read-only status remains available after restore lease release",
+        "kind": "passed",
+        "detail": {
+          "deploymentIdentityPreserved": true,
+          "lease": "none",
+          "docker": true,
+          "identityMatches": null,
+          "runningImageIdMatches": true,
+          "boundary": "Unpublished local fixture has no RepoDigests; status correctly leaves registry-qualified image identity unknown. Direct local image ID matches."
+        }
+      }
+    ],
+    "coverage": "Five real chat/document/project/settings records with no uploaded files, no canonical attachment references and no object directory. Both SQLite databases/WALs restore into separate instance and through built CLI; native hashing accepts legitimate absent storage, records and empty storage survive another cold restart/status."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,

@@ -208,6 +208,11 @@ custom Compose asset and an archived storage root containing spaces inside
 native legacy-MD5 corruption refusal followed by snapshot recovery, then runs
 the built CLI restore and cold restart. Managed Compose fixes its storage root
 at `/data/storage`; this fixture does not expand that supported profile.
+`--empty-storage-only` creates five real chat/document/project/settings records
+without uploading files or creating canonical attachment references. Both
+databases and WALs are captured; no object directory or sidecars exist. The
+built CLI restore must retain those records and keep storage legitimately empty
+through another cold restart and read-only status check.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks
