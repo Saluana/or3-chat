@@ -325,6 +325,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                 return denied('files.read');
             }
             const file = await files.get(id);
+            if (ended()) return pluginError('stale-context', 'Plugin activation has ended');
             if (!file) return pluginError('not-found', 'Staged file was not found');
             if (readOptions?.signal?.aborted) return pluginError('aborted', 'File read cancelled');
             let settleResult: (result: PluginResult<void>) => void = () => undefined;
@@ -344,12 +345,18 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                     finish(pluginError('aborted', 'File read cancelled'));
                 },
                 async *[Symbol.asyncIterator]() {
+                    if (ended()) {
+                        finish(pluginError('stale-context', 'Plugin activation has ended'));
+                        return;
+                    }
                     if (readOptions?.signal?.aborted) {
                         finish(pluginError('aborted', 'File read cancelled'));
                         return;
                     }
                     yield bytes;
-                    finish(pluginOk(undefined));
+                    finish(ended()
+                        ? pluginError('stale-context', 'Plugin activation has ended')
+                        : pluginOk(undefined));
                 },
             };
             return pluginOk(read);

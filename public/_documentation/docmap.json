@@ -911,7 +911,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements."
+                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements. File byte reads follow activation lifetime across workspace switches."
                 },
                 {
                     "name": "plugin-sdk-cli.md",

@@ -251,6 +251,10 @@ Feature requirements are checked before setup. Portable clients return `unsuppor
 `ui.kit.components.ChatMessage` is reactive and follows theme changes. `ui.sidebar.show(id)` reports `not-found` for unknown pages. `panes.open` supports core `chat`/`doc`, registered apps and `target: { pane: id }`; `panes.list/onChange` return snapshots. Removing a pane app resets only its panes to empty chats.
 
 `storage` persists JSON in the activation workspace under `or3.plugin.<id>.storage.<key>`; conditional writes use revisions. Values are limited to 32 KiB and each plugin to 1 MiB/1,000 live keys. Settings resolve persisted values, then defaults in the manifest's settings schema, then `public.pluginSettingDefaults[id]`. Disable retains workspace data. Activation clients return `stale-context` after disposal or a workspace switch.
+`files.read` rechecks this lifetime after loading bytes. A read handle obtained
+before the transition also checks lifetime before yielding bytes; returning to
+the original workspace does not revive that activation. Bytes already yielded
+remain with the caller.
 
 `secrets` uses device-local `or3.plugin.<id>.secret.<key>` keys. Observed sign-out clears them; stale-session startup preserves them. Secrets are never workspace KV values. An unavailable browser store reports `host-unavailable`.
 
