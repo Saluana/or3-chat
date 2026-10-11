@@ -43,12 +43,16 @@ The three plans are directionally aligned, but there are several conflicts and m
   restore and deep health, cleared the operation journal, then failed native
   inspection with `SQLITE_NOTADB` and authenticated session reads with HTTP 500.
   Restore, rollback and snapshot recovery now require native read-only SQLite
-  `quick_check` and a nonempty schema after startup before completion. Failure
-  preserves the explicit-recovery journal and possible accepted writes. The
+  `quick_check` and a nonempty schema before application startup. Failure
+  follows safe pre-start snapshot recovery; failed recovery keeps the journal.
+  The populated empty-schema case showed why this boundary matters: checking
+  after startup allowed initialization to recreate 30 tables with zero original
+  threads/messages, while restore reported success. The
   check uses the restored image's driver and does not impose newer ownership
   rules on legacy snapshots. Real known-good recovery restores all fixture
   records and attachment bytes; this is integrity validation, not a complete
-  semantic audit or an early pre-extraction database check.
+  semantic audit or an early pre-extraction database check. Later startup and
+  terminal-state failures still preserve possibly accepted writes.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

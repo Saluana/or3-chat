@@ -11,7 +11,6 @@ import { deploymentPaths } from '../deployment/paths';
 import { updatePending } from '../deployment/state-store';
 import { removeDashboardOperator } from '../runtime/dashboard-operator';
 import { run } from '../runtime/command-runner';
-import { composeArgs } from '../runtime/compose';
 import { containerNodeCommand } from '../runtime/health';
 import { pullAndRequireImage, requireImageDigest } from '../runtime/images';
 import { startProject, stopProject } from '../runtime/project';
@@ -33,7 +32,8 @@ import {
 import { assertBackupMatchesDeployment, readManifest, recordedBackupPath } from './manifests';
 
 // Deep health only opens database files; that also succeeds for a non-SQLite
-// payload. Use the restored image's native driver, without changing data or
+// payload. Startup can also initialize an empty database. Use the restored
+// image's native driver before starting the application, without changing data or
 // imposing current-release ownership on legitimate older recovery snapshots.
 const VERIFY_RESTORED_DATABASES_SCRIPT = `
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
@@ -116,16 +116,25 @@ export async function restoreBackupData(
   await writeSecure(deploymentPaths(directory).env, serializeEnv(restoredEnv));
   await restoreManagedAssets(directory, backupPath, manifest);
   await restoreVolumeArchive(directory, state.mode, restoredEnv, backupPath);
+  // Application startup can migrate an empty SQLite payload into a healthy
+  // schema. Check the extracted snapshot while no application writes are
+  // possible, so an invalid payload still follows safe pre-start recovery.
+  const databaseCheck = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only',
+    '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+    '-v', `${state.volumeName}:/data`,
+    '--env', `OR3_BASIC_AUTH_DB_PATH=${restoredEnv.OR3_BASIC_AUTH_DB_PATH ?? ''}`,
+    '--env', `OR3_SQLITE_DB_PATH=${restoredEnv.OR3_SQLITE_DB_PATH ?? ''}`,
+    '--entrypoint', 'sh', restoredEnv.OR3_IMAGE,
+    ...containerNodeCommand(VERIFY_RESTORED_DATABASES_SCRIPT).slice(1),
+  ], directory);
+  if (!databaseCheck.ok) {
+    throw new Error(`Restored SQLite database integrity verification failed. ${redact(databaseCheck.stderr, secretValues(restoredEnv))}`);
+  }
   // The caller journals the point at which application writes become possible
   // before requesting startup. Recovery snapshots keep their existing phase.
   await options.beforeStart?.();
   await startProject(directory, state.mode, restoredEnv);
-  const databaseCheck = await run('docker', composeArgs(directory, state.mode, [
-    'exec', '-T', 'or3', ...containerNodeCommand(VERIFY_RESTORED_DATABASES_SCRIPT),
-  ]), directory);
-  if (!databaseCheck.ok) {
-    throw new Error(`Restored SQLite database integrity verification failed. ${redact(databaseCheck.stderr, secretValues(restoredEnv))}`);
-  }
   return manifest;
 }
 

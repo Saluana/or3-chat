@@ -609,7 +609,7 @@ test('rollback refuses without confirmation, without a rollback point, and for a
 });
 
 for (const operation of ['restore', 'rollback'] as const) {
-  test(`${operation} cannot commit a deeply healthy target whose native database check fails`, async () => {
+  test(`${operation} checks native database integrity before startup and safely restores a refused payload`, async () => {
     const fixture = await sandbox();
     expect((await fixture.cli(['backup'])).exitCode).toBe(0);
     const [target] = await fixture.backupIds();
@@ -623,12 +623,32 @@ for (const operation of ['restore', 'rollback'] as const) {
     const result = await fixture.cli(operation === 'restore' ? ['restore', target, '--yes'] : ['rollback', '--yes']);
     expect(result.exitCode, result.output).toBe(1);
     expect(result.stderr).toContain('fixture SQLITE_NOTADB');
-    expect(result.stderr).toContain('NOT restored automatically');
-    expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
-    expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
-    expect((await fixture.cli(['recover'])).exitCode).toBe(1);
-    await fixture.configure({ failures: [] });
-    expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
+    expect(result.stderr).toContain('was restored');
     expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+    const calls = (await fixture.trace()).map(args => args.join(' '));
+    expect(calls.filter(call => call.includes('tar xzf'))).toHaveLength(2);
+    const checked = calls.findIndex(call => call.includes('quick_check'));
+    const started = calls.findIndex(call => /compose .* up -d/.test(call));
+    expect(checked).toBeGreaterThan(calls.findIndex(call => call.includes('tar xzf')));
+    expect(checked).toBeLessThan(started);
+    expect(calls[checked]).toContain('--network none');
+    expect(calls[checked]).toContain('--read-only');
+    expect(calls[checked]).toContain('--cap-drop ALL');
   });
 }
+
+test('native database verification failure during automatic recovery keeps the snapshot journal for explicit retry', async () => {
+  const fixture = await sandbox();
+  expect((await fixture.cli(['backup'])).exitCode).toBe(0);
+  const [target] = await fixture.backupIds();
+  await fixture.reset();
+  await fixture.configure({ failures: [{ match: 'quick_check', times: 2, message: 'fixture verification interrupted' }] });
+  const result = await fixture.cli(['restore', target, '--yes']);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain('automatic restoration of the pre-restore snapshot also failed');
+  expect((await fixture.readState()).incompleteOperation).toMatchObject({ phase: 'restoring-previous' });
+  expect((await fixture.trace()).some(args => /compose .* up -d/.test(args.join(' ')))).toBe(false);
+  await fixture.configure({ failures: [] });
+  expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
