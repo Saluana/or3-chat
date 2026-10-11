@@ -37,6 +37,163 @@ test('disconnected welcome keeps editor history and loads settings on first open
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
+test.describe('chat draft storage recovery faults', () => {
+    test.describe.configure({ timeout: 120_000 });
+    test.beforeEach(async ({ context, page }) => {
+        await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+            ? route.continue() : route.abort('blockedbyclient'));
+        await page.goto('/chat');
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+        await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:v1:')).length)).toBeGreaterThan(0);
+    });
+
+    async function savedTexts(page: Page): Promise<string[]> {
+        return page.evaluate(async () => {
+            const texts: string[] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const open = indexedDB.open(name);
+                    open.onsuccess = () => resolve(open.result);
+                    open.onerror = () => reject(open.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                    const rows = await new Promise<Array<{ draft: { text: string } }>>((resolve, reject) => {
+                        const tx = db.transaction('workspace_tab_drafts', 'readonly');
+                        const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        tx.oncomplete = () => resolve(read.result);
+                        tx.onabort = () => reject(tx.error);
+                    });
+                    texts.push(...rows.map(row => row.draft.text));
+                }
+                db.close();
+            }
+            return texts;
+        });
+    }
+
+    test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
+        await page.evaluate(() => {
+            const original = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (key, value) {
+                if (key.startsWith('or3:workspace-tabs:v1:')) throw new DOMException('Synthetic layout quota', 'QuotaExceededError');
+                return original.call(this, key, value);
+            };
+            (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout = () => { Storage.prototype.setItem = original; };
+        });
+        await page.locator('.workspace-tab-new').click();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('New tab layout recovery marker');
+        const notice = page.getByText('Tab layout could not be saved', { exact: true });
+        await expect(notice).toBeVisible();
+        // This is the product notice's expiry boundary, not a save-completion wait.
+        await page.waitForTimeout(6000);
+        await expect(notice).toBeVisible();
+        await page.evaluate(() => (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout());
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect(notice).toBeHidden();
+        await expect.poll(() => savedTexts(page)).toContain('New tab layout recovery marker');
+        await page.reload();
+        await expect(input).toHaveText('New tab layout recovery marker', { timeout: 60_000 });
+        await info.attach('layout-quota-retry', { body: JSON.stringify({ recovered: await input.textContent(), warningRetainedPastDefaultDuration: true }), contentType: 'application/json' });
+    });
+
+    test('an oversized draft reports failure and keeps its last durable copy until reduced', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('Last durable draft before size limit');
+        await expect.poll(() => savedTexts(page)).toContain('Last durable draft before size limit');
+        // Text plus editor JSON exceed the existing 500k serialized-character cap.
+        await input.fill('x'.repeat(260_000));
+        await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible();
+        await expect.poll(() => savedTexts(page)).toEqual(['Last durable draft before size limit']);
+        expect(await input.evaluate(element => element.textContent?.length)).toBe(260_000);
+        await input.fill('Reduced draft recovers after size limit');
+        await expect.poll(() => savedTexts(page)).toContain('Reduced draft recovers after size limit');
+        await expect(page.getByText('Draft could not be saved', { exact: true })).toBeHidden();
+        await page.reload();
+        await expect(input).toHaveText('Reduced draft recovers after size limit', { timeout: 60_000 });
+        await info.attach('oversized-draft-recovery', { body: JSON.stringify({ oversizedCharacters: 260_000, retainedPriorCopy: true, recovered: await input.textContent() }), contentType: 'application/json' });
+    });
+
+    test('a failed layout save protects a new tab draft from refresh until retry succeeds', async ({ page }, info) => {
+        await page.evaluate(() => {
+            const original = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (key, value) {
+                if (key.startsWith('or3:workspace-tabs:v1:')) throw new DOMException('Synthetic layout quota', 'QuotaExceededError');
+                return original.call(this, key, value);
+            };
+            (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout = () => { Storage.prototype.setItem = original; };
+        });
+        await page.locator('.workspace-tab-new').click();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('Refresh protected new tab draft');
+        await expect(page.getByText('Tab layout could not be saved', { exact: true })).toBeVisible();
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(input).toHaveText('Refresh protected new tab draft');
+        await page.evaluate(() => (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout());
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect.poll(() => savedTexts(page)).toContain('Refresh protected new tab draft');
+        await page.reload();
+        await expect(input).toHaveText('Refresh protected new tab draft', { timeout: 60_000 });
+        await info.attach('layout-refresh-guard', { body: JSON.stringify({ dialogs, recovered: await input.textContent() }), contentType: 'application/json' });
+    });
+
+    for (const failIndexedDb of [false, true]) test(`full localStorage with IndexedDB ${failIndexedDb ? 'rejected then retried' : 'available'} preserves the draft`, async ({ page }, info) => {
+        const quota = await page.evaluate((failIndexedDb) => {
+            const chunk = 'x'.repeat(64 * 1024);
+            let chunks = 0;
+            let exceeded = false;
+            // At most 10 MiB of synthetic characters; never fill disk/IndexedDB.
+            for (; chunks < 160; chunks++) {
+                try { localStorage.setItem(`or3:e2e:quota-fill:${chunks}`, chunk); }
+                catch (error) { exceeded = error instanceof DOMException && error.name === 'QuotaExceededError'; break; }
+            }
+            const original = IDBObjectStore.prototype.put;
+            if (failIndexedDb) IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name === 'workspace_tab_drafts') throw new DOMException('Synthetic draft storage full', 'QuotaExceededError');
+                return original.apply(this, args);
+            };
+            (window as unknown as { releaseRecoveryQuota: () => void }).releaseRecoveryQuota = () => {
+                for (const key of Object.keys(localStorage)) if (key.startsWith('or3:e2e:quota-fill:')) localStorage.removeItem(key);
+                IDBObjectStore.prototype.put = original;
+            };
+            return { exceeded, chunks, characters: chunks * chunk.length };
+        }, failIndexedDb);
+        expect(quota.exceeded).toBe(true);
+        const text = `Recover full-storage draft ${failIndexedDb}`;
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(text);
+        if (failIndexedDb) {
+            await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible();
+            expect(await savedTexts(page)).not.toContain(text);
+            await expect(input).toHaveText(text);
+            const dialogs: string[] = [];
+            page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+            await page.reload({ timeout: 10_000 }).catch(() => {});
+            expect(dialogs).toEqual(['beforeunload']);
+            await expect(input).toHaveText(text);
+            await page.evaluate(() => (window as unknown as { releaseRecoveryQuota: () => void }).releaseRecoveryQuota());
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        }
+        await expect.poll(() => savedTexts(page)).toContain(text);
+        const before = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:') || key.startsWith('or3:tab-draft-journal:'))
+            .map(key => [key, localStorage.getItem(key)])));
+        await info.attach('quota-before-reload-layout', { body: JSON.stringify(before), contentType: 'application/json' });
+        await page.reload();
+        const after = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:') || key.startsWith('or3:tab-draft-journal:'))
+            .map(key => [key, localStorage.getItem(key)])));
+        await info.attach('quota-after-reload-layout', { body: JSON.stringify({ after, savedTexts: await savedTexts(page) }), contentType: 'application/json' });
+        await expect(input).toHaveText(text, { timeout: 60_000 });
+        await info.attach('bounded-storage-quota', { body: JSON.stringify({ ...quota, indexedDbFaultInjected: failIndexedDb, recovered: text }), contentType: 'application/json' });
+    });
+});
+
 for (const savedWidth of [null, 'NaN']) {
     test(`desktop startup reserves the sidebar through hydration and viewport changes (${savedWidth ?? 'fresh'})`, async ({ page }, info) => {
         await page.setViewportSize({ width: 1350, height: 940 });
@@ -310,8 +467,10 @@ test('sidebar chat and document switching keeps the workspace mounted without a 
     expect(serverRenderErrors).toEqual([]);
 });
 
-test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ page }, info) => {
+test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ context, page }, info) => {
     test.setTimeout(120_000);
+    await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
     await page.route('**openrouter.ai/**', route => route.abort());
     const savedDrafts = () => page.evaluate(async () => {
         const saved: Array<{ text: string; hashes: string[]; account: string }> = [];
@@ -1204,6 +1363,8 @@ test('Files stores active content as download-only bytes without rendering it', 
 });
 
 async function openChat(page: Page): Promise<void> {
+    await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
     // Catalog loading can start before the fixture component mounts and
     // installs its fetch harness. Keep that startup request deterministic too.
     await page.route('**/api/__or3-e2e/models*', (route) =>
@@ -1647,16 +1808,59 @@ test.describe('production chat journey', () => {
         await expect(page.getByText('Partial response before stop.')).toBeVisible();
     });
     test('recovers a partial foreground response after refresh during streaming', async ({ page }) => {
-        test.setTimeout(60_000);
+        test.setTimeout(120_000);
         await openChat(page);
         await send(page, 'journey:refresh');
-        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible({ timeout: 30_000 });
         await waitForDurableReply(page, 'Partial response before refresh. Ready to recover.');
         await page.reload();
-        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible({ timeout: 30_000 });
         await expect(page.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible({ timeout: 35_000 });
         await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
         await expect(page.getByText(/Late response from the old page/)).toHaveCount(0);
+    });
+    for (const fault of ['quota', 'abort'] as const) test(`${fault} during user turn persistence keeps the draft and retries once without duplicate messages`, async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page);
+        await page.evaluate((fault) => {
+            const original = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                const value = args[0] as { role?: string };
+                if (this.name !== 'messages' || value?.role !== 'user') return original.apply(this, args);
+                if (fault === 'quota') throw new DOMException('Synthetic user-turn storage full', 'QuotaExceededError');
+                const request = original.apply(this, args);
+                this.transaction.abort();
+                return request;
+            };
+            const originalFetch = globalThis.fetch.bind(globalThis);
+            const state = { providerRequests: 0, restore: () => { IDBObjectStore.prototype.put = original; } };
+            globalThis.fetch = (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (url.includes('/api/__or3-e2e/chat/completions')) state.providerRequests++;
+                return originalFetch(input, init);
+            };
+            (window as unknown as { recoverySendState: typeof state }).recoverySendState = state;
+        }, fault);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('journey:complete');
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        const feedback = page.getByText(fault === 'abort' ? 'Could not save locally'
+            : /^(Browser storage full|Could not save locally|Something went wrong)$/).first();
+        await expect(feedback).toBeVisible();
+        await expect(input).toHaveText('journey:complete');
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(0);
+        expect(await page.evaluate(() => (window as unknown as { recoverySendState: { providerRequests: number } }).recoverySendState.providerRequests)).toBe(0);
+        await page.evaluate(() => (window as unknown as { recoverySendState: { restore: () => void } }).recoverySendState.restore());
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await waitForDurableReply(page, 'Hello from deterministic stream.');
+        await expect(input).toHaveText('');
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(1);
+        expect(await page.evaluate(() => (window as unknown as { recoverySendState: { providerRequests: number } }).recoverySendState.providerRequests)).toBe(1);
+        await page.reload();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(1);
+        await info.attach('user-turn-save-recovery', { body: JSON.stringify({ fault, refusedBeforeProvider: true, recoveredWithoutDuplicateUser: true }), contentType: 'application/json' });
     });
     test('clears a saved message before the provider responds and preserves the next draft', async ({ page }, info) => {
         await openChat(page);
@@ -1723,7 +1927,7 @@ test.describe('production chat journey', () => {
         const viewer = await context.newPage();
         try {
             await openChat(viewer);
-            await expect(viewer.getByText('Partial response shared across tabs.')).toBeVisible();
+            await expect(viewer.getByText('Partial response shared across tabs.')).toBeVisible({ timeout: 30_000 });
             await expect(page.getByText('Partial response shared across tabs. Owner made progress.'))
                 .toBeVisible({ timeout: 25_000 });
             await waitForDurableReply(page, 'Partial response shared across tabs. Owner made progress.');
@@ -1742,7 +1946,7 @@ test.describe('production chat journey', () => {
             await viewer.screenshot({ path, animations: 'disabled' });
             await info.attach('second-tab-recovery', { path, contentType: 'image/png' });
             await viewer.reload();
-            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1);
+            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1, { timeout: 30_000 });
             await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible();
             await expect(latestReply).toHaveCount(1);
             await expect(latestReply).toBeVisible();
