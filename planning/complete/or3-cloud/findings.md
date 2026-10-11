@@ -21,6 +21,14 @@ The three plans are directionally aligned, but there are several conflicts and m
   failure. Pre-start replacement failures retain automatic snapshot recovery;
   post-start recovery requires an explicit data-loss choice. This builds on the
   merged #235 backup/recovery work without enabling generation cleanup.
+- A real signed-archive omission test also restored an archive without
+  `auth.sqlite`: a sign-in request initialized an empty replacement, restore
+  reported success, and the synthetic account count fell from one to zero.
+  Archive validation now requires both managed database payloads before
+  extraction clears live data, while preserving tar errors on legacy POSIX
+  shells. Presence and checksums still do not prove referenced blob completeness;
+  the drill records that remaining semantic boundary and recovery from a
+  known-good archive.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

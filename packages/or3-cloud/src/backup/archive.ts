@@ -120,7 +120,30 @@ export async function validateVolumeArchive(directory: string, _mode: Mode, env:
       'run', '--rm', '-i', '--network', 'none', '--read-only',
       '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
       '--entrypoint', 'sh', env.OR3_IMAGE, '-c',
-      'tar tzf - >/dev/null',
+      // A structurally valid archive can still omit a database. Starting the
+      // app may create an empty replacement and make deep health green while
+      // accounts or canonical workspace data have been lost. Require both
+      // fixed-profile payloads before extraction can clear the live volume.
+      // Keep this streaming and use only the existing shell/tar tool contract.
+      // Pass tar's exit status through the stream too: legacy /bin/sh may not
+      // support pipefail, and a listing error must never be hidden by a reader.
+      `{ tar tzf -; printf '\\nOR3_TAR_RESULT:%s\\n' "$?"; } | {
+  auth=0
+  sync=0
+  tar_status=
+  while IFS= read -r entry; do
+    case "$entry" in
+      auth.sqlite|./auth.sqlite) auth=1 ;;
+      sync.sqlite|./sync.sqlite) sync=1 ;;
+      OR3_TAR_RESULT:*) tar_status="\${entry#OR3_TAR_RESULT:}" ;;
+    esac
+  done
+  if [ "$tar_status" != 0 ]; then exit 1; fi
+  if [ "$auth" != 1 ] || [ "$sync" != 1 ]; then
+    echo 'Backup archive is missing required managed database payloads (auth.sqlite and sync.sqlite).' >&2
+    exit 1
+  fi
+}`,
     ],
     join(backupPath, 'data.tgz'),
     directory,
