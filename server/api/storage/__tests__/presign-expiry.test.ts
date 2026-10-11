@@ -28,9 +28,17 @@ vi.mock('h3', async () => ({
 }));
 
 vi.mock('../../../auth/session', () => ({
+    getAuthorizationRevision: () => 'synthetic-expiry-revision',
     resolveSessionContext: vi.fn().mockResolvedValue({
         authenticated: true,
         user: { id: 'user-1' },
+    }),
+}));
+
+// Expiry tests still supply the membership dependency required by signing.
+vi.mock('../../../auth/store/registry', () => ({
+    getAuthWorkspaceStore: () => ({
+        listUserWorkspaces: async () => [{ id: 'ws-1', name: 'Synthetic expiry workspace', role: 'owner' }],
     }),
 }));
 

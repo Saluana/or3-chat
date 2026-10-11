@@ -16,6 +16,7 @@ const tests = [
     'server/api/storage/__tests__/download-isolation.test.ts',
     'server/api/storage/__tests__/presign-download.post.test.ts',
     'server/api/storage/__tests__/presign-upload.post.test.ts',
+    'server/api/storage/__tests__/presign-expiry.test.ts',
     'tests/unit/auth-can-workspace-scoping.test.ts',
     'app/utils/chat/useAi-internal/__tests__/backgroundJobPersistence.test.ts',
     'app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts',

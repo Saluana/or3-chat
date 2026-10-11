@@ -297,3 +297,69 @@ for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const)
             : { readOk: boundary === 'iteration', error: 'stale-context', chunks: 0, text: '' });
     });
 }
+
+for (const outcome of ['success', 'failure'] as const) {
+    for (const change of ['changed', 'returned'] as const) {
+        test(`actual palette preview preserves recovery after held ${outcome} and workspace ${change}`, async ({ page }, info) => {
+            await open(page);
+            const origin = `preview-browser-${outcome}-${change}-origin`;
+            await select(page, origin);
+            await page.evaluate(async () => {
+                const palettePath = '/_nuxt/composables/search/useCommandPalette.ts';
+                const registryPath = '/_nuxt/core/search/command-palette/registry.ts';
+                const typesPath = '/_nuxt/core/search/command-palette/types.ts';
+                const { useCommandPalette } = await import(palettePath);
+                const { registerPaletteSource } = await import(registryPath);
+                const { CORE_PALETTE_CATEGORIES } = await import(typesPath);
+                let finish!: (value: unknown) => void;
+                let reject!: (error: Error) => void;
+                const held = new Promise((resolve, deny) => { finish = resolve; reject = deny; });
+                const fixture = { palette: useCommandPalette(), entered: false, cleanup: 0, signal: null as AbortSignal | null,
+                    oldUrl: URL.createObjectURL(new Blob(['synthetic-former-preview'])), finish, reject, registration: null as any };
+                fixture.registration = registerPaletteSource({ id: 'fixture-preview', label: 'Synthetic previews',
+                    category: CORE_PALETTE_CATEGORIES.find((category: { id: string }) => category.id === 'chat'), order: 0,
+                    load: async (context: { workspaceGeneration: number }) => [{ sourceId: 'fixture-preview', categoryId: 'chat',
+                        key: 'fixture-preview:identical-id', recordId: 'identical-id', title: 'isolation-preview-probe',
+                        updatedAt: 1, revision: String(context.workspaceGeneration), content: 'isolation-preview-probe',
+                        primaryAction: { id: 'fixture-open', label: 'Synthetic open', target: { kind: 'chat', threadId: 'identical-id', destination: 'active' } } }],
+                    hydratePreview: async (_resource: unknown, context: { workspaceGeneration: number; signal: AbortSignal }) => {
+                        if (!fixture.entered) { fixture.entered = true; fixture.signal = context.signal; return held; }
+                        return { title: `current-preview-generation-${context.workspaceGeneration}`, categoryId: 'chat' };
+                    } });
+                (window as unknown as { isolationPreview: unknown }).isolationPreview = fixture;
+                fixture.palette.query.value = 'chat: isolation-preview-probe';
+                fixture.palette.open();
+            });
+            await page.waitForFunction(() => (window as unknown as { isolationPreview: { entered: boolean } }).isolationPreview.entered);
+            await select(page, `preview-browser-${outcome}-${change}-target`);
+            await page.waitForFunction(() => (window as unknown as { isolationPreview: { palette: { preview: { value: { title?: string } | null } } } }).isolationPreview.palette.preview.value?.title?.startsWith('current-preview-generation-'));
+            if (change === 'returned') {
+                const previous = await page.evaluate(() => (window as any).isolationPreview.palette.preview.value.title);
+                await select(page, origin);
+                await page.waitForFunction(old => { const current = (window as any).isolationPreview.palette.preview.value?.title; return current?.startsWith('current-preview-generation-') && current !== old; }, previous);
+            }
+            const receipt = await page.evaluate(async result => {
+                const fixture = (window as any).isolationPreview;
+                const recovered = fixture.palette.preview.value;
+                const before = { title: recovered.title, loading: fixture.palette.previewLoading.value };
+                if (result === 'failure') fixture.reject(new Error('synthetic-private-former-filename'));
+                else fixture.finish({ title: 'synthetic-private-former-filename', categoryId: 'chat', imageObjectUrl: fixture.oldUrl,
+                    cleanup: () => { fixture.cleanup++; URL.revokeObjectURL(fixture.oldUrl); } });
+                await new Promise(resolve => setTimeout(resolve, 0));
+                let oldReadable = true;
+                try { await fetch(fixture.oldUrl); } catch { oldReadable = false; }
+                const receipt = { before, after: { title: fixture.palette.preview.value?.title, loading: fixture.palette.previewLoading.value },
+                    samePreview: recovered === fixture.palette.preview.value, aborted: fixture.signal.aborted,
+                    cleanup: fixture.cleanup, oldReadable };
+                fixture.palette.close(); fixture.registration.dispose(); URL.revokeObjectURL(fixture.oldUrl);
+                return receipt;
+            }, outcome);
+            await info.attach('synthetic-palette-preview-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+            expect(receipt.after).toEqual(receipt.before);
+            expect(receipt.samePreview).toBe(true);
+            expect(receipt.aborted).toBe(true);
+            expect(receipt.cleanup).toBe(outcome === 'success' ? 1 : 0);
+            expect(receipt.oldReadable).toBe(outcome === 'failure');
+        });
+    }
+}
