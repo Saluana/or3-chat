@@ -33,12 +33,14 @@ assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), '
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
 const recoveryOnly = process.argv.includes('--recovery-only');
-const crashOnly = process.argv.includes('--crash-only');
+const prestartCrashOnly = process.argv.includes('--prestart-crash-only');
+const crashOnly = process.argv.includes('--crash-only') || prestartCrashOnly;
 const browserOnly = process.argv.includes('--browser-only');
 const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
 const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
-const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly;
+const walCorruptionOnly = process.argv.includes('--wal-corruption-only');
+const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
 assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
@@ -386,6 +388,15 @@ try {
   await stopProject(target.directory, 'local');
   await startProject(target.directory, 'local', target.env);
   evidence('second cold restart preserves chats/documents/attachment/settings and references', await verify(target));
+  if (walCorruptionOnly) {
+    await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite');const result=db.pragma('wal_checkpoint(TRUNCATE)');if(result[0]?.busy)throw Error('Synthetic checkpoint was busy');db.close()"]), target.directory);
+    const { api } = await authenticated(target);
+    const accepted = await (await api('/api/sync/push', { scope: { workspaceId }, ...caps,
+      ops: [op('posts', 'wal-sentinel', { ...base, id: 'wal-sentinel', title: 'Committed WAL sentinel', post_type: 'doc',
+        content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Committed after checkpoint' }] }] }), file_hashes: '[]' })] })).json();
+    assert(accepted.results.every((result: { success: boolean }) => result.success));
+  }
   const targetBackup = await backup(target);
   for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
@@ -524,33 +535,61 @@ try {
     evidence('explicit recovery after terminal commit failure restores actual pre-mutation snapshot', await verify(target));
   }
   if (deep || crashOnly) {
-    // Kill a separate CLI process after app startup, bypassing its exception
-    // handler. The persisted boundary must survive actual process death.
+    // Kill a separate CLI process at the selected boundary, bypassing its
+    // exception handler. The journal must survive actual process death.
     const childPath = join(root, 'crash-restore.ts');
     const restoreModule = fileURLToPath(new URL('../../packages/or3-cloud/src/commands/restore.ts', import.meta.url));
     const faultModule = fileURLToPath(new URL('../../packages/or3-cloud/src/lifecycle-faults.ts', import.meta.url));
+    if (prestartCrashOnly) {
+      const { api } = await authenticated(target);
+      const accepted = await (await api('/api/sync/push', { scope: { workspaceId }, ...caps,
+        ops: [op('posts', 'pre-mutation-write', { ...base, id: 'pre-mutation-write', title: 'Original snapshot sentinel',
+          post_type: 'doc', content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Accepted before restore' }] }] }), file_hashes: '[]' })] })).json();
+      assert(accepted.results.every((result: { success: boolean }) => result.success));
+    }
     await writeFile(childPath, `import { restoreCommand } from ${JSON.stringify(restoreModule)};
 import { lifecycleFaults } from ${JSON.stringify(faultModule)};
 lifecycleFaults.beforeCommand = (_command, args) => {
-  if (args[0] === 'inspect' && args.includes('{{.Image}}')) process.kill(process.pid, 'SIGKILL');
+  if (${prestartCrashOnly ? "args.join(' ').includes('quick_check')" : "args[0] === 'inspect' && args.includes('{{.Image}}')"}) process.kill(process.pid, 'SIGKILL');
 };
 await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON.stringify(targetBackup)}]);\n`, { mode: 0o600 });
     const child = await run(process.execPath, [childPath], root);
     assert(!child.ok, 'Crash fixture must terminate before terminal commit');
-    assert.equal((await readState(target.directory)).incompleteOperation?.phase, 'starting-target');
-    const { api } = await authenticated(target);
-    const write = await (await api('/api/sync/push', { scope: { workspaceId }, ...caps,
-      ops: [op('posts', 'crash-write', { ...base, id: 'crash-write', title: 'Crash write', post_type: 'doc', content: 'Accepted after CLI death', file_hashes: '[]' })] })).json();
-    assert(write.results.every((result: { success: boolean }) => result.success));
-    await stopProject(target.directory, 'local');
-    await startProject(target.directory, 'local', target.env);
-    const { api: restarted } = await authenticated(target);
-    const snapshot = await (await restarted('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
-    assert(snapshot.items.some((item: { pk: string }) => item.pk === 'crash-write'));
-    await assert.rejects(recoverCommand(target.directory), /may have replaced data/);
-    evidence('SIGKILL after target startup retains durable journal; subsequently accepted write survives cold restart and plain recovery refusal');
-    await recoverCommand(target.directory, { restore: true, yes: true });
-    evidence('explicit recovery after abrupt CLI death restores actual pre-mutation data and bytes', await verify(target));
+    if (prestartCrashOnly) {
+      const pending = (await readState(target.directory)).incompleteOperation;
+      assert.equal(pending?.phase, 'target-mutating');
+      assert(pending?.previousBackupPath);
+      await readManifest(pending.previousBackupPath, target.directory);
+      assert.equal(await command(composeArgs(target.directory, 'local', ['ps', '--status', 'running', '-q', 'or3']), target.directory), '');
+      const older = await command(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+        '--security-opt', 'no-new-privileges:true', '-v', `${target.state.volumeName}:/data`, '--entrypoint', nodePath, image, '-e',
+        `const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite',{readonly:true,fileMustExist:true});console.log(db.prepare('SELECT count(*) as n FROM s_posts WHERE id=? AND workspace_id=?').get('pre-mutation-write',${JSON.stringify(workspaceId)}).n);db.close()`], target.directory);
+      assert.equal(older, '0', 'Requested older archive must really have replaced the live volume');
+      await assert.rejects(recoverCommand(target.directory), /may have replaced data/);
+      evidence('SIGKILL after real extraction but before startup leaves app stopped and target-mutating journal; older target lacks the pre-mutation sentinel');
+      await recoverCommand(target.directory, { restore: true, yes: true });
+      await stopProject(target.directory, 'local');
+      await startProject(target.directory, 'local', target.env);
+      const { api } = await authenticated(target);
+      const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+      assert(snapshot.items.some((item: { pk: string }) => item.pk === 'pre-mutation-write'));
+      evidence('explicit recovery after pre-start CLI death restores original sentinel, baseline records and attachment through cold restart', await verify(target));
+    } else {
+      assert.equal((await readState(target.directory)).incompleteOperation?.phase, 'starting-target');
+      const { api } = await authenticated(target);
+      const write = await (await api('/api/sync/push', { scope: { workspaceId }, ...caps,
+        ops: [op('posts', 'crash-write', { ...base, id: 'crash-write', title: 'Crash write', post_type: 'doc', content: 'Accepted after CLI death', file_hashes: '[]' })] })).json();
+      assert(write.results.every((result: { success: boolean }) => result.success));
+      await stopProject(target.directory, 'local');
+      await startProject(target.directory, 'local', target.env);
+      const { api: restarted } = await authenticated(target);
+      const snapshot = await (await restarted('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+      assert(snapshot.items.some((item: { pk: string }) => item.pk === 'crash-write'));
+      await assert.rejects(recoverCommand(target.directory), /may have replaced data/);
+      evidence('SIGKILL after target startup retains durable journal; subsequently accepted write survives cold restart and plain recovery refusal');
+      await recoverCommand(target.directory, { restore: true, yes: true });
+      evidence('explicit recovery after abrupt CLI death restores actual pre-mutation data and bytes', await verify(target));
+    }
   }
   if (deep || attachmentOnly) {
     const missing = join(root, 'missing-archived-blob');
@@ -634,7 +673,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     await recoverCommand(target.directory, { restore: true, yes: true });
     evidence('retry after journal persistence is available restores actual pre-mutation data and attachment', await verify(target));
   }
-  if (sqliteOnly) {
+  if (sqliteOnly && !walCorruptionOnly) {
     for (const [index, fault] of (sqliteWalOnly ? [
       { database: 'sync.sqlite', payload: 'missing-wal' },
     ] : [
@@ -704,6 +743,41 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       evidence('explicit retry after native validation interruption restores actual records and attachment bytes', await verify(target));
     }
   }
+  if (walCorruptionOnly) {
+    const broken = join(root, 'corrupt-wal-header');
+    const tree = join(root, 'corrupt-wal-tree');
+    await cp(targetBackup, broken, { recursive: true });
+    await mkdir(tree);
+    const unpacked = await run('tar', ['xzf', join(broken, 'data.tgz'), '-C', tree]);
+    assert(unpacked.ok, unpacked.stderr);
+    const wal = await readFile(join(tree, 'sync.sqlite-wal'));
+    assert(wal.length > 32);
+    wal[0] = wal[0]! ^ 0xff;
+    await writeFile(join(tree, 'sync.sqlite-wal'), wal);
+    await rm(join(tree, 'sync.sqlite-shm'), { force: true });
+    const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+    assert(packed.ok, packed.stderr);
+    const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
+    manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+    const text = `${JSON.stringify(manifest, null, 2)}\n`;
+    await writeFile(join(broken, 'manifest.json'), text);
+    await writeBackupAuthentication(target.directory, broken, text);
+    await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), /Invalid SQLite WAL header/);
+    assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+    const { api } = await authenticated(target);
+    const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+    const retained = snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel');
+    assert(retained, 'Refused corrupt target must recover the original committed WAL record');
+    evidence('corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
+      sentinelRetained: retained, walBytes: wal.length, shmRemoved: true, baselineVerification: await verify(target),
+      outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
+    });
+    await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+    const { api: recovered } = await authenticated(target);
+    const good = await (await recovered('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+    assert(good.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+    evidence('known-good archive restores committed WAL sentinel and baseline records', await verify(target));
+  }
   if (capacityOnly) {
     const large = join(root, 'capacity-archive');
     const tree = join(root, 'capacity-tree');
@@ -763,7 +837,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

@@ -61,6 +61,15 @@ recovery path; a failed recovery keeps the verified snapshot and operation
 journal. Deep health alone can pass for a non-SQLite file, and startup can
 initialize an empty database with a fresh schema. This check
 does not prove every application record or referenced attachment is complete.
+Before opening each database, restore validates any nonempty WAL's 32-byte
+header magic, format, page size and checksum using the
+[documented SQLite WAL format](https://sqlite.org/fileformat2.html#wal_file_format).
+SQLite can ignore an invalid WAL and use an older, structurally valid main
+database: the drill reproduced successful restore with a committed WAL-only
+record missing after header corruption and SHM omission. Invalid headers are
+now refused before startup and the original snapshot is recovered. Empty WALs
+remain valid checkpoint artifacts. Header validation is not a complete audit
+of committed frame checksums or expected record inventory.
 For the archived FS root under
 `/data`, the reader also pairs canonical SHA-256/MD5 committed sidecars with
 their blob entries. Uncommitted uploads, temporary sidecars and opaque generation
@@ -87,6 +96,11 @@ these two additional recovery cases without repeating the malformed-input matrix
 The deep pass kills a separate restore process with SIGKILL after app startup,
 then checks that its durable journal protects a subsequently accepted write.
 `--crash-only` runs that process-death case with the source/target qualification.
+`--prestart-crash-only` kills the CLI after real extraction but before native
+validation/startup. It checks a durable `target-mutating` journal and a stopped
+app, confirms the older target lacks a record accepted before restore, then
+verifies that explicit recovery restores that record from the pre-mutation
+snapshot through a cold restart.
 `--browser-only` checks restored chat and document bodies in a fresh Chromium
 context and writes a screenshot. It requires `/usr/bin/chromium`, forwards only
 the disposable app through a loopback relay, and blocks external browser requests
@@ -109,6 +123,10 @@ while retaining its main database and authenticating the resulting archive.
 Its schema and records reside in the WAL, so the pre-start check must refuse the
 empty main database and recover the original data. Checkpointed SQLite snapshots
 can legitimately omit WAL/SHM; this is not a blanket WAL presence requirement.
+`--wal-corruption-only` first checkpoints populated data into the main database,
+commits another record into WAL, and captures a real backup. It corrupts the
+WAL header and removes the transient SHM file, verifies refusal before startup
+and recovery of the committed record, then verifies the intact backup again.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks
