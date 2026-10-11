@@ -78,6 +78,10 @@ describe('useNotifications', () => {
                     if (transition !== 'unchanged') {
                         sessionDataRef.value = { session: transition === 'logout' ? null : { authenticated: true, user: { id: transition === 'account' ? 'synthetic-destination-user' : 'synthetic-origin-user' }, workspace: { id: switchesWorkspace ? destinationId : originId } } };
                         await nextTick();
+                        if (transition === 'workspace') {
+                            await vi.waitFor(() => expect(state.isThreadMuted('destination-existing')).toBe(true));
+                            await state.muteThread('destination-new');
+                        }
                         if (transition === 'workspace-return') {
                             setActiveWorkspaceDb(originId);
                             sessionDataRef.value = { session: { authenticated: true, user: { id: 'synthetic-origin-user' }, workspace: { id: originId } } };
@@ -87,7 +91,7 @@ describe('useNotifications', () => {
                     release();
                     await pending;
                     lookup.mockRestore();
-                    if (switchesWorkspace) expect((await destinationDb.kv.get(originKey))?.value).toBe(JSON.stringify(['destination-existing']));
+                    if (switchesWorkspace) expect((await destinationDb.kv.get(originKey))?.value).toBe(JSON.stringify(transition === 'workspace' ? ['destination-existing', 'destination-new'] : ['destination-existing']));
                     expect(await destinationDb.kv.get(destinationKey)).toBeUndefined();
                     expect((await originDb.kv.get(originKey))?.value).toBe(JSON.stringify(expected));
                 } finally {
