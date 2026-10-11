@@ -1,0 +1,3 @@
+Runtime commit: c0b50a8efa57165e8ace56a2635f1e25dedede9f
+Command: bun x eslint app/composables/core/useWorkspaceTabs.ts
+Exit status: 0; no warnings. Qualified immediately before source commit.

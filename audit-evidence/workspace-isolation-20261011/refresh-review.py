@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[2]
 os.chdir(root)
 evidence = root / 'audit-evidence/workspace-isolation-20261011'
 base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5'
-latest_runtime = 'f1a3af0e69ad6ab7f9a0063ee2c8b77276aeb490'
+latest_runtime = 'c0b50a8efa57165e8ace56a2635f1e25dedede9f'
 
 def git(*args):
     return subprocess.check_output(['git', *args], stderr=subprocess.STDOUT)
@@ -49,7 +49,7 @@ for filename in ['workspace-isolation-source.patch', 'workspace-isolation-source
 (evidence / 'artifact-checksums.txt').write_text('\n'.join(lines) + '\n')
 p = evidence / 'README.md'
 s = re.sub(r'Current source/test review export head: `[^`]+`', f'Current source/test review export head: `{head}`', p.read_text())
-s = re.sub(r'changes through `[^`]+`', f'changes through `{head}`', s)
+s = re.sub(r'(source, test and documentation changes.*? through )`[^`]+`', rf'\g<1>`{head}`', s)
 s = re.sub(r'carries the \d+ local commits', f'carries the {count} local commits', s)
 p.write_text(s)
 print(f'Local review exports verified at {head}; {count} commits. No remote actions.')
