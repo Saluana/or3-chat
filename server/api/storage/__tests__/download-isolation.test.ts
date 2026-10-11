@@ -120,7 +120,9 @@ describe('filesystem download HTTP isolation and signed-link lifetime', () => {
     });
 
     it('does not redirect filesystem scope through a foreign canonical storage identifier', async () => {
-        canonical.get('ws-b')!.records.push({ ...canonical.get('ws-a')!.records[0]!, storageId: `ws-a:${hash}` });
+        const originRecord = canonical.get('ws-a')!.records.find(record => record.kind === 'metadata');
+        if (!originRecord || originRecord.kind !== 'metadata') throw new Error('Missing synthetic origin metadata');
+        canonical.get('ws-b')!.records.push({ ...originRecord, storageId: `ws-a:${hash}` });
         select('bob', 'ws-b');
         const missing = await presign('ws-b');
         expect(missing.status).toBe(404);
