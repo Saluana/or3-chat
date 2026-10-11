@@ -1,0 +1,79 @@
+Source checkpoint: 37a54fa374bdfdec81dd082b03db0572b38ded5d plus four new synthetic failure-redaction tests
+Synthetic local fixtures only; no paid/provider requests.
+Recorded process exit: 1 (expected failing assertions before fix)
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is changed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is returned
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is disposed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is unchanged
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is changed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is returned
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is disposed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is unchanged
+ × |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is changed while preserving live recovery 172ms
+   → expected { ok: false, error: { …(3) } } to match object { ok: false, error: { …(2) } }
+(1 matching property omitted from actual)
+ × |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is returned while preserving live recovery 163ms
+   → expected { ok: false, error: { …(3) } } to match object { ok: false, error: { …(2) } }
+(1 matching property omitted from actual)
+ × |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is disposed while preserving live recovery 95ms
+   → expected { ok: false, error: { …(3) } } to match object { ok: false, error: { …(2) } }
+(1 matching property omitted from actual)
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is unchanged while preserving live recovery 86ms
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences an actual stored-file read after native blob conversion crosses a workspace change
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is changed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is returned
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is disposed
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is unchanged
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > cannot use a direct foreign file hash to read another workspace through the SDK
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > denies direct file reads without a grant before accessing stored bytes
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > pages metadata without fetching blobs and includes native documents
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > delivers committed lifecycle events and manages revisions, Trash and retained bytes
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses policy vetoes before commits and rejects mutation of hook snapshots
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses the change when a policy callback throws or returns a non-boolean
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > lets read-only members and hosts without Files activate file integrations
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > rechecks the row after asynchronous hooks and preserves a concurrent write
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > keeps committed writes successful if a notification hook fails
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > requires explicit catalog and action grants, including for lifecycle subscriptions
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > binds actions and hooks to their activation and removes them on disposal
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses a workspace switch during a before-hook without touching either workspace
+ ↓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > rechecks cloud membership after hooks and refuses read-only writes
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is changed while preserving live recovery
+ FAIL  |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is returned while preserving live recovery
+ FAIL  |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is disposed while preserving live recovery
+AssertionError: expected { ok: false, error: { …(3) } } to match object { ok: false, error: { …(2) } }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "error": {
+      "code": "stale-context",
+-     "message": "Plugin activation has ended",
++     "message": "synthetic-private-origin-filename",
+    },
+    "ok": false,
+  }
+
+ ❯ app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts:126:31
+    124|         }
+    125|         release();
+    126|         expect(await reading).toMatchObject({ ok: false, error: change…
+       |                               ^
+    127|             ? { code: 'host-unavailable', message: 'synthetic-private-…
+    128|             : { code: 'stale-context', message: 'Plugin activation has…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed | 26 skipped (30)
+   Start at  11:23:15
+   Duration  3.07s (transform 1.14s, setup 211ms, import 1.67s, tests 518ms, environment 487ms)
+

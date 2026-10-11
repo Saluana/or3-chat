@@ -245,3 +245,55 @@ for (const outcome of ['success', 'failure'] as const) {
         });
     }
 }
+
+for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const) {
+    test(`actual SDK file read fences ${boundary} byte delivery`, async ({ page }, info) => {
+        await open(page);
+        await select(page, `sdk-browser-${boundary}-origin`);
+        await page.evaluate(async mode => {
+            const hostPath = '/_nuxt/composables/plugins/trusted-host-context.ts';
+            const { createTrustedHostContext } = await import(hostPath);
+            const trusted = createTrustedHostContext({ pluginId: 'fixture.browser-files', version: '1.0.0',
+                workspaceId: `sdk-browser-${mode}-origin`, grants: ['files.read', 'files.write'] });
+            const written = await trusted.context.files.write({ name: 'synthetic-sdk-origin.txt', mimeType: 'text/plain',
+                data: (async function* () { yield new TextEncoder().encode('synthetic-sdk-private-origin-bytes'); })() });
+            if (!written.ok) throw new Error(`Synthetic SDK write failed: ${written.error.code}`);
+            const nativeRead = Blob.prototype.arrayBuffer;
+            let release!: () => void;
+            const held = new Promise<void>(resolve => { release = resolve; });
+            const fixture = { trusted, entered: false, release, restore: () => { Blob.prototype.arrayBuffer = nativeRead; },
+                pending: null as Promise<unknown> | null, read: null as unknown };
+            if (mode === 'native-conversion') {
+                Blob.prototype.arrayBuffer = async function() {
+                    fixture.entered = true; await held; return nativeRead.call(this);
+                };
+                fixture.pending = trusted.context.files.read(written.value.id);
+            } else fixture.read = await trusted.context.files.read(written.value.id);
+            (window as unknown as { isolationSdkFile: unknown }).isolationSdkFile = fixture;
+        }, boundary);
+        if (boundary === 'native-conversion') {
+            await page.waitForFunction(() => (window as unknown as { isolationSdkFile: { entered: boolean } }).isolationSdkFile.entered);
+        }
+        if (boundary !== 'unchanged') await select(page, `sdk-browser-${boundary}-target`);
+        const receipt = await page.evaluate(async () => {
+            const fixture = (window as unknown as { isolationSdkFile: {
+                trusted: { dispose(): Promise<void> }; release(): void; restore(): void;
+                pending: Promise<any> | null; read: any;
+            } }).isolationSdkFile;
+            try {
+                fixture.restore(); fixture.release();
+                const read = fixture.pending ? await fixture.pending : fixture.read;
+                if (!read.ok) return { readOk: false, error: read.error.code, chunks: 0, text: '' };
+                const chunks: Uint8Array[] = [];
+                for await (const chunk of read.value) chunks.push(chunk);
+                const terminal = await read.value.result;
+                return { readOk: true, error: terminal.ok ? null : terminal.error.code, chunks: chunks.length,
+                    text: chunks.map(chunk => new TextDecoder().decode(chunk)).join('') };
+            } finally { fixture.restore(); fixture.release(); await fixture.trusted.dispose(); }
+        });
+        await info.attach('synthetic-sdk-file-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual(boundary === 'unchanged'
+            ? { readOk: true, error: null, chunks: 1, text: 'synthetic-sdk-private-origin-bytes' }
+            : { readOk: boundary === 'iteration', error: 'stale-context', chunks: 0, text: '' });
+    });
+}

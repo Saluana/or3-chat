@@ -1,5 +1,7 @@
 // Run from the repository root with Bun; all fixtures are synthetic/local/mocked.
 const tests = [
+    'app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts',
+    'app/composables/plugins/__tests__/trusted-host-context.test.ts',
     'app/composables/search/__tests__/useCommandPalette.test.ts',
     'server/api/storage/__tests__/presign-membership-continuation.test.ts',
     'app/composables/core/__tests__/useThumbnailUrlCache.test.ts',

@@ -1,5 +1,11 @@
-Export source/test head: dfb5c795a8a4ca405f7b9c46fec2f4114c985483
-Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
-Command: git apply --check <local source.patch> in disposable detached exact-base worktree
-Exit status: 0
-Temporary worktree removed. Git bundle verify passed.
+Source/test export head: 4529f0176fdeb4a107799b804a4b55b4dd109a1c
+Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Local commits: 28
+Patch applies cleanly at exact base in disposable worktree.
+Disposable worktree removed.
+/workspace/or3-chat/audit-evidence/workspace-isolation-20261011/review-ykw8azhp.bundle is okay
+The bundle contains this ref:
+4529f0176fdeb4a107799b804a4b55b4dd109a1c HEAD
+The bundle requires this ref:
+df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+The bundle uses this hash algorithm: sha1
