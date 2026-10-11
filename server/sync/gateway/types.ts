@@ -36,6 +36,8 @@ import type {
     FinalizeChatGenerationResult,
 } from '~~/shared/chat/background-history';
 
+import type { ExternalStorageGenerationCoordinatorV1 } from '../../storage/gateway/generation-lifecycle';
+
 export type CanonicalStorageQueryKind =
     | 'live_metadata'
     /** Read-only accounting; requires capabilities.retainedStorageMetadata v1. */
@@ -158,6 +160,9 @@ export type SyncMaintenanceState = {
  * - Must handle concurrent operations safely
  */
 export interface SyncGatewayAdapter {
+    /** Dormant trusted-server API; no provider may advertise it until all paired
+     * writer/upload/physical-generation paths have been qualified together. */
+    storageGenerationCoordinator?: ExternalStorageGenerationCoordinatorV1;
     id: string;
 
     /** Atomically persist an expiring reservation and enforce workspace quota. */
@@ -180,6 +185,8 @@ export interface SyncGatewayAdapter {
         projectOwnership?: 'v1';
         /** Bounded deleted-metadata queries for read-only accounting, not deletion coordination. */
         retainedStorageMetadata?: 'v1';
+        /** Separate from native-storage deletion coordination; default absent. */
+        externalStorageGenerations?: 'v1';
     };
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 

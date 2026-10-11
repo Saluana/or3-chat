@@ -6,6 +6,22 @@ The accounting patch is a safe partial deliverable, not completed reclamation.
 Physical filesystem deletion and GC remain disabled. Read-only observations and
 refusal tests cannot establish that a deleting collector is race-safe.
 
+The dormant host foundation now defines the trusted-server generation contract
+in `server/storage/gateway/generation-lifecycle.ts` and a strict pairing guard in
+`server/utils/storage/generation-coordination.ts`. It requires independently
+advertised external-generation support on both providers, valid matching provider
+IDs and the complete coordinator API. Existing native Convex deletion support
+and retained-metadata accounting do not satisfy this gate. No route calls the
+guard and no provider advertises the new flags. These types are not a public
+upload receipt or authorization to invoke lifecycle methods.
+
+The paired prototype must keep irreversible claims and immutable identities;
+there is deliberately no release or expiry-to-writable operation. Canonical
+reference/metadata activity restarts retention using server time, and bounded or
+malformed proof must block collection. Registration accepts only independently
+verified server-owned publication evidence; public authenticated dispatch and
+generation-bound upload intent handling remain separate integration requirements.
+
 Current filesystem uploads atomically rename temporary bytes onto a reusable
 workspace/hash pathname. Commit writes a sidecar; canonical file metadata arrives
 later through client sync. A database scan or lease plus a final reference recheck
@@ -63,6 +79,17 @@ providers, including S3 and unsupported SQLite runtimes, stay fail-closed.
 
 - All app instances and canonical writers must enforce the new protocol before
   enabling claims. A new capability flag alone does not fence an old server.
+- A transaction that survives a process crash is not necessarily durable against
+  power loss. The current SQLite WAL + synchronous=NORMAL default is insufficient
+  for a claim that authorizes durable filesystem removal. The active coordinator
+  must verify durable local settings (such as WAL + FULL/EXTRA), refuse unsafe or
+  unsupported configurations, and never silently change operator defaults.
+  Filesystem publication/removal must synchronize data and parent directories
+  before canonical publication/deletion acknowledgement.
+- Preserve a permanent, exclusively initialized generation namespace slot after
+  removing its payload. Delayed allocation retries must never recreate a retired
+  payload directory; normal signed uploads must not create directories. Missing
+  storage mounts/namespaces are errors, not successful deletion.
 - Fence old clients through versioned admission and expire outstanding legacy
   upload tokens. Prove direct Convex mutations and server-authored writers are
   covered, not just host HTTP routes.
@@ -90,6 +117,11 @@ transactions/filesystem operations, plus multi-process tests where relevant:
   acknowledgement: restart/retry safely reconciles each durable state.
 - Two workers and two app instances contend: canonical transactions serialize
   admission; process-local locks are not relied on for correctness.
+- Native guard triggers remain intact and enforce old raw-SQL writers, server
+  authored writes, replacement writes and full transaction rollback. A missing
+  or modified guard must prevent claims even if the migration ledger is current.
+- Unsafe durability settings refuse claims. Process termination/restart evidence
+  must be described separately from actual power-loss durability qualification.
 - Mixed provider versions, old clients/servers, unsupported providers, stale
   storage IDs, malformed claims and oversized reference scans all fail closed.
 - Workspace/provider boundaries, symlink/hardlink/path substitution, incomplete
