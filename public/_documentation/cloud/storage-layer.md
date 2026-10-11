@@ -6,6 +6,10 @@ checks the exact origin against its effective request origin or
 `OR3_ALLOWED_ORIGINS` before parsing the body. Originless API requests require
 bearer authorization and no cookie.
 
+Presign and commit are JSON control requests, not file-byte uploads. Their
+declared and streamed bodies are bounded to 16 KiB before authentication or
+provider work; oversized bodies return 413 and malformed JSON returns 400.
+
 Physical deletion requires a storage adapter with deletion coordination version 1 matching the active sync backend. Canonical preflight reads alone do not authorize unlinking bytes. Uncoordinated adapters return 503 for deletion and report GC disabled with reason `deletion_coordination_required`.
 
 The updated Convex scaffold records a private `storage_deletion_claims` barrier in the same transaction as physical deletion. Sync reference creation and metadata restoration honor that barrier. Only a hash-verified upload commit releases it; stale storage IDs remain invalid. These barriers are retained until verified re-upload or workspace purge, rather than expiring with sync history. The runtime probes `storage.deletionCapability` before cleanup, so older scaffolds fail closed. Deploy the matching schema, storage, sync and helper templates before enabling cleanup.

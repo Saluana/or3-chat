@@ -15,7 +15,11 @@
  * - Backend agnostic (delegates via registry).
  */
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import {
+    readLimitedJsonBody,
+    STORAGE_CONTROL_BODY_LIMIT_BYTES,
+} from '../../utils/security/limited-json-body';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
@@ -72,7 +76,11 @@ export default defineEventHandler(async (event) => {
 
     requireCloudMutation(event);
 
-    const body = BodySchema.safeParse(await readBody(event));
+    // Commit is a small control message, never the uploaded file bytes. Bound
+    // declared and streamed bytes before authentication or provider work.
+    const body = BodySchema.safeParse(
+        await readLimitedJsonBody(event, STORAGE_CONTROL_BODY_LIMIT_BYTES)
+    );
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
