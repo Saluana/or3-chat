@@ -67,6 +67,7 @@ describe('durable workspace tab drafts', () => {
     }
 
     afterEach(async () => {
+        vi.restoreAllMocks();
         session.userId = null;
         Object.keys(localStorage).filter((key) => key.startsWith('or3:tab-draft-journal:')).forEach((key) => localStorage.removeItem(key));
         const { client, drafts } = await reload();
@@ -230,6 +231,63 @@ describe('durable workspace tab drafts', () => {
     });
 
     const journalKeys = () => Object.keys(localStorage).filter((key) => key.startsWith('or3:tab-draft-journal:'));
+
+    it('keeps the newer same-millisecond journal while an older draft write completes', async () => {
+        const first = await reload();
+        const table = first.client.getDb().workspace_tab_drafts;
+        const put = table.put.bind(table);
+        let finishWrite!: () => Promise<void>;
+        vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
+            finishWrite = async () => { resolve(await put(row)); };
+        }) as never);
+        const updatedAt = Date.now();
+        first.drafts.write('tab-1', draft('Earlier buffer', { updatedAt }));
+        const saving = first.flush();
+        await vi.waitFor(() => expect(finishWrite).toBeDefined());
+        first.drafts.write('tab-1', draft('Later buffer in the same millisecond', { updatedAt }));
+        await finishWrite();
+        await saving;
+        expect(journalKeys()).toHaveLength(1);
+        // Simulate a page ending before the later IndexedDB write starts.
+        const second = await reload();
+        expect((await second.drafts.load('tab-1'))?.text).toBe('Later buffer in the same millisecond');
+        await second.flush();
+    });
+
+    it('reports an oversized draft as unsaved without deleting its previous durable copy', async () => {
+        const { client, drafts, flush } = await reload();
+        drafts.write('tab-1', draft('Previous durable buffer'));
+        await flush();
+        drafts.write('tab-1', draft('x'.repeat(600_000)));
+        await flush();
+        expect(drafts.saveFailed.value).toBe(true);
+        expect((await client.getDb().workspace_tab_drafts.toArray())[0]?.draft.text).toBe('Previous durable buffer');
+        expect(drafts.read('tab-1')?.text).toHaveLength(600_000);
+    });
+
+    it('keeps a same-millisecond discard journal when an older save completes', async () => {
+        const first = await reload();
+        const table = first.client.getDb().workspace_tab_drafts;
+        const put = table.put.bind(table);
+        let finishWrite!: () => Promise<void>;
+        vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
+            finishWrite = async () => { resolve(await put(row)); };
+        }) as never);
+        vi.spyOn(table, 'delete').mockImplementationOnce(() => new Promise(() => undefined) as never);
+        const updatedAt = Date.now();
+        vi.spyOn(Date, 'now').mockReturnValue(updatedAt);
+        first.drafts.write('tab-1', draft('Submitted draft', { updatedAt }));
+        const saving = first.flush();
+        await vi.waitFor(() => expect(finishWrite).toBeDefined());
+        first.drafts.discard('tab-1');
+        await finishWrite();
+        await saving;
+        expect(journalKeys()).toHaveLength(1);
+        const second = await reload();
+        expect(await second.drafts.load('tab-1')).toBeUndefined();
+        expect(await second.client.getDb().workspace_tab_drafts.count()).toBe(0);
+        expect(journalKeys()).toEqual([]);
+    });
 
     it('recovers the last edit when the page unloaded before IndexedDB committed it', async () => {
         const first = await reload();

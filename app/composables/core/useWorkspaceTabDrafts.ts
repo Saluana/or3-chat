@@ -106,8 +106,8 @@ function clearDiscardTimer(key: string): void {
     discardTimers.delete(key);
 }
 
-/** Null when there is nothing worth keeping, or the draft is too large to bound. */
-function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft | null {
+/** Null means empty; undefined means too large to persist, never a discard. */
+function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft | null | undefined {
     const attachments: PersistedDraftAttachment[] = [
         ...draft.attachments.flatMap((attachment) =>
             attachment.status === 'ready' && attachment.hash
@@ -131,7 +131,7 @@ function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft |
         composer: draft.composer,
         updatedAt: draft.updatedAt,
     } satisfies PersistedWorkspaceTabDraft);
-    if (serialized.length > MAX_PERSISTED_DRAFT_CHARS) return null;
+    if (serialized.length > MAX_PERSISTED_DRAFT_CHARS) return undefined;
     // The round trip also strips Vue proxies, which structured clone rejects.
     return JSON.parse(serialized) as PersistedWorkspaceTabDraft;
 }
@@ -194,14 +194,16 @@ function writeJournal(scope: WorkspaceDraftScope, tabId: string, draft: Persiste
 }
 
 /** Removes the journal once IndexedDB holds that change or a newer one. */
-function clearJournalCoveredBy(scope: WorkspaceDraftScope, tabId: string, savedAt: number): void {
+function clearJournalCoveredBy(scope: WorkspaceDraftScope, tabId: string, savedAt: number,
+    savedDraft: PersistedWorkspaceTabDraft | null = null): void {
     const storage = journalStorage();
     if (!storage) return;
     try {
         const raw = storage.getItem(journalKey(scope, tabId));
         if (!raw) return;
         const record = JSON.parse(raw) as Partial<JournalRecord>;
-        if (typeof record.updatedAt !== 'number' || record.updatedAt <= savedAt) {
+        if (typeof record.updatedAt !== 'number' || record.updatedAt < savedAt ||
+            (record.updatedAt === savedAt && JSON.stringify(record.draft) === JSON.stringify(savedDraft))) {
             storage.removeItem(journalKey(scope, tabId));
         }
     } catch {
@@ -229,9 +231,10 @@ function readNewerJournal(
             const record = JSON.parse(storage.getItem(key) ?? '') as JournalRecord;
             const valid = typeof record.tabId === 'string' && typeof record.updatedAt === 'number'
                 && (record.draft === null || fromPersisted(record.draft));
-            // A discard can only follow the write it removes, so a tie goes to the discard.
+            // Millisecond timestamps can tie across successive edits. A journal
+            // still present was not acknowledged as the same saved snapshot.
             const savedAt = savedAtByTab.get(record.tabId) ?? 0;
-            const newerThanSaved = record.draft === null ? record.updatedAt >= savedAt : record.updatedAt > savedAt;
+            const newerThanSaved = record.updatedAt >= savedAt;
             if (valid && record.updatedAt > cutoff && newerThanSaved) {
                 newer.push(record);
             } else {
@@ -262,6 +265,7 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boole
         const startedAt = Date.now();
         const entry = drafts.get(memoryKey(scope, tabId));
         const persisted = entry ? toPersisted(entry.draft) : null;
+        if (persisted === undefined) return false;
         if (!persisted) {
             await db.workspace_tab_drafts.delete(rowId(scope, tabId));
             clearJournalCoveredBy(scope, tabId, startedAt);
@@ -274,7 +278,7 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boole
             updated_at: persisted.updatedAt,
             draft: persisted,
         });
-        clearJournalCoveredBy(scope, tabId, persisted.updatedAt);
+        clearJournalCoveredBy(scope, tabId, persisted.updatedAt, persisted);
         await pruneOldest(db, scope.accountKey);
         return true;
     } catch (error) {
@@ -359,7 +363,7 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
                     const row = live.get(record.tabId);
                     if (row) await db.workspace_tab_drafts.delete(row.id);
                     live.delete(record.tabId);
-                    clearJournalCoveredBy(scope, record.tabId, Date.now());
+                    clearJournalCoveredBy(scope, record.tabId, record.updatedAt);
                     continue;
                 }
                 const draft = fromPersisted(record.draft);
@@ -481,7 +485,8 @@ export function useWorkspaceTabDrafts() {
         const key = memoryKey(scope, tabId);
         clearDiscardTimer(key);
         drafts.set(key, { scope, tabId, draft });
-        writeJournal(scope, tabId, toPersisted(draft));
+        const persisted = toPersisted(draft);
+        if (persisted !== undefined) writeJournal(scope, tabId, persisted);
         markDirty(scope, tabId);
     }
 
