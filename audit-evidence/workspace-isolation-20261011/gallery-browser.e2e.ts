@@ -521,6 +521,97 @@ for (const transition of ['switch', 'return'] as const) {
     }
 }
 
+for (const transition of ['switch', 'close-first'] as const) {
+    test(`actual prompt library discards captured list and preserves destination default (${transition})`, async ({ page }, info) => {
+        await open(page);
+        await page.route('**/api/openrouter/**', route => route.abort());
+        await page.route('**/api/jobs/**', route => route.abort());
+        await page.goto('/');
+        await page.waitForLoadState('networkidle');
+        await page.waitForFunction(() => (document.querySelector('#__nuxt') as any).__vue_app__?._instance?.isMounted);
+        await page.evaluate(async mode => {
+            const clientPath = '/_nuxt/db/client.ts';
+            const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
+            const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
+            const client = await import(clientPath);
+            const { useHooks } = await import(hooksPath);
+            const { useSystemPromptsModal } = await import(modalPath);
+            const ids = [`native-library-a-${mode}`, `native-library-b-${mode}`];
+            const dbs = ids.map(id => client.getWorkspaceDb(id));
+            for (const [index, db] of dbs.entries()) {
+                await db.open();
+                const label = index === 0 ? 'A' : 'B';
+                await db.posts.put({ id: `${label}-native-prompt`, title: `${label} native saved prompt`,
+                    content: JSON.stringify({ type: 'doc', content: [] }), postType: 'prompt',
+                    created_at: 1, updated_at: 1, clock: 1, deleted: false });
+                await db.kv.put({ id: 'identical-native-default', name: 'default_system_prompt_id',
+                    value: `${label}-native-prompt`, created_at: 1, updated_at: 1, clock: 1, deleted: false });
+            }
+            let release!: () => void;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            const fixture = { ids, dbs, release: () => release(), entered: false, held: true,
+                filter: async (records: Array<{ id: string }>) => {
+                    if (fixture.held && records.some(record => record.id === 'A-native-prompt')) {
+                        fixture.entered = true; await gate;
+                    }
+                    return records;
+                } };
+            (window as any).__nativePromptLibrary = fixture;
+            useHooks().addFilter('db.prompts.list:filter:output', fixture.filter);
+            client.setActiveWorkspaceDb(ids[0]);
+            useSystemPromptsModal().open({ mode: 'home' });
+        }, transition);
+        try {
+            await expect(page.getByRole('button', { name: 'Close system prompts', exact: true })).toBeVisible({ timeout: 30_000 });
+            await page.waitForFunction(() => (window as any).__nativePromptLibrary?.entered);
+            await expect(page.getByText('Loading prompts…', { exact: true })).toBeVisible();
+            if (transition === 'close-first') await page.getByRole('button', { name: 'Close system prompts', exact: true }).click();
+            await page.evaluate(async () => {
+                const clientPath = '/_nuxt/db/client.ts';
+                const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
+                const client = await import(clientPath);
+                const { useDefaultPrompt } = await import(promptPath);
+                const fixture = (window as any).__nativePromptLibrary;
+                client.setActiveWorkspaceDb(fixture.ids[1]);
+                await useDefaultPrompt().ensureLoaded();
+                fixture.held = false; fixture.release();
+            });
+            await expect(page.getByRole('button', { name: 'Close system prompts', exact: true })).toHaveCount(0);
+            await page.evaluate(async () => {
+                const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
+                const { useSystemPromptsModal } = await import(modalPath);
+                useSystemPromptsModal().open({ mode: 'home' });
+            });
+            await expect(page.locator('[data-test="system-prompt-row-B-native-prompt"]')).toBeVisible();
+            await expect(page.locator('[data-test="system-prompt-row-A-native-prompt"]')).toHaveCount(0);
+            const receipt = await page.evaluate(async () => {
+                const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
+                const { getDefaultPromptId, useDefaultPrompt } = await import(promptPath);
+                return { current: await getDefaultPromptId(), cached: useDefaultPrompt().defaultPromptId.value };
+            });
+            expect(receipt).toEqual({ current: 'B-native-prompt', cached: 'B-native-prompt' });
+            await info.attach('synthetic-actual-library-scope', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        } finally {
+            await page.evaluate(async () => {
+                const clientPath = '/_nuxt/db/client.ts';
+                const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
+                const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
+                const client = await import(clientPath);
+                const { useHooks } = await import(hooksPath);
+                const { useSystemPromptsModal } = await import(modalPath);
+                const fixture = (window as any).__nativePromptLibrary;
+                fixture.held = false; fixture.release(); useSystemPromptsModal().close();
+                useHooks().removeFilter('db.prompts.list:filter:output', fixture.filter);
+                client.setActiveWorkspaceDb(null);
+                for (const [index, db] of fixture.dbs.entries()) {
+                    client.evictWorkspaceDb(fixture.ids[index]); await db.delete();
+                }
+                delete (window as any).__nativePromptLibrary;
+            });
+        }
+    });
+}
+
 for (const action of ['muteThread', 'unmuteThread'] as const) {
     test(`native notification preference ${action} retains its DB during a workspace switch`, async ({ page }, info) => {
         await open(page);

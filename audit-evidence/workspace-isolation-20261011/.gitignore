@@ -1,5 +1,6 @@
 *.bundle
 *.patch
+*.tar.gz
 *-artifacts/
 test-results/
 *-runner.txt

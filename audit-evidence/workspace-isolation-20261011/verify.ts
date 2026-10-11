@@ -1,5 +1,8 @@
 // Run from the repository root with Bun; all fixtures are synthetic/local/mocked.
 const tests = [
+    'app/components/chat/__tests__/SystemPromptsModal.workspace.integration.test.ts',
+    'app/components/chat/__tests__/SystemPromptsModal.test.ts',
+    'app/composables/chat/__tests__/useSystemPromptsModal.test.ts',
     'app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts',
     'app/composables/core/__tests__/useWorkspaceTabMetadata.test.ts',
     'app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts',
@@ -58,7 +61,8 @@ const result = Bun.spawn(command, { stdout: 'pipe', stderr: 'pipe' });
 const [stdout, stderr, code] = await Promise.all([
     new Response(result.stdout).text(), new Response(result.stderr).text(), result.exited,
 ]);
-await Bun.write('audit-evidence/workspace-isolation-20261011/final-verification.txt',
+await Bun.write(`audit-evidence/workspace-isolation-20261011/${process.argv.includes('--exact-head')
+    ? 'final-head-verification-runner' : 'final-verification'}.txt`,
     `Commit: ${head}\nCommand: ${command.join(' ')}\n${stdout}${stderr}\nExit status: ${code}\n`);
 console.log(stdout + stderr);
 process.exitCode = code;

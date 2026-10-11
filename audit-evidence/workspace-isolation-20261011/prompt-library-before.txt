@@ -1,0 +1,37 @@
+Commit: 3f024d9c4107ac9743cedee419c83f4360ee2cef; mounted component/real KV and prompt APIs; await actual library settlement, not only Vue microtasks
+Command: bun x vitest run app/components/chat/__tests__/SystemPromptsModal.workspace.integration.test.ts --reporter=dot --silent=passed-only --bail=0 --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+xx
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  13:52:34
+   Duration  3.34s (transform 1.57s, setup 169ms, import 1.88s, tests 561ms, environment 515ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/components/chat/__tests__/SystemPromptsModal.workspace.integration.test.ts > prompt library workspace continuation with real saved prompts > does not clear a destination default after a captured origin list finishes (switch)
+ FAIL  |app-integration| app/components/chat/__tests__/SystemPromptsModal.workspace.integration.test.ts > prompt library workspace continuation with real saved prompts > does not clear a destination default after a captured origin list finishes (close)
+AssertionError: expected null to be 'B-prompt' // Object.is equality
+
+- Expected:
+"B-prompt"
+
++ Received:
+null
+
+ ❯ app/components/chat/__tests__/SystemPromptsModal.workspace.integration.test.ts:134:44
+    132|         }
+    133|         finally { release(); }
+    134|         expect(await getDefaultPromptId()).toBe(target.promptId);
+       |                                            ^
+    135|         expect(defaults.defaultPromptId.value).toBe(target.promptId);
+    136|         if (transition === 'switch') {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+Exit status: 1

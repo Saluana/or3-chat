@@ -1,0 +1,7 @@
+Independent read-only review of modal patch at pre-source parentHEADaa0f237d18fd31bacd34286ca8a34f4a919d40ec; no reviewer edits/tests/network.
+Final reviewed and committed modal SHA256b014401a06c9b9b24521b90798a78181fb0444a258787ac96fbc80c69410a973; source commitdc9675f3fe9ed5b750c8bc948f1dbbd0875ffb66.
+Verified library, same-ID delete-intent and context hazards have runtime failing receipts and original-base assertion replay.
+Final review: no additional verified blocker or compatibility regression. Selection captures identifiers and checks DB/workspace/open epoch before assigning. StopEditing checks admitted modal epoch before resetting fresh edit UI. Closed load performs no read/spinner mutation. Workspace invalidation clears action/context caches before close; single per-component listener removed on unmount/omittedSSR. Same-open reload/default repair/Back controls preserved.
+Public preference/prompt/KV/hook/provider contracts and PromptEditor saving untouched. Default repair origin behavior depends on3f024d9c.
+Remaining mutation/create/editor-loading/onSelected continuations are unqualified boundaries, not verified outstanding defects. No new exploratory cases were started during closing review.
+Parent stopped open-ended auditing at14:05UTC and explicitly requested remaining identified issues fixed at14:06UTC. Remaining bounded work qualified these already-reviewed modal hazards. Shared-draft/data-recovery and backup/WAL fixes remain with their separate owners; this checkpoint cannot qualify their combined stack.
