@@ -201,6 +201,24 @@ and `offline-state.png`. No source change was needed. Provider interruption is
 synthetic: this does **not** establish that offline mode alone disconnects an
 existing real socket, nor meter in-browser provider invocations after reload.
 
+## Abrupt Chromium renderer crash with a journaled draft
+
+Mounted Chromium acknowledged a synthetic initial draft, then a native draft put
+quota failure kept its later edit out of IndexedDB while the synchronous recovery
+journal held that exact edit. The save warning was visible. CDP `Page.crash`
+produced an actual page crash event, bypassing normal unload. A new page in the
+same isolated browser context restored the journaled text and committed it under
+the same original draft row ID. All assertions passed with one observed rejected
+put and external requests denied. No source change was needed.
+
+Probe `audit-evidence/renderer-crash-draft-probe.ts`; log
+`/tmp/or3-recovery-renderer-crash-draft-browser.log`; receipts
+`test-results/recovery-renderer-crash-draft/before-crash.json`, `evidence.json`
+and `before-crash.png`. This establishes renderer-failure recovery **after journal
+acknowledgement** for a small text draft; it does not cover pre-capture keystrokes,
+a whole-browser/storage-process crash, physical disk corruption, OS power loss,
+or unjournalable large buffers. The dormant generation cleanup system remains off.
+
 ## Terminal assistant-save failure — verified remaining limitation
 
 At source HEAD `9ae97eaa`, the mounted Chromium terminal probe rejected 20
