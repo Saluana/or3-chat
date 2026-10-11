@@ -67,6 +67,7 @@ const isRestoring = computed(() => mutationState.value === 'restore');
 const toast = useToast();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
+let pendingUploadOwner: { assertCurrent(): void } | null = null;
 
 const selectedCount = computed(() => selectedHashes.value.size);
 const hasSelection = computed(() => selectedCount.value > 0);
@@ -245,25 +246,35 @@ async function handleRename(meta: FileMeta) {
     }
 }
 
-function openUploadPicker() {
-    uploadInput.value?.click();
-}
-
-async function handleUpload(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []).filter((file) =>
-        file.type.startsWith('image/')
-    );
-    if (!files.length) return;
+function captureUploadOwner() {
     const originDb = getDb();
     const generation = getWorkspaceGeneration();
-    const owner = {
+    return {
         assertCurrent() {
             if (getDb() !== originDb || generation !== getWorkspaceGeneration()) {
                 throw new Error('The workspace changed during upload. Select the files again in the intended workspace.');
             }
         },
     };
+}
+
+function openUploadPicker() {
+    pendingUploadOwner = captureUploadOwner();
+    uploadInput.value?.click();
+}
+
+function cancelUploadPicker() {
+    pendingUploadOwner = null;
+}
+
+async function handleUpload(event: Event) {
+    const owner = pendingUploadOwner ?? captureUploadOwner();
+    pendingUploadOwner = null;
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []).filter((file) =>
+        file.type.startsWith('image/')
+    );
+    if (!files.length) return;
     uploading.value = true;
     try {
         for (const file of files) {
@@ -782,6 +793,7 @@ const searchInputProps = computed(() => {
             accept="image/*"
             multiple
             @change="handleUpload"
+            @cancel="cancelUploadPicker"
         />
 
         <header class="image-library-header">

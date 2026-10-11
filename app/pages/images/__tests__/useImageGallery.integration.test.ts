@@ -396,6 +396,58 @@ describe('useImageGallery integration', () => {
         }
     });
 
+    it.each(['changed', 'returned', 'unchanged'] as const)('keeps gallery picker ownership when the workspace is %s before file selection', async (change) => {
+        const nextWorkspace = `gallery-picker-next-${crypto.randomUUID()}`;
+        const Page = (await import('../index.vue')).default;
+        const wrapper = mount(Page, { global: { stubs: { GalleryGrid: true, ImageViewer: true, USelect: true } } });
+        const vm = wrapper.vm as unknown as { openUploadPicker(): void; handleUpload(event: Event): Promise<void> };
+        const input = wrapper.get('input[type="file"]').element as HTMLInputElement;
+        const click = vi.spyOn(input, 'click').mockImplementation(() => {});
+        vm.openUploadPicker();
+        if (change !== 'unchanged') {
+            setActiveWorkspaceDb(nextWorkspace);
+            if (change === 'returned') setActiveWorkspaceDb(workspaceId);
+        }
+        try {
+            const file = Object.assign(new NativeBlob(['picker-origin'], { type: 'image/png' }), { name: 'picker-origin.png' });
+            await vm.handleUpload({ target: { files: [file], value: 'synthetic-selection' } } as unknown as Event);
+            const nextDb = setActiveWorkspaceDb(nextWorkspace);
+            expect(await nextDb.file_meta.count()).toBe(0);
+            expect(await db.file_meta.count()).toBe(change === 'unchanged' ? 1 : 0);
+        } finally {
+            click.mockRestore();
+            wrapper.unmount();
+            setActiveWorkspaceDb(workspaceId);
+            evictWorkspaceDb(nextWorkspace);
+            await Dexie.delete(`or3-db-${nextWorkspace}`);
+        }
+    });
+
+    it.each(['cancel', 'empty selection'] as const)('clears the old picker owner after %s so a new direct selection uses the current workspace', async (cancel) => {
+        const nextWorkspace = `gallery-picker-cancel-${crypto.randomUUID()}`;
+        const Page = (await import('../index.vue')).default;
+        const wrapper = mount(Page, { global: { stubs: { GalleryGrid: true, ImageViewer: true, USelect: true } } });
+        const vm = wrapper.vm as unknown as { openUploadPicker(): void; handleUpload(event: Event): Promise<void> };
+        const input = wrapper.get('input[type="file"]');
+        const click = vi.spyOn(input.element as HTMLInputElement, 'click').mockImplementation(() => {});
+        vm.openUploadPicker();
+        const nextDb = setActiveWorkspaceDb(nextWorkspace);
+        try {
+            if (cancel === 'cancel') await input.trigger('cancel');
+            else await vm.handleUpload({ target: { files: [], value: '' } } as unknown as Event);
+            const file = Object.assign(new NativeBlob(['new-selection'], { type: 'image/png' }), { name: 'new-selection.png' });
+            await vm.handleUpload({ target: { files: [file], value: 'synthetic-new-selection' } } as unknown as Event);
+            expect(await nextDb.file_meta.count()).toBe(1);
+            expect(await db.file_meta.count()).toBe(0);
+        } finally {
+            click.mockRestore();
+            wrapper.unmount();
+            setActiveWorkspaceDb(workspaceId);
+            evictWorkspaceDb(nextWorkspace);
+            await Dexie.delete(`or3-db-${nextWorkspace}`);
+        }
+    });
+
     it('pages locale-aware name orders with no duplicates', async () => {
         await db.file_meta.bulkPut(
             Array.from({ length: 60 }, (_, index) =>
