@@ -63,6 +63,15 @@ The three plans are directionally aligned, but there are several conflicts and m
   pressure case still restores successfully by reclaiming actual blocks. No
   archive format or cleanup behavior changes. The failing fixture's separate
   known-good reset was test-only, not a successful managed recovery procedure.
+- A populated-main/WAL drill exposed another false restore success: corrupting
+  one WAL-header byte and removing SHM made SQLite ignore a committed record
+  while the older main database, baseline records and `quick_check` remained
+  valid. Restoring the intact archive recovered that record. Native pre-start
+  verification now checks the documented 32-byte WAL header before opening
+  the database, allowing empty checkpointed WALs and preserving legacy path
+  resolution. This is independent of provider schema and changes no archive
+  format. Actual refusal/recovery preserves the committed record; complete
+  committed-frame checksums and expected record inventory remain unqualified.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

@@ -31,16 +31,49 @@ import {
 } from './archive';
 import { assertBackupMatchesDeployment, readManifest, recordedBackupPath } from './manifests';
 
+/** SQLite's 32-byte WAL header: https://sqlite.org/fileformat2.html#wal_file_format */
+export function isValidSqliteWalHeader(header: Uint8Array) {
+  if (header.byteLength !== 32) return false;
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  const magic = view.getUint32(0);
+  const pageSize = view.getUint32(8);
+  if ((magic !== 0x377f0682 && magic !== 0x377f0683) || view.getUint32(4) !== 3007000
+    || pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0) return false;
+  let first = 0;
+  let second = 0;
+  for (let offset = 0; offset < 24; offset += 8) {
+    first = (first + view.getUint32(offset, magic === 0x377f0682) + second) >>> 0;
+    second = (second + view.getUint32(offset + 4, magic === 0x377f0682) + first) >>> 0;
+  }
+  return first === view.getUint32(24) && second === view.getUint32(28);
+}
+
 // Deep health only opens database files; that also succeeds for a non-SQLite
 // payload. Startup can also initialize an empty database. Use the restored
 // image's native driver before starting the application, without changing data or
 // imposing current-release ownership on legitimate older recovery snapshots.
 const VERIFY_RESTORED_DATABASES_SCRIPT = `
+const fs = require('node:fs');
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
+const validWalHeader = ${isValidSqliteWalHeader.toString()};
 const paths = [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean);
 if (paths.length !== 2) throw new Error('Both managed database paths must be configured');
 for (const path of paths) {
-  const db = new Database(path, { readonly: true, fileMustExist: true });
+  const databasePath = fs.realpathSync(path);
+  if (!fs.statSync(databasePath).isFile()) throw new Error('Restored database payload must be a regular file');
+  const walPath = databasePath + '-wal';
+  if (fs.existsSync(walPath)) {
+    const info = fs.statSync(walPath);
+    if (!info.isFile()) throw new Error('Restored WAL payload must be a regular file');
+    if (info.size > 0) {
+      const header = Buffer.alloc(32);
+      const fd = fs.openSync(walPath, 'r');
+      try {
+        if (fs.readSync(fd, header, 0, 32, 0) !== 32 || !validWalHeader(header)) throw new Error('Invalid SQLite WAL header');
+      } finally { fs.closeSync(fd); }
+    }
+  }
+  const db = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
     if (db.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('SQLite quick_check failed');
     const tables = db.prepare("select count(*) as count from sqlite_master where type = 'table'").get().count;
