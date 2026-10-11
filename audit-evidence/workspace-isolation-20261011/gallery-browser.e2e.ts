@@ -328,6 +328,67 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
     });
 }
 
+for (const action of ['muteThread', 'unmuteThread'] as const) {
+    test(`native notification preference ${action} retains its DB during a workspace switch`, async ({ page }, info) => {
+        await open(page);
+        await page.route('**/api/auth/**', route => route.abort());
+        const receipt = await page.evaluate(async operation => {
+            const clientPath = '/_nuxt/db/client.ts';
+            const notificationsPath = '/_nuxt/composables/notifications/useNotifications.ts';
+            const { setActiveWorkspaceDb, createWorkspaceDb, evictWorkspaceDb } = await import(clientPath);
+            const { useNotifications } = await import(notificationsPath);
+            const vueApp = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const nuxt = vueApp.$nuxt;
+            const previousSession = nuxt.payload.state['$sauth-session'];
+            const previousEnabled = nuxt.$config.public.ssrAuthEnabled;
+            const originId = `native-preference-${operation}-origin`;
+            const targetId = `native-preference-${operation}-target`;
+            const key = 'notification_muted_threads:synthetic-native-user';
+            const initial = operation === 'muteThread' ? ['origin-existing'] : ['origin-existing', 'identical-thread'];
+            const row = (value: string[]) => ({ id: key, name: key, value: JSON.stringify(value), deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+            const originDb = setActiveWorkspaceDb(originId); await originDb.open();
+            const targetDb = createWorkspaceDb(targetId); await targetDb.open();
+            await originDb.kv.put(row(initial)); await targetDb.kv.put(row(['target-existing']));
+            nuxt.$config.public.ssrAuthEnabled = true;
+            const selectSession = (id: string) => { nuxt.payload.state['$sauth-session'] = { appAccessAllowed: true,
+                session: { authenticated: true, user: { id: 'synthetic-native-user' }, workspace: { id }, role: 'owner' } }; };
+            selectSession(originId);
+            const scope = new vueApp._instance.scope.constructor(true);
+            const state = scope.run(() => nuxt.runWithContext(() => useNotifications()));
+            let release!: () => void;
+            let enter!: () => void;
+            const held = new Promise<void>(resolve => { release = resolve; });
+            const entered = new Promise<void>(resolve => { enter = resolve; });
+            const originalGet = originDb.kv.get.bind(originDb.kv);
+            let pending: Promise<void> | undefined;
+            try {
+                for (let i = 0; i < 40 && !state.isThreadMuted('origin-existing'); i++) await new Promise(resolve => requestAnimationFrame(resolve));
+                if (!state.isThreadMuted('origin-existing')) throw new Error('Synthetic origin preferences did not load');
+                originDb.kv.get = (...args: any[]) => {
+                    const result = originalGet(...args);
+                    if (!originDb.constructor.currentTransaction || args[0] !== key) return result;
+                    enter(); return originDb.constructor.waitFor(held).then(() => result);
+                };
+                pending = state[operation]('identical-thread');
+                await entered;
+                setActiveWorkspaceDb(targetId); selectSession(targetId);
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                release(); await pending;
+                originDb.kv.get = originalGet;
+                return { origin: JSON.parse((await originDb.kv.get(key)).value), target: JSON.parse((await targetDb.kv.get(key)).value) };
+            } finally {
+                release(); await pending?.catch(() => {}); originDb.kv.get = originalGet; scope.stop();
+                nuxt.$config.public.ssrAuthEnabled = previousEnabled;
+                nuxt.payload.state['$sauth-session'] = previousSession;
+                setActiveWorkspaceDb(null); evictWorkspaceDb(originId); evictWorkspaceDb(targetId);
+                await originDb.delete(); await targetDb.delete();
+            }
+        }, action);
+        await info.attach('synthetic-native-preference-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual({ origin: action === 'muteThread' ? ['origin-existing', 'identical-thread'] : ['origin-existing'], target: ['target-existing'] });
+    });
+}
+
 for (const account of ['changed', 'unchanged'] as const) {
     test(`actual SDK job tracking preserves originating account when account is ${account}`, async ({ page }, info) => {
         await open(page);
