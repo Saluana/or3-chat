@@ -90,6 +90,16 @@ The local drill checks application semantics separately: an authenticated archiv
 missing both a referenced blob and its sidecar can still report restore success
 and then return 404 on attachment download. Pairing is not database-reference
 validation; deep health cannot establish that completeness.
+The pre-start native helper also streams each canonical committed filesystem
+payload and compares its bytes with the SHA-256/legacy-MD5 filename hash, using
+a 64 KiB buffer. The real drill showed that authenticated archive checksums and
+payload presence still allowed a changed byte: restore reported success and
+HTTP 200 returned wrong content under the original hash. Such content mismatch
+is now refused before startup and follows safe snapshot recovery. Uncommitted
+uploads, temporary sidecars and opaque generation artifacts remain unscanned;
+no files are deleted or rewritten by content verification. This scan does not
+discover database references whose payload and sidecar are both absent, and
+production-scale hashing throughput has not been qualified.
 Restore and rollback run this read-only inventory preflight before journaling
 or capturing the pre-mutation snapshot, which itself stops the app. The stronger
 two-workspace drill exposed why checking only inside the replacement primitive
@@ -182,6 +192,10 @@ has succeeded, during capture of the pre-mutation snapshot. It checks an
 checksum change without updating the manifest and an authenticated database omission. The
 retained manifest/inventory rechecks must refuse both changed inputs and safely
 recover the stopped original data, followed by another actual cold restart.
+`--blob-content-only` corrupts one committed attachment byte in a real archive
+while retaining its original hash, sidecar, size and database references, then
+authenticates that synthetic archive. It checks native refusal before startup,
+recovery of the original bytes/hash, and another intact-archive restore.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks

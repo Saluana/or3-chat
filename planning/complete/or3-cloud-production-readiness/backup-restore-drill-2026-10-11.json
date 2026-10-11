@@ -17,7 +17,11 @@
       "behavior": "Refuse canonical committed FS metadata sidecars missing their blob payload entry under the archived FS root; preserve uncommitted uploads, temporary sidecars and opaque generation artifacts; no new format or physical cleanup."
     }
   ],
-  "finalCliSourceRevision": "c0f0c57650f060e6cb5edec88562a66e7547e309",
+  "finalCliSourceRevision": "de6642970257ee45b0bc8bdae366f71e0794bf0a",
+  "filesystemContentHashFix": {
+    "commit": "de6642970257ee45b0bc8bdae366f71e0794bf0a",
+    "behavior": "Native pre-start helper streams canonical committed FS objects and verifies their SHA-256/legacy-MD5 content-hash key with a 64 KiB buffer; damaged bytes refuse before startup and recover safely. Uncommitted uploads, temporary sidecars and opaque generation artifacts remain skipped; no new format or cleanup activation."
+  },
   "archivePreflightFix": {
     "commit": "c0f0c57650f060e6cb5edec88562a66e7547e309",
     "behavior": "Restore and rollback run the existing read-only archive inventory validator before journaling or stopped snapshot capture, using the authenticated archived FS root and retaining the later recheck. Invalid payload inventories no longer cause avoidable service downtime, state rewriting or snapshot recovery."
@@ -2776,6 +2780,184 @@
     ],
     "explanation": "Incomplete fixture run: beforeCommand does not cover streaming tar helpers, so the planned archive change never happened. Unchanged archive correctly restored; missing expected rejection was a fixture error, not a production defect. Corrected stop-boundary hook qualifies retained checksum/inventory checks and recovery."
   },
+  "actualAppCorruptFilesystemBefore": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "078990bb4c23de20d32e6dfcd4cf8f75bad73fdb",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "ed5f06fc4fa443a868002a4c286f73c8ec29687254ec06dd20c0b94060167ab6"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "signed archive with corrupt attachment content reports restore success and downloads wrong bytes under the original hash",
+        "kind": "limitation",
+        "detail": {
+          "declaredHash": "sha256:92bfb880cf5ff61be6f5bb4bf83520d8a78e7a811f928b2e8ca844d4634009a2",
+          "receivedHash": "sha256:78c1844feb99fe60c4a1c0a12e1978227abcc153d22e4430b58333908df4abc5",
+          "status": 200,
+          "byteLength": 48,
+          "baselineRecordsAndNativeIntegrity": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          }
+        }
+      },
+      {
+        "name": "intact archive restores original attachment content and its declared hash",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "trigger": "Changed one committed blob byte without changing its size, sidecar, hash key or canonical references; synthetic archive was rehashed/authenticated. Restore completed, SQLite integrity remained valid, HTTP 200 returned bytes whose hash disagreed with the key; intact archive repaired content."
+  },
+  "actualAppCorruptFilesystemAfter": {
+    "completed": true,
+    "cleanupFailed": false,
+    "recordedCliRevision": "078990bb4c23de20d32e6dfcd4cf8f75bad73fdb",
+    "qualifiedUncommittedSourceNowCommitted": "de6642970257ee45b0bc8bdae366f71e0794bf0a",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "bcca1747b58612e4557e949a7a26cff5c358938866b9b242836f32487f1c4a88"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "corrupt committed attachment content refused before startup; snapshot recovery preserves original bytes and hash",
+        "kind": "passed",
+        "detail": {
+          "declaredHash": "sha256:92bfb880cf5ff61be6f5bb4bf83520d8a78e7a811f928b2e8ca844d4634009a2",
+          "receivedHash": "sha256:92bfb880cf5ff61be6f5bb4bf83520d8a78e7a811f928b2e8ca844d4634009a2",
+          "status": 200,
+          "byteLength": 48,
+          "baselineRecordsAndNativeIntegrity": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          }
+        }
+      },
+      {
+        "name": "intact archive restores original attachment content and its declared hash",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,
@@ -3250,20 +3432,24 @@
   "automatedChecks": [
     {
       "command": "bun test packages/or3-cloud/test",
-      "result": "247 pass, 0 fail, 1881 assertions across 7 files (108.86 seconds after early archive preflight)",
+      "result": "248 pass, 0 fail, 1903 assertions across 7 files (102.50 seconds after filesystem content hashing)",
       "coverage": "mocked Docker/provider lifecycle and contracts; final POSIX archive reader additionally qualified by actual containers"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts --test-name-pattern \"WAL (frame|header)\"",
-      "result": "2 pass, 107 assertions including both checksum byte orders, every single-byte header corruption, all short headers, native frames at 512/4096/65536-byte pages, stale tails and incomplete append tails; all assertions included in final 247-test suite."
+      "result": "2 pass, 107 assertions including both checksum byte orders, every single-byte header corruption, all short headers, native frames at 512/4096/65536-byte pages, stale tails and incomplete append tails; all assertions included in final 248-test suite."
+    },
+    {
+      "command": "bun test packages/or3-cloud/test/cli-backup.test.ts --test-name-pattern \"filesystem payload validation\"",
+      "result": "1 pass, 22 assertions using real file chunks, SHA-256/MD5, empty/multi-chunk bytes, uppercase hex and corruption; included in final 248-test suite."
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts",
-      "result": "38 backup tests pass as part of final 247-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
+      "result": "39 backup tests pass as part of final 248-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-lifecycle.test.ts",
-      "result": "38 lifecycle tests pass as part of final 247-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction; early archive preflight: 2 pass, 12 assertions, after 2 failed before fix"
+      "result": "38 lifecycle tests pass as part of final 248-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction; early archive preflight: 2 pass, 12 assertions, after 2 failed before fix"
     },
     {
       "command": "bun run --cwd packages/or3-cloud typecheck; bun run --cwd packages/or3-cloud build",
@@ -3287,6 +3473,7 @@
     }
   ],
   "remainingRisksAndNotTested": [
+    "Filesystem content hashing covers canonical committed sidecars under the archived /data FS root, with a 64 KiB buffer; it is independent of provider schema and does not discover a reference when both payload and sidecar are absent. Production-scale full-volume hashing throughput and command-deadline behavior remain unqualified.",
     "WAL header and current-generation full-frame checksum validation refuse reproduced malformed-header/frame-content omissions. Old-salt tails after reset and incomplete append tails retain SQLite recovery semantics. Complete same-generation frames with bad checksums are conservatively refused, including torn uncommitted frames; input is not repaired. Truncation or altered salts can still resemble legitimate interrupted/reused tails; expected record inventory remains unqualified.",
     "Before 1ab5f45e, an authenticated archive missing only the referenced blob passed restore and deep health; actual download returned 404. That case is now refused. When both blob and sidecar are absent while database references remain, restore still reports success and download returns 404; a five-case data-only reference prototype detects the current-provider omission but is not shipped validation; known-good recovery restores bytes. This remaining case requires database-reference validation, not a new manifest format.",
     "Native pre-start quick_check/nonempty-schema checks do not prove every expected application record, canonical reference or correct cross-release schema. Missing-WAL qualification uses a snapshot whose main file has no tables; checkpointed snapshots legitimately omit WAL. Native checks run after extraction, so pre-start refusal relies on verified automatic recovery rather than pre-extraction database inspection.",
