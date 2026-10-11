@@ -105,6 +105,13 @@ explicit recovery after extraction and automatic recovery both fail. It also
 checks that a write accepted before terminal state recording fails survives
 another cold restart. `--recovery-only` runs the source/target qualification and
 these two additional recovery cases without repeating the malformed-input matrix.
+`--concurrency-only` waits up to five seconds for at least one of the seven
+racing atomic batches to be acknowledged before requesting stop. It checks
+that every acknowledged pair is present and no batch is split in the separate
+restored instance, after managed restore, and after another cold restart. This
+qualifies acknowledged writes before stop; capture itself runs with the app
+stopped. Requests interrupted by stop may have committed, so their restored
+pairs are allowed to be either wholly present or wholly absent.
 The deep pass kills a separate restore process with SIGKILL after app startup,
 then checks that its durable journal protects a subsequently accepted write.
 `--crash-only` runs that process-death case with the source/target qualification.

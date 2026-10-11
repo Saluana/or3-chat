@@ -2210,6 +2210,99 @@
     ],
     "explanation": "Restore and cold restart passed. Final status expectation incorrectly required registry identity for an unpublished local image with empty RepoDigests. Corrected qualifier retains null identity and checks the actual local image ID without changing the production safeguard."
   },
+  "actualAppAcknowledgedConcurrency": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "25405509cefe482588ac9630232fd0781f3bc4f2",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "seven synthetic push batches race the actual stopped-volume capture",
+        "kind": "passed",
+        "detail": {
+          "accepted": 7,
+          "refusedOrInterrupted": 0,
+          "bound": "8 atomic pairs; restoration verifies every acknowledged pair remains present and no pair is split",
+          "stopGate": "Wait for at least one successful racing batch before requesting stop"
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "9ffec8db411c08d1441b831aa46fdd3ce8265115fffab95267f82884d60c9088"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 8
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 8
+        }
+      },
+      {
+        "name": "managed restore retains every acknowledged concurrent atomic batch",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 8
+        }
+      },
+      {
+        "name": "acknowledged concurrent batches remain intact after another cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 8
+        }
+      }
+    ],
+    "boundary": "At least one racing batch acknowledged before requesting stop. Every acknowledged pair must restore; interrupted/unknown requests may be wholly present or absent. App is stopped during archive capture."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,

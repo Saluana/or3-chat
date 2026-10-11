@@ -32,6 +32,7 @@ assert(['/usr/local/bin/node', '/nodejs/bin/node'].includes(nodePath), 'Choose t
 assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), 'Set OR3_BACKUP_DRILL_IMAGE to a prebuilt local or3-backup-drill:<tag> image.');
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
+const concurrencyOnly = process.argv.includes('--concurrency-only');
 const builtCliOnly = process.argv.includes('--built-cli-only');
 const recoveryOnly = process.argv.includes('--recovery-only');
 const prestartCrashOnly = process.argv.includes('--prestart-crash-only');
@@ -46,7 +47,7 @@ const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walF
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(concurrencyOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -173,6 +174,7 @@ let workspaceId: string;
 let replayBody: unknown;
 let replayReceipt: unknown;
 const concurrentPairs: Array<[string, string]> = [];
+const acceptedPairs = new Set<string>();
 const caps = { fileKindCapability: 'v1', workspaceItemCapability: 'v1' };
 function op(tableName: string, pk: string, payload: Record<string, unknown>, clock = 1) {
   return { id: randomUUID(), tableName, pk, payload, operation: 'put',
@@ -208,6 +210,7 @@ async function verify(fixture: Instance) {
   for (const pair of concurrentPairs) {
     const captured = pair.filter(pk => snapshot.items.some((item: { pk: string }) => item.pk === pk));
     assert(captured.length === 0 || captured.length === 2, 'Backup split an atomic SQLite push batch');
+    if (acceptedPairs.has(pair[0])) assert.equal(captured.length, 2, 'Backup lost an acknowledged atomic push batch');
     if (captured.length === 2) capturedPairs++;
   }
   const integrity = await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
@@ -337,18 +340,19 @@ try {
   assert((replayReceipt as { results: Array<{ success: boolean }> }).results.every(result => result.success));
   evidence('populated source uses authenticated sync, real SQLite and FS attachment', await verify(source));
   let racingWrites: Array<Promise<unknown>> = [];
-  if (deep) {
+  if (deep || concurrencyOnly) {
     const pairBody = (index: number) => {
       const pair: [string, string] = [`race-${index}-a`, `race-${index}-b`];
       concurrentPairs.push(pair);
       return { scope: { workspaceId }, ...caps, ops: pair.map(id => op('posts', id,
-        { ...base, id, title: id, post_type: 'doc', content: `Atomic pair ${index}`, file_hashes: '[]' })) };
+        { ...base, id, title: id, post_type: 'doc', content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `Atomic pair ${index}` }] }] }), file_hashes: '[]' })) };
     };
     const first = await (await api('/api/sync/push', pairBody(0))).json();
     assert(first.results.every((result: { success: boolean }) => result.success));
+    acceptedPairs.add(concurrentPairs[0]![0]);
     const bodies = Array.from({ length: 7 }, (_, index) => pairBody(index + 1));
     let launched = false;
-    lifecycleFaults.beforeCommand = (_command, args) => {
+    lifecycleFaults.beforeCommand = async (_command, args) => {
       if (!launched && args[0] === 'compose' && args.includes('stop')) {
         launched = true;
         racingWrites = bodies.map(async body => {
@@ -358,18 +362,29 @@ try {
         });
         // Observe rejections immediately, before awaiting backup completion.
         for (const write of racingWrites) void write.catch(() => undefined);
+        if (concurrencyOnly) {
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([Promise.any(racingWrites), new Promise((_, reject) => {
+              timeout = setTimeout(() => reject(new Error('No concurrent write acknowledged within five seconds')), 5_000);
+            })]);
+          } finally { clearTimeout(timeout); }
+        }
       }
     };
   }
   let sourceBackup: string;
   try { sourceBackup = await backup(source); }
   finally { delete lifecycleFaults.beforeCommand; }
-  if (deep) {
+  if (deep || concurrencyOnly) {
     const settled = await Promise.allSettled(racingWrites);
+    settled.forEach((result, index) => { if (result.status === 'fulfilled') acceptedPairs.add(concurrentPairs[index + 1]![0]); });
+    if (concurrencyOnly) assert(acceptedPairs.size > 1, 'At least one racing batch must be acknowledged before stopping');
     evidence('seven synthetic push batches race the actual stopped-volume capture', {
       accepted: settled.filter(result => result.status === 'fulfilled').length,
       refusedOrInterrupted: settled.filter(result => result.status === 'rejected').length,
-      bound: '8 atomic pairs; restoration verifies that no pair is split',
+      bound: '8 atomic pairs; restoration verifies every acknowledged pair remains present and no pair is split',
+      stopGate: concurrencyOnly ? 'Wait for at least one successful racing batch before requesting stop' : 'Stop immediately after launching racers',
     });
   }
   const sourceManifest = await readManifest(sourceBackup, source.directory);
@@ -403,7 +418,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -441,7 +456,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -892,6 +907,13 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       freeBeforeBytes: free, verification: await verify(target), volatileFixtureOnly: true,
     });
   }
+  if (concurrencyOnly) {
+    await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+    evidence('managed restore retains every acknowledged concurrent atomic batch', await verify(target));
+    await stopProject(target.directory, 'local');
+    await startProject(target.directory, 'local', target.env);
+    evidence('acknowledged concurrent batches remain intact after another cold restart', await verify(target));
+  }
   if (builtCliOnly) {
     const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
     const restored = await run(process.execPath, [cli, 'restore', targetBackup, '--yes'], target.directory);
@@ -932,7 +954,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
