@@ -162,3 +162,8 @@ If tab props restore text before extensions finish loading, capture retains that
 matching scoped saved editor JSON until an editor can supply the current JSON.
 Files selected early remain capturable; lack of an editor alone does not discard
 their live bytes.
+Runtime tab status and view-state updates are reactive projections and do not
+schedule writes to the tab manifest. During startup, child status events can
+arrive before the shell restores its layout; persisting them would publish the
+temporary blank tab and orphan an otherwise durable draft. A fresh scope saves
+its initial tab explicitly after checking for a saved layout.
