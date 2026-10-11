@@ -11,7 +11,7 @@ import { resetJobProvider } from '../../background-jobs/store';
 import { useRuntimeConfig } from '#imports';
 import { createTrustedPluginServerServices } from '../../background-jobs/plugin-server-services';
 
-const fixture = vi.hoisted(() => ({ role: 'owner', projectId: null as string | null, deleted: false, send: vi.fn() }));
+const fixture = vi.hoisted(() => ({ role: 'owner' as string | null, projectId: null as string | null, deleted: false, send: vi.fn() }));
 vi.mock('~~/server/auth/session', () => ({ resolveSessionContext: async () => ({ authenticated: true, user: { id: 'owner' }, workspace: { id: 'workspace', name: 'Fixture' }, role: 'owner' }) }));
 vi.mock('~~/shared/openrouter', async load => ({
     ...(await load<Record<string, unknown>>()),
@@ -27,7 +27,7 @@ beforeEach(() => {
     const config = { public: { sync: { provider: 'workflow-dispatch' } }, sync: { provider: 'workflow-dispatch' }, backgroundJobs: { storageProvider: 'memory' } };
     vi.stubGlobal('useRuntimeConfig', () => config);
     vi.mocked(useRuntimeConfig).mockReturnValue(config as ReturnType<typeof useRuntimeConfig>);
-    registerAuthWorkspaceStore({ id: 'workflow-dispatch', create: () => ({ listUserWorkspaces: async () => [{ id: 'workspace', name: 'Fixture', role: fixture.role }] }) as unknown as AuthWorkspaceStore });
+    registerAuthWorkspaceStore({ id: 'workflow-dispatch', create: () => ({ listUserWorkspaces: async () => fixture.role ? [{ id: 'workspace', name: 'Fixture', role: fixture.role }] : [] }) as unknown as AuthWorkspaceStore });
     registerSyncGatewayAdapter({ id: 'workflow-dispatch', create: () => ({ capabilities: { canonicalChatHistory: 'v1' }, readChatHistory: async (_actor: CanonicalHistoryActor, query: CanonicalChatQuery) => query.kind === 'thread'
         ? { status: 'ok', project_ownership: 'resolved', thread: { id: query.thread_id, project_id: fixture.projectId } }
         : { status: 'ok', messages: [{ id: 'execution', thread_id: 'thread', deleted: fixture.deleted, data: { type: 'workflow-execution' } }] } }) as unknown as SyncGatewayAdapter });
@@ -51,6 +51,31 @@ describe('workflow server provider boundary', () => {
         if (kind === 'ordinary') { await sending; expect(fixture.send).toHaveBeenCalledOnce(); }
         else { await expect(sending).rejects.toThrow(); expect(fixture.send).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled(); }
     });
+    for (const stage of ['messages', 'thread'] as const) {
+        it.each(['viewer', null, 'owner'] as const)(`uses current membership %s after a held workflow ${stage} read resumes`, async nextRole => {
+            const { config } = await client();
+            let resume!: () => void;
+            const held = new Promise<void>(resolve => { resume = resolve; });
+            const read = vi.fn(async (_actor: CanonicalHistoryActor, query: CanonicalChatQuery) => {
+                if (query.kind === stage) await held;
+                return query.kind === 'thread'
+                    ? { status: 'ok', project_ownership: 'resolved', thread: { id: query.thread_id, project_id: null } }
+                    : { status: 'ok', messages: [{ id: 'execution', thread_id: 'thread', data: { type: 'workflow-execution' } }] };
+            });
+            registerSyncGatewayAdapter({ id: 'workflow-dispatch', create: () => ({
+                capabilities: { canonicalChatHistory: 'v1' }, readChatHistory: read,
+            }) as unknown as SyncGatewayAdapter });
+            const sending = config.client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } });
+            const outcome = nextRole === 'owner' ? sending : expect(sending).rejects.toThrow();
+            await vi.waitFor(() => expect(read.mock.calls.some(([, query]) => query.kind === stage)).toBe(true));
+            fixture.role = nextRole;
+            resume();
+            await outcome;
+            expect(fetch).toHaveBeenCalledTimes(nextRole === 'owner' ? 1 : 0);
+            expect(fixture.send).toHaveBeenCalledTimes(nextRole === 'owner' ? 1 : 0);
+        });
+    }
+
     it('keeps captured identity and rechecks ownership at the next dispatch', async () => {
         const { config, origin } = await client(); origin.threadId = 'different';
         await config.client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } });
