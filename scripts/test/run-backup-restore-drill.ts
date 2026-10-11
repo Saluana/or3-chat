@@ -37,7 +37,9 @@ const crashOnly = process.argv.includes('--crash-only');
 const browserOnly = process.argv.includes('--browser-only');
 const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
-assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) <= 1, 'Choose one qualification mode.');
+const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
+const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly;
+assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -368,7 +370,7 @@ try {
   await startProject(target.directory, 'local', target.env);
   evidence('second cold restart preserves chats/documents/attachment/settings and references', await verify(target));
   const targetBackup = await backup(target);
-  for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -406,7 +408,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly) {
+  if (!recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -615,6 +617,76 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     await recoverCommand(target.directory, { restore: true, yes: true });
     evidence('retry after journal persistence is available restores actual pre-mutation data and attachment', await verify(target));
   }
+  if (sqliteOnly) {
+    for (const [index, fault] of (sqliteWalOnly ? [
+      { database: 'sync.sqlite', payload: 'missing-wal' },
+    ] : [
+      { database: 'sync.sqlite', payload: 'non-sqlite' },
+      { database: 'auth.sqlite', payload: 'non-sqlite' },
+      { database: 'sync.sqlite', payload: 'empty-schema' },
+    ]).entries()) {
+      const broken = join(root, `corrupt-sqlite-${index}`);
+      const tree = join(root, `corrupt-sqlite-tree-${index}`);
+      await cp(targetBackup, broken, { recursive: true });
+      await mkdir(tree);
+      const unpacked = await run('tar', ['xzf', join(broken, 'data.tgz'), '-C', tree]);
+      assert(unpacked.ok, unpacked.stderr);
+      let payload = Buffer.from('synthetic payload that is not SQLite');
+      if (fault.payload === 'empty-schema') {
+        const empty = await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+          "const fs=require('node:fs');const Database=require('/app/.output/server/node_modules/better-sqlite3');const path='/tmp/synthetic-empty.sqlite';const db=new Database(path);db.pragma('user_version=1');if(db.pragma('quick_check',{simple:true})!=='ok')throw Error('Fixture integrity failure');db.close();console.log(fs.readFileSync(path).toString('base64'));fs.unlinkSync(path)"]), target.directory);
+        payload = Buffer.from(empty, 'base64');
+      }
+      if (fault.payload !== 'missing-wal') await writeFile(join(tree, fault.database), payload);
+      for (const suffix of ['-wal', '-shm']) await rm(join(tree, fault.database + suffix), { force: true });
+      const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+      assert(packed.ok, packed.stderr);
+      const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
+      manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+      const text = `${JSON.stringify(manifest, null, 2)}\n`;
+      await writeFile(join(broken, 'manifest.json'), text);
+      await writeBackupAuthentication(target.directory, broken, text);
+      let clears = 0;
+      lifecycleFaults.beforeCommand = (_command, args) => {
+        if (args.includes('find /data -mindepth 1 -delete')) clears++;
+      };
+      const startedAt = Date.now();
+      try {
+        await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), /snapshot .* was restored:/);
+      }
+      finally { delete lifecycleFaults.beforeCommand; }
+      assert.equal(clears, 2, 'Refused payload and safe automatic snapshot recovery each extract once');
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+      assert.match((await readState(target.directory)).lastError ?? '', /SQLite database integrity verification failed/);
+      evidence('real database payload refused before startup; automatic recovery restores original records and attachment', {
+        fault, elapsedMs: Date.now() - startedAt, verification: await verify(target),
+      });
+    }
+    if (!sqliteWalOnly) {
+      let interrupted = 0;
+      let started = 0;
+      lifecycleFaults.beforeCommand = (_command, args) => {
+        if (args.join(' ').includes('quick_check') && interrupted < 2) {
+          interrupted++;
+          throw new Error('Synthetic native validation interruption');
+        }
+        if (args[0] === 'compose' && args.includes('up')) started++;
+      };
+      try {
+        await assert.rejects(restoreCommand(target.directory, { yes: true }, [targetBackup]), /automatic restoration .* also failed/);
+      } finally { delete lifecycleFaults.beforeCommand; }
+      assert.equal(interrupted, 2);
+      assert.equal(started, 0, 'Neither refused target nor interrupted snapshot may start');
+      const pending = (await readState(target.directory)).incompleteOperation;
+      assert.equal(pending?.phase, 'restoring-previous');
+      assert(pending?.previousBackupPath);
+      await readManifest(pending.previousBackupPath, target.directory);
+      await assert.rejects(recoverCommand(target.directory), /may have replaced data/);
+      evidence('interrupted native validation and automatic recovery preserve the verified snapshot and journal without starting either app');
+      await recoverCommand(target.directory, { restore: true, yes: true });
+      evidence('explicit retry after native validation interruption restores actual records and attachment bytes', await verify(target));
+    }
+  }
   if (browserOnly) evidence('fresh browser reads restored conversation and document through the actual UI', await verifyBrowser(target));
   completed = true;
 } finally {
@@ -626,7 +698,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, browserOnly, journalOnly, attachmentOnly, nodePath, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, nodePath, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

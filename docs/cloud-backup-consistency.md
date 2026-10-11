@@ -53,8 +53,15 @@ The restore archive reader requires both fixed-profile database payloads,
 `auth.sqlite` and `sync.sqlite`, before clearing the current volume. A valid tar
 file that omits one is refused: application startup or a sign-in request can
 otherwise create an empty replacement and make deep health pass after account
-or workspace data is lost. This presence check does not prove database contents
-or every referenced attachment is complete. For the archived FS root under
+or workspace data is lost. After extraction and before app startup, restore also
+opens both databases with the restored image's native SQLite driver in read-only
+mode in a network-denied helper, requiring a passing `quick_check` and a nonempty
+schema. A refused payload follows the existing automatic pre-start snapshot
+recovery path; a failed recovery keeps the verified snapshot and operation
+journal. Deep health alone can pass for a non-SQLite file, and startup can
+initialize an empty database with a fresh schema. This check
+does not prove every application record or referenced attachment is complete.
+For the archived FS root under
 `/data`, the reader also pairs canonical SHA-256/MD5 committed sidecars with
 their blob entries. Uncommitted uploads, temporary sidecars and opaque generation
 artifacts remain accepted. No new archive format or physical cleanup is used.
@@ -91,6 +98,50 @@ failures with real journals/databases/archives; they do not simulate disk hardwa
 `--attachment-only` checks refusal of a committed sidecar without its payload,
 then records the still-detectable application failure when both are absent and
 verifies recovery from the known-good archive.
+`--sqlite-only` restores authenticated archives containing non-SQLite auth and
+sync database payloads and a valid SQLite database with an empty schema. It
+checks that native validation prevents startup of those payloads and that safe
+automatic recovery preserves original records and attachment bytes. It also
+interrupts both target validation and automatic recovery, verifies that neither
+app starts, then checks a successful explicit recovery retry.
+`--sqlite-wal-only` removes the captured sync WAL/SHM from this populated fixture
+while retaining its main database and authenticating the resulting archive.
+Its schema and records reside in the WAL, so the pre-start check must refuse the
+empty main database and recover the original data. Checkpointed SQLite snapshots
+can legitimately omit WAL/SHM; this is not a blanket WAL presence requirement.
+
+### Remaining canonical attachment preflight
+
+The both-blob-and-sidecar omission remains unresolved in the production reader.
+A local, data-only prototype confirmed that the current SQLite 0.0.15
+`queryCanonicalStorage` live-metadata selection can identify the missing pair
+from the archived database/WAL before any live mutation. The FS 0.0.11 hash and
+workspace-path contracts determine the required entries; the prototype accepted
+the complete archive and found both missing entries in the otherwise identical
+archive. Additional cases preserved tombstones and pending metadata without
+storage IDs, and detected the same hash missing under a second workspace. Both
+WAL-bearing and checkpointed snapshots were read successfully. It used a
+network-denied, read-only-root helper with a disposable data
+volume, 128 MiB memory and half a CPU. It ran a fixed trusted query with
+`trusted_schema=OFF`, executed no archive code, and removed its scratch volume.
+This is feasibility evidence for those provider versions, not shipped validation
+or cross-version qualification.
+
+A production implementation should give the SQLite provider a versioned offline
+inspection contract corresponding to canonical live metadata, rather than
+embedding a second unversioned interpretation of its schema in the CLI. Before
+stopping the live application, a helper using the authenticated image should
+extract only the required database/WAL members into a scratch volume, validate
+regular-file inputs and SQLite integrity, and stream canonical committed
+references against the archive inventory. Require both blob and sidecar at the
+archived FS root; preserve deleted/pending metadata, orphan uploads and opaque
+generation artifacts. No cleanup jobs or provider network calls are needed.
+Check free space on the actual scratch filesystem, bound extraction/query
+resources, clean up in every failure path, and refuse unsupported schemas or
+roots outside captured `/data` with an explicit explanation. Qualify legacy
+hashes, alternate FS roots, WAL-only committed references, duplicate workspace
+hashes, older snapshots and corruption before making this a managed restore
+requirement. This can retain the existing signed archive format.
 
 Build the current SSR application with Basic Auth, SQLite and filesystem providers
 using disposable build paths/secrets and no model credentials. Then build the
