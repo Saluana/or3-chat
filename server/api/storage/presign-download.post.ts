@@ -19,6 +19,7 @@ import {
     STORAGE_CONTROL_BODY_LIMIT_BYTES,
 } from '../../utils/security/limited-json-body';
 import { requireCan } from '../../auth/can';
+import { requireStorageWorkspaceAccess } from '../../utils/storage/workspace-access';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
@@ -186,6 +187,9 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
+    // Cached request sessions must not authorize signing after membership changes.
+    await requireStorageWorkspaceAccess(event, session, body.data.workspace_id);
+
     // Dispatch to adapter
     const result = await adapter.presignDownload(event, {
         workspaceId: body.data.workspace_id,
@@ -199,6 +203,9 @@ export default defineEventHandler(async (event) => {
         disposition: downloadPolicy.disposition,
         filename: downloadPolicy.filename,
     });
+
+    // A signer may await remote work; discard its URL if access was removed.
+    await requireStorageWorkspaceAccess(event, session, body.data.workspace_id);
 
     recordDownloadStart();
 

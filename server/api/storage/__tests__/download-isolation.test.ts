@@ -10,8 +10,10 @@ import type { CanonicalStorageQueryRequest } from '../../../sync/gateway/types';
 const fixtures = vi.hoisted(() => ({
     session: null as SessionContext | null,
     query: vi.fn(),
+    workspaces: vi.fn(),
 }));
 vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => fixtures.session }));
+vi.mock('../../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => ({ listUserWorkspaces: fixtures.workspaces }) }));
 vi.mock('#imports', () => ({
     useRuntimeConfig: () => ({ auth: { enabled: true }, storage: { enabled: true } }),
 }));
@@ -72,6 +74,9 @@ describe('filesystem download HTTP isolation and signed-link lifetime', () => {
             ['alice:ws-a', 'owner'], ['alice:ws-b', 'editor'],
             ['bob:ws-a', 'editor'], ['bob:ws-b', 'owner'],
         ]);
+        fixtures.workspaces.mockReset().mockImplementation(async (userId: string) => Array.from(memberships.entries())
+            .filter(([key]) => key.startsWith(`${userId}:`))
+            .map(([key, role]) => ({ id: key.slice(userId.length + 1), name: 'Synthetic', role })));
         canonical = new Map(['ws-a', 'ws-b'].map((workspaceId) => [workspaceId, new CanonicalStorageContractFixture({ workspaceId })]));
         const objectPath = resolveFsObjectPath(root, 'ws-a', hash);
         await mkdir(dirname(objectPath), { recursive: true });

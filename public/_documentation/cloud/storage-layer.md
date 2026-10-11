@@ -73,6 +73,10 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
     The gateway only signs a canonical live `file_meta` row in the requested
     workspace that has a provider storage ID; pending uploads, soft-deleted
     rows, and hashes from another workspace return the same not-found response.
+    The host rereads current workspace membership after canonical metadata and
+    after the signer returns. Removal prevents signing or delivery; viewers
+    retain read permission. An unavailable membership store returns 503. These
+    checks add two membership reads per successful signing request.
 4.  **Stream**: The file is downloaded and verified against its hash.
 5.  **Cache**: The blob is stored in `file_blobs` for future offline use.
 
