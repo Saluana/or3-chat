@@ -1782,7 +1782,9 @@ export function useChat(
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
-            const stopped = requestScope.cancelled || (error instanceof Error && error.name === 'AbortError');
+            // IndexedDB transaction aborts also use AbortError. Only request
+            // cancellation may suppress a failed-save notice before admission.
+            const stopped = requestScope.cancelled || requestScope.abortController?.signal.aborted === true;
             result = stopped ? { status: 'aborted', requestId, reason: 'aborted',
                 ...(requestScope.userMessageId ? { userMessageId: requestScope.userMessageId } : {}),
                 ...(requestScope.assistantMessageId ? { assistantMessageId: requestScope.assistantMessageId } : {}),
@@ -2383,6 +2385,16 @@ export function useChat(
             file_hashes: file_hashes.length
                 ? serializeFileHashes(file_hashes)
                 : undefined,
+        }).catch((error: unknown) => {
+            // A storage transaction abort is a failed save, not a user Stop.
+            // Keep app-owned save guidance rather than cancellation copy.
+            if (error instanceof Error && error.name === 'AbortError'
+                && !isRequestCancelled(requestScope) && !preparationSignal.aborted) {
+                throw err('ERR_DB_WRITE_FAILED', 'Could not save the message locally.', {
+                    cause: error, tags: { domain: 'chat', stage: 'user-persist' },
+                });
+            }
+            throw error;
         });
         requestScope.userMessageId = userDbMsg.id;
         // Show the durable turn even if attachment intake is subsequently stopped.
