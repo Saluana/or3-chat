@@ -54,7 +54,7 @@ vi.mock('@vueuse/core', async () => {
 const cloudIntake = vi.hoisted(() => ({ enabled: false, session: null as null | { authenticated: boolean; user: { id: string }; workspace: { id: string }; role: string; authorizationRevision: string; expiresAt: string }, refresh: vi.fn() }));
 // Mock other dependencies
 vi.mock('#imports', () => ({
-    useToast: () => ({ add: vi.fn() }),
+    useToast: () => ({ add: vi.fn(), remove: vi.fn() }),
     useRuntimeConfig: () => ({
         public: {
             ssrAuthEnabled: cloudIntake.enabled,
@@ -607,6 +607,33 @@ describe('ChatInputDropper', () => {
         } finally {
             wrapper.unmount();
             useWorkspaceTabDrafts().discard('hide-tab');
+        }
+    });
+
+    it('keeps the saved row when interrupted hydration is followed by leaving the empty composer', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-read-fault-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open();
+        const tabId = 'read-fault-tab';
+        const account = useWorkspaceTabDrafts().scope().accountKey;
+        const id = `${account}\u0000${tabId}`;
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId,
+            updated_at: Date.now(), draft: { version: 1, text: 'Saved buffer before failed restore',
+                attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValueOnce({ equals: () => ({
+            toArray: () => Promise.reject(new DOMException('Synthetic draft read aborted', 'AbortError')),
+        }) } as never);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            wrapper.unmount();
+            await useWorkspaceTabDrafts().flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe('Saved buffer before failed restore');
+        } finally {
+            wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+            process.client = previous;
         }
     });
 

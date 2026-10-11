@@ -73,6 +73,44 @@ test.describe('chat draft storage recovery faults', () => {
         });
     }
 
+    test('an interrupted draft read stays visible and retry restores the saved buffer', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Saved buffer before interrupted browser draft read';
+        await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.addInitScript(() => {
+            const originals = { getAll: IDBIndex.prototype.getAll, openCursor: IDBIndex.prototype.openCursor };
+            for (const method of ['getAll', 'openCursor'] as const) {
+                const original = originals[method];
+                IDBIndex.prototype[method] = function (...args: unknown[]) {
+                    if (this.objectStore.name === 'workspace_tab_drafts') {
+                        throw new DOMException('Synthetic interrupted draft read', 'AbortError');
+                    }
+                    return Reflect.apply(original, this, args);
+                } as typeof original;
+            }
+            (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads = () => {
+                IDBIndex.prototype.getAll = originals.getAll;
+                IDBIndex.prototype.openCursor = originals.openCursor;
+            };
+        });
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible();
+        await expect(input).toBeEmpty();
+        expect(await savedTexts(page)).toContain(marker);
+        // Closing the failed composer must not acknowledge an empty draft.
+        await page.reload();
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        expect(await savedTexts(page)).toContain(marker);
+        await page.evaluate(() => (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads());
+        await page.getByRole('button', { name: 'Retry restore', exact: true }).click();
+        await expect(input).toHaveText(marker);
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
+        await info.attach('interrupted-draft-read', { contentType: 'application/json',
+            body: JSON.stringify({ stored: await savedTexts(page), restored: await input.innerText(), externalRequests: 'denied' }) });
+    });
+
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
         await page.evaluate(() => {
             const original = Storage.prototype.setItem;

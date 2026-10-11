@@ -79,6 +79,22 @@ describe('durable workspace tab drafts', () => {
         vi.unstubAllGlobals();
     });
 
+    it('rejects interrupted hydration instead of pretending the saved draft is absent, then retries', async () => {
+        const first = await reload();
+        first.drafts.write('read-fault-tab', draft('Saved draft before interrupted read'));
+        await first.flush();
+        const second = await reload();
+        const table = second.client.getDb().workspace_tab_drafts;
+        vi.spyOn(table, 'where').mockReturnValueOnce({ equals: () => ({
+            toArray: () => Promise.reject(new DOMException('Synthetic draft read aborted', 'AbortError')),
+        }) } as never);
+        await expect(second.drafts.load('read-fault-tab')).rejects.toThrow('Synthetic draft read aborted');
+        expect((await table.toArray())[0]?.draft.text).toBe('Saved draft before interrupted read');
+        expect((await second.drafts.load('read-fault-tab'))?.text).toBe('Saved draft before interrupted read');
+        second.drafts.discard('read-fault-tab');
+        await second.flush();
+    });
+
     it('restores text, editor JSON, settings and large pasted blocks after a reload', async () => {
         const first = await reload();
         const block = { id: 'b1', text: 'long pasted text', wordCount: 3, preview: 'long', previewFull: 'long pasted text' };
@@ -351,7 +367,8 @@ describe('durable workspace tab drafts', () => {
         writes.mockRestore();
         await flush();
         expect(drafts.saveFailed.value).toBe(false);
-        expect(await table.count()).toBe(2);
+        expect((await table.toArray()).filter(row => ['failed-tab', 'saved-tab'].includes(row.tab_id))
+            .map(row => row.tab_id).sort()).toEqual(['failed-tab', 'saved-tab']);
     });
 
     it('clears a failed tab warning once its explicit discard is durable', async () => {
@@ -363,7 +380,7 @@ describe('durable workspace tab drafts', () => {
         expect(drafts.saveFailed.value).toBe(true);
         drafts.discard('failed-tab');
         await vi.waitFor(() => expect(drafts.saveFailed.value).toBe(false));
-        expect(await table.count()).toBe(0);
+        expect((await table.toArray()).filter(row => row.tab_id === 'failed-tab')).toEqual([]);
     });
 
     it('recovers the last edit when the page unloaded before IndexedDB committed it', async () => {

@@ -976,6 +976,8 @@ async function compactFromSettings() {
 }
 const restoringDraft = ref(false);
 let draftContentLoading = false;
+/** An unread copy must not be replaced by the untouched empty editor. */
+let failedDraftRestoreRevision: number | null = null;
 let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -996,7 +998,7 @@ function scheduleDraftCapture(tabId = props.tabId): void {
 function captureDraft(tabId = props.tabId): void {
     // Until saved content is applied the composer holds nothing the user wrote;
     // capturing now would overwrite the saved draft with an empty one.
-    if (!tabId || draftContentLoading) return;
+    if (!tabId || draftContentLoading || composerRevision === failedDraftRestoreRevision) return;
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
@@ -1042,6 +1044,7 @@ watch(tabDrafts.saveFailed, (failed) => {
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revision = ++draftRestoreRevision;
+    failedDraftRestoreRevision = null;
     if (!tabId) {
         restoringDraft.value = false;
         return;
@@ -1049,9 +1052,10 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
     restoringDraft.value = true;
     // The editor stays editable while saved content loads; anything typed meanwhile wins.
     const revisionBeforeLoad = composerRevision;
+    const scope = tabDrafts.scope();
+    const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
     let keptTypedText = false;
     try {
-        const scope = tabDrafts.scope();
         let draft: WorkspaceChatTabDraft | undefined;
         if (tabDrafts.isLoaded(tabId, scope)) {
             draft = tabDrafts.read(tabId, scope);
@@ -1061,6 +1065,7 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
         }
         draftContentLoading = false;
+        toast.remove(noticeId);
         draftScope = scope;
         keptTypedText = composerRevision !== revisionBeforeLoad;
         if (!keptTypedText) {
@@ -1104,6 +1109,23 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
                 aiSettings.value?.defaultModelVariant
             ));
         }
+    } catch {
+        if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
+        draftScope = scope;
+        failedDraftRestoreRevision = revisionBeforeLoad;
+        keptTypedText = composerRevision !== revisionBeforeLoad;
+        toast.add({
+            id: noticeId,
+            title: 'Draft could not be restored',
+            description: 'Your saved draft could not be read. Retry to restore it.',
+            color: 'warning',
+            duration: 0,
+            actions: [{ label: 'Retry restore', onClick: () => {
+                if (!componentDisposed && props.tabId === tabId && tabDrafts.scope().key === scope.key) {
+                    void restoreDraft(tabId);
+                }
+            } }],
+        });
     } finally {
         // A newer restore owns the flag; only the latest one may release it.
         if (revision === draftRestoreRevision) draftContentLoading = false;

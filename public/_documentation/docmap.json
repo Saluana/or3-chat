@@ -824,7 +824,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, tabs and drafts, with refresh guards, exact journal/failure acknowledgements and scoped database-handle recovery."
+                    "summary": "Preserve durable sends, native admission, tool policy, tabs and drafts, with refresh guards, exact journal/failure acknowledgements and scoped database-handle recovery and visible interrupted-read retries."
                 },
                 {
                     "name": "ai-preferences.md",

@@ -392,7 +392,7 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
         } catch (error) {
             hydrations.delete(scope.key);
             console.warn('[tab-drafts] Saved drafts could not be read', error);
-            return;
+            throw error;
         }
         entry.done = true;
     })();

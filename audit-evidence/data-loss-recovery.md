@@ -251,3 +251,34 @@ coverage. Vue source was checked by the successful type-check and browser tests.
 - No remote publication, PR creation, merging, deployment or generation cleanup
   activation occurred. Shared ownership was reported before planned PageShell
   changes; gallery/viewer/image-cache sources were untouched.
+
+## Interrupted draft hydration (additional verified finding)
+
+A rejected IndexedDB draft read was swallowed as an absent draft. Closing the
+untouched empty composer then captured a discard and removed the saved row.
+Both core and mounted composer regressions reproduced this before the fix:
+`/tmp/or3-recovery-hydration-red.log` and
+`/tmp/or3-recovery-hydration-composer-red.log`.
+
+Reads now reject, the empty failed restore cannot capture a discard, and a
+persistent scoped **Retry restore** action retries the read. Genuine edits still
+follow the existing typed-while-loading contract. Unit/component evidence:
+47 tests passed in `/tmp/or3-recovery-hydration-final-unit.log`.
+Actual Chromium evidence: one test passed in 36.4 seconds, retaining the original
+row across two reloads during a deterministic IndexedDB index-read abort, then
+restoring the same text through the visible retry button. External requests were
+denied. Log `/tmp/or3-recovery-hydration-browser.log`; artifact directory
+`test-results/recovery-draft-read`. This tests local persistence, not cloud sync.
+
+## Proposed competing-draft conflict design (not implemented)
+
+When two browser pages restore the same app-tab ID, the canonical row and journal
+currently share ownership. Preserve both versions before changing this behavior:
+keep the existing canonical contract and introduce bounded local recovery versions
+keyed by workspace/account/app-tab/editor session. Compare the exact baseline
+snapshot and timestamp atomically, preserve both conflicting buffers durably, and
+restore the page's own version with a visible conflict choice. Protect attachment
+references in unresolved versions and keep these versions out of sync. Capacity
+limits must visibly reject additional writes rather than silently deleting an
+unresolved version. This requires coordinated schema and recovery UI work; no
+winner was selected and no competing user text was discarded by this audit.
