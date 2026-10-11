@@ -39,17 +39,78 @@ const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer
 
 const draftRecoveryScripts = new WeakMap<Page, string[]>();
 
+async function retryDraftRestore(page: Page, text: string): Promise<void> {
+    try {
+        await page.getByRole('button', { name: 'Retry restore', exact: true }).click({ timeout: 5_000 });
+    } catch (error) {
+        // Repair can let a pending startup restore finish and remove its toast
+        // while Playwright is checking the button's transition/actionability.
+        // Accept only the observed successful restore, never an unhealed error.
+        if (await page.getByRole('textbox', { name: 'Message input' }).innerText() !== text) throw error;
+    }
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(text);
+    await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
+}
+
 test.describe('chat draft storage recovery faults', () => {
     test.describe.configure({ timeout: 120_000 });
     test.beforeEach(async ({ context, page }) => {
         const scripts: string[] = []; draftRecoveryScripts.set(page, scripts);
         page.on('request', request => { if (request.resourceType() === 'script') scripts.push(request.url()); });
+        if (process.env.OR3_RECOVERY_NATIVE_TRACE === 'true') await page.addInitScript(() => {
+            const set = Storage.prototype.setItem; const get = Storage.prototype.getItem;
+            const put = IDBObjectStore.prototype.put; const remove = IDBObjectStore.prototype.delete;
+            const record = (op: string, value: unknown) => {
+                try {
+                    const key = 'or3:e2e:native-draft-trace'; const rows = JSON.parse(localStorage.getItem(key) ?? '[]');
+                    rows.push({ op, value, page: performance.timeOrigin, at: Date.now(), editor: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText });
+                    set.call(localStorage, key, JSON.stringify(rows.slice(-100)));
+                } catch { /* Observations cannot change native persistence behavior. */ }
+            };
+            Storage.prototype.setItem = function (key, value) {
+                const result = set.call(this, key, value);
+                if (key.startsWith('or3:tab-draft-journal:') || key.startsWith('or3:workspace-tabs:v1:')) record('storage-set', { key, value });
+                return result;
+            };
+            Storage.prototype.getItem = function (key) {
+                const result = get.call(this, key);
+                if (key.startsWith('or3:workspace-tabs:v1:')) record('storage-get', { key, value: result });
+                return result;
+            };
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'workspace_tab_drafts') record('put-attempt', args[0]); return put.apply(this, args);
+            };
+            IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
+                if (this.name === 'workspace_tab_drafts') record('delete-attempt', args[0]); return remove.apply(this, args);
+            };
+        });
         await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
             ? route.continue() : route.abort('blockedbyclient'));
         await page.goto('/chat');
         await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
         await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
             .filter(key => key.startsWith('or3:workspace-tabs:v1:')).length)).toBeGreaterThan(0);
+    });
+
+    test.afterEach(async ({ page }, info) => {
+        if (process.env.OR3_RECOVERY_NATIVE_TRACE !== 'true' || page.isClosed()) return;
+        const receipt = await page.evaluate(async () => {
+            const rows: unknown[] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<unknown[]>((resolve, reject) => {
+                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                }));
+                db.close();
+            }
+            return { rows, liveText: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText,
+                storage: Object.fromEntries(Object.entries(localStorage).filter(([key]) => key === 'or3:e2e:native-draft-trace' || key.startsWith('or3:workspace-tabs:v1:') || key.startsWith('or3:tab-draft-journal:'))) };
+        });
+        await writeFile(info.outputPath('native-draft-trace.json'), JSON.stringify(receipt, null, 2));
     });
 
     async function savedTexts(page: Page): Promise<string[]> {
@@ -126,7 +187,7 @@ test.describe('chat draft storage recovery faults', () => {
         await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
         expect(await savedTexts(page)).toContain(marker);
         await page.evaluate(() => (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads());
-        await page.getByRole('button', { name: 'Retry restore', exact: true }).click();
+        await retryDraftRestore(page, marker);
         await expect(input).toHaveText(marker);
         await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
         await info.attach('interrupted-draft-read', { contentType: 'application/json',
@@ -190,7 +251,7 @@ test.describe('chat draft storage recovery faults', () => {
         await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
         expect(await savedReferences()).toBe(1);
         await page.evaluate(() => (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads());
-        await page.getByRole('button', { name: 'Retry restore', exact: true }).click();
+        await retryDraftRestore(page, marker);
         await expect(input).toHaveText(marker);
         await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
         await page.reload();

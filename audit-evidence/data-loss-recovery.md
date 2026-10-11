@@ -3,15 +3,88 @@
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (remote `or3-cloud`, fetched October 11).
 Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only.
 
-**Latest review checkpoint:** `147de1f1` includes source fixes through `b382349b`.
-Recent qualification: 58 draft/composer unit/component tests; nine Chromium draft
+**Latest source checkpoint:** `b7b3caf23f3685944fc8502f599f8d415ce64ca8` fixes
+runtime status writes publishing the temporary tab layout before restoration.
+Its two startup regressions and 49 tab-controller/persistence tests pass, as does
+the same mounted Chromium one-second startup fault that failed before the fix.
+Recent qualification: 60 draft/composer unit/component tests; nine Chromium draft
 recovery cases; native partial document/composer attachment transactions; exact
 attachment bytes; pending upload refresh; persistent failed-file visibility;
 and stale document-read recovery. These are separate per-run results, not one
 combined count. The expanded 32-case invocation completed with 31 passes and one failing
-last-keystroke draft reload; its focused diagnosis is in progress below. Open risk: competing browser-page drafts still share a canonical
+last-keystroke draft reload. The post-`bfa030ab` combined rerun completed with **29
+passes and 3 failures in 13.9 minutes**. It exposed two empty-composer-after-refresh
+failures and is **not a passing qualification** of that earlier source. Native
+diagnosis found both complete draft rows retained but replaced tab IDs in the
+manifest; the runtime-only layout fix above addresses that verified boundary.
+The interrupted-read retry click also timed out, although
+its final screenshot shows the recovered text. Native tracing confirmed that
+repair can let a pending startup restore finish and remove the toast during
+Playwright actionability checks. The harness accepts that race only after exact
+text recovery and removal of the failure notice. Broader final qualification
+remains pending.
+Open risk: competing browser-page drafts still share a canonical
 row/journal. Preserve-both design is documented and deliberately unimplemented.
 Natural hidden/OS-suspension coverage remains blocked by this browser environment.
+
+## Layout publication before restoration — verified source fix
+
+Two failures in the native diagnostic six-case run retained complete text,
+editor JSON, and image hashes in the original `workspace_tab_drafts` row, while
+startup published a new tab ID. Four diagnostic cases passed and two failed;
+those failures are preserved in `/tmp/or3-recovery-startup-fault-native-browser.log`
+and `test-results/recovery-startup-fault-trace/*/native-draft-trace.json`.
+An additional layout-get observational run passed four cases. Added observers
+can change timing, so those passes did not dismiss the earlier failures.
+
+The bounded startup probe pauses the mounted shell for one second immediately
+before its existing layout restoration. Application code is unchanged except
+for this local Vite response latency. Before the fix, its native observation
+sequence was **set temporary tab → get temporary tab → set temporary tab**;
+the original complete draft row remained present but undisplayed. This verifies
+layout publication before the saved manifest was read. Native RED:
+`test-results/recovery-layout-startup/evidence.json`, log
+`/tmp/or3-recovery-layout-startup-browser-red.log`.
+
+`updateRuntime` had used the same persistence-scheduling commit as manifest
+changes, even though runtime status/view state is excluded from the serialized
+manifest. It now publishes reactive state without scheduling a manifest write.
+An absent initial snapshot explicitly schedules the fresh initial tab after the
+storage read; this preserves fresh-workspace behavior. No schema, identity,
+generation cleanup, provider, or backup/recovery contract changed.
+
+Source commit: `b7b3caf23f3685944fc8502f599f8d415ce64ca8`.
+Unit RED: `/tmp/or3-recovery-layout-runtime-unit-red.log`.
+Final unit GREEN: 49 tests in `/tmp/or3-recovery-layout-runtime-unit-final.log`.
+Final browser GREEN: `/tmp/or3-recovery-layout-startup-browser-final.log`,
+`test-results/recovery-layout-startup-final/evidence.json`; original tab ID and
+the draft text survive the identical one-second fault.
+Credential-free type checking passed in
+`/tmp/or3-recovery-layout-runtime-typecheck.log`; changed-controller lint passed
+without errors or warnings in `/tmp/or3-recovery-layout-runtime-lint.log`.
+The first candidate's browser run failed because a fresh scope no longer had
+an implicit runtime-event save (`before: {}`); its evidence is retained under
+`recovery-layout-startup-green`. The explicit initial-save regression above
+corrected that candidate before commit. That intermediate directory is not a
+passing receipt despite its historical name.
+
+## Latest assistant-row fault coverage
+
+At application source checkpoint `bfa030ab`, Chromium completed
+`audit-evidence/assistant-save-failure-probe.ts` with one native `messages.put`
+quota rejection after an acknowledged partial assistant prefix. The existing
+save-error toast was visible, automatic persistence retry wrote the same
+assistant row, and refresh recovered its acknowledged expanded prefix with
+Continue generation available. Native receipts contain one user row, one
+assistant row with an unchanged ID, one injected fault and one local scripted
+provider call. External requests were denied. No application source fix was
+needed for this boundary. This is mounted browser + native IndexedDB evidence,
+not a unit-only coalescer assertion.
+
+Log: `/tmp/or3-recovery-assistant-save-failure-browser.log`.
+Receipts: `test-results/recovery-assistant-save-failure/evidence.json` and
+`assistant-save-visible.png`. This does not qualify permanent assistant save
+failure, abrupt OS termination, or a live authenticated cloud provider.
 
 ## Scope and safety
 
@@ -692,3 +765,10 @@ These three runs are targeted regression qualification after a verified startup
 fix, not a guarantee that every intermittent reload cause has been exhausted.
 The earlier 31/32 combined invocation remains recorded as failed. No fully passing
 32/32 post-fix combined invocation is claimed until it completes.
+
+Startup snapshot source fix committed as
+`bfa030ab65474aa4074b50fec6a88e163463cd1f`. Source/tests are committed; the report
+summary update and prospective assistant-save probe remain separate working
+items. The probe has not run and no assistant-save result is claimed.
+Portable artifacts are refreshed at this committed source checkpoint with the
+prior failed combined run and post-fix targeted results distinguished.
