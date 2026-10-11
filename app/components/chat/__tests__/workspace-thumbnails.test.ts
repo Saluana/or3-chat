@@ -44,6 +44,36 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    it.each(['changed', 'returned', 'unchanged'] as const)('keeps a shared palette thumbnail retained while a second consumer survives workspace %s', async transition => {
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:paired-origin').mockReturnValueOnce('blob:paired-target').mockReturnValue('blob:paired-return');
+        const first = mount(PaletteImageThumb, { props: { hash, alt: 'First synthetic image', fallbackIcon: 'image' } });
+        const second = mount(PaletteImageThumb, { props: { hash, alt: 'Second synthetic image', fallbackIcon: 'image' } });
+        wrappers.push(first, second);
+        await vi.waitFor(() => expect(first.find('img').attributes('src')).toBe('blob:paired-origin'));
+        await vi.waitFor(() => expect(second.find('img').attributes('src')).toBe('blob:paired-origin'));
+        let currentUrl = 'blob:paired-origin';
+        if (transition !== 'unchanged') {
+            setActiveWorkspaceDb('consumer-thumbnails-b');
+            currentUrl = 'blob:paired-target';
+            await vi.waitFor(() => expect(second.find('img').attributes('src')).toBe(currentUrl));
+            if (transition === 'returned') {
+                setActiveWorkspaceDb('consumer-thumbnails-a'); currentUrl = 'blob:paired-return';
+                await vi.waitFor(() => expect(second.find('img').attributes('src')).toBe(currentUrl));
+            }
+        }
+        await vi.waitFor(() => expect(first.find('img').attributes('src')).toBe(currentUrl));
+        vi.useFakeTimers();
+        try {
+            first.unmount();
+            await vi.advanceTimersByTimeAsync(15_001);
+            expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(currentUrl);
+            expect(second.find('img').attributes('src')).toBe(currentUrl);
+            second.unmount();
+            await vi.advanceTimersByTimeAsync(15_001);
+            expect(URL.revokeObjectURL).toHaveBeenCalledWith(currentUrl);
+        } finally { first.unmount(); second.unmount(); vi.useRealTimers(); }
+    });
+
     it('clears an already displayed palette thumbnail on workspace switching', async () => {
         const wrapper = mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic image', fallbackIcon: 'image' } });
         wrappers.push(wrapper);

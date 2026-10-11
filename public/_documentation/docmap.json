@@ -269,7 +269,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 2,
-                    "summary": "Bounded indexed pages, summary queries, image eligibility, and workspace-scoped gallery uploads, artifact delivery, viewer previews, attachment thumbnail caches, and media prefetch lifetime."
+                    "summary": "Bounded indexed pages, summary queries, image eligibility, and workspace-scoped gallery uploads, artifact delivery, viewer previews, mounted thumbnail retention, attachment caches, and media prefetch lifetime."
                 },
                 {
                     "name": "attachments.md",

@@ -107,6 +107,8 @@ watch(
 );
 
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    // The shared cache already cleared the previous workspace's references.
+    retainedHash = null;
     releaseCurrent();
     if (observer && rootRef.value) {
         observer.disconnect();

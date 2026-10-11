@@ -80,3 +80,6 @@ and a deterministic hash tie-breaker; it does not rely on IndexedDB string order
 Gallery download, clipboard copy, and delayed command-palette selection retain their originating workspace generation. A switch, including switching away and back, discards stale reads before opening a viewer, starting a download, or writing converted clipboard bytes. A clipboard write already accepted by the browser cannot be recalled; completion feedback is suppressed after a switch.
 
 Chat attachments and command-palette thumbnails share a separate raster-thumbnail cache. Workspace changes clear its URLs, pending reads/decodes, dimensions, retention and cleanup timers. Mounted consumers clear file/PDF names and discard late metadata or downloads. Prefetch resets on workspace generation even when thread/hash identifiers remain unchanged, then accepts fresh reads for the current workspace. Same-workspace reuse and raster validation remain supported.
+Each mounted palette thumbnail rebuilds its own retention after a switch, including
+the fallback without IntersectionObserver. Removing one shared-hash thumbnail does
+not revoke the URL still retained by another.
