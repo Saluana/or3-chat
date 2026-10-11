@@ -1,0 +1,3 @@
+Source: f1a3af0e69ad6ab7f9a0063ee2c8b77276aeb490 runtime prototype before commit
+Command: bun x eslint app/composables/chat/useMessageMediaPrefetch.ts
+Exit status: 0; no warnings

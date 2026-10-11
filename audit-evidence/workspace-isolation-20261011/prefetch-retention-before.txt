@@ -1,0 +1,79 @@
+Source commit: 191821d0df764f203cb1a1a0315de7ac973a3ab1 plus two mounted ordering tests
+Command: bun x vitest run app/components/chat/__tests__/workspace-thumbnails.test.ts -t "default prefetch resets" --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 1; one confirmed intermediate retention failure /one ordering control
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ × |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (palette-first) 200ms
+   → expected "vi.fn()" to not be called with arguments: [ 'blob:prefetch-palette-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:prefetch-palette-target",
++   "blob:prefetch-palette-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (prefetch-first) 202ms
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace changed
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace returned
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace unchanged
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the palette
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (palette-first)
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:prefetch-palette-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:prefetch-palette-target",
++   "blob:prefetch-palette-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:65:45
+     63|             await vi.waitFor(() => expect(wrapper.find('img').attribut…
+     64|             await vi.advanceTimersByTimeAsync(30_001);
+     65|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob…
+       |                                             ^
+     66|             expect(wrapper.find('img').attributes('src')).toBe('blob:p…
+     67|             wrapper.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 15 skipped (17)
+   Start at  12:43:35
+   Duration  2.15s (transform 586ms, setup 189ms, import 826ms, tests 404ms, environment 518ms)
+

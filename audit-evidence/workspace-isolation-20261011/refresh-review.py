@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[2]
 os.chdir(root)
 evidence = root / 'audit-evidence/workspace-isolation-20261011'
 base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5'
-latest_runtime = 'a85fbecb73c6a121aadfc4a3b35c44642de8de9b'
+latest_runtime = 'f1a3af0e69ad6ab7f9a0063ee2c8b77276aeb490'
 
 def git(*args):
     return subprocess.check_output(['git', *args], stderr=subprocess.STDOUT)
@@ -18,7 +18,7 @@ def git(*args):
 head = git('rev-parse', 'HEAD').decode().strip()
 count = git('rev-list', '--count', f'{base}..{head}').decode().strip()
 patch = evidence / 'workspace-isolation-source.patch'
-patch.write_bytes(git('diff', '--binary', base, head, '--', 'app', 'server', 'public'))
+patch.write_bytes(git('diff', '--binary', base, head, '--', 'app', 'server', 'public', 'vitest.config.ts'))
 fd, name = tempfile.mkstemp(prefix='review-', suffix='.bundle', dir=evidence)
 os.close(fd)
 os.unlink(name)

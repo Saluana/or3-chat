@@ -4,7 +4,13 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const directory = await mkdtemp('/tmp/or3-isolation-base-');
-const base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5';
+const pairedThumbnailsOnly = process.argv.includes('--paired-thumbnails-only');
+const prefetchRetentionsOnly = process.argv.includes('--prefetch-retentions-only');
+const base = prefetchRetentionsOnly
+    ? '191821d0df764f203cb1a1a0315de7ac973a3ab1'
+    : pairedThumbnailsOnly
+    ? '82254f38e123366c83594a046f1593fba93e734b'
+    : 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5';
 const tests = [
     'app/composables/notifications/__tests__/useNotifications.test.ts',
     'app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts',
@@ -24,6 +30,7 @@ const tests = [
 const preferencesOnly = process.argv.includes('--preferences-only');
 const selectedTests = preferencesOnly
     ? tests.filter(file => file.endsWith('/useNotifications.test.ts'))
+    : pairedThumbnailsOnly || prefetchRetentionsOnly ? tests.filter(file => file.endsWith('/workspace-thumbnails.test.ts'))
     : tests;
 async function run(args: string[], cwd = root) {
     const process = Bun.spawn(args, { cwd, stdout: 'pipe', stderr: 'pipe' });
@@ -46,8 +53,8 @@ try {
     for (const file of selectedTests) await Bun.write(join(directory, file), await Bun.file(join(root, file)).text());
     const result = await run(['bun', 'x', 'vitest', 'run', ...selectedTests,
         '--bail=0', '--maxWorkers=2', '--reporter=dot', '--silent=passed-only',
-        '--testNamePattern=keeps suspended (muteThread|unmuteThread) persistence|uses originating workspace mute preferences|retains (the )?admitted tracker account|redacts failed plugin file reads|fences plugin file read|native blob conversion|reports read completion|late palette action|shared preview workspace|held preview|displayed preview|cached-load continuation|gallery upload batch|gallery picker ownership|fences gallery|fences delayed palette|rechecks ownership after awaited PNG|held canonical ownership|membership becomes|awaited canonical ownership|former account completion|held quota|held canonical metadata|held signer|held workflow|shared thumbnail|held thumbnail|next workspace thumbnail|mounted thumbnail workspace consumers|held prefetch metadata'], directory);
-    await Bun.write(join(root, `audit-evidence/workspace-isolation-20261011/${preferencesOnly ? 'mute-persistence-concurrent-base' : 'baseline-regressions'}.txt`),
+        prefetchRetentionsOnly ? '--testNamePattern=default prefetch resets' : pairedThumbnailsOnly ? '--testNamePattern=keeps a shared palette thumbnail retained' : '--testNamePattern=keeps suspended (muteThread|unmuteThread) persistence|uses originating workspace mute preferences|retains (the )?admitted tracker account|redacts failed plugin file reads|fences plugin file read|native blob conversion|reports read completion|late palette action|shared preview workspace|held preview|displayed preview|cached-load continuation|gallery upload batch|gallery picker ownership|fences gallery|fences delayed palette|rechecks ownership after awaited PNG|held canonical ownership|membership becomes|awaited canonical ownership|former account completion|held quota|held canonical metadata|held signer|held workflow|shared thumbnail|held thumbnail|next workspace thumbnail|mounted thumbnail workspace consumers(?!.*(?:keeps a shared palette thumbnail retained|does not release a current palette retention))|held prefetch metadata'], directory);
+    await Bun.write(join(root, `audit-evidence/workspace-isolation-20261011/${preferencesOnly ? 'mute-persistence-concurrent-base' : prefetchRetentionsOnly ? 'prefetch-retention-counterfactual' : pairedThumbnailsOnly ? 'paired-thumbnail-counterfactual' : 'baseline-regressions'}.txt`),
         `Base: ${base}\nCommand: Bun Vitest canonical regression suites in a disposable worktree\n${result.output}\nExit status: ${result.code}\n`);
     console.log(result.output);
     if (result.code !== 1 || /Failed Suites|no tests/.test(result.output)) {
