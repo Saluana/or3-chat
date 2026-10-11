@@ -397,12 +397,14 @@ export async function runForegroundStreamLoop(
                     if (current.pending) current.pending = false;
 
                     const toolCall = ev.tool_call;
+                    const previousReceipt = ctx.activeToolCalls.get(toolCall.id)?.executionReceipt;
 
                     // Add tool call to tracking with loading status
                     ctx.activeToolCalls.set(toolCall.id, {
                         id: toolCall.id,
                         name: toolCall.function.name,
                         status: 'loading',
+                        executionReceipt: previousReceipt,
                         args: toolCall.function.arguments,
                         fingerprint: toolCallFingerprint(
                             toolCall.function.name,
@@ -546,6 +548,7 @@ export async function runForegroundStreamLoop(
                             id: toolCall.id,
                             name: toolCall.function.name,
                             status: 'error',
+                            outcome: 'failed',
                             args: toolCall.function.arguments,
                             error,
                             fingerprint,
@@ -597,6 +600,17 @@ export async function runForegroundStreamLoop(
                                 : decision.error,
                         };
                     } else {
+                        // The assistant row is the durable execution journal.
+                        // If the browser disappears or later writes fail, Retry
+                        // must still see that this call may have executed.
+                        ctx.activeToolCalls.set(toolCall.id, {
+                            ...ctx.activeToolCalls.get(toolCall.id)!,
+                            executionReceipt: { state: 'running', argumentFingerprint: decision.fingerprint, startedAt: Date.now() },
+                        });
+                        current.toolCalls = Array.from(ctx.activeToolCalls.values());
+                        await ctx.persistAssistant({ content: current.text,
+                            reasoning: current.reasoning_text ?? null, toolCalls: current.toolCalls, requireCurrent: true });
+                        ctx.abortSignal.throwIfAborted();
                         toolLedger.set(toolCall.id, {
                             callId: toolCall.id,
                             name: toolCall.function.name,
@@ -618,14 +632,8 @@ export async function runForegroundStreamLoop(
                             },
                             { definition: admittedDefinition }
                         );
-                        toolLedger.set(toolCall.id, {
-                            callId: toolCall.id,
-                            name: toolCall.function.name,
-                            argumentFingerprint: decision.fingerprint,
-                            state: execution.error ? 'failed' : 'completed',
-                            result: execution.result ?? undefined,
-                            error: execution.error,
-                        });
+                        // Keep the execution receipt unresolved until both
+                        // persistence boundaries below acknowledge the result.
                     }
 
                     let toolResultText: string;
@@ -647,6 +655,10 @@ export async function runForegroundStreamLoop(
                         id: toolCall.id,
                         name: toolCall.function.name,
                         status: toolStatus,
+                        outcome: ctx.abortSignal.aborted ? 'canceled'
+                            : execution.timedOut ? 'timed_out'
+                            : execution.error ? 'failed' : 'completed',
+                        executionReceipt: ctx.activeToolCalls.get(toolCall.id)?.executionReceipt,
                         args: toolCall.function.arguments,
                         result:
                             toolStatus === 'complete'
@@ -665,25 +677,51 @@ export async function runForegroundStreamLoop(
 
                     // Persist the FULL tool result so reload / sync / retry keep the
                     // real context. The UI already truncates via ToolCallIndicator.formatResult.
-                    await appendForegroundToolResult({
-                        threadId: ctx.threadId,
-                        turnId: ctx.parentTurnId ?? ctx.assistantId,
-                        parentAssistantId: ctx.assistantId,
-                        generationId: ctx.streamId,
-                        call: toolCall,
-                        fingerprint: decision.fingerprint,
-                        status: toolStatus,
-                        durableResult: projectedResult.durable,
-                        error: execution.error,
-                        ...(ctx.originDb ? { db: ctx.originDb } : {}),
-                    });
+                    try {
+                        await appendForegroundToolResult({
+                            threadId: ctx.threadId,
+                            turnId: ctx.parentTurnId ?? ctx.assistantId,
+                            parentAssistantId: ctx.assistantId,
+                            generationId: ctx.streamId,
+                            call: toolCall,
+                            fingerprint: decision.fingerprint,
+                            status: toolStatus,
+                            durableResult: projectedResult.durable,
+                            error: execution.error,
+                            ...(ctx.originDb ? { db: ctx.originDb } : {}),
+                        });
 
-                    // The next provider request is not issued until both the
-                    // result row and completed assistant ledger state are durable.
-                    await ctx.persistAssistant({
-                        content: current.text,
-                        reasoning: current.reasoning_text ?? null,
-                        toolCalls: current.toolCalls,
+                        // Both writes must be durable before the next request.
+                        const receipt = ctx.activeToolCalls.get(toolCall.id)?.executionReceipt;
+                        if (receipt) ctx.activeToolCalls.set(toolCall.id, {
+                            ...ctx.activeToolCalls.get(toolCall.id)!, executionReceipt: { ...receipt,
+                                state: ctx.abortSignal.aborted || execution.timedOut ? 'unresolved' : 'settled' },
+                        });
+                        current.toolCalls = Array.from(ctx.activeToolCalls.values());
+                        await ctx.persistAssistant({
+                            content: current.text,
+                            reasoning: current.reasoning_text ?? null,
+                            toolCalls: current.toolCalls,
+                            requireCurrent: true,
+                        });
+                    } catch (persistenceError) {
+                        const error = 'The tool executed, but its result could not be saved. Its outcome is unresolved. Continue chatting; do not retry this operation automatically.';
+                        ctx.activeToolCalls.set(toolCall.id, {
+                            ...ctx.activeToolCalls.get(toolCall.id)!, status: 'error',
+                            outcome: 'unresolved', result: undefined, error,
+                            executionReceipt: ctx.activeToolCalls.get(toolCall.id)?.executionReceipt
+                                ? { ...ctx.activeToolCalls.get(toolCall.id)!.executionReceipt!, state: 'unresolved' } : undefined,
+                        });
+                        current.toolCalls = Array.from(ctx.activeToolCalls.values());
+                        toolLedger.set(toolCall.id, { callId: toolCall.id, name: toolCall.function.name,
+                            argumentFingerprint: decision.fingerprint, state: 'running' });
+                        throw persistenceError;
+                    }
+                    if (decision.action === 'execute') toolLedger.set(toolCall.id, {
+                        callId: toolCall.id, name: toolCall.function.name,
+                        argumentFingerprint: decision.fingerprint,
+                        state: execution.error ? 'failed' : 'completed',
+                        result: execution.result ?? undefined, error: execution.error,
                     });
 
                     toolResultsForNextLoop.push({
@@ -734,6 +772,20 @@ export async function runForegroundStreamLoop(
                 MAX_TOOL_ITERATIONS
             ).state;
         } catch (streamError) {
+            // A malformed/interrupted stream may have exposed loading tool
+            // metadata before execution. Finalization must never save a spinner.
+            for (const [id, call] of ctx.activeToolCalls) {
+                if (call.status !== 'loading' && call.status !== 'pending') continue;
+                const uncertain = toolLedger.get(id)?.state === 'running';
+                ctx.activeToolCalls.set(id, { ...call, status: 'error', completedAt: Date.now(),
+                    executionReceipt: call.executionReceipt ? { ...call.executionReceipt, state: uncertain ? 'unresolved' : 'settled' } : undefined,
+                    outcome: uncertain ? 'unresolved' : ctx.abortSignal.aborted ? 'canceled' : 'failed',
+                    error: uncertain ? 'Tool execution was interrupted; its outcome is uncertain. Do not retry automatically.'
+                        : ctx.abortSignal.aborted ? 'Tool call canceled. You can continue chatting.'
+                        : 'The tool request was interrupted before execution. You can continue chatting.',
+                });
+            }
+            current.toolCalls = Array.from(ctx.activeToolCalls.values());
             normalizedState = failNormalizedStream(normalizedState, streamError);
             await streamHooks.flush();
             if (normalizedState.iteration > 1) {

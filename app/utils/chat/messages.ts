@@ -92,6 +92,8 @@ export type NormalizedStreamingToolCall = {
     id: string;
     name: string;
     status: 'loading' | 'complete' | 'error' | 'pending';
+    outcome?: import('./uiMessages').ToolCallInfo['outcome'];
+    executionReceipt?: import('./uiMessages').ToolCallInfo['executionReceipt'];
     args?: string;
     result?: string;
     error?: string;
@@ -159,6 +161,7 @@ export function normalizeStreamingMessage(input: {
             && transcript.callId === id && transcript.toolName === name
             && (transcript.status === 'complete' || transcript.status === 'error') ? transcript : null;
         const rawStatus = call.status;
+        const receipt = asRecord(call.executionReceipt);
         const status: NormalizedStreamingToolCall['status'] =
             rawStatus === 'complete' ||
             rawStatus === 'error' ||
@@ -169,6 +172,13 @@ export function normalizeStreamingMessage(input: {
             id,
             name,
             status,
+            outcome: call.outcome === 'completed' || call.outcome === 'failed' || call.outcome === 'timed_out'
+                || call.outcome === 'canceled' || call.outcome === 'unresolved' ? call.outcome : undefined,
+            executionReceipt: receipt && (receipt.state === 'running' || receipt.state === 'settled' || receipt.state === 'unresolved')
+                && typeof receipt.argumentFingerprint === 'string' && typeof receipt.startedAt === 'number'
+                && Number.isFinite(receipt.startedAt) && receipt.startedAt >= 0
+                ? { state: receipt.state, argumentFingerprint: receipt.argumentFingerprint, startedAt: receipt.startedAt }
+                : undefined,
             args:
                 typeof call.args === 'string'
                     ? call.args

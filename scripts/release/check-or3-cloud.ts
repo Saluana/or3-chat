@@ -59,6 +59,16 @@ const gates: Gate[] = [
         command: ['bun', 'run', 'test:e2e:cloud'],
     },
     {
+        label: 'Deterministic chat tool lifecycle',
+        cwd: root,
+        command: ['bun', 'run', 'test:e2e:chat-tools'],
+    },
+    {
+        label: 'Authenticated Cloud chat tools',
+        cwd: root,
+        command: ['bun', 'run', 'test:e2e:chat-tools:cloud'],
+    },
+    {
         label: 'Populated workspace performance',
         cwd: root,
         command: ['bun', 'run', 'performance:workspace:check'],

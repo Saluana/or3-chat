@@ -41,6 +41,7 @@ import { compareMessageOrder, messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage } from './types';
+import { normalizeStreamingMessage } from '~/utils/chat/messages';
 
 /**
  * Minimal hook interface required by retry operations.
@@ -307,6 +308,15 @@ export async function retryMessageImpl(
             target.role === 'assistant'
                 ? target
                 : selectedTurn.find((message) => message.role === 'assistant');
+
+        // Read saved execution evidence before hiding/superseding the turn.
+        // A fresh request ledger cannot authorize repeating an uncertain write.
+        const uncertain = selectedTurn.some(message => message.role === 'assistant'
+            && normalizeStreamingMessage({ data: message.data }).toolCalls.some(call =>
+                call.outcome === 'unresolved' || call.executionReceipt?.state === 'running'
+                || call.executionReceipt?.state === 'unresolved'));
+        if (uncertain) return { status: 'rejected', reason: 'unavailable',
+            error: 'This turn includes a tool whose outcome is uncertain. Retry is blocked to avoid repeating an operation. Continue chatting or verify the operation’s outcome first.' };
 
         await ctx.hooks.doAction('ai.chat.retry:action:before', {
             threadId,

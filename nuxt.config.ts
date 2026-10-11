@@ -208,6 +208,12 @@ export default defineNuxtConfig({
     // Disable SSR for test pages to avoid hydration mismatches
     routeRules: {
         '/_tests/**': { ssr: false },
+        ...(process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_TEST_HARNESS === 'true'
+            ? { '/__or3-chat-tools-test': { ssr: false } }
+            : {}),
+        ...(process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true'
+            ? { '/__or3-cloud-tools-test': { ssr: false } }
+            : {}),
         ...(process.env.NODE_ENV !== 'production' && process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true'
             ? {'/__or3-tool-cards-test':{ssr:false}}
             : {}),
@@ -298,6 +304,9 @@ export default defineNuxtConfig({
         provider: 'local',
     },
     nitro: {
+        ...(process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true'
+            ? { plugins: [resolve(__dirname, 'tests/e2e/fixtures/chat-tools-server.ts')] }
+            : {}),
         alias: {
             ...pluginSdkSourceAliases,
         },
@@ -638,7 +647,13 @@ export default defineNuxtConfig({
             ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-journeys') }
             : isScrollTestHarnessEnabled
                 ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-scroll') }
-                : {}),
+                : process.env.OR3_CHAT_TOOLS_TEST_HARNESS === 'true'
+                    ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-chat-tools') }
+                    : process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true'
+                        ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-chat-tools-cloud') }
+                        : process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true'
+                            ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-tool-cards') }
+                            : {}),
         resolve: {
             // Math renderers accept the root KaTeX patch release. Share it
             // instead of bundling rehype's older copy alongside Mermaid's.
@@ -810,6 +825,12 @@ export default defineNuxtConfig({
             }
         },
         'pages:extend'(pages) {
+            if (process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true')
+                pages.push({ name: 'or3-cloud-tools-test', path: '/__or3-cloud-tools-test',
+                    file: resolve(__dirname, 'tests/e2e/fixtures/CloudToolBridgeJourney.vue') });
+            if (process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_TEST_HARNESS === 'true')
+                pages.push({ name: 'or3-chat-tools-test', path: '/__or3-chat-tools-test',
+                    file: resolve(__dirname, 'tests/e2e/fixtures/ChatToolsJourney.vue') });
             if (
                 process.env.NODE_ENV !== 'production' &&
                 process.env.OR3_TOOL_CARDS_TEST_HARNESS === 'true'

@@ -379,11 +379,12 @@ describe('message transaction and ordering contracts', () => {
         );
 
         // Delta built from stale state (no concurrent keys) must not erase them.
-        await patchMessageInDb(db, 'msg-1', {
+        const acknowledged = await patchMessageInDb(db, 'msg-1', {
             data: { reasoning_text: 'new reasoning', tool_calls: [] },
         } as any);
 
         const row = await db.messages.get('msg-1');
+        expect(acknowledged).toEqual(row);
         expect(row).toMatchObject({
             clock: 6,
             file_hashes: '["concurrent-file"]',
@@ -395,6 +396,8 @@ describe('message transaction and ordering contracts', () => {
                 tool_calls: [],
             },
         });
+        await expect(patchMessageInDb(db, 'msg-1', { data: { content: 'stale generation' } }, undefined, () => false)).resolves.toBeUndefined();
+        expect(await db.messages.get('msg-1')).toEqual(row);
     });
 
     // state-concurrency, state-validation and state-lifecycle in failure-modes.md.

@@ -58,6 +58,14 @@ export interface ToolCallInfo {
     name: string;
     label?: string;
     status: 'loading' | 'complete' | 'error' | 'pending';
+    /** Terminal execution outcome, independent of legacy renderer status. */
+    outcome?: 'completed' | 'failed' | 'timed_out' | 'canceled' | 'unresolved';
+    /** Saved before invocation; no arguments or result payloads are stored here. */
+    executionReceipt?: {
+        state: 'running' | 'settled' | 'unresolved';
+        argumentFingerprint: string;
+        startedAt: number;
+    };
     args?: string;
     result?: string;
     error?: string;

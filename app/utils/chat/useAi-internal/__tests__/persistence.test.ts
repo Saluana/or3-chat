@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { reactive } from 'vue';
 
 const getMessage = vi.hoisted(() => vi.fn());
 const patchMessage = vi.hoisted(() => vi.fn());
@@ -19,6 +20,27 @@ describe('latest-row assistant persistence', () => {
         getMessage.mockReset();
         patchMessage.mockReset();
         getMessage.mockResolvedValue(undefined);
+    });
+
+    it('requires an acknowledged assistant row before tool execution', async () => {
+        const initial = { id: 'a1', pending: true, data: { generation_lease_id: 'lease' } } as any;
+        const persist = makeAssistantPersister(dbMock as any, initial, [], 'lease');
+        patchMessage.mockResolvedValue(undefined);
+        await expect(persist({ content: '', toolCalls: [], requireCurrent: true })).rejects.toThrow(/not acknowledged/);
+        patchMessage.mockResolvedValue(initial);
+        await expect(persist({ content: '', toolCalls: [], requireCurrent: true })).resolves.toBeNull();
+    });
+
+    it('serializes a reactive execution receipt into cloneable database data', async () => {
+        const initial = { id: 'a1', pending: true, data: {} } as any;
+        const calls = reactive([{ id: 'write', name: 'write', status: 'loading' as const,
+            executionReceipt: { state: 'running' as const, argumentFingerprint: 'fp', startedAt: 10 } }]);
+        patchMessage.mockImplementation(async (_db, _id, patch) => {
+            const copied = structuredClone(patch);
+            expect(copied.data.tool_calls[0].executionReceipt).toEqual(calls[0]!.executionReceipt);
+            return initial;
+        });
+        await expect(makeAssistantPersister(dbMock as any, initial, [])({ toolCalls: calls, requireCurrent: true })).resolves.toBeNull();
     });
 
     it('sends only the owned delta so the atomic merge cannot clobber concurrent writes', async () => {

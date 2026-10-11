@@ -218,7 +218,8 @@ export function useChat(
     options: { historyAlreadyLoaded?: boolean } = {}
 ) {
     // Messages and basic state
-    const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs.map((m) => ensureUiMessage(m)), msgs));
+    const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs
+        .filter((message) => message.role !== 'tool').map((m) => ensureUiMessage(m)), msgs));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const visibleRequest = shallowRef<ChatRequestScope | null>(null);
     const backgroundRequestScopes = shallowReactive(
