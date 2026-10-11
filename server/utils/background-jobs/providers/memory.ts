@@ -29,6 +29,8 @@ import type {
 import { AdmissionCancelledError, getChatJobExecution } from '../types';
 import { getJobConfig } from '../store';
 import { readRequestUsage } from '~~/shared/chat/compaction';
+import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
+import { logBackgroundEvent } from '../logging';
 
 /**
  * Internal job record that includes an AbortController.
@@ -405,6 +407,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
+            if (job && job.status !== 'streaming') {
+                logBackgroundEvent('info', 'background.job.late-completion-dropped', { jobId, status: job.status });
+            }
             if (leaseOwner) throwLeaseLost();
             return;
         }
@@ -425,6 +430,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
+            if (job && job.status !== 'streaming') {
+                logBackgroundEvent('info', 'background.job.late-failure-dropped', { jobId, status: job.status });
+            }
             if (leaseOwner) throwLeaseLost();
             return;
         }
@@ -538,6 +546,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
         pending.claimToken = claimToken;
         pending.claimExpiresAt = claimExpiresAt;
+        pending.claimFingerprint = toolCallFingerprint(pending.name, pending.arguments);
         job.lastActivityAt = Date.now();
         return cloneJob(job);
     },
@@ -559,7 +568,11 @@ export const memoryJobProvider: BackgroundJobProvider = {
             !pending ||
             pending.callId !== callId ||
             pending.claimToken !== claimToken ||
-            (pending.claimExpiresAt ?? 0) <= Date.now()
+            (pending.claimExpiresAt ?? 0) <= Date.now() ||
+            // Recompute from the actual call; a copied/stale metadata digest
+            // cannot authorize replacement arguments under an existing token.
+            (pending.claimFingerprint !== undefined &&
+                pending.claimFingerprint !== toolCallFingerprint(pending.name, pending.arguments))
         ) {
             return false;
         }
@@ -578,6 +591,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
     ): Promise<boolean> {
         const job = jobs.get(jobId);
         if (!job || job.status !== 'streaming' || !ownsLease(job, leaseOwner)) {
+            if (job && job.status !== 'streaming') {
+                logBackgroundEvent('info', 'background.job.late-snapshot-dropped', { jobId, status: job.status, snapshotStatus: snapshot.status });
+            }
             return false;
         }
         job.status = snapshot.status;

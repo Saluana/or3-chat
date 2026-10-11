@@ -10,6 +10,7 @@ import {
     runClaimedBackgroundJob,
 } from '../lifecycle';
 import { startBackgroundStream } from '../stream-handler';
+import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
 import { getChatJobExecution } from '../types';
 import type { JobUpdate } from '../types';
 import type { RequestUsage } from '~~/shared/chat/compaction';
@@ -249,6 +250,41 @@ describe('memory background job admission and lifecycle', () => {
                 Date.now() + 30_000
             )
         ).resolves.toMatchObject({ execution: settledExecution });
+    });
+
+    it.each([true, false])('rejects changed approval arguments even when the stored digest is unchanged (%s)', async (updateDigest) => {
+        const pending = { callId: 'call-1', name: 'client_tool', arguments: '{"path":"a.txt"}',
+            argumentFingerprint: toolCallFingerprint('client_tool', '{"path":"a.txt"}'),
+            definition: { type: 'function' as const, function: { name: 'client_tool', description: 'Test', parameters: { type: 'object' as const } } } };
+        const now = Date.now();
+        // Parked jobs cannot be claimed by a worker, so first establish the worker lease.
+        const unparked = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'thread-2', messageId: 'message-2',
+            model: 'test-model', execution: execution() });
+        await memoryJobProvider.claimJob!(unparked, 'worker', now, now + 30_000);
+        await memoryJobProvider.updateJobExecution!(unparked, { ...execution(), clientToolCall: pending }, 'worker');
+        await memoryJobProvider.claimClientToolCall!(unparked, 'user-1', 'call-1', 'old-token', now + 30_000);
+        const parked = getChatJobExecution((await memoryJobProvider.getJob(unparked, 'user-1'))!)!;
+        const changed = { ...parked, clientToolCall: { ...parked.clientToolCall!, arguments: '{"path":"b.txt"}',
+            ...(updateDigest ? { argumentFingerprint: toolCallFingerprint('client_tool', '{"path":"b.txt"}') } : {}) } };
+        await memoryJobProvider.updateJobExecution!(unparked, changed, 'worker');
+        expect(await memoryJobProvider.settleClientToolCall!(unparked, 'user-1', 'call-1', 'old-token', execution(), [])).toBe(false);
+        // A replacement without the old claim can be independently approved.
+        await memoryJobProvider.updateJobExecution!(unparked, { ...changed, clientToolCall: { ...changed.clientToolCall,
+            claimToken: undefined, claimExpiresAt: undefined } }, 'worker');
+        await memoryJobProvider.claimClientToolCall!(unparked, 'user-1', 'call-1', 'new-token', now + 30_000);
+        expect(await memoryJobProvider.settleClientToolCall!(unparked, 'user-1', 'call-1', 'old-token', execution(), [])).toBe(false);
+        expect(await memoryJobProvider.settleClientToolCall!(unparked, 'user-1', 'call-1', 'new-token', execution(), [])).toBe(true);
+    });
+
+    it('keeps the first terminal result when completion, failure, and snapshots arrive after abort', async () => {
+        const jobId = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'thread-1', messageId: 'message-1',
+            model: 'test-model', initialContent: 'accepted prefix', execution: execution() });
+        expect(await memoryJobProvider.abortJob(jobId, 'user-1')).toBe(true);
+        await memoryJobProvider.completeJob(jobId, 'late content');
+        await memoryJobProvider.failJob(jobId, 'late failure');
+        expect(await memoryJobProvider.saveTerminalSnapshot!(jobId, { status: 'complete', content: 'late snapshot',
+            reasoning: '', completedAt: Date.now() })).toBe(false);
+        expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({ status: 'aborted', content: 'accepted prefix' });
     });
 
     it('uses timeout as an inactivity watchdog rather than a runtime cap', async () => {

@@ -31,6 +31,8 @@ export type BackgroundClientToolCall = {
     definition: ToolDefinition;
     claimToken?: string;
     claimExpiresAt?: number;
+    /** Digest of the name and arguments reviewed under this claim. */
+    claimFingerprint?: string;
 };
 
 export type BackgroundPendingToolCall = {

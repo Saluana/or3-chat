@@ -83,6 +83,7 @@ export default defineEventHandler(async (event) => {
             id: pending.callId,
             name: pending.name,
             arguments: pending.arguments,
+            argumentFingerprint: pending.claimFingerprint ?? pending.argumentFingerprint,
             definition: pending.definition,
         },
         context: {
