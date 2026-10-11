@@ -594,3 +594,21 @@ after repaired storage → durable reference → reload with text and image.
 Delayed completion source commit: `c0d56ef8f73016e88aa3721da267eb8ae38d6cf7`.
 Final type-check for that preceding source checkpoint also passed in
 `/tmp/or3-recovery-attachment-checkpoint-typecheck.log`.
+
+## Delayed document read through the mounted browser editor
+
+The production document store was invoked against its real Chromium IndexedDB
+handle while a native read receipt containing the initial content was deferred.
+The receipt remained unsettled before and after the newer editor buffer committed
+(proved explicitly, so a fixture poll cannot stand in for the held store read).
+Releasing it kept the newer cached record and editor content; a subsequent edit
+saved without a stale-baseline conflict and survived reload. The tightened case
+passed in 9.5 seconds (`/tmp/or3-recovery-late-document-read-qualified-browser.log`);
+JSON `test-results/recovery-late-document-read-qualified/*/late-document-read.json`
+contains the stale captured content and newer accepted record. An initial case
+also passed in 10.3 seconds before the held-store proof was strengthened.
+
+This is mounted Chromium/editor + production store evidence using a deterministic
+callback delay around an actual local IndexedDB read. It extends the unit-only
+late-read regressions of `115df23a`; no further source change was needed.
+Persistent attachment visibility source commit: `b382349b`.

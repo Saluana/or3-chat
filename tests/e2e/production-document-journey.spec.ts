@@ -232,6 +232,50 @@ test.describe('local document recovery faults', () => {
         });
     }
 
+    test('a delayed document read cannot replace a newer committed editor buffer', async ({ page }, info) => {
+        const scripts = recoveryScripts.get(page) ?? [];
+        const clientURL = scripts.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
+        const storeURL = scripts.find(url => /\/useDocumentsStore\.ts(?:\?|$)/.test(url));
+        expect(clientURL).toBeTruthy(); expect(storeURL).toBeTruthy();
+        await page.evaluate(async ({ clientURL, storeURL }) => {
+            const client = await import(clientURL!); const store = await import(storeURL!);
+            const db = client.getDb(); const id = localStorage.getItem('or3:e2e:production-document-id')!;
+            const get = db.posts.get.bind(db.posts); let armed = true;
+            let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+            const probe = { captured: false, settled: false, capturedContent: undefined as unknown, release, read: undefined as unknown,
+                record: () => store.useDocumentState(id, db).record?.content };
+            db.posts.get = (key: unknown) => {
+                const read = get(key);
+                if (!armed || key !== id) return read;
+                armed = false;
+                return read.then(async (row: unknown) => { probe.captured = true; probe.capturedContent = (row as { content?: unknown } | undefined)?.content; await gate; return row; });
+            };
+            probe.read = store.loadDocument(id, db).finally(() => { probe.settled = true; db.posts.get = get; });
+            (window as unknown as { delayedDocumentRead: typeof probe }).delayedDocumentRead = probe;
+        }, { clientURL, storeURL });
+        await expect.poll(() => page.evaluate(() => (window as unknown as { delayedDocumentRead: { captured: boolean } }).delayedDocumentRead.captured)).toBe(true);
+        expect(await page.evaluate(() => (window as unknown as { delayedDocumentRead: { settled: boolean } }).delayedDocumentRead.settled)).toBe(false);
+        const body = page.getByRole('textbox', { name: 'Document body' }); const marker = 'Newer committed document survives a late read';
+        await body.fill(marker);
+        await expect(page.getByTestId('persisted-document-body')).toHaveText(marker);
+        expect(await page.evaluate(() => (window as unknown as { delayedDocumentRead: { settled: boolean } }).delayedDocumentRead.settled)).toBe(false);
+        const result = await page.evaluate(async () => {
+            const probe = (window as unknown as { delayedDocumentRead: { release: () => void; read: Promise<unknown>; capturedContent: unknown; record: () => unknown } }).delayedDocumentRead;
+            probe.release(); await probe.read; return { record: probe.record(), captured: probe.capturedContent };
+        });
+        expect(JSON.stringify(result.captured)).toContain('Initial document text.');
+        const record = result.record; expect(JSON.stringify(record)).toContain(marker);
+        await expect(body).toHaveText(marker);
+        await body.press('End'); await page.keyboard.type(' with a subsequent edit');
+        await expect(page.getByTestId('persisted-document-body')).toHaveText(marker + ' with a subsequent edit');
+        await page.reload();
+        await expect(body).toHaveText(marker + ' with a subsequent edit', { timeout: 45_000 });
+        const path = info.outputPath('late-document-read.json');
+        await writeFile(path, JSON.stringify({ capturedReadContent: result.captured, recordAfterLateRead: record, restoredText: await body.innerText(),
+            externalRequests: 'denied', fault: 'deferred native IndexedDB read receipt through the production store' }, null, 2));
+        await info.attach('late-document-read', { path, contentType: 'application/json' });
+    });
+
     test('refresh before the capture debounce protects the unsaved document', async ({ page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
         await body.click();
