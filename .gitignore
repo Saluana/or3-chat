@@ -56,3 +56,6 @@ or3-*-audit.md
 # Plugin development instance (isolated candidate data, never commit)
 .or3-plugin-dev
 .nuxt-plugin-dev
+
+# Build-owned offline inspection descriptor (generated from provider versions).
+scripts/docker/backup-inspection-profile.json

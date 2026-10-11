@@ -246,38 +246,48 @@ The volatile filesystem is held mounted by a separate network-denied helper
 across app restarts and removed after the test. These are real filesystem
 capacity/refusal tests, not host-reboot durability or disk-hardware qualification.
 
-### Remaining canonical attachment preflight
+### Offline canonical attachment inspection
 
-The both-blob-and-sidecar omission remains unresolved in the production reader.
-A local, data-only prototype confirmed that the current SQLite 0.0.15
-`queryCanonicalStorage` live-metadata selection can identify the missing pair
-from the archived database/WAL before any live mutation. The FS 0.0.11 hash and
-workspace-path contracts determine the required entries; the prototype accepted
-the complete archive and found both missing entries in the otherwise identical
-archive. Additional cases preserved tombstones and pending metadata without
-storage IDs, and detected the same hash missing under a second workspace. Both
-WAL-bearing and checkpointed snapshots were read successfully. It used a
-network-denied, read-only-root helper with a disposable data
-volume, 128 MiB memory and half a CPU. It ran a fixed trusted query with
-`trusted_schema=OFF`, executed no archive code, and removed its scratch volume.
-This is feasibility evidence for those provider versions, not shipped validation
-or cross-version qualification.
+The app-owned offline inspection contract v1 qualifies exactly SQLite provider
+0.0.15 and FS provider 0.0.11 with the known 001–023 migration history and
+canonical metadata columns. It is a new compatibility adapter, not an exported
+provider API. The image build records installed provider versions beside the
+standalone trusted `scripts/docker/backup-inspect.mjs`; the CLI never boots Nitro,
+runs migrations, imports provider internals or executes archived code.
 
-A production implementation should give the SQLite provider a versioned offline
-inspection contract corresponding to canonical live metadata, rather than
-embedding a second unversioned interpretation of its schema in the CLI. Before
-stopping the live application, a helper using the authenticated image should
-extract only the required database/WAL members into a scratch volume, validate
-regular-file inputs and SQLite integrity, and stream canonical committed
-references against the archive inventory. Require both blob and sidecar at the
-archived FS root; preserve deleted/pending metadata, orphan uploads and opaque
-generation artifacts. No cleanup jobs or provider network calls are needed.
-Check free space on the actual scratch filesystem, bound extraction/query
-resources, clean up in every failure path, and refuse unsupported schemas or
-roots outside captured `/data` with an explicit explanation. Qualify legacy
-hashes, alternate FS roots, WAL-only committed references, duplicate workspace
-hashes, older snapshots and corruption before making this a managed restore
-requirement. This can retain the existing signed archive format.
+Backup verification, restore/rollback preflight and recovery inspect archived
+`sync.sqlite` and its optional WAL in a disposable network-denied helper before
+certifying canonical references. A live metadata record with a nonblank storage
+ID requires both regular blob and sidecar entries at the archived FS root,
+scoped by workspace plus normalized SHA-256/legacy MD5 hash. Blob size must match
+canonical metadata; another workspace's identical hash does not satisfy it.
+Pending/deleted metadata, uncommitted uploads, temporary files and opaque
+generation artifacts remain untouched. The existing native pre-start verifier
+also checks committed filesystem content hashes. No cleanup system is enabled.
+
+The helper reads only selected database/WAL entries, ignores reconstructible
+SHM, uses readonly SQLite with `trusted_schema=OFF` and `query_only=ON`, and
+bounds inventory to 100,000 entries/8 MiB, selected databases to 192 MiB,
+metadata to 100,000 rows/1 MiB per row/60 seconds. Its 512 MiB tmpfs, 256 MiB
+memory, half CPU, 32-process limit and 240-second self-removing lifetime bound
+resource use; free scratch capacity is checked before extraction. Unsupported
+schemas, drivers, profiles, roots outside `/data`, absent image inspection
+artifacts and resource exhaustion fail closed rather than certify partial
+coverage. Normal cleanup also removes the named helper on every failure path.
+Older images without this executable/descriptor are explicitly unsupported,
+even if their provider package versions match; no cross-release compatibility
+claim is made. A provider-owned generic API would require separate provider
+repository work, which this change does not undertake.
+
+Native SQLite decides WAL recovery. The experimental header/frame/index
+validators remain offline diagnostics only: a healthy same-salt rollback tail
+or injected partial header can otherwise cause a custom gate to reject both
+an input and its known-good recovery snapshot. Missing/stale/rebuilt SHM is
+supported. Physical SQLite integrity and canonical live metadata inspection
+cannot prove expected records were not lost when damaged WAL state is ignored,
+or discover a file reference whose canonical metadata itself is missing.
+Production-scale throughput, other providers, cross-architecture hardware and
+older schema/image compatibility remain unqualified.
 
 Build the current SSR application with Basic Auth, SQLite and filesystem providers
 using disposable build paths/secrets and no model credentials. Then build the

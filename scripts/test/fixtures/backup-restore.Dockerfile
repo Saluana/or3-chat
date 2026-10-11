@@ -11,6 +11,7 @@ WORKDIR /app
 COPY --from=tools /bin/ /bin/
 COPY --chown=65532:65532 .output .output
 COPY --chown=65532:65532 scripts/docker/runtime-entrypoint.mjs scripts/docker/runtime-entrypoint.mjs
+COPY --chown=65532:65532 scripts/docker/backup-inspect.mjs scripts/docker/backup-inspection-profile.json scripts/docker/
 # distroless contains no mkdir/chown runtime utilities beyond our tools stage;
 # create the empty root-owned image directories using that pinned shell.
 USER 0:0
@@ -31,6 +32,7 @@ WORKDIR /app
 COPY --from=tools /bin/ /bin/
 COPY --chown=65532:65532 .output .output
 COPY --chown=65532:65532 scripts/docker/runtime-entrypoint.mjs scripts/docker/runtime-entrypoint.mjs
+COPY --chown=65532:65532 scripts/docker/backup-inspect.mjs scripts/docker/backup-inspection-profile.json scripts/docker/
 RUN mkdir -p /data/admin /data/extensions && chown -R 65532:65532 /data
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 OR3_EXTENSIONS_ROOT=/data/extensions OR3_ADMIN_DATA_DIR=/data/admin
 USER 65532:65532

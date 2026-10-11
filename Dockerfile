@@ -74,6 +74,7 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --ignore-scripts --no-audit --no-fund
 
 COPY . .
+RUN node scripts/docker/prepare-backup-inspection.mjs
 # Restore the real release version while retaining the fixed production
 # provider graph used for dependency installation.
 RUN node scripts/docker/prepare-manifest.mjs package.json
@@ -124,6 +125,7 @@ WORKDIR /app
 
 COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
+COPY --from=build --chown=65532:65532 /app/scripts/docker/backup-inspect.mjs /app/scripts/docker/backup-inspection-profile.json ./scripts/docker/
 COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
 COPY --from=runtime-tools /bin/ /bin/
 

@@ -1,9 +1,11 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { validateCanonicalBackupReferences } from '../backup/references';
 import { validateVolumeArchive } from '../backup/archive';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
+import { imageAtDigest } from '../deployment/identity';
 import { assertRestorableManagedAssets } from '../deployment/assets';
 import type { PendingOperation } from '../deployment/contracts';
 import { parseEnv, secretValues } from '../deployment/env';
@@ -51,6 +53,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   // Snapshot capture already stops the app. Validate before journaling/capture,
   // using the authenticated archived FS root and retaining the later recheck.
   await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
+  await validateCanonicalBackupReferences(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
   const pending: PendingOperation = {
     id: id('rollback'),
     operation: 'rollback',

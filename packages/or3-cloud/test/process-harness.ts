@@ -148,6 +148,12 @@ const containerScript = () => {
 };
 
 if (args[0] === 'run') { containerScript(); process.exit(0); }
+if (args[0] === 'exec') {
+  if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+  else if (joined.includes('backup-inspect.mjs references')) out(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
+  else containerScript();
+  process.exit(0);
+}
 
 if (args[0] === 'compose') {
   let index = 1;

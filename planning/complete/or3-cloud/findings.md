@@ -87,15 +87,24 @@ The three plans are directionally aligned, but there are several conflicts and m
   Real-file regressions cover empty/multi-chunk objects, both algorithms and
   uppercase hex. Missing payload plus sidecar remains a separate canonical
   reference-completeness gap; production-scale hashing is not qualified.
-- A further real signed-archive drill replaced sync.sqlite with a valid
-  unrelated one-table database. Native quick_check/nonempty-schema validation
-  and deep health passed; startup created provider tables beside the
-  placeholder and restore reported success. All six canonical fixture rows
-  were absent and sign-in returned 403 although the separate credential DB
-  retained its account. An intact archive restored sign-in, records and bytes.
-  This remains a provider schema/completeness gap requiring a versioned
-  offline provider integrity contract; the CLI does not add guessed schema
-  requirements or execute archive-supplied checks.
+- A versioned app-owned offline inspection contract now checks canonical
+  live SQLite attachment metadata against the archive's workspace-scoped blob
+  and sidecar inventory, including size and regular-file ancestors. This closes
+  the reproduced both-payload-and-sidecar omission for SQLite 0.0.15/FS 0.0.11.
+  The trusted image executable, build-owned version descriptor, known migration
+  history and canonical-column checks fail closed for unsupported images,
+  drivers, schemas, roots and bounded-resource exhaustion. Inspection uses
+  scratch tmpfs before live mutation, readonly native SQLite without provider
+  migrations, and no archived code. Backup verification and recovery use the
+  same contract. Pending/deleted metadata, legacy hashes, uncommitted uploads
+  and opaque generations remain supported. Independent review reproduced and
+  corrected a linked-ancestor bypass, valid large-metadata refusal and blank
+  pending-ID mismatch before qualification. Older images without this contract
+  are explicitly unsupported; generic provider APIs require separate work.
+- The valid unrelated one-table sync.sqlite false-success is also refused by
+  this qualified canonical schema contract before mutation. Physical database
+  integrity still does not prove all expected records survived native WAL
+  recovery or that a missing canonical metadata record had no other references.
 - Review of the new WAL guard found a real compatibility regression: killing
   an app during a two-MiB uncommitted transaction, restoring it, and accepting
   later healthy writes left an obsolete same-salt WAL tail. The strict frame
