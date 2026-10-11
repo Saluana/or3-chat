@@ -61,6 +61,14 @@ recovery path; a failed recovery keeps the verified snapshot and operation
 journal. Deep health alone can pass for a non-SQLite file, and startup can
 initialize an empty database with a fresh schema. This check
 does not prove every application record or referenced attachment is complete.
+The real `--sqlite-placeholder-schema-only` drill replaces the sync database
+with a valid SQLite file containing one unrelated table, removing its WAL/SHM.
+Restore still reports success; startup initializes provider tables beside the
+placeholder, all six original canonical records are absent, and sign-in returns
+403 despite the separate credential database retaining the account. Restoring
+the intact archive repairs sign-in, records and attachment access. The
+nonempty-schema check is physical validation; provider schema/completeness
+validation needs a versioned provider contract and remains unresolved.
 Before opening each database, restore validates any nonempty WAL's 32-byte
 header magic, format, page size and checksum using the
 [documented SQLite WAL format](https://sqlite.org/fileformat2.html#wal_file_format).

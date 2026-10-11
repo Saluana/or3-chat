@@ -3278,6 +3278,177 @@
     ],
     "coverage": "Five real chat/document/project/settings records with no uploaded files, no canonical attachment references and no object directory. Both SQLite databases/WALs restore into separate instance and through built CLI; native hashing accepts legitimate absent storage, records and empty storage survive another cold restart/status."
   },
+  "actualAppPlaceholderSchema": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "c5aab31ce2895eb52de4dce0edb5fc3772c0783f",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "c34e0dd4fd881e78c98d73af484288e6ba6a5dab8d2fd553466e6a3f4ef0ee41"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "valid SQLite placeholder schema passes native restore, startup recreates tables and all six original canonical records are absent",
+        "kind": "limitation",
+        "detail": {
+          "originalRows": 6,
+          "missingRows": 6,
+          "native": {
+            "integrity": "ok",
+            "placeholder": 1,
+            "tables": 31,
+            "counts": [
+              {
+                "table": "s_file_meta",
+                "count": 0
+              },
+              {
+                "table": "s_threads",
+                "count": 0
+              },
+              {
+                "table": "s_messages",
+                "count": 0
+              },
+              {
+                "table": "s_posts",
+                "count": 0
+              },
+              {
+                "table": "s_projects",
+                "count": 0
+              },
+              {
+                "table": "s_kv",
+                "count": 0
+              }
+            ],
+            "basicAuthAccounts": 1
+          },
+          "signInStatus": 403,
+          "boundary": "Database integrity and any-table count cannot prove provider schema or record completeness; requires a versioned provider integrity/inventory contract"
+        }
+      },
+      {
+        "name": "intact archive recovers original chats, documents, settings, references and attachment after placeholder schema loss",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "status": "Unresolved provider schema/completeness gap. Real signed sync database with one unrelated table passes physical checks; app initializes provider tables, six original canonical records are absent and sign-in returns 403 while credential DB retains account. Intact archive recovers sign-in, records and exact attachment bytes."
+  },
+  "actualAppPlaceholderSchemaFirstAttempt": {
+    "completed": false,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "135b08800fe37f0c55839ccb22853707fd9d4ddbe9b786c53ab36868212387a6"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "explanation": "CLI restore reported success but initial fixture expected sign-in to remain possible and stopped at unexpected HTTP 403. Cleanup completed. Corrected fixture asserts the sign-in loss, counts original records through native readonly SQLite and verifies intact-archive recovery."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,

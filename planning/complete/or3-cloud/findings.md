@@ -98,6 +98,15 @@ The three plans are directionally aligned, but there are several conflicts and m
   Real-file regressions cover empty/multi-chunk objects, both algorithms and
   uppercase hex. Missing payload plus sidecar remains a separate canonical
   reference-completeness gap; production-scale hashing is not qualified.
+- A further real signed-archive drill replaced sync.sqlite with a valid
+  unrelated one-table database. Native quick_check/nonempty-schema validation
+  and deep health passed; startup created provider tables beside the
+  placeholder and restore reported success. All six canonical fixture rows
+  were absent and sign-in returned 403 although the separate credential DB
+  retained its account. An intact archive restored sign-in, records and bytes.
+  This remains a provider schema/completeness gap requiring a versioned
+  offline provider integrity contract; the CLI does not add guessed schema
+  requirements or execute archive-supplied checks.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

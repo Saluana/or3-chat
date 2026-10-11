@@ -49,10 +49,11 @@ const browserOnly = process.argv.includes('--browser-only');
 const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
 const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
+const sqliteSchemaOnly = process.argv.includes('--sqlite-placeholder-schema-only');
 const walFrameOnly = process.argv.includes('--wal-frame-only');
 const walTailOnly = process.argv.includes('--wal-tail-only');
 const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walFrameOnly || walTailOnly;
-const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
+const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || sqliteSchemaOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
 assert(Number(deep) + Number(filesystemCompatOnly) + Number(blobContentOnly) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
@@ -827,7 +828,9 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     evidence('retry after journal persistence is available restores actual pre-mutation data and attachment', await verify(target));
   }
   if (sqliteOnly && !walCorruptionOnly) {
-    for (const [index, fault] of (sqliteWalOnly ? [
+    for (const [index, fault] of (sqliteSchemaOnly ? [
+      { database: 'sync.sqlite', payload: 'placeholder-schema' },
+    ] : sqliteWalOnly ? [
       { database: 'sync.sqlite', payload: 'missing-wal' },
     ] : [
       { database: 'sync.sqlite', payload: 'non-sqlite' },
@@ -846,6 +849,11 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
           "const fs=require('node:fs');const Database=require('/app/.output/server/node_modules/better-sqlite3');const path='/tmp/synthetic-empty.sqlite';const db=new Database(path);db.pragma('user_version=1');if(db.pragma('quick_check',{simple:true})!=='ok')throw Error('Fixture integrity failure');db.close();console.log(fs.readFileSync(path).toString('base64'));fs.unlinkSync(path)"]), target.directory);
         payload = Buffer.from(empty, 'base64');
       }
+      if (fault.payload === 'placeholder-schema') {
+        const database = await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+          "const fs=require('node:fs');const Database=require('/app/.output/server/node_modules/better-sqlite3');const path='/tmp/synthetic-placeholder.sqlite';const db=new Database(path);db.exec(\"CREATE TABLE synthetic_retained_table (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO synthetic_retained_table VALUES (1, 'retained unrelated bytes');\");if(db.pragma('quick_check',{simple:true})!=='ok')throw Error('Fixture integrity failure');db.close();console.log(fs.readFileSync(path).toString('base64'));fs.unlinkSync(path)"]), target.directory);
+        payload = Buffer.from(database, 'base64');
+      }
       if (fault.payload !== 'missing-wal') await writeFile(join(tree, fault.database), payload);
       for (const suffix of ['-wal', '-shm']) await rm(join(tree, fault.database + suffix), { force: true });
       const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
@@ -855,6 +863,25 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       const text = `${JSON.stringify(manifest, null, 2)}\n`;
       await writeFile(join(broken, 'manifest.json'), text);
       await writeBackupAuthentication(target.directory, broken, text);
+      if (sqliteSchemaOnly) {
+        await restoreCommand(target.directory, { yes: true }, [broken]);
+        assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+        await assert.rejects(authenticated(target), /403/);
+        const native = JSON.parse(await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+          `const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite',{readonly:true,fileMustExist:true});const counts=${JSON.stringify(fixtureRows.map(row => ({ table: `s_${row.tableName}`, id: row.pk })))}.map(row=>({table:row.table,count:db.prepare('SELECT count(*) AS n FROM '+row.table+' WHERE workspace_id=? AND id=?').get(${JSON.stringify(workspaceId)},row.id).n}));const auth=new Database('/data/auth.sqlite',{readonly:true,fileMustExist:true});console.log(JSON.stringify({integrity:db.pragma('integrity_check',{simple:true}),placeholder:db.prepare('SELECT count(*) AS n FROM synthetic_retained_table').get().n,tables:db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table'").get().n,counts,basicAuthAccounts:auth.prepare('SELECT count(*) AS n FROM basic_auth_accounts').get().n}));db.close();auth.close()`]), target.directory));
+        assert.equal(native.integrity, 'ok');
+        assert.equal(native.placeholder, 1);
+        assert.equal(native.basicAuthAccounts, 1, 'Separate credential database must retain the original synthetic account');
+        assert(native.counts.every((row: { count: number }) => row.count === 0));
+        assert(native.tables > 1, 'App startup must have actually initialized canonical tables beside the placeholder');
+        evidence('valid SQLite placeholder schema passes native restore, startup recreates tables and all six original canonical records are absent', {
+          originalRows: fixtureRows.length, missingRows: fixtureRows.length, native, signInStatus: 403,
+          boundary: 'Database integrity and any-table count cannot prove provider schema or record completeness; requires a versioned provider integrity/inventory contract',
+        }, 'limitation');
+        await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+        evidence('intact archive recovers original chats, documents, settings, references and attachment after placeholder schema loss', await verify(target));
+        continue;
+      }
       let clears = 0;
       lifecycleFaults.beforeCommand = (_command, args) => {
         if (args.includes('find /data -mindepth 1 -delete')) clears++;
@@ -866,12 +893,12 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       finally { delete lifecycleFaults.beforeCommand; }
       assert.equal(clears, 2, 'Refused payload and safe automatic snapshot recovery each extract once');
       assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-      assert.match((await readState(target.directory)).lastError ?? '', /SQLite database integrity verification failed/);
+      assert.match((await readState(target.directory)).lastError ?? '', /Restored snapshot integrity verification failed/);
       evidence('real database payload refused before startup; automatic recovery restores original records and attachment', {
         fault, elapsedMs: Date.now() - startedAt, verification: await verify(target),
       });
     }
-    if (!sqliteWalOnly) {
+    if (!sqliteWalOnly && !sqliteSchemaOnly) {
       let interrupted = 0;
       let started = 0;
       lifecycleFaults.beforeCommand = (_command, args) => {
@@ -1208,7 +1235,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, emptyStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, emptyStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, sqliteSchemaOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
