@@ -4,6 +4,12 @@ Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (latest fetched `origin/or3-clo
 Branch: `audit/workspace-isolation-20261011`. Latest runtime fix: `dc9675f3fe9ed5b750c8bc948f1dbbd0875ffb66`. Final source/test review export head is recorded in `final-review-export-runner.txt`, generated after the closing evidence commit.
 Nothing pushed, merged, deployed or released. PRs #234–#238 are already merged in this base. No dormant generation cleanup activation, approval bridge edits, document/editor persistence edits, PageShell.vue changes or ChatInputDropper.vue changes.
 
+The original qualification/export above predates authorized publication of draft
+PR #240. Its exact initial published HEAD is `352e11b87b9873578a5f16160b131d99fad26eab`.
+The subsequent narrow publication-CI repair is documented in `ci-repair.md`;
+original exact-head receipts and Library exports remain historical immutable
+qualification of that initial source checkpoint.
+
 ## Architecture and core-entry rationale
 
 Existing host caches, UI asynchronous continuations and server dispatch own these boundaries. Configuration/themes cannot fence asynchronous ownership; plugins cannot invalidate host-owned URLs reliably; storage providers cannot invalidate browser caches. These changes stay at those existing boundaries. The palette feedback fix belongs in the existing global palette controller: configuration cannot capture pending action ownership, themes cannot govern result delivery, plugins cannot fence every host action, and providers cannot own this frontend state. Its public consumer is the command palette, which discards stale action feedback after a workspace generation change while navigation remains with its existing owner. Optional clipboard ownership assertions preserve other callers; canonical read-only tools retain `workspace.read` defaults. GalleryGrid and ImageViewer share the preview singleton. Chat attachments, palette thumbnails and media prefetch share the separate raster-thumbnail singleton; its URL/decode lifetime and its consumers now follow workspace changes.

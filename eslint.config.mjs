@@ -16,6 +16,7 @@ const existingProjects = nuxtProjects
     .filter((path) => existsSync(new URL(path, import.meta.url)))
     .map((path) => path.replace('./.nuxt/tsconfig.', './tsconfig.eslint.'));
 const lintProject = './tsconfig.eslint.json';
+const auditProject = './tsconfig.eslint.audit.json';
 
 export default [
     {
@@ -25,8 +26,8 @@ export default [
             parser: tsParser,
             parserOptions: {
                 project: existingProjects.length
-                    ? [...existingProjects, lintProject]
-                    : [lintProject],
+                    ? [...existingProjects, lintProject, auditProject]
+                    : [lintProject, auditProject],
                 tsconfigRootDir: import.meta.dirname,
             },
         },

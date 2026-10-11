@@ -1,4 +1,39 @@
 import { test, expect, type Page } from '@playwright/test';
+import type { EffectScope } from 'vue';
+import type { PaletteCoordinator } from '../../app/core/search/command-palette/coordinator';
+import type { PalettePreview } from '../../app/core/search/command-palette/types';
+
+type WorkspaceDb = ReturnType<typeof import('../../app/db/client').getWorkspaceDb>;
+type Palette = ReturnType<typeof import('../../app/composables/search/useCommandPalette').useCommandPalette>;
+type Registration = ReturnType<typeof import('../../app/core/search/command-palette/registry').registerPaletteSource>;
+type TrustedHost = ReturnType<typeof import('../../app/composables/plugins/trusted-host-context').createTrustedHostContext>;
+type FileRead = Awaited<ReturnType<TrustedHost['context']['files']['read']>>;
+type NuxtRoot = Element & { __vue_app__: {
+    _instance: { isMounted: boolean; scope: { constructor: new (detached: boolean) => EffectScope } };
+    $nuxt: {
+        payload: { state: Record<string, unknown> };
+        $config: { public: { ssrAuthEnabled: boolean } };
+        $router: { push(path: string): Promise<unknown> };
+        runWithContext<T>(callback: () => T): T;
+    };
+} };
+type StoredSearchFixture = {
+    coordinator: PaletteCoordinator; registrations: Registration[]; entered: boolean;
+    release(): void; restore(): void; originalSearch: Promise<unknown> | null;
+};
+type PromptLibraryFixture = {
+    ids: string[]; dbs: WorkspaceDb[]; entered: boolean; held: boolean; release(): void;
+    filter(records: Array<{ id: string }>): Promise<Array<{ id: string }>>;
+};
+type PreviewFixture = {
+    palette: Palette; entered: boolean; cleanup: number; signal: AbortSignal | null; oldUrl: string;
+    finish(value: PalettePreview): void; reject(error: Error): void; registration: Registration;
+};
+type FixtureWindow = Window & {
+    isolationStoredSearch: StoredSearchFixture;
+    __nativePromptLibrary?: PromptLibraryFixture;
+    isolationPreview: PreviewFixture;
+};
 
 test.setTimeout(60_000);
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5m0AAAAASUVORK5CYII=', 'base64');
@@ -6,7 +41,7 @@ const file = { name: 'synthetic-origin.png', mimeType: 'image/png', buffer: pixe
 async function select(page: Page, workspace: string) {
     await page.evaluate(async id => {
         const path = '/_nuxt/db/client.ts';
-        const client = await import(path);
+        const client = await import(path) as typeof import("../../app/db/client.ts");
         await client.setActiveWorkspaceDb(id).open();
     }, workspace);
 }
@@ -52,7 +87,7 @@ test('actual file chooser cannot upload into a workspace selected after it opene
     await expect(page.getByText('Could not add the selected images.', { exact: true })).toBeVisible();
     expect(await page.evaluate(async () => {
         const path = '/_nuxt/db/client.ts';
-        const { getDb } = await import(path);
+        const { getDb } = await import(path) as typeof import("../../app/db/client.ts");
         return await getDb().file_meta.count();
     })).toBe(0);
     await page.locator('input[type=file]').setInputFiles(file);
@@ -64,7 +99,7 @@ test('actual gallery discards a held preview read after switching to an empty wo
     await select(page, 'gallery-browser-held-origin');
     await page.evaluate(async bytes => {
         const path = '/_nuxt/db/client.ts';
-        const { getDb } = await import(path);
+        const { getDb } = await import(path) as typeof import("../../app/db/client.ts");
         const db = getDb();
         const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
         const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
@@ -106,7 +141,7 @@ for (const action of ['download', 'copy'] as const) {
         page.on('download', download => downloads.push(download.suggestedFilename()));
         await page.evaluate(async () => {
             const path = '/_nuxt/db/client.ts';
-            const { getDb } = await import(path);
+            const { getDb } = await import(path) as typeof import("../../app/db/client.ts");
             const db = getDb();
             const get = db.file_blobs.get.bind(db.file_blobs);
             let release!: () => void;
@@ -148,9 +183,9 @@ for (const heldDecode of [false, true]) {
             const clientPath = '/_nuxt/db/client.ts';
             const filesPath = '/_nuxt/db/files.ts';
             const cachePath = '/_nuxt/composables/core/useThumbnailUrlCache.ts';
-            const client = await import(clientPath);
-            const files = await import(filesPath);
-            const { useThumbnailUrlCache } = await import(cachePath);
+            const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const files = await import(filesPath) as typeof import("../../app/db/files.ts");
+            const { useThumbnailUrlCache } = await import(cachePath) as typeof import("../../app/composables/core/useThumbnailUrlCache.ts");
             const canvas = document.createElement('canvas');
             canvas.width = 2; canvas.height = 2;
             canvas.getContext('2d')!.fillRect(0, 0, 2, 2);
@@ -158,7 +193,7 @@ for (const heldDecode of [false, true]) {
             await client.setActiveWorkspaceDb('native-thumbnail-a').open();
             const meta = await files.createOrRefFile(blob, 'synthetic-a.png');
             const cache = useThumbnailUrlCache();
-            const nativeDecode = Image.prototype.decode;
+            const nativeDecode = Image.prototype.decode as HTMLImageElement['decode'];
             let release!: () => void;
             let started!: () => void;
             const pending = new Promise<void>(resolve => { release = resolve; });
@@ -166,7 +201,7 @@ for (const heldDecode of [false, true]) {
             let oldUrl = '';
             if (held) {
                 let intercepted = false;
-                Image.prototype.decode = function() {
+                Image.prototype.decode = function(this: HTMLImageElement) {
                     if (!intercepted) {
                         intercepted = true; oldUrl = this.src; started(); return pending;
                     }
@@ -216,7 +251,7 @@ for (const outcome of ['success', 'failure'] as const) {
             await select(page, `palette-browser-${outcome}-${change}-origin`);
             await page.evaluate(async () => {
                 const path = '/_nuxt/composables/search/useCommandPalette.ts';
-                const module = await import(path);
+                const module = await import(path) as typeof import("../../app/composables/search/useCommandPalette.ts");
                 const palette = module.useCommandPalette();
                 let finish!: (value: unknown) => void;
                 const held = new Promise(resolve => { finish = resolve; });
@@ -256,12 +291,12 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
             const chatPath = '/_nuxt/core/search/command-palette/sources/chat-source.ts';
             const documentPath = '/_nuxt/core/search/command-palette/sources/document-source.ts';
             const filePath = '/_nuxt/core/search/command-palette/sources/file-source.ts';
-            const { setActiveWorkspaceDb, getDb } = await import(clientPath);
-            const { createPaletteCoordinator } = await import(coordinatorPath);
-            const { registerPaletteSource } = await import(registryPath);
-            const { createChatPaletteSource } = await import(chatPath);
-            const { createDocumentPaletteSource } = await import(documentPath);
-            const { createFilePaletteSource } = await import(filePath);
+            const { setActiveWorkspaceDb, getDb } = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const { createPaletteCoordinator } = await import(coordinatorPath) as typeof import("../../app/core/search/command-palette/coordinator.ts");
+            const { registerPaletteSource } = await import(registryPath) as typeof import("../../app/core/search/command-palette/registry.ts");
+            const { createChatPaletteSource } = await import(chatPath) as typeof import("../../app/core/search/command-palette/sources/chat-source.ts");
+            const { createDocumentPaletteSource } = await import(documentPath) as typeof import("../../app/core/search/command-palette/sources/document-source.ts");
+            const { createFilePaletteSource } = await import(filePath) as typeof import("../../app/core/search/command-palette/sources/file-source.ts");
             // /images does not mount PageShell's core-source registrations.
             const registrations = [createChatPaletteSource(), createDocumentPaletteSource(), createFilePaletteSource()].map(registerPaletteSource);
             const origin = `stored-search-${mode}-origin`;
@@ -300,10 +335,10 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
             fixture.originalSearch = fixture.coordinator.searchOnce({ term: 'isolationoriginmarker', sourceIds: ['chat', 'document', 'file'], limit: 10 })
                 .then(() => ({ rejected: false }), () => ({ rejected: true }));
         }, boundary);
-        await page.waitForFunction(() => (window as any).isolationStoredSearch.entered);
+        await page.waitForFunction(() => (window as unknown as FixtureWindow).isolationStoredSearch.entered);
         await select(page, `stored-search-${boundary}-target`);
         const receipt = await page.evaluate(async mode => {
-            const fixture = (window as any).isolationStoredSearch;
+            const fixture = (window as unknown as FixtureWindow).isolationStoredSearch;
             const query = (term: string) => fixture.coordinator.searchOnce({ term, sourceIds: ['chat', 'document', 'file'], limit: 10 });
             try {
                 fixture.restore(); fixture.release();
@@ -312,15 +347,15 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
                 const foreign = await query('isolationoriginmarker');
                 const own = await query('isolationtargetmarker');
                 const clientPath = '/_nuxt/db/client.ts';
-                const { setActiveWorkspaceDb } = await import(clientPath);
+                const { setActiveWorkspaceDb } = await import(clientPath) as typeof import("../../app/db/client.ts");
                 await setActiveWorkspaceDb(`stored-search-${mode}-origin`).open();
                 await fixture.coordinator.ensureWarm();
                 const recovered = await query('isolationoriginmarker');
                 const reverseForeign = await query('isolationtargetmarker');
-                return { original, foreign: foreign.results.length, own: own.results.map((row: any) => row.sourceId).sort(),
-                    recovered: recovered.results.map((row: any) => row.sourceId).sort(), reverseForeign: reverseForeign.results.length,
-                    snapshotsScoped: Array.from(own.snapshots.values()).every((row: any) => row.title.startsWith('isolationtargetmarker')) };
-            } finally { fixture.restore(); fixture.release(); fixture.coordinator.dispose(); fixture.registrations.forEach((handle: any) => handle.dispose()); }
+                return { original, foreign: foreign.results.length, own: own.results.map((row) => row.sourceId).sort(),
+                    recovered: recovered.results.map((row) => row.sourceId).sort(), reverseForeign: reverseForeign.results.length,
+                    snapshotsScoped: Array.from(own.snapshots.values()).every((row) => row.title.startsWith('isolationtargetmarker')) };
+            } finally { fixture.restore(); fixture.release(); fixture.coordinator.dispose(); fixture.registrations.forEach((handle) => handle.dispose()); }
         }, boundary);
         await info.attach('synthetic-stored-search-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
         expect(receipt).toEqual({ original: { rejected: true }, foreign: 0, own: ['chat', 'document', 'file'],
@@ -334,7 +369,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
     await page.route('**/api/jobs/**', route => route.abort());
     await page.evaluate(async () => {
         const path = '/_nuxt/db/client.ts';
-        const { setActiveWorkspaceDb } = await import(path);
+        const { setActiveWorkspaceDb } = await import(path) as typeof import("../../app/db/client.ts");
         for (const [workspace, text] of [['rendered-chat-origin', 'Synthetic rendered origin workspace message'], ['rendered-chat-target', 'Synthetic rendered target workspace message']]) {
             const db = setActiveWorkspaceDb(workspace); await db.open();
             await db.threads.put({ id: 'identical-rendered-thread', title: text, created_at: 1, updated_at: 1, clock: 1, deleted: false });
@@ -342,7 +377,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
                 data: { content: text }, created_at: 1, updated_at: 1, clock: 1, deleted: false, index: 0 });
         }
         setActiveWorkspaceDb('rendered-chat-origin');
-        await (document.querySelector('#__nuxt') as any).__vue_app__.$nuxt.$router.push('/chat/identical-rendered-thread');
+        await (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__.$nuxt.$router.push('/chat/identical-rendered-thread');
     });
     const messageRow = page.locator('[data-msg-id="identical-rendered-message"]');
     await expect(messageRow).toBeVisible();
@@ -351,7 +386,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
     await expect(page.getByText('Synthetic rendered origin workspace message', { exact: true })).toHaveCount(0);
     await page.evaluate(async () => {
         const path = '/_nuxt/utils/multiPaneApi.ts';
-        const { getGlobalMultiPaneApi } = await import(path);
+        const { getGlobalMultiPaneApi } = await import(path) as typeof import("../../app/utils/multiPaneApi.ts");
         const api = getGlobalMultiPaneApi();
         if (!api) throw new Error('Actual pane navigation API unavailable');
         await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
@@ -363,7 +398,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
     await expect(page.getByText('Synthetic rendered target workspace message', { exact: true })).toHaveCount(0);
     await page.evaluate(async () => {
         const path = '/_nuxt/utils/multiPaneApi.ts';
-        const { getGlobalMultiPaneApi } = await import(path);
+        const { getGlobalMultiPaneApi } = await import(path) as typeof import("../../app/utils/multiPaneApi.ts");
         const api = getGlobalMultiPaneApi();
         if (!api) throw new Error('Actual pane navigation API unavailable');
         await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
@@ -382,10 +417,10 @@ for (const outcome of ['success', 'failure'] as const) {
         const receipt = await page.evaluate(async mode => {
             const clientPath = '/_nuxt/db/client.ts';
             const metadataPath = '/_nuxt/composables/core/useWorkspaceTabMetadata.ts';
-            const client = await import(clientPath);
-            const { useWorkspaceTabMetadata } = await import(metadataPath);
+            const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const { useWorkspaceTabMetadata } = await import(metadataPath) as typeof import("../../app/composables/core/useWorkspaceTabMetadata.ts");
             const ids = [`native-title-a-${mode}`, `native-title-b-${mode}`];
-            const dbs: any[] = [];
+            const dbs: WorkspaceDb[] = [];
             const tab = (cachedTitle: string) => ({ id: 'identical-native-tab',
                 resource: { kind: 'chat', threadId: 'identical-native-thread' },
                 cachedTitle, createdAt: 1, lastActivatedAt: 1, ephemeral: false });
@@ -395,7 +430,7 @@ for (const outcome of ['success', 'failure'] as const) {
                     created_at: 1, updated_at: 1, clock: 0, deleted: false });
             }
             client.setActiveWorkspaceDb(ids[0]);
-            const app = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const app = (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__;
             const scope = new app._instance.scope.constructor(true);
             const metadata = scope.run(() => useWorkspaceTabMetadata());
             const getA = dbs[0].threads.bulkGet.bind(dbs[0].threads);
@@ -458,9 +493,9 @@ for (const transition of ['switch', 'return'] as const) {
                 const clientPath = '/_nuxt/db/client.ts';
                 const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
                 const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
-                const client = await import(clientPath);
-                const { useDefaultPrompt, getDefaultPromptId } = await import(promptPath);
-                const { useHooks } = await import(hooksPath);
+                const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+                const { useDefaultPrompt, getDefaultPromptId } = await import(promptPath) as typeof import("../../app/composables/chat/useDefaultPrompt.ts");
+                const { useHooks } = await import(hooksPath) as typeof import("../../app/core/hooks/useHooks.ts");
                 const ids = [`native-default-a-${transition}-${selection}`, `native-default-b-${transition}-${selection}`];
                 const dbs = ids.map(id => client.getWorkspaceDb(id));
                 for (const [index, db] of dbs.entries()) {
@@ -528,14 +563,14 @@ for (const transition of ['switch', 'close-first'] as const) {
         await page.route('**/api/jobs/**', route => route.abort());
         await page.goto('/');
         await page.waitForLoadState('networkidle');
-        await page.waitForFunction(() => (document.querySelector('#__nuxt') as any).__vue_app__?._instance?.isMounted);
+        await page.waitForFunction(() => (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__?._instance?.isMounted);
         await page.evaluate(async mode => {
             const clientPath = '/_nuxt/db/client.ts';
             const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
             const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
-            const client = await import(clientPath);
-            const { useHooks } = await import(hooksPath);
-            const { useSystemPromptsModal } = await import(modalPath);
+            const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const { useHooks } = await import(hooksPath) as typeof import("../../app/core/hooks/useHooks.ts");
+            const { useSystemPromptsModal } = await import(modalPath) as typeof import("../../app/composables/chat/useSystemPromptsModal.ts");
             const ids = [`native-library-a-${mode}`, `native-library-b-${mode}`];
             const dbs = ids.map(id => client.getWorkspaceDb(id));
             for (const [index, db] of dbs.entries()) {
@@ -556,22 +591,22 @@ for (const transition of ['switch', 'close-first'] as const) {
                     }
                     return records;
                 } };
-            (window as any).__nativePromptLibrary = fixture;
+            (window as unknown as FixtureWindow).__nativePromptLibrary! = fixture;
             useHooks().addFilter('db.prompts.list:filter:output', fixture.filter);
             client.setActiveWorkspaceDb(ids[0]);
             useSystemPromptsModal().open({ mode: 'home' });
         }, transition);
         try {
             await expect(page.getByRole('button', { name: 'Close system prompts', exact: true })).toBeVisible({ timeout: 30_000 });
-            await page.waitForFunction(() => (window as any).__nativePromptLibrary?.entered);
+            await page.waitForFunction(() => (window as unknown as FixtureWindow).__nativePromptLibrary!?.entered);
             await expect(page.getByText('Loading prompts…', { exact: true })).toBeVisible();
             if (transition === 'close-first') await page.getByRole('button', { name: 'Close system prompts', exact: true }).click();
             await page.evaluate(async () => {
                 const clientPath = '/_nuxt/db/client.ts';
                 const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
-                const client = await import(clientPath);
-                const { useDefaultPrompt } = await import(promptPath);
-                const fixture = (window as any).__nativePromptLibrary;
+                const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+                const { useDefaultPrompt } = await import(promptPath) as typeof import("../../app/composables/chat/useDefaultPrompt.ts");
+                const fixture = (window as unknown as FixtureWindow).__nativePromptLibrary!;
                 client.setActiveWorkspaceDb(fixture.ids[1]);
                 await useDefaultPrompt().ensureLoaded();
                 fixture.held = false; fixture.release();
@@ -579,14 +614,14 @@ for (const transition of ['switch', 'close-first'] as const) {
             await expect(page.getByRole('button', { name: 'Close system prompts', exact: true })).toHaveCount(0);
             await page.evaluate(async () => {
                 const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
-                const { useSystemPromptsModal } = await import(modalPath);
+                const { useSystemPromptsModal } = await import(modalPath) as typeof import("../../app/composables/chat/useSystemPromptsModal.ts");
                 useSystemPromptsModal().open({ mode: 'home' });
             });
             await expect(page.locator('[data-test="system-prompt-row-B-native-prompt"]')).toBeVisible();
             await expect(page.locator('[data-test="system-prompt-row-A-native-prompt"]')).toHaveCount(0);
             const receipt = await page.evaluate(async () => {
                 const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
-                const { getDefaultPromptId, useDefaultPrompt } = await import(promptPath);
+                const { getDefaultPromptId, useDefaultPrompt } = await import(promptPath) as typeof import("../../app/composables/chat/useDefaultPrompt.ts");
                 return { current: await getDefaultPromptId(), cached: useDefaultPrompt().defaultPromptId.value };
             });
             expect(receipt).toEqual({ current: 'B-native-prompt', cached: 'B-native-prompt' });
@@ -596,17 +631,17 @@ for (const transition of ['switch', 'close-first'] as const) {
                 const clientPath = '/_nuxt/db/client.ts';
                 const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
                 const modalPath = '/_nuxt/composables/chat/useSystemPromptsModal.ts';
-                const client = await import(clientPath);
-                const { useHooks } = await import(hooksPath);
-                const { useSystemPromptsModal } = await import(modalPath);
-                const fixture = (window as any).__nativePromptLibrary;
+                const client = await import(clientPath) as typeof import("../../app/db/client.ts");
+                const { useHooks } = await import(hooksPath) as typeof import("../../app/core/hooks/useHooks.ts");
+                const { useSystemPromptsModal } = await import(modalPath) as typeof import("../../app/composables/chat/useSystemPromptsModal.ts");
+                const fixture = (window as unknown as FixtureWindow).__nativePromptLibrary!;
                 fixture.held = false; fixture.release(); useSystemPromptsModal().close();
                 useHooks().removeFilter('db.prompts.list:filter:output', fixture.filter);
                 client.setActiveWorkspaceDb(null);
                 for (const [index, db] of fixture.dbs.entries()) {
                     client.evictWorkspaceDb(fixture.ids[index]); await db.delete();
                 }
-                delete (window as any).__nativePromptLibrary;
+                delete (window as unknown as FixtureWindow).__nativePromptLibrary;
             });
         }
     });
@@ -619,9 +654,9 @@ for (const action of ['muteThread', 'unmuteThread'] as const) {
         const receipt = await page.evaluate(async operation => {
             const clientPath = '/_nuxt/db/client.ts';
             const notificationsPath = '/_nuxt/composables/notifications/useNotifications.ts';
-            const { setActiveWorkspaceDb, createWorkspaceDb, evictWorkspaceDb } = await import(clientPath);
-            const { useNotifications } = await import(notificationsPath);
-            const vueApp = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const { setActiveWorkspaceDb, createWorkspaceDb, evictWorkspaceDb } = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const { useNotifications } = await import(notificationsPath) as typeof import("../../app/composables/notifications/useNotifications.ts");
+            const vueApp = (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__;
             const nuxt = vueApp.$nuxt;
             const previousSession = nuxt.payload.state['$sauth-session'];
             const previousEnabled = nuxt.$config.public.ssrAuthEnabled;
@@ -659,7 +694,7 @@ for (const action of ['muteThread', 'unmuteThread'] as const) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 release(); await pending;
                 originDb.kv.get = originalGet;
-                return { origin: JSON.parse((await originDb.kv.get(key)).value), target: JSON.parse((await targetDb.kv.get(key)).value) };
+                return { origin: JSON.parse((await originDb.kv.get(key)).value) as string[], target: JSON.parse((await targetDb.kv.get(key)).value) as string[] };
             } finally {
                 release(); await pending?.catch(() => {}); originDb.kv.get = originalGet; scope.stop();
                 nuxt.$config.public.ssrAuthEnabled = previousEnabled;
@@ -689,12 +724,12 @@ for (const account of ['changed', 'unchanged'] as const) {
             const trackerPath = '/_nuxt/utils/chat/useAi-internal/backgroundJobs.ts';
             const notificationsPath = '/_nuxt/utils/chat/useAi-internal/backgroundJobNotifications.ts';
             const clientPath = '/_nuxt/db/client.ts';
-            const { createTrustedHostContext } = await import(hostPath);
-            const { createTrustedRuntimeServices } = await import(servicesPath);
-            const { ensureBackgroundJobTracker, stopBackgroundJobTracking, backgroundJobTrackers } = await import(trackerPath);
-            const { emitBackgroundComplete } = await import(notificationsPath);
-            const { getDb, setActiveWorkspaceDb } = await import(clientPath);
-            const vueApp = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const { createTrustedHostContext } = await import(hostPath) as typeof import("../../app/composables/plugins/trusted-host-context.ts");
+            const { createTrustedRuntimeServices } = await import(servicesPath) as typeof import("../../app/composables/plugins/trusted-runtime-services.ts");
+            const { ensureBackgroundJobTracker, stopBackgroundJobTracking, backgroundJobTrackers } = await import(trackerPath) as typeof import("../../app/utils/chat/useAi-internal/backgroundJobs.ts");
+            const { emitBackgroundComplete } = await import(notificationsPath) as typeof import("../../app/utils/chat/useAi-internal/backgroundJobNotifications.ts");
+            const { getDb, setActiveWorkspaceDb } = await import(clientPath) as typeof import("../../app/db/client.ts");
+            const vueApp = (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__;
             const nuxt = vueApp.$nuxt;
             const stateKey = '$sauth-session';
             const previousSession = nuxt.payload.state[stateKey];
@@ -737,7 +772,7 @@ for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const)
         await select(page, `sdk-browser-${boundary}-origin`);
         await page.evaluate(async mode => {
             const hostPath = '/_nuxt/composables/plugins/trusted-host-context.ts';
-            const { createTrustedHostContext } = await import(hostPath);
+            const { createTrustedHostContext } = await import(hostPath) as typeof import("../../app/composables/plugins/trusted-host-context.ts");
             const trusted = createTrustedHostContext({ pluginId: 'fixture.browser-files', version: '1.0.0',
                 workspaceId: `sdk-browser-${mode}-origin`, grants: ['files.read', 'files.write'] });
             const written = await trusted.context.files.write({ name: 'synthetic-sdk-origin.txt', mimeType: 'text/plain',
@@ -763,7 +798,7 @@ for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const)
         const receipt = await page.evaluate(async () => {
             const fixture = (window as unknown as { isolationSdkFile: {
                 trusted: { dispose(): Promise<void> }; release(): void; restore(): void;
-                pending: Promise<any> | null; read: any;
+                pending: Promise<FileRead> | null; read: FileRead;
             } }).isolationSdkFile;
             try {
                 fixture.restore(); fixture.release();
@@ -793,14 +828,14 @@ for (const outcome of ['success', 'failure'] as const) {
                 const palettePath = '/_nuxt/composables/search/useCommandPalette.ts';
                 const registryPath = '/_nuxt/core/search/command-palette/registry.ts';
                 const typesPath = '/_nuxt/core/search/command-palette/types.ts';
-                const { useCommandPalette } = await import(palettePath);
-                const { registerPaletteSource } = await import(registryPath);
-                const { CORE_PALETTE_CATEGORIES } = await import(typesPath);
+                const { useCommandPalette } = await import(palettePath) as typeof import("../../app/composables/search/useCommandPalette.ts");
+                const { registerPaletteSource } = await import(registryPath) as typeof import("../../app/core/search/command-palette/registry.ts");
+                const { CORE_PALETTE_CATEGORIES } = await import(typesPath) as typeof import("../../app/core/search/command-palette/types.ts");
                 let finish!: (value: unknown) => void;
                 let reject!: (error: Error) => void;
                 const held = new Promise((resolve, deny) => { finish = resolve; reject = deny; });
                 const fixture = { palette: useCommandPalette(), entered: false, cleanup: 0, signal: null as AbortSignal | null,
-                    oldUrl: URL.createObjectURL(new Blob(['synthetic-former-preview'])), finish, reject, registration: null as any };
+                    oldUrl: URL.createObjectURL(new Blob(['synthetic-former-preview'])), finish, reject, registration: null as Registration | null };
                 fixture.registration = registerPaletteSource({ id: 'fixture-preview', label: 'Synthetic previews',
                     category: CORE_PALETTE_CATEGORIES.find((category: { id: string }) => category.id === 'chat'), order: 0,
                     load: async (context: { workspaceGeneration: number }) => [{ sourceId: 'fixture-preview', categoryId: 'chat',
@@ -819,12 +854,12 @@ for (const outcome of ['success', 'failure'] as const) {
             await select(page, `preview-browser-${outcome}-${change}-target`);
             await page.waitForFunction(() => (window as unknown as { isolationPreview: { palette: { preview: { value: { title?: string } | null } } } }).isolationPreview.palette.preview.value?.title?.startsWith('current-preview-generation-'));
             if (change === 'returned') {
-                const previous = await page.evaluate(() => (window as any).isolationPreview.palette.preview.value.title);
+                const previous = await page.evaluate(() => (window as unknown as FixtureWindow).isolationPreview.palette.preview.value.title);
                 await select(page, origin);
-                await page.waitForFunction(old => { const current = (window as any).isolationPreview.palette.preview.value?.title; return current?.startsWith('current-preview-generation-') && current !== old; }, previous);
+                await page.waitForFunction(old => { const current = (window as unknown as FixtureWindow).isolationPreview.palette.preview.value?.title; return current?.startsWith('current-preview-generation-') && current !== old; }, previous);
             }
             const receipt = await page.evaluate(async result => {
-                const fixture = (window as any).isolationPreview;
+                const fixture = (window as unknown as FixtureWindow).isolationPreview;
                 const recovered = fixture.palette.preview.value;
                 const before = { title: recovered.title, loading: fixture.palette.previewLoading.value };
                 if (result === 'failure') fixture.reject(new Error('synthetic-private-former-filename'));

@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.eslint.json",
+  "compilerOptions": {
+    "types": ["node", "bun-types"]
+  },
+  "include": [
+    "audit-evidence/**/*.ts",
+    "audit-evidence/**/*.tsx",
+    ".nuxt/nuxt.d.ts",
+    ".nuxt/types/imports.d.ts"
+  ],
+  "exclude": ["node_modules/**", ".output/**", "dist/**", "public/**"]
+}

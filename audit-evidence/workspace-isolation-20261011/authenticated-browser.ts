@@ -22,6 +22,6 @@ try {
     const child = Bun.spawn(['bun', fixture], { cwd: root, stdout: 'inherit', stderr: 'inherit' });
     process.exitCode = await child.exited;
     const receiptPath = join(root, 'audit-evidence/workspace-isolation-20261011', outputDirectory, 'profile.json');
-    const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as Record<string, unknown>;
     await writeFile(receiptPath, JSON.stringify({ ...receipt, sourceCommit }, null, 2) + '\n');
 } finally { await rm(fixture, { force: true }); }
