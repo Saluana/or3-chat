@@ -3,6 +3,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { defineComponent, h, ref } from 'vue';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
+import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import MessageAttachmentsGallery from '../MessageAttachmentsGallery.vue';
 import PaletteImageThumb from '../../search/PaletteImageThumb.vue';
 
@@ -44,6 +45,31 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    it.each(['palette-first', 'prefetch-first'] as const)('does not release a current palette retention when default prefetch resets (%s)', async order => {
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:prefetch-palette-origin').mockReturnValue('blob:prefetch-palette-target');
+        const createPrefetch = () => createMessageMediaPrefetchController({
+            loadMeta: async () => originMeta, loadBlob: async () => raster(),
+        });
+        let prefetch: ReturnType<typeof createPrefetch> | undefined = order === 'prefetch-first' ? createPrefetch() : undefined;
+        const wrapper = mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic retained palette image', fallbackIcon: 'image' } });
+        wrappers.push(wrapper);
+        prefetch ??= createPrefetch();
+        prefetch.updateRange([{ file_hashes: [hash] }], { startIndex: 0, endIndex: 0 });
+        await prefetch.whenIdle();
+        await vi.waitFor(() => expect(wrapper.find('img').attributes('src')).toBe('blob:prefetch-palette-origin'));
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+            setActiveWorkspaceDb('consumer-thumbnails-b');
+            await vi.waitFor(() => expect(wrapper.find('img').attributes('src')).toBe('blob:prefetch-palette-target'));
+            await vi.advanceTimersByTimeAsync(30_001);
+            expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:prefetch-palette-target');
+            expect(wrapper.find('img').attributes('src')).toBe('blob:prefetch-palette-target');
+            wrapper.unmount();
+            await vi.advanceTimersByTimeAsync(30_001);
+            expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:prefetch-palette-target');
+        } finally { prefetch.dispose(); wrapper.unmount(); vi.useRealTimers(); }
+    });
+
     it.each(['changed', 'returned', 'unchanged'] as const)('keeps a shared palette thumbnail retained while a second consumer survives workspace %s', async transition => {
         vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:paired-origin').mockReturnValueOnce('blob:paired-target').mockReturnValue('blob:paired-return');
         const first = mount(PaletteImageThumb, { props: { hash, alt: 'First synthetic image', fallbackIcon: 'image' } });

@@ -83,3 +83,5 @@ Chat attachments and command-palette thumbnails share a separate raster-thumbnai
 Each mounted palette thumbnail rebuilds its own retention after a switch, including
 the fallback without IntersectionObserver. Removing one shared-hash thumbnail does
 not revoke the URL still retained by another.
+Prefetch resets also preserve references already acquired in the new workspace;
+normal thread reset/disposal and injected-cache cleanup keep their existing behavior.

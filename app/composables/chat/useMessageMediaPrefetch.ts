@@ -154,7 +154,12 @@ export function createMessageMediaPrefetchController(
         notifyIdle();
     };
 
-    const stopWorkspace = subscribeActiveWorkspaceDb(reset);
+    const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+        // The default shared cache cleared old references before this listener.
+        // Releasing them now could decrement a consumer retained in the new DB.
+        if (!options.cache) retainedHashes.clear();
+        reset();
+    });
 
     const dispose = () => {
         if (disposed) return;
