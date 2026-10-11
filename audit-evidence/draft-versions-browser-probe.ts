@@ -1,6 +1,7 @@
 /** Mounted composers + native IDB commits, duplicated session hint, isolated profile; external requests denied. */
 import { chromium, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { WorkspaceTabDraftRow, WorkspaceDraftVersionRow } from '../app/db/client';
 const output = process.env.OR3_DRAFT_VERSIONS_OUTPUT ?? '/workspace/or3-chat/test-results/recovery-draft-versions-browser';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch(); const context = await browser.newContext();
@@ -12,21 +13,21 @@ const input = (page: Page) => page.getByRole('textbox', { name: 'Message input' 
 async function open(page: Page) { await page.goto('http://127.0.0.1:3127/chat'); await input(page).waitFor({ timeout: 60_000 }); }
 async function snapshot(page: Page) {
     return page.evaluate(async url => {
-        const { getDb } = await import(url); const name = getDb().name;
+        const { getDb } = await import(url) as typeof import('../app/db/client'); const name = getDb().name;
         const db = await new Promise<IDBDatabase>((resolve, reject) => { const r = indexedDB.open(name); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
         try {
-            const read = (table: string) => new Promise<any[]>((resolve, reject) => { const tx = db.transaction(table, 'readonly'); const r = tx.objectStore(table).getAll(); let rows: any[]; r.onsuccess = () => { rows = r.result; }; tx.oncomplete = () => resolve(rows); tx.onerror = () => reject(tx.error); });
-            return { name, version: db.version, canonical: await read('workspace_tab_drafts'), versions: await read('workspace_draft_versions') };
+            const read = <Row>(table: string) => new Promise<Row[]>((resolve, reject) => { const tx = db.transaction(table, 'readonly'); const r = tx.objectStore(table).getAll(); let rows: Row[]; r.onsuccess = () => { rows = r.result as Row[]; }; tx.oncomplete = () => resolve(rows); tx.onerror = () => reject(tx.error); });
+            return { name, version: db.version, canonical: await read<WorkspaceTabDraftRow>('workspace_tab_drafts'), versions: await read<WorkspaceDraftVersionRow>('workspace_draft_versions') };
         } finally { db.close(); }
     }, moduleURL(page, '/db/client.ts'));
 }
 async function flush(page: Page) {
     // Mounted lifecycle captures the actual editor immediately, outside the debounce.
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
-    await page.evaluate(async url => { const module = await import(url); await module.flushWorkspaceTabDrafts(); }, moduleURL(page, '/composables/core/useWorkspaceTabDrafts.ts'));
+    await page.evaluate(async url => { const module = await import(url) as typeof import('../app/composables/core/useWorkspaceTabDrafts'); await module.flushWorkspaceTabDrafts(); }, moduleURL(page, '/composables/core/useWorkspaceTabDrafts.ts'));
 }
 async function set(page: Page, text: string) { await input(page).fill(text); await flush(page); await expect.poll(async () => (await snapshot(page)).versions.some(row => row.kind === 'version' && row.draft?.text === text), { timeout: 15_000 }).toBe(true); }
-async function writer(page: Page) { return page.evaluate(async url => (await import(url)).useWorkspaceTabDrafts().writerId, moduleURL(page, '/composables/core/useWorkspaceTabDrafts.ts')); }
+async function writer(page: Page) { return page.evaluate(async url => (await import(url) as typeof import('../app/composables/core/useWorkspaceTabDrafts')).useWorkspaceTabDrafts().writerId, moduleURL(page, '/composables/core/useWorkspaceTabDrafts.ts')); }
 try {
     const a = await context.newPage(); track(a); await open(a);
     await set(a, 'Synthetic duplicated-tab baseline');

@@ -1,6 +1,7 @@
 /** Chromium foreground persistence; local scripted provider only, all external requests denied. */
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { RecoveryProbeWindow } from './probe-types';
 const browser = await chromium.launch();
 const context = await browser.newContext();
 await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort('blockedbyclient'));
@@ -71,22 +72,22 @@ try {
     await expect.poll(async () => (await read()).find(row => row.role === 'assistant')?.data.content, { timeout: 10_000 }).toBe(prefix);
     const before = await read(); const assistantId = before.find(row => row.role === 'assistant')!.id;
     await page.evaluate(() => (window as unknown as { assistantSaveProbe: { release: () => void } }).assistantSaveProbe.release());
-    await expect.poll(() => page.evaluate(() => (window as any).assistantSaveProbe.faults), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults), { timeout: 10_000 }).toBeGreaterThan(0);
     await expect(page.getByText(completePrefix, { exact: true })).toBeVisible();
     await expect(page.getByText(/^(Browser storage full|Could not save locally)$/).first()).toBeVisible();
     const beforeReload = await read();
-    const state = await page.evaluate(() => ({ faults: (window as any).assistantSaveProbe.faults, providerCalls: (window as any).assistantSaveProbe.providerCalls, guardEvents: (window as any).assistantSaveProbe.guardEvents,
+    const state = await page.evaluate(() => ({ faults: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults, providerCalls: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.providerCalls, guardEvents: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.guardEvents,
         stopVisible: Array.from(document.querySelectorAll('button')).some(button => button.getAttribute('aria-label') === 'Stop generation') }));
     const dialogs: string[] = []; page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
     let reloadError: string | undefined; await page.reload({ timeout: 2_000 }).catch(error => { reloadError = String(error); });
-    const held = dialogs.includes('beforeunload') ? await page.evaluate(() => ({ faults: (window as any).assistantSaveProbe.faults,
-        providerCalls: (window as any).assistantSaveProbe.providerCalls, guardEvents: (window as any).assistantSaveProbe.guardEvents })) : undefined;
+    const held = dialogs.includes('beforeunload') ? await page.evaluate(() => ({ faults: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults,
+        providerCalls: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.providerCalls, guardEvents: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.guardEvents })) : undefined;
     let healedGuardEvents: unknown[] | undefined;
     if (dialogs.includes('beforeunload')) {
-        await page.evaluate(() => (window as any).assistantSaveProbe.repair());
+        await page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.repair());
         await expect.poll(async () => (await read()).find(row => row.id === assistantId)?.data.content, { timeout: 5_000 }).toBe(completePrefix);
-        await expect.poll(() => page.evaluate(() => (window as any).assistantSaveProbe.guardEvents.some((event: any) => event.op === 'remove' && event.listener === 'guardFailedUnload'))).toBe(true);
-        healedGuardEvents = await page.evaluate(() => (window as any).assistantSaveProbe.guardEvents);
+        await expect.poll(() => page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.guardEvents.some((event) => event.op === 'remove' && event.listener === 'guardFailedUnload'))).toBe(true);
+        healedGuardEvents = await page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.guardEvents);
         await page.reload();
         await expect(page.getByText(completePrefix, { exact: true })).toBeVisible({ timeout: 30_000 });
     } else {

@@ -1,6 +1,7 @@
 /** Chromium foreground persistence; local scripted provider only, all external requests denied. */
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { RecoveryProbeWindow } from './probe-types';
 const browser = await chromium.launch();
 const context = await browser.newContext();
 await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort('blockedbyclient'));
@@ -72,16 +73,16 @@ try {
     await expect.poll(async () => (await read()).find(row => row.role === 'assistant')?.data.content, { timeout: 10_000 }).toBe(prefix);
     const before = await read(); const assistantId = before.find(row => row.role === 'assistant')!.id;
     await page.evaluate(() => (window as unknown as { assistantSaveProbe: { release: () => void } }).assistantSaveProbe.release());
-    await expect.poll(() => page.evaluate(() => (window as any).assistantSaveProbe.faults), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults), { timeout: 10_000 }).toBeGreaterThan(0);
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 35_000 });
     const terminalRows = await read();
     const terminalUi = await page.evaluate(() => ({
         containsExpandedPrefix: document.body.innerText.includes('Partial response before refresh. Ready to recover.'),
         containsLateSuffix: document.body.innerText.includes('Late response from the old page'),
         saveNotice: document.body.innerText.includes('Response could not be saved locally') || document.body.innerText.includes('Browser storage full') || document.body.innerText.includes('Could not save locally'),
-        faults: (window as any).assistantSaveProbe.faults,
-        providerCalls: (window as any).assistantSaveProbe.providerCalls,
-        guardEvents: (window as any).assistantSaveProbe.guardEvents,
+        faults: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults,
+        providerCalls: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.providerCalls,
+        guardEvents: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.guardEvents,
     }));
     const syntheticUnloadBlocked = await page.evaluate(() => {
         const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented;
@@ -98,10 +99,10 @@ try {
     let closedOrigin = false;
     if (process.env.OR3_TERMINAL_CLOSE_ORIGIN === 'true') {
         const clientURL = scripts.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)); expect(clientURL).toBeTruthy();
-        closedOrigin = await page.evaluate(async url => { const { getDb } = await import(url!); const origin = getDb(); origin.close(); return !origin.isOpen(); }, clientURL);
+        closedOrigin = await page.evaluate(async url => { const { getDb } = (await import(url!) as typeof import('../app/db/client')); const origin = getDb(); origin.close(); return !origin.isOpen(); }, clientURL);
         expect(closedOrigin).toBe(true);
     }
-    await page.evaluate(() => (window as any).assistantSaveProbe.repair());
+    await page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.repair());
     let healed = true;
     try { await expect.poll(async () => (await read()).find(row => row.id === assistantId)?.data.content?.includes(completePrefix), { timeout: 5_000 }).toBe(true); }
     catch { healed = false; }

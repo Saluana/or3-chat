@@ -1,6 +1,8 @@
 /** Mounted composer plus native IndexedDB; closed connection, visible failure, repair and refresh. */
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { WorkspaceTabDraftRow } from '../app/db/client';
+import type { RecoveryProbeWindow } from './probe-types';
 const output = process.env.OR3_CLOSED_DB_OUTPUT ?? '/workspace/or3-chat/test-results/recovery-mounted-closed-db';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch(); const context = await browser.newContext();
@@ -15,11 +17,11 @@ try {
     const first = 'Synthetic composer before its local connection closes';
     const pending = first + ' — retained edit after close';
     const read = () => page.evaluate(async () => {
-        const rows: any[] = [];
+        const rows: WorkspaceTabDraftRow[] = [];
         for (const { name } of await indexedDB.databases()) {
             if (!name?.startsWith('or3-db')) continue;
             const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-            if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<any[]>((resolve, reject) => {
+            if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<WorkspaceTabDraftRow[]>((resolve, reject) => {
                 const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
             })); db.close();
         }
@@ -29,9 +31,9 @@ try {
     await expect.poll(async () => (await read()).map(row => row.draft.text)).toContain(first);
     const before = await read();
     const closed = await page.evaluate(async url => {
-        const client = await import(url!); const db = client.getDb();
+        const client = (await import(url!) as typeof import('../app/db/client')); const db = client.getDb();
         const name = db.name; db.close();
-        (globalThis as any).__closedDbProbe = { db, name };
+        (globalThis as unknown as RecoveryProbeWindow).__closedDbProbe = { db, name };
         return { name, isOpen: db.isOpen() };
     }, clientURL);
     expect(closed.isOpen).toBe(false);
@@ -41,7 +43,7 @@ try {
     await expect(input).toHaveText(pending);
     const failedRows = await read();
     const acknowledgedWithoutManualRepair = failedRows.some(row => row.draft.text === pending);
-    const afterEdit = await page.evaluate(() => { const { db, name } = (globalThis as any).__closedDbProbe; return { name, isOpen: db.isOpen() }; });
+    const afterEdit = await page.evaluate(() => { const { db, name } = (globalThis as unknown as RecoveryProbeWindow).__closedDbProbe; return { name, isOpen: db.isOpen() }; });
     const failureVisible = await notice.isVisible();
     await writeFile(output + '/after-close.json', JSON.stringify({ before, closed, failedRows, afterEdit, failureVisible, acknowledgedWithoutManualRepair }, null, 2));
     await page.screenshot({ path: output + '/after-close.png' });
@@ -50,7 +52,7 @@ try {
         expect(failureVisible).toBe(true);
         expect(failedRows.some(row => row.draft.text === first)).toBe(true);
         reopened = await page.evaluate(async () => {
-            const { db, name } = (globalThis as any).__closedDbProbe; await db.open();
+            const { db, name } = (globalThis as unknown as RecoveryProbeWindow).__closedDbProbe; await db.open();
             return { name, isOpen: db.isOpen() };
         });
         expect(reopened).toEqual({ name: closed.name, isOpen: true });

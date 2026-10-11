@@ -51,7 +51,7 @@ try {
     await expect(input).toHaveCount(0);
     const before = await read();
     const prevented = await page.evaluate(async url => {
-        const drafts = await import(url!); const event = new Event('beforeunload', { cancelable: true });
+        const drafts = (await import(url!) as typeof import('../app/composables/core/useWorkspaceTabDrafts')); const event = new Event('beforeunload', { cancelable: true });
         window.dispatchEvent(event); await drafts.useWorkspaceTabDrafts().flush(); return event.defaultPrevented;
     }, urls.drafts);
     const after = await read();

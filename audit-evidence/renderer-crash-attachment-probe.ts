@@ -1,6 +1,8 @@
 /** Actual Chromium renderer crash after an acknowledged recovery journal but rejected IndexedDB save. */
 import { chromium, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { FileBlobRow, WorkspaceTabDraftRow } from '../app/db/client';
+import type { RecoveryProbeWindow } from './probe-types';
 const output = process.env.OR3_CRASH_ATTACHMENT_OUTPUT ?? '/workspace/or3-chat/test-results/recovery-renderer-crash-attachment';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ args: ['--disable-breakpad', '--disable-crash-reporter'] });
@@ -11,18 +13,18 @@ const attachmentBytes = (page: Page) => page.evaluate(async () => {
     for (const { name } of await indexedDB.databases()) {
         if (!name?.startsWith('or3-db')) continue;
         const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-        const rows = await new Promise<any[]>((resolve, reject) => { const request = db.transaction('file_blobs', 'readonly').objectStore('file_blobs').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        const rows = await new Promise<FileBlobRow[]>((resolve, reject) => { const request = db.transaction('file_blobs', 'readonly').objectStore('file_blobs').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
         for (const row of rows) blobs.push({ hash: row.hash, bytes: Array.from(new Uint8Array(await row.blob.arrayBuffer())) });
         db.close();
     } return blobs;
 });
 await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort('blockedbyclient'));
 const read = (page: Page) => page.evaluate(async () => {
-    const rows: any[] = [];
+    const rows: WorkspaceTabDraftRow[] = [];
     for (const { name } of await indexedDB.databases()) {
         if (!name?.startsWith('or3-db')) continue;
         const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-        if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<any[]>((resolve, reject) => {
+        if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<WorkspaceTabDraftRow[]>((resolve, reject) => {
             const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
         })); db.close();
     }
@@ -33,7 +35,7 @@ try {
     const input = page.getByRole('textbox', { name: 'Message input' }); await input.waitFor({ timeout: 45_000 });
     const first = 'Synthetic acknowledged draft before renderer crash'; const pending = first + ' — journaled edit with rejected IndexedDB save';
     await input.fill(first); await expect.poll(async () => (await read(page)).map(row => row.draft.text)).toContain(first);
-    const before = await read(page); const rowId = before.find(row => row.draft.text === first).id;
+    const before = await read(page); const rowId = before.find(row => row.draft.text === first)!.id;
     await page.evaluate(marker => {
         const put = IDBObjectStore.prototype.put; let faults = 0;
         IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
@@ -42,7 +44,7 @@ try {
             }
             return put.apply(this, args);
         };
-        (globalThis as any).__crashDraftProbe = { get faults() { return faults; } };
+        (globalThis as unknown as RecoveryProbeWindow).__crashDraftProbe = { get faults() { return faults; } };
     }, pending);
     await input.fill(pending);
     await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible({ timeout: 10_000 });
@@ -57,7 +59,7 @@ try {
     const failedRows = await read(page);
     expect(failedRows.find(row => row.id === rowId)?.draft.text).toBe(first);
     expect(failedRows.find(row => row.id === rowId)?.draft.attachments).toHaveLength(0);
-    const faults = await page.evaluate(() => (globalThis as any).__crashDraftProbe.faults); expect(faults).toBeGreaterThan(0);
+    const faults = await page.evaluate(() => (globalThis as unknown as RecoveryProbeWindow).__crashDraftProbe.faults); expect(faults).toBeGreaterThan(0);
     await writeFile(output + '/before-crash.json', JSON.stringify({ before, failedRows, journals, committedBlobs, faults, liveText: await input.innerText() }, null, 2));
     await page.screenshot({ path: output + '/before-crash.png' });
     const cdp = await context.newCDPSession(page);
@@ -71,7 +73,7 @@ try {
     const recovered = await read(recoveredPage);
     expect(recovered.filter(row => row.draft.text === pending).map(row => row.id)).toEqual([rowId]);
     await expect(recoveredPage.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
-    expect(recovered.find(row => row.id === rowId)?.draft.attachments.map((ref: any) => ref.hash)).toEqual([committedBlobs[0]!.hash]);
+    expect(recovered.find(row => row.id === rowId)?.draft.attachments.map((ref) => ref.hash)).toEqual([committedBlobs[0]!.hash]);
     const recoveredBlobs = await attachmentBytes(recoveredPage); expect(recoveredBlobs).toEqual(committedBlobs);
     await writeFile(output + '/evidence.json', JSON.stringify({ before, failedRows, journals, committedBlobs, recoveredBlobs, faults, recovered,
         liveText: await recoveredInput.innerText(), crash: 'actual Chromium Page.crash with crash event; new page in same isolated browser context',

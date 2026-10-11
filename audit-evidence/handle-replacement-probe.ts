@@ -18,8 +18,8 @@ try {
         drafts: scriptURLs.find(url => /useWorkspaceTabDrafts\.ts(?:\?|$)/.test(url)) };
     if (!moduleURLs.client || !moduleURLs.drafts) throw new Error(`Loaded Vite module URLs unavailable: ${JSON.stringify(scriptURLs.filter(url => /client|WorkspaceTabDrafts/.test(url)).map(url => new URL(url).pathname))}`);
     const evidence = await page.evaluate(async (urls) => {
-        const client = await import(urls.client!);
-        const module = await import(urls.drafts!);
+        const client = (await import(urls.client!) as typeof import('../app/db/client'));
+        const module = (await import(urls.drafts!) as typeof import('../app/composables/core/useWorkspaceTabDrafts'));
         const drafts = module.useWorkspaceTabDrafts();
         const original = client.setActiveWorkspaceDb('synthetic-recovery-origin');
         await original.open();
@@ -31,7 +31,7 @@ try {
             }
             return put.apply(this, args);
         };
-        const buffer = (text: string) => ({ version: 1, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() });
+        const buffer = (text: string) => ({ version: 1 as const, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() });
         drafts.write('recovery-handle-tab', buffer('Synthetic retained handle buffer'), owner);
         await drafts.flush();
         const failureBefore = drafts.saveFailed.value;

@@ -1,6 +1,7 @@
 /** Mounted offline/reconnect recovery with a deterministic local response-body error; no real provider. */
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { RecoveryProbeWindow } from './probe-types';
 const browser = await chromium.launch();
 const context = await browser.newContext();
 let observedProviderHttpRequests = 0;
@@ -61,11 +62,11 @@ try {
     const before = await read(); const assistantId = before.find(row => row.role === 'assistant')!.id;
     await context.setOffline(true);
     expect(await page.evaluate(() => navigator.onLine)).toBe(false);
-    await page.evaluate(() => (window as any).assistantSaveProbe.release());
-    await expect.poll(() => page.evaluate(() => (window as any).assistantSaveProbe.faults), { timeout: 10_000 }).toBe(1);
+    await page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.release());
+    await expect.poll(() => page.evaluate(() => (window as unknown as RecoveryProbeWindow).assistantSaveProbe.faults), { timeout: 10_000 }).toBe(1);
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 10_000 });
     const offlineRows = await read();
-    const offlineUi = await page.evaluate(() => ({ online: navigator.onLine, text: document.body.innerText, providerCalls: (window as any).assistantSaveProbe.providerCalls }));
+    const offlineUi = await page.evaluate(() => ({ online: navigator.onLine, text: document.body.innerText, providerCalls: (window as unknown as RecoveryProbeWindow).assistantSaveProbe.providerCalls }));
     expect(offlineRows.find(row => row.id === assistantId)?.data.content).toBe(prefix);
     expect(offlineRows.filter(row => row.role === 'user')).toHaveLength(1);
     expect(offlineRows.filter(row => row.role === 'assistant').map(row => row.id)).toEqual([assistantId]);

@@ -1,6 +1,7 @@
 /** Chromium IndexedDB + production draft composable; composer UI bypassed. */
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import type { WorkspaceTabDraftRow } from '../app/db/client';
 const browser = await chromium.launch();
 const context = await browser.newContext();
 const scripts: string[] = [];
@@ -14,18 +15,18 @@ try {
         drafts: scripts.find(url => /useWorkspaceTabDrafts\.ts(?:\?|$)/.test(url)) };
     if (!urls.client || !urls.drafts) throw new Error('Loaded production modules unavailable');
     const evidence = await page.evaluate(async urls => {
-        const client = await import(urls.client!); const module = await import(urls.drafts!);
+        const client = (await import(urls.client!) as typeof import('../app/db/client')); const module = (await import(urls.drafts!) as typeof import('../app/composables/core/useWorkspaceTabDrafts'));
         const drafts = module.useWorkspaceTabDrafts(); const table = client.getDb().workspace_tab_drafts;
         const put = table.put.bind(table); const tabId = 'synthetic-same-tab-save-ack';
         let completeOlder: (() => void) | undefined;
-        table.put = (row: { tab_id: string; draft: { text: string } }) => {
+        table.put = ((row: WorkspaceTabDraftRow) => {
             if (row.tab_id !== tabId) return put(row);
             if (row.draft.text === 'Older accepted synthetic buffer') {
-                return put(row).then((id: string) => new Promise(resolve => { completeOlder = () => resolve(id); }));
+                return put(row).then((id: string) => new Promise<string>(resolve => { completeOlder = () => resolve(id); }));
             }
             return Promise.reject(new DOMException('Synthetic latest-edit quota', 'QuotaExceededError'));
-        };
-        const buffer = (text: string) => ({ version: 1, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() });
+        }) as typeof table.put;
+        const buffer = (text: string) => ({ version: 1 as const, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() });
         drafts.write(tabId, buffer('Older accepted synthetic buffer'));
         const older = drafts.flush();
         for (let attempt = 0; !completeOlder && attempt < 200; attempt++) await new Promise(resolve => setTimeout(resolve, 10));
