@@ -61,7 +61,7 @@ export async function assertRestoreFreeSpace(
   const freeBytes = await dataVolumeFreeBytes(directory, state.mode, env);
   // Extraction first replaces the current managed volume contents. Its used
   // bytes are reclaimable capacity, unlike a backup archive written beside it.
-  const reclaimableBytes = await dataVolumeSize(directory, state.mode, env);
+  const reclaimableBytes = await dataVolumeSize(directory, state.mode, env, 'allocated');
   assertEnoughFreeSpace(freeBytes + reclaimableBytes, requiredBytes, 'Restore');
 }
 

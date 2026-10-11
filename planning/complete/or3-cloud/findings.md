@@ -53,6 +53,16 @@ The three plans are directionally aligned, but there are several conflicts and m
   records and attachment bytes; this is integrity validation, not a complete
   semantic audit or an early pre-extraction database check. Later startup and
   terminal-state failures still preserve possibly accepted writes.
+- A 96 MiB synthetic filesystem exposed a sparse-file restore capacity defect:
+  a largely unallocated 128 MiB file inflated reclaim estimates, allowing a
+  120 MiB payload to clear live data and fail extraction with `ENOSPC`.
+  Automatic recovery failed, and explicit recovery could not fit the retained
+  snapshot. Restore now counts allocated blocks as reclaimable bytes while
+  backup manifests retain apparent payload sizes. The same signed archive is
+  refused before journal/service/data mutation; a separate physically allocated
+  pressure case still restores successfully by reclaiming actual blocks. No
+  archive format or cleanup behavior changes. The failing fixture's separate
+  known-good reset was test-only, not a successful managed recovery procedure.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

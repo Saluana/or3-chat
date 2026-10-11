@@ -20,6 +20,37 @@ afterEach(async () => {
 
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
 
+test('restore refuses sparse apparent bytes as reclaimable capacity before mutating state or data', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ volumeApparentBytes: 128 * 1024 * 1024, volumeAllocatedKiB: 1024, volumeFreeKiB: 96 * 1024 });
+  const id = await createBackup(fixture);
+  await fixture.reset();
+  const before = await fixture.readStateText();
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.stderr).toContain('Restore needs at least');
+  expect(await fixture.readStateText()).toBe(before);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
+
+test('restore counts allocated bytes it will reclaim while keeping backup payload sizes apparent', async () => {
+  const fixture = await sandbox();
+  const target = await createBackup(fixture);
+  await fixture.configure({ volumeApparentBytes: 128 * 1024 * 1024, volumeAllocatedKiB: 80 * 1024, volumeFreeKiB: 16 * 1024,
+    failures: [{ match: 'du -sk', times: 1, message: 'fixture running probe unavailable' }] });
+  await fixture.reset();
+  const restored = await fixture.cli(['restore', target, '--yes']);
+  expect(restored.exitCode, restored.output).toBe(0);
+  const [snapshot] = (await fixture.backupIds()).filter(id => id !== target);
+  const manifest = JSON.parse(await readFile(join(fixture.cloud, 'backups', snapshot, 'manifest.json'), 'utf8'));
+  expect(manifest.dataBytes).toBe(128 * 1024 * 1024);
+  const probes = (await fixture.trace()).filter(args => args.join(' ').includes('du -sk'));
+  expect(probes.length).toBeGreaterThan(1);
+  expect(probes[1]).toEqual(expect.arrayContaining(['run', '--network', 'none', '--read-only']));
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
+
 async function createBackup(fixture: Sandbox) {
   const before = await fixture.backupIds();
   const result = await fixture.cli(['backup']);

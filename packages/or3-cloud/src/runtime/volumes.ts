@@ -136,27 +136,29 @@ export async function ensureManagedDataVolume(
 }
 
 /**
- * Measures the live data volume (mounted at /data) in bytes for the
- * free-space preflight, before the service is stopped.
+ * Measures the live data volume (mounted at /data) in bytes. Apparent bytes
+ * estimate archive payloads; allocated bytes estimate capacity reclaimed by
+ * clearing the volume. Sparse files must not inflate reclaimable capacity.
  *
- * Probe choice: `du -sb` runs inside the or3 image itself — first via
- * `docker compose exec` against the running container, then via
- * `docker compose run --entrypoint sh` (same image, no second image needed)
+ * Probe choice: `du -sb` (apparent) or `du -sk` (allocated) runs inside the
+ * or3 image itself — first via `docker compose exec` against the running
+ * container, then via `docker run` against the read-only data volume
  * when the deployment is stopped. The managed distroless image includes the
  * pinned BusyBox applets used here, and /data is already mounted there.
  */
-export async function dataVolumeSize(directory: string, mode: Mode, env: Record<string, string>) {
+export async function dataVolumeSize(directory: string, mode: Mode, env: Record<string, string>, size: 'apparent' | 'allocated' = 'apparent') {
+  const script = size === 'allocated' ? 'du -sk /data 2>/dev/null' : 'du -sb /data 2>/dev/null';
   const parseDuOutput = (stdout: string) => {
     const match = stdout.trim().match(/^(\d+)/);
     if (!match) throw new Error(`Could not parse the data volume size from "du" output.`);
-    return Number(match[1]);
+    return Number(match[1]) * (size === 'allocated' ? 1024 : 1);
   };
-  const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', 'du -sb /data 2>/dev/null'])], directory);
+  const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', script])], directory);
   if (exec.ok) return parseDuOutput(exec.stdout);
   const fallback = await run('docker', [
     'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
     '-v', `${env.OR3_VOLUME_NAME}:/data:ro`, '--entrypoint', 'sh', env.OR3_IMAGE,
-    '-c', 'du -sb /data 2>/dev/null',
+    '-c', script,
   ], directory);
   if (fallback.ok) return parseDuOutput(fallback.stdout);
   throw new Error(`Could not measure the data volume size for the free-space preflight. Start the deployment and retry. ${redact(`${exec.stderr} ${fallback.stderr}`)}`);

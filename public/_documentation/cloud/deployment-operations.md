@@ -26,6 +26,12 @@ restore can still succeed while attachment download returns 404. Always verify
 a previously uploaded original after restart; deep health alone cannot prove
 attachment completeness.
 
+Restore preflight measures free bytes on the actual managed data filesystem and
+adds only allocated blocks it can reclaim by clearing that volume. Large sparse
+files do not supply their logical size as free capacity. Backup payload sizes
+remain logical bytes because extraction can expand sparse contents. Keep the
+required reserve and free space available before retrying a capacity refusal.
+
 ## Monitoring and Health Checks
 
 - Liveness/readiness endpoint: `GET /api/health`
