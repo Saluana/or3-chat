@@ -801,7 +801,7 @@ describe('ChatInputDropper', () => {
             const editor = wrapper.getComponent(EditorContent).props('editor')!;
             editor.emit('update', { editor, transaction: editor.state.tr, appendedTransactions: [] });
             finishRead!(); await flushPromises();
-            expect(editor.getText()).toBe(row.draft.text);
+            await vi.waitFor(() => expect(editor.getText()).toBe(row.draft.text));
             expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe(row.draft.text);
         } finally {
             finishRead?.(); wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
