@@ -6,6 +6,7 @@ const root = process.cwd();
 const directory = await mkdtemp('/tmp/or3-isolation-base-');
 const base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5';
 const tests = [
+    'app/composables/search/__tests__/useCommandPalette.test.ts',
     'server/api/storage/__tests__/presign-membership-continuation.test.ts',
     'app/composables/core/__tests__/useThumbnailUrlCache.test.ts',
     'app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts',
@@ -39,7 +40,7 @@ try {
     for (const file of tests) await Bun.write(join(directory, file), await Bun.file(join(root, file)).text());
     const result = await run(['bun', 'x', 'vitest', 'run', ...tests,
         '--bail=0', '--maxWorkers=2', '--reporter=dot', '--silent=passed-only',
-        '--testNamePattern=shared preview workspace|held preview|displayed preview|cached-load continuation|gallery upload batch|gallery picker ownership|fences gallery|fences delayed palette|rechecks ownership after awaited PNG|held canonical ownership|membership becomes|awaited canonical ownership|former account completion|held quota|held canonical metadata|held signer|held workflow|shared thumbnail|held thumbnail|next workspace thumbnail|mounted thumbnail workspace consumers|held prefetch metadata'], directory);
+        '--testNamePattern=late palette action|shared preview workspace|held preview|displayed preview|cached-load continuation|gallery upload batch|gallery picker ownership|fences gallery|fences delayed palette|rechecks ownership after awaited PNG|held canonical ownership|membership becomes|awaited canonical ownership|former account completion|held quota|held canonical metadata|held signer|held workflow|shared thumbnail|held thumbnail|next workspace thumbnail|mounted thumbnail workspace consumers|held prefetch metadata'], directory);
     await Bun.write(join(root, 'audit-evidence/workspace-isolation-20261011/baseline-regressions.txt'),
         `Base: ${base}\nCommand: Bun Vitest canonical regression suites in a disposable worktree\n${result.output}\nExit status: ${result.code}\n`);
     console.log(result.output);

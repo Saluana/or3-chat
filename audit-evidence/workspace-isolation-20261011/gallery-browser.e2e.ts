@@ -208,3 +208,40 @@ for (const heldDecode of [false, true]) {
             preserved: true, sameHash: true, deliveredHashMatches: true });
     });
 }
+
+for (const outcome of ['success', 'failure'] as const) {
+    for (const change of ['changed', 'returned'] as const) {
+        test(`actual palette discards ${outcome} feedback after workspace is ${change}`, async ({ page }) => {
+            await open(page);
+            await select(page, `palette-browser-${outcome}-${change}-origin`);
+            await page.evaluate(async () => {
+                const path = '/_nuxt/composables/search/useCommandPalette.ts';
+                const module = await import(path);
+                const palette = module.useCommandPalette();
+                let finish!: (value: unknown) => void;
+                const held = new Promise(resolve => { finish = resolve; });
+                const restore = module.setPaletteHostContext({ canOpenNewPane: () => true, openChat: () => held });
+                palette.open();
+                const pending = palette.runAction({ id: 'synthetic-navigation', label: 'Synthetic navigation', target: { kind: 'chat', threadId: 'synthetic-thread', destination: 'active' } });
+                (window as unknown as { isolationPalette: unknown }).isolationPalette = { palette, finish, pending, restore };
+            });
+            await select(page, `palette-browser-${outcome}-${change}-target`);
+            if (change === 'returned') await select(page, `palette-browser-${outcome}-${change}-origin`);
+            const state = await page.evaluate(async result => {
+                const fixture = (window as unknown as { isolationPalette: {
+                    palette: { isOpen: { value: boolean }; errorMessage: { value: string | null }; announcement: { value: string }; close(): void };
+                    finish(value: unknown): void; pending: Promise<void>; restore(): void;
+                } }).isolationPalette;
+                fixture.finish(result === 'success' ? { ok: true } : { ok: false, error: { code: 'navigation-failed', message: 'synthetic-private-workspace-a-filename' } });
+                await fixture.pending;
+                const state = { open: fixture.palette.isOpen.value, error: fixture.palette.errorMessage.value, announcement: fixture.palette.announcement.value };
+                fixture.palette.close();
+                fixture.restore();
+                return state;
+            }, outcome);
+            expect(state.open).toBe(true);
+            expect(state.error).toBeNull();
+            expect(state.announcement).not.toContain('synthetic-private-workspace-a-filename');
+        });
+    }
+}
