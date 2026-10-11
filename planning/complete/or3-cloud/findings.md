@@ -63,24 +63,13 @@ The three plans are directionally aligned, but there are several conflicts and m
   pressure case still restores successfully by reclaiming actual blocks. No
   archive format or cleanup behavior changes. The failing fixture's separate
   known-good reset was test-only, not a successful managed recovery procedure.
-- A populated-main/WAL drill exposed another false restore success: corrupting
-  one WAL-header byte and removing SHM made SQLite ignore a committed record
-  while the older main database, baseline records and `quick_check` remained
-  valid. Restoring the intact archive recovered that record. Native pre-start
-  verification now checks the documented 32-byte WAL header before opening
-  the database, allowing empty checkpointed WALs and preserving legacy path
-  resolution. This is independent of provider schema and changes no archive
-  format. Actual refusal/recovery preserves the committed record.
-- The next real WAL drill retained a valid header but corrupted current-frame
-  content: native integrity and baseline reads remained healthy while restore
-  dropped the committed WAL-only record. Pre-start validation now streams
-  current-generation frames and checks their cumulative checksums with a
-  page-sized buffer. Old-salt tails after reuse and incomplete append tails
-  retain SQLite's existing recovery semantics. A complete same-generation
-  frame with a bad checksum is conservatively refused, including a torn
-  uncommitted frame; this does not repair damaged input. Truncation or altered
-  salts can still resemble legitimate interrupted/reused tails, so expected
-  record inventory remains a separate semantic completeness boundary.
+- Populated-main/WAL drills reproduced false restore success for damaged
+  headers and committed frame content: native integrity and baseline reads
+  stayed healthy while a later committed WAL-only record was missing. Intact
+  archives repaired the record. Custom header/frame gates were explored but
+  are now excluded from production: native recovery must decide which WAL
+  state is usable. These remain expected-record completeness limits; physical
+  database integrity does not establish every application record is present.
 - The two-workspace omission drill strengthened refusal assertions and exposed
   late archive validation: a missing committed blob was refused only after
   snapshot capture stopped the app and journaled target mutation, causing an
@@ -112,13 +101,19 @@ The three plans are directionally aligned, but there are several conflicts and m
   later healthy writes left an obsolete same-salt WAL tail. The strict frame
   guard rejected both the healthy backup and its automatic recovery snapshot.
   A cache-aware follow-up passed with valid SHM but still refused otherwise
-  healthy cacheless tails. Both experimental decoders are now excluded from
+  healthy cacheless tails. All experimental header/frame/index decoders are now excluded from
   production restore and retained under scripts/test as offline diagnostics.
   Native SQLite recovers healthy tails with valid, missing or corrupt SHM.
   An invalid database candidate safely recovers the real known-good snapshot
   with a discarded same-salt tail and no SHM; the strict diagnostic rejects
   that same healthy snapshot. Committed-frame corruption remains an explicit
-  record-completeness limit. Do not apply either experimental frame gate.
+  record-completeness limit. Independent native SQLite review passed twelve
+  healthy rollback/checkpoint cases with intact, missing, stale, corrupt,
+  empty or byte-swapped SHM. Six injected malformed headers also recovered
+  from a healthy checkpointed main, while the remaining custom header gate
+  would reject the previous snapshot. That gate is quarantined too. The
+  injected headers are not proof of a genuine host-crash artifact. Do not
+  apply any experimental WAL gate from the intermediate commits.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

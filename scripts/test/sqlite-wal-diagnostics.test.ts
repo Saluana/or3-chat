@@ -3,8 +3,7 @@ import { Database } from 'bun:sqlite';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { isValidSqliteWalHeader } from '../../packages/or3-cloud/src/backup/restore';
-import { assertValidSqliteWalFrames } from './fixtures/sqlite-wal-diagnostics';
+import { assertValidSqliteWalFrames, isValidSqliteWalHeader } from './fixtures/sqlite-wal-diagnostics';
 
 const directories = new Set<string>();
 afterEach(async () => {
@@ -16,6 +15,21 @@ async function sandbox() {
   directories.add(root);
   return { root };
 }
+
+test('WAL header validation accepts a real header and refuses every single-byte corruption and short header', () => {
+  const validate = isValidSqliteWalHeader;
+  const valid = Buffer.from('377f0682002de218000010000000000063ab680c9fc69e53e14fae76ecd64cba', 'hex');
+  expect(validate(valid)).toBe(true);
+  // Equivalent documented header with big-endian checksum terms.
+  expect(validate(Buffer.from('377f0683002de218000010000000000063ab680c9fc69e5379b04ee3c04fd4ef', 'hex'))).toBe(true);
+  for (let index = 0; index < valid.length; index++) {
+    const corrupted = Buffer.from(valid);
+    corrupted[index] = corrupted[index]! ^ 0xff;
+    expect(validate(corrupted)).toBe(false);
+  }
+  for (let length = 0; length < 32; length++) expect(validate(valid.subarray(0, length))).toBe(false);
+});
+
 
 test('WAL frame validation checks real native checksums and allows stale reuse and incomplete uncommitted tails', async () => {
   const fixture = await sandbox();

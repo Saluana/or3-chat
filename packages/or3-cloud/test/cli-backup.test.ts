@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
-import { assertFilesystemPayloadHash, isValidSqliteWalHeader } from '../src/backup/restore';
+import { assertFilesystemPayloadHash } from '../src/backup/restore';
 
 // Each test drives several real CLI processes.
 setDefaultTimeout(30_000);
@@ -53,21 +53,6 @@ test('filesystem payload validation hashes real file chunks for SHA-256 and lega
     }
   }
 });
-
-test('WAL header validation accepts a real header and refuses every single-byte corruption and short header', () => {
-  const validate = isValidSqliteWalHeader;
-  const valid = Buffer.from('377f0682002de218000010000000000063ab680c9fc69e53e14fae76ecd64cba', 'hex');
-  expect(validate(valid)).toBe(true);
-  // Equivalent documented header with big-endian checksum terms.
-  expect(validate(Buffer.from('377f0683002de218000010000000000063ab680c9fc69e5379b04ee3c04fd4ef', 'hex'))).toBe(true);
-  for (let index = 0; index < valid.length; index++) {
-    const corrupted = Buffer.from(valid);
-    corrupted[index] = corrupted[index]! ^ 0xff;
-    expect(validate(corrupted)).toBe(false);
-  }
-  for (let length = 0; length < 32; length++) expect(validate(valid.subarray(0, length))).toBe(false);
-});
-
 
 test('restore refuses sparse apparent bytes as reclaimable capacity before mutating state or data', async () => {
   const fixture = await sandbox();

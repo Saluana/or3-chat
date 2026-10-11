@@ -1,6 +1,21 @@
 // Offline diagnostic experiments only. These checks are deliberately excluded
 // from production restore: a discarded tail cannot prove expected records.
-import { isValidSqliteWalHeader } from '../../../packages/or3-cloud/src/backup/restore';
+/** SQLite's 32-byte WAL header: https://sqlite.org/fileformat2.html#wal_file_format */
+export function isValidSqliteWalHeader(header: Uint8Array) {
+  if (header.byteLength !== 32) return false;
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  const magic = view.getUint32(0);
+  const pageSize = view.getUint32(8);
+  if ((magic !== 0x377f0682 && magic !== 0x377f0683) || view.getUint32(4) !== 3007000
+    || pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0) return false;
+  let first = 0;
+  let second = 0;
+  for (let offset = 0; offset < 24; offset += 8) {
+    first = (first + view.getUint32(offset, magic === 0x377f0682) + second) >>> 0;
+    second = (second + view.getUint32(offset + 4, magic === 0x377f0682) + first) >>> 0;
+  }
+  return first === view.getUint32(24) && second === view.getUint32(28);
+}
 
 /** Validate the duplicated native-order WAL-index header as a commit-boundary hint. */
 export function readSqliteWalCommitBoundary(header: Uint8Array, byteLength: number, indexHeader?: Uint8Array) {
