@@ -365,3 +365,27 @@ not promise that bytes already committed before teardown are deleted; post-commi
 file recovery/accounting remains governed by the existing #234/#238 contracts.
 
 Attachment restoration source commit: `f401bd4b47a9821881df7ecaa1fecfcb42fc8c37`.
+
+## Same-tab save receipt ordering
+
+Reproduced an older successful same-tab write clearing the warning raised by a
+newer rejected edit (`/tmp/or3-recovery-same-tab-ack-red.log`). Each write now
+returns its actual persisted snapshot; success acknowledges failure only when
+that receipt matches the current buffer. Immediate discard consumes the same
+receipt and retains its tombstone/retry after rejected deletion.
+50 draft/composer tests passed (`/tmp/or3-recovery-same-tab-ack-final-unit.log`).
+Type-check and lint passed; lint retains four existing warnings:
+`/tmp/or3-recovery-same-tab-ack-final-typecheck.log`,
+`/tmp/or3-recovery-same-tab-ack-final-lint.log`.
+
+`audit-evidence/same-tab-save-ack-probe.ts` independently passed in Chromium:
+a native older IndexedDB write had its Dexie receipt deferred while a newer
+132,000-character buffer (larger than the journal cap) failed to save. Its warning
+and synthetic cancelable beforeunload protection remained until retry confirmed
+the latest row, then cleared. This is actual IndexedDB and the production
+composable/shell handler, with composer UI bypassed and a deterministic callback
+and quota fixture; it does not claim a natural browser unload dialog.
+`/tmp/or3-recovery-same-tab-ack-final-browser.log` and
+`test-results/recovery-same-tab-ack/evidence.json` contain the receipt.
+
+Image intake source commit: `b691314d`.

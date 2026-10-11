@@ -258,10 +258,10 @@ async function pruneOldest(db: Or3DB, accountKey: string): Promise<void> {
     );
 }
 
-/** Resolves false when storage rejected the write, so the caller can keep the draft dirty. */
-async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boolean> {
+/** Return the confirmed snapshot, or a rejected write to retain for retry. */
+async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ saved: boolean; persisted?: PersistedWorkspaceTabDraft | null }> {
     let db = scope.db;
-    if (!db) return true;
+    if (!db) return { saved: true };
     // LRU eviction may close the captured handle while its buffer is retained.
     // A restored handle can acknowledge that same account/workspace only.
     const restoredDb = hydrations.get(scope.key)?.db;
@@ -271,11 +271,11 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boole
         const startedAt = Date.now();
         const entry = drafts.get(memoryKey(scope, tabId));
         const persisted = entry ? toPersisted(entry.draft) : null;
-        if (persisted === undefined) return false;
+        if (persisted === undefined) return { saved: false };
         if (!persisted) {
             await db.workspace_tab_drafts.delete(rowId(scope, tabId));
             clearJournalCoveredBy(scope, tabId, startedAt);
-            return true;
+            return { saved: true, persisted: null };
         }
         await db.workspace_tab_drafts.put({
             id: rowId(scope, tabId),
@@ -286,10 +286,10 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boole
         });
         clearJournalCoveredBy(scope, tabId, persisted.updatedAt, persisted);
         await pruneOldest(db, scope.accountKey);
-        return true;
+        return { saved: true, persisted };
     } catch (error) {
         console.warn('[tab-drafts] Draft was not saved to local storage', error);
-        return false;
+        return { saved: false };
     }
 }
 
@@ -304,6 +304,11 @@ function markDirty(scope: WorkspaceDraftScope, tabId: string): void {
     persistTimer = setTimeout(() => void flushWorkspaceTabDrafts(), PERSIST_DEBOUNCE_MS);
 }
 
+function matchesCurrentDraftReceipt(key: string, persisted: PersistedWorkspaceTabDraft | null | undefined): boolean {
+    const current = drafts.get(key)?.draft;
+    return JSON.stringify(current ? toPersisted(current) : null) === JSON.stringify(persisted);
+}
+
 /** Write every pending draft now (also runs when the page is hidden). Failed writes stay pending and are retried. */
 export async function flushWorkspaceTabDrafts(): Promise<void> {
     if (persistTimer) clearTimeout(persistTimer);
@@ -312,13 +317,20 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
     const batch = [...dirty.values()];
     dirty.clear();
     const outcomes = await Promise.all(
-        batch.map(async (entry) => ({ entry, saved: await persist(entry.scope, entry.tabId) }))
+        batch.map(async (entry) => ({ entry, ...await persist(entry.scope, entry.tabId) }))
     );
     const failed = outcomes.filter((outcome) => !outcome.saved);
-    for (const { entry, saved } of outcomes) {
+    for (const { entry, saved, persisted } of outcomes) {
         const key = memoryKey(entry.scope, entry.tabId);
-        if (saved) failedDrafts.delete(key);
-        else failedDrafts.add(key);
+        if (!saved) {
+            failedDrafts.add(key);
+        } else {
+            // Completion of an older same-tab save cannot acknowledge a later
+            // failed edit. Compare the actual receipt, including attachment refs.
+            if (matchesCurrentDraftReceipt(key, persisted)) {
+                failedDrafts.delete(key);
+            }
+        }
     }
     saveFailed.value = failedDrafts.size > 0;
     if (!failed.length) {
@@ -518,9 +530,10 @@ export function useWorkspaceTabDrafts() {
         writeJournal(scope, tabId, null);
         releaseDraftAttachments(draft);
         // Deleted right away: a pending debounce must not resurrect it. A failed delete is retried.
-        void persist(scope, tabId).then((saved) => {
-            if (saved) failedDrafts.delete(key);
-            else {
+        void persist(scope, tabId).then(({ saved, persisted }) => {
+            if (saved) {
+                if (matchesCurrentDraftReceipt(key, persisted)) failedDrafts.delete(key);
+            } else {
                 failedDrafts.add(key);
                 markDirty(scope, tabId);
             }

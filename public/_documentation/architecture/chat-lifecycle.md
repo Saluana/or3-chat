@@ -129,3 +129,5 @@ Chat settings and their nested selectors use fade transitions to keep anchor wid
 Interrupted draft reads reject restoration instead of reporting an absent draft. The composer keeps the existing saved row, prevents its untouched empty editor from replacing that unread copy, and shows a persistent "Draft could not be restored" notice with **Retry restore**. The retry is scoped to the originating account, workspace and tab.
 
 A rejected attachment blob or metadata read keeps its original draft reference and reports a retryable restore failure. Partial preview URLs are released before retry. Only a successfully read absent/deleted file is reported through the existing missing-attachment notice.
+
+Save completion acknowledges only the exact current persisted snapshot. An older successful save of the same tab cannot clear a newer failed edit's warning. Immediate discard uses the same receipt rule, and rejected deletion keeps its discard journal and retry pending.

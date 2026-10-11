@@ -397,6 +397,30 @@ describe('durable workspace tab drafts', () => {
             .map(row => row.tab_id).sort()).toEqual(['failed-tab', 'saved-tab']);
     });
 
+    it('does not acknowledge a newer failed edit when an older save of the same tab finishes', async () => {
+        const { client, drafts, flush } = await reload();
+        const table = client.getDb().workspace_tab_drafts; const put = table.put.bind(table);
+        let finishOlder!: () => Promise<void>;
+        const writes = vi.spyOn(table, 'put').mockImplementation(row => {
+            if (row.draft.text === 'Older same-tab snapshot') return new Promise(resolve => {
+                finishOlder = async () => resolve(await put(row));
+            }) as never;
+            return Promise.reject(new DOMException('Synthetic latest-edit quota', 'QuotaExceededError')) as never;
+        });
+        drafts.write('same-tab', draft('Older same-tab snapshot'));
+        const older = flush(); await vi.waitFor(() => expect(finishOlder).toBeDefined());
+        drafts.write('same-tab', draft('Newer unsaved buffer'));
+        await flush(); expect(drafts.saveFailed.value).toBe(true);
+        await finishOlder(); await older;
+        expect(drafts.saveFailed.value).toBe(true);
+        expect(drafts.read('same-tab')?.text).toBe('Newer unsaved buffer');
+        expect((await table.toArray()).find(row => row.tab_id === 'same-tab')?.draft.text).toBe('Older same-tab snapshot');
+        writes.mockRestore(); await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect((await table.toArray()).find(row => row.tab_id === 'same-tab')?.draft.text).toBe('Newer unsaved buffer');
+        drafts.discard('same-tab'); await flush();
+    });
+
     it('clears a failed tab warning once its explicit discard is durable', async () => {
         const { client, drafts, flush } = await reload();
         const table = client.getDb().workspace_tab_drafts;
@@ -407,6 +431,20 @@ describe('durable workspace tab drafts', () => {
         drafts.discard('failed-tab');
         await vi.waitFor(() => expect(drafts.saveFailed.value).toBe(false));
         expect((await table.toArray()).filter(row => row.tab_id === 'failed-tab')).toEqual([]);
+    });
+
+    it('retains the discard journal and warns when immediate deletion fails, then retries it', async () => {
+        const { client, drafts, flush } = await reload(); const table = client.getDb().workspace_tab_drafts;
+        drafts.write('failed-delete-tab', draft('Delete after explicit discard')); await flush();
+        const rejection = vi.spyOn(table, 'delete').mockRejectedValue(new DOMException('Synthetic rejected deletion', 'AbortError'));
+        drafts.discard('failed-delete-tab');
+        await vi.waitFor(() => expect(drafts.saveFailed.value).toBe(true));
+        expect(journalKeys()).not.toEqual([]);
+        expect((await table.toArray()).find(row => row.tab_id === 'failed-delete-tab')).toBeDefined();
+        rejection.mockRestore(); await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect((await table.toArray()).find(row => row.tab_id === 'failed-delete-tab')).toBeUndefined();
+        expect(journalKeys()).toEqual([]);
     });
 
     it('recovers the last edit when the page unloaded before IndexedDB committed it', async () => {
