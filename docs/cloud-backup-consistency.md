@@ -76,26 +76,19 @@ SQLite can ignore an invalid WAL and use an older, structurally valid main
 database: the drill reproduced successful restore with a committed WAL-only
 record missing after header corruption and SHM omission. Invalid headers are
 now refused before startup and the original snapshot is recovered. Empty WALs
-remain valid checkpoint artifacts. Restore also streams full current-generation
-frames and verifies their cumulative checksums before native opening; the drill
-reproduced the same silent omission after corrupting frame content beneath a
-valid header. The buffer is bounded to one page plus its frame header. Old salts
-after WAL reuse and an incomplete trailing append remain accepted, preserving
-SQLite's checkpoint/crash semantics. A complete current-generation frame with
-a bad checksum is refused within the committed prefix. A real interrupted
-transaction exposed same-salt leftovers after rollback and later healthy
-appends: checking every physical frame falsely rejected both a healthy backup
-and its recovery snapshot. A duplicated, checksummed archived WAL-index header
-may now identify the committed boundary, but it is accepted only after the
-matching WAL prefix, final commit marker/page count and cumulative checksum are
-verified. Beyond that boundary, an invalid tail is accepted only when its
-remaining current-generation frames contain no commit markers. Missing,
-inconsistent or unsupported index metadata cannot authorize this exception;
-ambiguous same-salt tails without a usable index remain conservatively refused.
-Ordinary valid WALs still work without SHM. This verifier does not repair input.
-Truncation or altered salts can still resemble
-a legitimate interrupted/reset tail, so this is not proof of the expected
-record inventory or a substitute for semantic completeness validation.
+remain valid checkpoint artifacts. SQLite performs frame recovery itself.
+A custom full-frame check falsely rejected genuine same-salt leftovers after
+an interrupted transaction and later healthy appends, including the known-good
+automatic recovery snapshot. A cache-aware follow-up still rejected otherwise
+healthy cacheless tails, so both frame decoders are excluded from production
+restore. Their experiments remain in `scripts/test/fixtures/sqlite-wal-diagnostics.ts`
+and `scripts/test/sqlite-wal-diagnostics.test.ts` as offline diagnostics only.
+Native recovery accepts healthy rollback/reset/partial tails and rebuilds a
+missing or corrupt SHM cache. Committed-frame corruption can still silently
+discard the later record while native integrity and baseline reads pass.
+Truncation or altered salts can likewise resemble legitimate interrupted/reset
+tails. Archive checksums and physical integrity do not establish an expected
+record inventory; those semantic completeness gaps remain unresolved.
 The real `--wal-tail-only` drill verifies those remaining omissions: truncating
 one byte from a frame carrying a commit marker, or altering the first frame's
 salt, preserves healthy baseline data but loses the later committed record.
@@ -193,18 +186,20 @@ then sends SIGKILL to the owned app with its restart policy temporarily disabled
 It captures the stopped source and checks managed source restore discards the
 pending table/document change while retaining the acknowledged baseline. Later
 healthy writes leave a genuine obsolete same-salt tail. The built CLI must
-restore that backup; committed-frame corruption with the original SHM retained
-must still refuse and safely recover. Invalid/missing SHM on that ambiguous
-tail must conservatively refuse and recover the intact snapshot, followed by
-another cold restart. No manifest redesign or physical cleanup is involved.
+restore that backup with valid, corrupt and missing SHM caches, retaining the
+baseline. An invalid database candidate must safely auto-recover a known-good
+snapshot with the real discarded tail and no SHM, followed by another cold
+restart. The offline strict decoder must reproduce its rejection of that same
+healthy recovery snapshot. No manifest redesign or physical cleanup is involved.
 `--wal-corruption-only` first checkpoints populated data into the main database,
 commits another record into WAL, and captures a real backup. It corrupts the
 WAL header and removes the transient SHM file, verifies refusal before startup
 and recovery of the committed record, then verifies the intact backup again.
 `--wal-frame-only` corrupts a current-generation frame beneath an intact header,
-checks refusal/recovery of the committed record, and verifies that a stale
-frame after a valid commit and an incomplete append remain accepted. The
-pre-fix drill reported success while dropping the committed WAL-only record.
+records native recovery's unresolved loss of the WAL-only record, and verifies
+that a stale frame after a valid commit and an incomplete append retain it.
+The intact archive recovers the record. The offline decoder is a diagnostic,
+not a production completeness gate.
 `--wal-tail-only` records the unresolved commit-truncation and first-frame-salt
 omissions with real application reads, starting each case with the committed
 record present and recovering it from the intact archive afterward.
