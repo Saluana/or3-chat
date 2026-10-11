@@ -1,7 +1,7 @@
 /** Actual Chromium renderer crash after an acknowledged recovery journal but rejected IndexedDB save. */
 import { chromium, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
-const output = '/workspace/or3-chat/test-results/recovery-renderer-crash-attachment';
+const output = process.env.OR3_CRASH_ATTACHMENT_OUTPUT ?? '/workspace/or3-chat/test-results/recovery-renderer-crash-attachment';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ args: ['--disable-breakpad', '--disable-crash-reporter'] });
 const context = await browser.newContext();

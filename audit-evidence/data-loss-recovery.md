@@ -3,13 +3,111 @@
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (remote `or3-cloud`, fetched October 11).
 Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only.
 
+**Current source checkpoint:** `c7f309347b1d01b9f1e333af2cf41b4670a3be89`.
+Parent explicitly authorized fixing the remaining competing-draft and terminal-save
+issues after wake-up. `3d20af87` adds local recovery versions and additive v28;
+`c7f30934` retains and retries the terminal assistant snapshot without replay.
+The independent agent reviewed current source read-only and found no remaining
+blocking defect; this is source review, not independent test execution.
+
+Current narrow qualification: **81 core recovery tests + 44 database integration
+regressions + 10 coalescer tests pass**. Final Nuxt type checking and changed-source
+lint pass. Logs: `/tmp/or3-recovery-versions-terminal-unit-final.log`,
+`/tmp/or3-recovery-versions-db-integration-final.log`,
+`/tmp/or3-recovery-versions-db-guard-regressions.log`,
+`/tmp/or3-recovery-versions-terminal-typecheck-final.log`,
+`/tmp/or3-recovery-versions-terminal-lint-final.log`.
+
+Mounted/native Chromium draft version qualification passes:
+`/tmp/or3-recovery-draft-versions-qualified-browser-v2.log`,
+`test-results/recovery-draft-versions-browser/evidence.json`.
+Both pages commit distinct drafts, preserve their own text through real refresh,
+use fresh writer identities despite a duplicated session hint, and retain the
+replaced buffer after explicit chooser selection. Concurrent set/set and a later
+clear retain the other page's branch. The second page's native save updates the
+first chooser while localStorage is physically full (**79 x 65,536 characters,
+5,177,344 characters; next write rejected**). IDB quota remains injected, not a
+physical browser-disk exhaustion claim. The initial browser setup wrongly
+replayed its cloned hint on every reload; its failed log is preserved and this
+harness error was corrected with a once-only clone marker. The earlier debounce
+characterization rerun did not reliably reproduce the old overwrite and is not
+counted as a failed product regression.
+
+Mounted/native terminal save recovery also passes at this source:
+`/tmp/or3-recovery-assistant-terminal-save-qualified-browser.log`,
+`test-results/recovery-assistant-terminal-save-qualified/evidence.json`.
+After **20** rejected expanded-prefix puts, the terminal snapshot remains held,
+the save notice and synthetic unload protection remain, storage repair triggers
+a local-only retry, and actual refresh retains the complete prefix and final
+suffix under the same assistant ID. One synthetic user row and one local scripted
+provider invocation; all external requests denied. Closed-handle/real-dialog qualification also passes:
+`/tmp/or3-recovery-assistant-terminal-save-closed-qualified-browser.log`,
+`test-results/recovery-assistant-terminal-save-closed-qualified/evidence.json`.
+After **21** rejected puts, actual refresh raised one beforeunload dialog, which
+was dismissed. The captured origin Dexie handle was closed, storage was repaired,
+and a write-only retry reopened that exact database, acknowledged the complete
+suffix, removed protection, and allowed actual refresh with no further dialog.
+Provider invocations remained one; the user and assistant identities stayed fixed.
+
+Actual `CDP Page.crash`/crash-event attachment recovery passes at this source:
+`/tmp/or3-recovery-renderer-crash-attachment-versions-qualified-browser.log`,
+`test-results/recovery-renderer-crash-attachment-versions-qualified/evidence.json`.
+The journal protected the latest text and attachment reference while canonical
+puts failed. A fresh page recovered that text, the unchanged canonical row ID,
+and the exact **68 bytes** of the already committed synthetic PNG.
+
+The first combined run at this source finished with **31 passes and one timeout**
+in the oversized-draft refresh test. Its legacy fault paused `table.put` after
+the new native atomic transaction had opened, then repaired only the canonical
+put outside that transaction. That repair no longer establishes acknowledgment
+of the whole version/state transaction; the second refresh remained protected.
+The source-level diagnosis is that pausing after entry permits native IDB
+auto-completion before repair. Its failed log and error
+context are preserved: `/tmp/or3-recovery-versions-terminal-expanded-first-browser.log`
+and `test-results/recovery-large-draft-before-atomic-entry-failure/`.
+Harness-only commit `c89b7486fa1b1764bce1ead3eadf6e182de18ad1` pauses before
+transaction entry, then repairs and awaits the complete atomic transaction.
+The corrected case passes in **21.8 seconds**; log
+`/tmp/or3-recovery-large-draft-atomic-entry-browser.log`.
+A fresh combined run **passed all 32 cases in 8.6 minutes**, ending at
+15:10:40 UTC, at that harness commit and unchanged application source c7f30934.
+Log: `/tmp/or3-recovery-versions-terminal-expanded-final-browser.log`.
+One Chromium worker, no concurrent application edits, Nuxt preparation, unit
+suites or type checking. Subsequent evidence-only commits do not change the
+qualified application or test sources.
+
+The two formerly remaining source defects are implemented. No deployment, push,
+merge, model/provider replay, production access or dormant cleanup activation.
+`foregroundStream.ts` and `continue.ts` remain unchanged. Call-site overlap is
+limited to the request controller and useAi's captured, request-scoped save-notice
+callback/import. Existing canonical/tracker recovery stays with its owner.
+
+Current durability limits: terminal retry holds an in-memory snapshot, with a
+persistent notice and unload guard; it has no durable terminal journal before
+acknowledgment. Accepting unload or crashing while storage stays unavailable can
+lose that suffix. Uncommitted attachment bytes and oversized, unjournaled drafts
+also remain subject to the visible unsaved warning. The additive v28 migration
+preserves v27 rows/queues; older executable builds may not open an upgraded v28
+database. Recovery keeps at most 200 live versions, then reports capacity failure
+without eviction. Natural hidden/OS suspension, physical IDB exhaustion, eviction
+and power loss remain unqualified. The concise portable handoff records these
+limits separately from actual browser evidence.
+
+The evidence below is historical, with each result tied to its own source. Older
+'remaining/unimplemented' statements describe that checkpoint and are superseded
+by the current status above.
+
+## Earlier checkpoints
+
 **Latest source checkpoint:** `c65df47fb91570fefa1d218a695e46d41b9f7894`
 fixes four verified coalescer receipt/teardown races. It passes 27 scoped tests,
 type checking, lint, actual Chromium independent-writer dialogs with mocked
-writes, and the mounted native five-failure retry/refresh case. A fresh combined
-32-case run began at this exact source at 13:54 UTC, with no concurrent source
-edits, Nuxt preparation, unit suites or type checks. That pending invocation
-is not yet a passing qualification.
+writes, and the mounted native five-failure retry/refresh case. Its fresh combined
+run passed **32/32 in 8.9 minutes**, started at this exact
+source at 13:54 UTC and completed by 14:03:51 UTC. Log
+`/tmp/or3-recovery-coalescer-races-expanded-final-browser.log`. One Chromium
+worker; no concurrent application edits, Nuxt preparation, units or type checks.
+Evidence-only commit `e2007862` was made during the run without application changes.
 The preceding `bf9db934cd80673ce836d7f17239c109d09e6fbd` protects an unread tab manifest after storage-read failure. Its 51 scoped tests,
 type checking, lint and native Chromium failure/reload probe pass. Its fresh
 combined run passed **32/32 in 9.1 minutes**: log
@@ -97,8 +195,22 @@ save, guard removal and actual refresh preserving the expanded prefix. One
 unchanged assistant ID, one user row, one mocked provider invocation. Log
 `/tmp/or3-recovery-assistant-persistent-guard-races-qualified-browser.log`,
 `test-results/recovery-assistant-persistent-guard-races-qualified/evidence.json`.
-The new combined qualification remains pending; the prior 32/32 result does not qualify
-this newer committed source. The terminal-save limitation remains unchanged.
+The fresh combined qualification passed **32/32 in 8.9 minutes** at application
+source `c65df47f`: `/tmp/or3-recovery-coalescer-races-expanded-final-browser.log`.
+Evidence-only commit `e2007862` did not change application source during the run.
+The prior 32/32 result belongs to its earlier source, as recorded separately. The terminal-save limitation remains unchanged.
+
+### Coalescer acknowledgement contract limit
+
+The utility receives `write: () => Promise<void>` and cannot itself inspect the
+committed message snapshot. `patchMessageInDb` intentionally resolves without a
+write when its transaction-time generation guard rejects a stale owner; the
+persister preserves that existing void return contract. This review leaves #236
+barriers and the callback API intact. Current-owner native puts were verified in
+the mounted fault probe; a resolved callback is not independent proof that an
+arbitrary caller committed bytes. Stale-generation disposition belongs to the
+request/persistence owner. No new current-generation data-loss finding is claimed
+from this source-level limitation, and no shared persistence helper was modified.
 
 ## Permanent assistant-write rejection and active progress protection
 
