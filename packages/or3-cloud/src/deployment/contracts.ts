@@ -2,6 +2,16 @@ export type Mode = 'local' | 'public';
 export type Operation = 'init' | 'update' | 'restore' | 'adopt' | 'credentials-reset';
 export type PendingOperation = NonNullable<ManagedState['incompleteOperation']>;
 
+/** Last observed backup milestone, not a promise of current service health. */
+export type BackupProgress = {
+  stage: 'preflight' | 'maintenance' | 'capturing' | 'restarting' | 'verifying' | 'cleanup' | 'complete' | 'failed';
+  service: 'running' | 'stopped' | 'restarting' | 'healthy' | 'unknown';
+  artifact: 'not-created' | 'partial' | 'captured' | 'verified' | 'removed' | 'unknown';
+  message: string;
+  /** Stop request through successful restart/deep health, not total backup time. */
+  downtimeMs?: number;
+};
+
 export type ManagedState = {
   schemaVersion: StateSchemaVersion;
   mode: Mode;
@@ -48,6 +58,7 @@ export type ManagedState = {
     recreateDataVolume?: boolean;
     /** Whether the managed app was running before a standalone backup. */
     initialAppRunning?: boolean;
+    backupProgress?: BackupProgress;
     /** Whether an adopted source should be restarted if adoption fails. */
     sourceInitiallyRunning?: boolean;
     targetVersion?: string;

@@ -186,6 +186,13 @@ export function publicStateProjection(state: ManagedState) {
           dashboardJobId: pending.dashboardJobId ?? null,
           targetVersion: pending.targetVersion ?? null,
           targetImageDigest: pending.targetImageDigest ?? null,
+          backupProgress: pending.backupProgress ? {
+            stage: pending.backupProgress.stage,
+            service: pending.backupProgress.service,
+            artifact: pending.backupProgress.artifact,
+            downtimeMs: pending.backupProgress.downtimeMs ?? null,
+            message: redact(pending.backupProgress.message),
+          } : null,
           // Credential-reset recovery payloads and any environment snapshots are
           // intentionally excluded.
         }

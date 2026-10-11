@@ -10,6 +10,7 @@ export const lifecycleFaults: {
   beforeMirrorDelete?: () => void | Promise<void>;
   beforeArchiveRead?: () => void | Promise<void>;
   beforeArtifactDelete?: () => void | Promise<void>;
+  beforeTemporaryArchiveDelete?: () => void | Promise<void>;
   beforeCommand?: (command: string, args: string[]) => void | Promise<void>;
   beforeHandoff?: () => void | Promise<void>;
 } = {};
