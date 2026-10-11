@@ -60,18 +60,27 @@ describe('durable workspace tab drafts', () => {
     }
 
     /** A page reload: module state is gone, the IndexedDB data is not. */
-    async function reload() {
+    const pages: Array<{ drafts: ReturnType<typeof useWorkspaceTabDrafts>; flush: () => Promise<void> }> = [];
+    async function reload(trackPage = true) {
         vi.resetModules();
         const client = await import('~/db/client');
         const drafts = await import('../useWorkspaceTabDrafts');
-        return { client, drafts: drafts.useWorkspaceTabDrafts(), flush: drafts.flushWorkspaceTabDrafts };
+        const page = { client, drafts: drafts.useWorkspaceTabDrafts(), flush: drafts.flushWorkspaceTabDrafts };
+        if (trackPage) pages.push(page);
+        return page;
     }
 
     afterEach(async () => {
         vi.restoreAllMocks();
+        // Resetting modules does not close the older simulated pages. Drain
+        // their debounce/retry work before resetting shared durable fixtures.
+        for (const page of pages.splice(0)) {
+            page.drafts.clear();
+            await page.flush();
+        }
         session.userId = null;
         Object.keys(localStorage).filter((key) => key.startsWith('or3:tab-draft-journal:')).forEach((key) => localStorage.removeItem(key));
-        const { client, drafts } = await reload();
+        const { client, drafts } = await reload(false);
         client.setActiveWorkspaceDb(null);
         drafts.clear();
         await client.getDb().workspace_tab_drafts.clear();
