@@ -1,6 +1,7 @@
-Source/test head: f9ea3ce69b598bfca7e3a1978024a0b9f9d49655
+Host source/test review head: d57ffb71f295db77e17da2b89d4b688dc93bbd72
 Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
-Git bundle verify: passed; HEAD ref f9ea3ce69b598bfca7e3a1978024a0b9f9d49655; SHA-1 object format.
+Git bundle verify: passed; HEAD ref d57ffb71f295db77e17da2b89d4b688dc93bbd72; SHA-1 object format.
+Known provider delivery gap is recorded in README and is not fixed by these host review exports.
 SHA-256 file checksums:
-2c84c681f72b45e975fbb15faffecdd840f2b60b0bc015064742de7de3caecfd  workspace-isolation-source.patch
-d56e4803011aebdc0db9a4e7bfdb91dd3fa9327d2fbf0f7fc18090caf6540a5c  workspace-isolation-source.bundle
+badc98318f3780de3304705d1d41f364c25b02a058dc4ce2fde3f6fd5ef64eee  workspace-isolation-source.patch
+52c8261ca18df3a8fb1329dbccea41d56a99051dcded30a1742a2f9b5bd3a95e  workspace-isolation-source.bundle
