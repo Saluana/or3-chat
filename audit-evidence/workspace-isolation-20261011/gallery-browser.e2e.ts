@@ -328,6 +328,52 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
     });
 }
 
+test('rendered chat identifiers stay scoped through workspace switching and recovery', async ({ page }, info) => {
+    await open(page);
+    await page.route('**/api/openrouter/**', route => route.abort());
+    await page.route('**/api/jobs/**', route => route.abort());
+    await page.evaluate(async () => {
+        const path = '/_nuxt/db/client.ts';
+        const { setActiveWorkspaceDb } = await import(path);
+        for (const [workspace, text] of [['rendered-chat-origin', 'Synthetic rendered origin workspace message'], ['rendered-chat-target', 'Synthetic rendered target workspace message']]) {
+            const db = setActiveWorkspaceDb(workspace); await db.open();
+            await db.threads.put({ id: 'identical-rendered-thread', title: text, created_at: 1, updated_at: 1, clock: 1, deleted: false });
+            await db.messages.put({ id: 'identical-rendered-message', thread_id: 'identical-rendered-thread', role: 'user',
+                data: { content: text }, created_at: 1, updated_at: 1, clock: 1, deleted: false, index: 0 });
+        }
+        setActiveWorkspaceDb('rendered-chat-origin');
+        await (document.querySelector('#__nuxt') as any).__vue_app__.$nuxt.$router.push('/chat/identical-rendered-thread');
+    });
+    const messageRow = page.locator('[data-msg-id="identical-rendered-message"]');
+    await expect(messageRow).toBeVisible();
+    await expect(messageRow).toContainText('Synthetic rendered origin workspace message');
+    await select(page, 'rendered-chat-target');
+    await expect(page.getByText('Synthetic rendered origin workspace message', { exact: true })).toHaveCount(0);
+    await page.evaluate(async () => {
+        const path = '/_nuxt/utils/multiPaneApi.ts';
+        const { getGlobalMultiPaneApi } = await import(path);
+        const api = getGlobalMultiPaneApi();
+        if (!api) throw new Error('Actual pane navigation API unavailable');
+        await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
+    });
+    await expect(messageRow).toBeVisible();
+    await expect(messageRow).toContainText('Synthetic rendered target workspace message');
+    await expect(page.getByText('Synthetic rendered origin workspace message', { exact: true })).toHaveCount(0);
+    await select(page, 'rendered-chat-origin');
+    await expect(page.getByText('Synthetic rendered target workspace message', { exact: true })).toHaveCount(0);
+    await page.evaluate(async () => {
+        const path = '/_nuxt/utils/multiPaneApi.ts';
+        const { getGlobalMultiPaneApi } = await import(path);
+        const api = getGlobalMultiPaneApi();
+        if (!api) throw new Error('Actual pane navigation API unavailable');
+        await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
+    });
+    await expect(messageRow).toBeVisible();
+    await expect(messageRow).toContainText('Synthetic rendered origin workspace message');
+    await expect(page.getByText('Synthetic rendered target workspace message', { exact: true })).toHaveCount(0);
+    await info.attach('synthetic-rendered-chat-scope', { body: 'Actual PageShell/pane navigation, overlapping thread/message IDs, A→B→A; external/model/job requests denied.', contentType: 'text/plain' });
+});
+
 for (const action of ['muteThread', 'unmuteThread'] as const) {
     test(`native notification preference ${action} retains its DB during a workspace switch`, async ({ page }, info) => {
         await open(page);
