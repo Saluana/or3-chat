@@ -802,6 +802,35 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     await page.route('**openrouter.ai/**', route => route.abort());
+    await page.addInitScript(() => {
+        const traceKey = 'or3:e2e:recovery-draft-trace'; const set = Storage.prototype.setItem;
+        const pageId = crypto.randomUUID();
+        const record = (op: string, value: unknown) => {
+            try {
+                const trace = JSON.parse(localStorage.getItem(traceKey) ?? '[]') as unknown[];
+                trace.push({ op, value, pageId, at: Date.now(), editorText: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText ?? null });
+                set.call(localStorage, traceKey, JSON.stringify(trace.slice(-120)));
+            } catch { /* Observation must not affect persistence. */ }
+        };
+        Storage.prototype.setItem = function (key, value) {
+            const result = set.call(this, key, value);
+            try {
+                if (key.startsWith('or3:tab-draft-journal:') || key.startsWith('or3:workspace-tabs:v1:')) record('storage-set', { key, value: JSON.parse(value) });
+            } catch { /* Keep native storage behavior when a value is not JSON. */ }
+            return result;
+        };
+        const put = IDBObjectStore.prototype.put; const remove = IDBObjectStore.prototype.delete;
+        IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+            if (this.name === 'workspace_tab_drafts') record('draft-put-attempt', args[0]);
+            return put.apply(this, args);
+        };
+        IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
+            if (this.name === 'workspace_tab_drafts') record('draft-delete-attempt', args[0]);
+            return remove.apply(this, args);
+        };
+        window.addEventListener('beforeunload', () => record('beforeunload', null), { capture: true });
+        window.addEventListener('pagehide', () => record('pagehide', null));
+    });
     const savedDrafts = () => page.evaluate(async () => {
         const saved: Array<{ text: string; hashes: string[]; account: string }> = [];
         for (const { name } of await indexedDB.databases()) {
@@ -839,7 +868,13 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     await page.keyboard.press('End');
     await page.keyboard.type(' plus the last words');
     await page.reload();
-    await expect(input).toHaveText('Draft that must survive a reload plus the last words', { timeout: 30_000 });
+    try {
+        await expect(input).toHaveText('Draft that must survive a reload plus the last words', { timeout: 30_000 });
+    } finally {
+        const receipt = { savedDrafts: await savedDrafts(), liveText: await input.innerText(),
+            storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key === 'or3:e2e:recovery-draft-trace' || key.startsWith('or3:workspace-tabs:v1:') || key.startsWith('or3:tab-draft-journal:')))) };
+        await writeFile(info.outputPath('last-keystroke-reload-receipt.json'), JSON.stringify(receipt, null, 2));
+    }
 
     // Clearing the composer removes the saved copy rather than leaving a stale draft.
     await page.getByRole('button', { name: 'Remove image', exact: true }).click();

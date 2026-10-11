@@ -156,3 +156,9 @@ even after its transient error toast expires. The existing toast Retry remains
 available during that toast; afterward the user can remove and attach the file
 again. Removing a failed attachment or starting/succeeding at retry clears its
 persistent alert. A preview alone does not acknowledge file durability.
+
+Capturing before editor construction cannot discard an untouched unread buffer.
+If tab props restore text before extensions finish loading, capture retains that
+matching scoped saved editor JSON until an editor can supply the current JSON.
+Files selected early remain capturable; lack of an editor alone does not discard
+their live bytes.

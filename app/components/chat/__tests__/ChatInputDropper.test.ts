@@ -106,9 +106,10 @@ vi.mock('~/utils/errors', () => ({
 
 const attachmentFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((value: unknown) => Promise<unknown>) }));
 const beforeSendAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
+const editorExtensionsAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
-        doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); }),
+        doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); if (name === 'editor:request-extensions') await editorExtensionsAction.apply?.(); }),
         applyFilters: vi.fn(async (name: string, value: unknown) => name === 'files.attach:filter:input' && attachmentFilter.apply ? attachmentFilter.apply(value) : value),
     }),
 }));
@@ -245,6 +246,7 @@ describe('ChatInputDropper', () => {
         cloudIntake.session = null;
         attachmentFilter.apply = undefined;
         beforeSendAction.apply = undefined;
+        editorExtensionsAction.apply = undefined;
         vi.mocked(persistAttachment).mockResolvedValue(undefined);
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
@@ -284,6 +286,7 @@ describe('ChatInputDropper', () => {
             vm.setText('Next unsent draft'); gate.resolve(); await send;
             expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Clicked draft' });
             beforeSendAction.apply = undefined;
+        editorExtensionsAction.apply = undefined;
             await vm.triggerSend();
             expect(wrapper.emitted('send')?.[1]?.[0]).toMatchObject({ text: 'Next unsent draft' });
         } finally { gate.resolve(); wrapper.unmount(); process.client = client; }
@@ -608,6 +611,62 @@ describe('ChatInputDropper', () => {
         } finally {
             wrapper.unmount();
             useWorkspaceTabDrafts().discard('hide-tab');
+        }
+    });
+
+    it('cannot discard the unread saved row while editor initialization is held before draft restoration', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-before-initialize-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'uninitialized-draft-tab';
+        const drafts = useWorkspaceTabDrafts(); const account = drafts.scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const text = 'Saved buffer before delayed editor initialization';
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId, updated_at: Date.now(),
+            draft: { version: 1, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        const entered = deferred<void>(); const gate = deferred<void>();
+        editorExtensionsAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await entered.promise;
+            expect(wrapper.findComponent(EditorContent).exists()).toBe(false);
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            await drafts.flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe(text);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(wrapper.getComponent(EditorContent).props('editor')!.getText()).toBe(text));
+        } finally {
+            gate.resolve(); editorExtensionsAction.apply = undefined; wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
+        }
+    });
+
+    it('retains editor JSON when a tab prop restores text before the held editor is constructed', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-early-tab-restore-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'early-tab-restore';
+        const drafts = useWorkspaceTabDrafts(); const account = drafts.scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const text = 'Structured buffer before delayed editor initialization';
+        const editorJson = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] };
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId, updated_at: Date.now(),
+            draft: { version: 1, text, editorJson, attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        const entered = deferred<void>(); const gate = deferred<void>();
+        editorExtensionsAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await entered.promise; await wrapper.setProps({ tabId }); await flushPromises();
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            await flushPromises();
+            expect(wrapper.findComponent(EditorContent).exists()).toBe(false);
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true })); await drafts.flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.editorJson).toEqual(editorJson);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            expect(wrapper.getComponent(EditorContent).props('editor')!.getJSON()).toEqual(editorJson);
+        } finally {
+            gate.resolve(); editorExtensionsAction.apply = undefined; wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
         }
     });
 

@@ -1019,12 +1019,19 @@ function captureDraft(tabId = props.tabId): void {
     // Until saved content is applied the composer holds nothing the user wrote;
     // capturing now would overwrite the saved draft with an empty one.
     if (!tabId || draftContentLoading) return;
+    // Preserve unread content before initialization, while retaining files that
+    // the user may already have selected through the attachment picker.
+    if (!editor.value && !promptText.value.trim() && !attachments.value.length && !largeTextBlocks.value.length) return;
     if (draftRestoreFailed && !promptText.value.trim() && !attachments.value.length && !largeTextBlocks.value.length) return;
     draftRestoreFailed = false;
+    const scope = draftScope ?? tabDrafts.scope();
+    const saved = tabDrafts.read(tabId, scope);
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
-        editorJson: editor.value?.getJSON() as Record<string, unknown> | undefined,
+        // A prop-driven restore can finish before the editor is constructed.
+        editorJson: (editor.value?.getJSON() ??
+            (saved?.text === promptText.value ? saved.editorJson : undefined)) as Record<string, unknown> | undefined,
         attachments: attachments.value,
         largeTextBlocks: largeTextBlocks.value,
         composer: {
@@ -1035,7 +1042,7 @@ function captureDraft(tabId = props.tabId): void {
             imageSettings: { ...imageSettings.value },
         },
         updatedAt: Date.now(),
-    }, draftScope);
+    }, scope);
 }
 
 /** Page hide can land inside the capture debounce, so save what the composer holds right now. */

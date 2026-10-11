@@ -3,6 +3,16 @@
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (remote `or3-cloud`, fetched October 11).
 Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only.
 
+**Latest review checkpoint:** `147de1f1` includes source fixes through `b382349b`.
+Recent qualification: 58 draft/composer unit/component tests; nine Chromium draft
+recovery cases; native partial document/composer attachment transactions; exact
+attachment bytes; pending upload refresh; persistent failed-file visibility;
+and stale document-read recovery. These are separate per-run results, not one
+combined count. The expanded 32-case invocation completed with 31 passes and one failing
+last-keystroke draft reload; its focused diagnosis is in progress below. Open risk: competing browser-page drafts still share a canonical
+row/journal. Preserve-both design is documented and deliberately unimplemented.
+Natural hidden/OS-suspension coverage remains blocked by this browser environment.
+
 ## Scope and safety
 
 Synthetic local workspaces/accounts/blobs only. No real credentials, production,
@@ -631,3 +641,54 @@ The bounded recovery selector currently lists 32 cases in three files:
 `/tmp/or3-recovery-expanded-list.log`. These listed cases are not yet a claim of
 a fully passing combined invocation; its result will be recorded separately.
 Stale-read browser regression commit: `f06e6da0`.
+
+## Expanded combined qualification and startup capture diagnosis
+
+At source HEAD `147de1f1d0991a989b39f091b5f755eae27bd1c8`, the exact bounded
+`bun run test:e2e:recovery` invocation completed with **31 passed, one failed**
+in 9.3 minutes. The failing case was the unsent draft/attachment journey's
+second, last-keystroke reload: the composer was empty. No app edits, unit suite
+or Nuxt preparation/type-check ran concurrently. Log
+`/tmp/or3-recovery-expanded-final-browser.log`; screenshot and error context
+under `test-results/data-loss-recovery`. This result supersedes any assumption
+that the earlier intermittent empty reload was solely generated-file interference.
+
+A deterministic mounted regression separately reproduced capturing an empty
+composer before editor initialization had started restoration, which deleted
+the unread row (`/tmp/or3-recovery-before-initialize-unit-red.log`). A fresh-load
+Chromium hook-delay probe also showed text could restore through tab props before
+editor construction, then capture removed its editor JSON. The strengthened
+JSON assertion failed on old source:
+`/tmp/or3-recovery-before-initialize-json-browser-red.log`.
+The hook delay is registered through an instrumented local Vite useHooks response;
+composer and database code are unchanged. The initial tab-switch probe did not
+reach initialization because the composer stayed mounted and is not qualification.
+The first fresh-load text-only probe passed but exposed JSON loss; it is not
+reported as a full snapshot-retention pass.
+
+The candidate skips an untouched empty capture while no editor exists and uses
+a matching scoped saved editor JSON until construction. Genuine early attachment
+selections remain capturable. A broader initial absent-editor guard failed an
+existing intake test and was narrowed before qualification. Current candidate:
+60 draft/composer tests passed (`/tmp/or3-recovery-before-initialize-retain-intake-unit.log`);
+credential-free type-check passed (`/tmp/or3-recovery-before-initialize-final-typecheck.log`).
+Browser startup and the original last-keystroke race are still being qualified;
+no source fix for that combined failure is claimed yet.
+
+Startup capture qualification passed:
+- 60 draft/composer unit/component tests, including early selected-file intake
+  and both startup cases.
+- Credential-free type-check passed.
+- The strengthened Chromium hook-delay probe retained exact editor JSON as well
+  as text, then recovered through a real refresh while initialization was paused:
+  `/tmp/or3-recovery-before-initialize-final-browser.log`,
+  `test-results/recovery-editor-initialization/evidence.json`.
+- The original last-keystroke/attachment/workspace journey passed three bounded
+  focused invocations in 53.8 seconds with native put/delete, journal/layout and
+  final row receipts: `/tmp/or3-recovery-last-keystroke-qualified-browser.log`;
+  `test-results/recovery-last-keystroke-qualified/*/last-keystroke-reload-receipt.json`.
+
+These three runs are targeted regression qualification after a verified startup
+fix, not a guarantee that every intermittent reload cause has been exhausted.
+The earlier 31/32 combined invocation remains recorded as failed. No fully passing
+32/32 post-fix combined invocation is claimed until it completes.
