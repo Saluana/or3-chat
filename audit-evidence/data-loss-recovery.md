@@ -3,10 +3,31 @@
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (remote `or3-cloud`, fetched October 11).
 Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only.
 
-**Latest source checkpoint:** `b7b3caf23f3685944fc8502f599f8d415ce64ca8` fixes
+**Latest source checkpoint:** `bf9db934cd80673ce836d7f17239c109d09e6fbd`
+protects an unread tab manifest after storage-read failure. Its 51 scoped tests,
+type checking, lint and native Chromium failure/reload probe pass; a fresh
+32-case combined qualification is running with no concurrent source edits.
+The preceding `b7b3caf23f3685944fc8502f599f8d415ce64ca8` fixes
 runtime status writes publishing the temporary tab layout before restoration.
 Its two startup regressions and 49 tab-controller/persistence tests pass, as does
 the same mounted Chromium one-second startup fault that failed before the fix.
+**Combined browser qualification:** all **32 cases passed in 8.8 minutes** at
+`ae4bc1e06db1045d132dbfc0953fa54daddb109f`, which contains that source fix and
+tested evidence updates. Log: `/tmp/or3-recovery-layout-expanded-final-browser.log`.
+One worker, fresh isolated contexts, all external requests denied; no source
+edits or Nuxt preparation occurred during this run. This is a checkpoint while
+new fault coverage continues, not the end of the overnight assignment.
+An additional active failed-progress unload guard is committed as
+`9ae97eaaad45fcfa922b5e5028aebc7b6c315979` and qualified by a fresh combined
+run: **32/32 passed in 9.6 minutes** (started 13:04:33 UTC), log
+`/tmp/or3-recovery-stream-guard-expanded-final-browser.log`. One Chromium worker;
+no source changes, Nuxt preparation, type checking or unit suites ran concurrently.
+21 scoped persistence/lifecycle tests and the five-failure Chromium receipt pass.
+It changes only `streamWriteCoalescer.ts`; the foreground and continuation call
+sites remain unchanged. The 32-case result above belongs to the preceding HEAD,
+not this newer source. Type checking and changed-source lint pass. The separate
+32/32 run above qualifies this newer source, with terminal-save coverage still
+being investigated.
 Recent qualification: 60 draft/composer unit/component tests; nine Chromium draft
 recovery cases; native partial document/composer attachment transactions; exact
 attachment bytes; pending upload refresh; persistent failed-file visibility;
@@ -21,11 +42,111 @@ The interrupted-read retry click also timed out, although
 its final screenshot shows the recovered text. Native tracing confirmed that
 repair can let a pending startup restore finish and remove the toast during
 Playwright actionability checks. The harness accepts that race only after exact
-text recovery and removal of the failure notice. Broader final qualification
-remains pending.
+text recovery and removal of the failure notice. The subsequent combined run
+passed all 32 cases as recorded above.
 Open risk: competing browser-page drafts still share a canonical
 row/journal. Preserve-both design is documented and deliberately unimplemented.
 Natural hidden/OS-suspension coverage remains blocked by this browser environment.
+
+## Permanent assistant-write rejection and active progress protection
+
+Mounted Chromium at application source checkpoint `ae4bc1e0` rejected three
+successive native assistant-message puts containing a newly displayed suffix.
+The browser showed the app-owned storage error; one local scripted provider
+call and one durable user row were present. Natural refresh produced **no
+beforeunload dialog** and recovered the acknowledged earlier assistant prefix,
+while the newer displayed suffix was absent from the durable row. This is a
+verified baseline limitation under persistent storage failure, distinct from
+the passing transient failure + automatic retry case below. It does not imply
+that an acknowledged assistant row was deleted.
+
+Probe: `audit-evidence/assistant-persistent-save-probe.ts`.
+Log: `/tmp/or3-recovery-assistant-persistent-save-browser.log`.
+Native receipts: `test-results/recovery-assistant-persistent-save-failure/evidence.json`.
+All external requests were denied; there was no real model call.
+
+The narrow candidate adds a client-only beforeunload guard to a coalescer after
+an actual failed progress write. Starting its retry leaves the guard armed;
+acknowledgement clears it. Each independent writer owns its own guard, and
+disposal prevents a late rejection from registering another writer's warning.
+Browser globals remain optional for server-side use. Persistence callbacks,
+generation checks, provider requests, tool calls, and row shapes are unchanged.
+`foregroundStream.ts` and `continue.ts` remain untouched.
+
+Unit RED: `/tmp/or3-recovery-stream-unload-unit-red.log`. Final scoped GREEN:
+21 tests in `/tmp/or3-recovery-stream-unload-unit-final.log`, including server
+globals, pending retry, independent writers and disposal ordering. Mounted
+Chromium GREEN: `/tmp/or3-recovery-assistant-persistent-guard-qualified-browser.log`
+and `test-results/recovery-assistant-persistent-guard-qualified/evidence.json`:
+five native rejected puts while refresh is dismissed, one real beforeunload
+dialog, repair → confirmed save → guard removal → actual refresh retaining the
+expanded prefix, one unchanged assistant ID, one user row and one local provider
+call. A prior attempt stopped at a three-failure timing predicate with only two
+observed failures, before exercising refresh; it is not passing guard evidence.
+The strengthened run records repeated failures during the blocked navigation.
+
+The candidate protects active coalescers. Terminal persistence after coalescer
+disposal remains a separate unqualified boundary being investigated; this guard
+does not establish that finalization failures can be retried after storage heals.
+
+## Unavailable layout read with available writes — verified boundary
+
+At `9ae97eaa`, a native Chromium `Storage.getItem` fault rejected the first
+manifest read once while `setItem` remained available. The next write replaced
+the original tab ID with a placeholder. The complete original draft row remained
+in IndexedDB but the mounted composer was empty. This is distinct from corrupt
+JSON and preserves the existing #235 backup contract as a dependency.
+RED: `/tmp/or3-recovery-layout-read-failure-browser-red.log` and
+`test-results/recovery-layout-read-failure/evidence.json`.
+
+Source commit `bf9db934cd80673ce836d7f17239c109d09e6fbd` marks the scope unread after either a throwing storage
+property or unavailable native read. Scheduled writes, explicit Retry and unload
+flushes cannot replace that original. A successful restore clears the barrier
+and pending placeholder writes; scope switches clear only the outgoing scope's
+state. Recovery uses a subsequent reload after storage becomes readable. No new
+schema, backup key, UI action or provider behavior is introduced. The existing
+persistent warning stays until the scope is restored. Users can still choose to
+accept the browser confirmation; this protection is best effort.
+
+Unit RED: `/tmp/or3-recovery-layout-unavailable-unit-red.log` (first new case fails
+before the runner bails). Final unit qualification: 51 tab-controller/persistence
+tests in `/tmp/or3-recovery-layout-unavailable-unit-qualified.log`. Credential-free
+type checking and changed-source lint pass in
+`/tmp/or3-recovery-layout-unavailable-typecheck.log` and
+`/tmp/or3-recovery-layout-unavailable-lint.log`. Mounted Chromium GREEN: `/tmp/or3-recovery-layout-read-failure-browser-final.log`,
+`test-results/recovery-layout-read-failure-final/evidence.json` and `recovered.json`.
+The fault leaves the temporary composer empty (recorded observation), raises a
+persistent warning, and writes no placeholder manifest. The subsequent actual
+reload produces one beforeunload confirmation and recovers the exact draft text
+with the original tab ID. A new 32-case combined run is in progress at this
+source checkpoint; no full combined qualification is yet claimed for it.
+
+## Terminal assistant-save failure — verified remaining limitation
+
+At source HEAD `9ae97eaa`, the mounted Chromium terminal probe rejected 20
+native assistant writes containing the expanded prefix. Streaming ended with
+the expanded prefix and late suffix displayed and the storage notice visible.
+Coalescer disposal removed its active unload guard. A synthetic cancelable
+beforeunload event was not prevented; subsequent actual refresh produced no
+browser dialog. After native persistence was repaired, the same assistant row
+remained at the earlier durable prefix for the five-second observation window;
+refresh recovered that earlier prefix. One local provider call and one user row
+were present. The observation probe exits successfully when it collects receipts;
+**this is a recovery failure, not a passing regression**.
+
+Probe: `audit-evidence/assistant-terminal-save-probe.ts`.
+Log: `/tmp/or3-recovery-assistant-terminal-save-browser.log`.
+Receipts: `test-results/recovery-assistant-terminal-save-failure/evidence.json`,
+`before-refresh.json`, and `terminal-state.png`. Provider requests are local and
+external requests denied. Shared finalization/foreground/continuation handling
+has not been changed for this finding; ownership coordination is pending. Read-only
+tracing found `requestController.ts` retains a settled `request.finalization`
+promise after persistence failure and has no write-only retry path. Any remedy
+must retain the exact terminal snapshot, recheck generation ownership, preserve
+metadata merge contracts, avoid replaying tools/providers/hooks, and clear its
+unload protection only after acknowledged persistence or explicit discard. A
+bounded per-request recovery owner is preferable to prolonging a disposed stream
+coalescer. This is a proposed design, not an implemented fix.
 
 ## Layout publication before restoration — verified source fix
 
