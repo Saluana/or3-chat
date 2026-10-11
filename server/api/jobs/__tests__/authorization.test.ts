@@ -347,6 +347,88 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         expect(removedResponse.status).toBe(403);
     });
 
+    it.each(['streaming', 'complete', 'error', 'aborted'] as const)('recovers the scoped %s admission after switching active workspace', async (status) => {
+        membership.role = 'viewer';
+        const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 'private-thread', messageId: 'private-message',
+            model: 'test/model', idempotencyKey: getScopedAdmissionKey('former-member', 'revoked-workspace', admissionId),
+            execution: { version: 1, workspaceId: 'revoked-workspace', body: {}, referer: 'http://chat.example.test', apiKeyCiphertext: 'private',
+                history: { version: 1, kind: 'new-turn', admissionId, generationId: 'generation', workspaceId: 'revoked-workspace',
+                    threadId: 'private-thread', messageId: 'private-message', assistantMessage: { id: 'private-message', clock: 1 } } } });
+        if (status === 'complete') await memoryJobProvider.completeJob(jobId, 'done');
+        if (status === 'error') await memoryJobProvider.failJob(jobId, 'failed');
+        if (status === 'aborted') await memoryJobProvider.abortJob(jobId, 'former-member');
+        const handler = (await import('../admission/[admissionId].get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/admission/:admissionId', handler)));
+        const request = (workspace = 'revoked-workspace') => new Request(`http://chat.example.test/api/jobs/admission/${admissionId}?workspaceId=${workspace}`);
+        const response = await send(request());
+        expect(response.status).toBe(200);
+        expect(response.headers.get('cache-control')).toContain('no-store');
+        expect(await response.json()).toEqual({ jobId, status, threadId: 'private-thread', messageId: 'private-message', historyVersion: 1 });
+        membership.role = null;
+        expect((await send(request())).status).toBe(403);
+        membership.active = true;
+        expect((await send(request('remaining-workspace'))).status).toBe(404);
+        identity.session.user.id = 'different-user';
+        expect((await send(request('remaining-workspace'))).status).toBe(404);
+    });
+
+    it('does not report provider lookup failure as an absent admission', async () => {
+        membership.role = 'viewer';
+        vi.spyOn(memoryJobProvider, 'findJobByIdempotencyKey').mockRejectedValue(new Error('Provider offline'));
+        const handler = (await import('../admission/[admissionId].get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/admission/:admissionId', handler)));
+        expect((await send(new Request(`http://chat.example.test/api/jobs/admission/${admissionId}?workspaceId=revoked-workspace`))).status).toBe(500);
+    });
+
+    it.each(['rejected', 'threw', 'terminal', 'completed-during-stop', 'aborted'] as const)('reports %s job stops without prematurely stopping the workflow', async (outcome) => {
+        membership.role = 'editor';
+        const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'workflow', kind: 'workflow',
+            execution: { version: 1, kind: 'workflow', workspaceId: 'revoked-workspace' },
+            workflow_state: { type: 'workflow-execution', workflowId: 'workflow', workflowName: 'Test', prompt: 'Run',
+                executionState: 'running', nodeStates: {}, executionOrder: [], currentNodeId: null, finalOutput: '', version: 1 } });
+        if (outcome === 'terminal') await memoryJobProvider.completeJob(jobId, 'done');
+        const abort = vi.spyOn(memoryJobProvider, 'abortJob');
+        if (outcome === 'rejected') abort.mockResolvedValue(false);
+        if (outcome === 'threw') abort.mockRejectedValue(new Error('Provider offline'));
+        if (outcome === 'completed-during-stop') abort.mockImplementation(async () => {
+            await memoryJobProvider.completeJob(jobId, 'finished');
+            return false;
+        });
+        const handler = (await import('../[id]/abort.post')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().post('/api/jobs/:id/abort', handler)));
+        const response = await send(new Request(`http://chat.example.test/api/jobs/${jobId}/abort`, {
+            method: 'POST', headers: { host: 'chat.example.test', origin: 'http://chat.example.test',
+                'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' }));
+        expect(response.status).toBe(outcome === 'rejected' ? 502 : outcome === 'threw' ? 500 : 200);
+        expect(await response.json()).toMatchObject({ aborted: outcome === 'aborted',
+            state: outcome === 'rejected' ? 'abort_rejected' : outcome === 'threw' ? 'abort_error'
+                : outcome === 'terminal' || outcome === 'completed-during-stop' ? 'already_terminal' : 'aborted',
+            ...(outcome === 'aborted' ? { workflow_state: { executionState: 'stopped' } } : {}) });
+        if (outcome !== 'aborted') expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.workflow_state?.executionState).toBe('running');
+        if (outcome === 'terminal') expect(abort).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('reports durable and legacy admission stop failures explicitly (durable=%s)', async (durable) => {
+        membership.role = 'editor';
+        const jobId = await createRevokedWorkspaceJob();
+        if (durable) vi.spyOn(memoryJobProvider, 'cancelAdmission').mockRejectedValue(new Error('Provider offline'));
+        else {
+            registerBackgroundJobProvider('legacy', { ...memoryJobProvider, cancelAdmission: undefined,
+                abortJob: async () => { throw new Error('Provider offline'); } });
+            vi.stubGlobal('useRuntimeConfig', () => ({ auth: { enabled: true }, sync: { provider: 'sqlite' },
+                security: { proxy: {}, allowedOrigins: [] }, backgroundJobs: { storageProvider: 'legacy' } }));
+        }
+        const handler = (await import('../admission-abort.post')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().post('/api/jobs/admission-abort', handler)));
+        const response = await send(new Request('http://chat.example.test/api/jobs/admission-abort', {
+            method: 'POST', headers: { host: 'chat.example.test', origin: 'http://chat.example.test',
+                'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            body: JSON.stringify({ admissionId, workspaceId: 'revoked-workspace' }) }));
+        expect(response.status).toBe(500);
+        expect(await response.json()).toMatchObject({ aborted: false, pending: false, state: 'abort_error' });
+        expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.status).toBe('streaming');
+    });
+
     it('cannot cancel a revoked-workspace job that commits during another workspace\'s cancellation', async () => {
         membership.active = true;
         let committedJobId: string | undefined;
