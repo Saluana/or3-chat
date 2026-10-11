@@ -135,11 +135,11 @@ function formatCount(value: number | null | undefined): string {
  */
 async function openPaletteSelection(hash: string) {
     if (!hash) return;
-    const db = getDb();
+    const owner = captureWorkspaceOwner();
     let meta = items.value.find((item) => item.hash === hash);
     if (!meta) {
         const fetched = await getFileMeta(hash);
-        if (getDb() !== db) return;
+        if (!owner.isCurrent()) return;
         meta = fetched;
     }
     if (!meta || meta.deleted) return;
@@ -166,9 +166,11 @@ onUnmounted(() => {
 });
 
 async function handleDownload(meta: FileMeta) {
+    const owner = captureWorkspaceOwner();
     let url: string | undefined;
     try {
         const blob = await getFileBlob(meta.hash);
+        owner.assertCurrent();
         if (!blob) throw new Error('blob missing');
         url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -178,6 +180,7 @@ async function handleDownload(meta: FileMeta) {
         a.click();
         a.remove();
     } catch (error) {
+        if (!owner.isCurrent()) return;
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
             message: `Couldn't download "${meta.name || 'image'}".`,
@@ -189,12 +192,15 @@ async function handleDownload(meta: FileMeta) {
 }
 
 async function handleCopy(meta: FileMeta) {
+    const owner = captureWorkspaceOwner();
     let blob: Blob;
     try {
         const resolved = await getFileBlob(meta.hash);
+        owner.assertCurrent();
         if (!resolved) throw new Error('blob missing');
         blob = resolved;
     } catch (error) {
+        if (!owner.isCurrent()) return;
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
             message: `Couldn't copy "${meta.name || 'image'}".`,
@@ -212,9 +218,10 @@ async function handleCopy(meta: FileMeta) {
         });
 
     try {
-        await copyImageBlobToClipboard(blob, { preferredMimeType: mime });
-        showCopiedToast();
+        await copyImageBlobToClipboard(blob, { preferredMimeType: mime, assertCurrent: owner.assertCurrent });
+        if (owner.isCurrent()) showCopiedToast();
     } catch (error) {
+        if (!owner.isCurrent()) return;
         reportError(error, {
             code: 'ERR_INTERNAL',
             message: `Couldn't copy "${meta.name || 'image'}".`,
@@ -246,20 +253,22 @@ async function handleRename(meta: FileMeta) {
     }
 }
 
-function captureUploadOwner() {
+function captureWorkspaceOwner() {
     const originDb = getDb();
     const generation = getWorkspaceGeneration();
+    const isCurrent = () => getDb() === originDb && generation === getWorkspaceGeneration();
     return {
+        isCurrent,
         assertCurrent() {
-            if (getDb() !== originDb || generation !== getWorkspaceGeneration()) {
-                throw new Error('The workspace changed during upload. Select the files again in the intended workspace.');
+            if (!isCurrent()) {
+                throw new Error('The workspace changed. Repeat the action in the intended workspace.');
             }
         },
     };
 }
 
 function openUploadPicker() {
-    pendingUploadOwner = captureUploadOwner();
+    pendingUploadOwner = captureWorkspaceOwner();
     uploadInput.value?.click();
 }
 
@@ -268,7 +277,7 @@ function cancelUploadPicker() {
 }
 
 async function handleUpload(event: Event) {
-    const owner = pendingUploadOwner ?? captureUploadOwner();
+    const owner = pendingUploadOwner ?? captureWorkspaceOwner();
     pendingUploadOwner = null;
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []).filter((file) =>

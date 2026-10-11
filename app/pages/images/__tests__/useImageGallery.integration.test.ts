@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { Blob as NativeBlob } from 'node:buffer';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, type EffectScope } from 'vue';
 import {
@@ -14,6 +14,7 @@ import { updateFileName } from '~/db/files-select';
 import type { FileMeta } from '~/db/schema';
 import { useImageGallery } from '../useImageGallery';
 import * as fileOperations from '~/db/files';
+import * as clipboardOperations from '../copy-image-to-clipboard';
 
 const hooksMock = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -355,6 +356,85 @@ describe('useImageGallery integration', () => {
             'trash-3',
             'trash-4',
         ]);
+    });
+
+    it.each(['changed', 'returned', 'unchanged'] as const)('fences delayed palette image selection when the workspace is %s during metadata lookup', async (change) => {
+        const nextWorkspace = `gallery-palette-next-${crypto.randomUUID()}`;
+        const Page = (await import('../index.vue')).default;
+        const wrapper = mount(Page, { global: { stubs: { GalleryGrid: true, ImageViewer: true, USelect: true } } });
+        const vm = wrapper.vm as unknown as { stopGallery(): void; openPaletteSelection(hash: string): Promise<void>; showViewer: boolean };
+        vm.stopGallery();
+        await flushPromises();
+        const row = meta(`sha256:${'a'.repeat(64)}`);
+        await db.file_meta.put(row);
+        const originalRead = fileOperations.getFileMeta;
+        const read = vi.spyOn(fileOperations, 'getFileMeta').mockImplementation(async (...args) => {
+            const result = await originalRead(...args);
+            queueMicrotask(() => {
+                if (change === 'unchanged') return;
+                setActiveWorkspaceDb(nextWorkspace);
+                if (change === 'returned') setActiveWorkspaceDb(workspaceId);
+            });
+            return result;
+        });
+        try {
+            await vm.openPaletteSelection(row.hash);
+            expect(vm.showViewer).toBe(change === 'unchanged');
+        } finally {
+            read.mockRestore();
+            wrapper.unmount();
+            setActiveWorkspaceDb(nextWorkspace).close();
+            setActiveWorkspaceDb(workspaceId);
+            evictWorkspaceDb(nextWorkspace);
+            await Dexie.delete(`or3-db-${nextWorkspace}`);
+        }
+    });
+
+    it.each(['download', 'copy'] as const)('fences gallery %s delivery after a workspace change during its blob read', async (action) => {
+        const nextWorkspace = `gallery-delivery-next-${crypto.randomUUID()}`;
+        const Page = (await import('../index.vue')).default;
+        const wrapper = mount(Page, { global: { stubs: { GalleryGrid: true, ImageViewer: true, USelect: true } } });
+        const vm = wrapper.vm as unknown as { handleDownload(meta: FileMeta): Promise<void>; handleCopy(meta: FileMeta): Promise<void>; stopGallery(): void };
+        vm.stopGallery();
+        await flushPromises();
+        class ObjectUrl extends URL {}
+        Object.assign(ObjectUrl, { createObjectURL: vi.fn(() => 'blob:synthetic-gallery-delivery'), revokeObjectURL: vi.fn() });
+        vi.stubGlobal('URL', ObjectUrl);
+        const row = meta('delivery-origin');
+        await db.file_blobs.put({ hash: row.hash, blob: new NativeBlob(['origin-only'], { type: 'image/png' }) as unknown as Blob });
+        const originalRead = fileOperations.getFileBlob;
+        let change: 'changed' | 'returned' | 'unchanged' = 'changed';
+        const read = vi.spyOn(fileOperations, 'getFileBlob').mockImplementation(async (...args) => {
+            const result = await originalRead(...args);
+            queueMicrotask(() => {
+                if (change === 'unchanged') return;
+                setActiveWorkspaceDb(nextWorkspace);
+                if (change === 'returned') setActiveWorkspaceDb(workspaceId);
+            });
+            return result;
+        });
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const copy = vi.spyOn(clipboardOperations, 'copyImageBlobToClipboard').mockResolvedValue(undefined);
+        try {
+            for (const scenario of ['changed', 'returned', 'unchanged'] as const) {
+                change = scenario;
+                setActiveWorkspaceDb(workspaceId);
+                click.mockClear();
+                copy.mockClear();
+                await (action === 'download' ? vm.handleDownload(row) : vm.handleCopy(row));
+                expect(action === 'download' ? click : copy).toHaveBeenCalledTimes(scenario === 'unchanged' ? 1 : 0);
+            }
+        } finally {
+            vi.unstubAllGlobals();
+            read.mockRestore();
+            click.mockRestore();
+            copy.mockRestore();
+            wrapper.unmount();
+            setActiveWorkspaceDb(nextWorkspace).close();
+            setActiveWorkspaceDb(workspaceId);
+            evictWorkspaceDb(nextWorkspace);
+            await Dexie.delete(`or3-db-${nextWorkspace}`);
+        }
     });
 
     it.each(['changed', 'returned', 'unchanged'] as const)('keeps gallery upload batch ownership when the workspace is %s between file completions', async (change) => {

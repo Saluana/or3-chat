@@ -38,6 +38,25 @@ describe('copyImageBlobToClipboard', () => {
         ]);
     });
 
+    it('rechecks ownership after awaited PNG conversion before clipboard delivery', async () => {
+        resetFakeClipboardItem();
+        const write = vi.fn().mockResolvedValue(undefined);
+        let current = true;
+        const createPngBlob = vi.fn(async () => {
+            current = false;
+            return new Blob(['png'], { type: 'image/png' });
+        });
+        await expect(copyImageBlobToClipboard(new Blob(['jpeg'], { type: 'image/jpeg' }), {
+            clipboard: { write },
+            clipboardItemCtor: FakeClipboardItem,
+            supportsMimeType: mime => mime === 'image/png',
+            createPngBlob,
+            assertCurrent: () => { if (!current) throw new Error('workspace changed'); },
+        })).rejects.toThrow('workspace changed');
+        expect(createPngBlob).toHaveBeenCalledOnce();
+        expect(write).not.toHaveBeenCalled();
+    });
+
     it('normalizes image/jpg to image/jpeg', async () => {
         resetFakeClipboardItem();
         const write = vi.fn().mockResolvedValue(undefined);
