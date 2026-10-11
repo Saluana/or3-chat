@@ -1,11 +1,11 @@
-Source/test export head: 55cc59ddb8c9eda50e1ef31d6bc9f9cc79442fe7
+Source/test export head: 1976b3884e0cd2b049ca8d43fde6ab014896e8f8
 Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
-Local commits: 59
+Local commits: 62
 Patch applies cleanly at exact base in disposable worktree.
 Disposable worktree removed.
-/workspace/or3-chat/audit-evidence/workspace-isolation-20261011/review-uzqflgbr.bundle is okay
+/workspace/or3-chat/audit-evidence/workspace-isolation-20261011/review-vvjdhh7_.bundle is okay
 The bundle contains this ref:
-55cc59ddb8c9eda50e1ef31d6bc9f9cc79442fe7 HEAD
+1976b3884e0cd2b049ca8d43fde6ab014896e8f8 HEAD
 The bundle requires this ref:
 df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
 The bundle uses this hash algorithm: sha1
