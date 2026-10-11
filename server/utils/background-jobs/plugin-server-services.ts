@@ -85,7 +85,7 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
                         throw createError({ statusCode: 403, statusMessage: 'Invalid workflow job scope' });
                     }
                     await requireJobWorkspaceAccess(requestEvent, session, workspaceId, 'workspace.write');
-                    await assertServerProjectExecutionSupported({ subject: userId, workspaceId, threadId: input.threadId, abortSignal: AbortSignal.timeout(10_000) });
+                    await assertServerProjectExecutionSupported({ subject: userId, workspaceId, threadId: input.threadId, abortSignal: AbortSignal.timeout(10_000) }, 'workspace.write');
                     const id = await provider.createJob({
                         ...input,
                         execution: { version: 1, kind: 'workflow', workspaceId },
@@ -155,7 +155,7 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
                     || (message.data as { type?: string } | undefined)?.type !== 'workflow-execution')
                     throw new Error('The originating workflow message is no longer available.');
                 await requireJobWorkspaceAccess(requestEvent, session, origin.workspaceId, 'workspace.write');
-                await assertServerProjectExecutionSupported({ subject: origin.userId, workspaceId: origin.workspaceId, threadId: origin.threadId, abortSignal: signal });
+                await assertServerProjectExecutionSupported({ subject: origin.userId, workspaceId: origin.workspaceId, threadId: origin.threadId, abortSignal: signal }, 'workspace.write');
                 signal.throwIfAborted();
                 return fetch(request, { ...init, ...(jobSignal ? { signal: AbortSignal.any([jobSignal, ...(requestSignal ? [requestSignal] : [])]) } : {}) });
             } });

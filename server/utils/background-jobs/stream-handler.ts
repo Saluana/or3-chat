@@ -516,7 +516,7 @@ export async function startBackgroundStream(
     // First-turn ownership exists canonically only after admission. Refusing
     // execution must also leave the admitted job terminal rather than stranded.
     try {
-        await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) });
+        await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) }, 'workspace.write');
     } catch (error) {
         await persistTerminalGenerationSnapshot(provider, jobId, { status: 'error',
             content: execution.contentBase ?? '', reasoning: execution.reasoningBase ?? '',
@@ -1472,7 +1472,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
                 await assertServerProjectExecutionSupported({ subject: params.context.userId,
                     workspaceId: params.context.workspaceId, threadId: params.context.threadId,
-                    abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) });
+                    abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) }, 'workspace.write');
                 return fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
@@ -1966,7 +1966,7 @@ export async function executeBackgroundJob(
     const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
     const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
         await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId,
-            threadId: params.threadId, abortSignal: signal });
+            threadId: params.threadId, abortSignal: signal }, 'workspace.write');
         return fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
