@@ -448,6 +448,79 @@ for (const outcome of ['success', 'failure'] as const) {
     });
 }
 
+for (const transition of ['switch', 'return'] as const) {
+    for (const selection of ['native-A-new', null] as const) {
+        test(`native default prompt retains originating DB (${transition}, ${selection ?? 'clear'})`, async ({ page }, info) => {
+            await open(page);
+            await page.route('**/api/openrouter/**', route => route.abort());
+            await page.route('**/api/jobs/**', route => route.abort());
+            const receipt = await page.evaluate(async ({ transition, selection }) => {
+                const clientPath = '/_nuxt/db/client.ts';
+                const promptPath = '/_nuxt/composables/chat/useDefaultPrompt.ts';
+                const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
+                const client = await import(clientPath);
+                const { useDefaultPrompt, getDefaultPromptId } = await import(promptPath);
+                const { useHooks } = await import(hooksPath);
+                const ids = [`native-default-a-${transition}-${selection}`, `native-default-b-${transition}-${selection}`];
+                const dbs = ids.map(id => client.getWorkspaceDb(id));
+                for (const [index, db] of dbs.entries()) {
+                    await db.open();
+                    await db.kv.put({ id: 'identical-native-default', name: 'default_system_prompt_id',
+                        value: index === 0 ? 'native-A-existing' : 'native-B-existing',
+                        clock: 1, created_at: 1, updated_at: 1, deleted: false });
+                }
+                let release!: () => void;
+                const gate = new Promise<void>(resolve => { release = resolve; });
+                let entered!: () => void;
+                const reached = new Promise<void>(resolve => { entered = resolve; });
+                const where = dbs[0].kv.where.bind(dbs[0].kv);
+                dbs[0].kv.where = (index: string) => {
+                    const query = where(index);
+                    const equals = query.equals.bind(query);
+                    query.equals = (value: string) => {
+                        const collection = equals(value);
+                        const first = collection.first.bind(collection);
+                        collection.first = () => first().then(async (row: unknown) => {
+                            entered(); await gate; return row;
+                        });
+                        return collection;
+                    };
+                    return query;
+                };
+                const updates: Array<string | null> = [];
+                const changed = (id: string | null) => { updates.push(id); };
+                const hooks = useHooks();
+                hooks.addAction('chat.systemPrompt.default:action:update', changed);
+                let writing: Promise<void> | undefined;
+                try {
+                    client.setActiveWorkspaceDb(ids[0]);
+                    const prompt = useDefaultPrompt();
+                    writing = selection === null ? prompt.clearDefaultPrompt() : prompt.setDefaultPrompt(selection);
+                    await reached;
+                    client.setActiveWorkspaceDb(ids[1]);
+                    if (transition === 'return') client.setActiveWorkspaceDb(ids[0]);
+                    release(); await writing; await prompt.ensureLoaded();
+                    return { origin: (await where('name').equals('default_system_prompt_id').first())?.value,
+                        destination: (await dbs[1].kv.where('name').equals('default_system_prompt_id').first())?.value,
+                        current: await getDefaultPromptId(), cached: prompt.defaultPromptId.value, updates };
+                } finally {
+                    release(); await writing;
+                    hooks.removeAction('chat.systemPrompt.default:action:update', changed);
+                    dbs[0].kv.where = where;
+                    client.setActiveWorkspaceDb(null);
+                    for (const [index, db] of dbs.entries()) {
+                        client.evictWorkspaceDb(ids[index]); await db.delete();
+                    }
+                }
+            }, { transition, selection });
+            await info.attach('synthetic-native-default-scope', { body: JSON.stringify(receipt), contentType: 'application/json' });
+            expect(receipt).toEqual({ origin: selection, destination: 'native-B-existing',
+                current: transition === 'return' ? selection : 'native-B-existing',
+                cached: transition === 'return' ? selection : 'native-B-existing', updates: [] });
+        });
+    }
+}
+
 for (const action of ['muteThread', 'unmuteThread'] as const) {
     test(`native notification preference ${action} retains its DB during a workspace switch`, async ({ page }, info) => {
         await open(page);

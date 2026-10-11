@@ -1,0 +1,67 @@
+Parent HEAD: fef3e275; uncommitted prototype; new ABA recovery / failed write fault injection
+Command: /workspace/.bun/bin/bun x vitest run app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts --bail=0 --reporter=dot --silent=passed-only --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+·x··x
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  13:32:11
+   Duration  2.26s (transform 491ms, setup 178ms, import 748ms, tests 663ms, environment 467ms)
+
+stderr | app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not report an uncommitted preference when the KV write fails, and recovers on retry
+[hooks] Error in filter "db.kv.upsertByName:filter:input": Error: Synthetic default preference write failure
+    at /workspace/or3-chat/app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:129:29
+    at /workspace/or3-chat/shared/hooks/hook-engine-core.ts:494:32
+    at invokeWithFallbackPriority (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:201:33)
+    at runAsyncBody (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:492:35)
+    at /workspace/or3-chat/shared/hooks/hook-engine-core.ts:530:17
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+    at callAsync (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:529:32)
+    at Object.applyFilters (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:630:27)
+    at Object.applyFilters (/workspace/or3-chat/app/core/hooks/typed-hooks.ts:188:20)
+    at setKvByName (/workspace/or3-chat/app/db/kv.ts:435:48)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > keeps a suspended default preference write in its originating workspace (return)
+AssertionError: expected 'A-existing' to be 'A-new' // Object.is equality
+
+Expected: "A-new"
+Received: "A-existing"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:71:46
+     69|         expect((await where('name').equals('default_system_prompt_id')…
+     70|         await prompt.ensureLoaded();
+     71|         expect(prompt.defaultPromptId.value).toBe(transition === 'retu…
+       |                                              ^
+     72|     });
+     73|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not report an uncommitted preference when the KV write fails, and recovers on retry
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:132:61
+    130|             return record;
+    131|         });
+    132|         await expect(prompt.setDefaultPrompt('current-new')).rejects.t…
+       |                                                             ^
+    133|         expect(await getDefaultPromptId()).toBe('Current-existing');
+    134|         expect(prompt.defaultPromptId.value).toBe('Current-existing');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+Exit status: 1

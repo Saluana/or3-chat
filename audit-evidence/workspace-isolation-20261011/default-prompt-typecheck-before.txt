@@ -1,0 +1,43 @@
+Parent HEAD: fef3e275; pending default prompt source/test patch; local synthetic providers, cloud/storage/background disabled
+Command: bun run type-check
+ℹ Nuxt Icon client bundle consist of 43 icons with 10.40KB(uncompressed) in size
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(53,34): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(54,19): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(54,28): error TS7006: Parameter 'value' implicitly has an 'any' type.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(57,85): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(88,34): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(89,19): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(89,28): error TS7006: Parameter 'value' implicitly has an 'any' type.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(93,34): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(178,34): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(179,19): error TS2339: Property 'equals' does not exist on type 'Collection<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; }, string, { ...; }>'.
+app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts(179,28): error TS7006: Parameter 'value' implicitly has an 'any' type.
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node /workspace/or3-chat/node_modules/nuxt/bin/nuxt.mjs typecheck exited with code 2.
+error: script "type-check" exited with code 1
+
+Exit status: 1

@@ -1,5 +1,6 @@
 // Run from the repository root with Bun; all fixtures are synthetic/local/mocked.
 const tests = [
+    'app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts',
     'app/composables/core/__tests__/useWorkspaceTabMetadata.test.ts',
     'app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts',
     'app/composables/core/__tests__/useWorkspaceTabs.test.ts',
