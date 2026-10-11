@@ -1,0 +1,85 @@
+# Recovery fixture CI repair — 2026-10-11
+
+Starting head: `3063314f1c0f1455ca94fa8d8b04dde36b124d2e`.
+Frozen base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5`.
+PR: https://github.com/Saluana/or3-chat/pull/241.
+
+Run `38152614780` passed the complete Contracts job (`114508989009`),
+changed-source lint and application typechecking. Core job `114508989216`
+then failed the quiet foreground generation assertion at line 1671 of
+`useAi.backgroundDetach.test.ts`: durable `pending` became false.
+
+The unchanged canonical file passes alone at both the starting head and the
+frozen base (41 tests each). The new terminal-save retry changes the lifetime
+of an earlier failed-save fixture: it retains its original snapshot after the
+test returns. This test suite mocked every request and generation ID as
+`id-test` and reused the same assistant row ID. Thus an older retry could
+mistake a newer fixture for its own generation. A temporary diagnostic retained
+the native timer before enabling fake timers, waited 1.5 seconds after the live
+viewer attached, and reproduced the exact hosted `pending` assertion failure.
+Changing only the ID mock to unique monotonically increasing synthetic IDs
+made the same delayed diagnostic pass all 41 tests. The diagnostic timer was
+removed before committing. Production ID generation and lease logic are unchanged.
+
+The canonical quiet-generation case now deterministically creates an older
+failed terminal save, starts a distinct newer generation using the same
+assistant row ID, and advances 35 seconds across the retry and heartbeat timers.
+It retains the original durable/UI pending and error assertions, checks distinct
+generation IDs and verifies there is no additional provider-loop execution.
+The busy-admission test matches the exact synchronously admitted request ID.
+The first two fixture repairs were committed separately as
+`d1d2d4e4af610f6da2dbd82d92177130adb701c7`.
+
+Local full-core execution also exposed `ChatInputDropper.test.ts:804`, the
+retry-restore case. This failure reproduces in that single case. Its mock
+releases the first IndexedDB read, but the new draft-version hydration performs
+additional real IndexedDB reads before applying saved text. `flushPromises()`
+does not wait for those reads. The test now waits for the same expected editor
+text before checking the unchanged durable draft assertion. It passes without
+changing the component or storage code; closing the database during premature
+test teardown was the source of the secondary DatabaseClosedError warning.
+
+Parent-reported Mac verification also identified the interrupted-read fixture
+in `useWorkspaceTabDrafts.test.ts:251`: its assertion selected `toArray()[0]`,
+so a valid draft belonging to another tab could sort before the intended row.
+Adding an unrelated existing draft with an earlier primary key reproduces that
+same failure in the single case. The assertion now reads the interrupted tab's
+exact account/tab key, retains the retry-load text assertion, and additionally
+verifies the unrelated draft remains unchanged. The unrelated fixture stays
+in the regression test. No cleanup policy or production selection logic changed.
+
+Receipts (synthetic fixtures, cloud container only):
+
+- Starting-head canonical file: 41 pass,
+  `/tmp/or3-recovery-ci-background-detach-current.log`.
+- Frozen-base canonical file: 41 pass,
+  `/tmp/or3-recovery-ci-background-detach-base.log`.
+- Delayed old retry: exact pending failure,
+  `/tmp/or3-recovery-ci-old-retry-collision-red.log`; unique-ID diagnostic:
+  41 pass, `/tmp/or3-recovery-ci-old-retry-collision-green.log`.
+- Retry-restore single-case red/green:
+  `/tmp/or3-recovery-ci-retry-restore-current.log` and
+  `/tmp/or3-recovery-ci-retry-restore-green.log`.
+- Both final canonical suites: 72 pass,
+  `/tmp/or3-recovery-ci-two-canonical-suites-green.log`.
+- Interrupted-read deterministic red:
+  `/tmp/or3-recovery-ci-interrupted-read-red.log`.
+- All three affected canonical suites: 112 pass,
+  `/tmp/or3-recovery-ci-three-canonical-suites-green.log`. A final run after
+  narrowing the admitted-state TypeScript access is recorded in
+  `/tmp/or3-recovery-ci-three-canonical-suites-final.log`.
+- Exact changed-source CI lint: pass,
+  `/tmp/or3-recovery-ci-complete-changed-source-lint-second.log`.
+- Ledger and both snapshot checks: pass,
+  `/tmp/or3-recovery-ci-compatibility-second.log`; no regenerated changes.
+
+The initial full local core run exposed the retry-restore failure (696 pass,
+46 skipped before bail), `/tmp/or3-recovery-ci-full-current.log`.
+The next full local run was stopped when the third Mac finding required another
+fixture change; it is not a complete or exact-final-tree qualification.
+Full qualification of the published final tree is supplied by its hosted run.
+
+This follow-up changes three canonical test fixtures only. Browser qualification
+remains tied to the prior application checkpoint; no new browser execution,
+Mac execution, sibling integration, deployment or merge is claimed here.
+The next hosted receipt is recorded on PR #241 after completion.
