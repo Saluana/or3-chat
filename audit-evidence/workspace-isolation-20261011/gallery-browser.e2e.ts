@@ -374,6 +374,80 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
     await info.attach('synthetic-rendered-chat-scope', { body: 'Actual PageShell/pane navigation, overlapping thread/message IDs, A→B→A; external/model/job requests denied.', contentType: 'text/plain' });
 });
 
+for (const outcome of ['success', 'failure'] as const) {
+    test(`native tab title metadata rejects former-workspace cache and lookup (${outcome})`, async ({ page }, info) => {
+        await open(page);
+        await page.route('**/api/openrouter/**', route => route.abort());
+        await page.route('**/api/jobs/**', route => route.abort());
+        const receipt = await page.evaluate(async mode => {
+            const clientPath = '/_nuxt/db/client.ts';
+            const metadataPath = '/_nuxt/composables/core/useWorkspaceTabMetadata.ts';
+            const client = await import(clientPath);
+            const { useWorkspaceTabMetadata } = await import(metadataPath);
+            const ids = [`native-title-a-${mode}`, `native-title-b-${mode}`];
+            const dbs: any[] = [];
+            const tab = (cachedTitle: string) => ({ id: 'identical-native-tab',
+                resource: { kind: 'chat', threadId: 'identical-native-thread' },
+                cachedTitle, createdAt: 1, lastActivatedAt: 1, ephemeral: false });
+            for (const [index, id] of ids.entries()) {
+                const db = client.setActiveWorkspaceDb(id); await db.open(); dbs.push(db);
+                await db.threads.put({ id: 'identical-native-thread', title: index === 0 ? 'Native A stored' : 'Native B stored',
+                    created_at: 1, updated_at: 1, clock: 0, deleted: false });
+            }
+            client.setActiveWorkspaceDb(ids[0]);
+            const app = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const scope = new app._instance.scope.constructor(true);
+            const metadata = scope.run(() => useWorkspaceTabMetadata());
+            const getA = dbs[0].threads.bulkGet.bind(dbs[0].threads);
+            const getB = dbs[1].threads.bulkGet.bind(dbs[1].threads);
+            let releaseA!: () => void; let releaseB!: () => void;
+            const heldA = new Promise<void>(resolve => { releaseA = resolve; });
+            const heldB = new Promise<void>(resolve => { releaseB = resolve; });
+            let enteredA!: () => void;
+            const reachedA = new Promise<void>(resolve => { enteredA = resolve; });
+            try {
+                await metadata.refresh([tab('A fallback')]);
+                const original = metadata.titleFor(tab('A fallback')).title;
+                dbs[0].threads.bulkGet = async (keys: string[]) => {
+                    const rows = await getA(keys); enteredA(); await heldA; return rows;
+                };
+                const previous = metadata.refresh([tab('A fallback')]);
+                await reachedA;
+                dbs[1].threads.bulkGet = async (keys: string[]) => {
+                    const rows = await getB(keys); await heldB;
+                    if (mode === 'failure') throw new Error('Synthetic native destination failure');
+                    return rows;
+                };
+                client.setActiveWorkspaceDb(ids[1]);
+                const immediateCache = metadata.metadata.size;
+                const current = metadata.refresh([tab('B fallback')]);
+                const settled = current.then(() => 'success', () => 'failure');
+                releaseA(); await previous;
+                const whileHeld = metadata.titleFor(tab('B fallback')).title;
+                releaseB(); const result = await settled;
+                const destination = metadata.titleFor(tab('B fallback')).title;
+                dbs[0].threads.bulkGet = getA;
+                client.setActiveWorkspaceDb(ids[0]);
+                await dbs[0].threads.update('identical-native-thread', { title: 'Native A refreshed' });
+                await metadata.refresh([tab('A recovery fallback')]);
+                return { original, immediateCache, whileHeld, result, destination,
+                    recovered: metadata.titleFor(tab('A recovery fallback')).title };
+            } finally {
+                releaseA(); releaseB(); scope.stop();
+                dbs[0].threads.bulkGet = getA; dbs[1].threads.bulkGet = getB;
+                client.setActiveWorkspaceDb(null);
+                for (let index = 0; index < ids.length; index++) {
+                    client.evictWorkspaceDb(ids[index]); await dbs[index].delete();
+                }
+            }
+        }, outcome);
+        await info.attach('synthetic-native-title-scope', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual({ original: 'Native A stored', immediateCache: 0,
+            whileHeld: 'B fallback', result: outcome,
+            destination: outcome === 'success' ? 'Native B stored' : 'B fallback', recovered: 'Native A refreshed' });
+    });
+}
+
 for (const action of ['muteThread', 'unmuteThread'] as const) {
     test(`native notification preference ${action} retains its DB during a workspace switch`, async ({ page }, info) => {
         await open(page);

@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[2]
 os.chdir(root)
 evidence = root / 'audit-evidence/workspace-isolation-20261011'
 base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5'
-latest_runtime = 'c0b50a8efa57165e8ace56a2635f1e25dedede9f'
+latest_runtime = '625a3d77c45770e808d6b219e5b07f952455390a'
 
 def git(*args):
     return subprocess.check_output(['git', *args], stderr=subprocess.STDOUT)
