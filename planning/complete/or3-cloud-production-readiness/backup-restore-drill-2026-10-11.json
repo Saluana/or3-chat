@@ -3449,6 +3449,138 @@
     ],
     "explanation": "CLI restore reported success but initial fixture expected sign-in to remain possible and stopped at unexpected HTTP 403. Cleanup completed. Corrected fixture asserts the sign-in loss, counts original records through native readonly SQLite and verifies intact-archive recovery."
   },
+  "actualAppFinalCombinedNativeGuards": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "a5a0e9ccb4a1eb00351a174dad5df90ba0c82258",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "722008e50b059fe1799f47af9865a8dc49adcb5f5026ac08735c473a4a06eaa5"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "real database payload refused before startup; automatic recovery restores original records and attachment",
+        "kind": "passed",
+        "detail": {
+          "fault": {
+            "database": "sync.sqlite",
+            "payload": "non-sqlite"
+          },
+          "elapsedMs": 34462,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          }
+        }
+      },
+      {
+        "name": "real database payload refused before startup; automatic recovery restores original records and attachment",
+        "kind": "passed",
+        "detail": {
+          "fault": {
+            "database": "auth.sqlite",
+            "payload": "non-sqlite"
+          },
+          "elapsedMs": 37607,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          }
+        }
+      },
+      {
+        "name": "real database payload refused before startup; automatic recovery restores original records and attachment",
+        "kind": "passed",
+        "detail": {
+          "fault": {
+            "database": "sync.sqlite",
+            "payload": "empty-schema"
+          },
+          "elapsedMs": 34642,
+          "verification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          }
+        }
+      },
+      {
+        "name": "interrupted native validation and automatic recovery preserve the verified snapshot and journal without starting either app",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit retry after native validation interruption restores actual records and attachment bytes",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "coverage": "After filesystem hashing and archive preflight changes, actual non-SQLite auth/sync payloads and valid empty schema still refuse before startup and safely auto-recover. Interrupted requested validation plus automatic recovery retain stopped journal/snapshot; explicit retry restores all records and bytes."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,
