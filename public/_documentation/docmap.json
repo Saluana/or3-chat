@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Use the local-first Notification Center, extend it from source, and understand originating tracker accounts/workspace mute settings, detached completion alerts, and account changes during delivery."
+                    "summary": "Use the local-first Notification Center, extend it from source, and understand originating tracker accounts/workspace mute settings, scoped preference writes, detached completion alerts, and account changes during delivery."
                 },
                 {
                     "name": "webhooks.md",

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { effectScope, nextTick, ref } from 'vue';
+import Dexie from 'dexie';
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
@@ -22,7 +23,7 @@ vi.mock('~/composables/auth/useSessionContext', () => ({
     }),
 }));
 
-import { setActiveWorkspaceDb, getDb } from '~/db/client';
+import { setActiveWorkspaceDb, getDb, evictWorkspaceDb, createWorkspaceDb } from '~/db/client';
 import { useNotifications } from '~/composables/notifications/useNotifications';
 import { FALLBACK_NOTIFICATION_USER_ID } from '~/core/notifications/notification-user';
 
@@ -36,6 +37,97 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 describe('useNotifications', () => {
+    for (const action of ['muteThread', 'unmuteThread'] as const) {
+        for (const transition of ['workspace', 'account', 'logout', 'workspace-return', 'unchanged'] as const) {
+            it(`keeps suspended ${action} persistence in its origin across ${transition} transition`, async () => {
+                const originId = `mute-origin-${crypto.randomUUID()}`;
+                const destinationId = `mute-destination-${crypto.randomUUID()}`;
+                const originDb = setActiveWorkspaceDb(originId);
+                const originKey = 'notification_muted_threads:synthetic-origin-user';
+                const destinationKey = 'notification_muted_threads:synthetic-destination-user';
+                const initial = action === 'muteThread' ? ['origin-existing'] : ['origin-existing', 'identical-thread'];
+                const expected = action === 'muteThread' ? [...initial, 'identical-thread'] : ['origin-existing'];
+                const row = (id: string, value: string[]) => ({ id, name: id, value: JSON.stringify(value), deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+                await originDb.kv.put(row(originKey, initial));
+                const separateDb = createWorkspaceDb(destinationId);
+                await separateDb.kv.put(row(originKey, ['destination-existing']));
+                sessionDataRef.value = { session: { authenticated: true, user: { id: 'synthetic-origin-user' }, workspace: { id: originId } } };
+                const scope = effectScope();
+                let release!: () => void;
+                let entered!: () => void;
+                const held = new Promise<void>((resolve) => { release = resolve; });
+                const started = new Promise<void>((resolve) => { entered = resolve; });
+                let restoreLookup: (() => void) | undefined;
+                let pending: Promise<unknown> | undefined;
+                try {
+                    const state = scope.run(() => useNotifications());
+                    if (!state) throw new Error('Missing notification state');
+                    await vi.waitFor(() => expect(state.isThreadMuted('origin-existing')).toBe(true));
+                    const originalGet = originDb.kv.get.bind(originDb.kv);
+                    const lookup = vi.spyOn(originDb.kv, 'get').mockImplementation((...args: Parameters<typeof originalGet>) => {
+                        const result = originalGet(...args);
+                        if (!Dexie.currentTransaction || String(args[0]) !== originKey) return result;
+                        entered();
+                        return Dexie.Promise.resolve(Dexie.waitFor(held)).then(() => result);
+                    });
+                    restoreLookup = () => lookup.mockRestore();
+                    pending = state[action]('identical-thread').then(() => ({ ok: true }), (error: unknown) => ({ ok: false, error }));
+                    await started;
+                    const switchesWorkspace = transition === 'workspace' || transition === 'workspace-return';
+                    const destinationDb = switchesWorkspace ? setActiveWorkspaceDb(destinationId) : originDb;
+                    if (transition !== 'unchanged') {
+                        sessionDataRef.value = { session: transition === 'logout' ? null : { authenticated: true, user: { id: transition === 'account' ? 'synthetic-destination-user' : 'synthetic-origin-user' }, workspace: { id: switchesWorkspace ? destinationId : originId } } };
+                        await nextTick();
+                        if (transition === 'workspace-return') {
+                            setActiveWorkspaceDb(originId);
+                            sessionDataRef.value = { session: { authenticated: true, user: { id: 'synthetic-origin-user' }, workspace: { id: originId } } };
+                            await nextTick();
+                        }
+                    }
+                    release();
+                    await pending;
+                    lookup.mockRestore();
+                    if (switchesWorkspace) expect((await destinationDb.kv.get(originKey))?.value).toBe(JSON.stringify(['destination-existing']));
+                    expect(await destinationDb.kv.get(destinationKey)).toBeUndefined();
+                    expect((await originDb.kv.get(originKey))?.value).toBe(JSON.stringify(expected));
+                } finally {
+                    release(); await pending; restoreLookup?.(); scope.stop();
+                    sessionDataRef.value = { session: null }; setActiveWorkspaceDb(null);
+                    for (const id of [originId, destinationId]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
+                }
+            });
+        }
+    }
+
+    it('rolls back a failed origin mute write and recovers without changing the destination', async () => {
+        const originId = `mute-recovery-origin-${crypto.randomUUID()}`;
+        const destinationId = `mute-recovery-destination-${crypto.randomUUID()}`;
+        const originDb = setActiveWorkspaceDb(originId);
+        const destinationDb = createWorkspaceDb(destinationId);
+        const key = 'notification_muted_threads:synthetic-recovery-user';
+        const row = (value: string[]) => ({ id: key, name: key, value: JSON.stringify(value), deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        await originDb.kv.put(row(['origin-existing']));
+        await destinationDb.kv.put(row(['destination-existing']));
+        sessionDataRef.value = { session: { authenticated: true, user: { id: 'synthetic-recovery-user' }, workspace: { id: originId } } };
+        const scope = effectScope();
+        const put = vi.spyOn(originDb.kv, 'put');
+        try {
+            const state = scope.run(() => useNotifications());
+            if (!state) throw new Error('Missing notification state');
+            await vi.waitFor(() => expect(state.isThreadMuted('origin-existing')).toBe(true));
+            put.mockRejectedValueOnce(new Error('synthetic preference write failure'));
+            await expect(state.muteThread('identical-thread')).rejects.toThrow('synthetic preference write failure');
+            expect((await originDb.kv.get(key))?.value).toBe(JSON.stringify(['origin-existing']));
+            expect((await destinationDb.kv.get(key))?.value).toBe(JSON.stringify(['destination-existing']));
+            await state.muteThread('identical-thread');
+            expect((await originDb.kv.get(key))?.value).toBe(JSON.stringify(['origin-existing', 'identical-thread']));
+            expect((await destinationDb.kv.get(key))?.value).toBe(JSON.stringify(['destination-existing']));
+        } finally {
+            put.mockRestore(); scope.stop(); sessionDataRef.value = { session: null }; setActiveWorkspaceDb(null);
+            for (const id of [originId, destinationId]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
+        }
+    });
+
     it('rebinds notifications to new workspace db on session workspace switch', async () => {
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 

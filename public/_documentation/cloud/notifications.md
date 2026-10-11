@@ -9,6 +9,8 @@ account remain supported.
 
 Detached completion checks the originating workspace's thread mute settings.
 An identically named thread in the active workspace has independent preferences.
+Mute and unmute writes retain the workspace database and user key captured when
+the operation starts, including when a workspace switch occurs during storage.
 Same-account completions can still notify after switching workspaces; older
 trackers without an origin DB retain the active-workspace lookup fallback.
 
