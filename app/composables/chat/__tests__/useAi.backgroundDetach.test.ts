@@ -1437,7 +1437,10 @@ describe('useChat background detach race', () => {
         });
     });
 
-    it('reports an abort when stopped during background admission', async () => {
+    it.each(['confirmed', 'pending', 'error'] as const)('keeps canonical state accurate after admission stop %s', async (outcome) => {
+        const confirmed = outcome === 'confirmed';
+        if (outcome === 'error') abortAdmissionMock.mockRejectedValueOnce(new Error('stop unavailable'));
+        else abortAdmissionMock.mockResolvedValueOnce({ aborted: confirmed, pending: !confirmed });
         startBackgroundStreamMock.mockImplementationOnce(
             ({ signal }: { signal?: AbortSignal }) =>
                 new Promise((_resolve, reject) => {
@@ -1472,14 +1475,46 @@ describe('useChat background detach race', () => {
         const result = await sendPromise;
 
         expect(result).toMatchObject({
-            status: 'aborted',
-            reason: 'aborted',
+            status: confirmed ? 'aborted' : 'detached',
+            reason: confirmed ? 'aborted' : 'detached',
         });
+        if (!confirmed) {
+            const assistant = messageStore.get('assistant-msg-1');
+            expect(assistant).toBeDefined();
+            expect(assistant.pending).toBe(true);
+            expect(assistant.error ?? null).toBeNull();
+            expect(assistant.data).toMatchObject({ generation_mode: 'background', generation_state: 'streaming',
+                background_admission_id: expect.any(String) });
+            expect(assistant.data.generation_state).not.toBe('aborted');
+            expect(assistant.data.background_job_status).not.toBe('aborted');
+        }
         expect(messageStore.get('assistant-msg-1')).not.toMatchObject({
             data: expect.objectContaining({
                 background_job_status: 'error',
             }),
         });
+    });
+
+
+    it('leaves uncertain background admission pending without offering a failed generation to retry', async () => {
+        vi.resetModules();
+        const { BackgroundAdmissionUncertainError } = await import('~/utils/chat/openrouterStream');
+        startBackgroundStreamMock.mockImplementationOnce(async ({ admissionId, history }: any) => {
+            throw new BackgroundAdmissionUncertainError(admissionId, history.workspaceId, new Error('lookup unavailable'));
+        });
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const result = await chat.sendMessage('hello', { files: [], model: 'test-model',
+            file_hashes: [], online: false, context_hashes: [] });
+        expect(result).toMatchObject({ status: 'detached', reason: 'detached' });
+        const assistant = messageStore.get('assistant-msg-1');
+        expect(assistant).toBeDefined();
+        expect(assistant.pending).toBe(true);
+        expect(assistant.error ?? null).toBeNull();
+        expect(assistant.data).toMatchObject({ generation_mode: 'background', generation_state: 'streaming',
+            background_admission_id: expect.any(String) });
+        expect(startBackgroundStreamMock).toHaveBeenCalledTimes(1);
+        chat.dispose();
     });
 
     it('reconciles a stale foreground pending row as interrupted on reload', async () => {

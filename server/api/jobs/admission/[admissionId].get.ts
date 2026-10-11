@@ -1,17 +1,18 @@
-/** Recover a committed background admission after a lost start response. */
-import { defineEventHandler, getQuery, getRouterParam, setHeader, setResponseStatus } from 'h3';
+/** Recover a canonical admission without changing its owner or workspace. */
 import { getJobProvider } from '../../../utils/background-jobs/store';
-import { getChatJobExecution } from '../../../utils/background-jobs/types';
 import { getScopedAdmissionKey } from '../../../utils/background-jobs/admission-cancels';
 import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
+import { getChatJobExecution } from '../../../utils/background-jobs/types';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 
 export default defineEventHandler(async (event) => {
     setHeader(event, 'Cache-Control', 'no-store, private');
-    const admissionId = getRouterParam(event, 'admissionId')?.trim() ?? '';
-    const workspaceId = getQuery(event).workspaceId;
-    if (!admissionId || admissionId.length > 128 || typeof workspaceId !== 'string' || !workspaceId || workspaceId.length > 256) {
+    const raw = getRouterParam(event, 'admissionId');
+    const admissionId = typeof raw === 'string' ? raw.trim() : '';
+    const query = getQuery(event);
+    const workspaceId = typeof query.workspaceId === 'string' ? query.workspaceId : '';
+    if (!admissionId || admissionId.length > 128 || !workspaceId || workspaceId.length > 256) {
         setResponseStatus(event, 400);
         return { error: 'Admission ID and workspace ID are required' };
     }
@@ -27,8 +28,9 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 501);
         return { error: 'Admission lookup unavailable' };
     }
-    // Provider failure is an unknown outcome, never evidence that no job exists.
-    const job = await provider.findJobByIdempotencyKey(getScopedAdmissionKey(userId, workspaceId, admissionId), userId);
+    // Never translate a provider outage into a definitive "not committed".
+    const job = await provider.findJobByIdempotencyKey(
+        getScopedAdmissionKey(userId, workspaceId, admissionId), userId);
     if (!job) {
         setResponseStatus(event, 404);
         return { error: 'No job for this admission' };
@@ -36,7 +38,13 @@ export default defineEventHandler(async (event) => {
     const execution = getChatJobExecution(job);
     if (execution?.workspaceId !== workspaceId || execution.history?.version !== 1) {
         setResponseStatus(event, 409);
-        return { error: 'Background history contract unavailable', code: 'background_history_unsupported' };
+        return { error: 'Admission cannot be recovered as canonical chat history' };
     }
-    return { jobId: job.id, status: job.status, threadId: job.threadId, messageId: job.messageId, historyVersion: 1 };
+    return {
+        jobId: job.id,
+        status: job.status,
+        threadId: job.threadId,
+        messageId: job.messageId,
+        historyVersion: 1,
+    };
 });

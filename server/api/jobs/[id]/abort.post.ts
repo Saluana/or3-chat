@@ -11,25 +11,38 @@ import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { emitJobStatus } from '../../../utils/background-jobs/viewers';
 import { logBackgroundEvent } from '../../../utils/background-jobs/logging';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type { BackgroundJob } from '../../../utils/background-jobs/types';
+import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 
-function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowMessageData | undefined {
-    if (!state || (state.executionState !== 'running' && state.executionState !== 'idle')) {
-        return state;
+/**
+ * Machine-readable cancellation outcome. The UI must never report
+ * "cancelled" unless the provider confirmed its cancellation transaction.
+ * This does not prove that every upstream service acknowledged the stop or
+ * that an already-dispatched tool side effect was rolled back.
+ */
+export type AbortOutcomeState =
+    /** Provider committed cancellation of the job. */
+    | 'aborted'
+    /** No such job for this user (or it already aged out of retention). */
+    | 'not_found'
+    /** Job already reached a terminal state before the stop arrived. */
+    | 'already_terminal'
+    /** Provider refused to abort a streaming job; remote work may continue. */
+    | 'abort_rejected'
+    /** Provider threw while stopping; remote state is unknown. */
+    | 'abort_error';
+
+export function resolveAbortOutcome(
+    job: Pick<BackgroundJob, 'status'> | null,
+    providerResult: 'aborted' | 'rejected' | 'threw'
+): { state: AbortOutcomeState; httpStatus: number } {
+    if (providerResult === 'aborted') return { state: 'aborted', httpStatus: 200 };
+    if (!job) return { state: 'not_found', httpStatus: 200 };
+    if (job.status !== 'streaming') {
+        return { state: 'already_terminal', httpStatus: 200 };
     }
-    return {
-        ...state,
-        executionState: 'stopped',
-        currentNodeId: null,
-        failedNodeId: state.failedNodeId ?? state.currentNodeId ?? state.lastActiveNodeId ?? null,
-        result: {
-            ...state.result,
-            success: false,
-            duration: state.result?.duration ?? 0,
-            error: 'Workflow stopped by user'
-        },
-        version: (state.version ?? 0) + 1
-    };
+    if (providerResult === 'threw') return { state: 'abort_error', httpStatus: 500 };
+    return { state: 'abort_rejected', httpStatus: 502 };
 }
 
 /**
@@ -41,6 +54,7 @@ function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowM
  * Behavior:
  * - Identifies user.
  * - Tells the Job Provider to signal abortion.
+ * - Reports `aborted: true` only when the provider confirms the stop.
  *
  * Security:
  * - Only the job owner can abort their job.
@@ -73,32 +87,51 @@ export default defineEventHandler(async (event) => {
     const provider = await getJobProvider();
     const job = await provider.getJob(jobId, userId);
     if (!job) {
-        return { aborted: false, state: 'not_found', message: 'Job not found or already complete' };
+        const outcome = resolveAbortOutcome(null, 'rejected');
+        return {
+            aborted: false,
+            state: outcome.state,
+            message: 'Job not found or already complete',
+        };
     }
     await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.write');
+
     if (job.status !== 'streaming') {
-        return { aborted: false, state: 'already_terminal', status: job.status };
+        return { aborted: false, state: 'already_terminal' as const, status: job.status };
     }
-    let aborted: boolean;
+
+    let providerResult: 'aborted' | 'rejected' | 'threw' = 'rejected';
     try {
-        aborted = await provider.abortJob(jobId, userId);
+        providerResult = (await provider.abortJob(jobId, userId))
+            ? 'aborted'
+            : 'rejected';
     } catch (error) {
-        logBackgroundEvent('error', 'background.job.abort-error', { jobId, userId,
-            error: error instanceof Error ? error.message : String(error) });
-        setResponseStatus(event, 500);
-        return { aborted: false, state: 'abort_error', message: 'Failed to stop the job; remote state is unknown' };
+        providerResult = 'threw';
+        logBackgroundEvent('error', 'background.job.abort-error', {
+            jobId,
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+        });
     }
 
-    if (!aborted) {
-        // A job may have finished between the initial read and the stop.
-        const current = await provider.getJob(jobId, userId);
-        if (!current) return { aborted: false, state: 'not_found' };
-        if (current.status !== 'streaming') return { aborted: false, state: 'already_terminal', status: current.status };
-        setResponseStatus(event, 502);
-        return { aborted: false, state: 'abort_rejected', message: 'Provider refused to stop the job; remote work may still be running' };
+    // Completion may win between the initial read and the stop transaction.
+    const latest = providerResult === 'aborted' ? job : await provider.getJob(jobId, userId).catch(() => job);
+    const outcome = resolveAbortOutcome(latest, providerResult);
+    if (outcome.state !== 'aborted') {
+        setResponseStatus(event, outcome.httpStatus);
+        return {
+            aborted: false,
+            state: outcome.state,
+            message:
+                outcome.state === 'already_terminal'
+                    ? 'Job not found or already complete'
+                    : outcome.state === 'abort_rejected'
+                      ? 'Provider refused to abort the streaming job; remote work may still be running'
+                      : 'Failed to stop the job; remote state is unknown',
+        };
     }
 
-    const workflowState = stoppedWorkflowState(job.workflow_state);
+    const workflowState = projectBackgroundWorkflowState('aborted', job.workflow_state);
     emitJobStatus(jobId, 'aborted', {
         content: job.content,
         contentLength: job.content.length,
@@ -109,7 +142,7 @@ export default defineEventHandler(async (event) => {
 
     return {
         aborted: true,
-        state: 'aborted',
+        state: outcome.state,
         status: 'aborted',
         workflow_state: workflowState
     };

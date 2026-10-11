@@ -31,7 +31,7 @@ export type BackgroundClientToolCall = {
     definition: ToolDefinition;
     claimToken?: string;
     claimExpiresAt?: number;
-    /** Digest of the name and arguments reviewed under this claim. */
+    /** Argument digest recorded by providers that support bound claims. */
     claimFingerprint?: string;
 };
 

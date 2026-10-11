@@ -123,6 +123,7 @@ export type ContinueMessageContext = {
     workspaceId?: string;
     userId?: string;
     beginBackgroundAdmission?: (admissionId: string, messageId: string) => void;
+    onBackgroundAdmissionUncertain?: () => void;
     attachBackgroundJob?: (params: {
         jobId: string;
         messageId: string;
@@ -835,6 +836,11 @@ export async function continueMessageImpl(
             }, 0);
         }
     } catch (e) {
+        if (e instanceof Error && 'backgroundAdmissionUncertain' in e && e.backgroundAdmissionUncertain === true) {
+            ctx.onBackgroundAdmissionUncertain?.();
+            request.attached.value = false;
+            return;
+        }
         const setupError =
             e instanceof Error ? e : new Error(String(e));
         const stopped =

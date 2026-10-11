@@ -1,3 +1,4 @@
+import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '../background-client-tool-claim';
 import { describe, expect, it } from 'vitest';
 import { decideToolCall, toolCallFingerprint, type ToolLedgerEntry } from '../tool-ledger';
 
@@ -21,5 +22,31 @@ describe('tool call ledger decisions', () => {
 
     it('fingerprints semantically identical object arguments identically', () => {
         expect(toolCallFingerprint('write', '{"a":1,"b":2}')).toBe(fingerprint);
+    });
+});
+
+describe('background client tool claim binding', () => {
+    const identity = {
+        jobId: 'job', userId: 'user', workspaceId: 'workspace', threadId: 'thread', messageId: 'message',
+        call: { id: 'call', name: 'write', arguments: '{"path":"a"}',
+            definition: { type: 'function', function: { name: 'write', parameters: { type: 'object' } } } },
+    };
+    it('binds actual arguments, definition and originating identity, without trusting a cached fingerprint', () => {
+        const digest = backgroundClientToolDigest(identity);
+        expect(digest).toMatch(/^[a-f0-9]{64}$/);
+        for (const patch of [
+            { userId: 'other' }, { jobId: 'other' }, { workspaceId: 'other' }, { threadId: 'other' }, { messageId: 'other' },
+            { call: { ...identity.call, id: 'other' } },
+            { call: { ...identity.call, arguments: '{"path":"b"}' } },
+            { call: { ...identity.call, definition: { changed: true } } },
+        ]) expect(backgroundClientToolDigest({ ...identity, ...patch })).not.toBe(digest);
+        expect(backgroundClientToolDigest({ ...identity, call: { ...identity.call,
+            definition: { function: { parameters: { type: 'object' }, name: 'write' }, type: 'function' } } })).toBe(digest);
+    });
+    it('rejects missing, malformed and legacy unbound tokens', () => {
+        const digest = backgroundClientToolDigest(identity);
+        expect(backgroundClientToolTokenDigest(`or3ct1.${digest}.00000000-0000-4000-8000-000000000000`)).toBe(digest);
+        for (const token of ['', 'legacy-token', `or3ct1.${digest}.forged`])
+            expect(backgroundClientToolTokenDigest(token)).toBeNull();
     });
 });

@@ -1,3 +1,5 @@
+import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '~~/shared/chat/background-client-tool-claim';
+import { backgroundJobClientToolIdentity } from '../client-tool-identity';
 /**
  * @module server/utils/background-jobs/providers/memory
  *
@@ -407,10 +409,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
-            if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-completion-dropped', { jobId, status: job.status });
-            }
             if (leaseOwner) throwLeaseLost();
+            if (job && job.status !== 'streaming') logBackgroundEvent('info', 'background.job.late-completion-dropped', { jobId, status: job.status });
             return;
         }
 
@@ -430,10 +430,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
-            if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-failure-dropped', { jobId, status: job.status });
-            }
             if (leaseOwner) throwLeaseLost();
+            if (job && job.status !== 'streaming') logBackgroundEvent('info', 'background.job.late-failure-dropped', { jobId, status: job.status });
             return;
         }
 
@@ -544,6 +542,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
         ) {
             return null;
         }
+        const identity = backgroundJobClientToolIdentity(job);
+        const boundDigest = backgroundClientToolTokenDigest(claimToken);
+        if (claimToken.startsWith('or3ct1.') && (!identity || !boundDigest || backgroundClientToolDigest(identity) !== boundDigest)) return null;
         pending.claimToken = claimToken;
         pending.claimExpiresAt = claimExpiresAt;
         pending.claimFingerprint = toolCallFingerprint(pending.name, pending.arguments);
@@ -569,13 +570,14 @@ export const memoryJobProvider: BackgroundJobProvider = {
             pending.callId !== callId ||
             pending.claimToken !== claimToken ||
             (pending.claimExpiresAt ?? 0) <= Date.now() ||
-            // Recompute from the actual call; a copied/stale metadata digest
-            // cannot authorize replacement arguments under an existing token.
             (pending.claimFingerprint !== undefined &&
-                pending.claimFingerprint !== toolCallFingerprint(pending.name, pending.arguments))
+                toolCallFingerprint(pending.name, pending.arguments) !== pending.claimFingerprint)
         ) {
             return false;
         }
+        const identity = backgroundJobClientToolIdentity(job);
+        const boundDigest = backgroundClientToolTokenDigest(claimToken);
+        if (claimToken.startsWith('or3ct1.') && (!identity || !boundDigest || backgroundClientToolDigest(identity) !== boundDigest)) return false;
         job.execution = execution;
         job.tool_calls = toolCalls;
         job.leaseOwner = undefined;
@@ -591,9 +593,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
     ): Promise<boolean> {
         const job = jobs.get(jobId);
         if (!job || job.status !== 'streaming' || !ownsLease(job, leaseOwner)) {
-            if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-snapshot-dropped', { jobId, status: job.status, snapshotStatus: snapshot.status });
-            }
+            if (job && job.status !== 'streaming') logBackgroundEvent('info', 'background.job.late-snapshot-dropped', { jobId, status: job.status });
             return false;
         }
         job.status = snapshot.status;

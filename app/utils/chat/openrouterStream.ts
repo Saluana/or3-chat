@@ -824,9 +824,20 @@ function normalizeBackgroundJobUsage(status: BackgroundJobStatus): BackgroundJob
     return { ...rest, ...(usage ? { usage } : {}) };
 }
 
+/** The original admission may still commit; retain its identity instead of inviting a new send. */
+export class BackgroundAdmissionUncertainError extends Error {
+    readonly backgroundAdmissionUncertain = true;
+    readonly backgroundAdmissionRetryable = false;
+    constructor(readonly admissionId: string, readonly workspaceId: string, cause?: unknown) {
+        super('The server may still be running this response. Wait for it to reconnect before sending again.', { cause });
+        this.name = 'BackgroundAdmissionUncertainError';
+    }
+}
+
 type BackgroundAdmissionError = Error & {
     backgroundAdmissionRetryable?: boolean;
     backgroundCapabilityDisabled?: boolean;
+    backgroundAdmissionUncertain?: boolean;
 };
 
 function makeBackgroundAdmissionError(
@@ -1029,10 +1040,10 @@ export async function startBackgroundStream(params: {
                 // instead of silently launching another execution mode.
                 const contentType = resp.headers.get('content-type') ?? '';
                 if (!contentType.includes('application/json')) {
-                    throw makeBackgroundAdmissionError(
+                    throw Object.assign(makeBackgroundAdmissionError(
                         'Background admission returned a non-JSON response',
                         { retryable: false }
-                    );
+                    ), { backgroundAdmissionUncertain: true });
                 }
                 let decoded: unknown;
                 try {
@@ -1045,12 +1056,12 @@ export async function startBackgroundStream(params: {
                     );
                 } catch (decodeError) {
                     if (params.signal?.aborted) throw decodeError;
-                    throw makeBackgroundAdmissionError(
+                    throw Object.assign(makeBackgroundAdmissionError(
                         decodeError instanceof Error
                             ? decodeError.message
                             : 'Malformed background admission response',
-                        { retryable: decodeError instanceof OpenRouterTimeoutError || decodeError instanceof TypeError }
-                    );
+                        { retryable: false }
+                    ), { backgroundAdmissionUncertain: true });
                 }
                 const candidate =
                     decoded && typeof decoded === 'object'
@@ -1063,10 +1074,10 @@ export async function startBackgroundStream(params: {
                     candidate.status !== 'streaming' ||
                     candidate.historyVersion !== 1
                 ) {
-                    throw makeBackgroundAdmissionError(
+                    throw Object.assign(makeBackgroundAdmissionError(
                         'Malformed background admission response',
                         { retryable: false }
-                    );
+                    ), { backgroundAdmissionUncertain: true });
                 }
                 result = {
                     jobId: candidate.jobId,
@@ -1076,35 +1087,39 @@ export async function startBackgroundStream(params: {
                 break;
             }
         } catch (error) {
-            if (
-                params.signal?.aborted ||
-                (error instanceof Error && error.name === 'AbortError') ||
-                (error instanceof Error &&
-                    (error as BackgroundAdmissionError)
-                        .backgroundAdmissionRetryable === false)
-            ) {
+            if (params.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+            const admissionError = error as BackgroundAdmissionError;
+            if (admissionError?.backgroundAdmissionRetryable === false && !admissionError.backgroundAdmissionUncertain) {
                 throw error;
             }
             lastError = error;
-            if (attempt === 2) break;
+            if (attempt === 2 || admissionError?.backgroundAdmissionUncertain) break;
         }
         await abortableDelay(150 * 2 ** attempt, params.signal);
     }
     if (!result) {
-        const recovered = await recoverBackgroundJob(body._backgroundAdmissionId, params.history.workspaceId, {
-            signal: params.signal,
-            responseTimeoutMs: params.responseTimeoutMs,
-            idleTimeoutMs: params.idleTimeoutMs,
-        });
-        // Terminal jobs must also attach: the tracker projects their retained
-        // output without starting a second generation.
-        if (recovered && recovered.threadId === params.threadId && recovered.messageId === params.messageId) {
-            setBackgroundStreamingAvailable(true);
-            return { jobId: recovered.jobId, status: 'streaming', historyVersion: 1 };
+        try {
+            await assertDispatchOwner(params);
+            const recovered = await recoverBackgroundJob(
+                body._backgroundAdmissionId, params.history.workspaceId, {
+                    signal: params.signal,
+                    responseTimeoutMs: params.responseTimeoutMs,
+                    idleTimeoutMs: params.idleTimeoutMs,
+                });
+            // Admission acknowledges identity, not current liveness. Terminal jobs
+            // also attach so their authoritative result is not lost or resubmitted.
+            if (recovered && recovered.threadId === params.threadId && recovered.messageId === params.messageId) {
+                await assertDispatchOwner(params);
+                if (params.signal?.aborted) throw new DOMException('Admission cancelled', 'AbortError');
+                setBackgroundStreamingAvailable(true);
+                return { jobId: recovered.jobId, status: 'streaming', historyVersion: 1 };
+            }
+        } catch (error) {
+            if (params.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+            throw new BackgroundAdmissionUncertainError(body._backgroundAdmissionId, params.history.workspaceId, error);
         }
-        throw lastError instanceof Error
-            ? lastError
-            : new Error('Background stream admission failed');
+        throw new BackgroundAdmissionUncertainError(
+            body._backgroundAdmissionId, params.history.workspaceId, lastError);
     }
     
     // Mark background streaming as available since it worked
@@ -1113,30 +1128,37 @@ export async function startBackgroundStream(params: {
     return result;
 }
 
-/** Resolve an ambiguous admission against its originating workspace before retrying. */
+/**
+ * Look up a committed canonical admission in its originating workspace.
+ * A 404 means no row exists at lookup time; an earlier request may still commit.
+ * Transport/auth/provider failures never prove absence.
+ */
 export async function recoverBackgroundJob(
     admissionId: string,
     workspaceId: string,
     options: { signal?: AbortSignal; responseTimeoutMs?: number; idleTimeoutMs?: number } = {}
 ): Promise<{ jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 } | null> {
     if (!admissionId || !workspaceId) return null;
-    try {
-        const response = await fetchWithResponseDeadline(
-            `/api/jobs/admission/${encodeURIComponent(admissionId)}?${new URLSearchParams({ workspaceId })}`,
-            { credentials: 'include', cache: 'no-store' },
-            { signal: options.signal, timeoutMs: options.responseTimeoutMs ?? 3_000 }
-        );
-        if (!response.ok) return null;
-        const body = await readResponseJsonWithIdleDeadline<Record<string, unknown>>(response,
-            { signal: options.signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
-        if (!body || typeof body.jobId !== 'string' || !body.jobId || body.historyVersion !== 1 ||
-            typeof body.threadId !== 'string' || typeof body.messageId !== 'string' ||
-            typeof body.status !== 'string' || !['streaming', 'complete', 'error', 'aborted'].includes(body.status)) return null;
-        return body as { jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 };
-    } catch (error) {
-        if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
-        return null;
+    const signal = options.signal;
+    const query = new URLSearchParams({ workspaceId });
+    const response = await fetchWithResponseDeadline(
+        `/api/jobs/admission/${encodeURIComponent(admissionId)}?${query}`,
+        { credentials: 'include', cache: 'no-store' },
+        { signal, timeoutMs: options.responseTimeoutMs ?? 3_000 }
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Admission recovery failed: ${response.status}`);
+    const result = await readResponseJsonWithIdleDeadline<{
+        jobId?: unknown; status?: unknown; threadId?: unknown; messageId?: unknown; historyVersion?: unknown;
+    }>(response, { signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
+    if (!result || typeof result.jobId !== 'string' || !result.jobId ||
+        typeof result.threadId !== 'string' || typeof result.messageId !== 'string' ||
+        result.historyVersion !== 1 ||
+        !['streaming', 'complete', 'error', 'aborted'].includes(String(result.status))) {
+        throw new Error('Malformed admission recovery response');
     }
+    return { jobId: result.jobId, status: result.status as BackgroundJobStatus['status'],
+        threadId: result.threadId, messageId: result.messageId, historyVersion: 1 };
 }
 
 /**
@@ -1252,33 +1274,51 @@ export async function pollJobStatus(
  * Purpose:
  * Requests abortion of a background streaming job.
  */
-export async function abortBackgroundJob(jobId: string): Promise<boolean> {
+export type BackgroundAbortState = 'aborted' | 'not_found' | 'already_terminal' | 'abort_rejected' | 'abort_error' | 'cancel_requested';
+
+export async function abortBackgroundJob(
+    jobId: string,
+    onOutcome?: (state: BackgroundAbortState) => void
+): Promise<boolean> {
     const resp = await fetch(`/api/jobs/${jobId}/abort`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
         body: '{}',
     });
 
-    if (!resp.ok) {
-        return false;
-    }
-
-    const result = await resp.json() as { aborted: boolean };
-    return result.aborted;
+    const result = await resp.json().catch(() => null) as { aborted?: boolean; state?: BackgroundAbortState } | null;
+    const state = result?.state ?? (resp.ok && result?.aborted === true ? 'aborted' : 'abort_error');
+    onOutcome?.(state);
+    return resp.ok && result?.aborted === true && state === 'aborted';
 }
 
 export type BackgroundClientToolClaim = {
     claimToken: string;
+    claimDigest: string;
+    claimExpiresAt: number;
     call: {
         id: string;
         name: string;
         arguments: string;
-        /** Digest of the arguments reviewed under this claim. */
         argumentFingerprint: string;
         definition: ToolDefinition;
     };
     context: { workspaceId: string; threadId: string; messageId: string };
 };
+
+/** Fresh server check before a browser tool handler; never call in a storage transaction. */
+export async function validateBackgroundClientToolClaim(params: {
+    jobId: string; callId: string; claimToken: string; signal?: AbortSignal;
+}): Promise<void> {
+    const response = await fetchWithResponseDeadline(`/api/jobs/${encodeURIComponent(params.jobId)}/client-tool/validate`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-or3-tool-intent': 'validate' },
+        body: JSON.stringify({ callId: params.callId, claimToken: params.claimToken }),
+    }, { signal: params.signal, timeoutMs: 5000 });
+    if (!response.ok) throw new Error('Tool approval expired or is no longer authorized.');
+    const body = await readResponseJsonWithIdleDeadline<{ valid?: unknown }>(response, { signal: params.signal, timeoutMs: 5000 });
+    if (body?.valid !== true) throw new Error('Tool approval could not be verified.');
+}
 
 export async function claimBackgroundClientTool(
     jobId: string,
@@ -1350,7 +1390,7 @@ export async function submitBackgroundClientToolResult(params: {
 export async function abortBackgroundAdmission(
     admissionId: string,
     workspaceId: string | undefined
-): Promise<{ aborted: boolean; pending: boolean; jobId?: string }> {
+): Promise<{ aborted: boolean; pending: boolean; jobId?: string; state?: BackgroundAbortState }> {
     let resp: Response;
     try {
         resp = await fetch('/api/jobs/admission-abort', {
@@ -1380,6 +1420,7 @@ export async function abortBackgroundAdmission(
         aborted?: boolean;
         pending?: boolean;
         jobId?: string;
+        state?: BackgroundAbortState;
     } | null;
     if (!result || typeof result !== 'object') {
         throw new BackgroundJobPollError(
@@ -1391,6 +1432,7 @@ export async function abortBackgroundAdmission(
     return {
         aborted: result.aborted === true,
         pending: result.pending === true,
+        state: result.state,
         jobId: typeof result.jobId === 'string' ? result.jobId : undefined,
     };
 }

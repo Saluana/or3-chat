@@ -19,8 +19,10 @@ The three plans are directionally aligned, but there are several conflicts and m
   Lost-response recovery now reaches a bounded scoped lookup after retry exhaustion,
   validates canonical history and chat identity, and attaches terminal jobs too.
   Stop outcomes distinguish refusal/failure from confirmed cancellation without
-  prematurely changing workflow state. Memory claims recompute the reviewed argument
-  digest at settlement; external provider claim contracts remain unchanged.
+  prematurely changing workflow state. Browser-tool approvals bind actual arguments,
+  definitions and originating identity with SHA-256 and revalidate current access
+  before dispatch. Memory settlement also preserves actual-argument checks for legacy
+  tokens. Payload-free journals fence uncertain execution after expiry and logout.
 
 - Real models switched mid-thread (eight providers, shared tool history)
   worked. A low key balance no longer fails every default-allowance send (one

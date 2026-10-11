@@ -77,6 +77,15 @@ describe('serializeJobStatus', () => {
         expect(status.workflow_state).toEqual(baseJob.workflow_state);
     });
 
+    it('derives a stopped workflow from persisted aborted status after reconnect', () => {
+        const status = streamModule.serializeJobStatus({ ...baseJob, status: 'aborted' });
+        expect(status.workflow_state).toMatchObject({ executionState: 'stopped', version: 1 });
+        expect(baseJob.workflow_state?.executionState).toBe('running');
+        expect(streamModule.serializeJobStatus({ ...baseJob, status: 'complete' }).workflow_state)
+            .toEqual(baseJob.workflow_state);
+        expect(streamModule.serializeJobStatus(baseJob).workflow_state).toEqual(baseJob.workflow_state);
+    });
+
     it('marks a recovered full snapshot as a content reset', () => {
         const status = streamModule.serializeJobStatus(
             { ...baseJob, attempts: 2, content: 'checkpoint' },

@@ -1,3 +1,5 @@
+import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '~~/shared/chat/background-client-tool-claim';
+import { backgroundJobClientToolIdentity } from '../../../../utils/background-jobs/client-tool-identity';
 import { getChatJobExecution } from '../../../../utils/background-jobs/types';
 import { createError, defineEventHandler, setHeader } from 'h3';
 import { requireSession } from '../../../../auth/can';
@@ -73,6 +75,14 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 409, statusMessage: 'Tool call is no longer pending' });
     }
     await requireJobWorkspaceAccess(event, session, execution.workspaceId, 'workspace.write');
+
+    const identity = backgroundJobClientToolIdentity(job);
+    const boundDigest = backgroundClientToolTokenDigest(claimToken);
+    if (job.status !== 'streaming' || pending.claimToken !== claimToken ||
+        (pending.claimExpiresAt ?? 0) <= Date.now() || !identity || !boundDigest ||
+        backgroundClientToolDigest(identity) !== boundDigest) {
+        throw createError({ statusCode: 409, statusMessage: 'Tool approval expired or its reviewed payload changed' });
+    }
 
     let resolvedError = error;
     const rawModelResult = error

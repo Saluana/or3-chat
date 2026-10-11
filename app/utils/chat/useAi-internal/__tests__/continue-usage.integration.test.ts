@@ -12,14 +12,15 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 const provider = vi.hoisted(() => vi.fn());
+const backgroundProvider = vi.hoisted(() => vi.fn());
 vi.mock('~/utils/chat/openrouterStream', async (original) => ({
     ...await original<typeof import('~/utils/chat/openrouterStream')>(),
-    openRouterStreamWithRetry: provider, startBackgroundStream: vi.fn(),
+    openRouterStreamWithRetry: provider, startBackgroundStream: backgroundProvider,
 }));
 let workspace: string;
 beforeEach(async () => {
     workspace = `continue-usage-${crypto.randomUUID()}`; await setActiveWorkspaceDb(workspace).open();
-    setHookEngine(createTypedHookEngine(createHookEngine())); provider.mockReset();
+    setHookEngine(createTypedHookEngine(createHookEngine())); provider.mockReset(); backgroundProvider.mockReset();
     await getDb().threads.put({ id: 'thread', status: 'ready', clock: 1, created_at: 1, updated_at: 1, deleted: false, pinned: false, forked: false });
     await getDb().messages.bulkPut([
         { id: 'user', thread_id: 'thread', role: 'user', index: 0, clock: 1, created_at: 1, updated_at: 1, pending: false, deleted: false, data: { content: 'Continue this' } },
@@ -72,4 +73,37 @@ it('refuses an unbound continuation without model policy before any target mutat
     expect(await db.messages.toArray()).toEqual(before);
     expect(provider).not.toHaveBeenCalled();
     expect(request.publicState.value).toMatchObject({ status: 'terminal', result: { reason: 'model_metadata_unavailable' } });
+});
+
+it('preserves canonical continuation state when admission recovery is uncertain', async () => {
+    backgroundProvider.mockImplementationOnce(async ({ admissionId }: { admissionId: string }) => {
+        throw Object.assign(new Error('Admission recovery unavailable'), { backgroundAdmissionUncertain: true, admissionId });
+    });
+    const db = getDb();
+    const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'uncertain', kind: 'continue', originDb: db,
+        workspaceId: workspace, threadId: 'thread', accumulator });
+    request.ownsView = () => !request.cancelled;
+    const notify = vi.fn();
+    const ctx: ContinueMessageContext = {
+        request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), defaultModelId: 'model',
+        getSystemPromptContent: async () => null, useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 }, userMaxContextTokens: null, source: 'openrouter-live' }),
+        backgroundStreamingAllowed: true, workspaceId: workspace, userId: 'user',
+        attachBackgroundJob: vi.fn(), onBackgroundAdmissionUncertain: notify,
+    };
+    await continueMessageImpl(ctx, 'assistant');
+    expect(backgroundProvider).toHaveBeenCalledOnce();
+    expect(provider).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledOnce();
+    expect(ctx.attachBackgroundJob).not.toHaveBeenCalled();
+    expect(request.attached.value).toBe(false);
+    const stored = (await db.messages.get('assistant'))!;
+    expect(stored.pending).toBe(true);
+    expect(stored.error ?? null).toBeNull();
+    expect(stored.data).toMatchObject({ content: 'Hello', generation_mode: 'background',
+        generation_state: 'streaming', background_admission_id: expect.any(String), plugin_owned: 'preserve' });
 });

@@ -22,6 +22,65 @@ afterEach(async () => {
 });
 
 describe('client tool execution context', () => {
+    // Bridge validation can wait for the network after approval. It must run
+    // outside write transactions and must not replace local mutation fencing.
+    it('validates a bridge admission outside the handler transaction only once', async () => {
+        const registry = useToolRegistry();
+        const definition: ToolDefinition = {
+            type: 'function', runtime: 'client',
+            function: { name: 'bridge_transaction', description: 'Bridge transaction', parameters: { type: 'object', properties: {} } },
+        };
+        names.push(definition.function.name);
+        const beforeExecute = vi.fn(async () => {
+            expect(Dexie.currentTransaction).toBeFalsy();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        registry.registerTool(definition, async (_args, context) => {
+            const db = getDb();
+            await db.transaction('rw', db.threads, db.projects, db.posts, db.file_meta, async () => {
+                expect(Dexie.currentTransaction).toBeTruthy();
+                await context.assertToolAuthorized?.();
+                await db.threads.update('thread-1', { title: 'Authorized mutation' });
+            });
+            return 'saved';
+        }, { override: true });
+        const context: ToolExecutionContext = {
+            subject: 'user-1', workspaceId: workspace, threadId: 'thread-1',
+            messageId: 'message-1', callId: 'call-1', requestId: 'job-1',
+            abortSignal: new AbortController().signal,
+        };
+        await expect(registry.executeTool(definition.function.name, '{}', context, { definition, beforeExecute }))
+            .resolves.toMatchObject({ result: 'saved' });
+        expect(beforeExecute).toHaveBeenCalledTimes(1);
+        expect((await getDb().threads.get('thread-1'))?.title).toBe('Authorized mutation');
+    });
+
+    it.each(['refused', 'disabled', 'aborted'] as const)('does not execute after bridge validation is %s', async (outcome) => {
+        const registry = useToolRegistry();
+        const definition: ToolDefinition = {
+            type: 'function', runtime: 'client',
+            function: { name: `bridge_${outcome}`, description: 'Bridge guard', parameters: { type: 'object', properties: {} } },
+        };
+        names.push(definition.function.name);
+        const handler = vi.fn(() => 'must-not-run');
+        registry.registerTool(definition, handler, { override: true });
+        const abortController = new AbortController();
+        const beforeExecute = vi.fn(async () => {
+            await Promise.resolve();
+            if (outcome === 'refused') throw new Error('Tool claim expired or was replaced');
+            if (outcome === 'disabled') registry.setEnabled(definition.function.name, false);
+            if (outcome === 'aborted') abortController.abort();
+        });
+        const context: ToolExecutionContext = {
+            subject: 'user-1', workspaceId: workspace, threadId: 'thread-1',
+            messageId: 'message-1', callId: 'call-1', requestId: 'job-1', abortSignal: abortController.signal,
+        };
+        await expect(registry.executeTool(definition.function.name, '{}', context, { definition, beforeExecute }))
+            .resolves.toMatchObject({ result: null, error: expect.any(String) });
+        expect(beforeExecute).toHaveBeenCalledTimes(1);
+        expect(handler).not.toHaveBeenCalled();
+    });
+
     it('supports contextual and legacy handler signatures', async () => {
         const registry = useToolRegistry();
         const contextual: ToolDefinition = {

@@ -47,12 +47,19 @@ export default defineEventHandler(async (event) => {
                 ? { aborted: await provider.abortJob(job.id, userId), pending: false, jobId: job.id }
                 : { aborted: false, pending: true };
         }
-    } catch (error) {
-        logBackgroundEvent('error', 'background.admission.abort-error', { userId,
-            error: error instanceof Error ? error.message : String(error) });
+    } catch {
+        // The provider may have persisted a marker before losing its response.
+        // Neither success nor durable marker creation can be inferred here.
+        logBackgroundEvent('error', 'background.admission.abort-error', { userId });
         setResponseStatus(event, 500);
-        // A marker may exist, but it does not prove a committed job stopped.
-        return { aborted: false, pending: false, state: 'abort_error', message: 'Failed to stop the admission; remote state is unknown' };
+        return { aborted: false, pending: false, state: 'abort_error' as const };
+    }
+    if (!result.aborted && !result.pending) {
+        const job = result.jobId ? await provider.getJob(result.jobId, userId).catch(() => null) : null;
+        if (!job || job.status === 'streaming') {
+            setResponseStatus(event, 502);
+            return { ...result, state: 'abort_rejected' as const };
+        }
     }
     if (result.aborted && result.jobId) {
         const job = await provider.getJob(result.jobId, userId).catch(() => null);
@@ -65,11 +72,5 @@ export default defineEventHandler(async (event) => {
             });
         }
     }
-    if (result.aborted) return { ...result, state: 'aborted' };
-    if (result.pending) return { ...result, state: 'cancel_requested' };
-    const current = result.jobId ? await provider.getJob(result.jobId, userId) : null;
-    if (!current) return { ...result, state: 'not_found' };
-    if (current.status !== 'streaming') return { ...result, state: 'already_terminal' };
-    setResponseStatus(event, 502);
-    return { ...result, state: 'abort_rejected', message: 'Provider refused to stop the job; remote work may still be running' };
+    return { ...result, state: result.aborted ? 'aborted' as const : result.pending ? 'cancel_requested' as const : 'already_terminal' as const };
 });

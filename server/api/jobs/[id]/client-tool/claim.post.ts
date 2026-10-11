@@ -1,3 +1,5 @@
+import { backgroundClientToolDigest } from '~~/shared/chat/background-client-tool-claim';
+import { backgroundJobClientToolIdentity } from '../../../../utils/background-jobs/client-tool-identity';
 import { randomUUID } from 'node:crypto';
 import { getChatJobExecution } from '../../../../utils/background-jobs/types';
 import { createError, defineEventHandler, setHeader } from 'h3';
@@ -65,25 +67,33 @@ export default defineEventHandler(async (event) => {
     }
     await requireJobWorkspaceAccess(event, session, workspaceId, 'workspace.write');
 
-    const claimToken = randomUUID();
+    const identity = backgroundJobClientToolIdentity(current);
+    if (!identity || identity.call.id !== callId) throw createError({ statusCode: 409, statusMessage: 'Tool call no longer pending' });
+    const claimDigest = backgroundClientToolDigest(identity);
+    const claimToken = `or3ct1.${claimDigest}.${randomUUID()}`;
+    const claimExpiresAt = Date.now() + CLAIM_TTL_MS;
     const claimed = await provider.claimClientToolCall(
         jobId,
         userId,
         callId,
         claimToken,
-        Date.now() + CLAIM_TTL_MS
+        claimExpiresAt
     );
     const pending = claimed ? getChatJobExecution(claimed)?.clientToolCall : undefined;
-    if (!claimed || !pending || pending.callId !== callId) {
+    const claimedIdentity = claimed ? backgroundJobClientToolIdentity(claimed) : null;
+    if (!claimed || !pending || pending.callId !== callId || !claimedIdentity ||
+        pending.claimToken !== claimToken || backgroundClientToolDigest(claimedIdentity) !== claimDigest) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call already claimed' });
     }
     return {
         claimToken,
+        claimExpiresAt,
+        claimDigest,
         call: {
             id: pending.callId,
             name: pending.name,
             arguments: pending.arguments,
-            argumentFingerprint: pending.claimFingerprint ?? pending.argumentFingerprint,
+            argumentFingerprint: pending.argumentFingerprint,
             definition: pending.definition,
         },
         context: {

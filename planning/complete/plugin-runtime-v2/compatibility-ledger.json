@@ -11855,7 +11855,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "fae6bcef3b2f30547042397912847257025c377a12e10e140cf9fcf85dbef172",
+      "apiSha256": "9cdf883679a0f29eb72140d9540eb9f65b979d8c371d7d3c28629ca12261304f",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11942,7 +11942,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 168,
+              "line": 170,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
