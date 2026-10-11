@@ -246,6 +246,88 @@ for (const outcome of ['success', 'failure'] as const) {
     }
 }
 
+for (const boundary of ['chat-rows', 'file-metadata'] as const) {
+    test(`actual stored search rejects held ${boundary} across identical workspace identifiers`, async ({ page }, info) => {
+        await open(page);
+        await page.evaluate(async mode => {
+            const clientPath = '/_nuxt/db/client.ts';
+            const coordinatorPath = '/_nuxt/core/search/command-palette/coordinator.ts';
+            const registryPath = '/_nuxt/core/search/command-palette/registry.ts';
+            const chatPath = '/_nuxt/core/search/command-palette/sources/chat-source.ts';
+            const documentPath = '/_nuxt/core/search/command-palette/sources/document-source.ts';
+            const filePath = '/_nuxt/core/search/command-palette/sources/file-source.ts';
+            const { setActiveWorkspaceDb, getDb } = await import(clientPath);
+            const { createPaletteCoordinator } = await import(coordinatorPath);
+            const { registerPaletteSource } = await import(registryPath);
+            const { createChatPaletteSource } = await import(chatPath);
+            const { createDocumentPaletteSource } = await import(documentPath);
+            const { createFilePaletteSource } = await import(filePath);
+            // /images does not mount PageShell's core-source registrations.
+            const registrations = [createChatPaletteSource(), createDocumentPaletteSource(), createFilePaletteSource()].map(registerPaletteSource);
+            const origin = `stored-search-${mode}-origin`;
+            const target = `stored-search-${mode}-target`;
+            const blob = new Blob(['identical synthetic file bytes'], { type: 'text/plain' });
+            const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+            const hash = 'sha256:' + Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
+            for (const [workspace, marker] of [[origin, 'isolationoriginmarker'], [target, 'isolationtargetmarker']]) {
+                const db = setActiveWorkspaceDb(workspace); await db.open();
+                await db.threads.put({ id: 'identical-thread', title: `${marker} chat`, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+                await db.messages.put({ id: 'identical-message', thread_id: 'identical-thread', role: 'user',
+                    data: { content: `${marker} stored synthetic chat text` }, deleted: false, clock: 1, created_at: 1, updated_at: 1, index: 0 });
+                await db.posts.put({ id: 'identical-doc', postType: 'doc', title: `${marker} document`,
+                    content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `${marker} stored synthetic document text` }] }] }),
+                    deleted: false, clock: 1, created_at: 1, updated_at: 1, meta: '', file_hashes: null });
+                await db.file_blobs.put({ hash, blob });
+                await db.file_meta.put({ hash, name: `${marker}.txt`, mime_type: 'text/plain', kind: 'file', size_bytes: blob.size,
+                    ref_count: 1, created_at: 1, updated_at: 1, clock: 1, deleted: false });
+                await db.posts.put({ id: 'identical-file', postType: 'or3:file', title: `${marker} file`,
+                    content: `${marker} stored synthetic file text`, deleted: false, clock: 1, created_at: 1, updated_at: 1,
+                    meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }), file_hashes: JSON.stringify([hash]) });
+            }
+            await setActiveWorkspaceDb(origin).open();
+            const db = getDb();
+            const table = mode === 'chat-rows' ? db.messages : db.file_meta;
+            const method = mode === 'chat-rows' ? 'toArray' : 'bulkGet';
+            const original = table[method].bind(table);
+            let release!: () => void;
+            const held = new Promise<void>(resolve => { release = resolve; });
+            const fixture = { coordinator: createPaletteCoordinator({ debounceMs: 0 }), registrations, entered: false, release,
+                restore: () => { table[method] = original; }, originalSearch: null as Promise<unknown> | null };
+            table[method] = async (...args: unknown[]) => {
+                const captured = await original(...args); fixture.entered = true; await held; return captured;
+            };
+            (window as unknown as { isolationStoredSearch: unknown }).isolationStoredSearch = fixture;
+            fixture.originalSearch = fixture.coordinator.searchOnce({ term: 'isolationoriginmarker', sourceIds: ['chat', 'document', 'file'], limit: 10 })
+                .then(() => ({ rejected: false }), () => ({ rejected: true }));
+        }, boundary);
+        await page.waitForFunction(() => (window as any).isolationStoredSearch.entered);
+        await select(page, `stored-search-${boundary}-target`);
+        const receipt = await page.evaluate(async mode => {
+            const fixture = (window as any).isolationStoredSearch;
+            const query = (term: string) => fixture.coordinator.searchOnce({ term, sourceIds: ['chat', 'document', 'file'], limit: 10 });
+            try {
+                fixture.restore(); fixture.release();
+                const original = await fixture.originalSearch;
+                await fixture.coordinator.ensureWarm();
+                const foreign = await query('isolationoriginmarker');
+                const own = await query('isolationtargetmarker');
+                const clientPath = '/_nuxt/db/client.ts';
+                const { setActiveWorkspaceDb } = await import(clientPath);
+                await setActiveWorkspaceDb(`stored-search-${mode}-origin`).open();
+                await fixture.coordinator.ensureWarm();
+                const recovered = await query('isolationoriginmarker');
+                const reverseForeign = await query('isolationtargetmarker');
+                return { original, foreign: foreign.results.length, own: own.results.map((row: any) => row.sourceId).sort(),
+                    recovered: recovered.results.map((row: any) => row.sourceId).sort(), reverseForeign: reverseForeign.results.length,
+                    snapshotsScoped: Array.from(own.snapshots.values()).every((row: any) => row.title.startsWith('isolationtargetmarker')) };
+            } finally { fixture.restore(); fixture.release(); fixture.coordinator.dispose(); fixture.registrations.forEach((handle: any) => handle.dispose()); }
+        }, boundary);
+        await info.attach('synthetic-stored-search-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual({ original: { rejected: true }, foreign: 0, own: ['chat', 'document', 'file'],
+            recovered: ['chat', 'document', 'file'], reverseForeign: 0, snapshotsScoped: true });
+    });
+}
+
 for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const) {
     test(`actual SDK file read fences ${boundary} byte delivery`, async ({ page }, info) => {
         await open(page);
