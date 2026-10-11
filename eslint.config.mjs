@@ -42,6 +42,15 @@ export default [
         },
     },
     {
+        // Audit runners keep Bun types even when another project includes them.
+        files: ['audit-evidence/**/*.ts', 'audit-evidence/**/*.tsx'],
+        languageOptions: {
+            parserOptions: {
+                project: [auditProject],
+            },
+        },
+    },
+    {
         ignores: [
             '.nuxt/**',
             '.output/**',
