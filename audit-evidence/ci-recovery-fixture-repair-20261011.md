@@ -48,6 +48,26 @@ exact account/tab key, retains the retry-load text assertion, and additionally
 verifies the unrelated draft remains unchanged. The unrelated fixture stays
 in the regression test. No cleanup policy or production selection logic changed.
 
+Run `38153761311` at `38a93f10d569c910402e6bae51d8c9e02ba06b7d` again passed
+Contracts, lint and application typechecking, then exposed another manifestation
+of the orphan fixture surviving teardown. The rollback case at line 135 expected
+exactly `['durable A']`, but also found `independent old journal`. On hydration,
+the legacy-journal case schedules a debounced import receipt. `vi.resetModules()`
+does not dispose that older simulated page, and the original teardown removed
+journals/rows without cancelling its debounce. The old page can therefore
+repopulate the newly cleared tables. Delaying the original teardown by 350 ms
+reproduces that exact rollback assertion deterministically. Tracking the page
+instances and clearing/flushing each before durable fixture reset makes the same
+diagnostic pass. The temporary delay was removed before committing
+`3a233fc1c53d32b068fe93f78d2bd260587ab699`.
+
+The rollback assertions remain exactly `['durable A']` before retry and
+`['durable A', 'retry B']` afterward. Legacy-journal retention assertions remain
+unchanged within their own case. Quiescing simulated pages at test boundaries
+does not change product cleanup, recovery retention, active-tab concurrency or
+transactions. This completes fixture isolation rather than discarding a valid
+recovery alternative to make a product assertion pass.
+
 Receipts (synthetic fixtures, cloud container only):
 
 - Starting-head canonical file: 41 pass,
@@ -68,8 +88,15 @@ Receipts (synthetic fixtures, cloud container only):
   `/tmp/or3-recovery-ci-three-canonical-suites-green.log`. A final run after
   narrowing the admitted-state TypeScript access is recorded in
   `/tmp/or3-recovery-ci-three-canonical-suites-final.log`.
+- Orphan teardown deterministic red/green with the same 350 ms diagnostic:
+  `/tmp/or3-recovery-ci-orphan-teardown-red.log` and
+  `/tmp/or3-recovery-ci-orphan-teardown-green.log`.
+- Final quiescent fixtures without the diagnostic delay: 112 pass / 3 files,
+  `/tmp/or3-recovery-ci-three-canonical-suites-quiescent.log` (8.70 seconds).
 - Exact changed-source CI lint: pass,
   `/tmp/or3-recovery-ci-complete-changed-source-lint-second.log`.
+  The final quiescent-fixture branch command also passes:
+  `/tmp/or3-recovery-ci-changed-source-lint-quiescent.log`.
 - Ledger and both snapshot checks: pass,
   `/tmp/or3-recovery-ci-compatibility-second.log`; no regenerated changes.
 
@@ -77,7 +104,20 @@ The initial full local core run exposed the retry-restore failure (696 pass,
 46 skipped before bail), `/tmp/or3-recovery-ci-full-current.log`.
 The next full local run was stopped when the third Mac finding required another
 fixture change; it is not a complete or exact-final-tree qualification.
-Full qualification of the published final tree is supplied by its hosted run.
+Complete final-tree qualification remains pending; its hosted receipt is
+recorded on the PR, including any independently owned full-core blocker.
+
+A bounded full core run at `38a93f10` passed 4,105 tests / 427 files before
+bailing at the independently owned isolation test
+`server/api/plugins/__tests__/isolation-capability.post.test.ts:547`,
+"refuses ai.complete without a host provider credential". Its mocked handler
+resolved `{ ok: true, result: { text: 'ok' } }` instead of rejecting with 503.
+The same case fails alone in the separate frozen-base worktree at
+`df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5`. This is a pre-existing full-core
+blocker, reported to the parent/isolation owner; no isolation source was edited.
+Receipts: `/tmp/or3-recovery-ci-full-final-head.log` and
+`/tmp/or3-recovery-ci-isolation-credential-base.log`. Both use synthetic/mocked
+providers; no model request was made. This is not a complete full-core pass.
 
 This follow-up changes three canonical test fixtures only. Browser qualification
 remains tied to the prior application checkpoint; no new browser execution,
