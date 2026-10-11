@@ -19,6 +19,8 @@ Local-first use does not require an OR3 account. A Cloud instance can require si
 
 Use projects to group chats, documents for editable notes, and workspace panes to keep several items open. The [command palette](/documentation/start/command-palette) finds saved work and runs commands with Cmd+K or Ctrl+K.
 
+Open tabs are restored separately for each workspace and layout profile. If you switch workspaces during restoration, the earlier lookup cannot replace the current panes or show an outdated failure notice.
+
 ## Keep a backup
 
 Open **Workspace Backup** from the dashboard to export the active workspace as a JSONL backup. Keep the downloaded file somewhere safe. Import validates a backup and offers merge or replace behavior; replace removes the active workspace's existing data. Export before restoring or resetting browser storage.
