@@ -328,7 +328,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
     // image was already pulled and provenance-checked above, so both artifacts
     // are prepared while the source is still running.
     const operator = await prepareVerifiedDashboardOperator(loaded.directory, targetVersion);
-    const backup = await createBackup(loaded.directory, state, env, { restartAfter: false, backupId });
+    const backup = await createBackup(loaded.directory, state, env, { restartAfter: false, backupId, safetySnapshot: true });
     // The bridge release reads schema 2 but keeps writing schema 1. Only a
     // release explicitly qualified to write schema 2 migrates, and only after
     // the compatibility bridge is present (declared minimum source). Migration

@@ -48,6 +48,7 @@ export type FakeDockerConfig = {
   volumeApparentBytes?: number;
   volumeAllocatedKiB?: number;
   volumeFreeKiB?: number;
+  scratchFreeKiB?: number;
 };
 
 const FAKE_DOCKER = String.raw`#!/usr/bin/env bun
@@ -136,6 +137,7 @@ const containerScript = () => {
   if (joined.includes('stat -c')) return out('65532:65532');
   if (joined.includes('du -sb')) return out((config.volumeApparentBytes ?? 1000) + '\t/data');
   if (joined.includes('du -sk')) return out((config.volumeAllocatedKiB ?? 1) + '\t/data');
+  if (joined.includes('df -Pk /scratch')) return out(config.scratchFreeKiB ?? 512 * 1024);
   if (joined.includes('df -Pk')) return out(config.volumeFreeKiB ?? 1000000);
   if (joined.includes('tar czf')) return process.stdout.write(gzipSync(Buffer.from('fixture archive bytes')));
   if (joined.includes('quick_check')) return out(JSON.stringify([{ path: 'auth.sqlite', quickCheck: 'ok', tables: 1 }, { path: 'sync.sqlite', quickCheck: 'ok', tables: 1 }]));
