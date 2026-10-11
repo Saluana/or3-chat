@@ -1068,6 +1068,45 @@ describe('backgroundJobs reattach + notifications', () => {
         mod.backgroundJobTrackers.clear();
     });
 
+    for (const delivery of ['fallback', 'hook'] as const) {
+        it.each(['matching-conversation', 'foreign-conversation'] as const)(`retains the admitted tracker account before ${delivery} delivery when reuse requests a %s`, async conversation => {
+            subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+            sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
+            const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user', workspaceId: 'workspace-1',
+                threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+            const hookDelivery = vi.fn();
+            if (delivery === 'hook') {
+                (globalThis as typeof globalThis & { __NUXT_HOOKS__: HookEngine }).__NUXT_HOOKS__.addAction('notify:action:push', hookDelivery);
+            }
+            sessionValue = { authenticated: true, user: { id: 'next-user' }, workspace: { id: 'workspace-2' } };
+            try {
+                mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'next-user', workspaceId: 'workspace-2',
+                    threadId: conversation === 'matching-conversation' ? 'thread-1' : 'foreign-thread',
+                    messageId: conversation === 'matching-conversation' ? 'msg-1' : 'foreign-message', useSse: true });
+                const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+                await emitBackgroundComplete(tracker, makeStatus('error', { error: 'synthetic-origin-account-private-detail' }));
+                expect(hookDelivery).not.toHaveBeenCalled();
+                expect(notificationCreateMock).not.toHaveBeenCalled();
+                expect(tracker.userId).toBe('origin-user');
+            } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); }
+        });
+    }
+
+    it.each(['same-account', 'late-account-binding'] as const)('retains admitted tracker account controls for %s', async binding => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: binding === 'same-account' ? 'origin-user' : '',
+            workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        try {
+            const reused = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user', workspaceId: 'workspace-1',
+                threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+            expect(reused).toBe(tracker);
+            expect(tracker.userId).toBe('origin-user');
+            expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(1);
+        } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); }
+    });
+
     it('skips local completion notifications when server notifications are preferred', async () => {
         pollJobStatusMock.mockResolvedValue(
             makeStatus('complete', { content: 'done', content_length: 4 })

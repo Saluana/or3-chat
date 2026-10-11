@@ -2,6 +2,11 @@
 
 The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled.
 
+A background-job tracker keeps its known originating account when callers reuse
+the job identifier. A request from another account does not replace that owner
+or its tracker metadata. Same-account reuse and filling a previously unknown
+account remain supported.
+
 Detached chat completions cannot deliver their error details or navigation actions
 to a different authenticated account, including an account change during the
 asynchronous mute lookup. Switching workspaces within the same account retains

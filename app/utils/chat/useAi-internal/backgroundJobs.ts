@@ -1517,7 +1517,7 @@ function startBackgroundJobTracking(
  *
  * Behavior:
  * - Returns existing tracker from global map if found
- * - Updates existing tracker with new userId, threadId, messageId if provided
+ * - Fills missing ownership metadata; a known account cannot be replaced
  * - Seeds content if longer than existing
  * - Starts SSE if requested and not already running
  * - Creates new tracker with completion promise if not found
@@ -1550,6 +1550,8 @@ export function ensureBackgroundJobTracker(
 ): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
+        // A known account owns the tracker for its whole lifetime.
+        if (existing.userId && params.userId && existing.userId !== params.userId) return existing;
         bgStreamLog('tracker-reused', {
             jobId: params.jobId,
             existingStatus: existing.status,
