@@ -110,7 +110,38 @@ The tab session owns the open-tab manifest and active bindings. The pane adapter
 
 Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 
-Composer drafts are separate from that manifest. They live in memory and also persist, local-only, to the `workspace_tab_drafts` table of the workspace database, keyed by account and tab (never synchronized, never in the manifest), so an unsent message survives a reload. A draft stores text, editor JSON, composer settings, pasted blocks and attachments as hash references to the bytes already kept in `file_blobs`; blob preview URLs are recreated on restore. If the bytes are gone the composer asks the user to attach those files again. Writes are debounced and flushed when the page is hidden, and the composer captures its current text at that moment instead of waiting for its own debounce. Browsers drop IndexedDB writes begun while a page unloads, so every draft change is also journaled synchronously to `localStorage` (`or3:tab-draft-journal:v1:*`, drafts up to about 100k characters); the journal is merged when drafts next load (a recorded discard also wins over an older saved copy) and removed once IndexedDB confirms the change. Equal timestamps acknowledge only the exact saved snapshot, so an older in-flight save cannot erase a different later journal entry. A rejected write keeps the draft pending, retries with backoff (up to five times, then on the next edit or page hide), and raises one persistent "Draft could not be saved" notice with Retry until a write succeeds (`useWorkspaceTabDrafts().saveFailed`). Text typed while a saved draft is still loading is kept instead of being replaced by the loaded copy. At most 50 drafts per account and workspace are kept (least recently edited first), drafts expire after 30 days, and drafts exceeding about 500k serialized characters (text, editor JSON and pasted blocks combined) stay memory-only. An oversized draft reports save failure and preserves the previous durable copy; reducing the draft allows it to save again. Reads and writes are scoped by workspace and account, and a composer passes the scope captured when it restored a draft, so a late write after a workspace or account change cannot land in the wrong place. Physical deletion of a file is refused while a saved draft references it. A send clears only the composer revision it submitted: text typed while the request was being prepared is kept even if it later matches the submitted text. Draft discard revokes owned blob URLs and deletes the saved row; short deferred discard supports reopening a recently closed tab.
+Composer drafts persist in local-only `workspace_tab_drafts` and
+`workspace_draft_versions` tables, scoped by physical workspace database,
+account, app tab and a fresh page writer identity. Each set/discard has a
+monotonic sequence. One transaction compares the complete observed canonical
+row and discard state, preserves displaced legacy content, and commits the
+writer head and canonical mirror. A delayed retry cannot resurrect a newer
+clear or an explicitly removed version. Reload hints select that page's saved
+branch; duplicated browser tabs receive independent writer identities.
+**Review saved draft versions** includes other branches and orphaned app-tab
+drafts. Selection durably archives the current editor before copying the chosen
+version, and rejects intervening edits or uncommitted attachments. Removal
+requires the exact displayed version. Saved drafts never expire or automatically
+evict one another: reaching the 200-version capacity fails visibly until the
+user explicitly discards versions. Removed versions retain only a lightweight
+sequence floor, without text or attachment references.
+
+Drafts retain text, editor JSON, settings, pasted blocks and attachment hashes;
+missing-file hashes and names survive recapture. File deletion checks both
+canonical drafts and saved versions inside its transaction. Writes are debounced
+and retried with backoff; page hide captures the current editor immediately.
+Synchronous journals up to about 100k characters use immutable per-writer
+operation keys (`or3:tab-draft-journal:v2:*`). A confirmed newer own write
+compacts its older keys. Legacy v1 records are imported conservatively and
+retained because old writers can still mutate them. Unknown records remain
+untouched and cause a visible restore failure. Failed saves retain the buffer,
+show **Draft could not be saved** with Retry, and request unload confirmation
+when neither a native receipt nor a journal protects the bytes. Drafts over
+about 500k serialized characters stay in memory with a visible failure and
+preserve the previous durable copy. Captured scope prevents late writes entering
+another workspace/account. Send clears only its submitted composer revision;
+close-tab Undo retains its existing grace period and preview URLs are released
+on discard.
 
 Concurrent draft flushes can finish out of order. A successful write clears only that tab's failure; it cannot dismiss another tab's unresolved save warning. A confirmed explicit discard clears the corresponding failure once its deletion is durable.
 
@@ -176,3 +207,14 @@ Disposal cancels idle retries and prevents waiting or new callers from preparing
 more writes, while draining the already prepared write. Each writer owns its own
 warning; successful writes in another pane cannot acknowledge its failed data.
 Terminal persistence after disposal remains the finalization layer's concern.
+
+
+A failed request-owned terminal assistant save retains its exact content,
+reasoning and tool-call snapshot after stream teardown. It retries local
+persistence five times with bounded backoff, and on page hide, reconnect or
+**Retry local save**. A persistent notice and unload warning remain until
+acknowledgement or ownership supersession. Retries reopen only the captured
+physical database and check fresh ownership inside each write, including deleted,
+superseded and tracker-takeover states. They never replay a provider or tool.
+Preparation effects run once; completion effects run once following the durable
+write. Canonical/tracker failures remain with their existing recovery owners.
