@@ -282,3 +282,31 @@ references in unresolved versions and keep these versions out of sync. Capacity
 limits must visibly reject additional writes rather than silently deleting an
 unresolved version. This requires coordinated schema and recovery UI work; no
 winner was selected and no competing user text was discarded by this audit.
+
+## Delayed document image delivery (parent-assigned follow-up)
+
+`DocumentImageNode.vue` delivered a pending image after unmount or a workspace /
+account switch, and an older read cleared a newer request's loading state. Four
+unit regressions failed against the original source, with bail disabled:
+`/tmp/or3-recovery-document-image-red.log`.
+The node now reads against its captured DB and fences delivery by mounted scope,
+workspace generation, account and request revision. Scope invalidation revokes
+existing URLs; failures use the existing unavailable placeholder.
+
+25 editor/unit integration cases passed in
+`/tmp/or3-recovery-document-image-final-unit.log`, including hash ABA,
+account invalidation, URL cleanup and rejected reads. Two actual mounted-editor
+Chromium cases passed in 10.1 seconds: deferred local reads delivered after node
+removal and a workspace switch created zero URLs. This is a deterministic local
+read fixture, not an authenticated cross-account browser qualification. Log:
+`/tmp/or3-recovery-document-image-browser.log`; artifacts:
+`test-results/recovery-document-image`. Shared gallery/viewer/global thumbnail
+cache files remain untouched.
+
+Interrupted draft hydration source commit:
+`a566fa05` (47 unit/component tests, one Chromium test, local type-check and lint
+passed; `/tmp/or3-recovery-hydration-typecheck.log`,
+`/tmp/or3-recovery-hydration-lint.log`).
+
+Image follow-up type-check passed with basic-auth/sqlite local configuration:
+`/tmp/or3-recovery-document-image-typecheck.log`.

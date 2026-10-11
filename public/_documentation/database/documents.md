@@ -111,3 +111,5 @@ Reference content counts toward context limits but does not grant editable block
 Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:before` expose editable context and separate referenceContext; preserve that distinction. The implementation is `app/composables/documents/useDocumentAiAgent.ts`. Its live editor bridge also serves [document tools in chat](/documentation/utils/chat-tools).
 
 Optional editor autocomplete does not start inference requests for guests without a personal API key. Signed-in users can use the instance key through the server route. Local editing and autosave remain available without credentials.
+
+Document image node views capture their database, workspace generation and account when mounted. A delayed blob read cannot create or replace a preview after node removal, workspace/account changes, or a newer image request. Owned preview URLs are revoked on teardown or scope invalidation; read failures show the existing unavailable-image placeholder.

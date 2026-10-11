@@ -1,8 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const recoveryScripts = new WeakMap<Page, string[]>();
 
 test.describe('local document recovery faults', () => {
     test.describe.configure({ timeout: 90_000 });
     test.beforeEach(async ({ context, page }) => {
+        const scripts: string[] = []; recoveryScripts.set(page, scripts);
+        page.on('request', request => { if (request.resourceType() === 'script') scripts.push(request.url()); });
         await context.route('**/*', route => {
             const url = new URL(route.request().url());
             return url.hostname === '127.0.0.1' || url.protocol === 'blob:' || url.protocol === 'data:'
@@ -11,6 +15,56 @@ test.describe('local document recovery faults', () => {
         await page.goto('/__or3-document-journey-test');
         await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 45_000 });
     });
+
+    for (const boundary of ['node removal', 'workspace switch'] as const) {
+        test(`a delayed document image does not create a URL after ${boundary}`, async ({ page }, info) => {
+            const clientURL = recoveryScripts.get(page)?.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
+            expect(clientURL).toBeTruthy();
+            await page.evaluate(async (url) => {
+                const client = await import(url!);
+                const db = client.getDb();
+                const originalGet = db.file_blobs.get.bind(db.file_blobs);
+                const blob = new Blob(['Synthetic delayed image bytes'], { type: 'image/png' });
+                let finish!: () => void;
+                const delayed = new Promise(resolve => { finish = () => resolve({ hash: 'synthetic-delayed-image', blob }); });
+                const probe = { reads: 0, urls: 0, finish, client };
+                db.file_blobs.get = (key: unknown) => {
+                    if (key === 'synthetic-delayed-image') { probe.reads++; return delayed; }
+                    return originalGet(key);
+                };
+                const create = URL.createObjectURL.bind(URL);
+                URL.createObjectURL = (value) => { if (value === blob) probe.urls++; return create(value); };
+                (window as unknown as { imageRecoveryProbe: typeof probe }).imageRecoveryProbe = probe;
+                const editor = (document.querySelector('[aria-label="Document body"]') as unknown as {
+                    editor: { commands: { insertContent: (value: unknown) => void } }
+                }).editor;
+                editor.commands.insertContent({ type: 'or3Image', attrs: { hash: 'synthetic-delayed-image' } });
+            }, clientURL);
+            await expect(page.locator('.or3-document-image')).toContainText('Loading image');
+            await expect.poll(() => page.evaluate(() => (window as unknown as {
+                imageRecoveryProbe: { reads: number }
+            }).imageRecoveryProbe.reads)).toBe(1);
+            await page.evaluate((boundary) => {
+                const probe = (window as unknown as { imageRecoveryProbe: { finish: () => void;
+                    client: { setActiveWorkspaceDb: (id: string) => void } } }).imageRecoveryProbe;
+                if (boundary === 'workspace switch') probe.client.setActiveWorkspaceDb('synthetic-image-recovery-other');
+                else (document.querySelector('[aria-label="Document body"]') as unknown as {
+                    editor: { commands: { setContent: (value: unknown) => void } }
+                }).editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph' }] });
+            }, boundary);
+            await expect(page.locator('.or3-document-image')).toHaveCount(0);
+            await page.evaluate(() => (window as unknown as { imageRecoveryProbe: { finish: () => void } }).imageRecoveryProbe.finish());
+            // Cross two rendering frames so the fulfilled read and node cleanup settle.
+            await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+            const result = await page.evaluate(() => {
+                const probe = (window as unknown as { imageRecoveryProbe: { reads: number; urls: number } }).imageRecoveryProbe;
+                return { reads: probe.reads, urls: probe.urls };
+            });
+            expect(result).toEqual({ reads: 1, urls: 0 });
+            await info.attach('delayed-image-ownership', { body: JSON.stringify({ boundary, ...result,
+                evidence: 'actual mounted editor in Chromium; deterministic deferred local blob read; external requests denied' }), contentType: 'application/json' });
+        });
+    }
 
     test('refresh before the capture debounce protects the unsaved document', async ({ page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
