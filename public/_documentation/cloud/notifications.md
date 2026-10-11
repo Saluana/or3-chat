@@ -299,3 +299,5 @@ interface NotificationAction {
 - [Auth System](/documentation/cloud/auth-system) - Authentication architecture
 - [Hooks](/documentation/hooks/overview) - Hook system documentation
 - [Troubleshooting](/documentation/cloud/troubleshooting) - Common issues and solutions
+
+A completion that begins under an authenticated account is also discarded if logout clears that identity while its mute settings are being read. Delivery that starts with no available session keeps the existing tracker-scoped fallback for local and unavailable-session operation.

@@ -66,9 +66,12 @@ export async function emitBackgroundComplete(
 ): Promise<void> {
     if (!isClientRuntime() || !tracker.threadId) return;
 
+    const initialSession = getCachedSessionContext();
+    const authenticatedAtStart = Boolean(initialSession?.authenticated && initialSession.user?.id);
     const belongsToCurrentAccount = () => {
         const session = getCachedSessionContext();
-        return !session?.authenticated || !session.user?.id || session.user.id === tracker.userId;
+        if (!session?.authenticated || !session.user?.id) return !authenticatedAtStart;
+        return session.user.id === tracker.userId;
     };
     if (!belongsToCurrentAccount()) return;
 

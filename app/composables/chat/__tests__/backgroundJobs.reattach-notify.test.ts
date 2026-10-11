@@ -1045,7 +1045,8 @@ describe('backgroundJobs reattach + notifications', () => {
     it.each([
         ['fallback', 'before'], ['hook', 'before'],
         ['fallback', 'during mute read'], ['hook', 'during mute read'],
-    ] as const)('does not deliver a former account completion through %s after switching accounts %s', async (delivery, timing) => {
+        ['fallback', 'during logout'], ['hook', 'during logout'],
+    ] as const)('does not deliver a former account completion through %s after account access changes %s', async (delivery, timing) => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
         sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
@@ -1057,7 +1058,7 @@ describe('backgroundJobs reattach + notifications', () => {
             (globalThis as typeof globalThis & { __NUXT_HOOKS__: HookEngine }).__NUXT_HOOKS__
                 .addAction('notify:action:push', hookDelivery);
         }
-        const changeAccount = () => { sessionValue = { authenticated: true, user: { id: 'next-user' }, workspace: { id: 'workspace-1' } }; };
+        const changeAccount = () => { sessionValue = timing === 'during logout' ? null : { authenticated: true, user: { id: 'next-user' }, workspace: { id: 'workspace-1' } }; };
         if (timing === 'before') changeAccount();
         else dbMock.kv.get.mockImplementationOnce(async () => { changeAccount(); return undefined; });
         const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
