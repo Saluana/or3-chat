@@ -1,0 +1,6 @@
+*.bundle
+*.patch
+*-artifacts/
+test-results/
+*-runner.txt
+*-setup.txt

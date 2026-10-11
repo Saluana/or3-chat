@@ -1,0 +1,6 @@
+Source/test head: e13346dffc066208c25035ca6c97bbe8eb3f1745
+Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Git bundle verify: passed; HEAD ref e13346dffc066208c25035ca6c97bbe8eb3f1745; SHA-1 object format.
+SHA-256 file checksums:
+7dbe372249495fa65e0dbf42689afeb02dab7f6170e3bc6c339a539c02ab45e2  workspace-isolation-source.patch
+67950643281ffe4b8982de2a8266e5b5e100516d966a18bdec0e42336ad5b6b0  workspace-isolation-source.bundle

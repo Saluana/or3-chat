@@ -1,0 +1,605 @@
+Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-JhkuvX
+
+-------------------------------------------------xxxxxx-----------·x·xxxx·xx·----xxx-xx--------------x-------------------------x·xxx·xstdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.started","timestamp":"2026-10-11T09:09:25.373Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","userId":"owner","workspaceId":"workspace","threadId":"thread","messageId":"assistant","model":"test-model","requestedTools":["server_echo"]}
+{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T09:09:25.374Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":1}
+
+stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.call.received","timestamp":"2026-10-11T09:09:25.376Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":1,"toolCallId":"call-1","toolName":"server_echo","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"}}
+
+stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.call.completed","timestamp":"2026-10-11T09:09:25.379Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","toolCallId":"call-1","toolName":"server_echo","status":"complete","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"},"resultMetadata":{"utf8Bytes":15,"fingerprint":"fnv1a32:dfcdb3f9"}}
+
+stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T09:09:25.380Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":2}
+
+stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.completed","timestamp":"2026-10-11T09:09:25.381Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","chunksReceived":1,"contentLength":6,"toolCalls":[{"id":"call-1","name":"server_echo","status":"complete"}]}
+
+·------------
+
+ Test Files  6 failed (6)
+      Tests  24 failed | 7 passed | 116 skipped (147)
+   Start at  09:09:17
+   Duration  7.55s (transform 3.18s, setup 827ms, import 3.42s, tests 5.33s, environment 2.51s)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 24 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences delayed palette image selection when the workspace is returned during metadata lookup
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:382:35
+    380|         try {
+    381|             await vm.openPaletteSelection(row.hash);
+    382|             expect(vm.showViewer).toBe(change === 'unchanged');
+       |                                   ^
+    383|         } finally {
+    384|             read.mockRestore();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery download delivery after a workspace change during its blob read
+AssertionError: expected "click" to be called +0 times, but got 1 times
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:425:62
+    423|                 copy.mockClear();
+    424|                 await (action === 'download' ? vm.handleDownload(row) …
+    425|                 expect(action === 'download' ? click : copy).toHaveBee…
+       |                                                              ^
+    426|             }
+    427|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery copy delivery after a workspace change during its blob read
+AssertionError: expected "copyImageBlobToClipboard" to be called +0 times, but got 1 times
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:425:62
+    423|                 copy.mockClear();
+    424|                 await (action === 'download' ? vm.handleDownload(row) …
+    425|                 expect(action === 'download' ? click : copy).toHaveBee…
+       |                                                              ^
+    426|             }
+    427|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery upload batch ownership when the workspace is changed between file completions
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:468:52
+    466|             } as unknown as Event);
+    467|             const nextDb = setActiveWorkspaceDb(nextWorkspace);
+    468|             expect(await nextDb.file_meta.count()).toBe(0);
+       |                                                    ^
+    469|             expect(await db.file_meta.count()).toBe(change === 'unchan…
+    470|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery upload batch ownership when the workspace is returned between file completions
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:469:48
+    467|             const nextDb = setActiveWorkspaceDb(nextWorkspace);
+    468|             expect(await nextDb.file_meta.count()).toBe(0);
+    469|             expect(await db.file_meta.count()).toBe(change === 'unchan…
+       |                                                ^
+    470|         } finally {
+    471|             create.mockRestore();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery picker ownership when the workspace is changed before file selection
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:495:52
+    493|             await vm.handleUpload({ target: { files: [file], value: 's…
+    494|             const nextDb = setActiveWorkspaceDb(nextWorkspace);
+    495|             expect(await nextDb.file_meta.count()).toBe(0);
+       |                                                    ^
+    496|             expect(await db.file_meta.count()).toBe(change === 'unchan…
+    497|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/24]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery picker ownership when the workspace is returned before file selection
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:496:48
+    494|             const nextDb = setActiveWorkspaceDb(nextWorkspace);
+    495|             expect(await nextDb.file_meta.count()).toBe(0);
+    496|             expect(await db.file_meta.count()).toBe(change === 'unchan…
+       |                                                ^
+    497|         } finally {
+    498|             click.mockRestore();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/24]⎯
+
+ FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks a recovered plain-text job after membership becomes viewer
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ server/utils/background-jobs/__tests__/stream-handler.tools.test.ts:993:78
+    991|         }) as unknown as AuthWorkspaceStore });
+    992|         vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+    993|         await expect(executeBackgroundJob(jobId, context, memoryJobPro…
+       |                                                                              ^
+    994|         expect(fetch).not.toHaveBeenCalled();
+    995|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/24]⎯
+
+ FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > rechecks write membership after an awaited canonical ownership read
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ server/utils/background-jobs/__tests__/stream-handler.tools.test.ts:1013:78
+    1011|         }) as unknown as SyncGatewayAdapter });
+    1012|         vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+    1013|         await expect(executeBackgroundJob(jobId, context, memoryJobPro…
+       |                                                                              ^
+    1014|         expect(fetch).not.toHaveBeenCalled();
+    1015|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/24]⎯
+
+ FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > uses current membership viewer when a held canonical ownership read resumes
+ FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > uses current membership null when a held canonical ownership read resumes
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ server/utils/background-jobs/__tests__/stream-handler.tools.test.ts:1040:44
+    1038|         // Attach the rejection assertion before releasing the suspend…
+    1039|         const outcome = nextRole === 'owner'
+    1040|             ? execution : expect(execution).rejects.toThrow(nextRole =…
+       |                                            ^
+    1041|         await vi.waitFor(() => expect(read).toHaveBeenCalled());
+    1042|         role = nextRole;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/24]⎯
+
+ FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ server/utils/background-jobs/__tests__/stream-handler.tools.test.ts:1057:78
+    1055|         }, { override: true });
+    1056|         vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(…
+    1057|         await expect(executeBackgroundJob(jobId, context, memoryJobPro…
+       |                                                                              ^
+    1058|         expect(fetch).toHaveBeenCalledOnce();
+    1059|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes before
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "next-user",
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "c31894b0-0976-4954-8b54-a4b5b7ebabe8",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1067:44
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+       |                                            ^
+    1068|         mod.backgroundJobTrackers.clear();
+    1069|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes before
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "25991455-a00d-47d8-b9a0-6c8250b26e7b",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1066:34
+    1064|         const { emitBackgroundComplete } = await import('~/utils/chat/…
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+       |                                  ^
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+    1068|         mod.backgroundJobTrackers.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during mute read
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "next-user",
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "5b014d6e-5ac6-44a6-8384-4f2789b1bd87",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1067:44
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+       |                                            ^
+    1068|         mod.backgroundJobTrackers.clear();
+    1069|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during mute read
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "49258339-c93a-4c32-bac0-14dd0d02e918",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1066:34
+    1064|         const { emitBackgroundComplete } = await import('~/utils/chat/…
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+       |                                  ^
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+    1068|         mod.backgroundJobTrackers.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during logout
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "origin-user",
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "f1028ef3-692b-42e4-ae8c-e72d2f7a5910",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1067:44
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+       |                                            ^
+    1068|         mod.backgroundJobTrackers.clear();
+    1069|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/24]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during logout
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "5ab30865-26c7-4862-90e4-e1655db5d4b0",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1066:34
+    1064|         const { emitBackgroundComplete } = await import('~/utils/chat/…
+    1065|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1066|         expect(hookDelivery).not.toHaveBeenCalled();
+       |                                  ^
+    1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
+    1068|         mod.backgroundJobTrackers.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/24]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > invalidates cached URLs before another workspace can reuse an identifier
+AssertionError: expected 'blob:workspace-a' to be undefined
+
+- Expected:
+undefined
+
++ Received:
+"blob:workspace-a"
+
+ ❯ app/composables/core/__tests__/usePreviewCache.test.ts:29:43
+     27|         await cache.ensure('shared-hash', async () => ({ url: 'blob:wo…
+     28|         setActiveWorkspaceDb(b);
+     29|         expect(cache.peek('shared-hash')).toBeUndefined();
+       |                                           ^
+     30|         expect(revokeObjectUrl).toHaveBeenCalledWith('blob:workspace-a…
+     31|         const lookupB = vi.fn(async () => ({ url: 'blob:workspace-b' }…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/24]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > cancels a held old-workspace read without replacing a new preview
+AssertionError: expected 'blob:workspace-a' to be 'blob:workspace-b' // Object.is equality
+
+Expected: "blob:workspace-b"
+Received: "blob:workspace-a"
+
+ ❯ app/composables/core/__tests__/usePreviewCache.test.ts:43:32
+     41|         const readingB = cache.ensure('shared-hash', async () => ({ ur…
+     42|         finish({ url: 'blob:workspace-a' });
+     43|         expect(await readingB).toBe('blob:workspace-b');
+       |                                ^
+     44|         expect(await readingA).toBeUndefined();
+     45|         expect(cache.peek('shared-hash')).toBe('blob:workspace-b');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/24]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/copy-image-to-clipboard.test.ts > copyImageBlobToClipboard > rechecks ownership after awaited PNG conversion before clipboard delivery
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ app/pages/images/__tests__/copy-image-to-clipboard.test.ts:55:12
+     53|             createPngBlob,
+     54|             assertCurrent: () => { if (!current) throw new Error('work…
+     55|         })).rejects.toThrow('workspace changed');
+       |            ^
+     56|         expect(createPngBlob).toHaveBeenCalledOnce();
+     57|         expect(write).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/24]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > does not display a held preview after switching workspaces
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/image-viewer.cache.test.ts:121:46
+    119|         finish(new Blob(['workspace-a-private-fixture'], { type: 'imag…
+    120|         await flushPromises();
+    121|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+    122|         wrapper.unmount();
+    123|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/24]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > clears a displayed preview synchronously when the workspace changes
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/image-viewer.cache.test.ts:133:46
+    131|         setActiveWorkspaceDb('viewer-isolation-b');
+    132|         await flushPromises();
+    133|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+    134|         wrapper.unmount();
+    135|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/24]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > discards an old cached-load continuation even after switching away and back
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/image-viewer.cache.test.ts:149:46
+    147|         await loading;
+    148|         await flushPromises();
+    149|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+    150|     });
+    151|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/24]⎯
+
+
+Exit status: 1

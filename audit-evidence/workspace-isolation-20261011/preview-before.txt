@@ -1,0 +1,88 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+·xx·xx·············
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 15 passed (19)
+   Start at  08:34:41
+   Duration  5.01s (transform 1.05s, setup 365ms, import 1.09s, tests 1.72s, environment 1.31s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > invalidates cached URLs before another workspace can reuse an identifier
+AssertionError: expected 'blob:workspace-a' to be undefined
+
+- Expected:
+undefined
+
++ Received:
+"blob:workspace-a"
+
+ ❯ app/composables/core/__tests__/usePreviewCache.test.ts:29:43
+     27|         await cache.ensure('shared-hash', async () => ({ url: 'blob:wo…
+     28|         setActiveWorkspaceDb(b);
+     29|         expect(cache.peek('shared-hash')).toBeUndefined();
+       |                                           ^
+     30|         expect(revokeObjectUrl).toHaveBeenCalledWith('blob:workspace-a…
+     31|         const lookupB = vi.fn(async () => ({ url: 'blob:workspace-b' }…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > cancels a held old-workspace read without replacing a new preview
+AssertionError: expected 'blob:workspace-a' to be 'blob:workspace-b' // Object.is equality
+
+Expected: "blob:workspace-b"
+Received: "blob:workspace-a"
+
+ ❯ app/composables/core/__tests__/usePreviewCache.test.ts:43:32
+     41|         const readingB = cache.ensure('shared-hash', async () => ({ ur…
+     42|         finish({ url: 'blob:workspace-a' });
+     43|         expect(await readingB).toBe('blob:workspace-b');
+       |                                ^
+     44|         expect(await readingA).toBeUndefined();
+     45|         expect(cache.peek('shared-hash')).toBe('blob:workspace-b');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > does not display a held preview after switching workspaces
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/image-viewer.cache.test.ts:121:46
+    119|         finish(new Blob(['workspace-a-private-fixture'], { type: 'imag…
+    120|         await flushPromises();
+    121|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+    122|         wrapper.unmount();
+    123|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > clears a displayed preview synchronously when the workspace changes
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/image-viewer.cache.test.ts:133:46
+    131|         setActiveWorkspaceDb('viewer-isolation-b');
+    132|         await flushPromises();
+    133|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+    134|         wrapper.unmount();
+    135|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+Exit status: 1
