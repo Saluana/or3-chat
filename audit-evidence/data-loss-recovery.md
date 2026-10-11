@@ -450,3 +450,26 @@ not physical IndexedDB quota exhaustion or OS power loss. Browser confirmation
 remains best effort; accepting or suppressing it can still abandon pending bytes.
 
 Empty-transaction restoration source commit: `8dd1de97`.
+
+## Partial document attachment boundaries
+
+Two additional actual Chromium cases passed with off-host requests denied:
+- A two-image batch committed its first image, then rejected the second blob
+  write with synthetic quota. The first image and its document reference
+  survived reload; explicitly selecting the rejected second file restored both
+  images. The tightened receipt verifies every stored image is referenced by a
+  document, not merely that some reference exists. Final case passed in 12.3
+  seconds (`/tmp/or3-recovery-partial-image-batch-final-browser.log`), receipt
+  `test-results/recovery-partial-image-batch-final/*/partial-image-batch.json`.
+- File metadata/bytes committed successfully while the following document save
+  was rejected. The image stayed visible with a persistent document-save retry,
+  natural refresh confirmation retained the live buffer, and retry made the
+  document hash reference durable. Final reload restored the preview with one
+  metadata/blob row and no additional dialog. Passed in 29.6 seconds:
+  `/tmp/or3-recovery-image-reference-retry-browser.log`, receipt
+  `test-results/recovery-image-reference-retry/*/image-document-reference-retry.json`.
+
+These cover distinct transactions and retained live state. They do not guarantee
+recovery of an unreferenced blob after accepting the warning or killing the
+browser; the existing #234/#238 orphan/reference contracts remain unchanged.
+Pending-save source commits: `9914dcaa` (core/composer), `9ecd832c` (shell guard).

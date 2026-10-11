@@ -97,6 +97,91 @@ test.describe('local document recovery faults', () => {
         await info.attach('image-intake-quota-recovery', { path, contentType: 'application/json' });
     });
 
+    test('a partial image batch retains its committed first image and retries the rejected second image', async ({ page }, info) => {
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveAttribute('contenteditable', 'true');
+        const second = { ...intakePng, name: 'synthetic-second-image.png',
+            buffer: Buffer.concat([intakePng.buffer, Buffer.from('synthetic-second-file')]) };
+        await page.evaluate(() => {
+            const original = IDBObjectStore.prototype.put;
+            let writes = 0;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name === 'file_blobs' && ++writes === 2) {
+                    throw new DOMException('Synthetic second image quota', 'QuotaExceededError');
+                }
+                return original.apply(this, args);
+            };
+            (window as unknown as { restoreImageBatch: () => void }).restoreImageBatch = () => { IDBObjectStore.prototype.put = original; };
+        });
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles([intakePng, second]);
+        await expect(page.getByRole('alert')).toContainText('Image could not be added');
+        await expect(page.locator('.or3-document-image img')).toHaveCount(1);
+        await expect.poll(() => imageRows(page)).toEqual({ meta: 1, blobs: 1, referenced: true });
+        await page.evaluate(() => (window as unknown as { restoreImageBatch: () => void }).restoreImageBatch());
+        await page.reload();
+        await expect(page.locator('.or3-document-image img')).toBeVisible({ timeout: 45_000 });
+        expect(await imageRows(page)).toEqual({ meta: 1, blobs: 1, referenced: true });
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(second);
+        await expect(page.locator('.or3-document-image img')).toHaveCount(2);
+        await expect.poll(() => imageRows(page)).toEqual({ meta: 2, blobs: 2, referenced: true });
+        await page.reload();
+        await expect(page.locator('.or3-document-image img')).toHaveCount(2, { timeout: 45_000 });
+        const references = await page.evaluate(async () => {
+            const results: Array<{ files: number; allReferenced: boolean }> = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const tx = db.transaction(['file_meta', 'posts'], 'readonly');
+                const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
+                    const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const [files, documents] = await Promise.all([rows<{ hash: string }>('file_meta'), rows<{ file_hashes?: string }>('posts')]);
+                results.push({ files: files.length, allReferenced: files.every(file => documents.some(document => document.file_hashes?.includes(file.hash))) });
+                db.close();
+            }
+            return results;
+        });
+        expect(references.some(row => row.files === 2 && row.allReferenced)).toBe(true);
+        expect(references.every(row => row.allReferenced)).toBe(true);
+        const path = info.outputPath('partial-image-batch.json');
+        await writeFile(path, JSON.stringify({ ...await imageRows(page), references, externalRequests: 'denied',
+            firstImageSurvivedRejectedSecondTransaction: true, explicitSecondRetry: true, reloadImageCount: 2 }, null, 2));
+        await info.attach('partial-image-batch', { path, contentType: 'application/json' });
+    });
+
+    test('an image committed before a rejected document save stays retryable until its reference is durable', async ({ page }, info) => {
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveAttribute('contenteditable', 'true');
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'posts') throw new DOMException('Synthetic document reference quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+            (window as unknown as { restoreDocumentReferencePut: () => void }).restoreDocumentReferencePut = () => { IDBObjectStore.prototype.put = put; };
+        });
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        await expect(page.locator('.or3-document-image img')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Retry document save', exact: true })).toBeVisible();
+        expect(await imageRows(page)).toEqual({ meta: 1, blobs: 1, referenced: false });
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(page.locator('.or3-document-image img')).toBeVisible();
+        await page.evaluate(() => (window as unknown as { restoreDocumentReferencePut: () => void }).restoreDocumentReferencePut());
+        await page.getByRole('button', { name: 'Retry document save', exact: true }).click();
+        await expect.poll(() => imageRows(page)).toEqual({ meta: 1, blobs: 1, referenced: true });
+        await expect(page.getByRole('button', { name: 'Retry document save', exact: true })).toBeHidden();
+        await page.reload();
+        await expect(page.locator('.or3-document-image img')).toBeVisible({ timeout: 45_000 });
+        expect(dialogs).toEqual(['beforeunload']);
+        const path = info.outputPath('image-document-reference-retry.json');
+        await writeFile(path, JSON.stringify({ ...await imageRows(page), dialogs,
+            externalRequests: 'denied', savedBlobBeforeRejectedDocumentReference: true, reloadPreviewVisible: true }, null, 2));
+        await info.attach('image-document-reference-retry', { path, contentType: 'application/json' });
+    });
+
     for (const boundary of ['node removal', 'workspace switch'] as const) {
         test(`a delayed document image does not create a URL after ${boundary}`, async ({ page }, info) => {
             const clientURL = recoveryScripts.get(page)?.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
