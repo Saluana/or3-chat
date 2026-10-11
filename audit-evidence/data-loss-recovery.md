@@ -333,3 +333,35 @@ that initial attempt. Type-check passed after correcting a test-only Dexie overl
 cast; source lint has zero errors and four existing warnings.
 
 Document image ownership source commit: `7c7af957`.
+
+## Document image intake ownership and visible failure
+
+The original editor let an upload paused before commit store metadata/bytes after
+unmount, without any document reference. A quota rejection was also an unhandled
+promise without a visible failure state. Both original-source mounted regressions
+failed, with one expected unhandled synthetic quota error:
+`/tmp/or3-recovery-image-intake-complete-red.log`.
+
+The editor consumer now supplies the existing file API's ownership callback,
+fences insertion by editor/document/database/generation/account, and reports
+storage rejection through a persistent image-intake banner. No shared file API,
+thumbnail cache, reference-accounting or cleanup code changed.
+27 editor tests passed (`/tmp/or3-recovery-image-intake-final-unit.log`). The
+integration fixture mounts real EditorContent/NodeViewWrapper and waits for
+editing availability; the former shallow wrappers caused an artificial node-view
+error on retry. Actual browser evidence is independent of that fixture:
+- Chromium hashing-gate/editor-destruction case passed: zero metadata/blob rows.
+- Chromium quota → reselect file → reload case passed in 14.3 seconds:
+  one metadata row, one blob, a document hash reference and visible restored image.
+Logs `/tmp/or3-recovery-image-intake-browser.log` (first case passed; second
+initially failed an ambiguous fixture selector) and
+`/tmp/or3-recovery-image-intake-quota-browser.log` (focused retry case passed).
+JSON receipts are under `test-results/recovery-image-intake` and
+`test-results/recovery-image-intake-quota`. Type-check passed:
+`/tmp/or3-recovery-image-intake-typecheck.log`.
+
+This establishes pre-commit cancellation and atomic local quota rollback. It does
+not promise that bytes already committed before teardown are deleted; post-commit
+file recovery/accounting remains governed by the existing #234/#238 contracts.
+
+Attachment restoration source commit: `f401bd4b47a9821881df7ecaa1fecfcb42fc8c37`.

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 
 const recoveryScripts = new WeakMap<Page, string[]>();
 
@@ -14,6 +15,86 @@ test.describe('local document recovery faults', () => {
         });
         await page.goto('/__or3-document-journey-test');
         await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 45_000 });
+    });
+
+    async function imageRows(page: Page) {
+        return page.evaluate(async () => {
+            let meta = 0; let blobs = 0; let referenced = false;
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const open = indexedDB.open(name); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
+                });
+                if (['file_meta', 'file_blobs', 'posts'].every(table => db.objectStoreNames.contains(table))) {
+                    const tx = db.transaction(['file_meta', 'file_blobs', 'posts'], 'readonly');
+                    const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
+                        const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                    });
+                    const [files, bytes, documents] = await Promise.all([rows<{ hash: string }>('file_meta'), rows('file_blobs'), rows<{ file_hashes?: string }>('posts')]);
+                    meta += files.length; blobs += bytes.length;
+                    referenced ||= files.some(file => documents.some(document => document.file_hashes?.includes(file.hash)));
+                }
+                db.close();
+            }
+            return { meta, blobs, referenced };
+        });
+    }
+    const intakePng = { name: 'synthetic-document-intake.png', mimeType: 'image/png',
+        buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+
+    test('a destroyed editor cancels an image intake held before file hashing completes', async ({ page }, info) => {
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveAttribute('contenteditable', 'true');
+        await page.evaluate(() => {
+            const original = crypto.subtle.digest.bind(crypto.subtle);
+            let release!: () => void;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            const probe = { entered: 0, completed: false, release };
+            crypto.subtle.digest = async (...args: Parameters<typeof original>) => {
+                if (probe.entered === 0) {
+                    probe.entered++; await gate;
+                    const result = await original(...args); probe.completed = true; return result;
+                }
+                return original(...args);
+            };
+            (window as unknown as { imageIntakeProbe: typeof probe }).imageIntakeProbe = probe;
+        });
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        await expect.poll(() => page.evaluate(() => (window as unknown as { imageIntakeProbe: { entered: number } }).imageIntakeProbe.entered)).toBe(1);
+        await page.evaluate(() => {
+            (document.querySelector('[aria-label="Document body"]') as unknown as { editor: { destroy: () => void } }).editor.destroy();
+            (window as unknown as { imageIntakeProbe: { release: () => void } }).imageIntakeProbe.release();
+        });
+        await expect.poll(() => page.evaluate(() => (window as unknown as { imageIntakeProbe: { completed: boolean } }).imageIntakeProbe.completed)).toBe(true);
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        const result = await imageRows(page); expect(result).toEqual({ meta: 0, blobs: 0, referenced: false });
+        const path = info.outputPath('destroyed-editor-intake.json');
+        await writeFile(path, JSON.stringify({ ...result, boundary: 'actual Chromium mounted editor destroyed during synthetic digest gate', externalRequests: 'denied' }, null, 2));
+        await info.attach('destroyed-editor-intake', { path, contentType: 'application/json' });
+    });
+
+    test('an image intake quota failure is visible and retry preserves the attachment after reload', async ({ page }, info) => {
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveAttribute('contenteditable', 'true');
+        await page.evaluate(() => {
+            const original = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name === 'file_blobs') throw new DOMException('Synthetic image intake quota', 'QuotaExceededError');
+                return original.apply(this, args);
+            };
+            (window as unknown as { restoreImageIntake: () => void }).restoreImageIntake = () => { IDBObjectStore.prototype.put = original; };
+        });
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        await expect(page.getByRole('alert')).toContainText('Image could not be added');
+        expect(await imageRows(page)).toEqual({ meta: 0, blobs: 0, referenced: false });
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('Initial document text.');
+        await page.evaluate(() => (window as unknown as { restoreImageIntake: () => void }).restoreImageIntake());
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        await expect(page.locator('.or3-document-image img')).toBeVisible();
+        await expect.poll(() => imageRows(page)).toEqual({ meta: 1, blobs: 1, referenced: true });
+        await page.reload();
+        await expect(page.locator('.or3-document-image img')).toBeVisible({ timeout: 45_000 });
+        const path = info.outputPath('image-intake-quota-recovery.json');
+        await writeFile(path, JSON.stringify({ ...await imageRows(page), externalRequests: 'denied', reloadPreviewVisible: true }, null, 2));
+        await info.attach('image-intake-quota-recovery', { path, contentType: 'application/json' });
     });
 
     for (const boundary of ['node removal', 'workspace switch'] as const) {

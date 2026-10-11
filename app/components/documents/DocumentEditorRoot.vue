@@ -4,6 +4,9 @@
             <p>Your changes have not been saved locally.</p>
             <UButton color="neutral" variant="soft" label="Retry document save" @click="retryLocalSave" />
         </div>
+        <div v-if="documentLoaded && imageIntakeFailed" class="document-status-banner" role="alert">
+            Image could not be added. Try attaching it again.
+        </div>
         <div v-if="documentLoaded && itemReadOnly" class="document-status-banner" role="status">
             <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
             <p>{{ availabilityMessage }}</p>
@@ -313,7 +316,8 @@ import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
-import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { liveQuery } from 'dexie';
 import { isVisibleWorkspaceItem, workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import {
@@ -394,6 +398,7 @@ const documentId = toRef(props, 'documentId');
 const hooks = useHooks();
 const editor = shallowRef<Editor | null>(null);
 const editorDb = shallowRef(getDb());
+const imageIntakeFailed = ref(false);
 const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
@@ -650,21 +655,33 @@ function onEditorUpdate(payload?: { transaction?: { docChanged?: boolean } }) {
 
 async function insertFiles(files: File[]) {
     const current = editor.value;
-    if (!current) return;
+    const db = editorDb.value;
+    const id = props.documentId;
+    const generation = getWorkspaceGeneration();
+    const account = getCachedSessionContext()?.user?.id ?? null;
+    const isCurrent = () => !didUnmount && current === editor.value && !!current &&
+        !current.isDestroyed && current.isEditable && !itemReadOnly.value &&
+        documentLoaded.value && loadedDocumentId === id && props.documentId === id &&
+        editorDb.value === db && getDb() === db && getWorkspaceGeneration() === generation &&
+        (getCachedSessionContext()?.user?.id ?? null) === account;
+    if (!current || !isCurrent()) return;
+    imageIntakeFailed.value = false;
+    const owner = { assertCurrent() {
+        if (!isCurrent()) throw new Error('Document editor changed while attaching image');
+    } };
     for (const file of files.filter((item) => item.type.startsWith('image/'))) {
-        const stored = await createOrRefFile(file, file.name || 'Document image');
-        current
-            .chain()
-            .focus()
-            .insertContent({
+        try {
+            owner.assertCurrent();
+            const stored = await createOrRefFile(file, file.name || 'Document image', owner);
+            owner.assertCurrent();
+            current.chain().focus().insertContent({
                 type: 'or3Image',
-                attrs: {
-                    hash: stored.hash,
-                    alt: file.name.replace(/\.[^.]+$/u, ''),
-                    width: 100,
-                },
-            })
-            .run();
+                attrs: { hash: stored.hash, alt: file.name.replace(/\.[^.]+$/u, ''), width: 100 },
+            }).run();
+        } catch {
+            if (isCurrent()) imageIntakeFailed.value = true;
+            return;
+        }
     }
 }
 
@@ -884,6 +901,7 @@ function registerActiveSession(id: string): void {
 async function loadActiveDocument(id: string) {
     const db = editorDb.value;
     const generation = ++loadGeneration;
+    imageIntakeFailed.value = false;
     documentLoaded.value = false;
     loadingDocument.value = true;
     const isCurrent = () => !didUnmount && props.documentId === id &&

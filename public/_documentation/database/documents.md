@@ -113,3 +113,5 @@ Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:befo
 Optional editor autocomplete does not start inference requests for guests without a personal API key. Signed-in users can use the instance key through the server route. Local editing and autosave remain available without credentials.
 
 Document image node views capture their database, workspace generation and account when mounted. A delayed blob read cannot create or replace a preview after node removal, workspace/account changes, or a newer image request. Owned preview URLs are revoked on teardown or scope invalidation; read failures show the existing unavailable-image placeholder.
+
+Image intake uses the file API ownership callback bound to the mounted editor, document, database, account and workspace generation. An upload paused before commit is canceled if its editor closes or changes scope. A local storage rejection shows a persistent "Image could not be added" banner and leaves the document intact; selecting the file again retries intake. The file API and its transaction contracts are unchanged.
