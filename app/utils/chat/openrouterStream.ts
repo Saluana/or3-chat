@@ -1049,7 +1049,7 @@ export async function startBackgroundStream(params: {
                         decodeError instanceof Error
                             ? decodeError.message
                             : 'Malformed background admission response',
-                        { retryable: false }
+                        { retryable: decodeError instanceof OpenRouterTimeoutError || decodeError instanceof TypeError }
                     );
                 }
                 const candidate =
@@ -1081,16 +1081,27 @@ export async function startBackgroundStream(params: {
                 (error instanceof Error && error.name === 'AbortError') ||
                 (error instanceof Error &&
                     (error as BackgroundAdmissionError)
-                        .backgroundAdmissionRetryable === false) ||
-                attempt === 2
+                        .backgroundAdmissionRetryable === false)
             ) {
                 throw error;
             }
             lastError = error;
+            if (attempt === 2) break;
         }
         await abortableDelay(150 * 2 ** attempt, params.signal);
     }
     if (!result) {
+        const recovered = await recoverBackgroundJob(body._backgroundAdmissionId, params.history.workspaceId, {
+            signal: params.signal,
+            responseTimeoutMs: params.responseTimeoutMs,
+            idleTimeoutMs: params.idleTimeoutMs,
+        });
+        // Terminal jobs must also attach: the tracker projects their retained
+        // output without starting a second generation.
+        if (recovered && recovered.threadId === params.threadId && recovered.messageId === params.messageId) {
+            setBackgroundStreamingAvailable(true);
+            return { jobId: recovered.jobId, status: 'streaming', historyVersion: 1 };
+        }
         throw lastError instanceof Error
             ? lastError
             : new Error('Background stream admission failed');
@@ -1100,6 +1111,32 @@ export async function startBackgroundStream(params: {
     setBackgroundStreamingAvailable(true);
     
     return result;
+}
+
+/** Resolve an ambiguous admission against its originating workspace before retrying. */
+export async function recoverBackgroundJob(
+    admissionId: string,
+    workspaceId: string,
+    options: { signal?: AbortSignal; responseTimeoutMs?: number; idleTimeoutMs?: number } = {}
+): Promise<{ jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 } | null> {
+    if (!admissionId || !workspaceId) return null;
+    try {
+        const response = await fetchWithResponseDeadline(
+            `/api/jobs/admission/${encodeURIComponent(admissionId)}?${new URLSearchParams({ workspaceId })}`,
+            { credentials: 'include', cache: 'no-store' },
+            { signal: options.signal, timeoutMs: options.responseTimeoutMs ?? 3_000 }
+        );
+        if (!response.ok) return null;
+        const body = await readResponseJsonWithIdleDeadline<Record<string, unknown>>(response,
+            { signal: options.signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
+        if (!body || typeof body.jobId !== 'string' || !body.jobId || body.historyVersion !== 1 ||
+            typeof body.threadId !== 'string' || typeof body.messageId !== 'string' ||
+            typeof body.status !== 'string' || !['streaming', 'complete', 'error', 'aborted'].includes(body.status)) return null;
+        return body as { jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 };
+    } catch (error) {
+        if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        return null;
+    }
 }
 
 /**
@@ -1236,6 +1273,8 @@ export type BackgroundClientToolClaim = {
         id: string;
         name: string;
         arguments: string;
+        /** Digest of the arguments reviewed under this claim. */
+        argumentFingerprint: string;
         definition: ToolDefinition;
     };
     context: { workspaceId: string; threadId: string; messageId: string };

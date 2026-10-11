@@ -14,6 +14,14 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- PR #233 review preserves the current context/usage, workflow scope, workspace
+  authorization, mutation intent, and concurrent claim rate-admission boundaries.
+  Lost-response recovery now reaches a bounded scoped lookup after retry exhaustion,
+  validates canonical history and chat identity, and attaches terminal jobs too.
+  Stop outcomes distinguish refusal/failure from confirmed cancellation without
+  prematurely changing workflow state. Memory claims recompute the reviewed argument
+  digest at settlement; external provider claim contracts remain unchanged.
+
 - Real models switched mid-thread (eight providers, shared tool history)
   worked. A low key balance no longer fails every default-allowance send (one
   retry at the affordable size), an unreachable catalog fails within seconds
