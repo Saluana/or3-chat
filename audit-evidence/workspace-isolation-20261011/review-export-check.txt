@@ -1,0 +1,4 @@
+Export source/test head: 38f1ecc9c7f088494cb11534ea238118cf6abaf8
+Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Command: git apply --check <local source.patch> in disposable detached exact-base worktree
+Exit status: 0

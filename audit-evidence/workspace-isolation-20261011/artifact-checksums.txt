@@ -1,7 +1,8 @@
-Host source/test review head: d57ffb71f295db77e17da2b89d4b688dc93bbd72
+Host source/test review head: 38f1ecc9c7f088494cb11534ea238118cf6abaf8
+Latest runtime fix: d57ffb71f295db77e17da2b89d4b688dc93bbd72
 Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
-Git bundle verify: passed; HEAD ref d57ffb71f295db77e17da2b89d4b688dc93bbd72; SHA-1 object format.
-Provider-open observation was reclassified as documented request-time authorization (see README/fs-provider-contract-review.txt); no scope bypass was reproduced. These exports remain the exact original d57ffb71 host review artifacts.
+Git bundle verify: passed; HEAD ref 38f1ecc9c7f088494cb11534ea238118cf6abaf8; 21 local commits; SHA-1 object format.
+Local review exports only, no publication/package release. Provider request-time contract clarification and 11 added admin/concurrency tests are included. No reproduced provider scope bypass.
 SHA-256 file checksums:
-badc98318f3780de3304705d1d41f364c25b02a058dc4ce2fde3f6fd5ef64eee  workspace-isolation-source.patch
-52c8261ca18df3a8fb1329dbccea41d56a99051dcded30a1742a2f9b5bd3a95e  workspace-isolation-source.bundle
+3fc863cc53881b380790a88041203e5201f6e901f8d1c2b118520ac358432358  workspace-isolation-source.patch
+74d405b9b17b8be8fce9aac35e8fcb003381499e179321655b81cf17bdaa8670  workspace-isolation-source.bundle
