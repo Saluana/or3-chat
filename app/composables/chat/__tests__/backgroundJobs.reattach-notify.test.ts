@@ -1042,6 +1042,31 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
+    it.each([
+        ['fallback', 'before'], ['hook', 'before'],
+        ['fallback', 'during mute read'], ['hook', 'during mute read'],
+    ] as const)('does not deliver a former account completion through %s after switching accounts %s', async (delivery, timing) => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-1' } };
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user',
+            workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        mod.stopBackgroundJobTracking(tracker);
+        const hookDelivery = vi.fn();
+        if (delivery === 'hook') {
+            (globalThis as typeof globalThis & { __NUXT_HOOKS__: HookEngine }).__NUXT_HOOKS__
+                .addAction('notify:action:push', hookDelivery);
+        }
+        const changeAccount = () => { sessionValue = { authenticated: true, user: { id: 'next-user' }, workspace: { id: 'workspace-1' } }; };
+        if (timing === 'before') changeAccount();
+        else dbMock.kv.get.mockImplementationOnce(async () => { changeAccount(); return undefined; });
+        const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+        await emitBackgroundComplete(tracker, makeStatus('error', { error: 'origin-account-synthetic-private-detail' }));
+        expect(hookDelivery).not.toHaveBeenCalled();
+        expect(notificationCreateMock).not.toHaveBeenCalled();
+        mod.backgroundJobTrackers.clear();
+    });
+
     it('skips local completion notifications when server notifications are preferred', async () => {
         pollJobStatusMock.mockResolvedValue(
             makeStatus('complete', { content: 'done', content_length: 4 })
@@ -1065,6 +1090,20 @@ describe('backgroundJobs reattach + notifications', () => {
 
         expect(notificationCreateMock).not.toHaveBeenCalled();
         backgroundJobTrackers.clear();
+    });
+
+    it('preserves detached completion notifications after the same account switches workspaces', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'origin-user',
+            workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        mod.stopBackgroundJobTracking(tracker);
+        sessionValue = { authenticated: true, user: { id: 'origin-user' }, workspace: { id: 'workspace-2' } };
+        const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+        await emitBackgroundComplete(tracker, makeStatus('complete'));
+        expect(notificationCreateMock).toHaveBeenCalledTimes(1);
+        expect(notificationCreateMock.mock.calls[0]?.[0]).toBe('origin-user');
+        mod.backgroundJobTrackers.clear();
     });
 
     it('runs terminal cleanup when priming a stopped tracker during reattach', async () => {

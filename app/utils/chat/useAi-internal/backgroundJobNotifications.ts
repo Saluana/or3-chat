@@ -66,6 +66,12 @@ export async function emitBackgroundComplete(
 ): Promise<void> {
     if (!isClientRuntime() || !tracker.threadId) return;
 
+    const belongsToCurrentAccount = () => {
+        const session = getCachedSessionContext();
+        return !session?.authenticated || !session.user?.id || session.user.id === tracker.userId;
+    };
+    if (!belongsToCurrentAccount()) return;
+
     const hasSubscribers = tracker.subscribers.size > 0;
     if (tracker.preferServerNotifications && !hasSubscribers) return;
 
@@ -74,6 +80,9 @@ export async function emitBackgroundComplete(
         document.visibilityState === 'hidden';
     if (hasSubscribers && !isTabHidden) return;
     if (await isThreadMuted(tracker.threadId, tracker.userId)) return;
+    // A completion can outlive the account that admitted it, including while
+    // the mute lookup awaits IndexedDB. Never hand its payload to a new user.
+    if (!belongsToCurrentAccount()) return;
 
     const hooks = resolveNotificationHooks();
     if (!hooks) return;

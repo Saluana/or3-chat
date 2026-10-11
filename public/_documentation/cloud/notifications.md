@@ -2,6 +2,12 @@
 
 The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled.
 
+Detached chat completions cannot deliver their error details or navigation actions
+to a different authenticated account, including an account change during the
+asynchronous mute lookup. Switching workspaces within the same account retains
+completion notifications. When no session is available, the existing tracker-user
+fallback remains available.
+
 ---
 
 ## Overview
