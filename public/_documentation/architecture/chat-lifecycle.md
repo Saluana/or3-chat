@@ -168,7 +168,11 @@ arrive before the shell restores its layout; persisting them would publish the
 temporary blank tab and orphan an otherwise durable draft. A fresh scope saves
 its initial tab explicitly after checking for a saved layout.
 An active stream write coalescer registers a refresh warning after a failed
-progress save. The warning stays armed while that write is retried and is
-removed after acknowledgement or coalescer disposal. Each writer owns its own
+progress save. The warning stays armed while that write is retried, including
+newer deltas arriving during its retry, and is removed only when pending progress
+is acknowledged or the coalescer is disposed. Concurrent flush callers join the
+current write chain; they cannot return while a newer prepared write is pending.
+Disposal cancels idle retries and prevents waiting or new callers from preparing
+more writes, while draining the already prepared write. Each writer owns its own
 warning; successful writes in another pane cannot acknowledge its failed data.
 Terminal persistence after disposal remains the finalization layer's concern.

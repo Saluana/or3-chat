@@ -56,6 +56,7 @@ export function createStreamWriteCoalescer(options?: {
 
     return {
         markDirty(bytes = 0) {
+            if (disposed) return;
             dirtyEvents += 1;
             dirtyBytes += Math.max(0, bytes);
             scheduleIdleFlush();
@@ -76,7 +77,13 @@ export function createStreamWriteCoalescer(options?: {
             updateUnloadGuard();
         },
         async flush(write: () => Promise<void>) {
-            if (inFlight) await inFlight;
+            if (disposed) return;
+            // Another waiting caller may prepare the next snapshot first. Join
+            // that write too; returning while it is pending is not a flush receipt.
+            while (inFlight) {
+                await inFlight;
+                if (disposed) return;
+            }
             if (dirtyEvents === 0) return;
             // Acknowledge only the snapshot entering this write. Deltas that
             // arrive while it awaits storage remain dirty for the next write.
@@ -85,7 +92,9 @@ export function createStreamWriteCoalescer(options?: {
             inFlight = pending;
             try {
                 await pending;
-                failedWrite = false;
+                // This acknowledges only the captured snapshot. Newer deltas
+                // arriving during a failed-write retry still need protection.
+                failedWrite = failedWrite && dirtyEvents > 0;
                 updateUnloadGuard();
             } catch (error) {
                 dirtyEvents += 1;
