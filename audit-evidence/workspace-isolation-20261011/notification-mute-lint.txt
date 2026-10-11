@@ -1,0 +1,3 @@
+Source commit: 760a09292beef8b88231ab95780fed4ae66616de
+Command: bun x eslint app/utils/chat/useAi-internal/backgroundJobNotifications.ts
+Exit status: 0; no warnings

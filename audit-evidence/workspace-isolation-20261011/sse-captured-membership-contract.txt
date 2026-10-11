@@ -1,0 +1,83 @@
+Runtime source: f3468423fb342be1720564ef090101835230fb65
+Host HEAD: 0918d1cd with test-only captured-membership fixtures
+Command: PATH=/workspace/.bun/bin:$PATH bun x vitest run server/api/jobs/__tests__/authorization.test.ts --testNamePattern=earlier\ captured\ membership --bail=0 --reporter=verbose
+Exit status: 0
+Scope: synthetic account, in-memory job provider, actual H3 SSE route, captured pre-transition membership snapshot followed by fresh lookup; no model/network provider calls.
+
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > rejects a changed snapshot returned by the atomic claim before giving it to the browser
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses pre-execution validation when the claim is expired
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses pre-execution validation when the claim is replaced
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses pre-execution validation when the claim is aborted
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses pre-execution validation when the claim is arguments
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses pre-execution validation when the claim is name
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > rechecks a claim replaced while workspace authorization is awaiting
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > validates a live payload-bound claim without changing its state
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > rejects a result for changed actual arguments even when the diagnostic fingerprint is stale
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > carries only validated usage through authorized status snapshots
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > carries only validated usage through authorized status?offset=25 snapshots
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > carries only validated usage through authorized stream snapshots
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > omits missing or malformed canonical usage without damaging text (undefined)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > omits missing or malformed canonical usage without damaging text ({"prompt_tokens":1})
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > omits missing or malformed canonical usage without damaging text ({"prompt_tokens":42,"completion_tokens":-1,"model":"test/model","request_id":"request-1","iteration":0,"measured_at":1,"prefix_message_count":1,"prefix_hash":"prefix","configuration_hash":"config","input_estimate_tokens":40})
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > prefers live usage for polling but excludes superseded attempt state
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > blocks usage-only live updates after workspace membership is revoked
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > returns one consistent recovered attempt when recovery wins during the workspace check
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies status reads after the owner loses workspace membership
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies stream reads after the owner loses workspace membership
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > abort requires write access in the original workspace (viewer)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > abort requires write access in the original workspace (editor)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > admission-abort requires write access in the original workspace (viewer)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > admission-abort requires write access in the original workspace (editor)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > preserves status access after switching active workspaces
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > preserves stream access after switching active workspaces
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > closes an already-open stream when original workspace access is revoked
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies a different user at status as a negative control
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies a different user at stream as a negative control
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies a different user at abort as a negative control
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > refuses cross-workspace jobs through trusted package server services
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > preserves authorized status, stream, and stop for a newly admitted workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > recovers the scoped streaming admission after switching active workspace
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > recovers the scoped complete admission after switching active workspace
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > recovers the scoped error admission after switching active workspace
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > recovers the scoped aborted admission after switching active workspace
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > does not report provider lookup failure as an absent admission
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports rejected job stops without prematurely stopping the workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports threw job stops without prematurely stopping the workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports terminal job stops without prematurely stopping the workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports completed-during-stop job stops without prematurely stopping the workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports aborted job stops without prematurely stopping the workflow
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports durable and legacy admission stop failures explicitly (durable=true)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reports durable and legacy admission stop failures explicitly (durable=false)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > cannot cancel a revoked-workspace job that commits during another workspace's cancellation
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > blocks live SSE output immediately after workspace membership removal
+ ✓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reauthorizes later SSE output when an earlier captured membership read finishes after removed transition 56ms
+ ✓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reauthorizes later SSE output when an earlier captured membership read finishes after viewer transition 3ms
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > keeps authorized live deltas in order while rechecking membership
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > closes a live authorization backlog at the existing SSE transport capacity
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > scopes another user's admission cancellation without aborting the original owner's job
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reserves workflow:background before package work without counting its completion twice
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reserves workflow:hitl before package work without counting its completion twice
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > does not count a workflow package completion callback twice
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reserves client-tool claim requests before asynchronous job access
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > reserves client-tool result requests before asynchronous job access
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool claim requires fresh original workspace write access (null)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool claim requires fresh original workspace write access (viewer)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool claim requires fresh original workspace write access (editor)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool result requires fresh original workspace write access (null)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool result requires fresh original workspace write access (viewer)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > client-tool result requires fresh original workspace write access (editor)
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies workflow admission when current membership is viewer
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > denies workflow admission when current membership is null
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > round-trips payload-bound claims through the published SQLite provider and HTTP routes
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > persists canonical workflow scope in published SQLite and excludes it from chat recovery
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > persists scoped cancellation markers without affecting other users, workspaces, or legacy admissions
+ ↓ |core-node| server/api/jobs/__tests__/authorization.test.ts > background job workspace authorization at the HTTP boundary > uses the published Convex claim and retention handlers to fence canonical workflow scope
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 66 skipped (68)
+   Start at  11:06:27
+   Duration  2.63s (transform 727ms, setup 175ms, import 2.20s, tests 61ms, environment 1ms)
+

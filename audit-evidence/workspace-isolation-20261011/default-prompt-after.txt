@@ -1,0 +1,14 @@
+Parent HEAD: fef3e275; pending default preference patch including committed value and overlapping writes
+Command: bun x vitest run app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts app/components/chat/__tests__/SystemPromptsModal.test.ts app/components/chat/__tests__/ChatSettingsPopover.test.ts app/utils/chat/useAi-internal/__tests__/messageBuild.prompt-selection.test.ts --reporter=dot --silent=passed-only --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+····························
+
+ Test Files  4 passed (4)
+      Tests  28 passed (28)
+   Start at  13:43:49
+   Duration  6.37s (transform 4.18s, setup 619ms, import 6.67s, tests 2.32s, environment 2.06s)
+
+
+Exit status: 0

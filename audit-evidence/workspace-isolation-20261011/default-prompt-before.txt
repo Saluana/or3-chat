@@ -1,0 +1,49 @@
+Runtime: 625a3d77c45770e808d6b219e5b07f952455390a; new synthetic KV regressions uncommitted
+Command: /workspace/.bun/bin/bun x vitest run app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts --bail=0 --reporter=dot --silent=passed-only --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+xx·
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  13:22:21
+   Duration  2.07s (transform 471ms, setup 171ms, import 732ms, tests 397ms, environment 552ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > keeps a suspended default preference write in its originating workspace
+AssertionError: expected 'A-new' to be 'B-existing' // Object.is equality
+
+Expected: "B-existing"
+Received: "A-new"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:67:102
+     65|         try { release(); await writing; }
+     66|         finally { release(); }
+     67|         expect((await target.db.kv.where('name').equals('default_syste…
+       |                                                                                                      ^
+     68|         expect((await where('name').equals('default_system_prompt_id')…
+     69|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not publish a captured origin default after a newer destination load
+AssertionError: expected 'A-existing' to be 'B-existing' // Object.is equality
+
+Expected: "B-existing"
+Received: "A-existing"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:97:50
+     95|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+     96|             release(); await oldLoad;
+     97|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+       |                                                  ^
+     98|             expect(await getDefaultPromptId()).toBe('B-existing');
+     99|         } finally { release(); await oldLoad; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+Exit status: 1

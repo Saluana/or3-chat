@@ -9,6 +9,7 @@ import {
 } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -51,6 +52,14 @@ let previousHashes = new Set<string>();
 let idleHandle: number | null = null;
 let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let visibilityHandler: (() => void) | null = null;
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    for (const hash of Object.keys(state.urlByHash)) clearUrlState(hash);
+    for (const hash of Object.keys(state.errorByHash)) clearUrlState(hash);
+    visibleHashes.clear();
+    previousHashes.clear();
+    io?.disconnect();
+    cancelScheduledObserve();
+});
 
 function isSelected(hash: string): boolean {
     return props.selectedHashes?.has?.(hash) ?? false;
@@ -75,6 +84,7 @@ function pruneStaleState() {
 }
 
 async function ensureUrl(meta: FileMeta) {
+    const generation = getWorkspaceGeneration();
     if (!cache) return;
     if (state.errorByHash[meta.hash]) return;
     try {
@@ -88,11 +98,12 @@ async function ensureUrl(meta: FileMeta) {
             },
             1
         );
-        if (url) {
+        if (generation === getWorkspaceGeneration() && url) {
             state.urlByHash[meta.hash] = url;
             state.errorByHash[meta.hash] = undefined;
         }
     } catch (error) {
+        if (generation !== getWorkspaceGeneration()) return;
         state.errorByHash[meta.hash] = true;
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
@@ -257,6 +268,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    stopWorkspace();
     if (io) io.disconnect();
     cancelScheduledObserve();
     if (typeof document !== 'undefined' && visibilityHandler) {

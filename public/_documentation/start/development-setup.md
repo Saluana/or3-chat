@@ -155,6 +155,17 @@ Development can also alias the adjacent Scroll checkout when valid. Use `OR3_USE
 
 Run the narrowest affected existing test files, or `bun run test:changed`. `bun run test` runs the fast core lane; integration, scripts, release policy, and plugin compatibility have separate lanes. Use the named E2E harness for browser journeys rather than a broad command that also runs credential or paid-network suites.
 
+CI runs `bun run lint:changed -- <changed files>`. TypeScript audit runners under
+`audit-evidence/` use `tsconfig.eslint.audit.json`, with pinned Bun types and the
+same typed lint rules as application source. Keep browser fixture imports and
+shared fixture state typed; audit runners are included in the lint gate.
+
+For plugin-facing source changes, run `bun run plugin-runtime:compatibility:check`.
+If the ledger is stale, regenerate it with `bun run plugin-runtime:ledger` and
+review the diff. Declaration line changes can alter ledger hashes while public
+signatures remain stable. Review any public API or Nuxt import snapshot change
+before regenerating snapshots, then run `bun run test:plugin-compatibility`.
+
 For docs, update `docmap.json`, use `/documentation/...` links, and run `bun scripts/release/check-docs.mjs`. Open changed pages to check navigation and readability.
 
 ## Troubleshoot without losing data

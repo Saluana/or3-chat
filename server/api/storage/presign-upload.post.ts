@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
+import { requireStorageWorkspaceAccess } from '../../utils/storage/workspace-access';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
@@ -192,6 +193,9 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
+    // Quota reads can suspend beyond a cached request session's membership.
+    await requireStorageWorkspaceAccess(event, session, body.data.workspace_id, 'workspace.write');
+
     // Dispatch to adapter
     const result = await adapter.presignUpload(event, {
         workspaceId: body.data.workspace_id,
@@ -202,6 +206,9 @@ export default defineEventHandler(async (event) => {
         disposition: body.data.disposition,
         workspaceQuotaBytes,
     });
+
+    // Do not deliver an upload authority after the writer was removed/demoted.
+    await requireStorageWorkspaceAccess(event, session, body.data.workspace_id, 'workspace.write');
 
     recordUploadStart();
 

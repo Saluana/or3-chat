@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash 143ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail load without waiting on it in the next workspace 109ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching 223ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will resolve after switching away and back 203ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery 113ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will reject after switching away and back 203ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook 154ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will resolve 181ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces 140ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will reject 131ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces 102ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > preserves recovered same-hash bytes when a former-workspace blob lookup fails late 68ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > publishes a ready URL only after decode and includes intrinsic size 39ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failures as ordinary error placeholders 33ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failure as a placeholder when URL cleanup throws 39ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > does not invoke the image decoder for SVG or forged raster bytes 32ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery 180ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook 170ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette 174ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the gallery 119ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the hook 118ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the palette 119ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch 73ms
+
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+   Start at  10:22:16
+   Duration  3.81s (transform 937ms, setup 418ms, import 1.63s, tests 2.87s, environment 1.42s)
+

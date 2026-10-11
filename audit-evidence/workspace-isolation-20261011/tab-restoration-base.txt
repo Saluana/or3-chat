@@ -1,0 +1,46 @@
+Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-4C1oxp
+
+----------·x·x·-------------------
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed | 29 skipped (34)
+   Start at  12:57:01
+   Duration  1.15s (transform 141ms, setup 169ms, import 193ms, tests 38ms, environment 526ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useWorkspaceTabs.test.ts > tab restoration lookup ownership > discards held restore switch / failure after its scope expires
+ FAIL  |core-app| app/composables/core/__tests__/useWorkspaceTabs.test.ts > tab restoration lookup ownership > discards held restore return / failure after its scope expires
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      [Error: Former-workspace lookup detail],
+      Object {
+        "action": "filter-restore",
+        "tabId": "old-a",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/core/__tests__/useWorkspaceTabs.test.ts:487:29
+    485|         expect(tabs.tabs.value.map(tab => tab.id)).toEqual([currentId]…
+    486|         expect(fake.bindings.get('pane-a')).toEqual({ kind: 'document'…
+    487|         expect(onError).not.toHaveBeenCalled();
+       |                             ^
+    488|     });
+    489|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+Exit status: 1

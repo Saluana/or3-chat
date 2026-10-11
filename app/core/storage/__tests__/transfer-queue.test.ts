@@ -906,6 +906,55 @@ describe('FileTransferQueue', () => {
         expect((await newDb.file_transfers.get(transfer.id))?.state).toBe('queued');
     });
 
+    for (const boundary of ['presign', 'response'] as const) {
+        it(`rejects an uncooperative late download ${boundary} after a workspace switch with overlapping IDs`, async () => {
+            const meta = makeMeta({ storage_id: 'synthetic-origin-storage' });
+            const originDb = createDbStub([meta], []);
+            const destinationMeta = { ...meta, name: 'synthetic-destination-file' };
+            const destinationBlob = new Blob(['destination-existing']);
+            const destinationDb = createDbStub([destinationMeta], [{ hash: meta.hash, blob: destinationBlob }]);
+            const transfer: FileTransfer = { id: 'identical-transfer', hash: meta.hash, workspace_id: 'synthetic-origin', direction: 'download', state: 'queued', bytes_total: 0, bytes_done: 0, attempts: 0, created_at: 1, updated_at: 1 };
+            const destinationTransfer = { ...transfer, workspace_id: 'synthetic-destination' };
+            await originDb.file_transfers.put(transfer);
+            await destinationDb.file_transfers.put(destinationTransfer);
+            const signing = controlledIo<{ url: string; expiresAt: number }>();
+            const response = controlledIo<Response>();
+            const cancel = vi.fn();
+            const read = vi.fn();
+            const lateResponse = new Response(new ReadableStream<Uint8Array>({ pull: read, cancel }));
+            const signed = { url: 'https://synthetic.invalid/origin-download', expiresAt: Date.now() + 60000 };
+            const provider: ObjectStorageProvider = {
+                id: 'synthetic-provider', displayName: 'Synthetic', supports: { presignedUpload: true, presignedDownload: true },
+                getPresignedUploadUrl: vi.fn(async () => signed),
+                getPresignedDownloadUrl: boundary === 'presign' ? signing.request : vi.fn(async () => signed),
+            };
+            const fetchMock = boundary === 'response' ? response.request : vi.fn(async () => lateResponse);
+            vi.stubGlobal('fetch', fetchMock);
+            let activeDb = originDb;
+            const queue = new FileTransferQueue(originDb as any, provider, { dbResolver: () => activeDb as any });
+            queue.setWorkspaceId('synthetic-origin');
+            (queue as any).running.add(transfer.id);
+            const processing = (queue as any).processTransfer(transfer);
+            try {
+                for (let i = 0; i < 30 && (boundary === 'presign' ? signing.request : response.request).mock.calls.length === 0; i++) await Promise.resolve();
+                expect(boundary === 'presign' ? signing.request : response.request).toHaveBeenCalledOnce();
+                activeDb = destinationDb; queue.setWorkspaceId('synthetic-destination');
+                if (boundary === 'presign') signing.succeed(signed);
+                else response.succeed(lateResponse);
+                await processing;
+                expect(cancel).toHaveBeenCalledOnce();
+                expect(await originDb.file_blobs.get(meta.hash)).toBeUndefined();
+                expect(await destinationDb.file_meta.get(meta.hash)).toEqual(destinationMeta);
+                expect((await destinationDb.file_blobs.get(meta.hash))?.blob).toBe(destinationBlob);
+                expect(await destinationDb.file_transfers.get(transfer.id)).toEqual(destinationTransfer);
+                expect(await originDb.file_transfers.get(transfer.id)).toMatchObject({ state: 'queued', retry_at: 0 });
+                expect(provider.getPresignedDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'synthetic-origin', storageId: 'synthetic-origin-storage' }));
+            } finally {
+                signing.succeed(signed); response.succeed(lateResponse); await processing; queue.dispose();
+            }
+        });
+    }
+
     it('enforces concurrency cap', async () => {
         const metaA = makeMeta({ hash: `sha256:${'a'.repeat(64)}` });
         const metaB = makeMeta({ hash: `sha256:${'b'.repeat(64)}` });

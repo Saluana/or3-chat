@@ -1,0 +1,103 @@
+Source commit: cac9926d7aa834ff5fa442ebe98640465660b24a; two browser audit fixture additions. Latest runtime fix 69a7c140b3663489fb6f11a1f94a0598eb837bb0.
+Command: synthetic offline profile; PW_PORT=3121 bun x playwright test --config=audit-evidence/workspace-isolation-20261011/gallery-playwright.config.ts --grep actual SDK job --reporter=line
+Exit status: 0
+Actual SDK/context/runtime services/tracker and IndexedDB notifications; synthetic Nuxt session state. Every job endpoint mocked, model endpoints aborted, non-loopback requests denied. Not a live login/provider/model test.
+Expected warnings are aborted synthetic transport and JSON response to SSE fallback; no background model execution.
+[WebServer] $ tsx scripts/cli/dev.ts --host "127.0.0.1" --port "3121"
+
+[WebServer] (node:29117) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:29128) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] [or3-local] or3-provider-basic-auth: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-basic-auth/package.json'
+
+[WebServer] [or3-local] or3-provider-clerk: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-clerk/package.json'
+
+[WebServer] [or3-local] or3-provider-convex: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-convex/package.json'
+
+[WebServer] [or3-local] or3-provider-fs: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-fs/package.json'
+
+[WebServer] [or3-local] or3-provider-s3: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-s3/package.json'
+
+[WebServer] [or3-local] or3-provider-sqlite: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite/package.json'
+[WebServer] [or3-local] or3-provider-sqlite-tests: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite-tests/package.json'
+
+[WebServer] 
+[WebServer]  ERROR  (node:29135) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use node --trace-warnings ... to show where the warning was created)
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored.
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored. (x2)
+[WebServer] 
+
+[WebServer] (node:29176) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:29177) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 2 tests using 1 worker
+
+(node:29262) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/2] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:332:5 › actual SDK job tracking preserves originating account when account is changed
+[WebServer] 
+[WebServer]  WARN  [console.warn] [bg-stream] poll-status-failed {"jobId":"synthetic-sdk-job","runId":1,"error":"signal is aborted without reason"}
+[WebServer] 
+
+[2/2] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:332:5 › actual SDK job tracking preserves originating account when account is unchanged
+[WebServer] 
+[WebServer]  WARN  [console.warn] [bg-stream] poll-status-failed {"jobId":"synthetic-sdk-job","runId":1,"error":"signal is aborted without reason"} (x2)
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  [console.warn] [bg-stream] sse-error-fallback-poll {"jobId":"synthetic-sdk-job","error":"Background SSE connection failed"}
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  [console.warn] [bg-stream] poll-status-failed {"jobId":"synthetic-sdk-job","runId":3,"error":"signal is aborted without reason"}
+[WebServer] 
+
+  2 passed (1.3m)

@@ -1,0 +1,138 @@
+Source commit: 82254f38e123366c83594a046f1593fba93e734b plus three mounted fallback tests
+Command: bun x vitest run app/components/chat/__tests__/workspace-thumbnails.test.ts -t "keeps a shared palette thumbnail retained" --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 1; two confirmed intermediate regression failures, one unchanged-workspace control
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ × |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace changed 237ms
+   → expected "vi.fn()" to not be called with arguments: [ 'blob:paired-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-target",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ × |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace returned 235ms
+   → expected "vi.fn()" to not be called with arguments: [ 'blob:paired-return' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-target",
+  ]
+
+  3rd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 3
+
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace unchanged 156ms
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the gallery
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the hook
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the palette
+ ↓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace changed
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:paired-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-target",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:69:45
+     67|             first.unmount();
+     68|             await vi.advanceTimersByTimeAsync(15_001);
+     69|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(curre…
+       |                                             ^
+     70|             expect(second.find('img').attributes('src')).toBe(currentU…
+     71|             second.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace returned
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:paired-return' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-target",
+  ]
+
+  3rd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 3
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:69:45
+     67|             first.unmount();
+     68|             await vi.advanceTimersByTimeAsync(15_001);
+     69|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(curre…
+       |                                             ^
+     70|             expect(second.find('img').attributes('src')).toBe(currentU…
+     71|             second.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed | 12 skipped (15)
+   Start at  12:40:34
+   Duration  2.21s (transform 537ms, setup 172ms, import 745ms, tests 631ms, environment 459ms)
+

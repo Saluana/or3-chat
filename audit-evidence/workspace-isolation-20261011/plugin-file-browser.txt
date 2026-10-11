@@ -1,0 +1,83 @@
+Source commit: 4529f0176fdeb4a107799b804a4b55b4dd109a1c; browser audit fixture additions uncommitted during run.
+Command: synthetic offline profile documented in README; PW_PORT=3121 bun x playwright test --config=audit-evidence/workspace-isolation-20261011/gallery-playwright.config.ts --grep actual SDK --reporter=line
+Exit status: 0
+External requests denied; real Chromium Blob conversion and IndexedDB, synthetic files only.
+[WebServer] $ tsx scripts/cli/dev.ts --host "127.0.0.1" --port "3121"
+
+[WebServer] (node:24925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:24936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] [or3-local] or3-provider-basic-auth: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-basic-auth/package.json'
+[WebServer] [or3-local] or3-provider-clerk: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-clerk/package.json'
+[WebServer] [or3-local] or3-provider-convex: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-convex/package.json'
+[WebServer] [or3-local] or3-provider-fs: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-fs/package.json'
+
+[WebServer] [or3-local] or3-provider-s3: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-s3/package.json'
+[WebServer] [or3-local] or3-provider-sqlite: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite/package.json'
+[WebServer] [or3-local] or3-provider-sqlite-tests: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite-tests/package.json'
+
+[WebServer] 
+[WebServer]  ERROR  (node:24951) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use node --trace-warnings ... to show where the warning was created)
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored.
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored. (x2)
+[WebServer] 
+
+[WebServer] (node:24992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:24993) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 3 tests using 1 worker
+
+(node:25043) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:250:5 › actual SDK file read fences native-conversion byte delivery
+[2/3] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:250:5 › actual SDK file read fences iteration byte delivery
+[3/3] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:250:5 › actual SDK file read fences unchanged byte delivery
+  3 passed (1.2m)

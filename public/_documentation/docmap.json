@@ -14,7 +14,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose between using OR3, running Cloud, and source or plugin development."
+                    "summary": "Choose between using OR3, running Cloud, and source or plugin development; understand workspace-scoped tab restoration and title caches."
                 },
                 {
                     "name": "first-chat.md",
@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, and coverage."
+                    "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",
@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, isolated browser harnesses, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, and on-demand history/SDK execution."
+                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, and on-demand history/SDK execution."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -224,7 +224,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Source API reference for saved prompts."
+                    "summary": "Saved prompt APIs, workspace-scoped default preference updates, and modal library loading and close behavior."
                 },
                 {
                     "name": "document-revisions.md",
@@ -269,7 +269,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 2,
-                    "summary": "Bounded indexed pages, summary queries, and image eligibility."
+                    "summary": "Bounded indexed pages, summary queries, image eligibility, and workspace-scoped gallery uploads, artifact delivery, viewer previews, mounted thumbnail retention, attachment caches, and media prefetch lifetime."
                 },
                 {
                     "name": "attachments.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers originating workspace authorization, scoped admission recovery, confirmed cancellation, bound browser-tool approvals and retention."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers current originating-workspace read and write authorization, membership changes before model dispatch, scoped admission recovery, confirmed cancellation, bound browser-tool approvals and retention."
                 },
                 {
                     "name": "notifications.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Use the local-first Notification Center, extend it from source, and understand user scoping and completion alerts."
+                    "summary": "Use the local-first Notification Center, extend it from source, and understand originating tracker accounts/workspace mute settings, scoped preference writes, detached completion alerts, and account changes during delivery."
                 },
                 {
                     "name": "webhooks.md",
@@ -764,7 +764,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Authenticated storage, quota validation, bounded active/deleted/incomplete/disk observations, and remaining generation-coordinated cleanup requirements."
+                    "summary": "Authenticated storage, fresh read/write membership checks around download and upload signing, quota validation, bounded active/deleted/incomplete/disk observations, and remaining generation-coordinated cleanup requirements."
                 },
                 {
                     "name": "plugin-access-gating.md",
@@ -911,7 +911,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements."
+                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements. File byte reads follow activation lifetime across workspace switches."
                 },
                 {
                     "name": "plugin-sdk-cli.md",

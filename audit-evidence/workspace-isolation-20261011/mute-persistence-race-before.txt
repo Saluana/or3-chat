@@ -1,0 +1,82 @@
+Source commit: f755444d + six new held transaction tests (runtime identical to 760a0929)
+Command: bun x vitest run app/composables/notifications/__tests__/useNotifications.test.ts --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 1; two confirmed destination-write failures, nine passing cases
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ × |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across workspace transition 271ms
+   → expected { …(7) } to be undefined
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across account transition 100ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across unchanged transition 171ms
+ × |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across workspace transition 233ms
+   → expected { …(7) } to be undefined
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across account transition 94ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across unchanged transition 117ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > rebinds notifications to new workspace db on session workspace switch 109ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > orders notifications by newest first 52ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > mutes and unmutes threads via kv store 68ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > handles malformed muted threads data safely 54ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > tracks unread count reactively 56ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across workspace transition
+AssertionError: expected { …(7) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "clock": 1791720950,
+  "created_at": 1,
+  "deleted": false,
+  "id": "notification_muted_threads:synthetic-origin-user",
+  "name": "notification_muted_threads:synthetic-origin-user",
+  "updated_at": 1791720950,
+  "value": "[\"origin-existing\",\"identical-thread\"]",
+}
+
+ ❯ app/composables/notifications/__tests__/useNotifications.test.ts:81:99
+     79|                     await pending;
+     80|                     lookup.mockRestore();
+     81|                     if (transition === 'workspace') expect(await desti…
+       |                                                                                                   ^
+     82|                     expect(await destinationDb.kv.get(destinationKey))…
+     83|                     expect((await originDb.kv.get(originKey))?.value).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across workspace transition
+AssertionError: expected { …(7) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "clock": 1791720951,
+  "created_at": 1,
+  "deleted": false,
+  "id": "notification_muted_threads:synthetic-origin-user",
+  "name": "notification_muted_threads:synthetic-origin-user",
+  "updated_at": 1791720951,
+  "value": "[\"origin-existing\"]",
+}
+
+ ❯ app/composables/notifications/__tests__/useNotifications.test.ts:81:99
+     79|                     await pending;
+     80|                     lookup.mockRestore();
+     81|                     if (transition === 'workspace') expect(await desti…
+       |                                                                                                   ^
+     82|                     expect(await destinationDb.kv.get(destinationKey))…
+     83|                     expect((await originDb.kv.get(originKey))?.value).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  12:15:48
+   Duration  2.84s (transform 459ms, setup 182ms, import 724ms, tests 1.33s, environment 444ms)
+

@@ -1,0 +1,183 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+------------------------------------------xxxx----------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after switching accounts before
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "next-user",
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "aa5a82c9-f727-43ab-8a77-576589dc92c5",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1066:44
+    1064|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1065|         expect(hookDelivery).not.toHaveBeenCalled();
+    1066|         expect(notificationCreateMock).not.toHaveBeenCalled();
+       |                                            ^
+    1067|         mod.backgroundJobTrackers.clear();
+    1068|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after switching accounts before
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "319cbedf-fca5-493a-a72b-801253d59a3b",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1065:34
+    1063|         const { emitBackgroundComplete } = await import('~/utils/chat/…
+    1064|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1065|         expect(hookDelivery).not.toHaveBeenCalled();
+       |                                  ^
+    1066|         expect(notificationCreateMock).not.toHaveBeenCalled();
+    1067|         mod.backgroundJobTrackers.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after switching accounts during mute read
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "next-user",
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "61b3dbf4-f8c5-483f-a0d1-76013e7ab91b",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1066:44
+    1064|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1065|         expect(hookDelivery).not.toHaveBeenCalled();
+    1066|         expect(notificationCreateMock).not.toHaveBeenCalled();
+       |                                            ^
+    1067|         mod.backgroundJobTrackers.clear();
+    1068|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after switching accounts during mute read
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "actions": Array [
+          Object {
+            "data": Object {
+              "messageId": "msg-1",
+            },
+            "id": "f5df348c-cbdb-426f-8d07-a39157296c7d",
+            "kind": "navigate",
+            "label": "Open chat",
+            "target": Object {
+              "threadId": "thread-1",
+            },
+          },
+        ],
+        "body": "origin-account-synthetic-private-detail",
+        "threadId": "thread-1",
+        "title": "AI response failed",
+        "type": "system.warning",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts:1065:34
+    1063|         const { emitBackgroundComplete } = await import('~/utils/chat/…
+    1064|         await emitBackgroundComplete(tracker, makeStatus('error', { er…
+    1065|         expect(hookDelivery).not.toHaveBeenCalled();
+       |                                  ^
+    1066|         expect(notificationCreateMock).not.toHaveBeenCalled();
+    1067|         mod.backgroundJobTrackers.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 52 skipped (56)
+   Start at  08:43:23
+   Duration  2.33s (transform 604ms, setup 174ms, import 236ms, tests 1.25s, environment 449ms)
+

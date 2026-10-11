@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import { setActiveWorkspaceDb, getActiveWorkspaceId, getWorkspaceGeneration, evictWorkspaceDb } from '~/db/client';
 import type {
     PaletteCoordinator,
     PaletteCoordinatorSnapshot,
 } from '~/core/search/command-palette/coordinator';
 import type {
     PaletteAction,
+    PaletteActionResult,
     PalettePreview,
     PaletteResult,
 } from '~/core/search/command-palette/types';
@@ -469,6 +471,45 @@ describe('useCommandPalette', () => {
             'Navigation is unavailable right now.'
         );
     });
+
+    for (const outcome of ['success', 'failure'] as const) {
+        it.each(['changed', 'returned', 'unchanged'] as const)(`fences late palette action ${outcome} after workspace is %s`, async change => {
+            const previousWorkspace = getActiveWorkspaceId();
+            let finish!: (value: PaletteActionResult) => void;
+            const held = new Promise<PaletteActionResult>(resolve => { finish = resolve; });
+            executePaletteAction.mockReturnValueOnce(held);
+            setActiveWorkspaceDb('palette-action-isolation-a');
+            const palette = useCommandPalette();
+            try {
+                palette.open();
+                await Promise.resolve();
+                emitSnapshot({ results: [result({ key: 'chat:shared', title: 'Synthetic workspace A' })], workspaceGeneration: getWorkspaceGeneration() });
+                await nextTick();
+                const pending = palette.runAction(action());
+                await vi.waitFor(() => expect(executePaletteAction).toHaveBeenCalledOnce());
+                if (change !== 'unchanged') {
+                    setActiveWorkspaceDb('palette-action-isolation-b');
+                    emitSnapshot({ results: [], workspaceGeneration: getWorkspaceGeneration() });
+                    if (change === 'returned') {
+                        setActiveWorkspaceDb('palette-action-isolation-a');
+                        emitSnapshot({ results: [], workspaceGeneration: getWorkspaceGeneration() });
+                    }
+                    emitSnapshot({ results: [result({ key: 'chat:shared', title: 'Synthetic current workspace' })], workspaceGeneration: getWorkspaceGeneration() });
+                    await nextTick();
+                }
+                finish(outcome === 'success' ? { ok: true } : { ok: false, error: { code: 'navigation-failed', message: 'synthetic-private-workspace-a-filename' } });
+                await pending;
+                expect(palette.isOpen.value).toBe(change !== 'unchanged' || outcome !== 'success');
+                expect(palette.errorMessage.value).toBe(change === 'unchanged' && outcome === 'failure' ? 'synthetic-private-workspace-a-filename' : null);
+                if (change !== 'unchanged') expect(palette.announcement.value).not.toContain('synthetic-private-workspace-a-filename');
+            } finally {
+                disposeCommandPalette();
+                setActiveWorkspaceDb(previousWorkspace);
+                evictWorkspaceDb('palette-action-isolation-a');
+                evictWorkspaceDb('palette-action-isolation-b');
+            }
+        });
+    }
 
     it('does not let an older shell disposer clear a newer host context', () => {
         const older = { canOpenNewPane: () => false } as never;

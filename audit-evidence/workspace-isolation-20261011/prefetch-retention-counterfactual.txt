@@ -1,0 +1,46 @@
+Base: 191821d0df764f203cb1a1a0315de7ac973a3ab1
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-m9h6cS
+
+x·---------------
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 15 skipped (17)
+   Start at  12:45:32
+   Duration  2.02s (transform 625ms, setup 192ms, import 805ms, tests 379ms, environment 457ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (palette-first)
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:prefetch-palette-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:prefetch-palette-target",
++   "blob:prefetch-palette-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:65:45
+     63|             await vi.waitFor(() => expect(wrapper.find('img').attribut…
+     64|             await vi.advanceTimersByTimeAsync(30_001);
+     65|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob…
+       |                                             ^
+     66|             expect(wrapper.find('img').attributes('src')).toBe('blob:p…
+     67|             wrapper.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+Exit status: 1

@@ -4,8 +4,9 @@ import { createServer, type Server } from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ChatGenerationAdmissionEnvelope, CanonicalGenerationSnapshot } from '~~/shared/chat/background-history';
 import type { SessionContext } from '~/core/hooks/hook-types';
-import { initializeSqliteDb, destroySqliteDb, _resetForTest } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/kysely.ts';
+import { initializeSqliteDb, destroySqliteDb, _resetForTest, getRawDb } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/kysely.ts';
 import { runMigrations } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/migrate.ts';
 import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/auth/sqlite-auth-workspace-store.ts';
 import { createSqliteWorkspaceAccessStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/admin/stores/sqlite-store.ts';
@@ -44,6 +45,21 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
     let baseUrl = '';
     let access: ReturnType<typeof createSqliteWorkspaceAccessStore>;
     let alice: string, bob: string, workspaceA: string, workspaceB: string;
+
+    function admission(workspaceId: string): ChatGenerationAdmissionEnvelope {
+        return { version: 1, kind: 'new-turn', admissionId: 'shared-admission', generationId: 'shared-generation',
+            workspaceId, threadId: 'shared-thread', messageId: 'shared-assistant',
+            thread: { id: 'shared-thread', clock: 1, title: 'Synthetic thread' },
+            userMessage: { id: 'shared-user', clock: 1, thread_id: 'shared-thread', role: 'user', data: { content: 'Synthetic request' } },
+            assistantMessage: { id: 'shared-assistant', clock: 1, thread_id: 'shared-thread', role: 'assistant', pending: true,
+                data: { content: '', generation_id: 'shared-generation' } },
+        };
+    }
+    function message(workspaceId: string) {
+        const row = getRawDb().prepare('SELECT data_json FROM s_messages WHERE workspace_id = ? AND id = ?')
+            .get(workspaceId, 'shared-assistant') as { data_json: string };
+        return JSON.parse(row.data_json);
+    }
 
     function select(userId: string, workspaceId: string) {
         fixture.userId = userId;
@@ -151,5 +167,40 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         expect(await (await call('snapshot', workspaceA)).text()).toContain('A private document');
         select(bob, workspaceB);
         expect(await (await call('snapshot', workspaceB)).text()).toContain('B private document');
+    });
+    it.each(['removed', 'viewer', 'editor'] as const)('rechecks %s membership at finalization while identical identifiers exist elsewhere', async role => {
+        for (const workspaceId of [workspaceA, workspaceB]) await fixture.adapter!.admitChatGeneration({ userId: bob, workspaceId }, admission(workspaceId));
+        const snapshot: CanonicalGenerationSnapshot = { status: 'complete', content: 'Synthetic A response', reasoning: '', completedAt: Date.now() };
+        const input = { admission: admission(workspaceA), snapshot };
+        const beforeA = message(workspaceA), beforeB = message(workspaceB);
+        if (role === 'removed') await access.removeMember({ workspaceId: workspaceA, userId: bob });
+        else await access.setMemberRole({ workspaceId: workspaceA, userId: bob, role });
+        if (role === 'editor') {
+            expect((await fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceA }, input)).status).toBe('committed');
+            expect(message(workspaceA).data.content).toBe(snapshot.content);
+        } else {
+            await expect(fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceA }, input)).rejects.toThrow(/Forbidden/);
+            expect(message(workspaceA)).toEqual(beforeA);
+            const receipts = getRawDb().prepare("SELECT COUNT(*) AS count FROM background_generation_receipts WHERE workspace_id = ? AND stage = 'finalization'")
+                .get(workspaceA) as { count: number };
+            expect(receipts.count).toBe(0);
+        }
+        expect(message(workspaceB)).toEqual(beforeB);
+        await fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceB }, { admission: admission(workspaceB), snapshot: { ...snapshot, content: 'Synthetic B response' } });
+        expect(message(workspaceB).data.content).toBe('Synthetic B response');
+        if (role !== 'editor') {
+            await access.upsertMember({ workspaceId: workspaceA, provider: 'fixture', emailOrProviderId: 'bob', role: 'editor' });
+            expect((await fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceA }, input)).status).toBe('committed');
+            expect(message(workspaceA).data.content).toBe('Synthetic A response');
+            expect(message(workspaceB).data.content).toBe('Synthetic B response');
+        }
+    });
+    it('rejects a direct workspace substitution despite matching thread/message/generation identifiers', async () => {
+        for (const workspaceId of [workspaceA, workspaceB]) await fixture.adapter!.admitChatGeneration({ userId: bob, workspaceId }, admission(workspaceId));
+        const beforeA = message(workspaceA), beforeB = message(workspaceB);
+        await expect(fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceB }, {
+            admission: admission(workspaceA), snapshot: { status: 'complete', content: 'Synthetic forged destination', reasoning: '', completedAt: Date.now() },
+        })).rejects.toThrow(/Invalid background history workspace/);
+        expect(message(workspaceA)).toEqual(beforeA); expect(message(workspaceB)).toEqual(beforeB);
     });
 });

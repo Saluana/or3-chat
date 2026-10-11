@@ -126,6 +126,7 @@ import {
     useThumbnailUrlCache,
     type ThumbState,
 } from '~/composables/core/useThumbnailUrlCache';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type LocalThumbState = ThumbState | { status: 'loading' };
@@ -156,7 +157,9 @@ const fileNames = reactive<Record<string, string>>({});
 const downloading = reactive<Record<string, boolean>>({});
 
 async function ensure(h: string) {
+    const generation = getWorkspaceGeneration();
     const m = await getFileMeta(h).catch(() => undefined);
+    if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
     if (m) {
         meta[h] = m;
         if (m.name) fileNames[h] = m.name;
@@ -180,9 +183,11 @@ async function ensure(h: string) {
     thumbs[h] = { status: 'loading' };
     const state = await thumbUrlCache.ensure(h, async () => {
         const blob = await getFileBlob(h);
+        if (generation !== getWorkspaceGeneration()) return null;
         thumbUrlCache.setIntrinsicSize(h, m.width, m.height);
         return blob;
     });
+    if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
     if (state) {
         thumbs[h] = state;
     } else {
@@ -193,8 +198,10 @@ async function ensure(h: string) {
 async function downloadAttachment(hash: string): Promise<void> {
     if (downloading[hash]) return;
     downloading[hash] = true;
+    const generation = getWorkspaceGeneration();
     try {
         const blob = await getFileBlob(hash);
+        if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
@@ -202,8 +209,10 @@ async function downloadAttachment(hash: string): Promise<void> {
         anchor.download = fileNames[hash] || 'attachment';
         anchor.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+        if (isComponentActive && generation === getWorkspaceGeneration()) throw error;
     } finally {
-        delete downloading[hash];
+        if (generation === getWorkspaceGeneration()) delete downloading[hash];
     }
 }
 
@@ -211,37 +220,40 @@ async function downloadAttachment(hash: string): Promise<void> {
 const currentHashes = new Set<string>();
 let isComponentActive = true;
 
-watch(
-    () => props.hashes,
-    async (list) => {
-        const next = new Set(list);
-        for (const h of next) {
-            if (!currentHashes.has(h)) {
-                await ensure(h);
-                const state = thumbUrlCache.get(h);
-                if (state?.status === 'ready' && state.url) {
-                    if (!isComponentActive) {
-                        thumbUrlCache.retain(h);
-                        thumbUrlCache.release(h);
-                        return;
-                    }
-                    thumbUrlCache.retain(h);
-                    currentHashes.add(h);
-                }
+async function syncHashes(list: string[]) {
+    const generation = getWorkspaceGeneration();
+    const next = new Set(list);
+    for (const h of next) {
+        if (!currentHashes.has(h)) {
+            await ensure(h);
+            if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
+            const state = thumbUrlCache.get(h);
+            if (state?.status === 'ready' && state.url) {
+                thumbUrlCache.retain(h);
+                currentHashes.add(h);
             }
         }
-        for (const h of Array.from(currentHashes)) {
-            if (!next.has(h)) {
-                currentHashes.delete(h);
-                thumbUrlCache.release(h);
-                delete thumbs[h];
-            }
+    }
+    for (const h of Array.from(currentHashes)) {
+        if (!next.has(h)) {
+            currentHashes.delete(h);
+            thumbUrlCache.release(h);
+            delete thumbs[h];
         }
-    },
-    { immediate: true }
-);
+    }
+}
+watch(() => props.hashes, syncHashes, { immediate: true });
+
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    for (const record of [thumbs, meta, fileNames, downloading]) {
+        for (const key of Object.keys(record)) delete record[key];
+    }
+    currentHashes.clear();
+    void syncHashes(props.hashes);
+});
 
 onBeforeUnmount(() => {
+    stopWorkspace();
     isComponentActive = false;
     for (const h of currentHashes) {
         thumbUrlCache.release(h);

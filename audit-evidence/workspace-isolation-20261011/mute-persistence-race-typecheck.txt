@@ -1,0 +1,34 @@
+Source: f755444d plus notification navigation title correction and preference prototype
+Command: synthetic BasicAuth/SQLite/FS environment documented in README; bun run type-check
+Exit status: 1; fixture-only PromiseExtended/overload typing corrected before final committed qualification
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 43 icons with 10.40KB(uncompressed) in size
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+app/composables/notifications/__tests__/useNotifications.test.ts(65,84): error TS2345: Argument of type '(equalityCriterias: { [key: string]: any; }, thenShortcut: ThenShortcut<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; } | undefined, unknown>) => Promise<...>' is not assignable to parameter of type '(equalityCriterias: { [key: string]: any; }, thenShortcut: ThenShortcut<{ id: string; name: string; deleted: boolean; created_at: number; updated_at: number; clock: number; value?: string | null | undefined; hlc?: string | undefined; op_id?: string | undefined; } | undefined, unknown>) => PromiseExtended<...>'.
+  Property 'timeout' is missing in type 'Promise<unknown>' but required in type 'PromiseExtended<unknown>'.
+app/composables/notifications/__tests__/useNotifications.test.ts(67,58): error TS2367: This comparison appears to be unintentional because the types '{ [key: string]: any; }' and 'string' have no overlap.
+/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node /workspace/or3-chat/node_modules/nuxt/bin/nuxt.mjs typecheck exited with code 2.
+error: script "type-check" exited with code 1

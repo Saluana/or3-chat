@@ -1,0 +1,15 @@
+Commit: c0b50a8efa57165e8ace56a2635f1e25dedede9f
+Existing separately owned tests/source unchanged; synthetic local IndexedDB/session fixtures; no model transport
+Command: /workspace/.bun/bin/bun x vitest run app/composables/core/__tests__/useWorkspaceTabDrafts.test.ts -t account|workspace database|late write|while saved drafts load --reporter=dot --silent=passed-only --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+---···-------··
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 10 skipped (15)
+   Start at  13:01:28
+   Duration  2.43s (transform 379ms, setup 157ms, import 609ms, tests 1.03s, environment 476ms)
+
+
+Exit status: 0

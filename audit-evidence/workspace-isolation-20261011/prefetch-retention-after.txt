@@ -1,0 +1,47 @@
+Source: 191821d0 plus default-prefetch prototype and two tests, committed as f1a3af0e69ad6ab7f9a0063ee2c8b77276aeb490
+Command: bun x vitest run app/components/chat/__tests__/workspace-thumbnails.test.ts app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts app/composables/core/__tests__/useThumbnailUrlCache.test.ts --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 0; three files /35 passed
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash 100ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail load without waiting on it in the next workspace 132ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will resolve after switching away and back 229ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (palette-first) 249ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > does not release a current palette retention when default prefetch resets (prefetch-first) 229ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will reject after switching away and back 246ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will resolve 158ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will reject 188ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace changed 255ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > preserves recovered same-hash bytes when a former-workspace blob lookup fails late 142ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > publishes a ready URL only after decode and includes intrinsic size 41ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failures as ordinary error placeholders 38ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failure as a placeholder when URL cleanup throws 68ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > does not invoke the image decoder for SVG or forged raster bytes 33ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace returned 378ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace unchanged 120ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching 205ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery 150ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook 236ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces 87ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces 81ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery 184ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook 183ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette 198ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > limits image work to four concurrent loads 10ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > deduplicates hashes and releases resources outside the range 2ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > drops stale queued work and ignores non-image metadata on reset 1ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > does not prefetch generic or unsupported image MIME attachments 1ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > discards held prefetch metadata when the workspace is changed while thread/hash identifiers remain unchanged 81ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > discards held prefetch metadata when the workspace is returned while thread/hash identifiers remain unchanged 92ms
+ ✓ |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > cannot release a same-hash retention acquired by a newer epoch 1ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the gallery 130ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the hook 130ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the palette 126ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch 82ms
+
+ Test Files  3 passed (3)
+      Tests  35 passed (35)
+   Start at  12:44:16
+   Duration  4.63s (transform 1.15s, setup 366ms, import 1.86s, tests 4.59s, environment 1.54s)
+

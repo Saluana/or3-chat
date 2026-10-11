@@ -1,0 +1,7 @@
+
+/workspace/or3-chat/server/utils/chat/project-policy.ts
+  17:49  warning  Unnecessary optional chain on a non-nullish value  @typescript-eslint/no-unnecessary-condition
+  17:55  warning  Unnecessary optional chain on a non-nullish value  @typescript-eslint/no-unnecessary-condition
+
+✖ 2 problems (0 errors, 2 warnings)
+

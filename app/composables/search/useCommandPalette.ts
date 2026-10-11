@@ -13,6 +13,7 @@ import {
     type ComputedRef,
     type Ref,
 } from 'vue';
+import { getWorkspaceGeneration } from '~/db/client';
 import { executePaletteAction } from '~/core/search/command-palette/action-executor';
 import type {
     PaletteCoordinator,
@@ -455,12 +456,15 @@ async function runAction(
         errorMessage.value = 'Navigation is unavailable right now.';
         return;
     }
+    const workspaceGeneration = getWorkspaceGeneration();
     const result = await executePaletteAction({
         host: hostContext,
         action,
         sourceId,
         expectedPluginGeneration,
     });
+    // Navigation owns its work; only its originating workspace may consume feedback.
+    if (workspaceGeneration !== getWorkspaceGeneration()) return;
     if (result.ok && result.superseded) return;
     if (result.ok) {
         errorMessage.value = null;

@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+··················
+
+ Test Files  3 passed (3)
+      Tests  18 passed (18)
+   Start at  09:31:52
+   Duration  3.11s (transform 800ms, setup 354ms, import 1.53s, tests 1.54s, environment 1.43s)
+

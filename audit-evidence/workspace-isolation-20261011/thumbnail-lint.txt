@@ -1,0 +1,3 @@
+Commit: 447127182e20402f3179ad69e6b450fb78726ab6
+Command: bun x eslint app/composables/core/useThumbnailUrlCache.ts app/composables/chat/useMessageThumbnails.ts app/composables/chat/useMessageMediaPrefetch.ts
+Exit status: 0; no warnings or errors.

@@ -1,0 +1,16 @@
+Runtime source: f3468423fb342be1720564ef090101835230fb65
+Host HEAD: 0918d1cd with test-only captured-membership fixtures
+Command: PATH=/workspace/.bun/bin:$PATH bun x vitest run server/api/jobs/__tests__/authorization.test.ts server/api/jobs/__tests__/stream.batching.test.ts --reporter=dot --silent=passed-only --maxWorkers=2
+Exit status: 0
+Scope: synthetic account, in-memory job provider, actual H3 SSE route, captured pre-transition membership snapshot followed by fresh lookup; no model/network provider calls.
+
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+······························································································
+
+ Test Files  2 passed (2)
+      Tests  94 passed (94)
+   Start at  11:06:58
+   Duration  5.28s (transform 1.47s, setup 349ms, import 3.30s, tests 4.19s, environment 1ms)
+

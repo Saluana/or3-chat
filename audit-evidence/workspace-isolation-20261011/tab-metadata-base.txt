@@ -1,0 +1,85 @@
+Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-Z2IQ8F
+
+xxxx·x
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  13:11:36
+   Duration  2.44s (transform 409ms, setup 199ms, import 639ms, tests 857ms, environment 511ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts > workspace tab metadata with real workspace databases > clears old cached titles while the destination lookup is held (success)
+ FAIL  |app-integration| app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts > workspace tab metadata with real workspace databases > clears old cached titles while the destination lookup is held (failure)
+AssertionError: expected 'A stored title' to be 'B fallback' // Object.is equality
+
+Expected: "B fallback"
+Received: "A stored title"
+
+ ❯ app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts:65:64
+     63|         const settled = current.then(() => null, error => error);
+     64|         try {
+     65|             expect(metadata.titleFor(tab('B fallback')).title).toBe('B…
+       |                                                                ^
+     66|             expect(metadata.metadata.size).toBe(0);
+     67|         } finally { release(); await settled; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |app-integration| app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts > workspace tab metadata with real workspace databases > discards captured title rows after a held switch transition
+AssertionError: expected 'A stored title' to be 'Current B fallback' // Object.is equality
+
+Expected: "Current B fallback"
+Received: "A stored title"
+
+ ❯ app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts:100:56
+     98|         }
+     99|         release(); await previous; hold.mockRestore();
+    100|         expect(metadata.titleFor(tab(fallback)).title).toBe(fallback);
+       |                                                        ^
+    101|         expect(metadata.metadata.size).toBe(0);
+    102|         await metadata.refresh([tab(fallback)]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |app-integration| app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts > workspace tab metadata with real workspace databases > discards captured title rows after a held return transition
+AssertionError: expected 'A stored title' to be 'Current A fallback' // Object.is equality
+
+Expected: "Current A fallback"
+Received: "A stored title"
+
+ ❯ app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts:100:56
+     98|         }
+     99|         release(); await previous; hold.mockRestore();
+    100|         expect(metadata.titleFor(tab(fallback)).title).toBe(fallback);
+       |                                                        ^
+    101|         expect(metadata.metadata.size).toBe(0);
+    102|         await metadata.refresh([tab(fallback)]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |app-integration| app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts > workspace tab metadata with real workspace databases > discards an in-flight title lookup when its owning component is disposed
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ app/composables/core/__tests__/useWorkspaceTabMetadata.workspace.integration.test.ts:135:40
+    133|         scope.stop();
+    134|         release(); await previous;
+    135|         expect(metadata.metadata.size).toBe(0);
+       |                                        ^
+    136|     });
+    137| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+Exit status: 1

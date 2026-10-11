@@ -22,14 +22,16 @@
  * **Singleton State Pattern**
  * - Module-scoped ref (`_defaultPromptId`) ensures all callers share state
  * - Readonly export prevents external mutation while allowing reactive subscriptions
- * - State is lazy-loaded once on first access via `loadOnce()`
+ * - State is lazy-loaded per workspace generation via `loadOnce()`
  * - Subsequent calls to `useDefaultPrompt()` reuse loaded state
  * - State persists across component mount/unmount (session lifetime)
  * - Persisted to DB KV store (survives page reload)
  *
  * **Lifecycle**
  * - First call triggers lazy load from KV store (async)
- * - `setDefaultPrompt(id)` updates in-memory state and persists to KV
+ * - Workspace switches clear cached state and load the selected workspace
+ * - `setDefaultPrompt(id)` persists to its originating DB before publishing state
+ * - An old workspace load cannot replace the selected workspace's cached state
  * - `clearDefaultPrompt()` sets to `null` and persists
  * - State is NOT cleared on HMR (requires manual clear or page reload)
  *
@@ -40,15 +42,17 @@
  *
  * **Hook Emission**
  * - Fires `chat.systemPrompt.default:action:update` when default is changed
- * - Hook receives new default ID (or null if cleared)
+ * - Hook receives the committed default ID (or null if cleared)
+ * - A write finishing after a workspace switch does not emit this UI update hook
  *
  * **Error Handling**
- * - Load errors from KV store are swallowed; state defaults to `null`
+ * - Load errors from KV store are swallowed; current state defaults to `null`
+ *   and a later load retries
  * - Write errors should propagate to caller (not swallowed by setKvByName)
  */
 
 import { ref, readonly } from 'vue';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { setKvByName } from '~/db/kv';
 import { useHooks } from '#imports';
 
@@ -56,36 +60,75 @@ import { useHooks } from '#imports';
 const _defaultPromptId = ref<string | null>(null);
 let _loaded = false;
 let _loadedDbName: string | null = null;
+let _loadedWorkspaceGeneration = -1;
+let _loadGeneration = 0;
+let _loading: { generation: number; promise: Promise<void> } | null = null;
+let _stopWorkspace: (() => void) | null = null;
+
+function ensureWorkspaceListener(): void {
+    if (typeof window === 'undefined' || _stopWorkspace) return;
+    _stopWorkspace = subscribeActiveWorkspaceDb(() => {
+        _loadGeneration++;
+        _loaded = false;
+        _defaultPromptId.value = null;
+        void loadOnce();
+    });
+}
 
 /**
- * Lazy-loads default prompt ID from KV store (once per session).
+ * Lazy-loads default prompt ID from the currently selected workspace's KV store.
  *
  * **Behavior**
- * - Guarded by `_loaded` flag (idempotent)
+ * - Shares an in-flight read within one workspace generation
+ * - Discards reads from a previous workspace generation
  * - Queries KV store for key `'default_system_prompt_id'`
  * - Sets `_defaultPromptId` to stored value or `null`
  *
  * **Error Handling**
- * - Load errors are swallowed; state defaults to `null`
+ * - Current load errors are swallowed; state defaults to `null` and can retry
  */
 async function loadOnce() {
     const db = getDb();
-    if (_loaded && _loadedDbName === db.name) return;
+    const workspaceGeneration = getWorkspaceGeneration();
+    if (_loaded && _loadedDbName === db.name &&
+        _loadedWorkspaceGeneration === workspaceGeneration) {
+        return _loading?.generation === _loadGeneration ? _loading.promise : undefined;
+    }
     _loaded = true;
     _loadedDbName = db.name;
-    try {
-        const rec = await db.kv
-            .where('name')
-            .equals('default_system_prompt_id')
-            .first();
-        if (rec && typeof rec.value === 'string' && rec.value) {
-            _defaultPromptId.value = rec.value;
-        } else {
-            _defaultPromptId.value = null;
+    _loadedWorkspaceGeneration = workspaceGeneration;
+    const generation = ++_loadGeneration;
+    const current = () => generation === _loadGeneration &&
+        db === getDb() && workspaceGeneration === getWorkspaceGeneration();
+    const entry = { generation, promise: Promise.resolve() };
+    entry.promise = (async () => {
+        try {
+            const rec = await db.kv
+                .where('name')
+                .equals('default_system_prompt_id')
+                .first();
+            if (!current()) return;
+            _defaultPromptId.value = rec && typeof rec.value === 'string' && rec.value
+                ? rec.value : null;
+        } catch {
+            if (current()) {
+                _loaded = false;
+                _defaultPromptId.value = null;
+            }
+        } finally {
+            if (_loading === entry) _loading = null;
         }
-    } catch {
-        _defaultPromptId.value = null;
-    }
+    })();
+    _loading = entry;
+    return entry.promise;
+}
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        _stopWorkspace?.();
+        _stopWorkspace = null;
+        _loadGeneration++;
+    });
 }
 
 /**
@@ -105,6 +148,7 @@ async function loadOnce() {
  */
 export function useDefaultPrompt() {
     const hooks = useHooks();
+    ensureWorkspaceListener();
     if (import.meta.client) void loadOnce();
 
     /**
@@ -112,9 +156,9 @@ export function useDefaultPrompt() {
      *
      * **Behavior**
      * - Ensures state is loaded first
-     * - Updates module-scoped state
-     * - Persists to KV store via `setKvByName`
-     * - Emits `chat.systemPrompt.default:action:update` hook
+     * - Persists to the DB captured at admission via `setKvByName`
+     * - Publishes the committed value and update hook only in that generation
+     * - Refreshes canonical state if a write finishes after returning to its DB
      *
      * **Error Handling**
      * - Write errors from `setKvByName` propagate to caller
@@ -122,11 +166,24 @@ export function useDefaultPrompt() {
      * @param id - Prompt ID to set as default, or `null` to clear
      */
     async function setDefaultPrompt(id: string | null) {
+        const originDb = getDb();
+        const workspaceGeneration = getWorkspaceGeneration();
+        const current = () => originDb === getDb() &&
+            workspaceGeneration === getWorkspaceGeneration();
         await loadOnce();
-        const newId = id || null;
-        _defaultPromptId.value = newId;
-        await setKvByName('default_system_prompt_id', newId);
-        await hooks.doAction('chat.systemPrompt.default:action:update', newId);
+        const committed = await setKvByName('default_system_prompt_id', id || null, originDb);
+        const newId = typeof committed.value === 'string' && committed.value
+            ? committed.value : null;
+        if (current()) {
+            _loadGeneration++;
+            _defaultPromptId.value = newId;
+            await hooks.doAction('chat.systemPrompt.default:action:update', newId);
+        } else if (originDb === getDb()) {
+            // The admitted write finished after A→B→A. Refresh the current
+            // generation from its persisted row rather than publishing old work.
+            _loaded = false;
+            await loadOnce();
+        }
     }
 
     /**

@@ -1,0 +1,3 @@
+Source: a85fbecb73c6a121aadfc4a3b35c44642de8de9b runtime prototype before commit
+Command: bun x eslint app/composables/notifications/useNotifications.ts
+Exit status: 0; no warnings

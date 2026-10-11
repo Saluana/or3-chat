@@ -68,7 +68,10 @@ creating a job or contacting the model.
    A new chat is checked for canonical project ownership after this admission,
    when its thread exists. Unsupported ownership saves a terminal error snapshot.
    Resumed chat jobs and every tool-loop model request recheck current workspace
-   access and canonical ownership immediately before dispatch.
+   write access and canonical ownership immediately before dispatch, including
+   after an awaited ownership read. Removing membership or changing the user
+   to a viewer prevents the next model request; existing read-only history
+   tools retain their read authorization.
 5. `server/utils/background-jobs/stream-handler.ts` runs the stream loop and writes:
    - content deltas
    - reasoning deltas (reasoning-only progress counts and streams independently)

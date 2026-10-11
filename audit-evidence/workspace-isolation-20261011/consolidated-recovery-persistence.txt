@@ -1,0 +1,277 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > returns only the active owner workspace through pull
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > returns only the active owner workspace through snapshot
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash 107ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > returns only the active owner workspace through pull 211ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail load without waiting on it in the next workspace 134ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through pull even when the user belongs to it
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > returns only the active owner workspace through snapshot 143ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through snapshot even when the user belongs to it
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching 177ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through push even when the user belongs to it
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through pull even when the user belongs to it 59ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through snapshot even when the user belongs to it 70ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > preserves viewer reads, denies writes after downgrade, and denies removed membership
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery 99ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > refuses a foreign scope through push even when the user belongs to it 86ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will resolve after switching away and back 271ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks removed membership at finalization while identical identifiers exist elsewhere
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook 153ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks viewer membership at finalization while identical identifiers exist elsewhere
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > preserves viewer reads, denies writes after downgrade, and denies removed membership 94ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks removed membership at finalization while identical identifiers exist elsewhere 63ms
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks editor membership at finalization while identical identifiers exist elsewhere
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+stdout | server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rejects a direct workspace substitution despite matching thread/message/generation identifiers
+[or3-sqlite] migration "001_init" applied
+[or3-sqlite] migration "002_sync_tables" applied
+[or3-sqlite] migration "003_sync_hardening" applied
+[or3-sqlite] migration "004_auth_invites" applied
+[or3-sqlite] migration "005_admin_stores" applied
+[or3-sqlite] migration "006_sync_snapshots" applied
+[or3-sqlite] migration "007_device_cursor_ownership" applied
+[or3-sqlite] migration "008_upload_intents" applied
+[or3-sqlite] migration "009_or3_connect" applied
+[or3-sqlite] migration "010_connect_user_code_hmac" applied
+[or3-sqlite] migration "011_connect_environment_scope_indexes" applied
+[or3-sqlite] migration "012_connect_credential_redelivery" applied
+[or3-sqlite] migration "013_connect_environment_lifecycle" applied
+[or3-sqlite] migration "014_connect_retention_activation" applied
+[or3-sqlite] migration "015_rate_limits" applied
+[or3-sqlite] migration "016_connect_runtime_binding" applied
+[or3-sqlite] migration "017_background_jobs" applied
+[or3-sqlite] migration "018_background_admission_cancels" applied
+[or3-sqlite] migration "019_background_generation_history" applied
+[or3-sqlite] migration "020_background_generation_receipts" applied
+
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks viewer membership at finalization while identical identifiers exist elsewhere 79ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rechecks editor membership at finalization while identical identifiers exist elsewhere 76ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces 139ms
+ ✓ |core-node| server/api/sync/__tests__/workspace-isolation.integration.test.ts > document sync HTTP isolation with the real SQLite harness > rejects a direct workspace substitution despite matching thread/message/generation identifiers 72ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will reject after switching away and back 287ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will resolve 202ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces 152ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will reject 128ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery 184ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > preserves recovered same-hash bytes when a former-workspace blob lookup fails late 66ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > publishes a ready URL only after decode and includes intrinsic size 46ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failures as ordinary error placeholders 29ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > keeps decode failure as a placeholder when URL cleanup throws 35ms
+ ✓ |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > does not invoke the image decoder for SVG or forged raster bytes 30ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook 191ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette 176ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the gallery 122ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the hook 123ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > preserves recovered current-workspace thumbnails after former metadata fails in the palette 137ms
+ ✓ |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch 98ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider unavailable 27ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider failed-read 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider foreign-only 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download after held canonical metadata resumes 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download after held canonical metadata resumes 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for download after held canonical metadata resumes 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for download after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload after held quota resumes 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload after held quota resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for upload after held quota resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for upload after held signer resumes 1ms
+
+ Test Files  4 passed (4)
+      Tests  48 passed (48)
+   Start at  10:26:29
+   Duration  4.32s (transform 2.82s, setup 639ms, import 4.27s, tests 4.10s, environment 1.49s)
+

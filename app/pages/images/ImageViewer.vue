@@ -2,6 +2,7 @@
 import { onBeforeUnmount, reactive, watch, computed, ref } from 'vue';
 import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
@@ -34,6 +35,16 @@ const state = reactive<{ url?: string }>({ url: undefined });
 const dialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const cache = useSharedPreviewCache();
 const currentHash = ref<string | null>(null);
+let loadToken = 0;
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    loadToken += 1;
+    downgrade();
+    state.url = undefined;
+});
+onBeforeUnmount(() => {
+    loadToken += 1;
+    stopWorkspace();
+});
 
 const imageViewerModalOverrides = useThemeOverrides({
     component: 'modal',
@@ -225,6 +236,9 @@ const loadingTextProps = computed(() => {
 });
 
 async function load() {
+    const token = ++loadToken;
+    const generation = getWorkspaceGeneration();
+    const isCurrent = () => token === loadToken && generation === getWorkspaceGeneration();
     if (!cache) return;
     const nextMeta = props.meta;
     if (currentHash.value && currentHash.value !== nextMeta?.hash) {
@@ -240,11 +254,12 @@ async function load() {
             const url = URL.createObjectURL(blob);
             return { url, bytes: blob.size };
         });
-        if (url && props.modelValue && props.meta?.hash === nextMeta.hash) {
+        if (isCurrent() && url && props.modelValue && props.meta?.hash === nextMeta.hash) {
             state.url = url;
             cache.promote(nextMeta.hash, 2);
         }
     } catch (error) {
+        if (!isCurrent()) return;
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
             message: `Couldn't load "${nextMeta.name || 'image'}" preview.`,

@@ -984,6 +984,80 @@ describe('background usage through terminal history', () => {
         expect(fetch).toHaveBeenCalledOnce();
     });
 
+    it.each(['viewer', null] as const)('blocks a recovered plain-text job after membership becomes %s', async (role) => {
+        const { jobId, context } = await admitted(false);
+        registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({
+            listUserWorkspaces: async () => role ? [{ id: 'workspace', name: 'Fixture', role }] : [],
+        }) as unknown as AuthWorkspaceStore });
+        vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow();
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('rechecks write membership after an awaited canonical ownership read', async () => {
+        const { jobId, context } = await admitted(false);
+        let role: 'owner' | 'viewer' = 'owner';
+        registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({
+            listUserWorkspaces: async () => [{ id: 'workspace', name: 'Fixture', role }],
+        }) as unknown as AuthWorkspaceStore });
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+            readChatHistory: async () => {
+                role = 'viewer';
+                return { status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: null } };
+            },
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize,
+        }) as unknown as SyncGatewayAdapter });
+        vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow('Forbidden');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(['viewer', null, 'owner'] as const)('uses current membership %s when a held canonical ownership read resumes', async (nextRole) => {
+        const { jobId, context } = await admitted(false);
+        let role: 'owner' | 'viewer' | null = 'owner';
+        registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({
+            listUserWorkspaces: async () => role ? [{ id: 'workspace', name: 'Fixture', role }] : [],
+        }) as unknown as AuthWorkspaceStore });
+        let resume!: () => void;
+        const held = new Promise<void>(resolve => { resume = resolve; });
+        const read = vi.fn(async () => {
+            await held;
+            return { status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: null } };
+        });
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+            readChatHistory: read,
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize,
+        }) as unknown as SyncGatewayAdapter });
+        const fetch = vi.fn(async () => response(100));
+        vi.stubGlobal('fetch', fetch);
+        const execution = executeBackgroundJob(jobId, context, memoryJobProvider);
+        // Attach the rejection assertion before releasing the suspended task.
+        const outcome = nextRole === 'owner'
+            ? execution : expect(execution).rejects.toThrow(nextRole === null ? 'Workspace access is unavailable' : 'Forbidden');
+        await vi.waitFor(() => expect(read).toHaveBeenCalled());
+        role = nextRole;
+        resume();
+        await outcome;
+        expect(fetch).toHaveBeenCalledTimes(nextRole === 'owner' ? 1 : 0);
+    });
+
+    it.each(['viewer', null] as const)('blocks another model request after membership becomes %s during a tool', async (role) => {
+        const { jobId, context } = await admitted(true);
+        registerServerTool(toolDef, () => {
+            registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({
+                listUserWorkspaces: async () => role ? [{ id: 'workspace', name: 'Fixture', role }] : [],
+            }) as unknown as AuthWorkspaceStore });
+            return 'accepted result';
+        }, { override: true });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(100, true)).mockResolvedValueOnce(response(200)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow();
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+
     it('rejects a restored oversized captured maximum before reopening the provider', async () => {
         const { jobId, context } = await admitted(false, { version: 1, user_max_context_tokens: 20, requested_completion_tokens: null });
         vi.stubGlobal('fetch', vi.fn(async () => response(100)));

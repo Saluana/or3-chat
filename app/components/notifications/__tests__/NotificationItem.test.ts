@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import Dexie from 'dexie';
+import { evictWorkspaceDb, getActiveWorkspaceId, getDb, setActiveWorkspaceDb } from '~/db/client';
+import { getGlobalMultiPaneApi, setGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import NotificationItem from '../NotificationItem.vue';
 import type { Notification } from '~/db/schema';
 
@@ -51,6 +54,40 @@ describe('NotificationItem', () => {
     beforeEach(() => {
         pushMock.mockClear();
         doActionMock.mockClear();
+    });
+
+    it('keeps identifier-only notification navigation in the active workspace when record IDs overlap', async () => {
+        const previousWorkspace = getActiveWorkspaceId();
+        const previousApi = getGlobalMultiPaneApi();
+        const origin = `notification-origin-${crypto.randomUUID()}`;
+        const current = `notification-current-${crypto.randomUUID()}`;
+        let wrapper: ReturnType<typeof mount> | undefined;
+        try {
+            const originDb = setActiveWorkspaceDb(origin); await originDb.open();
+            await originDb.threads.put({ id: 'identical-thread', title: 'synthetic-origin-title', created_at: 1, updated_at: 1, clock: 1, deleted: false } as never);
+            const currentDb = setActiveWorkspaceDb(current); await currentDb.open();
+            await currentDb.threads.put({ id: 'identical-thread', title: 'synthetic-current-title', created_at: 1, updated_at: 1, clock: 1, deleted: false } as never);
+            const originRead = vi.spyOn(originDb.threads, 'get');
+            const opened: string[] = [];
+            const setPaneThread = vi.fn(async (_index: number, id: string) => {
+                const thread = await getDb().threads.get(id);
+                if (typeof thread?.title === 'string') opened.push(thread.title);
+            });
+            setGlobalMultiPaneApi({ activePaneIndex: ref(0), updatePane: vi.fn(), setPaneThread } as unknown as Parameters<typeof setGlobalMultiPaneApi>[0]);
+            const notification = baseNotification();
+            notification.actions = [{ id: 'open', label: 'Open chat', kind: 'navigate', target: { threadId: 'identical-thread' } }];
+            wrapper = mount(NotificationItem, { props: { notification, onMarkRead: vi.fn(async () => {}) },
+                global: { stubs: { UButton: UButtonStub, UIcon: UIconStub } } });
+            await wrapper.trigger('click');
+            await vi.waitFor(() => expect(opened).toEqual(['synthetic-current-title']));
+            expect(originRead).not.toHaveBeenCalled();
+            expect(getActiveWorkspaceId()).toBe(current);
+            expect(pushMock).not.toHaveBeenCalled();
+            originRead.mockRestore();
+        } finally {
+            wrapper?.unmount(); setGlobalMultiPaneApi(previousApi); setActiveWorkspaceDb(previousWorkspace);
+            for (const id of [origin, current]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
+        }
     });
 
     it('marks read once when clicking the item with a navigate action', async () => {
