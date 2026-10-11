@@ -75,7 +75,8 @@ function getIdentityAuthorizationRevisionKey(
     return `${providerId}:${providerUserId}:${storeId}`;
 }
 
-function getAuthorizationRevision(
+/** Internal invalidation stamp for fencing awaited authorization reads. */
+export function getAuthorizationRevision(
     providerId: string,
     providerUserId: string,
     storeId: string

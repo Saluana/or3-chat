@@ -12,7 +12,7 @@ const fixtures = vi.hoisted(() => ({
     query: vi.fn(),
     workspaces: vi.fn(),
 }));
-vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => fixtures.session }));
+vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => fixtures.session, getAuthorizationRevision: () => 0 }));
 vi.mock('../../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => ({ listUserWorkspaces: fixtures.workspaces }) }));
 vi.mock('#imports', () => ({
     useRuntimeConfig: () => ({ auth: { enabled: true }, storage: { enabled: true } }),

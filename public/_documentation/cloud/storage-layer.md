@@ -81,7 +81,11 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
     The host rereads current workspace membership after canonical metadata and
     after the signer returns. Removal prevents signing or delivery; viewers
     retain read permission. An unavailable membership store returns 503. These
-    checks add two membership reads per successful signing request.
+    checks add two membership reads per successful signing request. If host
+    authorization invalidation occurs while a membership read is pending, the
+    stale result is discarded and the read is retried up to three times;
+    sustained contention returns 503. This fence uses the existing process-local
+    invalidation revision and does not establish distributed revocation.
 4.  **Stream**: The file is downloaded and verified against its hash.
 5.  **Cache**: The blob is stored in `file_blobs` for future offline use.
 
