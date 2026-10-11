@@ -821,6 +821,46 @@ describe('background streaming helpers', () => {
         await assertion;
     });
 
+    it.each(['streaming', 'complete', 'error', 'aborted'] as const)(
+        'recovers a %s job after all start responses are lost without resubmitting', async (status) => {
+            vi.useFakeTimers();
+            const fetchMock = vi.fn()
+                .mockRejectedValueOnce(new TypeError('Lost response'))
+                .mockRejectedValueOnce(new TypeError('Lost response'))
+                .mockRejectedValueOnce(new TypeError('Lost response'))
+                .mockResolvedValueOnce(createJsonResponse({ jobId: 'committed-job', status,
+                    threadId: 't1', messageId: 'm1', historyVersion: 1 }));
+            vi.stubGlobal('fetch', fetchMock);
+            const start = startBackgroundStream({ model: 'model-1', orMessages: [], modalities: ['text'],
+                threadId: 't1', messageId: 'm1', admissionId: 'lost-admission', history: { ...testHistory(), admissionId: 'lost-admission' } });
+            const settled = start.then(value => ({ value }), error => ({ error }));
+            await vi.advanceTimersByTimeAsync(500);
+            expect(await settled).toEqual({ value: { jobId: 'committed-job', status: 'streaming', historyVersion: 1 } });
+            expect(fetchMock).toHaveBeenCalledTimes(4);
+            expect(fetchMock.mock.calls.slice(0, 3).every(([, init]) =>
+                JSON.parse(String(init.body))._backgroundAdmissionId === 'lost-admission')).toBe(true);
+            const [url, init] = fetchMock.mock.calls[3]!;
+            expect(url).toBe('/api/jobs/admission/lost-admission?workspaceId=workspace-1');
+            expect(init).toMatchObject({ credentials: 'include', cache: 'no-store' });
+        }
+    );
+
+    it.each([
+        { jobId: 'legacy', status: 'streaming', threadId: 't1', messageId: 'm1' },
+        { jobId: 'other-chat', status: 'streaming', threadId: 'other', messageId: 'm1', historyVersion: 1 },
+    ])('rejects an incompatible recovery response (%j)', async (recovered) => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError('Lost response'))
+            .mockRejectedValueOnce(new TypeError('Lost response')).mockRejectedValueOnce(new TypeError('Lost response'))
+            .mockResolvedValueOnce(createJsonResponse(recovered));
+        vi.stubGlobal('fetch', fetchMock);
+        const assertion = expect(startBackgroundStream({ model: 'model-1', orMessages: [], modalities: ['text'],
+            threadId: 't1', messageId: 'm1', history: testHistory() })).rejects.toThrow('server may still be running');
+        await vi.advanceTimersByTimeAsync(500);
+        await assertion;
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+
     it('startBackgroundStream sends Anthropic cache control', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
             createJsonResponse({

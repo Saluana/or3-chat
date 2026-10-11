@@ -96,6 +96,10 @@ export default defineEventHandler(async (event) => {
     }
     await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.write');
 
+    if (job.status !== 'streaming') {
+        return { aborted: false, state: 'already_terminal' as const, status: job.status };
+    }
+
     let providerResult: 'aborted' | 'rejected' | 'threw' = 'rejected';
     try {
         providerResult = (await provider.abortJob(jobId, userId))

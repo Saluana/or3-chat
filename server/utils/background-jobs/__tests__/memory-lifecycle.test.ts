@@ -253,7 +253,7 @@ describe('memory background job admission and lifecycle', () => {
         ).resolves.toMatchObject({ execution: settledExecution });
     });
 
-    it('binds approval settlement to the exact arguments reviewed at claim time', async () => {
+    it.each([true, false])('binds legacy approval settlement to actual reviewed arguments (diagnostic updated=%s)', async (diagnosticUpdated) => {
         // Failure modes: approval identity mismatch (a result authorizing
         // arguments the user never reviewed) and the approval replacement
         // race (the pending call changing between claim and result).
@@ -300,10 +300,7 @@ describe('memory background job admission and lifecycle', () => {
             'token-1',
             Date.now() + 30_000
         );
-        // The claim snapshots the digest of the reviewed arguments.
-        expect(
-            (claimed ? getChatJobExecution(claimed) : undefined)?.clientToolCall?.claimFingerprint
-        ).toBe('fingerprint-v1');
+        expect(claimed).not.toBeNull();
 
         // Simulate a re-park that carries the claim forward but swaps the
         // arguments (the dangerous case the digest binding must catch).
@@ -316,7 +313,7 @@ describe('memory background job admission and lifecycle', () => {
                 clientToolCall: {
                     ...parked!.clientToolCall!,
                     arguments: '{"path":"b.txt"}',
-                    argumentFingerprint: 'fingerprint-v2',
+                    argumentFingerprint: diagnosticUpdated ? 'fingerprint-v2' : 'fingerprint-v1',
                 },
             },
             'worker'

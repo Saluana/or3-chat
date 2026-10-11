@@ -31,6 +31,7 @@ import type {
 import { AdmissionCancelledError, getChatJobExecution } from '../types';
 import { getJobConfig } from '../store';
 import { readRequestUsage } from '~~/shared/chat/compaction';
+import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
 import { logBackgroundEvent } from '../logging';
 
 /**
@@ -546,7 +547,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (claimToken.startsWith('or3ct1.') && (!identity || !boundDigest || backgroundClientToolDigest(identity) !== boundDigest)) return null;
         pending.claimToken = claimToken;
         pending.claimExpiresAt = claimExpiresAt;
-        pending.claimFingerprint = pending.argumentFingerprint;
+        pending.claimFingerprint = toolCallFingerprint(pending.name, pending.arguments);
         job.lastActivityAt = Date.now();
         return cloneJob(job);
     },
@@ -569,7 +570,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
             pending.callId !== callId ||
             pending.claimToken !== claimToken ||
             (pending.claimExpiresAt ?? 0) <= Date.now() ||
-            (pending.claimFingerprint !== undefined && pending.argumentFingerprint !== pending.claimFingerprint)
+            (pending.claimFingerprint !== undefined &&
+                toolCallFingerprint(pending.name, pending.arguments) !== pending.claimFingerprint)
         ) {
             return false;
         }

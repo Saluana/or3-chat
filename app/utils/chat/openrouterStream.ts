@@ -1101,7 +1101,11 @@ export async function startBackgroundStream(params: {
         try {
             await assertDispatchOwner(params);
             const recovered = await recoverBackgroundJob(
-                body._backgroundAdmissionId, params.history.workspaceId, params.signal, params.responseTimeoutMs);
+                body._backgroundAdmissionId, params.history.workspaceId, {
+                    signal: params.signal,
+                    responseTimeoutMs: params.responseTimeoutMs,
+                    idleTimeoutMs: params.idleTimeoutMs,
+                });
             // Admission acknowledges identity, not current liveness. Terminal jobs
             // also attach so their authoritative result is not lost or resubmitted.
             if (recovered && recovered.threadId === params.threadId && recovered.messageId === params.messageId) {
@@ -1132,20 +1136,21 @@ export async function startBackgroundStream(params: {
 export async function recoverBackgroundJob(
     admissionId: string,
     workspaceId: string,
-    signal?: AbortSignal,
-    timeoutMs = DEFAULT_BACKGROUND_START_TIMEOUT_MS
-): Promise<{ jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string } | null> {
+    options: { signal?: AbortSignal; responseTimeoutMs?: number; idleTimeoutMs?: number } = {}
+): Promise<{ jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 } | null> {
+    if (!admissionId || !workspaceId) return null;
+    const signal = options.signal;
     const query = new URLSearchParams({ workspaceId });
     const response = await fetchWithResponseDeadline(
         `/api/jobs/admission/${encodeURIComponent(admissionId)}?${query}`,
         { credentials: 'include', cache: 'no-store' },
-        { signal, timeoutMs }
+        { signal, timeoutMs: options.responseTimeoutMs ?? 3_000 }
     );
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Admission recovery failed: ${response.status}`);
     const result = await readResponseJsonWithIdleDeadline<{
         jobId?: unknown; status?: unknown; threadId?: unknown; messageId?: unknown; historyVersion?: unknown;
-    }>(response, { signal, timeoutMs });
+    }>(response, { signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
     if (!result || typeof result.jobId !== 'string' || !result.jobId ||
         typeof result.threadId !== 'string' || typeof result.messageId !== 'string' ||
         result.historyVersion !== 1 ||
@@ -1153,7 +1158,7 @@ export async function recoverBackgroundJob(
         throw new Error('Malformed admission recovery response');
     }
     return { jobId: result.jobId, status: result.status as BackgroundJobStatus['status'],
-        threadId: result.threadId, messageId: result.messageId };
+        threadId: result.threadId, messageId: result.messageId, historyVersion: 1 };
 }
 
 /**

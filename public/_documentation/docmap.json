@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers originating workspace authorization, scoped admission cancellation, durable recovery and retention."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers originating workspace authorization, scoped admission recovery, confirmed cancellation, bound browser-tool approvals and retention."
                 },
                 {
                     "name": "notifications.md",
