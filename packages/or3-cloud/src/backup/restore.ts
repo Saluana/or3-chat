@@ -87,16 +87,34 @@ export function assertValidSqliteWalFrames(
   return { checkedFrames, staleTail, partialTailBytes: staleTail ? 0 : byteLength - offset };
 }
 
+/** Verify committed filesystem objects against the existing content-hash key. */
+export function assertFilesystemPayloadHash(
+  key: string,
+  readChunk: () => Uint8Array | undefined,
+  createHash: (algorithm: 'sha256' | 'md5') => { update: (bytes: Uint8Array) => unknown; digest: (encoding: 'hex') => string },
+) {
+  const match = /^(sha256|md5)_([a-fA-F0-9]+)$/.exec(key);
+  const algorithm = match?.[1];
+  const expected = match?.[2];
+  if ((algorithm !== 'sha256' && algorithm !== 'md5') || expected?.length !== (algorithm === 'sha256' ? 64 : 32)) {
+    throw new Error('Invalid canonical filesystem payload key');
+  }
+  const hash = createHash(algorithm);
+  for (let chunk = readChunk(); chunk !== undefined; chunk = readChunk()) hash.update(chunk);
+  if (hash.digest('hex') !== expected.toLowerCase()) throw new Error('Filesystem payload hash mismatch');
+}
+
 // Deep health only opens database files; that also succeeds for a non-SQLite
 // payload. Startup can also initialize an empty database. Use the restored
-// image's native driver before starting the application, without changing data or
-// imposing current-release ownership on legitimate older recovery snapshots.
-const VERIFY_RESTORED_DATABASES_SCRIPT = `
+// image's native driver and filesystem content hashes before application startup,
+// without imposing current-release ownership on legitimate older snapshots.
+const VERIFY_RESTORED_DATA_SCRIPT = `
 const fs = require('node:fs');
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
 const validWalHeader = ${isValidSqliteWalHeader.toString()};
 const isValidSqliteWalHeader = validWalHeader;
 const validWalFrames = ${assertValidSqliteWalFrames.toString()};
+const validFilesystemPayload = ${assertFilesystemPayloadHash.toString()};
 const paths = [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean);
 if (paths.length !== 2) throw new Error('Both managed database paths must be configured');
 for (const path of paths) {
@@ -130,6 +148,30 @@ for (const path of paths) {
     const tables = db.prepare("select count(*) as count from sqlite_master where type = 'table'").get().count;
     if (tables < 1) throw new Error('Restored database has no tables');
   } finally { db.close(); }
+}
+const path = require('node:path');
+const crypto = require('node:crypto');
+const storageRoot = path.resolve(process.env.OR3_STORAGE_FS_ROOT || '/data/storage');
+const workspacesRoot = path.join(storageRoot, 'workspaces');
+if ((storageRoot === '/data' || storageRoot.startsWith('/data/')) && fs.existsSync(workspacesRoot)) {
+  const chunk = Buffer.alloc(65536);
+  for (const workspace of fs.readdirSync(workspacesRoot, { withFileTypes: true }).filter(entry => /^[a-zA-Z0-9_-]+$/.test(entry.name))) {
+    const directory = path.join(workspacesRoot, workspace.name);
+    if (!fs.statSync(directory).isDirectory()) continue;
+    for (const entry of fs.readdirSync(directory)) {
+      if (!/^(sha256_[a-fA-F0-9]{64}|md5_[a-fA-F0-9]{32})[.]meta[.]json$/.test(entry)) continue;
+      const key = entry.slice(0, -10);
+      const file = path.join(directory, key);
+      if (!fs.statSync(file).isFile()) throw new Error('Restored filesystem payload must be a regular file');
+      const fd = fs.openSync(file, 'r');
+      try {
+        validFilesystemPayload(key, () => {
+          const count = fs.readSync(fd, chunk, 0, chunk.length, null);
+          return count ? chunk.subarray(0, count) : undefined;
+        }, algorithm => crypto.createHash(algorithm));
+      } finally { fs.closeSync(fd); }
+    }
+  }
 }
 `;
 
@@ -203,17 +245,18 @@ export async function restoreBackupData(
   // Application startup can migrate an empty SQLite payload into a healthy
   // schema. Check the extracted snapshot while no application writes are
   // possible, so an invalid payload still follows safe pre-start recovery.
-  const databaseCheck = await run('docker', [
+  const snapshotCheck = await run('docker', [
     'run', '--rm', '--network', 'none', '--read-only',
     '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
     '-v', `${state.volumeName}:/data`,
     '--env', `OR3_BASIC_AUTH_DB_PATH=${restoredEnv.OR3_BASIC_AUTH_DB_PATH ?? ''}`,
     '--env', `OR3_SQLITE_DB_PATH=${restoredEnv.OR3_SQLITE_DB_PATH ?? ''}`,
+    '--env', `OR3_STORAGE_FS_ROOT=${restoredEnv.OR3_STORAGE_FS_ROOT ?? '/data/storage'}`,
     '--entrypoint', 'sh', restoredEnv.OR3_IMAGE,
-    ...containerNodeCommand(VERIFY_RESTORED_DATABASES_SCRIPT).slice(1),
+    ...containerNodeCommand(VERIFY_RESTORED_DATA_SCRIPT).slice(1),
   ], directory);
-  if (!databaseCheck.ok) {
-    throw new Error(`Restored SQLite database integrity verification failed. ${redact(databaseCheck.stderr, secretValues(restoredEnv))}`);
+  if (!snapshotCheck.ok) {
+    throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
   // The caller journals the point at which application writes become possible
   // before requesting startup. Recovery snapshots keep their existing phase.

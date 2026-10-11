@@ -89,6 +89,15 @@ The three plans are directionally aligned, but there are several conflicts and m
   using the authenticated archived filesystem root and retaining the later
   check. Two canonical command regressions failed before this change and pass
   afterward; the real scoped fixture checks state/container preservation.
+- A signed archive containing one changed committed attachment byte passed
+  restore and SQLite integrity while download returned HTTP 200 with wrong
+  bytes under the original SHA-256 hash. Native pre-start verification now
+  streams canonical committed FS objects and verifies their existing SHA-256
+  or legacy-MD5 content-hash key with a 64 KiB buffer. Mismatch follows safe
+  snapshot recovery; metadata/contracts and physical cleanup remain unchanged.
+  Real-file regressions cover empty/multi-chunk objects, both algorithms and
+  uppercase hex. Missing payload plus sidecar remains a separate canonical
+  reference-completeness gap; production-scale hashing is not qualified.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

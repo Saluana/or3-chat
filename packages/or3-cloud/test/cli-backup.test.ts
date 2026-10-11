@@ -1,11 +1,12 @@
 import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
-import { assertValidSqliteWalFrames, isValidSqliteWalHeader } from '../src/backup/restore';
+import { assertFilesystemPayloadHash, assertValidSqliteWalFrames, isValidSqliteWalHeader } from '../src/backup/restore';
 
 // Each test drives several real CLI processes.
 setDefaultTimeout(30_000);
@@ -21,6 +22,37 @@ afterEach(async () => {
 });
 
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
+
+test('filesystem payload validation hashes real file chunks for SHA-256 and legacy MD5 and refuses changed bytes', async () => {
+  const fixture = await sandbox();
+  for (const bytes of [Buffer.alloc(0), Buffer.from('synthetic attachment'), Buffer.alloc(150_001, 0x93)]) {
+    const path = join(fixture.root, 'payload');
+    await writeFile(path, bytes);
+    for (const algorithm of ['sha256', 'md5'] as const) {
+      const digest = createHash(algorithm).update(bytes).digest('hex');
+      const validate = (expected: string) => {
+        const fd = openSync(path, 'r');
+        const chunk = Buffer.alloc(65_536);
+        try {
+          return assertFilesystemPayloadHash(expected, () => {
+            const count = readSync(fd, chunk, 0, chunk.length, null);
+            return count ? chunk.subarray(0, count) : undefined;
+          }, createHash);
+        } finally { closeSync(fd); }
+      };
+      expect(() => validate(`${algorithm}_${digest}`)).not.toThrow();
+      expect(() => validate(`${algorithm}_${digest.toUpperCase()}`)).not.toThrow();
+      expect(() => validate(`${algorithm}_${'0'.repeat(digest.length)}`)).toThrow('Filesystem payload hash mismatch');
+      if (bytes.length) {
+        const changed = Buffer.from(bytes);
+        changed[0] = changed[0]! ^ 0xff;
+        await writeFile(path, changed);
+        expect(() => validate(`${algorithm}_${digest}`)).toThrow('Filesystem payload hash mismatch');
+        await writeFile(path, bytes);
+      }
+    }
+  }
+});
 
 test('WAL header validation accepts a real header and refuses every single-byte corruption and short header', () => {
   const validate = isValidSqliteWalHeader;
