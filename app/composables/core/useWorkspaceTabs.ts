@@ -165,7 +165,10 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             ...runtime.get(tabId),
             ...patch,
         });
-        commit({ ...state.value, runtime });
+        // Runtime status/view state is excluded from the persisted manifest.
+        // Scheduling it during child startup can overwrite the unread saved
+        // layout with the shell's temporary blank tab before restore runs.
+        state.value = { ...state.value, runtime };
     }
 
     function updateCachedTitle(tabId: string, title: string): void {
@@ -574,7 +577,14 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         const finishMeasure = measureWorkspaceTabAction('restore');
         const generation = ++scopeGeneration;
         try {
-            return applySnapshot(persistence.restore(), generation);
+            const snapshot = persistence.restore();
+            if (!snapshot) {
+                // A fresh scope needs its initial blank tab saved deliberately,
+                // after the existing manifest has been checked for recovery.
+                persistence.schedule();
+                return false;
+            }
+            return applySnapshot(snapshot, generation);
         } finally {
             finishMeasure();
         }

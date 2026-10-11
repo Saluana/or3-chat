@@ -179,6 +179,8 @@ export function useWorkspaceTabPersistence(options: {
     let dirty = false;
     // A corrupt original that could not be copied aside; it is never replaced until it is.
     let unbackedCorrupt: string | null = null;
+    // A failed read is not an absent manifest. Never replace an unread original.
+    let unreadLayout = false;
     const getStorage = (): WorkspaceTabStorage | null => {
         if (options.storage !== undefined) return options.storage;
         if (typeof window === 'undefined') return null;
@@ -234,6 +236,7 @@ export function useWorkspaceTabPersistence(options: {
             clearTimeout(timer);
             timer = undefined;
         }
+        if (unreadLayout) return false;
         if (!dirty) return true;
         const storage = getStorage();
         if (!storage) return false;
@@ -276,6 +279,7 @@ export function useWorkspaceTabPersistence(options: {
         activeStorageKey = nextKey;
         dirty = false;
         unbackedCorrupt = null;
+        unreadLayout = false;
     }
 
     /** Reads the active scope as a new failure episode. Never throws. */
@@ -283,8 +287,20 @@ export function useWorkspaceTabPersistence(options: {
         status.value = 'ok';
         episodeReported = false;
         const storage = getStorage();
-        if (!storage) return null;
+        if (!storage) {
+            unreadLayout = true;
+            return null;
+        }
         const read = readWorkspaceTabsSnapshot(storage, activeStorageKey);
+        if (read.status !== 'unavailable') {
+            if (unreadLayout) {
+                // Pending placeholder changes cannot land after restoring the original.
+                dirty = false;
+                if (timer) clearTimeout(timer);
+                timer = undefined;
+            }
+            unreadLayout = false;
+        }
         switch (read.status) {
             case 'ok':
                 unbackedCorrupt = null;
@@ -293,6 +309,7 @@ export function useWorkspaceTabPersistence(options: {
                 unbackedCorrupt = null;
                 return null;
             case 'unavailable':
+                unreadLayout = true;
                 fail('unavailable', UNAVAILABLE_MESSAGE, read.error);
                 return null;
             case 'corrupt': {

@@ -174,6 +174,49 @@ describe('workspace tab persistence', () => {
         );
     });
 
+    it('never overwrites an unread layout when writes remain available', () => {
+        const original = JSON.stringify(createWorkspaceTabsSnapshot(state(), ['pane-a', 'pane-b'], 7));
+        const { storage, faults, data } = memoryStorage({ [KEY]: original });
+        const env = setup(storage);
+        faults.read = true;
+        expect(env.persistence.restore()).toBeNull();
+        faults.read = false;
+        changeLayout(env, 'tab-1');
+        vi.advanceTimersByTime(50);
+        expect(data.get(KEY)).toBe(original);
+        expect(env.persistence.retry()).toBe(false);
+        expect(env.persistence.status.value).toBe('unavailable');
+        expect(env.onIssue).toHaveBeenCalledTimes(1);
+        expect(env.persistence.restore()?.activeTabId).toBe('tab-2');
+        vi.advanceTimersByTime(50);
+        expect(data.get(KEY)).toBe(original);
+        // The caller can now apply the returned snapshot before future commits.
+        changeLayout(env, 'tab-1');
+        expect(env.persistence.retry()).toBe(true);
+        expect(JSON.parse(data.get(KEY)!).activeTabId).toBe('tab-1');
+    });
+
+    it('protects an unread scope when obtaining storage initially fails', () => {
+        const original = JSON.stringify(createWorkspaceTabsSnapshot(state(), ['pane-a', 'pane-b'], 7));
+        const memory = memoryStorage({ [KEY]: original });
+        let blocked = true;
+        vi.stubGlobal('window', {
+            get localStorage() {
+                if (blocked) throw new DOMException('Access denied', 'SecurityError');
+                return memory.storage;
+            },
+            addEventListener: vi.fn(), removeEventListener: vi.fn(),
+        });
+        try {
+            const env = setup(undefined as unknown as null);
+            expect(env.persistence.restore()).toBeNull();
+            blocked = false;
+            expect(env.persistence.retry()).toBe(false);
+            expect(memory.data.get(KEY)).toBe(original);
+            expect(env.persistence.restore()?.activeTabId).toBe('tab-2');
+        } finally { vi.unstubAllGlobals(); }
+    });
+
     it('stays usable when reading window.localStorage itself throws', () => {
         vi.stubGlobal('window', {
             get localStorage(): Storage {

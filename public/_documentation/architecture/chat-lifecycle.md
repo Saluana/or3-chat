@@ -108,9 +108,44 @@ points so opening them does not trigger a Vite dependency reload.
 
 The tab session owns the open-tab manifest and active bindings. The pane adapter owns the mounted panes; chat and document controllers own content. Changing an active tab should not create a second content store.
 
-Tab manifests persist to localStorage by workspace and profile. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one "Tab layout could not be saved" toast per failure episode with Retry. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
+Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 
-Composer drafts are separate from that manifest. They live in memory and also persist, local-only, to the `workspace_tab_drafts` table of the workspace database, keyed by account and tab (never synchronized, never in the manifest), so an unsent message survives a reload. A draft stores text, editor JSON, composer settings, pasted blocks and attachments as hash references to the bytes already kept in `file_blobs`; blob preview URLs are recreated on restore. If the bytes are gone the composer asks the user to attach those files again. Writes are debounced and flushed when the page is hidden, and the composer captures its current text at that moment instead of waiting for its own debounce. Browsers drop IndexedDB writes begun while a page unloads, so every draft change is also journaled synchronously to `localStorage` (`or3:tab-draft-journal:v1:*`, drafts up to about 100k characters); the journal is merged when drafts next load (a recorded discard also wins over an older saved copy) and removed once IndexedDB confirms the change. A rejected write keeps the draft pending, retries with backoff (up to five times, then on the next edit or page hide), and raises one persistent "Draft could not be saved" notice with Retry until a write succeeds (`useWorkspaceTabDrafts().saveFailed`). Text typed while a saved draft is still loading is kept instead of being replaced by the loaded copy. At most 50 drafts per account and workspace are kept (least recently edited first), drafts expire after 30 days, and drafts over about 500k characters stay memory-only. Reads and writes are scoped by workspace and account, and a composer passes the scope captured when it restored a draft, so a late write after a workspace or account change cannot land in the wrong place. Physical deletion of a file is refused while a saved draft references it. A send clears only the composer revision it submitted: text typed while the request was being prepared is kept even if it later matches the submitted text. Draft discard revokes owned blob URLs and deletes the saved row; short deferred discard supports reopening a recently closed tab.
+Composer drafts persist in local-only `workspace_tab_drafts` and
+`workspace_draft_versions` tables, scoped by physical workspace database,
+account, app tab and a fresh page writer identity. Each set/discard has a
+monotonic sequence. One transaction compares the complete observed canonical
+row and discard state, preserves displaced legacy content, and commits the
+writer head and canonical mirror. A delayed retry cannot resurrect a newer
+clear or an explicitly removed version. Reload hints select that page's saved
+branch; duplicated browser tabs receive independent writer identities.
+**Review saved draft versions** includes other branches and orphaned app-tab
+drafts. Selection durably archives the current editor before copying the chosen
+version, and rejects intervening edits or uncommitted attachments. Removal
+requires the exact displayed version. Saved drafts never expire or automatically
+evict one another: reaching the 200-version capacity fails visibly until the
+user explicitly discards versions. Removed versions retain only a lightweight
+sequence floor, without text or attachment references.
+
+Drafts retain text, editor JSON, settings, pasted blocks and attachment hashes;
+missing-file hashes and names survive recapture. File deletion checks both
+canonical drafts and saved versions inside its transaction. Writes are debounced
+and retried with backoff; page hide captures the current editor immediately.
+Synchronous journals up to about 100k characters use immutable per-writer
+operation keys (`or3:tab-draft-journal:v2:*`). A confirmed newer own write
+compacts its older keys. Legacy v1 records are imported conservatively and
+retained because old writers can still mutate them. Unknown records remain
+untouched and cause a visible restore failure. Failed saves retain the buffer,
+show **Draft could not be saved** with Retry, and request unload confirmation
+when neither a native receipt nor a journal protects the bytes. Drafts over
+about 500k serialized characters stay in memory with a visible failure and
+preserve the previous durable copy. Captured scope prevents late writes entering
+another workspace/account. Send clears only its submitted composer revision;
+close-tab Undo retains its existing grace period and preview URLs are released
+on discard.
+
+Concurrent draft flushes can finish out of order. A successful write clears only that tab's failure; it cannot dismiss another tab's unresolved save warning. A confirmed explicit discard clears the corresponding failure once its deletion is durable.
+
+An inactive workspace's database handle can close while its unsaved buffer remains in memory. After that workspace/account is restored, retries may use its already-loaded replacement handle only when the database name also matches. A late callback retains its captured destination; the active workspace never becomes an implicit fallback, and the closed handle is not reopened.
 
 The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
 
@@ -121,3 +156,65 @@ Tab commands resolve to a status (`activated`, `created`, `failed`, or `supersed
 See [source map](/documentation/start/source-map), [documents](/documentation/database/documents), and [workspace-safe writes](/documentation/database/safe-changes#workspace-safe-operations).
 
 Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.
+
+Interrupted draft reads reject restoration instead of reporting an absent draft. The composer keeps the existing saved row, prevents its untouched empty editor from replacing that unread copy, and shows a persistent "Draft could not be restored" notice with **Retry restore**. The retry is scoped to the originating account, workspace and tab.
+
+A rejected attachment blob or metadata read keeps its original draft reference and reports a retryable restore failure. Partial preview URLs are released before retry. Only a successfully read absent/deleted file is reported through the existing missing-attachment notice.
+
+Save completion acknowledges only the exact current persisted snapshot. An older successful save of the same tab cannot clear a newer failed edit's warning. Immediate discard uses the same receipt rule, and rejected deletion keeps its discard journal and retry pending.
+
+Empty editor transactions do not count as competing edits during restoration.
+After an interrupted read, unload or unmount cannot replace the unread saved
+buffer merely because the empty editor emitted an update. Retry applies the
+saved copy unless the user changed text, attachments or pasted blocks while it
+was loading; typing and clearing text still counts as a user edit. This restore
+comparison is separate from the revision used to clear accepted sends.
+
+Before unload, the composer captures the latest editor state before the shell
+checks local durability. Pending draft bytes require confirmation when neither
+a confirmed IndexedDB receipt nor a matching synchronous journal protects them.
+This includes valid buffers larger than the unload journal limit and files still
+preparing. Recapturing unchanged durable content does not prompt solely because
+its timestamp changed. Browser confirmations remain best effort.
+
+Selected attachments remain reactive throughout persistence. A ready/hash or
+error transition after the initial draft flush triggers another draft capture,
+so an upload that finishes late still persists its restorable file reference.
+The original intake ownership and cancellation checks apply throughout.
+
+An attachment in the error state keeps a composer alert naming the failed file
+even after its transient error toast expires. The existing toast Retry remains
+available during that toast; afterward the user can remove and attach the file
+again. Removing a failed attachment or starting/succeeding at retry clears its
+persistent alert. A preview alone does not acknowledge file durability.
+
+Capturing before editor construction cannot discard an untouched unread buffer.
+If tab props restore text before extensions finish loading, capture retains that
+matching scoped saved editor JSON until an editor can supply the current JSON.
+Files selected early remain capturable; lack of an editor alone does not discard
+their live bytes.
+Runtime tab status and view-state updates are reactive projections and do not
+schedule writes to the tab manifest. During startup, child status events can
+arrive before the shell restores its layout; persisting them would publish the
+temporary blank tab and orphan an otherwise durable draft. A fresh scope saves
+its initial tab explicitly after checking for a saved layout.
+An active stream write coalescer registers a refresh warning after a failed
+progress save. The warning stays armed while that write is retried, including
+newer deltas arriving during its retry, and is removed only when pending progress
+is acknowledged or the coalescer is disposed. Concurrent flush callers join the
+current write chain; they cannot return while a newer prepared write is pending.
+Disposal cancels idle retries and prevents waiting or new callers from preparing
+more writes, while draining the already prepared write. Each writer owns its own
+warning; successful writes in another pane cannot acknowledge its failed data.
+Terminal persistence after disposal remains the finalization layer's concern.
+
+
+A failed request-owned terminal assistant save retains its exact content,
+reasoning and tool-call snapshot after stream teardown. It retries local
+persistence five times with bounded backoff, and on page hide, reconnect or
+**Retry local save**. A persistent notice and unload warning remain until
+acknowledgement or ownership supersession. Retries reopen only the captured
+physical database and check fresh ownership inside each write, including deleted,
+superseded and tracker-takeover states. They never replay a provider or tool.
+Preparation effects run once; completion effects run once following the durable
+write. Canonical/tracker failures remain with their existing recovery owners.

@@ -1,4 +1,4 @@
-import { computed, nextTick, onScopeDispose, ref, watch } from 'vue';
+import { computed, nextTick, onScopeDispose, reactive, ref, watch } from 'vue';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -167,14 +167,16 @@ export function useChatInputAttachments(
             return;
         }
 
-        const attachment: UploadedImage = {
+        // Persistence completes after the initial draft capture; its ready/error
+        // updates must reach the same reactive object watched by the composer.
+        const attachment = reactive<UploadedImage>({
             file,
             url: makePreviewUrl(file),
             name: name || file.name,
             status: 'pending',
             mime,
             kind: validation.kind,
-        };
+        });
 
         attachments.value.push(attachment);
         options.onImageAdd(attachment);

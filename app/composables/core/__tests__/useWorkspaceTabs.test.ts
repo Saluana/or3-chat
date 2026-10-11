@@ -48,6 +48,41 @@ function createHost(): {
 }
 
 describe('useWorkspaceTabs', () => {
+    it('persists a fresh scope only after checking for a saved layout', async () => {
+        vi.useFakeTimers(); const fake = createHost(); const data = new Map<string, string>();
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: computed(() => 3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard',
+            storage: { getItem: key => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); } } });
+        try {
+            await vi.advanceTimersByTimeAsync(500); expect(data.size).toBe(0);
+            await expect(tabs.restore()).resolves.toBe(false);
+            await vi.advanceTimersByTimeAsync(500);
+            expect(JSON.parse(data.get('or3:workspace-tabs:v1:local:standard')!).activeTabId).toBe(tabs.activeTabId.value);
+        } finally { await vi.runOnlyPendingTimersAsync(); vi.useRealTimers(); }
+    });
+
+    it('cannot publish a placeholder layout from runtime status updates before restore', async () => {
+        vi.useFakeTimers();
+        const fake = createHost();
+        const key = 'or3:workspace-tabs:v1:local:standard';
+        const saved = JSON.stringify({ schemaVersion: 1,
+            tabs: [{ id: 'saved-draft-tab', resource: { kind: 'chat', threadId: null }, cachedTitle: 'New chat', createdAt: 1, lastActivatedAt: 1, ephemeral: true }],
+            activeTabId: 'saved-draft-tab', visibleTabIds: ['saved-draft-tab'], activeVisibleIndex: 0, savedAt: 1 });
+        const data = new Map([[key, saved]]);
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: computed(() => 3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard',
+            storage: { getItem: key => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); } } });
+        try {
+            const placeholder = tabs.activeTabId.value;
+            tabs.updateRuntime(placeholder, { status: 'loading' });
+            expect(tabs.state.value.runtime.get(placeholder)?.status).toBe('loading');
+            await vi.advanceTimersByTimeAsync(500);
+            expect(data.get(key)).toBe(saved);
+            await expect(tabs.restore()).resolves.toBe(true);
+            expect(tabs.activeTabId.value).toBe('saved-draft-tab');
+        } finally { await vi.runOnlyPendingTimersAsync(); vi.useRealTimers(); }
+    });
+
     it('creates a distinct blank tab for every explicit New tab command', async () => {
         const fake = createHost();
         const tabs = useWorkspaceTabs({

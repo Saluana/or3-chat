@@ -45,6 +45,8 @@
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/vue-3';
 import { getFileBlob } from '~/db/files';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 
 const props = defineProps<NodeViewProps>();
 const objectUrl = ref('');
@@ -55,22 +57,53 @@ function releaseUrl() {
     objectUrl.value = '';
 }
 
-async function loadImage(hash: string) {
+// A node belongs to the document/editor scope in which it was mounted.
+const ownerDb = getDb();
+const ownerGeneration = getWorkspaceGeneration();
+const ownerAccount = getCachedSessionContext()?.user?.id ?? null;
+let requestRevision = 0;
+let scopeValid = true;
+let disposed = false;
+
+function hasOwnerScope() {
+    return scopeValid && !disposed && getDb() === ownerDb &&
+        getWorkspaceGeneration() === ownerGeneration &&
+        (getCachedSessionContext()?.user?.id ?? null) === ownerAccount;
+}
+
+function invalidateOwner() {
+    scopeValid = false;
+    requestRevision++;
     releaseUrl();
-    if (!hash) return;
+    loading.value = false;
+}
+
+async function loadImage(hash: string) {
+    const revision = ++requestRevision;
+    releaseUrl();
+    loading.value = false;
+    if (!hash || !hasOwnerScope()) return;
     loading.value = true;
+    const current = () => revision === requestRevision && hasOwnerScope() &&
+        String(props.node.attrs.hash || '') === hash;
     try {
-        const blob = await getFileBlob(hash);
-        if (blob && props.node.attrs.hash === hash) {
-            objectUrl.value = URL.createObjectURL(blob);
-        }
+        const blob = await getFileBlob(hash, ownerDb);
+        if (blob && current()) objectUrl.value = URL.createObjectURL(blob);
+    } catch {
+        // The unavailable placeholder is also the local read failure state.
     } finally {
-        loading.value = false;
+        if (current()) loading.value = false;
     }
 }
 
+const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(invalidateOwner);
+watch(() => getCachedSessionContext()?.user?.id ?? null, invalidateOwner, { flush: 'sync' });
 watch(() => String(props.node.attrs.hash || ''), loadImage, { immediate: true });
-onBeforeUnmount(releaseUrl);
+onBeforeUnmount(() => {
+    disposed = true;
+    stopWorkspaceSubscription();
+    invalidateOwner();
+});
 
 function setAlt(event: Event) {
     props.updateAttributes({ alt: (event.target as HTMLInputElement).value });

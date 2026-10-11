@@ -110,6 +110,8 @@ export type ChatRequest = {
     finalization?: Promise<RequestFinalization>;
     stopConfirmation?: Promise<boolean>;
     terminal?: RequestTerminal;
+    /** Captured UI service; called even after the original view detaches. */
+    onFinalizationResult?: (result: RequestFinalization) => void;
 };
 
 export function createChatRequest(options: {
@@ -227,6 +229,71 @@ export function projectTerminalMessages(
     view.messages.value = [...view.messages.value];
 }
 
+type TerminalRecovery = {
+    execute: () => Promise<RequestFinalization>;
+    retries: number;
+    timer?: ReturnType<typeof setTimeout>;
+    inFlight?: Promise<RequestFinalization>;
+};
+const terminalRecoveries = new Map<ChatRequest, TerminalRecovery>();
+let terminalLifecycleBound = false;
+function guardTerminalSaveUnload(event: BeforeUnloadEvent): void {
+    if (!terminalRecoveries.size) return;
+    event.preventDefault(); event.returnValue = '';
+}
+function updateTerminalRecoveryLifecycle(): void {
+    if (typeof window === 'undefined') return;
+    if (terminalRecoveries.size && !terminalLifecycleBound) {
+        window.addEventListener('beforeunload', guardTerminalSaveUnload);
+        window.addEventListener('pagehide', retryTerminalSavesWhenHidden);
+        window.addEventListener('online', retryTerminalSavesWhenHidden);
+        terminalLifecycleBound = true;
+    } else if (!terminalRecoveries.size && terminalLifecycleBound) {
+        window.removeEventListener('beforeunload', guardTerminalSaveUnload);
+        window.removeEventListener('pagehide', retryTerminalSavesWhenHidden);
+        window.removeEventListener('online', retryTerminalSavesWhenHidden);
+        terminalLifecycleBound = false;
+    }
+}
+function retryTerminalSavesWhenHidden(): void {
+    for (const request of terminalRecoveries.keys()) void retryRequestFinalization(request);
+}
+function settleTerminalRecovery(request: ChatRequest, result: RequestFinalization, execute: () => Promise<RequestFinalization>): void {
+    const existing = terminalRecoveries.get(request);
+    if (!result.persistenceError || result.superseded || result.terminal.persistence === 'tracker' || result.terminal.persistence === 'canonical') {
+        if (existing?.timer) clearTimeout(existing.timer);
+        terminalRecoveries.delete(request);
+    } else {
+        const recovery = existing ?? { execute, retries: 0 };
+        terminalRecoveries.set(request, recovery);
+        // Five automatic local-only attempts. The snapshot and manual retry remain after exhaustion.
+        if (!recovery.timer && recovery.retries < 5) {
+            const delay = 1_000 * 2 ** recovery.retries++;
+            recovery.timer = setTimeout(() => {
+                recovery.timer = undefined;
+                void retryTerminalRecovery(request, false);
+            }, delay);
+        }
+    }
+    updateTerminalRecoveryLifecycle();
+    try { request.onFinalizationResult?.(result); } catch { /* UI notification cannot change the durable result. */ }
+}
+function retryTerminalRecovery(request: ChatRequest, manual: boolean): Promise<RequestFinalization | undefined> {
+    const recovery = terminalRecoveries.get(request);
+    if (!recovery) return request.finalization ?? Promise.resolve(undefined);
+    if (recovery.inFlight) return recovery.inFlight;
+    if (recovery.timer) clearTimeout(recovery.timer);
+    recovery.timer = undefined;
+    if (manual) recovery.retries = 0;
+    recovery.inFlight = Promise.resolve().then(recovery.execute).finally(() => { recovery.inFlight = undefined; });
+    request.finalization = recovery.inFlight;
+    return recovery.inFlight;
+}
+/** Retry retained terminal persistence only; never re-enter provider/tool execution. */
+export function retryRequestFinalization(request: ChatRequest): Promise<RequestFinalization | undefined> {
+    return retryTerminalRecovery(request, true);
+}
+
 /**
  * Claim the terminal snapshot synchronously, before any write or hook awaits.
  * Duplicate callbacks share the same promise; stale attempts cannot claim it.
@@ -265,18 +332,20 @@ export function finalizeRequest(
                 ? (request.message?.toolCalls ?? null)
                 : input.toolCalls,
     };
+    // Tool arrays can still be mutated by a detached stream callback. Keep the claimed snapshot immutable.
+    if (terminal.toolCalls) terminal.toolCalls = JSON.parse(JSON.stringify(terminal.toolCalls)) as ToolCallInfo[];
     request.terminal = terminal;
     request.phase.value = 'finalizing';
     // Scheduling the body also ensures finalization is assigned before a
     // projection or hook can synchronously deliver another terminal callback.
-    request.finalization = Promise.resolve().then(async () => {
+    const execute = async (firstAttempt: boolean): Promise<RequestFinalization> => {
         const result: RequestFinalization = {
             terminal,
             deleted: false,
             superseded: false,
         };
         try {
-            await terminal.beforePersist?.();
+            if (firstAttempt) await terminal.beforePersist?.();
         } catch (error) {
             result.effectError = error;
         }
@@ -313,7 +382,10 @@ export function finalizeRequest(
                             : undefined;
                     const generation = data?.generation_id;
                     if (
-                        !latest ||
+                        !latest || latest.deleted ||
+                        data?.generation_state === 'superseded' ||
+                        typeof data?.superseded_by === 'string' ||
+                        (typeof data?.background_job_id === 'string' && data.background_job_id !== request.jobId) ||
                         (request.streamId &&
                             typeof generation === 'string' &&
                             generation !== request.streamId) ||
@@ -330,6 +402,8 @@ export function finalizeRequest(
                     }
                     return true;
                 };
+                // Reopen only the captured physical database; never redirect to the active workspace.
+                if (typeof request.originDb.isOpen === 'function' && !request.originDb.isOpen()) await request.originDb.open();
                 const latest = (await request.originDb.messages.get(
                     request.assistantMessageId
                 )) as StoredMessage | undefined;
@@ -520,7 +594,9 @@ export function finalizeRequest(
                 result: outcome,
             };
         }
+        settleTerminalRecovery(request, result, () => execute(false));
         return result;
-    });
+    };
+    request.finalization = Promise.resolve().then(() => execute(true));
     return request.finalization;
 }

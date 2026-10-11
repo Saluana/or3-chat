@@ -8,6 +8,7 @@ import { mount, enableAutoUnmount, flushPromises } from '@vue/test-utils';
 enableAutoUnmount(afterEach);
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
+import { EditorContent } from '@tiptap/vue-3';
 import type { SendResult } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 
@@ -54,7 +55,7 @@ vi.mock('@vueuse/core', async () => {
 const cloudIntake = vi.hoisted(() => ({ enabled: false, session: null as null | { authenticated: boolean; user: { id: string }; workspace: { id: string }; role: string; authorizationRevision: string; expiresAt: string }, refresh: vi.fn() }));
 // Mock other dependencies
 vi.mock('#imports', () => ({
-    useToast: () => ({ add: vi.fn() }),
+    useToast: () => ({ add: vi.fn(), remove: vi.fn() }),
     useRuntimeConfig: () => ({
         public: {
             ssrAuthEnabled: cloudIntake.enabled,
@@ -105,9 +106,10 @@ vi.mock('~/utils/errors', () => ({
 
 const attachmentFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((value: unknown) => Promise<unknown>) }));
 const beforeSendAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
+const editorExtensionsAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
-        doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); }),
+        doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); if (name === 'editor:request-extensions') await editorExtensionsAction.apply?.(); }),
         applyFilters: vi.fn(async (name: string, value: unknown) => name === 'files.attach:filter:input' && attachmentFilter.apply ? attachmentFilter.apply(value) : value),
     }),
 }));
@@ -147,6 +149,15 @@ function deferred<T>() {
     return { promise, resolve, reject };
 }
 
+async function clearDraftFixtures(): Promise<void> {
+    // These fixtures delete their entire workspace DB. Settle local draft
+    // discards first, so cleanup cannot strand writes against a closed handle.
+    useWorkspaceTabDrafts().clear();
+    await flushPromises();
+    await useWorkspaceTabDrafts().flush();
+    await flushPromises();
+}
+
 describe('ChatInputDropper', () => {
     // A file picker can outlive the access token. Renew cached authorization,
     // but never admit bytes after sign-out, a viewer downgrade or a workspace move.
@@ -176,6 +187,7 @@ describe('ChatInputDropper', () => {
             if (transition === 'workspace') expect(await getDb().file_meta.count()).toBe(0);
         } finally {
             cloudIntake.enabled = false; cloudIntake.session = null;
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null);
             for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
         }
@@ -223,6 +235,7 @@ describe('ChatInputDropper', () => {
         } finally {
             gate.resolve(); wrapper.unmount(); await flushPromises();
             create.mockRestore(); revoke.mockRestore();
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null);
             for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
         }
@@ -233,6 +246,7 @@ describe('ChatInputDropper', () => {
         cloudIntake.session = null;
         attachmentFilter.apply = undefined;
         beforeSendAction.apply = undefined;
+        editorExtensionsAction.apply = undefined;
         vi.mocked(persistAttachment).mockResolvedValue(undefined);
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
@@ -272,6 +286,7 @@ describe('ChatInputDropper', () => {
             vm.setText('Next unsent draft'); gate.resolve(); await send;
             expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Clicked draft' });
             beforeSendAction.apply = undefined;
+        editorExtensionsAction.apply = undefined;
             await vm.triggerSend();
             expect(wrapper.emitted('send')?.[1]?.[0]).toMatchObject({ text: 'Next unsent draft' });
         } finally { gate.resolve(); wrapper.unmount(); process.client = client; }
@@ -316,6 +331,7 @@ describe('ChatInputDropper', () => {
             expect(preference?.value).toBe(choice === 'explicit' ? JSON.stringify({ model: 'fixture/explicit', variant: 'nitro' }) : undefined);
         } finally {
             wrapper.unmount(); await flushPromises(); vi.unstubAllGlobals();
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
         }
     });
@@ -595,6 +611,201 @@ describe('ChatInputDropper', () => {
         } finally {
             wrapper.unmount();
             useWorkspaceTabDrafts().discard('hide-tab');
+        }
+    });
+
+    it('cannot discard the unread saved row while editor initialization is held before draft restoration', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-before-initialize-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'uninitialized-draft-tab';
+        const drafts = useWorkspaceTabDrafts(); const account = drafts.scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const text = 'Saved buffer before delayed editor initialization';
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId, updated_at: Date.now(),
+            draft: { version: 1, text, attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        const entered = deferred<void>(); const gate = deferred<void>();
+        editorExtensionsAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await entered.promise;
+            expect(wrapper.findComponent(EditorContent).exists()).toBe(false);
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            await drafts.flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe(text);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(wrapper.getComponent(EditorContent).props('editor')!.getText()).toBe(text));
+        } finally {
+            gate.resolve(); editorExtensionsAction.apply = undefined; wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
+        }
+    });
+
+    it('retains editor JSON when a tab prop restores text before the held editor is constructed', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-early-tab-restore-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'early-tab-restore';
+        const drafts = useWorkspaceTabDrafts(); const account = drafts.scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const text = 'Structured buffer before delayed editor initialization';
+        const editorJson = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] };
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId, updated_at: Date.now(),
+            draft: { version: 1, text, editorJson, attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        const entered = deferred<void>(); const gate = deferred<void>();
+        editorExtensionsAction.apply = async () => { entered.resolve(); await gate.promise; };
+        const wrapper = mount(ChatInputDropper, { props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await entered.promise; await wrapper.setProps({ tabId }); await flushPromises();
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            await flushPromises();
+            expect(wrapper.findComponent(EditorContent).exists()).toBe(false);
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true })); await drafts.flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.editorJson).toEqual(editorJson);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            expect(wrapper.getComponent(EditorContent).props('editor')!.getJSON()).toEqual(editorJson);
+        } finally {
+            gate.resolve(); editorExtensionsAction.apply = undefined; wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
+        }
+    });
+
+    it('keeps attachment storage failure visible until the failed file is removed', async () => {
+        vi.mocked(persistAttachment).mockImplementationOnce(async attachment => { attachment.status = 'error'; });
+        const wrapper = mount(ChatInputDropper, { props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            mockFiles.value = [new NativeFile(['synthetic rejected bytes'], 'rejected.png', { type: 'image/png' })] as unknown as FileList;
+            await flushPromises();
+            expect(wrapper.get('[role="alert"]').text()).toContain('Attachments could not be saved: rejected.png');
+            await wrapper.get('[aria-label="Remove image"]').trigger('click');
+            expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        } finally { wrapper.unmount(); }
+    });
+
+    it('persists an attachment that becomes ready after the pending draft was already flushed', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-delayed-attachment-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'delayed-attachment-tab';
+        const drafts = useWorkspaceTabDrafts(); const gate = deferred<void>(); const entered = deferred<void>();
+        vi.mocked(persistAttachment).mockImplementationOnce(async attachment => {
+            entered.resolve(); await gate.promise;
+            attachment.hash = 'synthetic-ready-hash'; attachment.status = 'ready';
+        });
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            (wrapper.vm as unknown as { setText: (text: string) => void }).setText('Delayed attachment buffer');
+            mockFiles.value = [new NativeFile(['synthetic delayed bytes'], 'delayed.png', { type: 'image/png' })] as unknown as FileList;
+            await entered.promise;
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            await drafts.flush();
+            expect((await db.workspace_tab_drafts.toArray())[0]?.draft.attachments).toHaveLength(0);
+            gate.resolve(); await flushPromises();
+            await vi.waitFor(async () => expect((await db.workspace_tab_drafts.toArray())[0]?.draft.attachments).toHaveLength(1));
+        } finally {
+            gate.resolve(); wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
+        }
+    });
+
+    it('captures a final editor change before an earlier bubbling unload guard and removes its listener', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-unload-capture-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'unload-capture-tab';
+        const drafts = useWorkspaceTabDrafts(); let captured = '';
+        const observer = () => { captured = drafts.read(tabId)?.text ?? ''; };
+        window.addEventListener('beforeunload', observer);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            (wrapper.vm as unknown as { setText: (text: string) => void }).setText('Final edit inside the capture debounce');
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            expect(drafts.read(tabId)?.text).toBe('Final edit inside the capture debounce');
+            expect(captured).toBe('Final edit inside the capture debounce');
+            wrapper.unmount(); await clearDraftFixtures();
+            captured = '';
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            expect(captured).toBe('');
+        } finally {
+            window.removeEventListener('beforeunload', observer); wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+            process.client = previous;
+        }
+    });
+
+    it('keeps the saved row when interrupted hydration is followed by leaving the empty composer', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-read-fault-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open();
+        const tabId = 'read-fault-tab';
+        const account = useWorkspaceTabDrafts().scope().accountKey;
+        const id = `${account}\u0000${tabId}`;
+        await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId,
+            updated_at: Date.now(), draft: { version: 1, text: 'Saved buffer before failed restore',
+                attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
+        const imports = await import('#imports'); const add = vi.fn();
+        vi.spyOn(imports, 'useToast').mockReturnValue({ add, remove: vi.fn() } as never);
+        vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValue({ equals: () => ({
+            toArray: () => Promise.reject(new DOMException('Synthetic draft read aborted', 'AbortError')),
+        }) } as never);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be restored' })));
+            await flushPromises();
+            // A TipTap empty-document update advances its revision without adding user text.
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.emit('update', { editor, transaction: editor.state.tr, appendedTransactions: [] });
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            wrapper.unmount();
+            await useWorkspaceTabDrafts().flush();
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe('Saved buffer before failed restore');
+        } finally {
+            wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+            process.client = previous;
+        }
+    });
+
+    it('applies a retry result despite an empty editor transaction while the saved row is loading', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-retry-empty-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'retry-empty-tab';
+        const account = useWorkspaceTabDrafts().scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const row = { id, account_key: account, tab_id: tabId, updated_at: Date.now(), draft: { version: 1 as const,
+            text: 'Saved retry buffer survives empty editor updates', attachments: [], largeTextBlocks: [], updatedAt: Date.now() } };
+        await db.workspace_tab_drafts.put(row);
+        const imports = await import('#imports'); const add = vi.fn();
+        vi.spyOn(imports, 'useToast').mockReturnValue({ add, remove: vi.fn() } as never);
+        const interrupted = vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValue({ equals: () => ({
+            toArray: () => Promise.reject(new DOMException('Synthetic interrupted retry read', 'AbortError')),
+        }) } as never);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        let finishRead: (() => void) | undefined;
+        try {
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be restored' })));
+            await flushPromises(); interrupted.mockRestore();
+            vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValueOnce({ equals: () => ({
+                toArray: () => new Promise(resolve => { finishRead = () => resolve([row]); }),
+            }) } as never);
+            const notice = add.mock.calls.filter(([value]) => value.title === 'Draft could not be restored').at(-1)![0];
+            notice.actions[0].onClick(); await vi.waitFor(() => expect(finishRead).toBeDefined());
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.emit('update', { editor, transaction: editor.state.tr, appendedTransactions: [] });
+            finishRead!(); await flushPromises();
+            await vi.waitFor(() => expect(editor.getText()).toBe(row.draft.text));
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe(row.draft.text);
+        } finally {
+            finishRead?.(); wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
         }
     });
 

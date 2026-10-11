@@ -104,6 +104,18 @@ export interface WorkspaceTabDraftRow {
     draft: PersistedWorkspaceTabDraft;
 }
 
+/** Local recovery head per page writer; null is a deliberate discard. */
+export interface WorkspaceDraftVersionRow {
+    id: string;
+    account_key: string;
+    tab_id: string;
+    writer_id: string;
+    sequence: number;
+    updated_at: number;
+    kind: 'version' | 'state' | 'retired';
+    draft: PersistedWorkspaceTabDraft | null;
+}
+
 // Dexie database versioning & schema
 /**
  * Purpose:
@@ -139,6 +151,7 @@ export class Or3DB extends Dexie {
     snapshot_staging!: Table<SnapshotStageRow, string>;
     sync_quarantine!: Table<SyncQuarantineRow, string>;
     workspace_tab_drafts!: Table<WorkspaceTabDraftRow, string>;
+    workspace_draft_versions!: Table<WorkspaceDraftVersionRow, string>;
 
     constructor(name = 'or3-db') {
         super(name);
@@ -403,6 +416,11 @@ export class Or3DB extends Dexie {
         this.version(27).stores({
             sync_quarantine: 'id, status, [tableName+pk], quarantinedAt',
             workspace_tab_drafts: 'id, account_key, updated_at',
+        });
+
+        // Additive local recovery. Keep v27 canonical rows readable and untouched.
+        this.version(28).stores({
+            workspace_draft_versions: 'id, account_key, [account_key+tab_id], kind',
         });
 
         // Derived-key maintenance must run on every instance, including

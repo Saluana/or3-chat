@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref } from 'vue';
+// Request/generation IDs remain distinct across requests and module resets.
+// A retained terminal-save retry must not mistake a later fixture for its row.
+let syntheticIdSequence = 0;
 
 const startBackgroundStreamMock = vi.fn();
 const ensureBackgroundJobTrackerMock = vi.fn();
@@ -84,7 +87,7 @@ vi.mock('#imports', () => ({
 
 vi.mock('~/db/util', () => ({
     nowSec: () => 1,
-    newId: () => 'id-test',
+    newId: () => `id-test-${++syntheticIdSequence}`,
     getWriteTxTableNames: () => ['messages'],
 }));
 
@@ -965,6 +968,9 @@ describe('useChat background detach race', () => {
         } as any;
 
         const first = chat.sendMessage('first', params);
+        const firstState = chat.requestState.value;
+        const firstRequestId = 'requestId' in firstState ? firstState.requestId : undefined;
+        expect(firstRequestId).toEqual(expect.any(String));
         const second = await chat.sendMessage('second', params);
 
         expect(second).toEqual({ status: 'rejected', reason: 'busy' });
@@ -973,7 +979,7 @@ describe('useChat background detach race', () => {
         resolveBackgroundStart?.({ jobId: 'job-one-winner' });
         await expect(first).resolves.toMatchObject({
             status: 'complete',
-            requestId: 'id-test',
+            requestId: firstRequestId,
         });
         expect(chat.requestState.value).toMatchObject({ status: 'terminal' });
     });
@@ -1644,6 +1650,7 @@ describe('useChat background detach race', () => {
 
     it('keeps a quiet foreground generation alive when another tab reconciles history', async () => {
         vi.useFakeTimers();
+        let previousOwner: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
         let owner: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
         let viewer: typeof owner;
         let send: Promise<unknown> | undefined;
@@ -1652,16 +1659,26 @@ describe('useChat background detach race', () => {
         try {
             vi.setSystemTime(100_000);
             runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+            vi.resetModules();
+            const { useChat } = await import('~/composables/chat/useAi');
+            // The fixture reuses the assistant row ID, as retrying a turn can.
+            // Its old terminal snapshot remains queued when a new generation
+            // starts; generation identity must protect the live request.
+            previousOwner = useChat([], 'thread-1');
+            terminalPersistFailure.value = true;
+            await expect(previousOwner.sendMessage('previous generation', { model: 'test-model' }))
+                .resolves.toMatchObject({ status: 'failed' });
+            const previousGeneration = messageStore.get('assistant-msg-1').data.generation_id;
+            terminalPersistFailure.value = false;
             runForegroundStreamLoopMock.mockImplementationOnce(({ tailAssistant }: any) => {
                 tailAssistant.value = { id: 'assistant-msg-1', role: 'assistant', text: '', pending: true };
                 return new Promise<void>((resolve) => { finish = resolve; });
             });
-            vi.resetModules();
-            const { useChat } = await import('~/composables/chat/useAi');
             owner = useChat([], 'thread-1');
             send = owner.sendMessage('quiet model', { model: 'test-model' });
-            await vi.waitFor(() => expect(runForegroundStreamLoopMock).toHaveBeenCalled());
+            await vi.waitFor(() => expect(runForegroundStreamLoopMock).toHaveBeenCalledTimes(2));
             const pending = messageStore.get('assistant-msg-1');
+            expect(pending.data.generation_id).not.toBe(previousGeneration);
             messagesByThreadMock.mockResolvedValue([pending]);
             viewer = useChat([{ id: pending.id, role: 'assistant', content: '', pending: true }],
                 'thread-1', undefined, { historyAlreadyLoaded: true });
@@ -1671,6 +1688,7 @@ describe('useChat background detach race', () => {
             expect(messageStore.get(pending.id).pending).toBe(true);
             expect(messageStore.get(pending.id).error ?? null).toBeNull();
             expect(viewer.messages.value[0]).toMatchObject({ pending: true });
+            expect(runForegroundStreamLoopMock).toHaveBeenCalledTimes(2);
 
             // An admitted request survives view disposal, then releases its
             // heartbeat once it settles without reviving the durable row.
@@ -1695,6 +1713,7 @@ describe('useChat background detach race', () => {
             releaseIncoming?.();
             await send;
             owner?.dispose();
+            previousOwner?.dispose();
             viewer?.dispose();
             vi.useRealTimers();
         }

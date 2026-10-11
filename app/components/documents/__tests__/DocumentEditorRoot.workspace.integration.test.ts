@@ -58,7 +58,7 @@ afterEach(async () => {
     vi.unstubAllGlobals();
 });
 
-async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing') {
+async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mountEditorContent = false) {
     const hooks = createTypedHookEngine(createHookEngine());
     setHookEngine(hooks);
     let editor!: Editor;
@@ -86,6 +86,7 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing') {
     wrapper = shallowMount(DocumentEditorRoot, {
         props: { documentId, paneId: 'fixture-pane', tabId: 'fixture-tab' },
         global: { directives: { theme: () => {} }, stubs: {
+            EditorContent: !mountEditorContent, NodeViewWrapper: false, USlider: true,
             UTextarea: Title, USelect: true, UDropdownMenu: true, UFormField: true, USwitch: true,
         } },
     });
@@ -118,6 +119,65 @@ describe('mounted document editor workspace lifecycle', () => {
             expect(wrapper!.text()).not.toContain('Restore it');
             expect((await dbA.posts.get(documentId))?.content).toBe(row.content);
         }
+    });
+
+    it('does not commit an image intake after its originating editor unmounts', async () => {
+        vi.stubGlobal('Blob', NodeBlob);
+        vi.stubGlobal('Image', undefined);
+        const { dbA, hooks, editor } = await mountedWorkspaces(undefined, true);
+        expect(editor.isDestroyed).toBe(false);
+        await vi.waitFor(() => expect(editor.isEditable).toBe(true));
+        let entered = false; let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        hooks.addFilter('db.files.create:filter:input', async value => { entered = true; await gate; return value; });
+        const files = await import('~/db/files'); const create = files.createOrRefFile;
+        const pending: Promise<unknown>[] = [];
+        vi.spyOn(files, 'createOrRefFile').mockImplementation((...args) => {
+            const result = create(...args); pending.push(result.catch(() => undefined)); return result;
+        });
+        const image = new NodeBlob([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82])], { type: 'image/png' });
+        Object.defineProperty(image, 'name', { value: 'synthetic-delayed-intake.png' });
+        const input = wrapper!.get('input[type="file"]');
+        Object.defineProperty(input.element, 'files', { value: [image], configurable: true });
+        try {
+            await input.trigger('change');
+            await vi.waitFor(() => expect(entered).toBe(true));
+            wrapper!.unmount(); wrapper = undefined;
+            release(); await Promise.all(pending); await flushPromises();
+            expect(await dbA.file_meta.count()).toBe(0);
+            expect(await dbA.file_blobs.count()).toBe(0);
+            expect((await dbA.posts.get(documentId))?.content).not.toContain('or3Image');
+        } finally { release(); await Promise.all(pending); await flushPromises(); }
+    });
+
+    it('reports an image intake storage failure and preserves the document through a successful retry', async () => {
+        vi.stubGlobal('Blob', NodeBlob); vi.stubGlobal('Image', undefined);
+        vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+        const { dbA, editor } = await mountedWorkspaces(undefined, true);
+        await vi.waitFor(() => expect(editor.isEditable).toBe(true));
+        const files = await import('~/db/files'); const create = files.createOrRefFile;
+        const pending: Promise<unknown>[] = [];
+        vi.spyOn(files, 'createOrRefFile').mockImplementation((...args) => {
+            const result = create(...args); pending.push(result.catch(() => undefined)); return result;
+        });
+        const image = new NodeBlob([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82])], { type: 'image/png' });
+        Object.defineProperty(image, 'name', { value: 'synthetic-retry-intake.png' });
+        const input = wrapper!.get('input[type="file"]');
+        Object.defineProperty(input.element, 'files', { value: [image], configurable: true });
+        const quota = vi.spyOn(dbA.file_blobs, 'put').mockRejectedValue(new DOMException('Synthetic image quota', 'QuotaExceededError'));
+        await input.trigger('change'); await Promise.all(pending); await flushPromises();
+        expect(wrapper!.get('[role="alert"]').text()).toContain('Image could not be added');
+        expect(await dbA.file_meta.count()).toBe(0); expect(await dbA.file_blobs.count()).toBe(0);
+        expect((await dbA.posts.get(documentId))?.content).toContain('A original body');
+        quota.mockRestore();
+        await input.trigger('change'); await Promise.all(pending); await flushPromises();
+        expect(wrapper!.find('[role="alert"]').exists()).toBe(false);
+        const saved = (await dbA.file_meta.toArray())[0]!;
+        expect(JSON.stringify(editor.getJSON())).toContain(saved.hash);
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        await getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!.ensureLocalDurability();
+        expect((await dbA.posts.get(documentId))?.file_hashes).toContain(saved.hash);
+        expect(await dbA.file_meta.count()).toBe(1); expect(await dbA.file_blobs.count()).toBe(1);
     });
 
     it('still blocks tab-close durability when real unsaved edits fail to persist', async () => {

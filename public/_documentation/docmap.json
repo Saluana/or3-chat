@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, and safe tab closing."
+                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, failed-save retry, unsaved-change guards, and scoped image-read delivery and visible image-intake recovery."
                 },
                 {
                     "name": "prompts.md",
@@ -833,7 +833,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions, safe closing, quiet navigation supersession and composer drafts."
+                    "summary": "Preserve durable sends, native admission, tool policy, tabs and drafts, with refresh guards, exact current-snapshot journal/failure acknowledgements and scoped database-handle recovery and visible interrupted draft/attachment-read retries."
                 },
                 {
                     "name": "ai-preferences.md",

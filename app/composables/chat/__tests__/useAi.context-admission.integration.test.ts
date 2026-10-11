@@ -1071,6 +1071,15 @@ describe('native context admission at the actual durable boundary', () => {
         expect(await getDb().threads.count()).toBe(0); expect(await getDb().messages.count()).toBe(0);
         expect(external.bodies).toEqual([]);
     });
+    it('reports a database AbortError before user persistence as failed without dispatching inference', async () => {
+        vi.spyOn(getDb().messages, 'put').mockRejectedValueOnce(
+            new DOMException('Synthetic IndexedDB transaction aborted', 'AbortError')
+        );
+        const result = await chat().sendMessage('Retain failed save draft', { model: 'fixture/model' });
+        expect(result).toMatchObject({ status: 'failed', reason: 'stream_error' });
+        expect(await getDb().messages.count()).toBe(0);
+        expect(external.bodies).toEqual([]);
+    });
     it('acknowledges one delegated commit with real DB rows and never dispatches native inference', async () => {
         let preparationSignal: AbortSignal;
         useHooks().addFilter('ai.chat.send:filter:prepare', async (payload) => {

@@ -202,6 +202,61 @@ describe('useDocumentsStore - memory leaks', () => {
         expect(useDocumentState(mockDoc.id).pendingTitle).toBeUndefined();
         expect(useDocumentState(mockDoc.id).status).toBe('saved');
     });
+
+    it('retains failed title and content when release attempts a flush', async () => {
+        const doc = { id: 'release-failed-buffer', title: 'Original',
+            content: { type: 'doc' as const, content: [] }, created_at: 1, updated_at: 1, deleted: false };
+        const content = { type: 'doc' as const, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Unsaved body' }] }] };
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(doc);
+        vi.mocked(documentsDb.updateDocumentInDb).mockRejectedValueOnce(new DOMException('Full', 'QuotaExceededError'));
+        await loadDocument(doc.id);
+        setDocumentTitle(doc.id, 'Unsaved title');
+        setDocumentContent(doc.id, content);
+        await releaseDocument(doc.id);
+        const state = useDocumentState(doc.id);
+        expect(state.record).toEqual(doc);
+        expect(state.pendingTitle).toBe('Unsaved title');
+        expect(state.pendingContent).toEqual(content);
+        expect(state.status).toBe('error');
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue({ ...doc, title: 'Unsaved title', content });
+        await flush(doc.id);
+        expect(state.status).toBe('saved');
+        expect(state.pendingContent).toBeUndefined();
+        await releaseDocument(doc.id);
+        expect(state.record).toBeNull();
+    });
+
+    it('does not replace a dirty conflict baseline with a freshly loaded row', async () => {
+        const doc = { id: 'reload-dirty-baseline', title: 'Original',
+            content: { type: 'doc' as const, content: [] }, created_at: 1, updated_at: 1, deleted: false };
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValueOnce(doc).mockResolvedValueOnce({ ...doc, title: 'Other tab' });
+        await loadDocument(doc.id);
+        setDocumentTitle(doc.id, 'My unsaved title');
+        await loadDocument(doc.id);
+        expect(useDocumentState(doc.id).record?.title).toBe('Original');
+        expect(useDocumentState(doc.id).pendingTitle).toBe('My unsaved title');
+        vi.mocked(documentsDb.updateDocumentInDb).mockRejectedValueOnce(new Error('Document changed'));
+        await flush(doc.id);
+        expect(documentsDb.updateDocumentInDb).toHaveBeenLastCalledWith(expect.anything(), doc.id,
+            { title: 'My unsaved title' }, { title: 'Original', content: doc.content });
+    });
+
+    it('ignores a stale read completing after a save commits', async () => {
+        const doc = { id: 'stale-read-after-save', title: 'Original',
+            content: { type: 'doc' as const, content: [] }, created_at: 1, updated_at: 1, deleted: false };
+        let finishRead!: (value: typeof doc) => void;
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValueOnce(doc)
+            .mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValueOnce({ ...doc, title: 'Committed' });
+        await loadDocument(doc.id);
+        const read = loadDocument(doc.id);
+        setDocumentTitle(doc.id, 'Committed');
+        await flush(doc.id);
+        finishRead(doc);
+        await read;
+        expect(useDocumentState(doc.id).record?.title).toBe('Committed');
+        expect(useDocumentState(doc.id).status).toBe('saved');
+    });
 });
 
 describe('useDocumentsStore - type safety', () => {

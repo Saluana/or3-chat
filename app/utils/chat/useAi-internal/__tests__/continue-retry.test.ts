@@ -146,6 +146,8 @@ import {
 } from '../continue';
 import {
     createChatRequest,
+    finalizeRequest,
+    retryRequestFinalization,
     projectTerminalMessages,
 } from '../requestController';
 import { retryMessageImpl } from '../retry';
@@ -217,6 +219,90 @@ describe('continue/retry regressions', () => {
         dbState.transaction.mockImplementation(
             async (_mode, _tables, run) => await run()
         );
+    });
+
+    it('retries the retained terminal snapshot locally and runs completion effects only after acknowledgement', async () => {
+        vi.useFakeTimers();
+        try {
+            const row = { id: 'terminal-recovery', role: 'assistant', pending: true, data: { generation_id: 'terminal-generation', content: 'old prefix' } };
+            dbState.messagesGet.mockResolvedValue(row);
+            updateMessageRecordSpy.mockResolvedValue(undefined);
+            const accumulator = { reset: vi.fn(), append: vi.fn(), state: { finalized: false }, finalize: vi.fn() };
+            const request = createChatRequest({ requestId: 'terminal-owned', originDb: dbState.db as any, workspaceId: 'local', accumulator });
+            request.assistantMessageId = row.id; request.streamId = 'terminal-generation'; request.ownsView = () => true;
+            const writes = vi.fn().mockRejectedValueOnce(new DOMException('Synthetic final save quota', 'QuotaExceededError')).mockRejectedValueOnce(new Error('Still full')).mockResolvedValue('ack');
+            request.persistAssistant = writes;
+            const beforePersist = vi.fn(async () => {}); const afterPersist = vi.fn(async () => {});
+            const initial = await finalizeRequest(request, { outcome: 'completed', content: 'complete final suffix', beforePersist, afterPersist });
+            expect(initial.persistenceError).toBeDefined(); expect(request.persistence.value).toBe('failed');
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(request.persistence.value).toBe('failed');
+            await retryRequestFinalization(request);
+            expect(request.persistence.value).toBe('saved');
+            expect(writes).toHaveBeenCalledTimes(3);
+            expect(writes.mock.calls.every(([patch]) => patch.content === 'complete final suffix')).toBe(true);
+            expect(beforePersist).toHaveBeenCalledTimes(1); expect(afterPersist).toHaveBeenCalledTimes(1);
+            await retryRequestFinalization(request); await vi.advanceTimersByTimeAsync(30_000);
+            expect(writes).toHaveBeenCalledTimes(3); expect(afterPersist).toHaveBeenCalledTimes(1);
+        } finally { vi.useRealTimers(); }
+    });
+
+    it('stops terminal save recovery when another generation takes ownership, without replaying completion', async () => {
+        vi.useFakeTimers();
+        try {
+            let generation = 'original-generation';
+            dbState.messagesGet.mockImplementation(async () => ({ id: 'terminal-superseded', role: 'assistant', pending: true, data: { generation_id: generation } }));
+            const request = createChatRequest({ requestId: 'superseded-terminal', originDb: dbState.db as any, workspaceId: 'local', accumulator: { reset: vi.fn(), append: vi.fn(), state: { finalized: false }, finalize: vi.fn() } });
+            request.assistantMessageId = 'terminal-superseded'; request.streamId = generation;
+            request.persistAssistant = vi.fn().mockRejectedValue(new Error('Synthetic interrupted save'));
+            const afterPersist = vi.fn(async () => {});
+            await finalizeRequest(request, { outcome: 'completed', content: 'retained old generation', afterPersist });
+            generation = 'new-generation';
+            const result = await retryRequestFinalization(request);
+            expect(result?.superseded).toBe(true); expect(request.persistence.value).toBe('superseded');
+            expect(request.persistAssistant).toHaveBeenCalledTimes(1); expect(afterPersist).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(30_000); expect(request.persistAssistant).toHaveBeenCalledTimes(1);
+        } finally { vi.useRealTimers(); }
+    });
+
+    it.each(['deleted', 'superseded_by', 'generation_state', 'background_job_id'] as const)('does not retry terminal output after same-generation %s takeover', async (field) => {
+        vi.useFakeTimers();
+        try {
+            const row = { id: 'same-generation-takeover', role: 'assistant', pending: true, deleted: false, data: { generation_id: 'same-generation' } as Record<string, unknown> };
+            dbState.messagesGet.mockImplementation(async () => row);
+            const request = createChatRequest({ requestId: `same-generation-${field}`, originDb: dbState.db as any, workspaceId: 'local', accumulator: { reset: vi.fn(), append: vi.fn(), state: { finalized: false }, finalize: vi.fn() } });
+            request.assistantMessageId = row.id; request.streamId = 'same-generation';
+            request.persistAssistant = vi.fn().mockRejectedValue(new Error('Synthetic terminal write failure'));
+            const afterPersist = vi.fn(async () => {});
+            await finalizeRequest(request, { outcome: 'completed', content: 'unsaved former suffix', afterPersist });
+            if (field === 'deleted') row.deleted = true;
+            else row.data[field] = field === 'generation_state' ? 'superseded' : 'synthetic-new-owner';
+            const result = await retryRequestFinalization(request);
+            expect(result?.superseded).toBe(true); expect(request.persistence.value).toBe('superseded');
+            expect(request.persistAssistant).toHaveBeenCalledTimes(1); expect(afterPersist).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(30_000); expect(request.persistAssistant).toHaveBeenCalledTimes(1);
+        } finally { vi.useRealTimers(); }
+    });
+
+    it('bounds automatic terminal retries, retains an unload warning, and joins concurrent manual repairs', async () => {
+        vi.useFakeTimers();
+        try {
+            dbState.messagesGet.mockResolvedValue({ id: 'bounded-terminal', role: 'assistant', pending: true, data: { generation_id: 'bounded-generation' } });
+            updateMessageRecordSpy.mockResolvedValue(undefined);
+            const request = createChatRequest({ requestId: 'bounded-terminal', originDb: dbState.db as any, workspaceId: 'local', accumulator: { reset: vi.fn(), append: vi.fn(), state: { finalized: false }, finalize: vi.fn() } });
+            request.assistantMessageId = 'bounded-terminal'; request.streamId = 'bounded-generation';
+            const writes = vi.fn().mockRejectedValue(new Error('Synthetic terminal quota remains full')); request.persistAssistant = writes;
+            await finalizeRequest(request, { outcome: 'completed', content: 'retained bounded suffix' });
+            await vi.advanceTimersByTimeAsync(60_000); expect(writes).toHaveBeenCalledTimes(6);
+            const blocked = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(blocked); expect(blocked.defaultPrevented).toBe(true);
+            let acknowledge!: () => void;
+            writes.mockImplementationOnce(() => new Promise(resolve => { acknowledge = () => resolve('ack'); }));
+            const one = retryRequestFinalization(request); const two = retryRequestFinalization(request); expect(one).toBe(two);
+            await Promise.resolve(); await Promise.resolve(); acknowledge(); await one;
+            expect(request.persistence.value).toBe('saved'); expect(writes).toHaveBeenCalledTimes(7);
+            const unblocked = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unblocked); expect(unblocked.defaultPrevented).toBe(false);
+            await vi.advanceTimersByTimeAsync(60_000); expect(writes).toHaveBeenCalledTimes(7);
+        } finally { vi.useRealTimers(); }
     });
 
     it.each(['text', 'reasoning'] as const)('continue flushes quiet %s before the model completes and keeps the existing reply', async (type) => {

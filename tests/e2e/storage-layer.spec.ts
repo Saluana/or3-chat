@@ -6,6 +6,70 @@ async function upload(page: Page, file: { name: string; mimeType: string; buffer
 }
 
 test.describe('Storage Layer', () => {
+    for (const fault of ['quota', 'abort'] as const) test(`${fault} during blob persistence rolls back metadata and bytes and allows retry`, async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.evaluate((fault) => {
+            const original = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name !== 'file_blobs') return original.apply(this, args);
+                if (fault === 'quota') throw new DOMException('Synthetic blob storage full', 'QuotaExceededError');
+                const request = original.apply(this, args);
+                this.transaction.abort();
+                return request;
+            };
+            (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut = () => { IDBObjectStore.prototype.put = original; };
+        }, fault);
+        const file = { name: 'transaction-recovery.txt', mimeType: 'text/plain', buffer: Buffer.from('Attachment transaction recovery bytes.') };
+        await upload(page, file);
+        await expect(page.getByTestId('storage-feedback')).toContainText(/abort|Synthetic/i);
+        await page.getByTestId('storage-refresh').click();
+        await expect(page.getByTestId('metadata-count')).toHaveText('0');
+        await expect(page.getByTestId('transfer-count')).toHaveText('0');
+        const blobs = await page.evaluate(async () => {
+            const names = (await indexedDB.databases()).flatMap(row => row.name?.startsWith('or3-db') ? [row.name] : []);
+            return Promise.all(names.map(name => new Promise<number>((resolve, reject) => {
+                const open = indexedDB.open(name);
+                open.onerror = () => reject(open.error);
+                open.onsuccess = () => {
+                    const db = open.result;
+                    const transaction = db.transaction('file_blobs', 'readonly');
+                    const count = transaction.objectStore('file_blobs').count();
+                    transaction.oncomplete = () => { db.close(); resolve(count.result); };
+                    transaction.onabort = () => { db.close(); reject(transaction.error); };
+                };
+            })));
+        });
+        expect(blobs.every(count => count === 0)).toBe(true);
+        await page.evaluate(() => (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut());
+        await upload(page, file);
+        await expect(page.getByTestId('storage-feedback')).toHaveText('File queued for upload');
+        await expect(page.getByTestId('metadata-count')).toHaveText('1');
+        await expect(page.getByTestId('transfer-count')).toHaveText('1');
+        await page.reload();
+        await expect(page.getByTestId('metadata-rows')).toContainText(file.name, { timeout: 30_000 });
+        await expect(page.getByTestId('transfer-count')).toHaveText('1');
+        await info.attach('attachment-transaction-recovery', { body: JSON.stringify({ fault, abortedBlobCounts: blobs, retryQueued: true }), contentType: 'application/json' });
+    });
+
+    test('offline file import preserves original bytes after reconnect and reload', async ({ context, page }, info) => {
+        test.setTimeout(90_000);
+        const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
+        await context.setOffline(true);
+        await files.getByLabel('Upload files', { exact: true }).setInputFiles({ name: 'offline-original.txt', mimeType: 'text/plain', buffer: Buffer.from('Offline original recovery bytes.') });
+        const item = files.getByRole('listitem').filter({ hasText: 'offline-original.txt' });
+        await expect(item).toBeVisible({ timeout: 30_000 });
+        await context.setOffline(false);
+        await page.reload();
+        await expect(item).toBeVisible({ timeout: 30_000 });
+        await item.getByRole('button', { name: 'Open offline-original.txt', exact: true }).click();
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
+        const downloaded = page.waitForEvent('download');
+        await preview.getByRole('button', { name: 'Download', exact: true }).click();
+        const path = info.outputPath('offline-original.txt');
+        await (await downloaded).saveAs(path);
+        expect(await readFile(path, 'utf8')).toBe('Offline original recovery bytes.');
+        await info.attach('offline-original-bytes', { path, contentType: 'text/plain' });
+    });
     test('a trusted file plugin receives lifecycle events, adds an action and cleans up', async ({ page }, info) => {
         await page.getByTestId('file-plugin-enable').click();
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
@@ -82,7 +146,9 @@ test.describe('Storage Layer', () => {
         await page.screenshot({ path: screenshot, animations: 'disabled' });
         await info.attach('catalog-restored', { path: screenshot, contentType: 'image/png' });
     });
-    test.beforeEach(async ({ page }) => {
+    test.beforeEach(async ({ context, page }) => {
+        await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+            ? route.continue() : route.abort('blockedbyclient'));
         await page.goto('/_tests/_test-storage');
         await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 45_000 });
         await expect(page.getByTestId('storage-ready')).toHaveText('true');

@@ -15,6 +15,23 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
+            <details v-if="savedDraftVersions.length" class="text-sm" data-testid="draft-saved-versions">
+                <summary class="cursor-pointer">Review saved draft versions ({{ savedDraftVersions.length }})</summary>
+                <p>Other browser tabs and earlier drafts are saved here. Restoring keeps your current draft as another version.</p>
+                <ul class="max-h-48 overflow-y-auto space-y-2" aria-label="Saved draft versions">
+                    <li v-for="version in savedDraftVersions" :key="version.id">
+                        <p>{{ version.draft?.text.slice(0, 180) || (version.draft ? 'Draft with attachments or pasted text' : 'Cleared draft') }}</p>
+                        <p class="text-xs">{{ new Date(version.updated_at).toLocaleString() }} · {{ version.draft?.attachments.length || 0 }} attachments</p>
+                        <UButton size="xs" variant="soft" :disabled="draftVersionBusy || restoringDraft" @click.stop="restoreSavedDraftVersion(version)">Restore this version</UButton>
+                        <UButton size="xs" variant="ghost" color="warning" :disabled="draftVersionBusy || restoringDraft" @click.stop="discardSavedDraftVersion(version)">Discard this saved version</UButton>
+                    </li>
+                </ul>
+            </details>
+            <p v-if="draftVersionsError" role="alert" class="text-sm text-(--md-error)">{{ draftVersionsError }}</p>
+            <p v-if="failedAttachmentNames.length" role="alert" class="text-sm text-(--md-error)">
+                Attachments could not be saved: {{ failedAttachmentNames.join(', ') }}.
+                Remove and attach those files again.
+            </p>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
                 <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
@@ -388,7 +405,7 @@ import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
 import { reportError } from '~/utils/errors';
-import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb, type WorkspaceDraftVersionRow } from '~/db/client';
 import {
     computed,
     ref,
@@ -629,7 +646,9 @@ async function initializeEditor(replaceExisting = false) {
             },
             onUpdate: ({ editor: ed }) => {
                 composerRevision++;
-                promptText.value = ed.getText();
+                const nextText = ed.getText();
+                if (nextText.trim() || promptText.value.trim()) noteDraftEdit();
+                promptText.value = nextText;
                 if (!restoringDraft.value) scheduleDraftCapture(props.tabId);
                 autoResize();
             },
@@ -669,6 +688,8 @@ async function initializeEditor(replaceExisting = false) {
 }
 
 onMounted(async () => {
+    // Capture before the shell's bubbling unload guard evaluates durability.
+    window.addEventListener('beforeunload', saveDraftNow, { capture: true });
     window.addEventListener('pagehide', saveDraftNow);
     document.addEventListener('visibilitychange', saveDraftWhenHidden);
     await initializeEditor();
@@ -681,6 +702,7 @@ watch(trustedEditorRevision, () => {
 });
 
 onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', saveDraftNow, { capture: true });
     window.removeEventListener('pagehide', saveDraftNow);
     document.removeEventListener('visibilitychange', saveDraftWhenHidden);
     componentDisposed = true;
@@ -911,6 +933,9 @@ const {
         }
     },
 });
+const failedAttachmentNames = computed(() => attachments.value
+    .filter(attachment => attachment.status === 'error')
+    .map(attachment => attachment.name));
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
     numResults: 2,
@@ -931,6 +956,39 @@ const contextPreview = useContextPreview({ threadId: () => props.threadId, model
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const tabDrafts = useWorkspaceTabDrafts();
+const savedDraftVersions = ref<WorkspaceDraftVersionRow[]>([]);
+const draftVersionsError = ref('');
+const draftVersionBusy = ref(false);
+let draftVersionsLoadRevision = 0;
+async function refreshSavedDraftVersions(): Promise<void> {
+    const revision = ++draftVersionsLoadRevision;
+    const scope = draftScope;
+    try {
+        const versions = await tabDrafts.listVersions(scope);
+        if (componentDisposed || revision !== draftVersionsLoadRevision || scope.key !== draftScope.key || scope.db !== draftScope.db || tabDrafts.scope().key !== scope.key || tabDrafts.scope().db !== scope.db) return;
+        savedDraftVersions.value = versions.filter(row => row.writer_id !== tabDrafts.writerId || row.tab_id !== props.tabId);
+    } catch { if (!componentDisposed && revision === draftVersionsLoadRevision && scope.key === draftScope.key && scope.db === draftScope.db && tabDrafts.scope().key === scope.key && tabDrafts.scope().db === scope.db) draftVersionsError.value = 'Saved draft versions could not be read. Retry restoring your draft.'; }
+}
+async function restoreSavedDraftVersion(version: WorkspaceDraftVersionRow): Promise<void> {
+    if (!props.tabId || draftVersionBusy.value || restoringDraft.value || tabDrafts.scope().key !== draftScope.key || tabDrafts.scope().db !== draftScope.db) return;
+    const tabId = props.tabId; const scope = draftScope;
+    captureDraft(tabId); const revision = composerRevision;
+    draftVersionBusy.value = true; draftVersionsError.value = '';
+    try {
+        await tabDrafts.restoreVersion(tabId, version, scope, () => !componentDisposed && props.tabId === tabId && draftScope.key === scope.key && tabDrafts.scope().key === scope.key && tabDrafts.scope().db === scope.db && composerRevision === revision);
+        if (!componentDisposed && props.tabId === tabId && draftScope.key === scope.key && tabDrafts.scope().key === scope.key && tabDrafts.scope().db === scope.db && composerRevision === revision) await restoreDraft(tabId);
+    } catch (error) { if (!componentDisposed && draftScope.key === scope.key) draftVersionsError.value = error instanceof Error ? error.message : 'This draft could not be restored.'; }
+    finally { draftVersionBusy.value = false; await refreshSavedDraftVersions(); }
+}
+async function discardSavedDraftVersion(version: WorkspaceDraftVersionRow): Promise<void> {
+    if (draftVersionBusy.value || restoringDraft.value || tabDrafts.scope().key !== draftScope.key || tabDrafts.scope().db !== draftScope.db) return;
+    const scope = draftScope;
+    draftVersionBusy.value = true; draftVersionsError.value = '';
+    try { await tabDrafts.discardVersion(version, scope); }
+    catch (error) { if (!componentDisposed && draftScope.key === scope.key) draftVersionsError.value = error instanceof Error ? error.message : 'This version could not be discarded.'; }
+    finally { draftVersionBusy.value = false; await refreshSavedDraftVersions(); }
+}
+watch(tabDrafts.versionsRevision, () => void refreshSavedDraftVersions());
 // Whose draft this composer is editing, captured at restore so a late capture
 // after a workspace or account change still lands with its original owner.
 let draftScope = tabDrafts.scope();
@@ -939,8 +997,18 @@ const draftAccountId = computed(() => getCachedSessionContext()?.user?.id ?? 'lo
 // only the revision it submitted, so text typed while it was being prepared
 // survives even if it later matches the submitted text.
 let composerRevision = 0;
+// Empty editor bookkeeping must not compete with a saved buffer being restored.
+let draftEditRevision = 0;
+let draftRestoreFailed = false;
+function noteDraftEdit(): void {
+    draftEditRevision++;
+    draftRestoreFailed = false;
+}
 watch([promptText, () => attachments.value.slice(), () => largeTextBlocks.value.slice()],
-    () => { composerRevision++; }, { flush: 'sync' });
+    ([text, files, blocks], [previousText, previousFiles, previousBlocks]) => {
+        composerRevision++;
+        if (text.trim() || previousText.trim() || files.length || previousFiles.length || blocks.length || previousBlocks.length) noteDraftEdit();
+    }, { flush: 'sync' });
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
 let autoCompactionAttempt: string | undefined;
@@ -997,11 +1065,22 @@ function captureDraft(tabId = props.tabId): void {
     // Until saved content is applied the composer holds nothing the user wrote;
     // capturing now would overwrite the saved draft with an empty one.
     if (!tabId || draftContentLoading) return;
+    // Preserve unread content before initialization, while retaining files that
+    // the user may already have selected through the attachment picker.
+    if (!editor.value && !promptText.value.trim() && !attachments.value.length && !largeTextBlocks.value.length) return;
+    if (draftRestoreFailed && !promptText.value.trim() && !attachments.value.length && !largeTextBlocks.value.length) return;
+    draftRestoreFailed = false;
+    const scope = draftScope ?? tabDrafts.scope();
+    const saved = tabDrafts.read(tabId, scope);
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
-        editorJson: editor.value?.getJSON() as Record<string, unknown> | undefined,
+        // A prop-driven restore can finish before the editor is constructed.
+        editorJson: (editor.value?.getJSON() ??
+            (saved?.text === promptText.value ? saved.editorJson : undefined)) as Record<string, unknown> | undefined,
         attachments: attachments.value,
+        missingAttachments: saved?.missingAttachments,
+        attachmentRefs: saved?.attachmentRefs,
         largeTextBlocks: largeTextBlocks.value,
         composer: {
             model: selectedModel.value,
@@ -1011,7 +1090,7 @@ function captureDraft(tabId = props.tabId): void {
             imageSettings: { ...imageSettings.value },
         },
         updatedAt: Date.now(),
-    }, draftScope);
+    }, scope);
 }
 
 /** Page hide can land inside the capture debounce, so save what the composer holds right now. */
@@ -1033,7 +1112,7 @@ watch(tabDrafts.saveFailed, (failed) => {
     toast.add({
         id: 'draft-save-failed',
         title: 'Draft could not be saved',
-        description: 'Your unsent message is still here, but it will not survive a reload. Browser storage may be full or blocked.',
+        description: 'Your unsent message is still here, but the latest changes will not survive a reload. Browser storage may be full or blocked, or this draft may be too large.',
         color: 'warning',
         duration: 0,
         actions: [{ label: 'Retry', onClick: () => void tabDrafts.flush() }],
@@ -1042,16 +1121,21 @@ watch(tabDrafts.saveFailed, (failed) => {
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revision = ++draftRestoreRevision;
+    draftRestoreFailed = false;
     if (!tabId) {
         restoringDraft.value = false;
         return;
     }
     restoringDraft.value = true;
     // The editor stays editable while saved content loads; anything typed meanwhile wins.
-    const revisionBeforeLoad = composerRevision;
+    const revisionBeforeLoad = draftEditRevision;
+    const scope = tabDrafts.scope();
+    if (draftScope.key !== scope.key || draftScope.db !== scope.db) {
+        savedDraftVersions.value = []; draftVersionsError.value = ''; draftVersionsLoadRevision++;
+    }
+    const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
     let keptTypedText = false;
     try {
-        const scope = tabDrafts.scope();
         let draft: WorkspaceChatTabDraft | undefined;
         if (tabDrafts.isLoaded(tabId, scope)) {
             draft = tabDrafts.read(tabId, scope);
@@ -1061,8 +1145,10 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
         }
         draftContentLoading = false;
+        toast.remove(noticeId);
         draftScope = scope;
-        keptTypedText = composerRevision !== revisionBeforeLoad;
+        void refreshSavedDraftVersions();
+        keptTypedText = draftEditRevision !== revisionBeforeLoad;
         if (!keptTypedText) {
             promptText.value = draft?.text ?? '';
             replaceDraft(draft?.attachments ?? [], draft?.largeTextBlocks ?? []);
@@ -1104,6 +1190,24 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
                 aiSettings.value?.defaultModelVariant
             ));
         }
+    } catch {
+        if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
+        draftScope = scope;
+        void refreshSavedDraftVersions();
+        keptTypedText = draftEditRevision !== revisionBeforeLoad;
+        draftRestoreFailed = !keptTypedText;
+        toast.add({
+            id: noticeId,
+            title: 'Draft could not be restored',
+            description: 'Your saved draft could not be read. Retry to restore it.',
+            color: 'warning',
+            duration: 0,
+            actions: [{ label: 'Retry restore', onClick: () => {
+                if (!componentDisposed && props.tabId === tabId && tabDrafts.scope().key === scope.key) {
+                    void restoreDraft(tabId);
+                }
+            } }],
+        });
     } finally {
         // A newer restore owns the flag; only the latest one may release it.
         if (revision === draftRestoreRevision) draftContentLoading = false;

@@ -17,6 +17,21 @@ export function createStreamWriteCoalescer(options?: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight: Promise<void> | undefined;
     let disposed = false;
+    let failedWrite = false;
+    let unloadGuardBound = false;
+
+    function guardFailedUnload(event: BeforeUnloadEvent) {
+        if (!failedWrite || disposed || (!inFlight && dirtyEvents === 0)) return;
+        event.preventDefault();
+        event.returnValue = '';
+    }
+    function updateUnloadGuard() {
+        if (typeof window === 'undefined') return;
+        const needed = failedWrite && !disposed;
+        if (needed && !unloadGuardBound) window.addEventListener('beforeunload', guardFailedUnload);
+        else if (!needed && unloadGuardBound) window.removeEventListener('beforeunload', guardFailedUnload);
+        unloadGuardBound = needed;
+    }
 
     function clearTimer() {
         if (timer !== undefined) clearTimeout(timer);
@@ -41,6 +56,7 @@ export function createStreamWriteCoalescer(options?: {
 
     return {
         markDirty(bytes = 0) {
+            if (disposed) return;
             dirtyEvents += 1;
             dirtyBytes += Math.max(0, bytes);
             scheduleIdleFlush();
@@ -57,9 +73,17 @@ export function createStreamWriteCoalescer(options?: {
         },
         flushed() {
             resetDirty();
+            failedWrite = false;
+            updateUnloadGuard();
         },
         async flush(write: () => Promise<void>) {
-            if (inFlight) await inFlight;
+            if (disposed) return;
+            // Another waiting caller may prepare the next snapshot first. Join
+            // that write too; returning while it is pending is not a flush receipt.
+            while (inFlight) {
+                await inFlight;
+                if (disposed) return;
+            }
             if (dirtyEvents === 0) return;
             // Acknowledge only the snapshot entering this write. Deltas that
             // arrive while it awaits storage remain dirty for the next write.
@@ -68,9 +92,17 @@ export function createStreamWriteCoalescer(options?: {
             inFlight = pending;
             try {
                 await pending;
+                // This acknowledges only the captured snapshot. Newer deltas
+                // arriving during a failed-write retry still need protection.
+                failedWrite = failedWrite && dirtyEvents > 0;
+                updateUnloadGuard();
             } catch (error) {
                 dirtyEvents += 1;
                 lastFlushAt = now();
+                // Keep the displayed response available while storage retries.
+                // Starting another write is not acknowledgement of this one.
+                failedWrite = true;
+                updateUnloadGuard();
                 throw error;
             } finally {
                 inFlight = undefined;
@@ -80,6 +112,7 @@ export function createStreamWriteCoalescer(options?: {
         async dispose() {
             disposed = true;
             clearTimer();
+            updateUnloadGuard();
             // Drain a prepared progress write before the caller finalizes the
             // row, so an older snapshot cannot land after its terminal state.
             await inFlight?.catch(() => {});

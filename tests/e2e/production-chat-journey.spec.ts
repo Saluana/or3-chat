@@ -37,6 +37,570 @@ test('disconnected welcome keeps editor history and loads settings on first open
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
+const draftRecoveryScripts = new WeakMap<Page, string[]>();
+
+async function retryDraftRestore(page: Page, text: string): Promise<void> {
+    try {
+        await page.getByRole('button', { name: 'Retry restore', exact: true }).click({ timeout: 5_000 });
+    } catch (error) {
+        // Repair can let a pending startup restore finish and remove its toast
+        // while Playwright is checking the button's transition/actionability.
+        // Accept only the observed successful restore, never an unhealed error.
+        if (await page.getByRole('textbox', { name: 'Message input' }).innerText() !== text) throw error;
+    }
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(text);
+    await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
+}
+
+test.describe('chat draft storage recovery faults', () => {
+    test.describe.configure({ timeout: 120_000 });
+    test.beforeEach(async ({ context, page }) => {
+        const scripts: string[] = []; draftRecoveryScripts.set(page, scripts);
+        page.on('request', request => { if (request.resourceType() === 'script') scripts.push(request.url()); });
+        if (process.env.OR3_RECOVERY_NATIVE_TRACE === 'true') await page.addInitScript(() => {
+            const set = Storage.prototype.setItem; const get = Storage.prototype.getItem;
+            const put = IDBObjectStore.prototype.put; const remove = IDBObjectStore.prototype.delete;
+            const record = (op: string, value: unknown) => {
+                try {
+                    const key = 'or3:e2e:native-draft-trace'; const rows = JSON.parse(localStorage.getItem(key) ?? '[]');
+                    rows.push({ op, value, page: performance.timeOrigin, at: Date.now(), editor: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText });
+                    set.call(localStorage, key, JSON.stringify(rows.slice(-100)));
+                } catch { /* Observations cannot change native persistence behavior. */ }
+            };
+            Storage.prototype.setItem = function (key, value) {
+                const result = set.call(this, key, value);
+                if (key.startsWith('or3:tab-draft-journal:') || key.startsWith('or3:workspace-tabs:v1:')) record('storage-set', { key, value });
+                return result;
+            };
+            Storage.prototype.getItem = function (key) {
+                const result = get.call(this, key);
+                if (key.startsWith('or3:workspace-tabs:v1:')) record('storage-get', { key, value: result });
+                return result;
+            };
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'workspace_tab_drafts') record('put-attempt', args[0]); return put.apply(this, args);
+            };
+            IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
+                if (this.name === 'workspace_tab_drafts') record('delete-attempt', args[0]); return remove.apply(this, args);
+            };
+        });
+        await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+            ? route.continue() : route.abort('blockedbyclient'));
+        await page.goto('/chat');
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+        await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:v1:')).length)).toBeGreaterThan(0);
+    });
+
+    test.afterEach(async ({ page }, info) => {
+        if (process.env.OR3_RECOVERY_NATIVE_TRACE !== 'true' || page.isClosed()) return;
+        const receipt = await page.evaluate(async () => {
+            const rows: unknown[] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<unknown[]>((resolve, reject) => {
+                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                }));
+                db.close();
+            }
+            return { rows, liveText: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText,
+                storage: Object.fromEntries(Object.entries(localStorage).filter(([key]) => key === 'or3:e2e:native-draft-trace' || key.startsWith('or3:workspace-tabs:v1:') || key.startsWith('or3:tab-draft-journal:'))) };
+        });
+        await writeFile(info.outputPath('native-draft-trace.json'), JSON.stringify(receipt, null, 2));
+    });
+
+    async function savedTexts(page: Page): Promise<string[]> {
+        return page.evaluate(async () => {
+            const texts: string[] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const open = indexedDB.open(name);
+                    open.onsuccess = () => resolve(open.result);
+                    open.onerror = () => reject(open.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                    const rows = await new Promise<Array<{ draft: { text: string } }>>((resolve, reject) => {
+                        const tx = db.transaction('workspace_tab_drafts', 'readonly');
+                        const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        tx.oncomplete = () => resolve(read.result);
+                        tx.onabort = () => reject(tx.error);
+                    });
+                    texts.push(...rows.map(row => row.draft.text));
+                }
+                db.close();
+            }
+            return texts;
+        });
+    }
+
+    async function savedAttachmentReferences(page: Page): Promise<number> {
+        return page.evaluate(async () => {
+            let count = 0;
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const rows = await new Promise<Array<{ draft: { attachments: unknown[] } }>>((resolve, reject) => {
+                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                count += rows.reduce((sum, row) => sum + row.draft.attachments.length, 0); db.close();
+            }
+            return count;
+        });
+    }
+
+    test('an interrupted draft read stays visible and retry restores the saved buffer', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Saved buffer before interrupted browser draft read';
+        await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.addInitScript(() => {
+            const originals = { getAll: IDBIndex.prototype.getAll, openCursor: IDBIndex.prototype.openCursor };
+            for (const method of ['getAll', 'openCursor'] as const) {
+                const original = originals[method];
+                IDBIndex.prototype[method] = function (...args: unknown[]) {
+                    if (this.objectStore.name === 'workspace_tab_drafts') {
+                        throw new DOMException('Synthetic interrupted draft read', 'AbortError');
+                    }
+                    return Reflect.apply(original, this, args);
+                } as typeof original;
+            }
+            (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads = () => {
+                IDBIndex.prototype.getAll = originals.getAll;
+                IDBIndex.prototype.openCursor = originals.openCursor;
+            };
+        });
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible();
+        await expect(input).toBeEmpty();
+        expect(await savedTexts(page)).toContain(marker);
+        // Closing the failed composer must not acknowledge an empty draft.
+        await page.reload();
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        expect(await savedTexts(page)).toContain(marker);
+        await page.evaluate(() => (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads());
+        await retryDraftRestore(page, marker);
+        await expect(input).toHaveText(marker);
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
+        await info.attach('interrupted-draft-read', { contentType: 'application/json',
+            body: JSON.stringify({ stored: await savedTexts(page), restored: await input.innerText(), externalRequests: 'denied' }) });
+    });
+
+    test('an interrupted attachment read retains the reference and retry restores its preview', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Saved attachment survives interrupted local blob read';
+        await input.fill(marker);
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const savedReferences = () => page.evaluate(async () => {
+            let count = 0;
+            const savedTabIds = new Set(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:'))
+                .flatMap(key => (JSON.parse(localStorage.getItem(key) ?? '{}').tabs ?? []).map((tab: { id: string }) => tab.id)));
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const open = indexedDB.open(name); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                    const rows = await new Promise<Array<{ tab_id: string; draft: { attachments: unknown[] } }>>((resolve, reject) => {
+                        const tx = db.transaction('workspace_tab_drafts', 'readonly'); const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        tx.oncomplete = () => resolve(read.result); tx.onabort = () => reject(tx.error);
+                    });
+                    count += rows.filter(row => savedTabIds.has(row.tab_id)).reduce((sum, row) => sum + row.draft.attachments.length, 0);
+                }
+                db.close();
+            }
+            return count;
+        });
+        await expect.poll(savedReferences).toBe(1);
+        await page.addInitScript(() => {
+            const probe = { reads: 0 };
+            (window as unknown as { attachmentReadProbe: typeof probe }).attachmentReadProbe = probe;
+            const original = IDBObjectStore.prototype.get;
+            IDBObjectStore.prototype.get = function (...args: Parameters<typeof original>) {
+                if (this.name === 'file_blobs' && localStorage.getItem('or3:recovery:blob-read-repaired') !== 'yes') {
+                    probe.reads++;
+                    throw new DOMException('Synthetic interrupted attachment read', 'AbortError');
+                }
+                return original.apply(this, args);
+            };
+            (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads = () => {
+                localStorage.setItem('or3:recovery:blob-read-repaired', 'yes'); IDBObjectStore.prototype.get = original;
+            };
+        });
+        await info.attach('before-attachment-read-reload', { body: JSON.stringify({ references: await savedReferences(), texts: await savedTexts(page), layout: await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:')).map(key => [key, localStorage.getItem(key)]))) }), contentType: 'application/json' });
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        await info.attach('after-attachment-read-reload', { body: JSON.stringify({ references: await savedReferences(), texts: await savedTexts(page), reads: await page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads), layout: await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:')).map(key => [key, localStorage.getItem(key)]))) }), contentType: 'application/json' });
+        await expect.poll(() => page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads)).toBeGreaterThan(0);
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText('Attach these files again', { exact: true })).toHaveCount(0);
+        expect(await savedReferences()).toBe(1);
+        expect(await savedTexts(page)).toContain(marker);
+        await page.reload();
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        expect(await savedReferences()).toBe(1);
+        await page.evaluate(() => (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads());
+        await retryDraftRestore(page, marker);
+        await expect(input).toHaveText(marker);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 60_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const evidencePath = info.outputPath('interrupted-attachment-read.json');
+        await writeFile(evidencePath, JSON.stringify({ storedReferences: await savedReferences(),
+            restoredText: await input.innerText(), externalRequests: 'denied', faultReadsConfirmed: true, layoutAcknowledged: true }, null, 2));
+        await info.attach('interrupted-attachment-read', { path: evidencePath, contentType: 'application/json' });
+    });
+
+    test('refresh protects a valid draft too large for the unload journal while its save is interrupted', async ({ page }, info) => {
+        const clientURL = draftRecoveryScripts.get(page)?.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
+        expect(clientURL).toBeTruthy();
+        await page.evaluate(async url => {
+            const client = await import(url!); const db = client.getDb();
+            const transaction = db.transaction.bind(db);
+            const held: Array<{ args: unknown[]; resolve: (value: unknown) => void; reject: (reason: unknown) => void }> = [];
+            // Hold before transaction entry. Suspending an individual put after
+            // native transaction entry lets IDB auto-commit; repairing that put
+            // directly bypasses the version/state transaction acknowledgment.
+            db.transaction = (...args: unknown[]) => {
+                const tables = args.slice(1, -1).flat() as Array<{ name?: string }>;
+                if (!String(args[0]).startsWith('rw') || !tables.some(table => table.name === 'workspace_tab_drafts')) {
+                    return transaction(...args);
+                }
+                return new Promise((resolve, reject) => { held.push({ args, resolve, reject }); });
+            };
+            (window as unknown as { interruptedDraftSave: { count: () => number; repair: () => Promise<void> } }).interruptedDraftSave = {
+                count: () => held.length,
+                repair: async () => {
+                    db.transaction = transaction;
+                    for (const { args, resolve, reject } of held.splice(0)) {
+                        try { resolve(await transaction(...args)); } catch (error) { reject(error); }
+                    }
+                },
+            };
+        }, clientURL);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Valid large draft pending local durability '.repeat(3_000);
+        await input.fill(marker);
+        await expect.poll(() => page.evaluate(() => (window as unknown as { interruptedDraftSave: { count: () => number } }).interruptedDraftSave.count())).toBeGreaterThan(0);
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        const receiptPath = info.outputPath('pending-large-unload-state.json');
+        await writeFile(receiptPath, JSON.stringify({ dialogs, liveChars: (await input.innerText()).length,
+            storedMarker: (await savedTexts(page)).includes(marker) }, null, 2));
+        expect(dialogs).toEqual(['beforeunload']);
+        expect(await page.evaluate(expected => document.querySelector('[aria-label="Message input"]')?.textContent === expected, marker)).toBe(true);
+        await page.evaluate(() => (window as unknown as { interruptedDraftSave: { repair: () => Promise<void> } }).interruptedDraftSave.repair());
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        expect(await page.evaluate(expected => document.querySelector('[aria-label="Message input"]')?.textContent === expected, marker)).toBe(true);
+        expect(dialogs).toEqual(['beforeunload']);
+        const path = info.outputPath('interrupted-large-draft.json');
+        await writeFile(path, JSON.stringify({ chars: marker.length, dialogs, recoveredChars: (await input.innerText()).length,
+            externalRequests: 'denied', fault: 'deferred whole draft write before native transaction entry' }, null, 2));
+        await info.attach('interrupted-large-draft', { path, contentType: 'application/json' });
+    });
+
+    test('refresh protects an attachment still hashing and reload restores it after completion', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Synthetic pending image draft'; await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const digest = crypto.subtle.digest.bind(crypto.subtle);
+            let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+            const probe = { entered: 0, completed: false, release };
+            crypto.subtle.digest = async (...args: Parameters<typeof digest>) => {
+                if (probe.entered === 0) { probe.entered++; await gate; const result = await digest(...args); probe.completed = true; return result; }
+                return digest(...args);
+            };
+            (window as unknown as { pendingImageDraft: typeof probe }).pendingImageDraft = probe;
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect.poll(() => page.evaluate(() => (window as unknown as { pendingImageDraft: { entered: number } }).pendingImageDraft.entered)).toBe(1);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(input).toHaveText(marker);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await page.evaluate(() => (window as unknown as { pendingImageDraft: { release: () => void } }).pendingImageDraft.release());
+        const references = () => savedAttachmentReferences(page);
+        await expect.poll(references).toBe(1);
+        await expect(input).toHaveText(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        const before = { texts: await savedTexts(page), references: await references(),
+            layout: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('or3:workspace-tabs:v1:')))) };
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 45_000 });
+        const diagnostic = info.outputPath('pending-image-reload-state.json');
+        await writeFile(diagnostic, JSON.stringify({ before, after: { texts: await savedTexts(page), references: await references(),
+            layout: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('or3:workspace-tabs:v1:')))) }, dialogs }, null, 2));
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        expect(dialogs).toEqual(['beforeunload']);
+        const path = info.outputPath('pending-image-unload.json');
+        await writeFile(path, JSON.stringify({ dialogs, savedReferences: await references(), text: await input.innerText(),
+            externalRequests: 'denied', fault: 'deferred local WebCrypto digest' }, null, 2));
+        await info.attach('pending-image-unload', { path, contentType: 'application/json' });
+    });
+
+    test('a failed attachment save stays visible and retry persists its reference without another edit', async ({ page }, info) => {
+        const marker = 'Synthetic retry attachment draft'; const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(marker); await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put; let faults = 0;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs' && faults++ === 0) throw new DOMException('Synthetic first attachment quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        const retry = page.getByRole('button', { name: 'Retry', exact: true });
+        await expect(retry).toBeVisible();
+        expect(await savedAttachmentReferences(page)).toBe(0);
+        await retry.click();
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await expect(input).toHaveText(marker);
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const path = info.outputPath('attachment-save-retry.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page), restoredText: await input.innerText(),
+            externalRequests: 'denied', fault: 'synthetic first native file_blobs put quota', noFurtherEditorEdit: true }, null, 2));
+        await info.attach('attachment-save-retry', { path, contentType: 'application/json' });
+    });
+
+    test('an unresolved attachment failure stays visible after its transient toast expires', async ({ page }, info) => {
+        const marker = 'Persistent rejected attachment buffer';
+        const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs') throw new DOMException('Synthetic persistent attachment quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+            (window as unknown as { restoreRejectedAttachmentPut: () => void }).restoreRejectedAttachmentPut = () => { IDBObjectStore.prototype.put = put; };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+        // Cross the real eight-second error-toast duration, without virtual-clock interference.
+        await page.waitForTimeout(9_000);
+        const notice = page.getByRole('alert').filter({ hasText: 'Attachments could not be saved' });
+        const path = info.outputPath('persistent-attachment-failure.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page),
+            visibleErrorNotice: await notice.count(), transientRetryButtons: await page.getByRole('button', { name: 'Retry', exact: true }).count(),
+            externalRequests: 'denied', elapsedToastIntervalMs: 9_000 }, null, 2));
+        await expect(notice).toBeVisible();
+        await expect(notice).toContainText(fixturePng.name);
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+        await page.getByRole('button', { name: 'Remove image', exact: true }).click();
+        await expect(notice).toHaveCount(0);
+        await page.evaluate(() => (window as unknown as { restoreRejectedAttachmentPut: () => void }).restoreRejectedAttachmentPut());
+        const reselection = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await reselection).setFiles(fixturePng);
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await expect(notice).toHaveCount(0);
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    });
+
+    test('a partial composer attachment batch preserves its first file and retries the second with exact bytes', async ({ page }, info) => {
+        const marker = 'Synthetic partial composer attachment batch'; const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(marker); await expect.poll(() => savedTexts(page)).toContain(marker);
+        const second = { ...fixturePng, name: 'synthetic-second-composer.png',
+            buffer: Buffer.concat([fixturePng.buffer, Buffer.from('synthetic-second-composer-file')]) };
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put; let blobWrites = 0;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs' && ++blobWrites === 2) throw new DOMException('Synthetic second composer file quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles([fixturePng, second]);
+        const notice = page.getByRole('alert').filter({ hasText: 'Attachments could not be saved' });
+        await expect(notice).toContainText(second.name);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(2);
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(2);
+        await expect(notice).toHaveCount(0);
+        const savedBytes = await page.evaluate(async () => {
+            const bytes: number[][] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const rows = await new Promise<Array<{ blob: Blob }>>((resolve, reject) => {
+                    const request = db.transaction('file_blobs', 'readonly').objectStore('file_blobs').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                for (const row of rows) bytes.push(Array.from(new Uint8Array(await row.blob.arrayBuffer())));
+                db.close();
+            }
+            return bytes;
+        });
+        expect(savedBytes).toHaveLength(2);
+        expect(savedBytes).toEqual(expect.arrayContaining([Array.from(fixturePng.buffer), Array.from(second.buffer)]));
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(2);
+        await expect(notice).toHaveCount(0);
+        const path = info.outputPath('partial-composer-batch.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page), exactByteLengths: savedBytes.map(bytes => bytes.length),
+            firstReferenceSurvivedSecondQuota: true, reloadImageCount: 2, externalRequests: 'denied' }, null, 2));
+        await info.attach('partial-composer-batch', { path, contentType: 'application/json' });
+    });
+
+    test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
+        await page.evaluate(() => {
+            const original = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (key, value) {
+                if (key.startsWith('or3:workspace-tabs:v1:')) throw new DOMException('Synthetic layout quota', 'QuotaExceededError');
+                return original.call(this, key, value);
+            };
+            (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout = () => { Storage.prototype.setItem = original; };
+        });
+        await page.locator('.workspace-tab-new').click();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('New tab layout recovery marker');
+        const notice = page.getByText('Tab layout could not be saved', { exact: true });
+        await expect(notice).toBeVisible();
+        // This is the product notice's expiry boundary, not a save-completion wait.
+        await page.waitForTimeout(6000);
+        await expect(notice).toBeVisible();
+        await page.evaluate(() => (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout());
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect(notice).toBeHidden();
+        await expect.poll(() => savedTexts(page)).toContain('New tab layout recovery marker');
+        await page.reload();
+        await expect(input).toHaveText('New tab layout recovery marker', { timeout: 60_000 });
+        await info.attach('layout-quota-retry', { body: JSON.stringify({ recovered: await input.textContent(), warningRetainedPastDefaultDuration: true }), contentType: 'application/json' });
+    });
+
+    test('an oversized draft reports failure and keeps its last durable copy until reduced', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('Last durable draft before size limit');
+        await expect.poll(() => savedTexts(page)).toContain('Last durable draft before size limit');
+        // Text plus editor JSON exceed the existing 500k serialized-character cap.
+        await input.fill('x'.repeat(260_000));
+        await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible();
+        await expect.poll(() => savedTexts(page)).toEqual(['Last durable draft before size limit']);
+        expect(await input.evaluate(element => element.textContent?.length)).toBe(260_000);
+        await input.fill('Reduced draft recovers after size limit');
+        await expect.poll(() => savedTexts(page)).toContain('Reduced draft recovers after size limit');
+        await expect(page.getByText('Draft could not be saved', { exact: true })).toBeHidden();
+        await page.reload();
+        await expect(input).toHaveText('Reduced draft recovers after size limit', { timeout: 60_000 });
+        await info.attach('oversized-draft-recovery', { body: JSON.stringify({ oversizedCharacters: 260_000, retainedPriorCopy: true, recovered: await input.textContent() }), contentType: 'application/json' });
+    });
+
+    test('a failed layout save protects a new tab draft from refresh until retry succeeds', async ({ page }, info) => {
+        await page.evaluate(() => {
+            const original = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (key, value) {
+                if (key.startsWith('or3:workspace-tabs:v1:')) throw new DOMException('Synthetic layout quota', 'QuotaExceededError');
+                return original.call(this, key, value);
+            };
+            (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout = () => { Storage.prototype.setItem = original; };
+        });
+        await page.locator('.workspace-tab-new').click();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('Refresh protected new tab draft');
+        await expect(page.getByText('Tab layout could not be saved', { exact: true })).toBeVisible();
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(input).toHaveText('Refresh protected new tab draft');
+        await page.evaluate(() => (window as unknown as { restoreRecoveryLayout: () => void }).restoreRecoveryLayout());
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect.poll(() => savedTexts(page)).toContain('Refresh protected new tab draft');
+        await page.reload();
+        await expect(input).toHaveText('Refresh protected new tab draft', { timeout: 60_000 });
+        await info.attach('layout-refresh-guard', { body: JSON.stringify({ dialogs, recovered: await input.textContent() }), contentType: 'application/json' });
+    });
+
+    for (const failIndexedDb of [false, true]) test(`full localStorage with IndexedDB ${failIndexedDb ? 'rejected then retried' : 'available'} preserves the draft`, async ({ page }, info) => {
+        const quota = await page.evaluate((failIndexedDb) => {
+            const chunk = 'x'.repeat(64 * 1024);
+            let chunks = 0;
+            let exceeded = false;
+            // At most 10 MiB of synthetic characters; never fill disk/IndexedDB.
+            for (; chunks < 160; chunks++) {
+                try { localStorage.setItem(`or3:e2e:quota-fill:${chunks}`, chunk); }
+                catch (error) { exceeded = error instanceof DOMException && error.name === 'QuotaExceededError'; break; }
+            }
+            const original = IDBObjectStore.prototype.put;
+            if (failIndexedDb) IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name === 'workspace_tab_drafts') throw new DOMException('Synthetic draft storage full', 'QuotaExceededError');
+                return original.apply(this, args);
+            };
+            (window as unknown as { releaseRecoveryQuota: () => void }).releaseRecoveryQuota = () => {
+                for (const key of Object.keys(localStorage)) if (key.startsWith('or3:e2e:quota-fill:')) localStorage.removeItem(key);
+                IDBObjectStore.prototype.put = original;
+            };
+            return { exceeded, chunks, characters: chunks * chunk.length };
+        }, failIndexedDb);
+        expect(quota.exceeded).toBe(true);
+        const text = `Recover full-storage draft ${failIndexedDb}`;
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(text);
+        if (failIndexedDb) {
+            await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible();
+            expect(await savedTexts(page)).not.toContain(text);
+            await expect(input).toHaveText(text);
+            const dialogs: string[] = [];
+            page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+            await page.reload({ timeout: 10_000 }).catch(() => {});
+            expect(dialogs).toEqual(['beforeunload']);
+            await expect(input).toHaveText(text);
+            await page.evaluate(() => (window as unknown as { releaseRecoveryQuota: () => void }).releaseRecoveryQuota());
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        }
+        await expect.poll(() => savedTexts(page)).toContain(text);
+        const before = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:') || key.startsWith('or3:tab-draft-journal:'))
+            .map(key => [key, localStorage.getItem(key)])));
+        await info.attach('quota-before-reload-layout', { body: JSON.stringify(before), contentType: 'application/json' });
+        await page.reload();
+        const after = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+            .filter(key => key.startsWith('or3:workspace-tabs:') || key.startsWith('or3:tab-draft-journal:'))
+            .map(key => [key, localStorage.getItem(key)])));
+        await info.attach('quota-after-reload-layout', { body: JSON.stringify({ after, savedTexts: await savedTexts(page) }), contentType: 'application/json' });
+        await expect(input).toHaveText(text, { timeout: 60_000 });
+        await info.attach('bounded-storage-quota', { body: JSON.stringify({ ...quota, indexedDbFaultInjected: failIndexedDb, recovered: text }), contentType: 'application/json' });
+    });
+});
+
 for (const savedWidth of [null, 'NaN']) {
     test(`desktop startup reserves the sidebar through hydration and viewport changes (${savedWidth ?? 'fresh'})`, async ({ page }, info) => {
         await page.setViewportSize({ width: 1350, height: 940 });
@@ -310,9 +874,40 @@ test('sidebar chat and document switching keeps the workspace mounted without a 
     expect(serverRenderErrors).toEqual([]);
 });
 
-test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ page }, info) => {
+test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ context, page }, info) => {
     test.setTimeout(120_000);
+    await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
     await page.route('**openrouter.ai/**', route => route.abort());
+    await page.addInitScript(() => {
+        const traceKey = 'or3:e2e:recovery-draft-trace'; const set = Storage.prototype.setItem;
+        const pageId = crypto.randomUUID();
+        const record = (op: string, value: unknown) => {
+            try {
+                const trace = JSON.parse(localStorage.getItem(traceKey) ?? '[]') as unknown[];
+                trace.push({ op, value, pageId, at: Date.now(), editorText: (document.querySelector('[aria-label="Message input"]') as HTMLElement | null)?.innerText ?? null });
+                set.call(localStorage, traceKey, JSON.stringify(trace.slice(-120)));
+            } catch { /* Observation must not affect persistence. */ }
+        };
+        Storage.prototype.setItem = function (key, value) {
+            const result = set.call(this, key, value);
+            try {
+                if (key.startsWith('or3:tab-draft-journal:') || key.startsWith('or3:workspace-tabs:v1:')) record('storage-set', { key, value: JSON.parse(value) });
+            } catch { /* Keep native storage behavior when a value is not JSON. */ }
+            return result;
+        };
+        const put = IDBObjectStore.prototype.put; const remove = IDBObjectStore.prototype.delete;
+        IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+            if (this.name === 'workspace_tab_drafts') record('draft-put-attempt', args[0]);
+            return put.apply(this, args);
+        };
+        IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
+            if (this.name === 'workspace_tab_drafts') record('draft-delete-attempt', args[0]);
+            return remove.apply(this, args);
+        };
+        window.addEventListener('beforeunload', () => record('beforeunload', null), { capture: true });
+        window.addEventListener('pagehide', () => record('pagehide', null));
+    });
     const savedDrafts = () => page.evaluate(async () => {
         const saved: Array<{ text: string; hashes: string[]; account: string }> = [];
         for (const { name } of await indexedDB.databases()) {
@@ -333,6 +928,8 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Draft that must survive a reload');
+    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
     await (await chooser).setFiles(fixturePng);
@@ -350,7 +947,13 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     await page.keyboard.press('End');
     await page.keyboard.type(' plus the last words');
     await page.reload();
-    await expect(input).toHaveText('Draft that must survive a reload plus the last words', { timeout: 30_000 });
+    try {
+        await expect(input).toHaveText('Draft that must survive a reload plus the last words', { timeout: 30_000 });
+    } finally {
+        const receipt = { savedDrafts: await savedDrafts(), liveText: await input.innerText(),
+            storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key === 'or3:e2e:recovery-draft-trace' || key.startsWith('or3:workspace-tabs:v1:') || key.startsWith('or3:tab-draft-journal:')))) };
+        await writeFile(info.outputPath('last-keystroke-reload-receipt.json'), JSON.stringify(receipt, null, 2));
+    }
 
     // Clearing the composer removes the saved copy rather than leaving a stale draft.
     await page.getByRole('button', { name: 'Remove image', exact: true }).click();
@@ -1204,6 +1807,8 @@ test('Files stores active content as download-only bytes without rendering it', 
 });
 
 async function openChat(page: Page): Promise<void> {
+    await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
     // Catalog loading can start before the fixture component mounts and
     // installs its fetch harness. Keep that startup request deterministic too.
     await page.route('**/api/__or3-e2e/models*', (route) =>
@@ -1647,16 +2252,59 @@ test.describe('production chat journey', () => {
         await expect(page.getByText('Partial response before stop.')).toBeVisible();
     });
     test('recovers a partial foreground response after refresh during streaming', async ({ page }) => {
-        test.setTimeout(60_000);
+        test.setTimeout(120_000);
         await openChat(page);
         await send(page, 'journey:refresh');
-        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible({ timeout: 30_000 });
         await waitForDurableReply(page, 'Partial response before refresh. Ready to recover.');
         await page.reload();
-        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible({ timeout: 30_000 });
         await expect(page.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible({ timeout: 35_000 });
         await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
         await expect(page.getByText(/Late response from the old page/)).toHaveCount(0);
+    });
+    for (const fault of ['quota', 'abort'] as const) test(`${fault} during user turn persistence keeps the draft and retries once without duplicate messages`, async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page);
+        await page.evaluate((fault) => {
+            const original = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                const value = args[0] as { role?: string };
+                if (this.name !== 'messages' || value?.role !== 'user') return original.apply(this, args);
+                if (fault === 'quota') throw new DOMException('Synthetic user-turn storage full', 'QuotaExceededError');
+                const request = original.apply(this, args);
+                this.transaction.abort();
+                return request;
+            };
+            const originalFetch = globalThis.fetch.bind(globalThis);
+            const state = { providerRequests: 0, restore: () => { IDBObjectStore.prototype.put = original; } };
+            globalThis.fetch = (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (url.includes('/api/__or3-e2e/chat/completions')) state.providerRequests++;
+                return originalFetch(input, init);
+            };
+            (window as unknown as { recoverySendState: typeof state }).recoverySendState = state;
+        }, fault);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('journey:complete');
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        const feedback = page.getByText(fault === 'abort' ? 'Could not save locally'
+            : /^(Browser storage full|Could not save locally|Something went wrong)$/).first();
+        await expect(feedback).toBeVisible();
+        await expect(input).toHaveText('journey:complete');
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(0);
+        expect(await page.evaluate(() => (window as unknown as { recoverySendState: { providerRequests: number } }).recoverySendState.providerRequests)).toBe(0);
+        await page.evaluate(() => (window as unknown as { recoverySendState: { restore: () => void } }).recoverySendState.restore());
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await waitForDurableReply(page, 'Hello from deterministic stream.');
+        await expect(input).toHaveText('');
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(1);
+        expect(await page.evaluate(() => (window as unknown as { recoverySendState: { providerRequests: number } }).recoverySendState.providerRequests)).toBe(1);
+        await page.reload();
+        await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(1);
+        await info.attach('user-turn-save-recovery', { body: JSON.stringify({ fault, refusedBeforeProvider: true, recoveredWithoutDuplicateUser: true }), contentType: 'application/json' });
     });
     test('clears a saved message before the provider responds and preserves the next draft', async ({ page }, info) => {
         await openChat(page);
@@ -1723,7 +2371,7 @@ test.describe('production chat journey', () => {
         const viewer = await context.newPage();
         try {
             await openChat(viewer);
-            await expect(viewer.getByText('Partial response shared across tabs.')).toBeVisible();
+            await expect(viewer.getByText('Partial response shared across tabs.')).toBeVisible({ timeout: 30_000 });
             await expect(page.getByText('Partial response shared across tabs. Owner made progress.'))
                 .toBeVisible({ timeout: 25_000 });
             await waitForDurableReply(page, 'Partial response shared across tabs. Owner made progress.');
@@ -1742,7 +2390,7 @@ test.describe('production chat journey', () => {
             await viewer.screenshot({ path, animations: 'disabled' });
             await info.attach('second-tab-recovery', { path, contentType: 'image/png' });
             await viewer.reload();
-            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1);
+            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1, { timeout: 30_000 });
             await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible();
             await expect(latestReply).toHaveCount(1);
             await expect(latestReply).toBeVisible();

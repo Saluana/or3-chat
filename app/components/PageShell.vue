@@ -749,6 +749,7 @@ const workspaceTabs = useWorkspaceTabs({
             title: 'Tab layout could not be saved',
             description: 'Your open tabs will not be restored after a reload. Storage may be full or blocked.',
             color: 'warning',
+            duration: 0,
             actions: [
                 {
                     label: 'Retry',
@@ -760,6 +761,17 @@ const workspaceTabs = useWorkspaceTabs({
         });
     },
 });
+// Failed draft writes retain only memory; failed layout writes make a new
+// tab's durable draft unreachable. Neither is safe to acknowledge on unload.
+if (import.meta.client) {
+    useEventListener(window, 'beforeunload', (event: BeforeUnloadEvent) => {
+        if (!workspaceTabsEnabled.value) return;
+        const layoutSaved = workspaceTabs.persistenceStatus.value === 'ok' || workspaceTabs.retryPersistence();
+        if (layoutSaved && !workspaceTabDrafts.saveFailed.value && !workspaceTabDrafts.needsUnloadConfirmation()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+}
 /** Saves the unreadable tab layout the persistence layer copied aside, so it can be inspected or reported. */
 function downloadCorruptLayoutBackup(layoutKey: string): void {
     const raw = workspaceTabs.getCorruptLayoutBackup(layoutKey);

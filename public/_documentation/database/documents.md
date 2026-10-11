@@ -96,7 +96,9 @@ Mounted editors capture and flush against their own DB before switching workspac
 
 Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
 
-Releasing a cached document drops heavy content and timers. The current `releaseDocument` implementation suppresses flush errors during release, so release alone is not a successful-save acknowledgement. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+Releasing a cached document drops heavy content and timers only when no staged or in-flight save remains. A failed flush retains the record, conflict baseline and edits for retry; release alone is not a successful-save acknowledgement. Reads also preserve an unsaved edit's original baseline and cannot replace a newer committed save. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+
+The mounted editor shows a persistent save-failure banner with **Retry document save** while edits remain unsaved. Hiding the page captures and flushes the current editor buffer. Refreshing or leaving the page with staged edits requests the browser's unsaved-change confirmation and starts a save; dismissing the confirmation keeps the buffer open. An unload-time write is not a durability receipt. Browsers may suppress confirmations without prior user interaction, and forcibly closing the browser or accepting the confirmation can still discard an uncommitted edit.
 
 ## Document AI proposals
 
@@ -109,3 +111,7 @@ Reference content counts toward context limits but does not grant editable block
 Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:before` expose editable context and separate referenceContext; preserve that distinction. The implementation is `app/composables/documents/useDocumentAiAgent.ts`. Its live editor bridge also serves [document tools in chat](/documentation/utils/chat-tools).
 
 Optional editor autocomplete does not start inference requests for guests without a personal API key. Signed-in users can use the instance key through the server route. Local editing and autosave remain available without credentials.
+
+Document image node views capture their database, workspace generation and account when mounted. A delayed blob read cannot create or replace a preview after node removal, workspace/account changes, or a newer image request. Owned preview URLs are revoked on teardown or scope invalidation; read failures show the existing unavailable-image placeholder.
+
+Image intake uses the file API ownership callback bound to the mounted editor, document, database, account and workspace generation. An upload paused before commit is canceled if its editor closes or changes scope. A local storage rejection shows a persistent "Image could not be added" banner and leaves the document intact; selecting the file again retries intake. The file API and its transaction contracts are unchanged.
