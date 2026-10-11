@@ -49,6 +49,88 @@ for standalone-backup recovery; this does not restore older live data. Restart
 and cleanup are attempted independently, and either failure keeps the journal.
 Intentionally stopped deployments remain stopped. Do not manually delete locks.
 
+The restore archive reader requires both fixed-profile database payloads,
+`auth.sqlite` and `sync.sqlite`, before clearing the current volume. A valid tar
+file that omits one is refused: application startup or a sign-in request can
+otherwise create an empty replacement and make deep health pass after account
+or workspace data is lost. This presence check does not prove database contents
+or every referenced attachment is complete. For the archived FS root under
+`/data`, the reader also pairs canonical SHA-256/MD5 committed sidecars with
+their blob entries. Uncommitted uploads, temporary sidecars and opaque generation
+artifacts remain accepted. No new archive format or physical cleanup is used.
+The local drill checks application semantics separately: an authenticated archive
+missing both a referenced blob and its sidecar can still report restore success
+and then return 404 on attachment download. Pairing is not database-reference
+validation; deep health cannot establish that completeness.
+
+## Local restore qualification
+
+`scripts/test/run-backup-restore-drill.ts` drives the production backup/restore
+commands against two fresh Docker instances with synthetic accounts, real SQLite
+databases and filesystem storage. It checks authenticated chat/document/project/
+settings records, exact attachment bytes, database integrity and foreign keys,
+sync replay receipts, cold restarts, malformed or missing backup components,
+extraction interruption, and a write accepted before startup verification fails.
+The `--deep` pass also races seven atomic push batches with capture, tests missing
+database payloads and a referenced blob inside authenticated archives, and checks
+explicit recovery after extraction and automatic recovery both fail. It also
+checks that a write accepted before terminal state recording fails survives
+another cold restart. `--recovery-only` runs the source/target qualification and
+these two additional recovery cases without repeating the malformed-input matrix.
+The deep pass kills a separate restore process with SIGKILL after app startup,
+then checks that its durable journal protects a subsequently accepted write.
+`--crash-only` runs that process-death case with the source/target qualification.
+`--browser-only` checks restored chat and document bodies in a fresh Chromium
+context and writes a screenshot. It requires `/usr/bin/chromium`, forwards only
+the disposable app through a loopback relay, and blocks external browser requests
+and model routes. It uses newly issued synthetic provider session cookies.
+`--journal-only` checks persistent failure of the terminal state and error record,
+refusal to extract when recovery cannot persist its journal, and a successful
+explicit retry after persistence is available. These cases use injected write
+failures with real journals/databases/archives; they do not simulate disk hardware.
+`--attachment-only` checks refusal of a committed sidecar without its payload,
+then records the still-detectable application failure when both are absent and
+verifies recovery from the known-good archive.
+
+Build the current SSR application with Basic Auth, SQLite and filesystem providers
+using disposable build paths/secrets and no model credentials. Then build the
+local fixture image from that `.output`:
+
+```bash
+docker build --network=none \
+  --target bookworm \
+  --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" \
+  --build-arg OR3_VERSION="$(bun -e 'console.log((await Bun.file("package.json").json()).version)')" \
+  -f scripts/test/fixtures/backup-restore.Dockerfile \
+  -t or3-backup-drill:local .
+OR3_BACKUP_DRILL_IMAGE=or3-backup-drill:local \
+  bun scripts/test/run-backup-restore-drill.ts --deep
+```
+
+To qualify the pinned production distroless base instead, build the fixture's
+`--target distroless` and set `OR3_BACKUP_DRILL_NODE_PATH=/nodejs/bin/node` when
+running the drill. Both targets use the same SSR output and pinned BusyBox tools;
+this is local runtime qualification, not a release image build or publication.
+
+This is an explicit contributor qualification command, not installation or
+production restore guidance. It requires a local Docker daemon and a prebuilt
+local image, creates fresh random deployment/volume identities, blocks provider
+egress with internal Docker networks, and removes only its disposable resources.
+HTTP checks execute inside the app container so nested Docker hosts do not need
+to expose the test ports. Results are written to `output/backup-restore-drill.json`
+(override with `OR3_BACKUP_DRILL_EVIDENCE`). Failed cleanup preserves the fixture
+directory and returns a failure for inspection.
+
+The managed CLI deliberately rejects cross-deployment restores. The drill first
+tests that rejection, then explicitly transfers the authenticated source archive
+into the second disposable volume through the production archive primitive. Its
+subsequent restore/recovery tests use the second deployment's own signed backup.
+This does not establish a production identity-migration procedure. The drill
+covers application APIs/backend persistence; browser rendering, external provider
+stacks and cross-release database downgrades require separate qualification. The
+optional browser pass qualifies conversation/document reads; other browser flows
+still require separate coverage.
+
 ## Why database-only online backup is insufficient
 
 SQLite's [Online Backup API](https://www.sqlite.org/backup.html) produces a

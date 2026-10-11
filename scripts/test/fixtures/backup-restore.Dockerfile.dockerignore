@@ -1,0 +1,6 @@
+**
+!.output/
+!.output/**
+!scripts/
+!scripts/docker/
+!scripts/docker/runtime-entrypoint.mjs

@@ -1,0 +1,1168 @@
+{
+  "date": "2026-10-11",
+  "scope": "Synthetic local backup/restore qualification; no production access, provider calls, deployment, publication or physical cleanup activation.",
+  "branch": "audit/backup-restore-drill-20261011",
+  "base": "df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5",
+  "fixes": [
+    {
+      "commit": "7e4bc716de759234ae31dac8a6d25a6029300e71",
+      "behavior": "Restore and rollback journal starting-target before startup; never automatically replace possibly accepted writes after startup/verification/terminal commit failure."
+    },
+    {
+      "commit": "00bc239e8abdde99a142645ad31b27828aa2b297",
+      "behavior": "Require auth.sqlite and sync.sqlite in a valid streamed tar listing before live volume replacement; preserve tar failure status on legacy POSIX shells."
+    },
+    {
+      "commit": "1ab5f45e09175b33576bf87a5fc3886e59de14dd",
+      "behavior": "Refuse canonical committed FS metadata sidecars missing their blob payload entry under the archived FS root; preserve uncommitted uploads, temporary sidecars and opaque generation artifacts; no new format or physical cleanup."
+    }
+  ],
+  "dependencies": {
+    "pr235": {
+      "head": "4501da7d4f2e5d9375560dbc3567d1afb4f877fa",
+      "merge": "9908bb3699d36c6d7bbb788f836cdaacb3fd3a8a",
+      "status": "already merged into base; retained backup/recovery lifecycle and test seams"
+    },
+    "pr238": {
+      "head": "56fd888744918e910d135199935611d84b9d01db",
+      "merge": "654b7ed9d2a8664d4a155516a3633e9e29bf9d99",
+      "status": "already merged into base; upload/restore contracts preserved"
+    },
+    "otherReviewedDrafts": "#234, #236, #237 already merged into base; no duplicate/revert or generation cleanup activation"
+  },
+  "runtime": {
+    "sourceRevision": "df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5",
+    "appVersion": "0.1.82",
+    "image": "or3-backup-drill:df1be2c8",
+    "imageDigest": "sha256:685a04f268ed18907a951f267af2f1773be6975f7d5c4b5a2d5ff3c283479b70",
+    "profile": "Basic Auth / SQLite / filesystem; Linux amd64 Node bookworm fixture using actual SSR output, not the published distroless image",
+    "node": "24.21.0",
+    "bun": "1.3.14",
+    "docker": "28.4.0",
+    "busybox": "1.37.0",
+    "nuxt": "4.5.2",
+    "nitropack": "2.13.4",
+    "betterSqlite3": "13.0.3",
+    "providers": {
+      "basicAuth": "0.0.11",
+      "sqlite": "0.0.15",
+      "filesystem": "0.0.11"
+    },
+    "fixtureDockerfileBuildImageDigest": "sha256:865c9499f3cd8573914cd0588d0de2eed246650f79181155dad7e588716de94f",
+    "isolation": "Internal Compose networks; archive helpers --network none; synthetic account and random deployment/volume identities; owner-only files; cleanup verified."
+  },
+  "reproducedDefects": {
+    "postStartAutoRollback": {
+      "before": "Four canonical restore/rollback fault cases failed before fix; actual later test accepts a sync write before image-verification failure and confirms preservation.",
+      "canonicalNewTests": "startup, running-image verification, and terminal state write failure for restore and rollback (6 tests)"
+    },
+    "omittedAuthDatabase": {
+      "before": {
+        "before": 1,
+        "after": 0,
+        "refused": false,
+        "pending": false,
+        "expected": "refuse missing auth.sqlite and preserve accounts"
+      },
+      "after": {
+        "before": 1,
+        "after": 1,
+        "refused": true,
+        "pending": false,
+        "expected": "refuse missing auth.sqlite and preserve accounts"
+      },
+      "trigger": "Valid signed archive omits auth.sqlite and WAL/shm. Sign-in initializes an empty replacement; old restore completed healthy with account count 1 -> 0."
+    }
+  },
+  "actualAppDeepRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "seven synthetic push batches race the actual stopped-volume capture",
+        "kind": "passed",
+        "detail": {
+          "accepted": 0,
+          "refusedOrInterrupted": 7,
+          "bound": "8 atomic pairs; restoration verifies that no pair is split"
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "fbc765880261c5c64b0461e095c6fb5789d5005f5eac5359989181de942aaaff"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects missing-data; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects missing-config; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects missing-asset; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects checksum; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects future-schema; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects version-mismatch; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects corrupt-tar; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects missing-auth-database; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "restore rejects missing-sync-database; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "interrupted extraction restores the actual pre-mutation SQLite/blob snapshot",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "post-start write survives verification failure and plain recovery refusal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery restores actual pre-mutation data after post-start failure",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "successful managed restore verified through authenticated reads after restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      },
+      {
+        "name": "Authenticated, well-formed archive missing a referenced blob passes structural restore; app download detects the omission",
+        "kind": "limitation",
+        "detail": "Checksums authenticate captured bytes; they do not prove that source metadata had every payload. Deep health is not an attachment audit."
+      },
+      {
+        "name": "known-good backup recovers attachment bytes after semantic omission",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 1
+        }
+      }
+    ]
+  },
+  "actualAppAdditionalRecoveryRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "0a14abf9727e35200295c4f435a46710734c55c3c69f014f6136c8f4e98642b1"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "failed extraction and failed automatic recovery retain the verified pre-mutation snapshot and journal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after double failure restores actual databases, references and attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "accepted write survives terminal state commit failure and cold restart; destructive plain recovery is refused",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after terminal commit failure restores actual pre-mutation snapshot",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualAppProcessDeathRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "eb4da8d4f3e3558d9c6d2126cc32fd3636582080b536ccbb7ba9a98563628a6a"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "SIGKILL after target startup retains durable journal; subsequently accepted write survives cold restart and plain recovery refusal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after abrupt CLI death restores actual pre-mutation data and bytes",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualAppDistrolessRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "image": "or3-backup-drill:distroless",
+    "imageDigest": "sha256:65ed80a1fff57c90379c1e22219b1de1476195036b0a5e19dc4c3805eeda306c",
+    "nodePath": "/nodejs/bin/node",
+    "nodeVersion": "24.21.0",
+    "productionBase": "gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "seven synthetic push batches race the actual stopped-volume capture",
+        "kind": "passed",
+        "detail": {
+          "accepted": 1,
+          "refusedOrInterrupted": 6,
+          "bound": "8 atomic pairs; restoration verifies that no pair is split"
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "d71b4a5ff2aade2628b3fc870290b14b29a021c293dd1f418f30526440ca1973"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects missing-data; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects missing-config; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects missing-asset; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects checksum; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects future-schema; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects version-mismatch; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects corrupt-tar; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects missing-auth-database; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "restore rejects missing-sync-database; target is intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "interrupted extraction restores the actual pre-mutation SQLite/blob snapshot",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "post-start write survives verification failure and plain recovery refusal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery restores actual pre-mutation data after post-start failure",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "successful managed restore verified through authenticated reads after restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "failed extraction and failed automatic recovery retain the verified pre-mutation snapshot and journal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after double failure restores actual databases, references and attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "accepted write survives terminal state commit failure and cold restart; destructive plain recovery is refused",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after terminal commit failure restores actual pre-mutation snapshot",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "SIGKILL after target startup retains durable journal; subsequently accepted write survives cold restart and plain recovery refusal",
+        "kind": "passed"
+      },
+      {
+        "name": "explicit recovery after abrupt CLI death restores actual pre-mutation data and bytes",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      },
+      {
+        "name": "Authenticated, well-formed archive missing a referenced blob passes structural restore; app download detects the omission",
+        "kind": "limitation",
+        "detail": "Checksums authenticate captured bytes; they do not prove that source metadata had every payload. Deep health is not an attachment audit."
+      },
+      {
+        "name": "known-good backup recovers attachment bytes after semantic omission",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 2
+        }
+      }
+    ]
+  },
+  "actualAppJournalPersistenceRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "e476ef388be86e65e1216e9419f0df1bbcb90862b3e77cac611cb241d846bd53"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "durable starting-target journal and accepted write survive both terminal commit and error-record write failures",
+        "kind": "passed"
+      },
+      {
+        "name": "failed recovery journal persistence refuses extraction and preserves live accepted write",
+        "kind": "passed"
+      },
+      {
+        "name": "retry after journal persistence is available restores actual pre-mutation data and attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualAppAttachmentGuardRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "66f6c1a2d49137f1118c68b175e5a47dcc6e1e26cb0df7046c33e34106726d3b"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "authenticated archive missing a committed sidecar payload is refused; live data and attachment remain intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "Authenticated, well-formed archive missing both a referenced blob and its sidecar passes structural restore; app download detects the omission",
+        "kind": "limitation",
+        "detail": "Pairing checks available committed sidecars; absent blob and sidecar cannot be discovered without database-reference validation. Deep health is not an attachment audit."
+      },
+      {
+        "name": "known-good backup recovers attachment bytes after semantic omission",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualFreshBrowserRun": {
+    "completed": true,
+    "cleanupFailed": false,
+    "chromium": "154.0.8037.57",
+    "screenshot": "/workspace/backup-drill/restored-browser.png",
+    "documentContract": "Serialized TipTap JSON; earlier backend-only fixtures used HTML strings, so those earlier API checks did not qualify document editor rendering.",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "b5c18080a8d85e59fba7e0a1e1a156f9467b6ba4c68d327bc0eabb8810d2455f"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "fresh browser reads restored conversation and document through the actual UI",
+        "kind": "passed",
+        "detail": {
+          "freshBrowser": true,
+          "chatBodyVisible": true,
+          "documentBodyVisible": true,
+          "externalRequestsBlocked": true
+        }
+      }
+    ]
+  },
+  "actualArchiveReaderMatrix": {
+    "outcomes": [
+      {
+        "name": "valid-dot",
+        "image": "or3-backup-drill:df1be2c8",
+        "result": "accepted"
+      },
+      {
+        "name": "valid-dot",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "valid-bare",
+        "image": "or3-backup-drill:df1be2c8",
+        "result": "accepted"
+      },
+      {
+        "name": "valid-bare",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "missing-auth",
+        "image": "or3-backup-drill:df1be2c8",
+        "result": "refused"
+      },
+      {
+        "name": "missing-auth",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "refused"
+      },
+      {
+        "name": "missing-sync",
+        "image": "or3-backup-drill:df1be2c8",
+        "result": "refused"
+      },
+      {
+        "name": "missing-sync",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "refused"
+      },
+      {
+        "name": "corrupt",
+        "image": "or3-backup-drill:df1be2c8",
+        "result": "refused"
+      },
+      {
+        "name": "corrupt",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "refused"
+      }
+    ]
+  },
+  "actualArchiveCompletenessMatrix": {
+    "outcomes": [
+      {
+        "name": "missing-current-blob",
+        "image": "or3-backup-drill:distroless",
+        "result": "refused"
+      },
+      {
+        "name": "missing-current-blob",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "refused"
+      },
+      {
+        "name": "valid-current",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "valid-current",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "uncommitted-upload",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "uncommitted-upload",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "temporary-sidecar",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "temporary-sidecar",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "legacy-md5-pair",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "legacy-md5-pair",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "legacy-md5-missing-blob",
+        "image": "or3-backup-drill:distroless",
+        "result": "refused"
+      },
+      {
+        "name": "legacy-md5-missing-blob",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "refused"
+      },
+      {
+        "name": "blob-and-sidecar-both-absent",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "blob-and-sidecar-both-absent",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      },
+      {
+        "name": "opaque-generation-artifact",
+        "image": "or3-backup-drill:distroless",
+        "result": "accepted"
+      },
+      {
+        "name": "opaque-generation-artifact",
+        "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+        "result": "accepted"
+      }
+    ]
+  },
+  "automatedChecks": [
+    {
+      "command": "bun test packages/or3-cloud/test",
+      "result": "238 pass, 0 fail, 1719 assertions across 7 files (94.91 seconds after sidecar guard)",
+      "coverage": "mocked Docker/provider lifecycle and contracts; final POSIX archive reader additionally qualified by actual containers"
+    },
+    {
+      "command": "bun test packages/or3-cloud/test/cli-backup.test.ts",
+      "result": "34 pass, 0 fail, 256 assertions on 00bc239e"
+    },
+    {
+      "command": "bun test packages/or3-cloud/test/cli-lifecycle.test.ts",
+      "result": "33 pass, 0 fail, 318 assertions"
+    },
+    {
+      "command": "bun run --cwd packages/or3-cloud typecheck; bun run --cwd packages/or3-cloud build",
+      "result": "passed; built CLI, no package publication"
+    },
+    {
+      "command": "bun x eslint packages/or3-cloud/src/backup/archive.ts packages/or3-cloud/src/backup/restore.ts packages/or3-cloud/src/commands/restore.ts packages/or3-cloud/src/commands/rollback.ts",
+      "result": "passed; production source only (test/script paths excluded by project ESLint)"
+    },
+    {
+      "command": "bun x tsc --noEmit --target esnext --module esnext --moduleResolution bundler --types node --skipLibCheck --strict scripts/test/run-backup-restore-drill.ts",
+      "result": "passed"
+    },
+    {
+      "command": "bun build scripts/test/run-backup-restore-drill.ts --target=bun --external @playwright/test",
+      "result": "passed; optional test tool remains external. Bundling Playwright itself fails on its unused optional chromium-bidi imports; actual Chromium execution passed."
+    },
+    {
+      "command": "bun run check:docs",
+      "result": "passed (111 files, 99 mapped routes, 20 typed examples)"
+    }
+  ],
+  "remainingRisksAndNotTested": [
+    "Before 1ab5f45e, an authenticated archive missing only the referenced blob passed restore and deep health; actual download returned 404. That case is now refused. When both blob and sidecar are absent while database references remain, restore still reports success and download returns 404; known-good recovery restores bytes. This remaining case requires database-reference validation, not a new manifest format.",
+    "Seven pushes racing stop were all refused/interrupted; one precommitted atomic pair restored intact. This proves stop-boundary refusal and no split pair in this run, not sustained accepted writes during capture.",
+    "Cross-deployment managed restore remains refused. Test-only second-instance transfer uses the raw production archive primitive after source authentication; no production identity-migration procedure is qualified.",
+    "Fresh-browser chat and document bodies were qualified with serialized TipTap JSON; complete browser flows/Dexie reconciliation, external provider stacks, the published release image/build graph, ARM64, production-size throughput, disk-full hardware faults and cross-release database downgrades were not qualified. The pinned production distroless base was qualified with locally built SSR output.",
+    "Injected lifecycle/filesystem failures use existing test-only seams; archives, extraction, SQLite databases, authentication, sync APIs, attachment transfer, restart and explicit recovery are real."
+  ],
+  "evidenceDirectory": "/workspace/backup-drill (local only; detailed logs and synthetic before/after fixtures; no real credentials)"
+}
