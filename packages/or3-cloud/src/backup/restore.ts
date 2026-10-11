@@ -59,7 +59,7 @@ export async function restoreBackupData(
   }
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
-  await validateVolumeArchive(directory, state.mode, env, backupPath);
+  await validateVolumeArchive(directory, state.mode, env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
   await ensureManagedDataVolume(directory, state.mode, state, env);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove

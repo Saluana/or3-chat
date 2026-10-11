@@ -29,6 +29,16 @@ The three plans are directionally aligned, but there are several conflicts and m
   shells. Presence and checksums still do not prove referenced blob completeness;
   the drill records that remaining semantic boundary and recovery from a
   known-good archive.
+- The populated restore drill reproduced a committed FS sidecar whose blob
+  was absent from an otherwise valid authenticated archive: restore reported
+  success but attachment download returned 404. The archive preflight now
+  requires the matching payload for canonical SHA-256/MD5 sidecars under the
+  archived FS root, without a new manifest format. Uncommitted uploads,
+  temporary sidecars and opaque generation artifacts remain accepted; no
+  physical cleanup is enabled. This does not discover a database reference
+  when both its blob and sidecar are absent. That separate omission still
+  reports restore success and is recorded as data-integrity evidence, with
+  known-good recovery verified against real attachment bytes.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

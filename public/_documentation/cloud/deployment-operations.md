@@ -14,6 +14,14 @@ Run `npx @or3/cloud doctor` and `npx @or3/cloud status` from the managed deploym
 
 Before a recovery experiment, retain a verified backup and its separate authentication key. Restore and rollback can replace newer data; review the recorded snapshot and intended result before confirming either. A backup on the same disk does not protect against disk loss.
 
+The restore reader refuses archives missing either managed database or a blob
+paired with a canonical committed filesystem sidecar. It preserves uncommitted
+uploads and generation artifacts. These checks do not audit every database
+reference: if both a referenced blob and its sidecar are absent, structural
+restore can still succeed while attachment download returns 404. Always verify
+a previously uploaded original after restart; deep health alone cannot prove
+attachment completeness.
+
 ## Monitoring and Health Checks
 
 - Liveness/readiness endpoint: `GET /api/health`
