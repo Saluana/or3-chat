@@ -1,8 +1,8 @@
-Host source/test review head: f350fae9b60e9af164b4780984fd313314068f56
+Host source/test review head: 794b34dab3f00b910515836221454b3eb703fa50
 Latest runtime fix: 4529f0176fdeb4a107799b804a4b55b4dd109a1c
 Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
-Git bundle verify: passed; HEAD ref f350fae9b60e9af164b4780984fd313314068f56; 29 local commits; SHA-1 object format.
+Git bundle verify: passed; HEAD ref 794b34dab3f00b910515836221454b3eb703fa50; 32 local commits; SHA-1 object format.
 Local review exports only; no publication/package release. Includes all committed host SDK isolation fixes.
 SHA-256 file checksums:
-6e67ea6ecc9f1c71a234cafa04b8e098b3f063f2eb25cd4098c0816583aaf5c9  workspace-isolation-source.patch
-73fa863de6180295709bd38a3cee1030546dc8c1ee9d85603bdf8e8e99255cbb  workspace-isolation-source.bundle
+b51f595f08e938a2bccec4029e377599ed8374e3a7ff4334afd208a7a0ef48c7  workspace-isolation-source.patch
+f7d9e812ef1e9dc856e4414cabaad87b8d8f03d48637610bc864198c518d7e32  workspace-isolation-source.bundle
