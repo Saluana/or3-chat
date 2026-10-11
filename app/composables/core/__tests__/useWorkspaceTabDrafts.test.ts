@@ -242,14 +242,22 @@ describe('durable workspace tab drafts', () => {
         const first = await reload();
         first.drafts.write('read-fault-tab', draft('Saved draft before interrupted read'));
         await first.flush();
+        const account = first.drafts.scope().accountKey;
+        const savedId = `${account}\u0000read-fault-tab`;
+        const unrelatedId = `${account}\u0000a-unrelated-tab`;
+        const saved = (await first.client.getDb().workspace_tab_drafts.get(savedId))!;
+        await first.client.getDb().workspace_tab_drafts.put({ ...saved,
+            id: unrelatedId, tab_id: 'a-unrelated-tab',
+            draft: { ...saved.draft, text: 'Independent existing draft' } });
         const second = await reload();
         const table = second.client.getDb().workspace_tab_drafts;
         vi.spyOn(table, 'where').mockReturnValueOnce({ equals: () => ({
             toArray: () => Promise.reject(new DOMException('Synthetic draft read aborted', 'AbortError')),
         }) } as never);
         await expect(second.drafts.load('read-fault-tab')).rejects.toThrow('Synthetic draft read aborted');
-        expect((await table.toArray())[0]?.draft.text).toBe('Saved draft before interrupted read');
+        expect((await table.get(savedId))?.draft.text).toBe('Saved draft before interrupted read');
         expect((await second.drafts.load('read-fault-tab'))?.text).toBe('Saved draft before interrupted read');
+        expect((await table.get(unrelatedId))?.draft.text).toBe('Independent existing draft');
         second.drafts.discard('read-fault-tab');
         await second.flush();
     });

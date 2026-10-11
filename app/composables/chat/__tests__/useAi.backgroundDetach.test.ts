@@ -968,7 +968,8 @@ describe('useChat background detach race', () => {
         } as any;
 
         const first = chat.sendMessage('first', params);
-        const firstRequestId = chat.requestState.value.requestId;
+        const firstState = chat.requestState.value;
+        const firstRequestId = 'requestId' in firstState ? firstState.requestId : undefined;
         expect(firstRequestId).toEqual(expect.any(String));
         const second = await chat.sendMessage('second', params);
 
