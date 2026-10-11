@@ -14,7 +14,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose between using OR3, running Cloud, and source or plugin development; understand workspace-scoped tab restoration."
+                    "summary": "Choose between using OR3, running Cloud, and source or plugin development; understand workspace-scoped tab restoration and title caches."
                 },
                 {
                     "name": "first-chat.md",

@@ -21,6 +21,8 @@ Use projects to group chats, documents for editable notes, and workspace panes t
 
 Open tabs are restored separately for each workspace and layout profile. If you switch workspaces during restoration, the earlier lookup cannot replace the current panes or show an outdated failure notice.
 
+Tab title caches also reset when the workspace changes. Tabs with the same identifiers in different workspaces use their own saved titles while fresh metadata loads; late lookups from an earlier workspace cannot replace them.
+
 ## Keep a backup
 
 Open **Workspace Backup** from the dashboard to export the active workspace as a JSONL backup. Keep the downloaded file somewhere safe. Import validates a backup and offers merge or replace behavior; replace removes the active workspace's existing data. Export before restoring or resetting browser storage.

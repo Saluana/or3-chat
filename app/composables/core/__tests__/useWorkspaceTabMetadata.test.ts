@@ -5,6 +5,8 @@ const bulkGetPosts = vi.fn();
 const getPaneApp = vi.fn();
 
 vi.mock('~/db/client', () => ({
+    getWorkspaceGeneration: () => 0,
+    subscribeActiveWorkspaceDb: () => () => {},
     getDb: () => ({
         threads: { bulkGet: bulkGetThreads },
         posts: { bulkGet: bulkGetPosts },
