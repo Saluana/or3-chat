@@ -17,6 +17,21 @@ export function createStreamWriteCoalescer(options?: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight: Promise<void> | undefined;
     let disposed = false;
+    let failedWrite = false;
+    let unloadGuardBound = false;
+
+    function guardFailedUnload(event: BeforeUnloadEvent) {
+        if (!failedWrite || disposed || (!inFlight && dirtyEvents === 0)) return;
+        event.preventDefault();
+        event.returnValue = '';
+    }
+    function updateUnloadGuard() {
+        if (typeof window === 'undefined') return;
+        const needed = failedWrite && !disposed;
+        if (needed && !unloadGuardBound) window.addEventListener('beforeunload', guardFailedUnload);
+        else if (!needed && unloadGuardBound) window.removeEventListener('beforeunload', guardFailedUnload);
+        unloadGuardBound = needed;
+    }
 
     function clearTimer() {
         if (timer !== undefined) clearTimeout(timer);
@@ -57,6 +72,8 @@ export function createStreamWriteCoalescer(options?: {
         },
         flushed() {
             resetDirty();
+            failedWrite = false;
+            updateUnloadGuard();
         },
         async flush(write: () => Promise<void>) {
             if (inFlight) await inFlight;
@@ -68,9 +85,15 @@ export function createStreamWriteCoalescer(options?: {
             inFlight = pending;
             try {
                 await pending;
+                failedWrite = false;
+                updateUnloadGuard();
             } catch (error) {
                 dirtyEvents += 1;
                 lastFlushAt = now();
+                // Keep the displayed response available while storage retries.
+                // Starting another write is not acknowledgement of this one.
+                failedWrite = true;
+                updateUnloadGuard();
                 throw error;
             } finally {
                 inFlight = undefined;
@@ -80,6 +103,7 @@ export function createStreamWriteCoalescer(options?: {
         async dispose() {
             disposed = true;
             clearTimer();
+            updateUnloadGuard();
             // Drain a prepared progress write before the caller finalizes the
             // row, so an older snapshot cannot land after its terminal state.
             await inFlight?.catch(() => {});
