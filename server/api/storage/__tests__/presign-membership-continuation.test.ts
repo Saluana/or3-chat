@@ -5,7 +5,7 @@ import { _resetSharedSessionCache, invalidateSharedSessionCacheForIdentity } fro
 
 const fixture = vi.hoisted(() => ({
     role: 'owner' as 'owner' | 'editor' | 'viewer' | null,
-    query: vi.fn(), sign: vi.fn(), usage: vi.fn(), list: vi.fn(), storeAvailable: true,
+    query: vi.fn(), sign: vi.fn(), usage: vi.fn(), list: vi.fn(), storeAvailable: true, mutate: vi.fn(),
 }));
 vi.mock('../../../auth/registry', () => ({ getAuthProvider: () => ({ getSession: async () => ({
     provider: 'synthetic-storage', user: { id: 'synthetic-subject' }, expiresAt: new Date(Date.now() + 60_000),
@@ -20,6 +20,17 @@ vi.mock('../../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => fi
 vi.mock('../../../sync/gateway/registry', () => ({ getActiveSyncGatewayAdapter: () => ({ queryCanonicalStorage: fixture.query }) }));
 vi.mock('../../../storage/gateway/registry', () => ({ getActiveStorageGatewayAdapter: () => ({ presignDownload: fixture.sign, presignUpload: fixture.sign }) }));
 
+// This fixture isolates the already-authorized admin route mutation/invalidation path.
+// Admin authentication itself is covered by its canonical route-policy suites.
+vi.mock('../../../admin/api', () => ({ requireAdminApiContext: async () => ({
+    principal: { kind: 'workspace_admin' }, session: { workspace: { id: 'synthetic-workspace' } },
+}) }));
+vi.mock('../../../admin/stores/registry', () => ({ getWorkspaceAccessStore: () => ({
+    removeMember: fixture.mutate, setMemberRole: fixture.mutate,
+}) }));
+import removeMemberHandler from '../../admin/workspace/members/remove.post';
+import setRoleHandler from '../../admin/workspace/members/set-role.post';
+
 vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
 vi.mock('../../../utils/storage/quota', () => ({ getWorkspaceStorageUsageSnapshot: fixture.usage }));
 import downloadHandler from '../presign-download.post';
@@ -32,6 +43,7 @@ describe('storage signing membership continuation with real session caching', ()
         _resetSharedSessionCache();
         vi.stubGlobal('useRuntimeConfig', () => testRuntimeConfig.value);
         fixture.role = 'owner';
+        fixture.mutate.mockReset().mockImplementation(async (input: { role?: 'owner' | 'editor' | 'viewer' }) => { fixture.role = input.role ?? null; });
         fixture.storeAvailable = true;
         fixture.list.mockReset().mockImplementation(async () => fixture.role ? [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }] : []);
         fixture.query.mockReset().mockResolvedValue(page);
@@ -120,6 +132,56 @@ describe('storage signing membership continuation with real session caching', ()
             body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash }),
         }))).status).toBe(200);
         expect(fixture.list).toHaveBeenCalledTimes(2);
+    });
+
+    for (const operation of ['download', 'upload'] as const) {
+        it.each(['removed', 'viewer', 'editor'] as const)(`fences ${operation} when an admin route changes membership %s during final membership lookup`, async role => {
+            let resume!: () => void;
+            let entered!: () => void;
+            const held = new Promise<void>(resolve => { resume = resolve; });
+            const started = new Promise<void>(resolve => { entered = resolve; });
+            fixture.list.mockImplementationOnce(async () => [{ id: 'synthetic-workspace', name: 'Synthetic', role: 'owner' }]);
+            fixture.list.mockImplementationOnce(async () => {
+                const snapshot = [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }];
+                entered(); await held; return snapshot;
+            });
+            const request = toWebHandler(createApp().use(operation === 'upload' ? uploadHandler : downloadHandler));
+            const input = () => new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash, ...(operation === 'upload' ? { mime_type: 'image/png', size_bytes: 3 } : {}) }),
+            });
+            const response = request(input());
+            await Promise.race([started, response.then(() => { throw new Error('Fixture did not reach final membership read'); })]);
+            const admin = toWebHandler(createApp().use(role === 'removed' ? removeMemberHandler : setRoleHandler));
+            const mutation = await admin(new Request('http://synthetic.test/admin/mutate', { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ workspaceId: 'synthetic-workspace', userId: 'synthetic-internal', ...(role === 'removed' ? {} : { role }) }),
+            }));
+            expect(mutation.status).toBe(200);
+            expect(fixture.mutate).toHaveBeenCalledWith({ workspaceId: 'synthetic-workspace', userId: 'synthetic-internal', ...(role === 'removed' ? {} : { role }) });
+            resume();
+            const result = await response;
+            const permitted = role !== 'removed' && (operation === 'download' || role === 'editor');
+            expect(result.status).toBe(permitted ? 200 : 403);
+            if (!permitted) expect(await result.text()).not.toContain('/synthetic-download');
+            expect(fixture.list).toHaveBeenCalledTimes(3);
+            expect(fixture.sign).toHaveBeenCalledOnce();
+            // The same admin path restores access; denied signing does not poison recovery.
+            const restore = toWebHandler(createApp().use(setRoleHandler));
+            expect((await restore(new Request('http://synthetic.test/admin/mutate', { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ workspaceId: 'synthetic-workspace', userId: 'synthetic-internal', role: 'editor' }),
+            }))).status).toBe(200);
+            expect((await request(input())).status).toBe(200);
+        });
+    }
+    it.each(['unrelated-store', 'global'] as const)('handles %s invalidation during a membership read', async scope => {
+        fixture.list.mockImplementationOnce(async () => {
+            invalidateSharedSessionCacheForIdentity(scope === 'global' ? {} : { storeId: 'unrelated-store' });
+            return [{ id: 'synthetic-workspace', name: 'Synthetic', role: 'owner' }];
+        });
+        const request = toWebHandler(createApp().use(downloadHandler));
+        expect((await request(new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash }),
+        }))).status).toBe(200);
+        expect(fixture.list).toHaveBeenCalledTimes(scope === 'global' ? 3 : 2);
     });
 
     for (const operation of ['download', 'upload'] as const) {
