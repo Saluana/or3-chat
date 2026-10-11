@@ -577,22 +577,22 @@ test('failed terminal state write preserves the verified artifact and backup rec
 
 // A crash after exclusive mkdir but before the maintenance milestone leaves
 // the same journal as a name collision. Recovery may inspect, never delete.
-async function recordUnclaimedBackup(fixture: Sandbox, backupId: string) {
+async function recordUnclaimedBackup(fixture: Sandbox, backupId: string, milestoneRecorded = true) {
   const state = await fixture.readState();
   state.incompleteOperation = {
     id: 'backup-operation-fixture', operation: 'backup', startedAt: state.updatedAt,
     message: 'Preflight: preparing a stopped-volume backup', phase: 'prepared',
     backupId, backupPath: join(fixture.cloud, 'backups', backupId), initialAppRunning: true,
-    backupProgress: { stage: 'preflight', service: 'running', artifact: 'not-created', message: 'Preflight' },
+    ...(milestoneRecorded ? { backupProgress: { stage: 'preflight' as const, service: 'running' as const, artifact: 'not-created' as const, message: 'Preflight' } } : {}),
   };
   await fixture.writeState(state);
 }
 
-test('recovery reports the retained directory from a crash before ownership was journaled', async () => {
+test.each([true, false])('recovery preserves unowned artifacts before the first ownership milestone (preflight recorded=%s)', async (milestoneRecorded) => {
   const fixture = await sandbox();
   const id = 'backup-crash-window';
   const path = join(fixture.cloud, 'backups', id);
-  await recordUnclaimedBackup(fixture, id);
+  await recordUnclaimedBackup(fixture, id, milestoneRecorded);
   await mkdir(path, { mode: 0o700 });
   const recovered = await fixture.cli(['recover', '--json']);
   expect(recovered.exitCode, recovered.output).toBe(0);

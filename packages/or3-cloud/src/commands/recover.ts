@@ -151,7 +151,9 @@ async function runRecovery(
       // maintenance. Recover the service independently, then retry cleanup.
       const failures: Error[] = [];
       let service: 'stopped' | 'healthy' | 'unknown' = pending.initialAppRunning === false ? 'stopped' : 'unknown';
-      let artifact = pending.backupProgress?.artifact ?? 'unknown';
+      // No progress record includes the crash before the first callback and
+      // older journals. Neither establishes ownership of the named artifacts.
+      let artifact = pending.backupProgress?.artifact ?? 'not-created';
       let artifactDetail = '';
       if (pending.initialAppRunning !== false) {
         report('Restart: recovering OR3 and checking deep health before backup cleanup.');
