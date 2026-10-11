@@ -91,3 +91,12 @@ Previously reviewed #234–#238 are merged in the exact base and preserved.
 Dormant generation cleanup remains inactive. No production access, credentials,
 paid/model requests, external scans, push, merge, deployment or package release.
 Library saves are the explicitly requested private transfer of these artifacts.
+
+Transfer blocker: the required current Library upload helper failed before any
+file writes during hosted-app discovery with HTTP 401. A read-only Library app
+request succeeded, so this is the cloud upload runtime's authentication path,
+not evidence that the user's Library is disconnected. No Library files or IDs
+were created. The skill prohibits switching a started prepared write to direct
+actions. The supported transfer is to restore that runtime's authentication and
+run the same ordered prepared-upload batch over the five verified local files.
+No remote Git publication or invented download URL was used as a substitute.

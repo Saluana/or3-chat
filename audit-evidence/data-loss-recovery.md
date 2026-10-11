@@ -93,6 +93,15 @@ without eviction. Natural hidden/OS suspension, physical IDB exhaustion, evictio
 and power loss remain unqualified. The concise portable handoff records these
 limits separately from actual browser evidence.
 
+Portable transfer qualification: the incremental Git bundle verifies against
+the stated base, and applying the binary patch to a temporary base index produces
+the exact final HEAD tree. Library transfer was attempted through the required
+current helper but failed before file creation: hosted-app discovery HTTP 401.
+A separate read-only Library app request succeeded. No saved Library IDs exist;
+restore the cloud upload runtime's authentication for the supported prepared
+batch. Direct mutation fallback is prohibited by the Library skill, and no
+remote publication or fabricated URL was substituted.
+
 The evidence below is historical, with each result tied to its own source. Older
 'remaining/unimplemented' statements describe that checkpoint and are superseded
 by the current status above.
