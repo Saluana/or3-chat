@@ -35,7 +35,8 @@ const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
 const archiveRaceOnly = process.argv.includes('--archive-race-only');
 const blobContentOnly = process.argv.includes('--blob-content-only');
-const filesystemCompatOnly = process.argv.includes('--filesystem-compat-only');
+const alternateStorageOnly = process.argv.includes('--alternate-storage-only');
+const filesystemCompatOnly = process.argv.includes('--filesystem-compat-only') || alternateStorageOnly;
 const workspaceOmissionOnly = process.argv.includes('--workspace-omission-only');
 const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only') || workspaceOmissionOnly;
 const builtCliOnly = process.argv.includes('--built-cli-only');
@@ -117,6 +118,15 @@ async function instance(name: string): Promise<Instance> {
   // Compose archive helpers. Direct extraction helpers use --network none.
   await appendFile(join(directory, 'compose.yaml'), '\nnetworks:\n  default:\n    internal: true\n');
   const env = buildEnv({ mode: 'local', version: PACKAGE_VERSION, directory, image, email, password, port });
+  if (alternateStorageOnly) {
+    // The supported managed asset fixes its root at /data/storage. This
+    // compatibility fixture deliberately owns a custom Compose asset too.
+    env.OR3_STORAGE_FS_ROOT = '/data/retained uploads';
+    const composePath = join(directory, 'compose.yaml');
+    const compose = await readFile(composePath, 'utf8');
+    assert(compose.includes('OR3_STORAGE_FS_ROOT: /data/storage'));
+    await writeFile(composePath, compose.replace('OR3_STORAGE_FS_ROOT: /data/storage', "OR3_STORAGE_FS_ROOT: '/data/retained uploads'"));
+  }
   const state = stateFromEnv(directory, env, 'local', 'init', digest);
   await writeFile(join(directory, '.env'), serializeEnv(env), { mode: 0o600 });
   await writeFile(join(directory, '.or3-cloud/backup-auth.key'), `${randomBytes(32).toString('hex')}\n`, { mode: 0o600 });
@@ -215,7 +225,7 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
     assert.deepEqual(Buffer.from(await (await api(download.url)).arrayBuffer()), legacyAttachment.bytes);
   }
   if (extraFilesystemFiles.length) {
-    const script = `const fs=require('node:fs'),crypto=require('node:crypto');const root=${JSON.stringify(`/data/storage/workspaces/${workspaceId}/`)};console.log(JSON.stringify(${JSON.stringify(extraFilesystemFiles)}.map(item=>({name:item.name,sha256:crypto.createHash('sha256').update(fs.readFileSync(root+item.name)).digest('hex')}))))`;
+    const script = `const fs=require('node:fs'),crypto=require('node:crypto');const root=${JSON.stringify(`${fixture.env.OR3_STORAGE_FS_ROOT}/workspaces/${workspaceId}/`)};console.log(JSON.stringify(${JSON.stringify(extraFilesystemFiles)}.map(item=>({name:item.name,sha256:crypto.createHash('sha256').update(fs.readFileSync(root+item.name)).digest('hex')}))))`;
     const observed = JSON.parse(await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), fixture.directory));
     assert.deepEqual(observed, extraFilesystemFiles, 'Native verification must preserve uncommitted/temporary/opaque files without rewriting bytes');
   }
@@ -395,7 +405,7 @@ try {
     for (const item of fixtures) extraFilesystemFiles.push({ name: item.name, sha256: createHash('sha256').update(item.bytes).digest('hex') });
     // Local filesystem fixtures simulate a pre-existing legacy object and
     // retained artifacts; they do not exercise a new MD5 upload contract.
-    const script = `const fs=require('node:fs');const root=${JSON.stringify(`/data/storage/workspaces/${workspaceId}/`)};const files=${JSON.stringify(fixtures.map(item => ({ name: item.name, base64: item.bytes.length === large.length ? undefined : item.bytes.toString('base64'), large: item.bytes.length === large.length })))};for(const item of files){fs.writeFileSync(root+item.name,item.large?Buffer.alloc(150001,0x93):Buffer.from(item.base64,'base64'))}for(const name of files.slice(0,3).map(item=>item.name))fs.writeFileSync(root+name+'.meta.json',JSON.stringify({workspace_id:${JSON.stringify(workspaceId)},hash:name.replace('_',':'),committed_at:new Date().toISOString()}))`;
+    const script = `const fs=require('node:fs');const root=${JSON.stringify(`${source.env.OR3_STORAGE_FS_ROOT}/workspaces/${workspaceId}/`)};const files=${JSON.stringify(fixtures.map(item => ({ name: item.name, base64: item.bytes.length === large.length ? undefined : item.bytes.toString('base64'), large: item.bytes.length === large.length })))};for(const item of files){fs.writeFileSync(root+item.name,item.large?Buffer.alloc(150001,0x93):Buffer.from(item.base64,'base64'))}for(const name of files.slice(0,3).map(item=>item.name))fs.writeFileSync(root+name+'.meta.json',JSON.stringify({workspace_id:${JSON.stringify(workspaceId)},hash:name.replace('_',':'),committed_at:new Date().toISOString()}))`;
     await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), source.directory);
   }
   replayBody = { scope: { workspaceId }, ...caps, ops: fixtureRows.map(row => op(row.tableName, row.pk, row.payload)) };
@@ -1108,6 +1118,40 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       : 'acknowledged concurrent batches remain intact after another cold restart', await verify(target));
   }
   if (builtCliOnly || filesystemCompatOnly) {
+    if (alternateStorageOnly) {
+      for (const fault of ['missing-blob', 'corrupt-legacy-blob']) {
+        const broken = join(root, `alternate-${fault}`);
+        const tree = join(root, `alternate-tree-${fault}`);
+        await cp(targetBackup, broken, { recursive: true });
+        await mkdir(tree);
+        const unpack = await run('tar', ['xzf', join(broken, 'data.tgz'), '-C', tree]);
+        assert(unpack.ok, unpack.stderr);
+        const key = fault === 'missing-blob' ? hash : legacyAttachment!.hash;
+        const blob = join(tree, 'retained uploads/workspaces', workspaceId, key.replace(':', '_'));
+        if (fault === 'missing-blob') await rm(blob);
+        else {
+          const bytes = await readFile(blob);
+          bytes[0] ^= 1;
+          await writeFile(blob, bytes);
+        }
+        const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+        assert(packed.ok, packed.stderr);
+        const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
+        manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+        const text = `${JSON.stringify(manifest, null, 2)}\n`;
+        await writeFile(join(broken, 'manifest.json'), text);
+        await writeBackupAuthentication(target.directory, broken, text);
+        const beforeState = await readState(target.directory);
+        const beforeContainer = await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory);
+        await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), fault === 'missing-blob'
+          ? /sidecar without its required blob payload/ : /Filesystem payload hash mismatch/);
+        if (fault === 'missing-blob') {
+          assert.deepEqual(await readState(target.directory), beforeState);
+          assert.equal(await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory), beforeContainer);
+        }
+        evidence(`alternate filesystem root with spaces: ${fault} refused and intact scoped objects retained`, await verify(target));
+      }
+    }
     const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
     const restored = await run(process.execPath, [cli, 'restore', targetBackup, '--yes'], target.directory);
     assert(restored.ok, restored.stderr);
@@ -1148,7 +1192,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

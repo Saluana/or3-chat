@@ -3053,6 +3053,131 @@
     ],
     "coverage": "Built Node-target ESM CLI orchestrated by Bun; restored-image native Node crypto accepts seeded legacy MD5, zero-length and 150001-byte committed objects. Seven extra filesystem fixture byte hashes remain identical, including wrong-key uncommitted upload bytes, temporary sidecar and opaque generation pair. Legacy metadata is published by real sync and its MD5 object is downloaded through the real authenticated app; no new MD5 upload contract is qualified."
   },
+  "actualAppAlternateStorageRoot": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "51dc4e91ce604d893a7286f388f2304c53ac9def",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "d109b94feba54e1971ed75fe45d7d7b9a6bde12dc8d56ee2f5357464a194a8a6"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "alternate filesystem root with spaces: missing-blob refused and intact scoped objects retained",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "alternate filesystem root with spaces: corrupt-legacy-blob refused and intact scoped objects retained",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI native helper accepts legacy MD5, empty/multi-chunk committed objects and preserves temporary/uncommitted/opaque fixtures",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI restore survives another actual cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 7,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI read-only status remains available after restore lease release",
+        "kind": "passed",
+        "detail": {
+          "deploymentIdentityPreserved": true,
+          "lease": "none",
+          "docker": true,
+          "identityMatches": null,
+          "runningImageIdMatches": true,
+          "boundary": "Unpublished local fixture has no RepoDigests; status correctly leaves registry-qualified image identity unknown. Direct local image ID matches."
+        }
+      }
+    ],
+    "coverage": "Explicitly custom owned Compose asset uses an archived /data storage root containing spaces. Native legacy MD5 content corruption refuses with snapshot recovery; missing SHA-256 blob refuses before exact state/container mutation. All scoped records, modern/legacy downloads and retained artifacts survive built CLI restore and cold restart. Does not expand the managed fixed-root profile."
+  },
+  "actualAppAlternateStorageFirstAttempt": {
+    "completed": false,
+    "cleanupFailed": false,
+    "outcomes": [],
+    "explanation": "Fixture setup stopped before backup: managed Compose intentionally hardcodes /data/storage, so changing .env alone left the expected alternate workspace directory absent. Corrected fixture explicitly owns the custom Compose asset too. Not a production restore defect."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,

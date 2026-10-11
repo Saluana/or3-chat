@@ -202,6 +202,12 @@ fixtures. It publishes the legacy metadata through real sync and checks its
 authenticated app download. The built CLI's native verifier must accept the
 valid committed objects, retain every fixture byte, and pass another cold
 restart/status check. This does not qualify a new MD5 upload contract.
+`--alternate-storage-only` repeats the compatibility fixture with an explicitly
+custom Compose asset and an archived storage root containing spaces inside
+`/data`. It checks missing-blob refusal before state/container mutation and
+native legacy-MD5 corruption refusal followed by snapshot recovery, then runs
+the built CLI restore and cold restart. Managed Compose fixes its storage root
+at `/data/storage`; this fixture does not expand that supported profile.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks
