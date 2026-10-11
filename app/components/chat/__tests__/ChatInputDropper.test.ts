@@ -611,6 +611,33 @@ describe('ChatInputDropper', () => {
         }
     });
 
+    it('captures a final editor change before an earlier bubbling unload guard and removes its listener', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-unload-capture-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'unload-capture-tab';
+        const drafts = useWorkspaceTabDrafts(); let captured = '';
+        const observer = () => { captured = drafts.read(tabId)?.text ?? ''; };
+        window.addEventListener('beforeunload', observer);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            (wrapper.vm as unknown as { setText: (text: string) => void }).setText('Final edit inside the capture debounce');
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            expect(drafts.read(tabId)?.text).toBe('Final edit inside the capture debounce');
+            expect(captured).toBe('Final edit inside the capture debounce');
+            wrapper.unmount(); await clearDraftFixtures();
+            captured = '';
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+            expect(captured).toBe('');
+        } finally {
+            window.removeEventListener('beforeunload', observer); wrapper.unmount(); await clearDraftFixtures();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+            process.client = previous;
+        }
+    });
+
     it('keeps the saved row when interrupted hydration is followed by leaving the empty composer', async () => {
         const previous = process.client; process.client = true;
         const workspace = `draft-read-fault-${crypto.randomUUID()}`;

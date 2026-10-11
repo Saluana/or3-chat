@@ -37,9 +37,13 @@ test('disconnected welcome keeps editor history and loads settings on first open
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
+const draftRecoveryScripts = new WeakMap<Page, string[]>();
+
 test.describe('chat draft storage recovery faults', () => {
     test.describe.configure({ timeout: 120_000 });
     test.beforeEach(async ({ context, page }) => {
+        const scripts: string[] = []; draftRecoveryScripts.set(page, scripts);
+        page.on('request', request => { if (request.resourceType() === 'script') scripts.push(request.url()); });
         await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
             ? route.continue() : route.abort('blockedbyclient'));
         await page.goto('/chat');
@@ -178,6 +182,44 @@ test.describe('chat draft storage recovery faults', () => {
         await writeFile(evidencePath, JSON.stringify({ storedReferences: await savedReferences(),
             restoredText: await input.innerText(), externalRequests: 'denied', faultReadsConfirmed: true, layoutAcknowledged: true }, null, 2));
         await info.attach('interrupted-attachment-read', { path: evidencePath, contentType: 'application/json' });
+    });
+
+    test('refresh protects a valid draft too large for the unload journal while its save is interrupted', async ({ page }, info) => {
+        const clientURL = draftRecoveryScripts.get(page)?.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
+        expect(clientURL).toBeTruthy();
+        await page.evaluate(async url => {
+            const client = await import(url!); const table = client.getDb().workspace_tab_drafts;
+            const put = table.put.bind(table);
+            const held: Array<{ row: unknown; resolve: (value: unknown) => void }> = [];
+            table.put = (row: unknown) => new Promise(resolve => { held.push({ row, resolve }); });
+            (window as unknown as { interruptedDraftSave: { count: () => number; repair: () => Promise<void> } }).interruptedDraftSave = {
+                count: () => held.length,
+                repair: async () => { table.put = put; for (const { row, resolve } of held) resolve(await put(row)); },
+            };
+        }, clientURL);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Valid large draft pending local durability '.repeat(3_000);
+        await input.fill(marker);
+        await expect.poll(() => page.evaluate(() => (window as unknown as { interruptedDraftSave: { count: () => number } }).interruptedDraftSave.count())).toBeGreaterThan(0);
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        const receiptPath = info.outputPath('pending-large-unload-state.json');
+        await writeFile(receiptPath, JSON.stringify({ dialogs, liveChars: (await input.innerText()).length,
+            storedMarker: (await savedTexts(page)).includes(marker) }, null, 2));
+        expect(dialogs).toEqual(['beforeunload']);
+        expect(await page.evaluate(expected => document.querySelector('[aria-label="Message input"]')?.textContent === expected, marker)).toBe(true);
+        await page.evaluate(() => (window as unknown as { interruptedDraftSave: { repair: () => Promise<void> } }).interruptedDraftSave.repair());
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        expect(await page.evaluate(expected => document.querySelector('[aria-label="Message input"]')?.textContent === expected, marker)).toBe(true);
+        expect(dialogs).toEqual(['beforeunload']);
+        const path = info.outputPath('interrupted-large-draft.json');
+        await writeFile(path, JSON.stringify({ chars: marker.length, dialogs, recoveredChars: (await input.innerText()).length,
+            externalRequests: 'denied', fault: 'deferred local Dexie put before native transaction' }, null, 2));
+        await info.attach('interrupted-large-draft', { path, contentType: 'application/json' });
     });
 
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {

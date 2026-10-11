@@ -57,6 +57,9 @@ const discardTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const dirty = new Map<string, { scope: WorkspaceDraftScope; tabId: string }>();
 /** Independent flushes may overlap; success for one tab cannot acknowledge another. */
 const failedDrafts = new Set<string>();
+/** Local receipts keep unchanged large buffers from requesting needless confirmations. */
+const durableDrafts = new Map<string, PersistedWorkspaceTabDraft | null>();
+const inFlightDrafts = new Map<string, { scope: WorkspaceDraftScope; tabId: string; count: number }>();
 const hydrations = new Map<string, { db: Or3DB; promise: Promise<void>; done: boolean }>();
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let retryArmed = false;
@@ -249,13 +252,13 @@ function readNewerJournal(
     return newer;
 }
 
-async function pruneOldest(db: Or3DB, accountKey: string): Promise<void> {
-    const owned = db.workspace_tab_drafts.where('account_key').equals(accountKey);
+async function pruneOldest(db: Or3DB, scope: WorkspaceDraftScope): Promise<void> {
+    const owned = db.workspace_tab_drafts.where('account_key').equals(scope.accountKey);
     if (await owned.count() <= MAX_PERSISTED_DRAFTS) return;
     const rows = await owned.sortBy('updated_at');
-    await db.workspace_tab_drafts.bulkDelete(
-        rows.slice(0, rows.length - MAX_PERSISTED_DRAFTS).map((row) => row.id)
-    );
+    const pruned = rows.slice(0, rows.length - MAX_PERSISTED_DRAFTS);
+    await db.workspace_tab_drafts.bulkDelete(pruned.map(row => row.id));
+    for (const row of pruned) durableDrafts.delete(memoryKey(scope, row.tab_id));
 }
 
 /** Return the confirmed snapshot, or a rejected write to retain for retry. */
@@ -266,6 +269,10 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
     // A restored handle can acknowledge that same account/workspace only.
     const restoredDb = hydrations.get(scope.key)?.db;
     if (!db.isOpen() && restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
+    const key = memoryKey(scope, tabId);
+    const flight = inFlightDrafts.get(key) ?? { scope, tabId, count: 0 };
+    flight.count++;
+    inFlightDrafts.set(key, flight);
     try {
         // Read memory at write time so the newest edit wins over an older timer.
         const startedAt = Date.now();
@@ -274,6 +281,8 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
         if (persisted === undefined) return { saved: false };
         if (!persisted) {
             await db.workspace_tab_drafts.delete(rowId(scope, tabId));
+            if (drafts.has(key)) durableDrafts.set(key, null);
+            else durableDrafts.delete(key);
             clearJournalCoveredBy(scope, tabId, startedAt);
             return { saved: true, persisted: null };
         }
@@ -284,12 +293,16 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
             updated_at: persisted.updatedAt,
             draft: persisted,
         });
+        durableDrafts.set(key, persisted);
         clearJournalCoveredBy(scope, tabId, persisted.updatedAt, persisted);
-        await pruneOldest(db, scope.accountKey);
+        await pruneOldest(db, scope);
         return { saved: true, persisted };
     } catch (error) {
         console.warn('[tab-drafts] Draft was not saved to local storage', error);
         return { saved: false };
+    } finally {
+        flight.count--;
+        if (flight.count === 0 && inFlightDrafts.get(key) === flight) inFlightDrafts.delete(key);
     }
 }
 
@@ -376,14 +389,22 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
             const cutoff = Date.now() - PERSISTED_DRAFT_TTL_MS;
             const expired = rows.filter((row) => row.updated_at < cutoff).map((row) => row.id);
             if (expired.length) await db.workspace_tab_drafts.bulkDelete(expired);
+            for (const id of expired) {
+                const row = rows.find(row => row.id === id);
+                if (row) durableDrafts.delete(memoryKey(scope, row.tab_id));
+            }
             const live = new Map(rows.filter((row) => row.updated_at >= cutoff && row.account_key === scope.accountKey)
                 .map((row) => [row.tab_id, row]));
+            for (const row of live.values()) {
+                if (fromPersisted(row.draft)) durableDrafts.set(memoryKey(scope, row.tab_id), row.draft);
+            }
             // Changes made just before the page unloaded may not have reached IndexedDB.
             for (const record of readNewerJournal(scope, new Map([...live].map(([tabId, row]) => [tabId, row.updated_at])))) {
                 const key = memoryKey(scope, record.tabId);
                 if (record.draft === null) {
                     const row = live.get(record.tabId);
                     if (row) await db.workspace_tab_drafts.delete(row.id);
+                    durableDrafts.delete(key);
                     live.delete(record.tabId);
                     clearJournalCoveredBy(scope, record.tabId, record.updatedAt);
                     continue;
@@ -427,6 +448,38 @@ async function resolveAttachment(
         // Preview is optional; the file itself is what gets sent.
     }
     return { file, url, name: ref.name, hash: ref.hash, status: 'ready', meta, mime, kind: ref.kind };
+}
+
+function samePersistedContent(a: PersistedWorkspaceTabDraft | null, b: PersistedWorkspaceTabDraft | null): boolean {
+    // Re-capturing an unchanged editor advances its timestamp, not its user data.
+    return JSON.stringify(a ? { ...a, updatedAt: 0 } : null) ===
+        JSON.stringify(b ? { ...b, updatedAt: 0 } : null);
+}
+
+/** Pending writes need confirmation only when neither a receipt nor the synchronous journal protects their bytes. */
+function needsUnloadConfirmation(): boolean {
+    const pending = new Map<string, { scope: WorkspaceDraftScope; tabId: string }>(dirty);
+    for (const [key, entry] of drafts) pending.set(key, entry);
+    for (const [key, flight] of inFlightDrafts) pending.set(key, flight);
+    for (const [key, { scope, tabId }] of pending) {
+        try {
+            const draft = drafts.get(key)?.draft;
+            if (draft?.attachments.some(item => item.status !== 'ready' || !item.hash)) return true;
+            const current = draft ? toPersisted(draft) : null;
+            if (current === undefined) return true;
+            const cutoff = Date.now() - PERSISTED_DRAFT_TTL_MS;
+            const durable = durableDrafts.get(key);
+            if (durable !== undefined && (durable === null || durable.updatedAt >= cutoff) && samePersistedContent(current, durable)) continue;
+            const raw = journalStorage()?.getItem(journalKey(scope, tabId));
+            const record = raw ? JSON.parse(raw) as JournalRecord : null;
+            if (record?.tabId === tabId && record.updatedAt >= cutoff &&
+                (record.draft === null || fromPersisted(record.draft)) && samePersistedContent(current, record.draft)) continue;
+            return true;
+        } catch {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -566,6 +619,7 @@ export function useWorkspaceTabDrafts() {
         read, load, isLoaded, write, discard, discardAfter, clear,
         scope: currentWorkspaceDraftScope,
         flush: flushWorkspaceTabDrafts,
+        needsUnloadConfirmation,
         /** True while a draft could not be written to local storage (it is kept in memory and retried). */
         saveFailed: readonly(saveFailed),
     };

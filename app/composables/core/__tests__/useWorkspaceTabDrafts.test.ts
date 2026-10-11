@@ -162,6 +162,62 @@ describe('durable workspace tab drafts', () => {
         second.drafts.discard('attachment-read-tab'); await second.flush();
     });
 
+    it('protects unjournaled in-flight bytes and accepts unchanged content after a confirmed receipt', async () => {
+        const { client, drafts, flush } = await reload(); const table = client.getDb().workspace_tab_drafts;
+        const put = table.put.bind(table); let finish!: () => Promise<void>;
+        const held = vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
+            finish = async () => resolve(await put(row));
+        }) as never);
+        const text = 'L'.repeat(150_000);
+        drafts.write('large-pending-tab', draft(text));
+        expect(journalKeys()).toEqual([]); expect(drafts.needsUnloadConfirmation()).toBe(true);
+        const writing = flush(); await vi.waitFor(() => expect(finish).toBeDefined());
+        expect(drafts.needsUnloadConfirmation()).toBe(true);
+        await finish(); await writing;
+        expect(drafts.needsUnloadConfirmation()).toBe(false);
+        drafts.write('large-pending-tab', draft(text, { updatedAt: Date.now() + 1 }));
+        expect(drafts.needsUnloadConfirmation()).toBe(false);
+        held.mockRestore(); await flush(); drafts.discard('large-pending-tab'); await flush();
+    });
+
+    it('uses a synchronous journal for pending small drafts, but guards a blocked journal', async () => {
+        const { client, drafts, flush } = await reload();
+        const table = client.getDb().workspace_tab_drafts; const put = table.put.bind(table);
+        const completions: Array<() => Promise<void>> = [];
+        const held = vi.spyOn(table, 'put').mockImplementation(row => new Promise(resolve => {
+            completions.push(async () => resolve(await put(row)));
+        }) as never);
+        drafts.write('journal-guard-tab', draft('Small journal protects these bytes'));
+        const writing = flush(); expect(drafts.needsUnloadConfirmation()).toBe(false);
+        const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Synthetic journal quota', 'QuotaExceededError'); });
+        drafts.write('journal-guard-tab', draft('Different bytes without a journal'));
+        expect(drafts.needsUnloadConfirmation()).toBe(true);
+        storage.mockRestore(); held.mockRestore();
+        for (const complete of completions) await complete(); await writing;
+        await flush(); drafts.discard('journal-guard-tab'); await flush();
+    });
+
+    it('guards files still preparing even when the text has a synchronous journal', async () => {
+        const { drafts, flush } = await reload();
+        const attachment = { file: new File(['synthetic pending bytes'], 'pending.png', { type: 'image/png' }),
+            name: 'pending.png', url: '', mime: 'image/png', kind: 'image', status: 'pending' } as never;
+        drafts.write('pending-file-tab', draft('Journaled text with an uncommitted file', { attachments: [attachment] }));
+        expect(drafts.needsUnloadConfirmation()).toBe(true);
+        await flush();
+        // The pending file cannot be reconstructed from that text-only receipt.
+        expect(drafts.needsUnloadConfirmation()).toBe(true);
+        drafts.discard('pending-file-tab'); await flush();
+    });
+
+    it('restores a large receipt after reload without warning on unchanged recapture', async () => {
+        const first = await reload(); const text = 'R'.repeat(150_000);
+        first.drafts.write('restored-large-tab', draft(text)); await first.flush();
+        const second = await reload(); await second.drafts.load('restored-large-tab');
+        second.drafts.write('restored-large-tab', draft(text, { updatedAt: Date.now() + 1 }));
+        expect(second.drafts.needsUnloadConfirmation()).toBe(false);
+        await second.flush(); second.drafts.discard('restored-large-tab'); await second.flush();
+    });
+
     it('never shows one account\'s draft to another account in the same workspace', async () => {
         session.userId = 'user-a';
         const first = await reload();

@@ -671,6 +671,8 @@ async function initializeEditor(replaceExisting = false) {
 }
 
 onMounted(async () => {
+    // Capture before the shell's bubbling unload guard evaluates durability.
+    window.addEventListener('beforeunload', saveDraftNow, { capture: true });
     window.addEventListener('pagehide', saveDraftNow);
     document.addEventListener('visibilitychange', saveDraftWhenHidden);
     await initializeEditor();
@@ -683,6 +685,7 @@ watch(trustedEditorRevision, () => {
 });
 
 onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', saveDraftNow, { capture: true });
     window.removeEventListener('pagehide', saveDraftNow);
     document.removeEventListener('visibilitychange', saveDraftWhenHidden);
     componentDisposed = true;

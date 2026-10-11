@@ -417,3 +417,36 @@ Final candidate credential-free type-check passed:
 `/tmp/or3-recovery-unload-edits-final-typecheck.log`. Core source ESLint has zero
 errors and the same four existing warnings:
 `/tmp/or3-recovery-unload-edits-final-lint.log`.
+
+## Pending saves larger than the synchronous unload journal
+
+Reproduced natural Chromium refresh losing a valid 129,000-character draft
+while its Dexie write was held before the native transaction. The content fits
+the persisted draft cap but exceeds the synchronous journal cap, so no failed
+save warning had yet appeared. Original-source browser failure:
+`/tmp/or3-recovery-pending-large-browser-red.log`.
+
+Local exact-content receipts and pending write tracking now determine whether
+draft bytes are protected by IndexedDB or the synchronous journal. Uncommitted
+attachment files, oversized buffers and unavailable journals require unsaved
+confirmation. Unchanged confirmed content does not prompt merely because a new
+capture timestamp was assigned. Receipt state is scoped by account/workspace/tab;
+pruning or expiry invalidates its known protection. No schema, sync or cleanup
+contract changed. The composer captures in beforeunload's capture phase before
+the shell's bubbling durability guard, and removes that listener on teardown.
+The shell consumes this check in a separate one-line integration commit.
+
+Four core receipt/journal/attachment tests and one mounted event-order test were
+added. The final 56-test draft/composer suite and nine-case Chromium recovery
+lane passed; the large-draft case independently passed in 25.1 seconds before
+final qualification. Chromium dismissed one natural beforeunload dialog, retained
+the live buffer, repaired the held write, and reloaded the saved buffer without a
+second dialog. JSON receipts:
+`test-results/recovery-unload-edits-final/*/interrupted-large-draft.json` and
+`pending-large-unload-state.json`; log
+`/tmp/or3-recovery-unload-edits-final-browser.log`.
+The deterministic fault is deferred local Dexie put before a native transaction,
+not physical IndexedDB quota exhaustion or OS power loss. Browser confirmation
+remains best effort; accepting or suppressing it can still abandon pending bytes.
+
+Empty-transaction restoration source commit: `8dd1de97`.

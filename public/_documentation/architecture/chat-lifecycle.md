@@ -138,3 +138,10 @@ buffer merely because the empty editor emitted an update. Retry applies the
 saved copy unless the user changed text, attachments or pasted blocks while it
 was loading; typing and clearing text still counts as a user edit. This restore
 comparison is separate from the revision used to clear accepted sends.
+
+Before unload, the composer captures the latest editor state before the shell
+checks local durability. Pending draft bytes require confirmation when neither
+a confirmed IndexedDB receipt nor a matching synchronous journal protects them.
+This includes valid buffers larger than the unload journal limit and files still
+preparing. Recapturing unchanged durable content does not prompt solely because
+its timestamp changed. Browser confirmations remain best effort.
