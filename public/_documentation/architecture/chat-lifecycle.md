@@ -131,3 +131,10 @@ Interrupted draft reads reject restoration instead of reporting an absent draft.
 A rejected attachment blob or metadata read keeps its original draft reference and reports a retryable restore failure. Partial preview URLs are released before retry. Only a successfully read absent/deleted file is reported through the existing missing-attachment notice.
 
 Save completion acknowledges only the exact current persisted snapshot. An older successful save of the same tab cannot clear a newer failed edit's warning. Immediate discard uses the same receipt rule, and rejected deletion keeps its discard journal and retry pending.
+
+Empty editor transactions do not count as competing edits during restoration.
+After an interrupted read, unload or unmount cannot replace the unread saved
+buffer merely because the empty editor emitted an update. Retry applies the
+saved copy unless the user changed text, attachments or pasted blocks while it
+was loading; typing and clearing text still counts as a user edit. This restore
+comparison is separate from the revision used to clear accepted sends.

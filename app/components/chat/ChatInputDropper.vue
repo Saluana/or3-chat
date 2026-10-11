@@ -629,7 +629,9 @@ async function initializeEditor(replaceExisting = false) {
             },
             onUpdate: ({ editor: ed }) => {
                 composerRevision++;
-                promptText.value = ed.getText();
+                const nextText = ed.getText();
+                if (nextText.trim() || promptText.value.trim()) noteDraftEdit();
+                promptText.value = nextText;
                 if (!restoringDraft.value) scheduleDraftCapture(props.tabId);
                 autoResize();
             },
@@ -939,8 +941,18 @@ const draftAccountId = computed(() => getCachedSessionContext()?.user?.id ?? 'lo
 // only the revision it submitted, so text typed while it was being prepared
 // survives even if it later matches the submitted text.
 let composerRevision = 0;
+// Empty editor bookkeeping must not compete with a saved buffer being restored.
+let draftEditRevision = 0;
+let draftRestoreFailed = false;
+function noteDraftEdit(): void {
+    draftEditRevision++;
+    draftRestoreFailed = false;
+}
 watch([promptText, () => attachments.value.slice(), () => largeTextBlocks.value.slice()],
-    () => { composerRevision++; }, { flush: 'sync' });
+    ([text, files, blocks], [previousText, previousFiles, previousBlocks]) => {
+        composerRevision++;
+        if (text.trim() || previousText.trim() || files.length || previousFiles.length || blocks.length || previousBlocks.length) noteDraftEdit();
+    }, { flush: 'sync' });
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
 let autoCompactionAttempt: string | undefined;
@@ -976,8 +988,6 @@ async function compactFromSettings() {
 }
 const restoringDraft = ref(false);
 let draftContentLoading = false;
-/** An unread copy must not be replaced by the untouched empty editor. */
-let failedDraftRestoreRevision: number | null = null;
 let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -998,7 +1008,9 @@ function scheduleDraftCapture(tabId = props.tabId): void {
 function captureDraft(tabId = props.tabId): void {
     // Until saved content is applied the composer holds nothing the user wrote;
     // capturing now would overwrite the saved draft with an empty one.
-    if (!tabId || draftContentLoading || composerRevision === failedDraftRestoreRevision) return;
+    if (!tabId || draftContentLoading) return;
+    if (draftRestoreFailed && !promptText.value.trim() && !attachments.value.length && !largeTextBlocks.value.length) return;
+    draftRestoreFailed = false;
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
@@ -1044,14 +1056,14 @@ watch(tabDrafts.saveFailed, (failed) => {
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revision = ++draftRestoreRevision;
-    failedDraftRestoreRevision = null;
+    draftRestoreFailed = false;
     if (!tabId) {
         restoringDraft.value = false;
         return;
     }
     restoringDraft.value = true;
     // The editor stays editable while saved content loads; anything typed meanwhile wins.
-    const revisionBeforeLoad = composerRevision;
+    const revisionBeforeLoad = draftEditRevision;
     const scope = tabDrafts.scope();
     const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
     let keptTypedText = false;
@@ -1067,7 +1079,7 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
         draftContentLoading = false;
         toast.remove(noticeId);
         draftScope = scope;
-        keptTypedText = composerRevision !== revisionBeforeLoad;
+        keptTypedText = draftEditRevision !== revisionBeforeLoad;
         if (!keptTypedText) {
             promptText.value = draft?.text ?? '';
             replaceDraft(draft?.attachments ?? [], draft?.largeTextBlocks ?? []);
@@ -1112,8 +1124,8 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
     } catch {
         if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
         draftScope = scope;
-        failedDraftRestoreRevision = revisionBeforeLoad;
-        keptTypedText = composerRevision !== revisionBeforeLoad;
+        keptTypedText = draftEditRevision !== revisionBeforeLoad;
+        draftRestoreFailed = !keptTypedText;
         toast.add({
             id: noticeId,
             title: 'Draft could not be restored',

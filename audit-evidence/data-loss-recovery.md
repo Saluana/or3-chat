@@ -389,3 +389,31 @@ and quota fixture; it does not claim a natural browser unload dialog.
 `test-results/recovery-same-tab-ack/evidence.json` contain the receipt.
 
 Image intake source commit: `b691314d`.
+
+## Empty editor transactions during failed restoration
+
+An empty TipTap update advanced the send/composer revision even though no user
+text had changed. After a failed read this allowed unload/unmount to delete the
+unread row; during retry it made the loaded saved buffer look like a competing
+edit and left the editor empty. Both mounted regressions failed on the previous
+source (`/tmp/or3-recovery-empty-restore-capture-red.log`,
+`/tmp/or3-recovery-empty-retry-red.log`).
+
+Restoration now tracks meaningful text/attachment/block edits separately from
+the existing send-clear revision. Empty bookkeeping does not compete with saved
+content, while typing and then clearing still counts as a user edit. An unread
+copy stays protected until a real edit or successful restoration.
+The full candidate passed 56 draft/composer tests and all nine Chromium draft
+recovery cases, including failed read/retry and attachment read/retry:
+`/tmp/or3-recovery-unload-edits-final-unit.log`,
+`/tmp/or3-recovery-unload-edits-final-browser.log` (3.1 minutes, one worker).
+That browser run also includes the pending-save unload guard committed separately.
+Earlier nine-case qualification attempts each passed eight cases and exposed one
+restore failure; they are not reported as fully passing suites.
+
+Same-tab receipt source commit: `53ccc64f`.
+
+Final candidate credential-free type-check passed:
+`/tmp/or3-recovery-unload-edits-final-typecheck.log`. Core source ESLint has zero
+errors and the same four existing warnings:
+`/tmp/or3-recovery-unload-edits-final-lint.log`.

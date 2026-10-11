@@ -8,6 +8,7 @@ import { mount, enableAutoUnmount, flushPromises } from '@vue/test-utils';
 enableAutoUnmount(afterEach);
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
+import { EditorContent } from '@tiptap/vue-3';
 import type { SendResult } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 
@@ -620,13 +621,22 @@ describe('ChatInputDropper', () => {
         await db.workspace_tab_drafts.put({ id, account_key: account, tab_id: tabId,
             updated_at: Date.now(), draft: { version: 1, text: 'Saved buffer before failed restore',
                 attachments: [], largeTextBlocks: [], updatedAt: Date.now() } });
-        vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValueOnce({ equals: () => ({
+        const imports = await import('#imports'); const add = vi.fn();
+        vi.spyOn(imports, 'useToast').mockReturnValue({ add, remove: vi.fn() } as never);
+        vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValue({ equals: () => ({
             toArray: () => Promise.reject(new DOMException('Synthetic draft read aborted', 'AbortError')),
         }) } as never);
         const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
             global: { mocks: { $theme: createThemeMock() } } });
         try {
             await flushPromises();
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be restored' })));
+            await flushPromises();
+            // A TipTap empty-document update advances its revision without adding user text.
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.emit('update', { editor, transaction: editor.state.tr, appendedTransactions: [] });
+            window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
             wrapper.unmount();
             await useWorkspaceTabDrafts().flush();
             expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe('Saved buffer before failed restore');
@@ -634,6 +644,42 @@ describe('ChatInputDropper', () => {
             wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
             setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
             process.client = previous;
+        }
+    });
+
+    it('applies a retry result despite an empty editor transaction while the saved row is loading', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-retry-empty-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open(); const tabId = 'retry-empty-tab';
+        const account = useWorkspaceTabDrafts().scope().accountKey; const id = `${account}\u0000${tabId}`;
+        const row = { id, account_key: account, tab_id: tabId, updated_at: Date.now(), draft: { version: 1 as const,
+            text: 'Saved retry buffer survives empty editor updates', attachments: [], largeTextBlocks: [], updatedAt: Date.now() } };
+        await db.workspace_tab_drafts.put(row);
+        const imports = await import('#imports'); const add = vi.fn();
+        vi.spyOn(imports, 'useToast').mockReturnValue({ add, remove: vi.fn() } as never);
+        const interrupted = vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValue({ equals: () => ({
+            toArray: () => Promise.reject(new DOMException('Synthetic interrupted retry read', 'AbortError')),
+        }) } as never);
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        let finishRead: (() => void) | undefined;
+        try {
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be restored' })));
+            await flushPromises(); interrupted.mockRestore();
+            vi.spyOn(db.workspace_tab_drafts, 'where').mockReturnValueOnce({ equals: () => ({
+                toArray: () => new Promise(resolve => { finishRead = () => resolve([row]); }),
+            }) } as never);
+            const notice = add.mock.calls.filter(([value]) => value.title === 'Draft could not be restored').at(-1)![0];
+            notice.actions[0].onClick(); await vi.waitFor(() => expect(finishRead).toBeDefined());
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.emit('update', { editor, transaction: editor.state.tr, appendedTransactions: [] });
+            finishRead!(); await flushPromises();
+            expect(editor.getText()).toBe(row.draft.text);
+            expect((await db.workspace_tab_drafts.get(id))?.draft.text).toBe(row.draft.text);
+        } finally {
+            finishRead?.(); wrapper.unmount(); await clearDraftFixtures(); vi.restoreAllMocks();
+            setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); process.client = previous;
         }
     });
 
