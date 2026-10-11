@@ -81,6 +81,14 @@ The three plans are directionally aligned, but there are several conflicts and m
   uncommitted frame; this does not repair damaged input. Truncation or altered
   salts can still resemble legitimate interrupted/reused tails, so expected
   record inventory remains a separate semantic completeness boundary.
+- The two-workspace omission drill strengthened refusal assertions and exposed
+  late archive validation: a missing committed blob was refused only after
+  snapshot capture stopped the app and journaled target mutation, causing an
+  unnecessary snapshot restore and state rewrite. Restore and rollback now
+  run the existing read-only inventory validator before journaling/capture,
+  using the authenticated archived filesystem root and retaining the later
+  check. Two canonical command regressions failed before this change and pass
+  afterward; the real scoped fixture checks state/container preservation.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

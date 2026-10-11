@@ -31,6 +31,23 @@ afterEach(async () => {
 const NEW_IMAGE = `${REPOSITORY}@${NEW_DIGEST}`;
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
 
+test.each(['restore', 'rollback'] as const)('%s refuses archive inventory failure before journal or service mutation', async (operation) => {
+  const fixture = await sandbox();
+  const setup = await fixture.cli([operation === 'restore' ? 'backup' : 'update']);
+  expect(setup.exitCode, setup.output).toBe(0);
+  const [target] = await fixture.backupIds();
+  const before = await fixture.readStateText();
+  const beforeBackups = await fixture.backupIds();
+  await fixture.configure({ failures: [{ match: 'OR3_TAR_RESULT', times: 1, message: 'fixture invalid archive inventory' }] });
+  await fixture.reset();
+  const refused = await fixture.cli(operation === 'restore' ? ['restore', target!, '--yes'] : ['rollback', '--yes']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain('fixture invalid archive inventory');
+  expect(await fixture.readStateText()).toBe(before);
+  expect(await fixture.backupIds()).toEqual(beforeBackups);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+});
+
 async function fixtureState(fixture: Sandbox) {
   return {
     state: await fixture.readState(),

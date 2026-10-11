@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { validateVolumeArchive } from '../backup/archive';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
@@ -46,6 +47,9 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   // Do this before recording a recovery operation: a capacity refusal has not
   // touched the live deployment and should not require an operator recovery.
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
+  // Snapshot capture already stops the app. Refuse invalid archive inventories
+  // before journaling or creating that snapshot; retain the later recheck too.
+  await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
   const pending: PendingOperation = {
     id: id('restore'),
     operation: 'restore',

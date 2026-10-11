@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { validateVolumeArchive } from '../backup/archive';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
@@ -47,6 +48,9 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
+  // Snapshot capture already stops the app. Validate before journaling/capture,
+  // using the authenticated archived FS root and retaining the later recheck.
+  await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
   const pending: PendingOperation = {
     id: id('rollback'),
     operation: 'rollback',
