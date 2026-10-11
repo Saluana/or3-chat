@@ -86,6 +86,10 @@ JSON job ID. An unsupported or malformed admission is an error; this helper
 does not silently start a second execution mode. Polling, SSE attachment,
 cancellation, and retryable status errors are provided by the same module.
 
+If all transport attempts lose the admission response, one bounded recovery
+lookup uses the captured workspace and admission ID. A matching version-1 job
+reattaches even if it already finished. Permanent refusals and Stop do not probe.
+
 Background mode requires the SSR server route and the server's feature flag.
 The client availability cache can be cleared or stale; explicit runtime
 configuration takes precedence. The exact request eligibility, authorization,

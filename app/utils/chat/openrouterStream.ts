@@ -1,3 +1,9 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { captureUsagePrefix, attachRequestUsage, estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
+import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
+import { countTokensApprox } from './tokens';
+import { admitProviderRequest, captureContextEnvelope, ChatContextAdmissionError, type ContextRequestPolicy, type ContextRequestEnvelope } from '~~/shared/chat/context-budget';
+import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/utils/chat/openrouterStream
  *
@@ -23,7 +29,8 @@ import {
     type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
-import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
+import { PROJECT_MEMORY_HEADING } from '~~/shared/projects/workspace';
+import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import {
     getAnthropicPromptCacheControl,
     type OpenRouterCacheControl,
@@ -39,7 +46,9 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import { getDeviceId } from '~/core/sync/hlc';
+import type { ORContentPart, ORMessage as BuiltMessage } from '~/core/auth/openrouter-build';
 
 function parseRetryAfterSeconds(value: string): number {
     const seconds = Number(value);
@@ -73,11 +82,11 @@ export class BackgroundJobPollError extends Error {
 // NOTE: The OpenRouter SDK supports streaming, but this module uses raw fetch
 // so we can keep one shared SSE parser for both direct and proxied/server routes.
 
-type ORMessagePart = { type: string; [key: string]: unknown };
+type ORMessagePart = ORContentPart | { type: string; [key: string]: unknown };
 
 // Permissive message type that accepts both strict ORMessage from openrouter-build
 // and tool messages. Content is optional for tool role messages.
-type ORMessage = {
+type ORMessage = BuiltMessage | {
     role: string;
     content?: string | ORMessagePart[];
     name?: string;
@@ -97,6 +106,7 @@ type OpenRouterRequestBody = {
     messages: ORMessage[];
     modalities?: string[];
     stream: true;
+    max_tokens?: number;
     reasoning?: OpenRouterReasoningConfig;
     cache_control?: OpenRouterCacheControl;
     tools?: ToolDefinition[];
@@ -107,6 +117,7 @@ type OpenRouterRequestBody = {
     _toolRuntime?: Record<string, string>;
     _clientDeviceId?: string;
     _streamedFieldMode?: StreamedFieldMode;
+    _context?: ContextRequestEnvelope;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -157,6 +168,16 @@ function isServerRouteAvailable(): boolean {
 }
 
 /**
+ * A 404/405 only means the stream route is absent when the route did not
+ * answer itself. The route marks every response (including relayed provider
+ * errors such as "No endpoints found that support image input").
+ */
+function isMissingServerRoute(response: Response): boolean {
+    return (response.status === 404 || response.status === 405)
+        && response.headers.get('x-or3-stream-route') !== '1';
+}
+
+/**
  * Mark server routes as available or unavailable with TTL.
  */
 function setServerRouteAvailable(available: boolean): void {
@@ -190,7 +211,24 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
  * Purpose:
  * Streams OpenRouter responses as SSE events.
  */
-export async function* openRouterStream(params: {
+async function assertDispatchOwner(params: {
+    expectedProjectId?: string | null;
+    threadId?: string;
+    signal?: AbortSignal;
+}) {
+    if (params.expectedProjectId === undefined || !params.threadId) return;
+    const { captureProjectOperation } = await import('~/utils/projects/context');
+    const { resolveChatProject } = await import('~/db/project-workspace');
+    const scope = captureProjectOperation(params.signal, params.threadId);
+    if (await resolveChatProject(scope.db, params.threadId) !== params.expectedProjectId)
+        throw new Error('This chat changed projects before dispatch. Start a new turn.');
+    scope.assertCurrent();
+}
+
+export type OpenRouterStreamParams = {
+    expectedProjectId?: string | null;
+    onProjectContext?: (receipt: import('~~/shared/projects/workspace').ProjectContextReceipt, iterations: unknown[]) => void;
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -198,6 +236,7 @@ export async function* openRouterStream(params: {
     threadId?: string;
     messageId?: string;
     tools?: ToolDefinition[];
+    maxCompletionTokens?: number;
     toolChoice?: ToolChoice;
     signal?: AbortSignal;
     reasoning?: OpenRouterReasoningConfig;
@@ -206,8 +245,71 @@ export async function* openRouterStream(params: {
     /** Primarily configurable for deterministic tests and constrained runtimes. */
     responseTimeoutMs?: number;
     idleTimeoutMs?: number;
-}): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, tools, signal } = params;
+    contextPolicy?: ContextRequestPolicy;
+    /** First valid provider event, after initial admission/error handling. */
+    onProviderAccepted?: () => void;
+};
+
+/** Single provider-body constructor used by admission and dispatch. */
+export function buildOpenRouterRequestBody(params: OpenRouterStreamParams): OpenRouterRequestBody {
+    const body: OpenRouterRequestBody = { model: params.model, messages: params.orMessages, stream: true };
+    if (params.modalities?.length) body.modalities = params.modalities;
+    if (params.maxCompletionTokens !== undefined) body.max_tokens = params.maxCompletionTokens;
+    if (params.reasoning) body.reasoning = params.reasoning;
+    const cacheControl = getAnthropicPromptCacheControl(params.model);
+    if (cacheControl) body.cache_control = cacheControl;
+    if (params.tools) {
+        body.tools = params.tools.map(stripUiMetadata);
+        body.tool_choice = params.toolChoice ?? 'auto';
+    }
+    return JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+}
+
+/** Validate the detached, complete provider body; preserve every selected message. */
+export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): Promise<OpenRouterRequestBody> {
+    const body = buildOpenRouterRequestBody(params);
+    if (params.projectContext) {
+        const { assertProjectContextIncluded } = await import('~/utils/projects/context');
+        assertProjectContextIncluded(params.projectContext, body.messages);
+    }
+    if (!params.contextPolicy) {
+        if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0))
+            throw new Error('Reply maximum must be a positive integer.');
+        return body;
+    }
+    const policy = params.contextPolicy;
+    const admit = () => admitProviderRequest(body, { ...policy,
+        requestedCompletionTokens: policy.requestedCompletionTokens ?? params.maxCompletionTokens },
+        countTokensApprox, params.signal, async (request) => {
+            const { messages, ...configuration } = request;
+            return estimateMeasuredChatRequest({ model: params.model, messages, tools: request.tools,
+                modalities: request.modalities, configuration, usage: params.contextPolicy?.measuredUsage,
+                countText: countTokensApprox });
+        });
+    while (true) {
+        try { return await admit(); }
+        catch (error) {
+            if (!(error instanceof ChatContextAdmissionError) || error.code !== 'context_full' || !params.projectContext) throw error;
+            const optional = [...(params.projectContext.receipt.chats ?? []).map(chat => chat.message_id),
+                ...params.projectContext.receipt.sources.filter(source => !params.projectContext!.requiredSourceIds.includes(source.id)).map(source => source.id)];
+            const index = body.messages.findLastIndex(message => {
+                const text = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
+                    ? message.content.map(part => 'text' in part ? part.text : '').filter(Boolean).join(' ') : '';
+                return message.role === 'user' && params.projectContext!.messages.some(context => (typeof context.content === 'string' ? context.content === text
+                    : Array.isArray(context.content) && context.content.some(part => part.type === 'text' && part.text === text)
+                        && context.content.every(part => part.type !== 'image' || JSON.stringify(message.content).includes(String(part.image))))
+                    && (text.startsWith(`${params.projectContext!.marker}\n${PROJECT_MEMORY_HEADING}`)
+                        || optional.some(id => text.startsWith(`${params.projectContext!.marker} Source ${id}:`) || text.startsWith(`${params.projectContext!.marker} Source ${id} `)
+                        || text.startsWith(`${params.projectContext!.marker} Previous chat `) && text.includes(`summary ${id}:`))));
+            });
+            if (index < 0) throw error;
+            body.messages.splice(index, 1);
+        }
+    }
+}
+
+export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const { apiKey, model, signal } = params;
     const hasApiKey = Boolean(apiKey);
     const runtimeConfig = useRuntimeConfig() as {
         public: {
@@ -225,12 +327,9 @@ export async function* openRouterStream(params: {
         isSsrAuthEnabled && !allowClientFallback
     );
 
-    const body: OpenRouterRequestBody = {
-        model,
-        messages: orMessages,
-        stream: true,
-    };
-    if (modalities?.length) body.modalities = modalities;
+    const body = await prepareOpenRouterRequest(params);
+    if (params.contextPolicy) body._context = captureContextEnvelope({ ...params.contextPolicy,
+        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens });
 
     if (params.threadId) {
         body._threadId = params.threadId;
@@ -239,18 +338,123 @@ export async function* openRouterStream(params: {
         body._messageId = params.messageId;
     }
 
-    if (params.reasoning) {
-        body.reasoning = params.reasoning;
+    // This is the actual provider request boundary. Freeze the serialized body
+    // before asynchronous provenance work so later view/tool mutations cannot
+    // change the sent prefix after its fingerprint was captured.
+    const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+    const usageRequestId = createRuntimeUuid();
+    let recordRequestState: ((state: 'dispatched' | 'accepted' | 'failed') => Promise<void>) | undefined;
+    await assertDispatchOwner(params);
+    if (params.projectContext && params.threadId && !params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId) throw new Error('Project changed while preparing the handoff.');
+        scope.assertCurrent();
+        params.onProjectContext?.(finalizeProjectReceipt(params.projectContext, requestSnapshot.messages), []);
     }
-    const cacheControl = getAnthropicPromptCacheControl(model);
-    if (cacheControl) {
-        body.cache_control = cacheControl;
+    if (params.projectContext && params.threadId && params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const { patchMessageInDb } = await import('~/db/messages');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId)
+            throw new Error('This chat changed workspace or project. Start a new turn.');
+        let receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages);
+        const previous = await scope.db.messages.get(params.messageId);
+        const prior = (previous?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+        const iterations: unknown[] = Array.isArray(prior) ? prior : [];
+        if (iterations.length >= 32) throw new Error('Project request iteration limit reached. Continue in a new chat.');
+        const { ProjectContextIterationSchema } = await import('~~/shared/projects/workspace');
+        const previousSources = new Map<string, { revision: string; state: string }>();
+        const previousChats = new Map<string, string>();
+        for (const iteration of iterations) {
+            const parsed = ProjectContextIterationSchema.safeParse(iteration);
+            if (!parsed.success) continue;
+            for (const source of parsed.data.source_changes) previousSources.set(source.id, source);
+            for (const chat of parsed.data.chat_changes) previousChats.set(chat.id, chat.state);
+        }
+        const iteration = { project_id: receipt.project_id, request_id: usageRequestId, request_state: 'prepared' as const,
+            instructions: receipt.instructions_included ?? Boolean(receipt.instructions), brief: receipt.brief_included ?? Boolean(receipt.brief), memory_count: receipt.memories.length,
+            source_changes: receipt.sources.filter(source => {
+                const previous = previousSources.get(source.id);
+                return previous ? previous.revision !== source.revision || previous.state !== source.state : source.state !== 'available';
+            }).map(source => ({ id: source.id, revision: source.revision, state: source.state })),
+            chat_changes: (receipt.chats ?? []).filter(chat => previousChats.get(chat.message_id) !== chat.state).map(chat => ({ id: chat.message_id, state: chat.state })) };
+        const history = [...iterations, iteration];
+        receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages,
+            new TextEncoder().encode(JSON.stringify(history)).byteLength);
+        const metadata = { project_context: receipt, project_context_iterations: history };
+        await patchMessageInDb(scope.db, params.messageId, { data: metadata }, undefined, message => {
+            scope.assertCurrent('write'); return Boolean(message && !message.deleted && message.thread_id === params.threadId);
+        });
+        scope.assertCurrent();
+        params.onProjectContext?.(receipt, metadata.project_context_iterations);
+        recordRequestState = async request_state => {
+            scope.assertCurrent('write');
+            if (await resolveChatProject(scope.db, params.threadId!) !== receipt.project_id)
+                throw new Error('Project changed before recording dispatch.');
+            const message = await scope.db.messages.get(params.messageId!);
+            const current = (message?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+            if (!Array.isArray(current) || current.at(-1)?.request_id !== usageRequestId)
+                throw new Error('The project request was replaced.');
+            const savedIterations: unknown[] = current;
+            const next = [...savedIterations.slice(0, -1), { ...(savedIterations.at(-1) as Record<string, unknown>), request_state }];
+            await patchMessageInDb(scope.db, params.messageId!, { data: { project_context_iterations: next } }, undefined, row => {
+                scope.assertCurrent('write');
+                return Boolean(row && !row.deleted && row.thread_id === params.threadId
+                    && JSON.stringify((row.data as Record<string, unknown>).project_context_iterations) === JSON.stringify(current));
+            });
+            scope.assertCurrent();
+            params.onProjectContext?.(receipt, next);
+        };
     }
-
-    if (tools) {
-        body.tools = tools.map(stripUiMetadata);
-        body.tool_choice = params.toolChoice ?? 'auto';
-    }
+    const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, _context: _context, ...providerConfiguration } = requestSnapshot;
+    const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
+        tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
+        countText: countTokensApprox }).catch(() => undefined);
+    const recordFailure = async () => {
+        try { await recordRequestState?.('failed'); }
+        catch (error) { console.warn('[projects] Could not record failed dispatch', error); }
+    };
+    // Admission (ownership, workspace/project scope) refuses before any network
+    // I/O. The refusal is final for this payload, so it must not be retried or
+    // reported as a connection problem.
+    const admitDispatch = async (assertOwnerFirst = false) => {
+        try {
+            if (assertOwnerFirst) await assertDispatchOwner(params);
+            await recordRequestState?.('dispatched');
+            await assertDispatchOwner(params);
+        } catch (error) {
+            if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+            throw new OpenRouterStreamError(
+                error instanceof Error ? error.message : String(error),
+                { status: 0, retryable: false, kind: 'admission' }
+            );
+        }
+    };
+    const transportRequest = async (url: string, init: RequestInit) => {
+        try {
+            const response = await fetchWithResponseDeadline(url, init, { signal, timeoutMs: params.responseTimeoutMs });
+            try { await recordRequestState?.(response.ok && response.body ? 'accepted' : 'failed'); }
+            catch (error) {
+                // A refused turn must not leave the provider stream generating unseen tokens.
+                await response.body?.cancel().catch(() => undefined);
+                throw error;
+            }
+            return response;
+        } catch (error) { await recordFailure(); throw error; }
+    };
+    const dispatchRequest = async (url: string, init: RequestInit) => {
+        await admitDispatch();
+        return await transportRequest(url, init);
+    };
+    let providerAccepted = false;
+    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
+        if (!providerAccepted && !signal?.aborted) { providerAccepted = true; params.onProviderAccepted?.(); }
+        return event.type === 'usage' ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
+            { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) } : event;
+    };
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.
     // Only 404/405 and genuine network failures are treated as "route unavailable";
@@ -260,18 +464,20 @@ export async function* openRouterStream(params: {
         let serverResp: Response | undefined;
         let networkError: Error | undefined;
 
+        await admitDispatch(true);
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
+                'x-or3-cloud-intent': 'mutation',
             };
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
-            serverResp = await fetchWithResponseDeadline('/api/openrouter/stream', {
+            serverResp = await transportRequest('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify(body),
-            }, { signal, timeoutMs: params.responseTimeoutMs });
+                body: JSON.stringify(requestSnapshot),
+            });
         } catch (e) {
             if (
                 signal?.aborted ||
@@ -290,15 +496,21 @@ export async function* openRouterStream(params: {
                     signal,
                     timeoutMs: params.idleTimeoutMs,
                 });
+                try {
                 for await (const evt of parseOpenRouterSSE(guardedBody, {
                     streamedFieldMode: params.streamedFieldMode,
                 })) {
-                    yield evt;
+                    yield measuredEvent(evt);
+                }
+                } catch (error) {
+                    await recordFailure();
+                    if (error instanceof OpenRouterStreamError) error.credentialSource = serverResp.headers.get('x-or3-credential-source') === 'server' ? 'server' : hasApiKey ? 'personal' : undefined;
+                    throw error;
                 }
                 return; // Success; don't fall back
             }
 
-            if (serverResp.status === 404 || serverResp.status === 405) {
+            if (isMissingServerRoute(serverResp)) {
                 if (forceServerRoute) {
                     throw new OpenRouterStreamError(
                         'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)',
@@ -311,15 +523,13 @@ export async function* openRouterStream(params: {
                     signal,
                     timeoutMs: params.idleTimeoutMs,
                 }).catch(() => '');
-                const retryable =
-                    serverResp.status === 429 || serverResp.status >= 500;
-                throw new OpenRouterStreamError(
-                    `OpenRouter proxy error ${serverResp.status}: ${errorText.slice(
-                        0,
-                        300
-                    )}`,
-                    { status: serverResp.status, retryable }
-                );
+                let payload: unknown;
+                try { payload = JSON.parse(errorText); } catch { payload = {}; }
+                const metadata = normalizeError({ data: payload, status: serverResp.status,
+                    retryAfterMs: parseRetryAfter(serverResp.headers.get('retry-after')) });
+                throw new OpenRouterStreamError(presentError(metadata).message, {
+                    ...metadata, status: serverResp.status,
+                });
             }
         } else if (networkError) {
             if (forceServerRoute) {
@@ -340,14 +550,16 @@ export async function* openRouterStream(params: {
     }
 
     // Fallback: direct OpenRouter (legacy path)
-    const fallbackBody = { ...body };
+    const fallbackBody = { ...requestSnapshot };
     delete fallbackBody._background;
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
+    delete fallbackBody._context;
 
     let resp: Response;
+    let refusedText: string | undefined;
     try {
-        resp = await fetchWithResponseDeadline(openRouterChatUrl, {
+        ({ response: resp, errorText: refusedText } = await sendWithAffordableReply((requestBody) => dispatchRequest(openRouterChatUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -358,8 +570,12 @@ export async function* openRouterStream(params: {
                 'X-Title': 'or3.chat',
                 Accept: 'text/event-stream',
             },
-            body: JSON.stringify(fallbackBody),
-        }, { signal, timeoutMs: params.responseTimeoutMs });
+            body: JSON.stringify(requestBody),
+        }), fallbackBody, {
+            defaultAllowance: !!params.contextPolicy
+                && (params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens) == null,
+            signal,
+        }));
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         if (error instanceof OpenRouterStreamError) throw error;
@@ -371,8 +587,8 @@ export async function* openRouterStream(params: {
 
     if (!resp.ok || !resp.body) {
         // Read response text for diagnostics
-        let respText = '<no-body>';
-        try {
+        let respText = refusedText ?? '<no-body>';
+        if (refusedText === undefined) try {
             respText = await readResponseTextWithIdleDeadline(resp, {
                 signal,
                 timeoutMs: params.idleTimeoutMs,
@@ -390,14 +606,10 @@ export async function* openRouterStream(params: {
             requestMetadata: sensitiveValueMetadata(JSON.stringify(fallbackBody)),
         });
 
-        const retryable = resp.status === 429 || resp.status >= 500;
-        const retryAfter = resp.headers.get('retry-after');
-        const retryAfterMs = retryAfter
-            ? parseRetryAfterSeconds(retryAfter) * 1000
-            : undefined;
+        const metadata = normalizeProviderResponseError(respText, resp.status, { credentialSource: 'personal' });
         throw new OpenRouterStreamError(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}`,
-            { status: resp.status, retryable, retryAfterMs }
+            presentError(metadata).message,
+            { ...metadata, status: resp.status, retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) }
         );
     }
 
@@ -406,10 +618,16 @@ export async function* openRouterStream(params: {
         signal,
         timeoutMs: params.idleTimeoutMs,
     });
+    try {
     for await (const evt of parseOpenRouterSSE(guardedBody, {
         streamedFieldMode: params.streamedFieldMode,
     })) {
-        yield evt;
+        yield measuredEvent(evt);
+    }
+    } catch (error) {
+        await recordFailure();
+        if (error instanceof OpenRouterStreamError) error.credentialSource = 'personal';
+        throw error;
     }
 }
 
@@ -464,6 +682,9 @@ export async function* openRouterStreamWithRetry(
                 yield next.value;
             }
         } catch (e) {
+            // Local admission is a final decision for this exact full payload;
+            // preserve its structured reason and never treat it as transport.
+            if (e instanceof ChatContextAdmissionError) throw e;
             const error =
                 e instanceof OpenRouterStreamError
                     ? e
@@ -532,6 +753,8 @@ export interface BackgroundJobStatus {
     chunksReceived: number;
     /** Durable execution attempt; increments after a worker takeover. */
     attempt?: number;
+    /** Last measured provider request; prompt occupancy is never accumulated. */
+    usage?: RequestUsage;
     startedAt: number;
     completedAt?: number;
     error?: string;
@@ -565,6 +788,8 @@ export interface BackgroundJobStatus {
         result?: string;
         error?: string;
         runtime?: 'client' | 'server' | 'hybrid';
+        /** Length of the assistant text when this call's results arrived. */
+        text_offset?: number;
     }>;
     workflow_state?: WorkflowMessageData;
 }
@@ -592,6 +817,12 @@ export type BackgroundJobStreamEvent = {
     event: 'snapshot' | 'delta' | 'status';
     status: BackgroundJobStatus;
 };
+
+function normalizeBackgroundJobUsage(status: BackgroundJobStatus): BackgroundJobStatus {
+    const { usage: candidate, ...rest } = status;
+    const usage = readRequestUsage(candidate);
+    return { ...rest, ...(usage ? { usage } : {}) };
+}
 
 type BackgroundAdmissionError = Error & {
     backgroundAdmissionRetryable?: boolean;
@@ -683,6 +914,8 @@ function setBackgroundStreamingAvailable(available: boolean): void {
  * Starts a background streaming job and returns its job ID.
  */
 export async function startBackgroundStream(params: {
+    expectedProjectId?: string | null;
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -696,6 +929,7 @@ export async function startBackgroundStream(params: {
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
+    contextPolicy?: ContextRequestPolicy;
     streamedFieldMode?: StreamedFieldMode;
     signal?: AbortSignal;
     responseTimeoutMs?: number;
@@ -708,10 +942,7 @@ export async function startBackgroundStream(params: {
         _backgroundAdmissionId: string;
         _history: import('~~/shared/chat/background-history').ChatGenerationAdmissionEnvelope;
     } = {
-        model: params.model,
-        messages: params.orMessages,
-        modalities: params.modalities,
-        stream: true,
+        ...await prepareOpenRouterRequest(params),
         _background: true,
         _threadId: params.threadId,
         _messageId: params.messageId,
@@ -720,23 +951,13 @@ export async function startBackgroundStream(params: {
         _backgroundAdmissionId:
             params.admissionId && params.admissionId.length > 0
                 ? params.admissionId
-                : crypto.randomUUID(),
+                : createRuntimeUuid(),
         _history: params.history,
         _clientDeviceId: getDeviceId(),
     };
 
-    if (params.reasoning) {
-        body.reasoning = params.reasoning;
-    }
-    const cacheControl = getAnthropicPromptCacheControl(params.model);
-    if (cacheControl) {
-        body.cache_control = cacheControl;
-    }
-
-    if (params.tools) {
-        body.tools = params.tools.map(stripUiMetadata);
-        body.tool_choice = params.toolChoice ?? 'auto';
-    }
+    if (params.contextPolicy) body._context = captureContextEnvelope({ ...params.contextPolicy,
+        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens });
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;
     }
@@ -746,6 +967,7 @@ export async function startBackgroundStream(params: {
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'x-or3-cloud-intent': 'mutation',
     };
     if (params.apiKey) {
         headers['x-or3-openrouter-key'] = params.apiKey;
@@ -755,6 +977,7 @@ export async function startBackgroundStream(params: {
     let result: BackgroundStreamResult | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+        await assertDispatchOwner(params);
         try {
             const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
                 method: 'POST',
@@ -788,14 +1011,15 @@ export async function startBackgroundStream(params: {
                         capabilityDisabled: true,
                     });
                 }
-                if (resp.status === 404 || resp.status === 405) {
+                if (isMissingServerRoute(resp)) {
                     setServerRouteAvailable(false);
                     setBackgroundStreamingAvailable(false);
                 }
-                const retryable = resp.status >= 500;
-                const error = makeBackgroundAdmissionError(message, {
-                    retryable,
-                });
+                const metadata = normalizeError({ data: payload, status: resp.status,
+                    retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) });
+                const retryable = metadata.retryable === true;
+                const error = makeBackgroundAdmissionError(presentError(metadata).message, { retryable });
+                Object.assign(error, metadata);
                 if (!retryable || attempt === 2) throw error;
                 lastError = error;
             } else {
@@ -825,7 +1049,7 @@ export async function startBackgroundStream(params: {
                         decodeError instanceof Error
                             ? decodeError.message
                             : 'Malformed background admission response',
-                        { retryable: false }
+                        { retryable: decodeError instanceof OpenRouterTimeoutError || decodeError instanceof TypeError }
                     );
                 }
                 const candidate =
@@ -857,30 +1081,26 @@ export async function startBackgroundStream(params: {
                 (error instanceof Error && error.name === 'AbortError') ||
                 (error instanceof Error &&
                     (error as BackgroundAdmissionError)
-                        .backgroundAdmissionRetryable === false) ||
-                attempt === 2
+                        .backgroundAdmissionRetryable === false)
             ) {
                 throw error;
             }
             lastError = error;
+            if (attempt === 2) break;
         }
         await abortableDelay(150 * 2 ** attempt, params.signal);
     }
     if (!result) {
-        // Uncertain start: the server may have committed the job while the
-        // response was lost. Recover by admission ID before reporting
-        // failure, so a retry attaches to the existing run instead of
-        // launching a duplicate execution.
-        const recovered = await recoverBackgroundJob(
-            body._backgroundAdmissionId
-        ).catch(() => null);
-        if (recovered && recovered.status === 'streaming') {
+        const recovered = await recoverBackgroundJob(body._backgroundAdmissionId, params.history.workspaceId, {
+            signal: params.signal,
+            responseTimeoutMs: params.responseTimeoutMs,
+            idleTimeoutMs: params.idleTimeoutMs,
+        });
+        // Terminal jobs must also attach: the tracker projects their retained
+        // output without starting a second generation.
+        if (recovered && recovered.threadId === params.threadId && recovered.messageId === params.messageId) {
             setBackgroundStreamingAvailable(true);
-            return {
-                jobId: recovered.jobId,
-                status: 'streaming',
-                historyVersion: 1,
-            };
+            return { jobId: recovered.jobId, status: 'streaming', historyVersion: 1 };
         }
         throw lastError instanceof Error
             ? lastError
@@ -893,42 +1113,28 @@ export async function startBackgroundStream(params: {
     return result;
 }
 
-/**
- * `recoverBackgroundJob`
- *
- * Purpose:
- * Recover-before-resubmit. When a start request's outcome is uncertain (the
- * server may have committed the job while the response was lost), probe the
- * admission lookup with the stable admission ID. If a job exists, the caller
- * attaches to it instead of submitting another potentially duplicate action.
- * Returns null when no job was committed for the admission.
- */
+/** Resolve an ambiguous admission against its originating workspace before retrying. */
 export async function recoverBackgroundJob(
-    admissionId: string
-): Promise<{ jobId: string; status: string } | null> {
-    if (!admissionId) return null;
-    let resp: Response;
+    admissionId: string,
+    workspaceId: string,
+    options: { signal?: AbortSignal; responseTimeoutMs?: number; idleTimeoutMs?: number } = {}
+): Promise<{ jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 } | null> {
+    if (!admissionId || !workspaceId) return null;
     try {
-        resp = await fetch(
-            `/api/jobs/admission/${encodeURIComponent(admissionId)}`,
-            { credentials: 'include', cache: 'no-store' }
+        const response = await fetchWithResponseDeadline(
+            `/api/jobs/admission/${encodeURIComponent(admissionId)}?${new URLSearchParams({ workspaceId })}`,
+            { credentials: 'include', cache: 'no-store' },
+            { signal: options.signal, timeoutMs: options.responseTimeoutMs ?? 3_000 }
         );
-    } catch {
-        return null;
-    }
-    if (resp.status === 404) return null;
-    if (!resp.ok) return null;
-    try {
-        const body = (await resp.json()) as {
-            jobId?: unknown;
-            status?: unknown;
-        };
-        if (typeof body.jobId !== 'string' || !body.jobId) return null;
-        return {
-            jobId: body.jobId,
-            status: typeof body.status === 'string' ? body.status : 'unknown',
-        };
-    } catch {
+        if (!response.ok) return null;
+        const body = await readResponseJsonWithIdleDeadline<Record<string, unknown>>(response,
+            { signal: options.signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
+        if (!body || typeof body.jobId !== 'string' || !body.jobId || body.historyVersion !== 1 ||
+            typeof body.threadId !== 'string' || typeof body.messageId !== 'string' ||
+            typeof body.status !== 'string' || !['streaming', 'complete', 'error', 'aborted'].includes(body.status)) return null;
+        return body as { jobId: string; status: BackgroundJobStatus['status']; threadId: string; messageId: string; historyVersion: 1 };
+    } catch (error) {
+        if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
         return null;
     }
 }
@@ -1037,7 +1243,7 @@ export async function pollJobStatus(
             false
         );
     }
-    return decoded as BackgroundJobStatus;
+    return normalizeBackgroundJobUsage(decoded as BackgroundJobStatus);
 }
 
 /**
@@ -1049,6 +1255,8 @@ export async function pollJobStatus(
 export async function abortBackgroundJob(jobId: string): Promise<boolean> {
     const resp = await fetch(`/api/jobs/${jobId}/abort`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+        body: '{}',
     });
 
     if (!resp.ok) {
@@ -1065,7 +1273,7 @@ export type BackgroundClientToolClaim = {
         id: string;
         name: string;
         arguments: string;
-        /** Digest of the exact arguments under review; the approval is bound to it. */
+        /** Digest of the arguments reviewed under this claim. */
         argumentFingerprint: string;
         definition: ToolDefinition;
     };
@@ -1140,15 +1348,16 @@ export async function submitBackgroundClientToolResult(params: {
  * cancellation marker consumed when the admission commits.
  */
 export async function abortBackgroundAdmission(
-    admissionId: string
+    admissionId: string,
+    workspaceId: string | undefined
 ): Promise<{ aborted: boolean; pending: boolean; jobId?: string }> {
     let resp: Response;
     try {
         resp = await fetch('/api/jobs/admission-abort', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
             credentials: 'include',
-            body: JSON.stringify({ admissionId }),
+            body: JSON.stringify({ admissionId, workspaceId }),
         });
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
@@ -1254,7 +1463,7 @@ export function subscribeBackgroundJobStream(params: {
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            params.onStatus(parsed.status);
+            params.onStatus(normalizeBackgroundJobUsage(parsed.status));
         } catch (err) {
             if (params.onError) {
                 params.onError(

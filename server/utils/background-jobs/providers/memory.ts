@@ -26,8 +26,10 @@ import type {
     GenerationHistoryPhase,
     TerminalGenerationSnapshot,
 } from '../types';
-import { AdmissionCancelledError } from '../types';
+import { AdmissionCancelledError, getChatJobExecution } from '../types';
 import { getJobConfig } from '../store';
+import { readRequestUsage } from '~~/shared/chat/compaction';
+import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
 import { logBackgroundEvent } from '../logging';
 
 /**
@@ -112,7 +114,7 @@ async function cleanupExpiredJobs(): Promise<number> {
             job.status = 'error';
             job.error = 'Job timed out';
             job.completedAt = now;
-            if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+            if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
                 job.historyPhase = 'finalization_pending';
             }
             cleaned++;
@@ -185,10 +187,11 @@ function claimJobRecord(
     now: number,
     leaseExpiresAt: number
 ): BackgroundJob | null {
+    const execution = getChatJobExecution(job);
     if (
         job.status !== 'streaming' ||
-        !job.execution ||
-        job.execution.clientToolCall !== undefined ||
+        !execution ||
+        execution.clientToolCall !== undefined ||
         (job.historyPhase ?? 'ready') !== 'ready'
     ) return null;
     if (job.leaseOwner && (job.leaseExpiresAt ?? 0) > now) {
@@ -201,8 +204,11 @@ function claimJobRecord(
     job.attempts = (job.attempts ?? 0) + 1;
     job.abortController = new AbortController();
     if (recovering) {
-        job.content = job.execution.contentBase ?? '';
-        job.reasoning = job.execution.reasoningBase ?? '';
+        job.content = execution.contentBase ?? '';
+        job.reasoning = execution.reasoningBase ?? '';
+        // A new attempt replays only the committed checkpoint. Measurements
+        // from the discarded partial attempt must not outlive that reset.
+        job.usage = readRequestUsage(execution.normalizedToolState?.requestUsage);
         job.chunksReceived = 0;
     }
     return toPublicJob(job);
@@ -239,18 +245,18 @@ export const memoryJobProvider: BackgroundJobProvider = {
         // Enforce max concurrent jobs
         const currentJobs = Array.from(jobs.values());
         const activeCount = currentJobs.filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall
         ).length;
         const activeCountForUser = currentJobs.filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall && j.userId === params.userId
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall && j.userId === params.userId
         ).length;
         // Browser handoffs release a worker slot, but parked records still
         // need a separate bound so abandoned browsers cannot grow the queue.
         const waitingCount = currentJobs.filter(
-            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall)
+            (j) => j.status === 'streaming' && Boolean(getChatJobExecution(j)?.clientToolCall)
         ).length;
         const waitingCountForUser = currentJobs.filter(
-            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall) && j.userId === params.userId
+            (j) => j.status === 'streaming' && Boolean(getChatJobExecution(j)?.clientToolCall) && j.userId === params.userId
         ).length;
 
         if (activeCount >= config.maxConcurrentJobs) {
@@ -340,7 +346,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
                 job.status = 'aborted';
                 job.error = 'Cancelled by user';
                 job.completedAt = Date.now();
-                if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+                if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
                     job.historyPhase = 'finalization_pending';
                 }
                 cancelledAdmissions.set(
@@ -385,6 +391,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (update.workflow_state !== undefined) {
             job.workflow_state = update.workflow_state;
         }
+        const usage = readRequestUsage(update.usage);
+        if (usage) job.usage = usage;
         job.lastActivityAt = Date.now();
     },
 
@@ -399,18 +407,10 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
-            if (leaseOwner) throwLeaseLost();
-            // Late remote completion: the job already reached a terminal
-            // state (for example, aborted). The first terminal write wins;
-            // this one is dropped and logged so the reconciliation is
-            // explicit instead of silent.
             if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-completion-dropped', {
-                    jobId,
-                    status: job.status,
-                    completedAt: job.completedAt,
-                });
+                logBackgroundEvent('info', 'background.job.late-completion-dropped', { jobId, status: job.status });
             }
+            if (leaseOwner) throwLeaseLost();
             return;
         }
 
@@ -430,14 +430,10 @@ export const memoryJobProvider: BackgroundJobProvider = {
             job.status !== 'streaming' ||
             !ownsLease(job, leaseOwner)
         ) {
-            if (leaseOwner) throwLeaseLost();
             if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-failure-dropped', {
-                    jobId,
-                    status: job.status,
-                    completedAt: job.completedAt,
-                });
+                logBackgroundEvent('info', 'background.job.late-failure-dropped', { jobId, status: job.status });
             }
+            if (leaseOwner) throwLeaseLost();
             return;
         }
 
@@ -464,7 +460,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         job.abortController.abort();
         job.status = 'aborted';
         job.completedAt = Date.now();
-        if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+        if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
             job.historyPhase = 'finalization_pending';
         }
         return true;
@@ -537,7 +533,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         claimExpiresAt
     ) {
         const job = jobs.get(jobId);
-        const pending = job?.execution?.clientToolCall;
+        const pending = job ? getChatJobExecution(job)?.clientToolCall : undefined;
         if (
             !job ||
             job.userId !== userId ||
@@ -550,11 +546,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
         pending.claimToken = claimToken;
         pending.claimExpiresAt = claimExpiresAt;
-        // Bind this claim to the exact arguments the user is about to review.
-        // If the parked call is re-parked with different arguments, the fresh
-        // object carries no token; if arguments are mutated in place, the
-        // fingerprint check in settleClientToolCall rejects the stale claim.
-        pending.claimFingerprint = pending.argumentFingerprint;
+        pending.claimFingerprint = toolCallFingerprint(pending.name, pending.arguments);
         job.lastActivityAt = Date.now();
         return cloneJob(job);
     },
@@ -568,7 +560,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         toolCalls
     ) {
         const job = jobs.get(jobId);
-        const pending = job?.execution?.clientToolCall;
+        const pending = job ? getChatJobExecution(job)?.clientToolCall : undefined;
         if (
             !job ||
             job.userId !== userId ||
@@ -577,12 +569,10 @@ export const memoryJobProvider: BackgroundJobProvider = {
             pending.callId !== callId ||
             pending.claimToken !== claimToken ||
             (pending.claimExpiresAt ?? 0) <= Date.now() ||
-            // The claim was granted for a specific argument digest. If the
-            // parked arguments changed since (replacement race or in-place
-            // mutation), this approval must not authorize the new arguments.
-            // Providers that do not snapshot a fingerprint skip this check.
+            // Recompute from the actual call; a copied/stale metadata digest
+            // cannot authorize replacement arguments under an existing token.
             (pending.claimFingerprint !== undefined &&
-                pending.argumentFingerprint !== pending.claimFingerprint)
+                pending.claimFingerprint !== toolCallFingerprint(pending.name, pending.arguments))
         ) {
             return false;
         }
@@ -601,14 +591,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
     ): Promise<boolean> {
         const job = jobs.get(jobId);
         if (!job || job.status !== 'streaming' || !ownsLease(job, leaseOwner)) {
-            // A superseded worker's terminal snapshot must never overwrite
-            // the authoritative terminal result. Dropped explicitly.
             if (job && job.status !== 'streaming') {
-                logBackgroundEvent('info', 'background.job.late-snapshot-dropped', {
-                    jobId,
-                    status: job.status,
-                    snapshotStatus: snapshot.status,
-                });
+                logBackgroundEvent('info', 'background.job.late-snapshot-dropped', { jobId, status: job.status, snapshotStatus: snapshot.status });
             }
             return false;
         }
@@ -618,6 +602,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (snapshot.toolCalls !== undefined) {
             job.tool_calls = snapshot.toolCalls;
         }
+        const usage = readRequestUsage(snapshot.usage);
+        if (usage) job.usage = usage;
         job.error = snapshot.error;
         job.completedAt = snapshot.completedAt;
         job.historyPhase = 'finalization_pending';
@@ -661,7 +647,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
 
     async getActiveJobCount(): Promise<number> {
         return Array.from(jobs.values()).filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall
         ).length;
     },
 };
