@@ -71,7 +71,7 @@ describe('NotificationItem', () => {
             const opened: string[] = [];
             const setPaneThread = vi.fn(async (_index: number, id: string) => {
                 const thread = await getDb().threads.get(id);
-                if (thread) opened.push(thread.title);
+                if (typeof thread?.title === 'string') opened.push(thread.title);
             });
             setGlobalMultiPaneApi({ activePaneIndex: ref(0), updatePane: vi.fn(), setPaneThread } as unknown as Parameters<typeof setGlobalMultiPaneApi>[0]);
             const notification = baseNotification();
