@@ -1,7 +1,7 @@
 Host source/test review head: d57ffb71f295db77e17da2b89d4b688dc93bbd72
 Required base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
 Git bundle verify: passed; HEAD ref d57ffb71f295db77e17da2b89d4b688dc93bbd72; SHA-1 object format.
-Known provider delivery gap is recorded in README and is not fixed by these host review exports.
+Provider-open observation was reclassified as documented request-time authorization (see README/fs-provider-contract-review.txt); no scope bypass was reproduced. These exports remain the exact original d57ffb71 host review artifacts.
 SHA-256 file checksums:
 badc98318f3780de3304705d1d41f364c25b02a058dc4ce2fde3f6fd5ef64eee  workspace-isolation-source.patch
 52c8261ca18df3a8fb1329dbccea41d56a99051dcded30a1742a2f9b5bd3a95e  workspace-isolation-source.bundle

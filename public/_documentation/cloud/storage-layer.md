@@ -92,10 +92,11 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
 Filesystem download tokens also bind the issuing user and workspace. The
 download route rechecks `workspace.read` on each request: another user, a
 different active workspace, or a removed member cannot use an issued token.
-The installed filesystem provider authorizes before opening its file stream.
-An in-flight request that passed this check can still deliver bytes if membership
-is removed while file opening is pending; host signing checks do not close this
-provider delivery window.
+Filesystem authorization applies when each download request starts. A request
+that passed this check can finish after membership removal; cancellation of an
+already-authorized stream is not part of this contract. Its file path remains
+bound to the verified token, and a subsequent request must pass authorization
+again. Host signing checks do not promise cancellation of in-flight downloads.
 Viewers retain read access after a role downgrade. Tokens expire; deleting a
 canonical metadata row prevents new signing, but an already-issued filesystem
 token can still serve retained bytes until it expires or the object is removed.
