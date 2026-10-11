@@ -1,8 +1,51 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { usePreviewCache } from '../usePreviewCache';
+import { usePreviewCache, useSharedPreviewCache, resetSharedPreviewCache } from '../usePreviewCache';
+import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 
 const originalUrl = globalThis.URL;
 let revokeObjectUrl: ReturnType<typeof vi.fn>;
+
+describe('shared preview workspace isolation', () => {
+    const a = 'preview-isolation-a';
+    const b = 'preview-isolation-b';
+    beforeEach(() => {
+        resetSharedPreviewCache();
+        setActiveWorkspaceDb(a);
+        revokeObjectUrl = vi.fn();
+        vi.stubGlobal('URL', { revokeObjectURL: revokeObjectUrl });
+    });
+    afterEach(() => {
+        resetSharedPreviewCache();
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb(a);
+        evictWorkspaceDb(b);
+        vi.unstubAllGlobals();
+    });
+
+    it('invalidates cached URLs before another workspace can reuse an identifier', async () => {
+        const cache = useSharedPreviewCache();
+        await cache.ensure('shared-hash', async () => ({ url: 'blob:workspace-a' }));
+        setActiveWorkspaceDb(b);
+        expect(cache.peek('shared-hash')).toBeUndefined();
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:workspace-a');
+        const lookupB = vi.fn(async () => ({ url: 'blob:workspace-b' }));
+        expect(await cache.ensure('shared-hash', lookupB)).toBe('blob:workspace-b');
+        expect(lookupB).toHaveBeenCalledOnce();
+    });
+
+    it('cancels a held old-workspace read without replacing a new preview', async () => {
+        const cache = useSharedPreviewCache();
+        let finish!: (value: { url: string }) => void;
+        const readingA = cache.ensure('shared-hash', () => new Promise(resolve => { finish = resolve; }));
+        setActiveWorkspaceDb(b);
+        const readingB = cache.ensure('shared-hash', async () => ({ url: 'blob:workspace-b' }));
+        finish({ url: 'blob:workspace-a' });
+        expect(await readingB).toBe('blob:workspace-b');
+        expect(await readingA).toBeUndefined();
+        expect(cache.peek('shared-hash')).toBe('blob:workspace-b');
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:workspace-a');
+    });
+});
 
 describe('usePreviewCache', () => {
     beforeEach(() => {

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { makeMeta } from './test-utils';
 import type { FileMeta } from '~/db/schema';
+import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 
 const factory = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -33,7 +34,9 @@ function stubObjectUrl(
 }
 
 describe('ImageViewer preview cache reuse', () => {
+    const wrappers: VueWrapper[] = [];
     beforeEach(async () => {
+        setActiveWorkspaceDb('viewer-isolation-a');
         factory.toastAdd.mockReset();
         factory.getFileBlob.mockReset();
         factory.reportError.mockReset();
@@ -47,19 +50,24 @@ describe('ImageViewer preview cache reuse', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        for (const wrapper of wrappers.splice(0)) wrapper.unmount();
+        (await import('~/composables/core/usePreviewCache')).resetSharedPreviewCache();
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb('viewer-isolation-a');
+        evictWorkspaceDb('viewer-isolation-b');
         vi.unstubAllGlobals();
     });
 
     async function mountViewer(meta: FileMeta | null, modelValue = true) {
         const ImageViewer = (await import('../ImageViewer.vue')).default;
-        return mount(ImageViewer, {
+        const wrapper = mount(ImageViewer, {
             props: { modelValue, meta },
             global: {
                 stubs: {
                     UModal: {
                         name: 'ModalStub',
-                        template: '<div><slot /></div>',
+                        template: '<div><slot /><slot name="content" /></div>',
                     },
                     UButton: true,
                     UFieldGroup: true,
@@ -68,6 +76,8 @@ describe('ImageViewer preview cache reuse', () => {
                 },
             },
         });
+        wrappers.push(wrapper);
+        return wrapper;
     }
 
     it('reuses cached previews when reopening with the same hash', async () => {
@@ -97,6 +107,46 @@ describe('ImageViewer preview cache reuse', () => {
         expect(factory.getFileBlob).toHaveBeenCalledTimes(1);
         expect(createObjectURL).toHaveBeenCalledTimes(1);
         expect(revokeObjectURL).not.toHaveBeenCalled();
+    });
+
+    it('does not display a held preview after switching workspaces', async () => {
+        stubObjectUrl(vi.fn(() => 'blob:old-workspace'), vi.fn());
+        let finish!: (blob: Blob) => void;
+        factory.getFileBlob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const wrapper = await mountViewer(makeMeta('held-preview'));
+        await flushPromises();
+        setActiveWorkspaceDb('viewer-isolation-b');
+        finish(new Blob(['workspace-a-private-fixture'], { type: 'image/png' }));
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it('clears a displayed preview synchronously when the workspace changes', async () => {
+        stubObjectUrl(vi.fn(() => 'blob:old-workspace'), vi.fn());
+        factory.getFileBlob.mockResolvedValue(new Blob(['workspace-a'], { type: 'image/png' }));
+        const wrapper = await mountViewer(makeMeta('displayed-preview'));
+        await flushPromises();
+        expect(wrapper.get('img').attributes('src')).toBe('blob:old-workspace');
+        setActiveWorkspaceDb('viewer-isolation-b');
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it('discards an old cached-load continuation even after switching away and back', async () => {
+        stubObjectUrl(vi.fn(() => 'blob:old-workspace'), vi.fn());
+        factory.getFileBlob.mockResolvedValue(new Blob(['workspace-a'], { type: 'image/png' }));
+        const wrapper = await mountViewer(makeMeta('cached-continuation'));
+        await flushPromises();
+        // load() can await an already resolved cache hit. Invalidation must
+        // still fence its continuation, even when the workspace ID is restored.
+        const loading = (wrapper.vm as unknown as { load(): Promise<void> }).load();
+        setActiveWorkspaceDb('viewer-isolation-b');
+        setActiveWorkspaceDb('viewer-isolation-a');
+        await loading;
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(false);
     });
 
     it('fetches a new blob when opening a different hash', async () => {

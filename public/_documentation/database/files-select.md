@@ -71,6 +71,8 @@ and a deterministic hash tie-breaker; it does not rely on IndexedDB string order
 
 ## Usage tips
 
+-   The gallery and viewer share preview URLs within the active workspace. Switching workspaces revokes cached URLs, cancels pending preview loads, and clears displayed previews. The next workspace must resolve its own blob even when a file hash is the same.
+-   A gallery upload batch belongs to the workspace generation captured when the files are selected. Switching workspaces stops the remaining files; files already committed remain in the original workspace. Switching away and back does not resume that batch.
 -   Combine with `createOrRefFile` / `softDeleteFile` from `files.ts` for lifecycle actions.
 -   Use `listImagePage` plus a persisted cursor for Load more; do not grow offsets.
 -   Global counts and search totals come from `listImageSummaries`, which is O(N) in compact keys and separate from page hydration.

@@ -1,5 +1,7 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
+import { Blob as NativeBlob } from 'node:buffer';
+import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, type EffectScope } from 'vue';
 import {
@@ -11,6 +13,7 @@ import { softDeleteMany, restoreMany } from '~/db/files';
 import { updateFileName } from '~/db/files-select';
 import type { FileMeta } from '~/db/schema';
 import { useImageGallery } from '../useImageGallery';
+import * as fileOperations from '~/db/files';
 
 const hooksMock = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -352,6 +355,45 @@ describe('useImageGallery integration', () => {
             'trash-3',
             'trash-4',
         ]);
+    });
+
+    it.each(['changed', 'returned', 'unchanged'] as const)('keeps gallery upload batch ownership when the workspace is %s between file completions', async (change) => {
+        const nextWorkspace = `gallery-upload-next-${crypto.randomUUID()}`;
+        const Page = (await import('../index.vue')).default;
+        const wrapper = mount(Page, { global: { stubs: { GalleryGrid: true, ImageViewer: true, USelect: true } } });
+        const originalCreate = fileOperations.createOrRefFile;
+        let first = true;
+        const create = vi.spyOn(fileOperations, 'createOrRefFile').mockImplementation(async (...args) => {
+            const result = await originalCreate(...args);
+            if (first) {
+                first = false;
+                // A queued workspace event wins between one file's settled
+                // creation and the outer batch's asynchronous continuation.
+                queueMicrotask(() => {
+                    if (change === 'unchanged') return;
+                    setActiveWorkspaceDb(nextWorkspace);
+                    if (change === 'returned') setActiveWorkspaceDb(workspaceId);
+                });
+            }
+            return result;
+        });
+        const files = ['origin-one', 'origin-two'].map(name => Object.assign(
+            new NativeBlob([name], { type: 'image/png' }), { name: `${name}.png` },
+        ));
+        try {
+            await (wrapper.vm as unknown as { handleUpload(event: Event): Promise<void> }).handleUpload({
+                target: { files, value: 'synthetic-selection' },
+            } as unknown as Event);
+            const nextDb = setActiveWorkspaceDb(nextWorkspace);
+            expect(await nextDb.file_meta.count()).toBe(0);
+            expect(await db.file_meta.count()).toBe(change === 'unchanged' ? 2 : 1);
+        } finally {
+            create.mockRestore();
+            wrapper.unmount();
+            setActiveWorkspaceDb(workspaceId);
+            evictWorkspaceDb(nextWorkspace);
+            await Dexie.delete(`or3-db-${nextWorkspace}`);
+        }
     });
 
     it('pages locale-aware name orders with no duplicates', async () => {

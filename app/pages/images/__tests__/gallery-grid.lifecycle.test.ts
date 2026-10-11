@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { makeMeta } from './test-utils';
 import type { FileMeta } from '~/db/schema';
 import { resetSharedPreviewCache } from '~/composables/core/usePreviewCache';
+import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 
 const { getMocks } = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -44,6 +45,7 @@ vi.mock(
 );
 
 const mocks = getMocks();
+const wrappers: VueWrapper[] = [];
 
 function stubObjectUrl(
     createObjectURL: ReturnType<typeof vi.fn>,
@@ -57,7 +59,7 @@ function stubObjectUrl(
 
 async function mountGrid(items: FileMeta[]) {
     const GalleryGrid = (await import('../GalleryGrid.vue')).default;
-    return mount(GalleryGrid, {
+    const wrapper = mount(GalleryGrid, {
         props: {
             items,
             selectionMode: false,
@@ -73,10 +75,13 @@ async function mountGrid(items: FileMeta[]) {
             },
         },
     });
+    wrappers.push(wrapper);
+    return wrapper;
 }
 
 describe('GalleryGrid lifecycle management', () => {
     beforeEach(() => {
+        setActiveWorkspaceDb('grid-isolation-a');
         mocks.toastAdd.mockReset();
         mocks.getFileBlob.mockReset();
         mocks.reportError.mockReset();
@@ -84,10 +89,32 @@ describe('GalleryGrid lifecycle management', () => {
     });
 
     afterEach(() => {
+        for (const wrapper of wrappers.splice(0)) wrapper.unmount();
         resetSharedPreviewCache();
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb('grid-isolation-a');
+        evictWorkspaceDb('grid-isolation-b');
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
         vi.useRealTimers();
+    });
+
+    it('discards a held preview and clears displayed URLs when switching workspaces', async () => {
+        const createObjectURL = vi.fn(() => 'blob:old-grid');
+        stubObjectUrl(createObjectURL, vi.fn());
+        let finish!: (blob: Blob) => void;
+        mocks.getFileBlob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const meta = makeMeta('held-grid');
+        const wrapper = await mountGrid([meta]);
+        const vm = wrapper.vm as unknown as { ensureUrl(meta: FileMeta): Promise<void> };
+        const reading = vm.ensureUrl(meta);
+        setActiveWorkspaceDb('grid-isolation-b');
+        await wrapper.setProps({ items: [] });
+        finish(new Blob(['workspace-a-only'], { type: 'image/png' }));
+        await reading;
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(mocks.reportError).not.toHaveBeenCalled();
+        wrapper.unmount();
     });
 
     it('revokes object URLs when items are removed', async () => {

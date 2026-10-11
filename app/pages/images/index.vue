@@ -11,7 +11,7 @@ import {
     restoreMany,
     hardDeleteMany,
 } from '../../db/files';
-import { getDb } from '../../db/client';
+import { getDb, getWorkspaceGeneration } from '../../db/client';
 import {
     consumePendingPaletteImageSelection,
     subscribePaletteImageSelection,
@@ -255,10 +255,20 @@ async function handleUpload(event: Event) {
         file.type.startsWith('image/')
     );
     if (!files.length) return;
+    const originDb = getDb();
+    const generation = getWorkspaceGeneration();
+    const owner = {
+        assertCurrent() {
+            if (getDb() !== originDb || generation !== getWorkspaceGeneration()) {
+                throw new Error('The workspace changed during upload. Select the files again in the intended workspace.');
+            }
+        },
+    };
     uploading.value = true;
     try {
         for (const file of files) {
-            await createOrRefFile(file, file.name || 'Uploaded image');
+            await createOrRefFile(file, file.name || 'Uploaded image', owner);
+            owner.assertCurrent();
         }
         refreshGallery();
         setActiveView('uploads');
