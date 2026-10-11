@@ -328,6 +328,64 @@ for (const boundary of ['chat-rows', 'file-metadata'] as const) {
     });
 }
 
+for (const account of ['changed', 'unchanged'] as const) {
+    test(`actual SDK job tracking preserves originating account when account is ${account}`, async ({ page }, info) => {
+        await open(page);
+        await page.route('**/api/openrouter/**', route => route.abort());
+        await page.route('**/api/models/**', route => route.abort());
+        // Mock every job request before creating a tracker: no server/model execution.
+        await page.route('**/api/jobs/**', route => route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ status: 'streaming', content: '', content_length: 0, id: 'synthetic-sdk-job',
+                threadId: 'synthetic-thread', messageId: 'synthetic-message', model: 'synthetic/model', chunksReceived: 0, startedAt: 1 }) }));
+        await select(page, `sdk-tracker-${account}-origin`);
+        const receipt = await page.evaluate(async mode => {
+            const hostPath = '/_nuxt/composables/plugins/trusted-host-context.ts';
+            const servicesPath = '/_nuxt/composables/plugins/trusted-runtime-services.ts';
+            const trackerPath = '/_nuxt/utils/chat/useAi-internal/backgroundJobs.ts';
+            const notificationsPath = '/_nuxt/utils/chat/useAi-internal/backgroundJobNotifications.ts';
+            const clientPath = '/_nuxt/db/client.ts';
+            const { createTrustedHostContext } = await import(hostPath);
+            const { createTrustedRuntimeServices } = await import(servicesPath);
+            const { ensureBackgroundJobTracker, stopBackgroundJobTracking, backgroundJobTrackers } = await import(trackerPath);
+            const { emitBackgroundComplete } = await import(notificationsPath);
+            const { getDb, setActiveWorkspaceDb } = await import(clientPath);
+            const vueApp = (document.querySelector('#__nuxt') as any).__vue_app__;
+            const nuxt = vueApp.$nuxt;
+            const stateKey = '$sauth-session';
+            const previousSession = nuxt.payload.state[stateKey];
+            const originWorkspace = `sdk-tracker-${mode}-origin`;
+            nuxt.payload.state[stateKey] = { appAccessAllowed: true, session: { authenticated: true,
+                user: { id: 'synthetic-origin-user' }, workspace: { id: originWorkspace }, role: 'owner' } };
+            const originDb = getDb();
+            const tracker = ensureBackgroundJobTracker({ jobId: 'synthetic-sdk-job', userId: 'synthetic-origin-user',
+                workspaceId: originWorkspace, threadId: 'synthetic-thread', messageId: 'synthetic-message',
+                originDb, useSse: false });
+            stopBackgroundJobTracking(tracker);
+            const workspace = mode === 'changed' ? `sdk-tracker-${mode}-target` : originWorkspace;
+            if (mode === 'changed') await setActiveWorkspaceDb(workspace).open();
+            nuxt.payload.state[stateKey] = { appAccessAllowed: true, session: { authenticated: true,
+                user: { id: mode === 'changed' ? 'synthetic-next-user' : 'synthetic-origin-user' }, workspace: { id: workspace }, role: 'owner' } };
+            const trusted = nuxt.runWithContext(() => createTrustedHostContext({ pluginId: 'fixture.sdk-tracker', version: '1.0.0',
+                workspaceId: workspace, grants: ['jobs.background'], runtimeServices: createTrustedRuntimeServices }));
+            try {
+                const tracked = await trusted.context.jobs.track({ jobId: 'synthetic-sdk-job', threadId: 'synthetic-thread', messageId: 'synthetic-message' });
+                const owner = tracker.userId;
+                const db = getDb();
+                const before = await db.notifications.count();
+                await emitBackgroundComplete(tracker, { id: 'synthetic-sdk-job', status: 'error', threadId: 'synthetic-thread',
+                    messageId: 'synthetic-message', model: 'synthetic/model', chunksReceived: 0, startedAt: 1,
+                    completedAt: 2, content: '', content_length: 0, error: 'synthetic-origin-private-error' });
+                const after = await db.notifications.count();
+                return { tracked: tracked.ok, owner, originRetained: tracker.originDb === originDb,
+                    notificationDelta: after - before };
+            } finally { await trusted.dispose(); stopBackgroundJobTracking(tracker); backgroundJobTrackers.clear(); nuxt.payload.state[stateKey] = previousSession; }
+        }, account);
+        await info.attach('synthetic-sdk-tracker-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual({ tracked: true, owner: 'synthetic-origin-user', originRetained: true,
+            notificationDelta: account === 'changed' ? 0 : 1 });
+    });
+}
+
 for (const boundary of ['native-conversion', 'iteration', 'unchanged'] as const) {
     test(`actual SDK file read fences ${boundary} byte delivery`, async ({ page }, info) => {
         await open(page);

@@ -20,7 +20,12 @@ try:
     (worktree / 'tsconfig.json').write_text(json.dumps({'compilerOptions': {'target': 'ESNext', 'module': 'ESNext', 'moduleResolution': 'Bundler'}}))
     test = 'app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts'
     shutil.copyfile(root / test, worktree / test)
-    subprocess.run(['git', 'apply', str(evidence / 'tracker-account-guard-proposal.patch')], cwd=worktree, check=True)
+    source = worktree / 'app/utils/chat/useAi-internal/backgroundJobs.ts'
+    original = source.read_text()
+    needle = "    if (existing) {\n        bgStreamLog('tracker-reused', {"
+    guard = "    if (existing) {\n        // A known account owns the tracker for its whole lifetime.\n        if (existing.userId && params.userId && existing.userId !== params.userId) return existing;\n        bgStreamLog('tracker-reused', {"
+    assert original.count(needle) == 1
+    source.write_text(original.replace(needle, guard))
     command = ['bun', 'x', 'vitest', 'run', test, '--bail=0', '--reporter=verbose', '--maxWorkers=2']
     result = subprocess.run(command, cwd=worktree, capture_output=True, text=True)
     (evidence / 'tracker-account-proposal.txt').write_text(

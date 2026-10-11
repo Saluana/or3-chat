@@ -3,78 +3,78 @@ Only proposed tracker account guard applied in disposable checkout.
 Current six canonical regression/control cases copied in; providers/transports mocked.
 Command: bun x vitest run app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts --bail=0 --reporter=verbose --maxWorkers=2
 
- RUN  v4.1.11 /tmp/or3-tracker-proposal-xva55ecg
+ RUN  v4.1.11 /tmp/or3-tracker-proposal-9qhhgvqz
 
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains accepted usage after a failed write and missing later snapshots 1077ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains accepted usage after a failed write and malformed later snapshots 11ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains terminal usage when the full-content refetch has no measurement 11ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not regress the accepted iteration within one background attempt 11ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops discarded usage after recovery even if its local write fails: {"attempt":2} 11ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops discarded usage after recovery even if its local write fails: {"attempt":1,"content_reset":true} 10ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not attach an earlier terminal event measurement to a newer attempt refetch 9ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains a same-attempt reset instruction across a full-content refetch 11ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains accepted usage after a failed write and missing later snapshots 1234ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains accepted usage after a failed write and malformed later snapshots 15ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains terminal usage when the full-content refetch has no measurement 15ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not regress the accepted iteration within one background attempt 12ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops discarded usage after recovery even if its local write fails: {"attempt":2} 14ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops discarded usage after recovery even if its local write fails: {"attempt":1,"content_reset":true} 12ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not attach an earlier terminal event measurement to a newer attempt refetch 11ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains a same-attempt reset instruction across a full-content refetch 14ms
  ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > ignores a terminal full-content refetch from an older attempt 10ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > restarts SSE when a detached polling job is reattached 10ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > executes a claimed client tool while detached with expired session cache=false 64ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > executes a claimed client tool while detached with expired session cache=true 61ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose arguments changed without a new binding 97ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose name changed without a new binding 97ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose callId changed without a new binding 97ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose threadId changed without a new binding 97ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose messageId changed without a new binding 98ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a running journal bound to undefined 67ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a settled journal bound to undefined 65ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a running journal bound to different-digest 67ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a settled journal bound to different-digest 57ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a corrupt-json journal bound to undefined 57ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a invalid-shape journal bound to undefined 58ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a expired-running journal bound to undefined 57ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a expired-settled journal bound to undefined 58ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps a durable running journal when pre-execution revalidation fails 57ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not restore a late private result after logout scrubbed the journal 87ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > delivers a settled result with the same binding under a fresh claim without reexecution 58ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a pre-restart measured partial response with an unmeasured streaming attempt 57ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a pre-restart measured partial response with an unmeasured complete attempt 58ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a longer reused tracker when storage has a newer shorter attempt 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops a stale transport status from an older attempt 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > honors a same-attempt content reset while priming 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not publish an old terminal snapshot after another tab persisted a newer attempt 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > clears stale persisted error fields when a job resumes streaming 64ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > closes the live transport and resets tracking flags when stopped 14ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > delivers primed abort state while isolating a throwing subscriber 14ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > projects an abort without a server workflow snapshot into the stored card state 14ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not cancel or drop a live server job when local persistence fails 64ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > uses one live reconciliation transport for multiple viewers of one job 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not fallback to polling when SSE closes after tracker reached terminal state 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > uses tracker user scope for fallback completion notifications when session is unavailable 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes before 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes before 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during mute read 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during mute read 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during logout 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during logout 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before fallback delivery when reuse requests a matching-conversation 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before fallback delivery when reuse requests a foreign-conversation 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before hook delivery when reuse requests a matching-conversation 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before hook delivery when reuse requests a foreign-conversation 5ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains admitted tracker account controls for same-account 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains admitted tracker account controls for late-account-binding 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > skips local completion notifications when server notifications are preferred 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > preserves detached completion notifications after the same account switches workspaces 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > runs terminal cleanup when priming a stopped tracker during reattach 11ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps reconciling an active job after a transient transport outage 35ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > re-reads the message row for each persisted SSE status update 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > preserves metadata written between background status updates 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > persists tool-only state transitions once per distinct fingerprint 8ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps persistence pinned to the originating DB after workspace changes 9ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > stops tracking on a protocol failure without failing the generation 6ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the full terminal snapshot including reasoning "final reasoning" when the final write fails 7ms
- ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the full terminal snapshot including reasoning "" when the final write fails 7ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > restarts SSE when a detached polling job is reattached 13ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > executes a claimed client tool while detached with expired session cache=false 68ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > executes a claimed client tool while detached with expired session cache=true 62ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose arguments changed without a new binding 94ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose name changed without a new binding 93ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose callId changed without a new binding 93ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose threadId changed without a new binding 93ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > refuses a claimed tool whose messageId changed without a new binding 94ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a running journal bound to undefined 83ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a settled journal bound to undefined 99ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a running journal bound to different-digest 73ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a settled journal bound to different-digest 59ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a corrupt-json journal bound to undefined 60ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a invalid-shape journal bound to undefined 59ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a expired-running journal bound to undefined 56ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not replay a expired-settled journal bound to undefined 60ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps a durable running journal when pre-execution revalidation fails 61ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not restore a late private result after logout scrubbed the journal 92ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > delivers a settled result with the same binding under a fresh claim without reexecution 60ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a pre-restart measured partial response with an unmeasured streaming attempt 63ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a pre-restart measured partial response with an unmeasured complete attempt 61ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > replaces a longer reused tracker when storage has a newer shorter attempt 13ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > drops a stale transport status from an older attempt 11ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > honors a same-attempt content reset while priming 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not publish an old terminal snapshot after another tab persisted a newer attempt 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > clears stale persisted error fields when a job resumes streaming 60ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > closes the live transport and resets tracking flags when stopped 12ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > delivers primed abort state while isolating a throwing subscriber 11ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > projects an abort without a server workflow snapshot into the stored card state 12ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not cancel or drop a live server job when local persistence fails 60ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > uses one live reconciliation transport for multiple viewers of one job 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not fallback to polling when SSE closes after tracker reached terminal state 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > uses tracker user scope for fallback completion notifications when session is unavailable 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes before 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes before 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during mute read 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during mute read 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during logout 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during logout 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before fallback delivery when reuse requests a matching-conversation 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before fallback delivery when reuse requests a foreign-conversation 11ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before hook delivery when reuse requests a matching-conversation 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the admitted tracker account before hook delivery when reuse requests a foreign-conversation 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains admitted tracker account controls for same-account 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains admitted tracker account controls for late-account-binding 8ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > skips local completion notifications when server notifications are preferred 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > preserves detached completion notifications after the same account switches workspaces 6ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > runs terminal cleanup when priming a stopped tracker during reattach 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps reconciling an active job after a transient transport outage 26ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > re-reads the message row for each persisted SSE status update 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > preserves metadata written between background status updates 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > persists tool-only state transitions once per distinct fingerprint 12ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > keeps persistence pinned to the originating DB after workspace changes 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > stops tracking on a protocol failure without failing the generation 9ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the full terminal snapshot including reasoning "final reasoning" when the final write fails 10ms
+ ✓ |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > retains the full terminal snapshot including reasoning "" when the final write fails 10ms
 
  Test Files  1 passed (1)
       Tests  65 passed (65)
-   Start at  11:50:22
-   Duration  4.07s (transform 528ms, setup 171ms, import 244ms, tests 2.98s, environment 470ms)
+   Start at  11:58:25
+   Duration  4.88s (transform 699ms, setup 228ms, import 368ms, tests 3.30s, environment 718ms)
 
 
 Exit status: 0
