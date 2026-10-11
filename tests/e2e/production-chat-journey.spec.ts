@@ -88,6 +88,8 @@ test.describe('chat draft storage recovery faults', () => {
             ? route.continue() : route.abort('blockedbyclient'));
         await page.goto('/chat');
         await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
         await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
             .filter(key => key.startsWith('or3:workspace-tabs:v1:')).length)).toBeGreaterThan(0);
     });
@@ -926,6 +928,8 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Draft that must survive a reload');
+    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
     await (await chooser).setFiles(fixturePng);
