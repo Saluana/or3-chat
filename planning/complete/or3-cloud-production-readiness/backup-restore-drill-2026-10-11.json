@@ -17,7 +17,11 @@
       "behavior": "Refuse canonical committed FS metadata sidecars missing their blob payload entry under the archived FS root; preserve uncommitted uploads, temporary sidecars and opaque generation artifacts; no new format or physical cleanup."
     }
   ],
-  "finalCliSourceRevision": "aab3318c9c7142ed575039cdfba9702c991fb476",
+  "finalCliSourceRevision": "f195153bda7937462a7a85fc4d295ac89cebef44",
+  "walFrameFix": {
+    "commit": "f195153bda7937462a7a85fc4d295ac89cebef44",
+    "behavior": "Stream complete current-generation SQLite WAL frames and verify cumulative checksums before native opening with one bounded page/frame buffer. Refuse damage without hiding committed records; preserve stale reset tails and incomplete appends."
+  },
   "walHeaderFix": {
     "commit": "aab3318c9c7142ed575039cdfba9702c991fb476",
     "behavior": "Validate nonempty SQLite WAL headers before native opening, including magic, format, page size and documented endian-dependent checksum. Empty checkpointed WALs remain accepted. Actual malformed-header restore refusal safely recovers the committed WAL-only record."
@@ -1698,6 +1702,210 @@
       }
     ]
   },
+  "actualAppWalFrameBefore": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "a70d9ed2d9bbcb8f91799517841cee80d79a8514",
+    "evidenceAnnotation": "Outcome kind corrected after execution: original evidence helper ignored its third argument; asserted native behavior and raw log are unchanged.",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "8ffedac7b7bb34c5151e55e7189ed2910c8391e37deb818957578abe238f98af"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "unresolved: valid WAL header with corrupt first frame reports restore success while losing committed WAL-only record",
+        "kind": "limitation",
+        "detail": {
+          "sentinelRetained": false,
+          "walBytes": 32992,
+          "shmRemoved": true,
+          "baselineVerification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "corruptionOffset": 156,
+          "outcome": "False restore success; committed WAL record missing; header remains valid"
+        }
+      },
+      {
+        "name": "known-good archive restores committed WAL sentinel and baseline records",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
+  "actualAppWalFrameAfter": {
+    "completed": true,
+    "cleanupFailed": false,
+    "recordedCliRevision": "a70d9ed2d9bbcb8f91799517841cee80d79a8514",
+    "qualifiedUncommittedSourceNowCommitted": "f195153bda7937462a7a85fc4d295ac89cebef44",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "8e9d077df24f2f3215c2e1eb60b277e3a7122bc97c71f56614043c6176814326"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "corrupt WAL frame refused before startup; automatic recovery preserves committed WAL-only record and baseline data",
+        "kind": "passed",
+        "detail": {
+          "sentinelRetained": true,
+          "walBytes": 32992,
+          "shmRemoved": true,
+          "baselineVerification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "corruptionOffset": 156,
+          "outcome": "Invalid archive refused; original pre-mutation snapshot restored"
+        }
+      },
+      {
+        "name": "stale WAL tail remains accepted and preserves the committed record",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "incomplete WAL tail remains accepted and preserves the committed record",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "known-good archive restores committed WAL sentinel and baseline records",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ]
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,
@@ -2172,20 +2380,20 @@
   "automatedChecks": [
     {
       "command": "bun test packages/or3-cloud/test",
-      "result": "244 pass, 0 fail, 1827 assertions across 7 files (95.34 seconds after WAL-header fix)",
+      "result": "245 pass, 0 fail, 1867 assertions across 7 files (103.38 seconds after WAL-frame fix)",
       "coverage": "mocked Docker/provider lifecycle and contracts; final POSIX archive reader additionally qualified by actual containers"
     },
     {
-      "command": "bun test packages/or3-cloud/test/cli-backup.test.ts --test-name-pattern \"WAL header\"",
-      "result": "1 pass, 66 assertions including both checksum byte orders; every single-byte corruption and all short headers refused. Additional big-endian positive assertion ran after the complete 244-test suite."
+      "command": "bun test packages/or3-cloud/test/cli-backup.test.ts --test-name-pattern \"WAL (frame|header)\"",
+      "result": "2 pass, 107 assertions including both checksum byte orders, every single-byte header corruption, all short headers, native frames at 512/4096/65536-byte pages, stale tails and incomplete append tails. Two fixed big-endian frame assertions ran after the complete 245-test suite."
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts",
-      "result": "37 backup tests pass as part of final 244-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
+      "result": "38 backup tests pass as part of final 245-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-lifecycle.test.ts",
-      "result": "36 lifecycle tests pass as part of final 244-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction"
+      "result": "36 lifecycle tests pass as part of final 245-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction"
     },
     {
       "command": "bun run --cwd packages/or3-cloud typecheck; bun run --cwd packages/or3-cloud build",
@@ -2209,7 +2417,7 @@
     }
   ],
   "remainingRisksAndNotTested": [
-    "WAL-header validation does not validate every committed frame checksum or prove the expected record inventory. The reproduced invalid-header case used a populated valid main database, a real committed WAL-only record, and removed SHM; SQLite ignored the broken WAL without repairing its bytes. Full frame corruption remains a separate qualification boundary.",
+    "WAL header and current-generation full-frame checksum validation refuse reproduced malformed-header/frame-content omissions. Old-salt tails after reset and incomplete append tails retain SQLite recovery semantics. Complete same-generation frames with bad checksums are conservatively refused, including torn uncommitted frames; input is not repaired. Truncation or altered salts can still resemble legitimate interrupted/reused tails; expected record inventory remains unqualified.",
     "Before 1ab5f45e, an authenticated archive missing only the referenced blob passed restore and deep health; actual download returned 404. That case is now refused. When both blob and sidecar are absent while database references remain, restore still reports success and download returns 404; a five-case data-only reference prototype detects the current-provider omission but is not shipped validation; known-good recovery restores bytes. This remaining case requires database-reference validation, not a new manifest format.",
     "Native pre-start quick_check/nonempty-schema checks do not prove every expected application record, canonical reference or correct cross-release schema. Missing-WAL qualification uses a snapshot whose main file has no tables; checkpointed snapshots legitimately omit WAL. Native checks run after extraction, so pre-start refusal relies on verified automatic recovery rather than pre-extraction database inspection.",
     "Sparse preflight fault: target extraction hit ENOSPC and automatic recovery failed; the exact automatic-recovery error was not separately retained in the first log. Explicit recovery capacity refusal and retained verified snapshot were asserted. A separate raw-primitive fixture/state reset restored the smaller known-good archive; that reset is not an operator recovery procedure. The fixed preflight avoids this mutation. Capacity fixtures use 96 MiB volatile tmpfs with a holder across app restarts; no disk hardware or host-reboot durability qualification.",

@@ -39,7 +39,8 @@ const browserOnly = process.argv.includes('--browser-only');
 const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
 const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
-const walCorruptionOnly = process.argv.includes('--wal-corruption-only');
+const walFrameOnly = process.argv.includes('--wal-frame-only');
+const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walFrameOnly;
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
@@ -159,7 +160,9 @@ function client(fixture: Instance) {
     return response;
   };
 }
-const evidence = (name: string, detail?: unknown) => { outcomes.push({ name, kind: 'passed', detail }); console.log(`PASS ${name}`); };
+const evidence = (name: string, detail?: unknown, kind: 'passed' | 'limitation' = 'passed') => {
+  outcomes.push({ name, kind, detail }); console.log(`${kind === 'passed' ? 'PASS' : 'LIMITATION'} ${name}`);
+};
 const fixtureRows: Array<{ tableName: string; pk: string; payload: Record<string, unknown> }> = [];
 const fileBytes = Buffer.from('Synthetic backup document and attachment bytes.\n');
 const hash = `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`;
@@ -751,8 +754,11 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const unpacked = await run('tar', ['xzf', join(broken, 'data.tgz'), '-C', tree]);
     assert(unpacked.ok, unpacked.stderr);
     const wal = await readFile(join(tree, 'sync.sqlite-wal'));
+    const originalWal = Buffer.from(wal);
     assert(wal.length > 32);
-    wal[0] = wal[0]! ^ 0xff;
+    const corruptionOffset = walFrameOnly ? 32 + 24 + 100 : 0;
+    assert(wal.length > corruptionOffset);
+    wal[corruptionOffset] = wal[corruptionOffset]! ^ 0xff;
     await writeFile(join(tree, 'sync.sqlite-wal'), wal);
     await rm(join(tree, 'sync.sqlite-shm'), { force: true });
     const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
@@ -762,16 +768,38 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const text = `${JSON.stringify(manifest, null, 2)}\n`;
     await writeFile(join(broken, 'manifest.json'), text);
     await writeBackupAuthentication(target.directory, broken, text);
-    await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), /Invalid SQLite WAL header/);
+    await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), walFrameOnly
+      ? /Invalid SQLite WAL frame checksum/ : /Invalid SQLite WAL header/);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     const { api } = await authenticated(target);
     const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
     const retained = snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel');
     assert(retained, 'Refused corrupt target must recover the original committed WAL record');
-    evidence('corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
+    evidence(walFrameOnly
+      ? 'corrupt WAL frame refused before startup; automatic recovery preserves committed WAL-only record and baseline data'
+      : 'corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
       sentinelRetained: retained, walBytes: wal.length, shmRemoved: true, baselineVerification: await verify(target),
-      outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
+      corruptionOffset, outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
     });
+    if (walFrameOnly) {
+      const frameSize = originalWal.readUInt32BE(8) + 24;
+      for (const tail of ['stale', 'incomplete']) {
+        const bytes = Buffer.from(originalWal.subarray(32, 32 + (tail === 'stale' ? frameSize : 100)));
+        if (tail === 'stale') bytes[8] = bytes[8]! ^ 0xff;
+        await writeFile(join(tree, 'sync.sqlite-wal'), Buffer.concat([originalWal, bytes]));
+        const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+        assert(packed.ok, packed.stderr);
+        manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+        const text = `${JSON.stringify(manifest, null, 2)}\n`;
+        await writeFile(join(broken, 'manifest.json'), text);
+        await writeBackupAuthentication(target.directory, broken, text);
+        await restoreCommand(target.directory, { yes: true }, [broken]);
+        const { api } = await authenticated(target);
+        const restored = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+        assert(restored.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+        evidence(`${tail} WAL tail remains accepted and preserves the committed record`, await verify(target));
+      }
+    }
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
     const { api: recovered } = await authenticated(target);
     const good = await (await recovered('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
@@ -837,7 +865,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

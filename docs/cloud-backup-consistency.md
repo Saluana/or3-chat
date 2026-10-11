@@ -68,8 +68,16 @@ SQLite can ignore an invalid WAL and use an older, structurally valid main
 database: the drill reproduced successful restore with a committed WAL-only
 record missing after header corruption and SHM omission. Invalid headers are
 now refused before startup and the original snapshot is recovered. Empty WALs
-remain valid checkpoint artifacts. Header validation is not a complete audit
-of committed frame checksums or expected record inventory.
+remain valid checkpoint artifacts. Restore also streams full current-generation
+frames and verifies their cumulative checksums before native opening; the drill
+reproduced the same silent omission after corrupting frame content beneath a
+valid header. The buffer is bounded to one page plus its frame header. Old salts
+after WAL reuse and an incomplete trailing append remain accepted, preserving
+SQLite's checkpoint/crash semantics. A complete current-generation frame with
+a bad checksum is conservatively refused, including a torn uncommitted frame;
+this verifier does not repair it. Truncation or altered salts can still resemble
+a legitimate interrupted/reset tail, so this is not proof of the expected
+record inventory or a substitute for semantic completeness validation.
 For the archived FS root under
 `/data`, the reader also pairs canonical SHA-256/MD5 committed sidecars with
 their blob entries. Uncommitted uploads, temporary sidecars and opaque generation
@@ -127,6 +135,10 @@ can legitimately omit WAL/SHM; this is not a blanket WAL presence requirement.
 commits another record into WAL, and captures a real backup. It corrupts the
 WAL header and removes the transient SHM file, verifies refusal before startup
 and recovery of the committed record, then verifies the intact backup again.
+`--wal-frame-only` corrupts a current-generation frame beneath an intact header,
+checks refusal/recovery of the committed record, and verifies that a stale
+frame after a valid commit and an incomplete append remain accepted. The
+pre-fix drill reported success while dropping the committed WAL-only record.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks
