@@ -111,6 +111,75 @@ test.describe('chat draft storage recovery faults', () => {
             body: JSON.stringify({ stored: await savedTexts(page), restored: await input.innerText(), externalRequests: 'denied' }) });
     });
 
+    test('an interrupted attachment read retains the reference and retry restores its preview', async ({ page }, info) => {
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const marker = 'Saved attachment survives interrupted local blob read';
+        await input.fill(marker);
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const savedReferences = () => page.evaluate(async () => {
+            let count = 0;
+            const savedTabIds = new Set(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:'))
+                .flatMap(key => (JSON.parse(localStorage.getItem(key) ?? '{}').tabs ?? []).map((tab: { id: string }) => tab.id)));
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const open = indexedDB.open(name); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
+                });
+                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                    const rows = await new Promise<Array<{ tab_id: string; draft: { attachments: unknown[] } }>>((resolve, reject) => {
+                        const tx = db.transaction('workspace_tab_drafts', 'readonly'); const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        tx.oncomplete = () => resolve(read.result); tx.onabort = () => reject(tx.error);
+                    });
+                    count += rows.filter(row => savedTabIds.has(row.tab_id)).reduce((sum, row) => sum + row.draft.attachments.length, 0);
+                }
+                db.close();
+            }
+            return count;
+        });
+        await expect.poll(savedReferences).toBe(1);
+        await page.addInitScript(() => {
+            const probe = { reads: 0 };
+            (window as unknown as { attachmentReadProbe: typeof probe }).attachmentReadProbe = probe;
+            const original = IDBObjectStore.prototype.get;
+            IDBObjectStore.prototype.get = function (...args: Parameters<typeof original>) {
+                if (this.name === 'file_blobs' && localStorage.getItem('or3:recovery:blob-read-repaired') !== 'yes') {
+                    probe.reads++;
+                    throw new DOMException('Synthetic interrupted attachment read', 'AbortError');
+                }
+                return original.apply(this, args);
+            };
+            (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads = () => {
+                localStorage.setItem('or3:recovery:blob-read-repaired', 'yes'); IDBObjectStore.prototype.get = original;
+            };
+        });
+        await info.attach('before-attachment-read-reload', { body: JSON.stringify({ references: await savedReferences(), texts: await savedTexts(page), layout: await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:')).map(key => [key, localStorage.getItem(key)]))) }), contentType: 'application/json' });
+        await page.reload();
+        await expect(input).toBeVisible({ timeout: 60_000 });
+        await info.attach('after-attachment-read-reload', { body: JSON.stringify({ references: await savedReferences(), texts: await savedTexts(page), reads: await page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads), layout: await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:')).map(key => [key, localStorage.getItem(key)]))) }), contentType: 'application/json' });
+        await expect.poll(() => page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads)).toBeGreaterThan(0);
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText('Attach these files again', { exact: true })).toHaveCount(0);
+        expect(await savedReferences()).toBe(1);
+        expect(await savedTexts(page)).toContain(marker);
+        await page.reload();
+        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        expect(await savedReferences()).toBe(1);
+        await page.evaluate(() => (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads());
+        await page.getByRole('button', { name: 'Retry restore', exact: true }).click();
+        await expect(input).toHaveText(marker);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 60_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+        const evidencePath = info.outputPath('interrupted-attachment-read.json');
+        await writeFile(evidencePath, JSON.stringify({ storedReferences: await savedReferences(),
+            restoredText: await input.innerText(), externalRequests: 'denied', faultReadsConfirmed: true, layoutAcknowledged: true }, null, 2));
+        await info.attach('interrupted-attachment-read', { path: evidencePath, contentType: 'application/json' });
+    });
+
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
         await page.evaluate(() => {
             const original = Storage.prototype.setItem;

@@ -310,3 +310,26 @@ passed; `/tmp/or3-recovery-hydration-typecheck.log`,
 
 Image follow-up type-check passed with basic-auth/sqlite local configuration:
 `/tmp/or3-recovery-document-image-typecheck.log`.
+
+## Interrupted attachment restoration (additional verified finding)
+
+A rejected local blob read was treated as an absent file: the retryable reference
+was replaced by a missing-file notice and a later composer capture dropped the
+reference. The core regression failed before implementation:
+`/tmp/or3-recovery-attachment-read-red.log`.
+
+Attachment restore now settles every read, retains the original references when
+any read rejects, releases previews from partial success and propagates a retryable
+restore failure. Actual missing bytes still use the existing missing-file notice.
+48 draft/composer tests passed (`/tmp/or3-recovery-attachment-read-unit.log`).
+Chromium passed the tightened layout-acknowledged fixture in 26.1 seconds:
+synthetic file upload, confirmed local read fault, two failed reloads retaining
+references, visible retry, and a final successful reload with text and preview.
+External requests denied. Log `/tmp/or3-recovery-attachment-read-browser-final.log`;
+JSON receipt `test-results/recovery-attachment-read/*/interrupted-attachment-read.json`.
+The first browser attempt did not reach its expected warning; fault-hit and layout
+receipt checks were added before qualification. No passing result is claimed for
+that initial attempt. Type-check passed after correcting a test-only Dexie overload
+cast; source lint has zero errors and four existing warnings.
+
+Document image ownership source commit: `7c7af957`.

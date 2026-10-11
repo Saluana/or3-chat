@@ -136,6 +136,32 @@ describe('durable workspace tab drafts', () => {
         expect(restored?.attachmentRefs).toBeUndefined();
     });
 
+    it('keeps attachment references retryable when one local blob read is interrupted', async () => {
+        const first = await reload(); const db = first.client.getDb();
+        for (const hash of ['attachment-ok', 'attachment-read-fault']) {
+            await db.file_meta.put({ hash, name: `${hash}.png`, mime_type: 'image/png', kind: 'image',
+                size_bytes: 3, deleted: false, ref_count: 1 } as never);
+            await db.file_blobs.put({ hash, blob: new Blob(['png'], { type: 'image/png' }) });
+        }
+        first.drafts.write('attachment-read-tab', draft('Saved attachment recovery buffer', { attachmentRefs:
+            ['attachment-ok', 'attachment-read-fault'].map(hash => ({ hash, name: `${hash}.png`, mime: 'image/png', kind: 'image' as const })) }));
+        await first.flush();
+        const second = await reload(); const table = second.client.getDb().file_blobs; const get = table.get.bind(table);
+        const fault = vi.spyOn(table, 'get').mockImplementation((key: unknown) => (key === 'attachment-read-fault'
+            ? Promise.reject(new DOMException('Synthetic attachment read aborted', 'AbortError')) : get(key as string)) as never);
+        const create = vi.fn(() => 'blob:synthetic-restored-attachment'); const revoke = vi.fn();
+        vi.stubGlobal('URL', Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: revoke }));
+        await expect(second.drafts.load('attachment-read-tab')).rejects.toThrow('Synthetic attachment read aborted');
+        expect(second.drafts.read('attachment-read-tab')?.attachmentRefs).toHaveLength(2);
+        expect(second.drafts.read('attachment-read-tab')?.missingAttachments).toBeUndefined();
+        expect(revoke).toHaveBeenCalledWith('blob:synthetic-restored-attachment');
+        expect((await second.client.getDb().workspace_tab_drafts.toArray())[0]?.draft.attachments).toHaveLength(2);
+        fault.mockRestore();
+        expect((await second.drafts.load('attachment-read-tab'))?.attachments.map(item => item.hash))
+            .toEqual(['attachment-ok', 'attachment-read-fault']);
+        second.drafts.discard('attachment-read-tab'); await second.flush();
+    });
+
     it('never shows one account\'s draft to another account in the same workspace', async () => {
         session.userId = 'user-a';
         const first = await reload();

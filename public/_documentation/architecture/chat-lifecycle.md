@@ -127,3 +127,5 @@ See [source map](/documentation/start/source-map), [documents](/documentation/da
 Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.
 
 Interrupted draft reads reject restoration instead of reporting an absent draft. The composer keeps the existing saved row, prevents its untouched empty editor from replacing that unread copy, and shows a persistent "Draft could not be restored" notice with **Retry restore**. The retry is scoped to the originating account, workspace and tab.
+
+A rejected attachment blob or metadata read keeps its original draft reference and reports a retryable restore failure. Partial preview URLs are released before retry. Only a successfully read absent/deleted file is reported through the existing missing-attachment notice.

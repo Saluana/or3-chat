@@ -460,20 +460,25 @@ export function useWorkspaceTabDrafts() {
         const refs = entry?.draft.attachmentRefs;
         if (!entry || !refs?.length || !scope.db) return entry?.draft;
 
-        const resolved = await Promise.all(refs.map(async (ref) => {
-            try {
-                return await resolveAttachment(scope.db!, ref);
-            } catch {
-                return null;
-            }
-        }));
-        const current = drafts.get(key);
-        if (current !== entry) {
-            // Edited or discarded while the files loaded: the newer state owns the result.
+        // A rejected read is not evidence that the bytes are missing. Wait for
+        // every read so partial preview URLs can be released before retrying.
+        const results = await Promise.allSettled(refs.map(ref => resolveAttachment(scope.db!, ref)));
+        const resolved = results.map(result => result.status === 'fulfilled' ? result.value : null);
+        const releaseResolvedUrls = () => {
             for (const attachment of resolved) {
                 if (attachment?.url.startsWith('blob:')) URL.revokeObjectURL(attachment.url);
             }
+        };
+        const current = drafts.get(key);
+        if (current !== entry) {
+            // Edited or discarded while the files loaded: the newer state owns the result.
+            releaseResolvedUrls();
             return current?.draft;
+        }
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected') {
+            releaseResolvedUrls();
+            throw failed.reason;
         }
         const missing = refs.filter((_, index) => !resolved[index]);
         const next: WorkspaceChatTabDraft = {
