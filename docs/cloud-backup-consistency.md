@@ -177,6 +177,11 @@ then checks read-only status after lease release. Build the cloud package first.
 An unpublished local fixture has no repository digests, so status retains
 `identityMatches: null`; the drill compares its running local image ID directly
 instead of relaxing the registry-identity safeguard.
+`--archive-race-only` changes a target backup after early inventory preflight
+has succeeded, during capture of the pre-mutation snapshot. It checks an
+checksum change without updating the manifest and an authenticated database omission. The
+retained manifest/inventory rechecks must refuse both changed inputs and safely
+recover the stopped original data, followed by another actual cold restart.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks

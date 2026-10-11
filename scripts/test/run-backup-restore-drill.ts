@@ -33,6 +33,7 @@ assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), '
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
+const archiveRaceOnly = process.argv.includes('--archive-race-only');
 const workspaceOmissionOnly = process.argv.includes('--workspace-omission-only');
 const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only') || workspaceOmissionOnly;
 const builtCliOnly = process.argv.includes('--built-cli-only');
@@ -49,7 +50,7 @@ const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walF
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -469,7 +470,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of archiveRaceOnly || multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -507,7 +508,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!archiveRaceOnly && !multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -974,6 +975,51 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       freeBeforeBytes: free, verification: await verify(target), volatileFixtureOnly: true,
     });
   }
+  if (archiveRaceOnly) {
+    for (const fault of ['checksum-change', 'authenticated-database-omission']) {
+      const changedArchive = join(root, `archive-race-${fault}`);
+      await cp(targetBackup, changedArchive, { recursive: true });
+      let validated = false;
+      let changed = false;
+      lifecycleFaults.beforeCommand = async (_command, args) => {
+        if (!changed && args[0] === 'compose' && args.includes('stop')) {
+          // Streamed tar commands do not use beforeCommand. The snapshot's
+          // normal stop command is reached only after the early preflight.
+          const pending = (await readState(target.directory)).incompleteOperation;
+          assert.equal(pending?.phase, 'prepared');
+          assert.equal(pending?.backupPath, changedArchive);
+          assert(pending?.previousBackupPath);
+          validated = true;
+          changed = true;
+          if (fault === 'checksum-change') await appendFile(join(changedArchive, 'data.tgz'), 'synthetic post-preflight mutation');
+          else {
+            const tree = join(root, 'archive-race-tree');
+            await mkdir(tree);
+            const unpacked = await run('tar', ['xzf', join(changedArchive, 'data.tgz'), '-C', tree]);
+            assert(unpacked.ok, unpacked.stderr);
+            for (const name of ['auth.sqlite', 'auth.sqlite-wal', 'auth.sqlite-shm']) await rm(join(tree, name), { force: true });
+            const packed = await run('tar', ['czf', join(changedArchive, 'data.tgz'), '-C', tree, '.']);
+            assert(packed.ok, packed.stderr);
+            const manifest = JSON.parse(await readFile(join(changedArchive, 'manifest.json'), 'utf8'));
+            manifest.dataSha256 = await sha256File(join(changedArchive, 'data.tgz'));
+            const text = `${JSON.stringify(manifest, null, 2)}\n`;
+            await writeFile(join(changedArchive, 'manifest.json'), text);
+            await writeBackupAuthentication(target.directory, changedArchive, text);
+          }
+        }
+      };
+      try {
+        await assert.rejects(restoreCommand(target.directory, { yes: true }, [changedArchive]), fault === 'checksum-change'
+          ? /checksum mismatch/ : /missing required managed database payloads/);
+      } finally { delete lifecycleFaults.beforeCommand; }
+      assert(changed && validated);
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+      evidence(`${fault} after early preflight is refused by retained rechecks; pre-start recovery preserves live data`, await verify(target));
+    }
+    await stopProject(target.directory, 'local');
+    await startProject(target.directory, 'local', target.env);
+    evidence('post-preflight archive-race recovery survives an actual cold restart', await verify(target));
+  }
   if (concurrencyOnly || multiWorkspaceOnly) {
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
     evidence(multiWorkspaceOnly ? 'managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments'
@@ -1023,7 +1069,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
