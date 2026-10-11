@@ -78,6 +78,10 @@ a bad checksum is conservatively refused, including a torn uncommitted frame;
 this verifier does not repair it. Truncation or altered salts can still resemble
 a legitimate interrupted/reset tail, so this is not proof of the expected
 record inventory or a substitute for semantic completeness validation.
+The real `--wal-tail-only` drill verifies those remaining omissions: truncating
+one byte from a frame carrying a commit marker, or altering the first frame's
+salt, preserves healthy baseline data but loses the later committed record.
+Both restores report success; intact-archive recovery restores the record.
 For the archived FS root under
 `/data`, the reader also pairs canonical SHA-256/MD5 committed sidecars with
 their blob entries. Uncommitted uploads, temporary sidecars and opaque generation
@@ -139,6 +143,15 @@ and recovery of the committed record, then verifies the intact backup again.
 checks refusal/recovery of the committed record, and verifies that a stale
 frame after a valid commit and an incomplete append remain accepted. The
 pre-fix drill reported success while dropping the committed WAL-only record.
+`--wal-tail-only` records the unresolved commit-truncation and first-frame-salt
+omissions with real application reads, starting each case with the committed
+record present and recovering it from the intact archive afterward.
+`--built-cli-only` restores through the built CLI dispatcher with its real
+deployment lease and serialized native validator, checks another cold restart,
+then checks read-only status after lease release. Build the cloud package first.
+An unpublished local fixture has no repository digests, so status retains
+`identityMatches: null`; the drill compares its running local image ID directly
+instead of relaxing the registry-identity safeguard.
 `--capacity-only` uses a 96 MiB tmpfs volume to check refusal of a signed 80 MiB
 payload plus reserve before any journal, service or data mutation. It then
 allocates 40 MiB of filler and verifies that restore can reclaim those blocks

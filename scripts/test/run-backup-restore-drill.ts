@@ -32,6 +32,7 @@ assert(['/usr/local/bin/node', '/nodejs/bin/node'].includes(nodePath), 'Choose t
 assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), 'Set OR3_BACKUP_DRILL_IMAGE to a prebuilt local or3-backup-drill:<tag> image.');
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
+const builtCliOnly = process.argv.includes('--built-cli-only');
 const recoveryOnly = process.argv.includes('--recovery-only');
 const prestartCrashOnly = process.argv.includes('--prestart-crash-only');
 const crashOnly = process.argv.includes('--crash-only') || prestartCrashOnly;
@@ -40,11 +41,12 @@ const journalOnly = process.argv.includes('--journal-only');
 const attachmentOnly = process.argv.includes('--attachment-only');
 const sqliteWalOnly = process.argv.includes('--sqlite-wal-only');
 const walFrameOnly = process.argv.includes('--wal-frame-only');
-const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walFrameOnly;
+const walTailOnly = process.argv.includes('--wal-tail-only');
+const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walFrameOnly || walTailOnly;
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -401,7 +403,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -439,7 +441,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -756,48 +758,85 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const wal = await readFile(join(tree, 'sync.sqlite-wal'));
     const originalWal = Buffer.from(wal);
     assert(wal.length > 32);
-    const corruptionOffset = walFrameOnly ? 32 + 24 + 100 : 0;
-    assert(wal.length > corruptionOffset);
-    wal[corruptionOffset] = wal[corruptionOffset]! ^ 0xff;
-    await writeFile(join(tree, 'sync.sqlite-wal'), wal);
-    await rm(join(tree, 'sync.sqlite-shm'), { force: true });
-    const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
-    assert(packed.ok, packed.stderr);
-    const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
-    manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
-    const text = `${JSON.stringify(manifest, null, 2)}\n`;
-    await writeFile(join(broken, 'manifest.json'), text);
-    await writeBackupAuthentication(target.directory, broken, text);
-    await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), walFrameOnly
-      ? /Invalid SQLite WAL frame checksum/ : /Invalid SQLite WAL header/);
-    assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    const { api } = await authenticated(target);
-    const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
-    const retained = snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel');
-    assert(retained, 'Refused corrupt target must recover the original committed WAL record');
-    evidence(walFrameOnly
-      ? 'corrupt WAL frame refused before startup; automatic recovery preserves committed WAL-only record and baseline data'
-      : 'corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
-      sentinelRetained: retained, walBytes: wal.length, shmRemoved: true, baselineVerification: await verify(target),
-      corruptionOffset, outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
-    });
-    if (walFrameOnly) {
-      const frameSize = originalWal.readUInt32BE(8) + 24;
-      for (const tail of ['stale', 'incomplete']) {
-        const bytes = Buffer.from(originalWal.subarray(32, 32 + (tail === 'stale' ? frameSize : 100)));
-        if (tail === 'stale') bytes[8] = bytes[8]! ^ 0xff;
-        await writeFile(join(tree, 'sync.sqlite-wal'), Buffer.concat([originalWal, bytes]));
+    if (walTailOnly) {
+      const frameSize = wal.readUInt32BE(8) + 24;
+      assert.equal((wal.length - 32) % frameSize, 0);
+      const lastCommitPages = wal.readUInt32BE(wal.length - frameSize + 4);
+      assert(lastCommitPages > 0, 'Truncation fixture must target a frame carrying an actual commit marker');
+      for (const fault of ['truncated-commit', 'first-frame-salt']) {
+        const { api: before } = await authenticated(target);
+        const original = await (await before('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+        assert(original.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+        const damaged = fault === 'truncated-commit' ? Buffer.from(wal.subarray(0, wal.length - 1)) : Buffer.from(wal);
+        if (fault === 'first-frame-salt') damaged[32 + 8] = damaged[32 + 8]! ^ 0xff;
+        await writeFile(join(tree, 'sync.sqlite-wal'), damaged);
+        await rm(join(tree, 'sync.sqlite-shm'), { force: true });
         const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
         assert(packed.ok, packed.stderr);
+        const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
         manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
         const text = `${JSON.stringify(manifest, null, 2)}\n`;
         await writeFile(join(broken, 'manifest.json'), text);
         await writeBackupAuthentication(target.directory, broken, text);
         await restoreCommand(target.directory, { yes: true }, [broken]);
+        assert.equal((await readState(target.directory)).incompleteOperation, undefined);
         const { api } = await authenticated(target);
-        const restored = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
-        assert(restored.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
-        evidence(`${tail} WAL tail remains accepted and preserves the committed record`, await verify(target));
+        const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+        assert(!snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+        evidence(`${fault}: restore reports success while committed record is missing`, {
+          sentinelBefore: true, sentinelAfter: false, walBytesBefore: wal.length, walBytesAfter: damaged.length,
+          lastCommitPages, shmRemoved: true, baselineVerification: await verify(target),
+          distinction: 'No damaged full matching-salt frame: indistinguishable from an interrupted append or stale reset tail without expected record inventory',
+        }, 'limitation');
+        if (fault === 'truncated-commit') {
+          await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+          evidence('intact archive restores the committed record between independent tail faults', await verify(target));
+        }
+      }
+    } else {
+      const corruptionOffset = walFrameOnly ? 32 + 24 + 100 : 0;
+      assert(wal.length > corruptionOffset);
+      wal[corruptionOffset] = wal[corruptionOffset]! ^ 0xff;
+      await writeFile(join(tree, 'sync.sqlite-wal'), wal);
+      await rm(join(tree, 'sync.sqlite-shm'), { force: true });
+      const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+      assert(packed.ok, packed.stderr);
+      const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
+      manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+      const text = `${JSON.stringify(manifest, null, 2)}\n`;
+      await writeFile(join(broken, 'manifest.json'), text);
+      await writeBackupAuthentication(target.directory, broken, text);
+      await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), walFrameOnly
+        ? /Invalid SQLite WAL frame checksum/ : /Invalid SQLite WAL header/);
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+      const { api } = await authenticated(target);
+      const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+      const retained = snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel');
+      assert(retained, 'Refused corrupt target must recover the original committed WAL record');
+      evidence(walFrameOnly
+        ? 'corrupt WAL frame refused before startup; automatic recovery preserves committed WAL-only record and baseline data'
+        : 'corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
+        sentinelRetained: retained, walBytes: wal.length, shmRemoved: true, baselineVerification: await verify(target),
+        corruptionOffset, outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
+      });
+      if (walFrameOnly) {
+        const frameSize = originalWal.readUInt32BE(8) + 24;
+        for (const tail of ['stale', 'incomplete']) {
+          const bytes = Buffer.from(originalWal.subarray(32, 32 + (tail === 'stale' ? frameSize : 100)));
+          if (tail === 'stale') bytes[8] = bytes[8]! ^ 0xff;
+          await writeFile(join(tree, 'sync.sqlite-wal'), Buffer.concat([originalWal, bytes]));
+          const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+          assert(packed.ok, packed.stderr);
+          manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+          const text = `${JSON.stringify(manifest, null, 2)}\n`;
+          await writeFile(join(broken, 'manifest.json'), text);
+          await writeBackupAuthentication(target.directory, broken, text);
+          await restoreCommand(target.directory, { yes: true }, [broken]);
+          const { api } = await authenticated(target);
+          const restored = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+          assert(restored.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+          evidence(`${tail} WAL tail remains accepted and preserves the committed record`, await verify(target));
+        }
       }
     }
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
@@ -853,6 +892,34 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       freeBeforeBytes: free, verification: await verify(target), volatileFixtureOnly: true,
     });
   }
+  if (builtCliOnly) {
+    const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
+    const restored = await run(process.execPath, [cli, 'restore', targetBackup, '--yes'], target.directory);
+    assert(restored.ok, restored.stderr);
+    assert.match(restored.stdout, /Restored backup-/);
+    assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+    evidence('built CLI dispatcher restores real archive with lease and serialized native database/WAL checks', await verify(target));
+    await stopProject(target.directory, 'local');
+    await startProject(target.directory, 'local', target.env);
+    evidence('built CLI restore survives another actual cold restart', await verify(target));
+    const status = await run(process.execPath, [cli, 'status', '--json'], target.directory);
+    assert(status.ok, status.stderr);
+    const state = JSON.parse(status.stdout);
+    await writeFile(join(evidencePath, '..', 'built-cli-status.json'), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+    assert.equal(state.state.deploymentId, target.state.deploymentId);
+    assert.equal(state.inProgress, false);
+    assert.equal(state.lease, 'none');
+    assert.equal(state.docker, true);
+    const repoDigests = JSON.parse(await command(['image', 'inspect', '--format', '{{json .RepoDigests}}', image]));
+    assert.equal(state.identityMatches, repoDigests.length ? true : null);
+    const container = await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory);
+    assert.equal(await command(['inspect', '--format', '{{.Image}}', container]), digest);
+    evidence('built CLI read-only status remains available after restore lease release', {
+      deploymentIdentityPreserved: true, lease: state.lease, docker: state.docker,
+      identityMatches: state.identityMatches, runningImageIdMatches: true,
+      boundary: 'Unpublished local fixture has no RepoDigests; status correctly leaves registry-qualified image identity unknown. Direct local image ID matches.',
+    });
+  }
   if (browserOnly) evidence('fresh browser reads restored conversation and document through the actual UI', await verifyBrowser(target));
   completed = true;
 } finally {
@@ -865,7 +932,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

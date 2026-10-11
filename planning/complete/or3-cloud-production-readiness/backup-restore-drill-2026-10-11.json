@@ -1906,6 +1906,310 @@
       }
     ]
   },
+  "actualAppWalTailBoundaries": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "0d3fad9068f472c184d467078c931a46e8529700",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "7951085c4c12f98994f3cb5457d76a4729f1b33bea71fd51723b1b5fc9b234f0"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "truncated-commit: restore reports success while committed record is missing",
+        "kind": "limitation",
+        "detail": {
+          "sentinelBefore": true,
+          "sentinelAfter": false,
+          "walBytesBefore": 32992,
+          "walBytesAfter": 32991,
+          "lastCommitPages": 114,
+          "shmRemoved": true,
+          "baselineVerification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "distinction": "No damaged full matching-salt frame: indistinguishable from an interrupted append or stale reset tail without expected record inventory"
+        }
+      },
+      {
+        "name": "intact archive restores the committed record between independent tail faults",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "first-frame-salt: restore reports success while committed record is missing",
+        "kind": "limitation",
+        "detail": {
+          "sentinelBefore": true,
+          "sentinelAfter": false,
+          "walBytesBefore": 32992,
+          "walBytesAfter": 32992,
+          "lastCommitPages": 114,
+          "shmRemoved": true,
+          "baselineVerification": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "distinction": "No damaged full matching-salt frame: indistinguishable from an interrupted append or stale reset tail without expected record inventory"
+        }
+      },
+      {
+        "name": "known-good archive restores committed WAL sentinel and baseline records",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "status": "Unresolved semantic completeness: final commit-frame truncation and altered first-frame salt both lose a real committed record while main database integrity and baseline reads remain valid; intact archive recovery verified."
+  },
+  "actualAppBuiltCli": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "0d3fad9068f472c184d467078c931a46e8529700",
+    "nativeValidatorSource": "f195153bda7937462a7a85fc4d295ac89cebef44",
+    "orchestrator": "Node-target built ESM CLI executed with Bun 1.3.14, native Node app/helpers",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "64c5c3b7fdde6f89382d6f6a20fad86fa16440db884d5ceba8ae0cb588c0fc0d"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI dispatcher restores real archive with lease and serialized native database/WAL checks",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI restore survives another actual cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI read-only status remains available after restore lease release",
+        "kind": "passed",
+        "detail": {
+          "deploymentIdentityPreserved": true,
+          "lease": "none",
+          "docker": true,
+          "identityMatches": null,
+          "runningImageIdMatches": true,
+          "boundary": "Unpublished local fixture has no RepoDigests; status correctly leaves registry-qualified image identity unknown. Direct local image ID matches."
+        }
+      }
+    ],
+    "statusArtifact": "/workspace/backup-drill/built-cli-status.json"
+  },
+  "actualAppBuiltCliFirstAttempt": {
+    "completed": false,
+    "cleanupFailed": false,
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "39572388b00346833525b691bbfc8472f62a87b28b78d1de5623a4ccedf1e6da"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI dispatcher restores real archive with lease and serialized native database/WAL checks",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      },
+      {
+        "name": "built CLI restore survives another actual cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0
+        }
+      }
+    ],
+    "explanation": "Restore and cold restart passed. Final status expectation incorrectly required registry identity for an unpublished local image with empty RepoDigests. Corrected qualifier retains null identity and checks the actual local image ID without changing the production safeguard."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,
