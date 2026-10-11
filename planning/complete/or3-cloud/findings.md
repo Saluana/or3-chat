@@ -107,6 +107,17 @@ The three plans are directionally aligned, but there are several conflicts and m
   This remains a provider schema/completeness gap requiring a versioned
   offline provider integrity contract; the CLI does not add guessed schema
   requirements or execute archive-supplied checks.
+- Review of the new WAL guard found a real compatibility regression: killing
+  an app during a two-MiB uncommitted transaction, restoring it, and accepting
+  later healthy writes left an obsolete same-salt WAL tail. The strict frame
+  guard rejected both the healthy backup and its automatic recovery snapshot.
+  The follow-up uses a duplicated/checksummed archived index header only after
+  its committed frame prefix, end marker/page count and checksum are verified.
+  Only a remaining tail without current-generation commit markers may be
+  discarded. Invalid/missing index metadata retains conservative refusal;
+  ordinary fully valid WALs still work without SHM. Frame corruption within
+  the verified committed prefix remains refused. Do not apply the earlier
+  strict frame guard without this follow-up compatibility fix.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

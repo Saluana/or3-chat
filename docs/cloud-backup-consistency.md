@@ -82,8 +82,18 @@ reproduced the same silent omission after corrupting frame content beneath a
 valid header. The buffer is bounded to one page plus its frame header. Old salts
 after WAL reuse and an incomplete trailing append remain accepted, preserving
 SQLite's checkpoint/crash semantics. A complete current-generation frame with
-a bad checksum is conservatively refused, including a torn uncommitted frame;
-this verifier does not repair it. Truncation or altered salts can still resemble
+a bad checksum is refused within the committed prefix. A real interrupted
+transaction exposed same-salt leftovers after rollback and later healthy
+appends: checking every physical frame falsely rejected both a healthy backup
+and its recovery snapshot. A duplicated, checksummed archived WAL-index header
+may now identify the committed boundary, but it is accepted only after the
+matching WAL prefix, final commit marker/page count and cumulative checksum are
+verified. Beyond that boundary, an invalid tail is accepted only when its
+remaining current-generation frames contain no commit markers. Missing,
+inconsistent or unsupported index metadata cannot authorize this exception;
+ambiguous same-salt tails without a usable index remain conservatively refused.
+Ordinary valid WALs still work without SHM. This verifier does not repair input.
+Truncation or altered salts can still resemble
 a legitimate interrupted/reset tail, so this is not proof of the expected
 record inventory or a substitute for semantic completeness validation.
 The real `--wal-tail-only` drill verifies those remaining omissions: truncating
@@ -178,6 +188,15 @@ while retaining its main database and authenticating the resulting archive.
 Its schema and records reside in the WAL, so the pre-start check must refuse the
 empty main database and recover the original data. Checkpointed SQLite snapshots
 can legitimately omit WAL/SHM; this is not a blanket WAL presence requirement.
+`--transaction-crash-only` spills a real two-MiB uncommitted transaction into WAL,
+then sends SIGKILL to the owned app with its restart policy temporarily disabled.
+It captures the stopped source and checks managed source restore discards the
+pending table/document change while retaining the acknowledged baseline. Later
+healthy writes leave a genuine obsolete same-salt tail. The built CLI must
+restore that backup; committed-frame corruption with the original SHM retained
+must still refuse and safely recover. Invalid/missing SHM on that ambiguous
+tail must conservatively refuse and recover the intact snapshot, followed by
+another cold restart. No manifest redesign or physical cleanup is involved.
 `--wal-corruption-only` first checkpoints populated data into the main database,
 commits another record into WAL, and captures a real backup. It corrupts the
 WAL header and removes the transient SHM file, verifies refusal before startup
