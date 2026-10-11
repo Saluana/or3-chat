@@ -3,7 +3,7 @@
 // never pulls an image, enables physical cleanup, or opens a remote provider.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { appendFile, cp, mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readFile, readdir, rm, truncate, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -25,6 +25,7 @@ import { imageDigest } from '../../packages/or3-cloud/src/runtime/images';
 import { startProject, stopProject } from '../../packages/or3-cloud/src/runtime/project';
 import { PACKAGE_VERSION } from '../../packages/or3-cloud/src/package-info';
 import { sha256File } from '../../packages/or3-cloud/src/util/fs';
+import { assertValidSqliteWalFrames } from './fixtures/sqlite-wal-diagnostics';
 
 const image = process.env.OR3_BACKUP_DRILL_IMAGE;
 const nodePath = process.env.OR3_BACKUP_DRILL_NODE_PATH ?? '/usr/local/bin/node';
@@ -793,8 +794,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     evidence(workspaceOmissionOnly
       ? 'second-workspace blob omission refused before mutation despite identical first-workspace hash; both scopes remain intact'
       : 'authenticated archive missing a committed sidecar payload is refused; live data and attachment remain intact', await verify(target));
-    // Pairing cannot detect a completed object whose blob and sidecar are both
-    // absent. Preserve this narrower data-integrity boundary as real evidence.
+    // Canonical metadata supplies the reference even when no sidecar remains.
     await rm(blob + '.meta.json');
     const repacked = await run('tar', ['czf', join(missing, 'data.tgz'), '-C', tree, '.']);
     assert(repacked.ok, repacked.stderr);
@@ -802,21 +802,14 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const missingBothText = `${JSON.stringify(manifest, null, 2)}\n`;
     await writeFile(join(missing, 'manifest.json'), missingBothText);
     await writeBackupAuthentication(target.directory, missing, missingBothText);
-    await restoreCommand(target.directory, { yes: true }, [missing]);
-    await assert.rejects(verify(target), /404|File not found/);
-    if (workspaceOmissionOnly) {
-      const { api } = await authenticated(target);
-      await api('/api/workspaces/active', { id: workspaceId });
-      evidence('both second-workspace payload and sidecar omitted: first workspace stays intact while second download fails', {
-        firstWorkspace: await verify(target, false), secondWorkspaceDownload: 404,
-        boundary: 'Database-reference completeness remains unresolved; another workspace with the same hash must not satisfy this reference',
-      }, 'limitation');
-    }
-    outcomes.push({ name: 'Authenticated, well-formed archive missing both a referenced blob and its sidecar passes structural restore; app download detects the omission',
-      kind: 'limitation', detail: 'Pairing checks available committed sidecars; absent blob and sidecar cannot be discovered without database-reference validation. Deep health is not an attachment audit.' });
-    console.log('DATA-INTEGRITY LIMITATION authenticated archive missing both blob and sidecar requires database-reference validation');
+    await assert.rejects(restoreCommand(target.directory, { yes: true }, [missing]), /required by live canonical attachment metadata/);
+    assert.deepEqual(await readState(target.directory), beforeState);
+    assert.equal(await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory), beforeContainer);
+    evidence(workspaceOmissionOnly
+      ? 'both second-workspace blob and sidecar omitted: canonical inspection refuses before mutation despite same first-workspace hash'
+      : 'both referenced blob and sidecar omitted: canonical inspection refuses before state/container mutation', await verify(target));
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
-    evidence('known-good backup recovers attachment bytes after semantic omission', await verify(target));
+    evidence('known-good archive retains attachment bytes through canonical inspection and managed restore', await verify(target));
   }
   if (deep || journalOnly) {
     let started = false;
@@ -1017,19 +1010,18 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       const text = `${JSON.stringify(manifest, null, 2)}\n`;
       await writeFile(join(broken, 'manifest.json'), text);
       await writeBackupAuthentication(target.directory, broken, text);
-      await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), walFrameOnly
-        ? /Invalid SQLite WAL frame checksum/ : /Invalid SQLite WAL header/);
+      await restoreCommand(target.directory, { yes: true }, [broken]);
       assert.equal((await readState(target.directory)).incompleteOperation, undefined);
       const { api } = await authenticated(target);
       const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
       const retained = snapshot.items.some((item: { pk: string }) => item.pk === 'wal-sentinel');
-      assert(retained, 'Refused corrupt target must recover the original committed WAL record');
+      assert(!retained, 'Native recovery discards a damaged WAL generation; semantic loss must be recorded');
       evidence(walFrameOnly
-        ? 'corrupt WAL frame refused before startup; automatic recovery preserves committed WAL-only record and baseline data'
-        : 'corrupt WAL header refused before startup; automatic recovery preserves committed WAL-only record and baseline data', {
+        ? 'native recovery accepts damaged committed WAL frame; baseline survives while WAL-only record is missing'
+        : 'native recovery accepts damaged WAL header; baseline survives while WAL-only record is missing', {
         sentinelRetained: retained, walBytes: wal.length, shmRemoved: true, baselineVerification: await verify(target),
-        corruptionOffset, outcome: 'Invalid archive refused; original pre-mutation snapshot restored',
-      });
+        corruptionOffset, outcome: 'Unresolved expected-record completeness limit; custom WAL gating is excluded',
+      }, 'limitation');
       if (walFrameOnly) {
         const frameSize = originalWal.readUInt32BE(8) + 24;
         for (const tail of ['stale', 'incomplete']) {
@@ -1055,6 +1047,63 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const good = await (await recovered('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
     assert(good.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
     evidence('known-good archive restores committed WAL sentinel and baseline records', await verify(target));
+    if (walFrameOnly) {
+      // Independent review found that strict header rejection can poison a
+      // healthy checkpointed previous snapshot too. This is an injected
+      // short-write fixture, not proof of a real host crash producing it.
+      await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+        "const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite');const result=db.pragma('wal_checkpoint(TRUNCATE)');if(result[0]?.busy)throw Error('Synthetic checkpoint was busy');db.close()"]), target.directory);
+      const rejected = join(root, 'invalid-database-header-recovery');
+      await cp(targetBackup, rejected, { recursive: true });
+      await writeFile(join(tree, 'sync.sqlite'), Buffer.from('synthetic invalid requested database'));
+      await rm(join(tree, 'sync.sqlite-wal'), { force: true });
+      await rm(join(tree, 'sync.sqlite-shm'), { force: true });
+      const repack = await run('tar', ['czf', join(rejected, 'data.tgz'), '-C', tree, '.']);
+      assert(repack.ok, repack.stderr);
+      const rejectedManifest = JSON.parse(await readFile(join(rejected, 'manifest.json'), 'utf8'));
+      rejectedManifest.dataSha256 = await sha256File(join(rejected, 'data.tgz'));
+      const rejectedText = `${JSON.stringify(rejectedManifest, null, 2)}\n`;
+      await writeFile(join(rejected, 'manifest.json'), rejectedText);
+      await writeBackupAuthentication(target.directory, rejected, rejectedText);
+      await stopProject(target.directory, 'local');
+      // Mutate only the quiescent, disposable fixture. Main holds all records;
+      // the sixteen bytes model an interrupted creation of the next WAL.
+      await command(['run', '--rm', '--network', 'none', '--read-only', '--user', '0',
+        '--memory', '64m', '--pids-limit', '16', '--cap-drop', 'ALL',
+        '-v', `${(await readState(target.directory)).volumeName}:/data`, '--entrypoint', nodePath, image!, '-e',
+        `const fs=require('node:fs');fs.writeFileSync('/data/sync.sqlite-wal',Buffer.from('${originalWal.subarray(0, 16).toString('hex')}','hex'));fs.rmSync('/data/sync.sqlite-shm',{force:true})`]);
+      const backups = join(target.directory, '.or3-cloud/backups');
+      const previous = new Set(await readdir(backups));
+      let validationInterrupted = 0;
+      lifecycleFaults.beforeCommand = (_command, args) => {
+        if (args.join(' ').includes('quick_check') && validationInterrupted++ === 0) throw new Error('Synthetic requested native validation interruption');
+      };
+      try { await assert.rejects(restoreCommand(target.directory, { yes: true }, [targetBackup]), /snapshot .* was restored:/); }
+      finally { delete lifecycleFaults.beforeCommand; }
+      assert.equal(validationInterrupted, 2);
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+      const created = (await readdir(backups)).filter(name => !previous.has(name) && name.startsWith('backup-before-restore-'));
+      assert.equal(created.length, 1);
+      const recoverySnapshot = join(backups, created[0]!);
+      await readManifest(recoverySnapshot, target.directory);
+      const recoveredTree = join(root, 'recovered-partial-header-snapshot');
+      await mkdir(recoveredTree);
+      const unpack = await run('tar', ['xzf', join(recoverySnapshot, 'data.tgz'), '-C', recoveredTree]);
+      assert(unpack.ok, unpack.stderr);
+      assert.equal((await readFile(join(recoveredTree, 'sync.sqlite-wal'))).length, 16);
+      await assert.rejects(readFile(join(recoveredTree, 'sync.sqlite-shm')), /ENOENT/);
+      const { api: native } = await authenticated(target);
+      const recoveredRecords = await (await native('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+      assert(recoveredRecords.items.some((item: { pk: string }) => item.pk === 'wal-sentinel'));
+      evidence('interrupted requested validation safely recovers checkpointed main plus injected partial WAL header without SHM', {
+        sentinelRetained: true, previousSnapshotWalBytes: 16, partialHeaderInjection: true,
+        baselineVerification: await verify(target), distinction: 'Injected filesystem short write, not an observed hardware/crash artifact',
+      });
+      await stopProject(target.directory, 'local');
+      await startProject(target.directory, 'local', target.env);
+      evidence('native partial-header snapshot recovery survives another cold restart', await verify(target));
+    }
+
   }
   if (capacityOnly) {
     const large = join(root, 'capacity-archive');
@@ -1199,7 +1248,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       : multiWorkspaceOnly ? 'managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments'
       : 'managed restore retains every acknowledged concurrent atomic batch', await verify(target));
     if (transactionCrashOnly) {
-      for (const fault of ['committed-frame-corruption', 'invalid-index', 'missing-index']) {
+      for (const fault of ['invalid-index', 'missing-index']) {
         const broken = join(root, `transaction-${fault}`);
         const tree = join(root, `transaction-tree-${fault}`);
         await cp(targetBackup, broken, { recursive: true });
@@ -1209,14 +1258,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
         const indexPath = join(tree, 'sync.sqlite-shm');
         const index = await readFile(indexPath);
         assert.equal(index.readUInt32LE(0), 3007000, 'This local native fixture uses little-endian SHM');
-        if (fault === 'committed-frame-corruption') {
-          const walPath = join(tree, 'sync.sqlite-wal');
-          const wal = await readFile(walPath);
-          const frame = 32 + (index.readUInt32LE(16) - 1) * (wal.readUInt32BE(8) + 24);
-          assert(wal.readUInt32BE(frame + 4) > 0, 'Fault must hit an actual committed frame covered by the unchanged index');
-          wal[frame + 24 + 100] ^= 0xff;
-          await writeFile(walPath, wal);
-        } else if (fault === 'invalid-index') {
+        if (fault === 'invalid-index') {
           index[0] ^= 1;
           await writeFile(indexPath, index);
         } else await rm(indexPath);
@@ -1227,10 +1269,57 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
         const text = `${JSON.stringify(manifest, null, 2)}\n`;
         await writeFile(join(broken, 'manifest.json'), text);
         await writeBackupAuthentication(target.directory, broken, text);
-        await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), /Invalid SQLite WAL frame checksum/);
+        await restoreCommand(target.directory, { yes: true }, [broken]);
         assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-        evidence(`${fault}: strict native refusal and verified snapshot recovery preserve every baseline record and attachment`, await verify(target));
+        evidence(`${fault}: SQLite reconstructs its optional cache and retains every baseline record and attachment`, await verify(target));
       }
+      const rejected = join(root, 'transaction-invalid-database');
+      const tree = join(root, 'transaction-invalid-database-tree');
+      await cp(targetBackup, rejected, { recursive: true });
+      await mkdir(tree);
+      const unpacked = await run('tar', ['xzf', join(rejected, 'data.tgz'), '-C', tree]);
+      assert(unpacked.ok, unpacked.stderr);
+      await writeFile(join(tree, 'sync.sqlite'), 'Synthetic invalid SQLite database');
+      for (const suffix of ['-wal', '-shm']) await rm(join(tree, `sync.sqlite${suffix}`), { force: true });
+      const packed = await run('tar', ['czf', join(rejected, 'data.tgz'), '-C', tree, '.']);
+      assert(packed.ok, packed.stderr);
+      const manifest = JSON.parse(await readFile(join(rejected, 'manifest.json'), 'utf8'));
+      manifest.dataSha256 = await sha256File(join(rejected, 'data.tgz'));
+      const text = `${JSON.stringify(manifest, null, 2)}\n`;
+      await writeFile(join(rejected, 'manifest.json'), text);
+      await writeBackupAuthentication(target.directory, rejected, text);
+      await stopProject(target.directory, 'local');
+      // Remove only the cache on the quiescent, owned fixture. Its healthy
+      // same-salt discarded tail must remain usable for automatic recovery.
+      await command(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+        '--security-opt', 'no-new-privileges:true', '-v', `${target.state.volumeName}:/data`, '--entrypoint', nodePath, image, '-e',
+        "require('node:fs').unlinkSync('/data/sync.sqlite-shm')"], target.directory);
+      const backups = join(target.directory, '.or3-cloud/backups');
+      const previous = new Set(await readdir(backups));
+      let validationInterrupted = 0;
+      lifecycleFaults.beforeCommand = (_command, args) => {
+        if (args.join(' ').includes('quick_check') && validationInterrupted++ === 0) throw new Error('Synthetic requested validation interruption');
+      };
+      try { await assert.rejects(restoreCommand(target.directory, { yes: true }, [targetBackup]), /snapshot .* was restored:/); }
+      finally { delete lifecycleFaults.beforeCommand; }
+      assert.equal(validationInterrupted, 2);
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+      const created = (await readdir(backups)).filter(name => !previous.has(name) && name.startsWith('backup-before-restore-'));
+      assert.equal(created.length, 1);
+      const snapshot = join(backups, created[0]!);
+      await readManifest(snapshot, target.directory);
+      const listing = await run('tar', ['tzf', join(snapshot, 'data.tgz')]);
+      assert(listing.ok, listing.stderr);
+      assert(listing.stdout.includes('./sync.sqlite-wal'));
+      assert(!listing.stdout.includes('./sync.sqlite-shm'), 'Recovery snapshot must actually lack the optional cache');
+      const recoveredTree = join(root, 'recovered-cacheless-snapshot');
+      await mkdir(recoveredTree);
+      const extract = await run('tar', ['xzf', join(snapshot, 'data.tgz'), '-C', recoveredTree]);
+      assert(extract.ok, extract.stderr);
+      const archivedWal = await readFile(join(recoveredTree, 'sync.sqlite-wal'));
+      assert.throws(() => assertValidSqliteWalFrames(archivedWal.subarray(0, 32), archivedWal.length,
+        (offset, size) => archivedWal.subarray(offset, offset + size)), /Invalid SQLite WAL frame checksum/);
+      evidence('interrupted requested validation safely auto-recovers known-good real same-salt WAL snapshot without SHM', await verify(target));
     }
     await stopProject(target.directory, 'local');
     await startProject(target.directory, 'local', target.env);
@@ -1303,6 +1392,36 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     });
   }
   if (browserOnly) evidence('fresh browser reads restored conversation and document through the actual UI', await verifyBrowser(target));
+  if (filesystemCompatOnly && !emptyStorageOnly) {
+    // A live installation can already be missing an object. Ordinary backup
+    // must refuse to certify it, while a validated known-good restore can still
+    // repair it. Safety snapshots preserve exact prior bytes, not completeness.
+    const missingPath = `${target.env.OR3_STORAGE_FS_ROOT}/workspaces/${workspaceId}/${hash.replace(':', '_')}`;
+    await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      `const fs=require('node:fs');fs.rmSync(${JSON.stringify(missingPath)});fs.rmSync(${JSON.stringify(missingPath + '.meta.json')})`]), target.directory);
+    const backups = join(target.directory, '.or3-cloud/backups');
+    const beforeBackups = new Set(await readdir(backups));
+    await assert.rejects(backup(target), /required by live canonical attachment metadata/);
+    assert.deepEqual(new Set(await readdir(backups)), beforeBackups);
+    assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+    await assert.rejects(verify(target), /404|File not found/);
+    evidence('ordinary backup refuses existing missing blob-and-sidecar pair, restarts app and removes only unverified artifact');
+    let interrupted = 0;
+    lifecycleFaults.beforeCommand = (_command, args) => {
+      if (args.join(' ').includes('quick_check') && interrupted++ === 0) throw new Error('Synthetic repair validation interruption');
+    };
+    try { await assert.rejects(restoreCommand(target.directory, { yes: true }, [targetBackup]), /snapshot .* was restored:/); }
+    finally { delete lifecycleFaults.beforeCommand; }
+    assert.equal(interrupted, 2);
+    assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+    await assert.rejects(verify(target), /404|File not found/);
+    evidence('interrupted repair restores the exact prior incomplete byte state without certifying attachment completeness');
+    await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+    evidence('known-good managed restore repairs an already-incomplete live installation', await verify(target));
+    await stopProject(target.directory, 'local');
+    await startProject(target.directory, 'local', target.env);
+    evidence('repaired canonical attachments and all compatibility fixtures survive cold restart', await verify(target));
+  }
   completed = true;
 } finally {
   for (const key of Object.keys(lifecycleFaults)) delete lifecycleFaults[key as keyof typeof lifecycleFaults];

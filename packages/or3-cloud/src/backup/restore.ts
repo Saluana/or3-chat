@@ -122,7 +122,7 @@ export async function restoreBackupData(
   state: ManagedState,
   env: Record<string, string>,
   backupPath: string,
-  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void> } = {},
+  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
   assertRestorableManagedAssets(manifest);
@@ -133,7 +133,14 @@ export async function restoreBackupData(
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await validateVolumeArchive(directory, state.mode, env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
-  await validateCanonicalBackupReferences(directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  if (!options.previousSafetySnapshot) {
+    await validateCanonicalBackupReferences(directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  } else {
+    // Recovery preserves the exact prior byte state, including pre-existing
+    // missing objects. Requiring semantic completeness would prevent repairing
+    // that state and make otherwise usable older-image snapshots unrecoverable.
+    console.warn('Restoring the recorded byte-preservation safety snapshot; canonical attachment completeness is not certified. Verify previously uploaded files.');
+  }
   await ensureManagedDataVolume(directory, state.mode, state, env);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove
@@ -207,13 +214,13 @@ export async function restorePreMutationSnapshot(
   const previous = await recordedBackupPath(directory, pending);
   await updatePending(directory, state, { phase: 'restoring-previous' });
   if (pending.recreateDataVolume) {
-    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true });
+    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true });
     return previous;
   }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
     await setManagedVolumeRootOwnership(directory, state, env, state.image, pending.previousRootOwnership);
   }
-  await restoreBackupData(directory, state, env, previous.path);
+  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true });
   return previous;
 }

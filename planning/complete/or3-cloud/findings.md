@@ -95,8 +95,11 @@ The three plans are directionally aligned, but there are several conflicts and m
   history and canonical-column checks fail closed for unsupported images,
   drivers, schemas, roots and bounded-resource exhaustion. Inspection uses
   scratch tmpfs before live mutation, readonly native SQLite without provider
-  migrations, and no archived code. Backup verification and recovery use the
-  same contract. Pending/deleted metadata, legacy hashes, uncommitted uploads
+  migrations, and no archived code. Ordinary backups and requested targets use the
+  same contract. Internal safety captures preserve authenticated prior bytes
+  without claiming reference completeness, so existing missing objects do not
+  prevent a known-good repair. Recorded prior-snapshot recovery retains native
+  DB/FS integrity checks and warns about unqualified attachment completeness. Pending/deleted metadata, legacy hashes, uncommitted uploads
   and opaque generations remain supported. Independent review reproduced and
   corrected a linked-ancestor bypass, valid large-metadata refusal and blank
   pending-ID mismatch before qualification. Older images without this contract

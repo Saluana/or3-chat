@@ -54,6 +54,8 @@ export async function createBackup(
     restartAfter?: boolean;
     backupId?: string;
     initiallyRunning?: boolean;
+    /** Internal byte-preservation capture; never exposed by the backup CLI. */
+    safetySnapshot?: boolean;
     onProgress?: (progress: BackupProgress) => void | Promise<void>;
   } = {},
 ) {
@@ -152,7 +154,7 @@ export async function createBackup(
       const manifestContents = `${JSON.stringify(manifest, null, 2)}\n`;
       await writeSecure(join(backupDir, 'manifest.json'), manifestContents);
       await writeBackupAuthentication(directory, backupDir, manifestContents);
-      await validateCanonicalBackupReferences(directory, { ...env, OR3_IMAGE: imageAtDigest(state.image, state.imageDigest) }, backupDir);
+      if (!options.safetySnapshot) await validateCanonicalBackupReferences(directory, { ...env, OR3_IMAGE: imageAtDigest(state.image, state.imageDigest) }, backupDir);
       verifiedManifest = await readManifest(backupDir, directory);
       artifact = 'verified';
     } catch (error) {
@@ -233,5 +235,5 @@ export async function createPreMutationSnapshot(
   env: Record<string, string>,
   backupId: string,
 ) {
-  return await createBackup(directory, state, env, { restartAfter: false, backupId });
+  return await createBackup(directory, state, env, { restartAfter: false, backupId, safetySnapshot: true });
 }
