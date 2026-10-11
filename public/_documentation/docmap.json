@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, and safe tab closing."
+                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, failed-save retry, and unsaved-change guards."
                 },
                 {
                     "name": "prompts.md",

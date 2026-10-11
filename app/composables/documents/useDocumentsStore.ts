@@ -228,7 +228,7 @@ async function flushInDb(db: Or3DB, id: string) {
  * - Emits toast notifications on failure
  *
  * Non-Goals:
- * - Retry logic or offline recovery
+ * - Automatically rebasing unsaved changes over concurrent edits
  *
  * @example
  * ```ts
@@ -237,13 +237,24 @@ async function flushInDb(db: Or3DB, id: string) {
  */
 export async function loadDocument(id: string, db = getDb()) {
     const st = ensure(id, db);
-    st.status = 'loading';
+    const recordAtStart = st.record;
+    const generationAtStart = st.nextGeneration;
+    const hasPendingSave = () => st.pendingTitle !== undefined ||
+        st.pendingContent !== undefined || !!st.flushPromise;
+    const canAcceptRead = () => st.record === recordAtStart &&
+        st.nextGeneration === generationAtStart && !hasPendingSave();
+    if (!hasPendingSave()) st.status = 'loading';
     try {
         const rec = await getDocumentInDb(db, id);
+        // A read is not permission to acknowledge or rebase an unsaved edit.
+        // Preserve its conflict baseline, and reject reads older than a save
+        // or a new edit made while storage was being read.
+        if (!canAcceptRead()) return st.record;
         st.record = rec || null;
         st.status = rec ? 'idle' : 'unavailable';
         st.lastError = undefined;
     } catch (e) {
+        if (!canAcceptRead()) return st.record;
         st.status = 'error';
         st.lastError = e;
         reportError(e, { message: 'Document could not be loaded.', tags: { domain: 'documents' } });
@@ -459,7 +470,7 @@ export function __peekDocumentStatus(
  * removes the entry from the state map.
  *
  * Constraints:
- * - Flush failures are swallowed during release
+ * - Unsaved edits prevent release, including after a failed flush
  *
  * Non-Goals:
  * - Deleting the document record from storage
@@ -489,6 +500,11 @@ export async function releaseDocument(
         try {
             await flushInDb(db, id);
         } catch { /* Silently ignore flush errors during release */ }
+    }
+    // Release is cache eviction, not a user-authorized discard. A failed save
+    // or an edit staged while release awaited storage must remain retryable.
+    if (st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined) {
+        return;
     }
     // Null record to drop heavy content reference; then optionally drop entry entirely.
     if (st.record) {

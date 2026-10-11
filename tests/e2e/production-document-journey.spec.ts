@@ -1,5 +1,91 @@
 import { expect, test } from '@playwright/test';
 
+test.describe('local document recovery faults', () => {
+    test.describe.configure({ timeout: 90_000 });
+    test.beforeEach(async ({ context, page }) => {
+        await context.route('**/*', route => {
+            const url = new URL(route.request().url());
+            return url.hostname === '127.0.0.1' || url.protocol === 'blob:' || url.protocol === 'data:'
+                ? route.continue() : route.abort('blockedbyclient');
+        });
+        await page.goto('/__or3-document-journey-test');
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 45_000 });
+    });
+
+    test('refresh before the capture debounce protects the unsaved document', async ({ page }, info) => {
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await body.click();
+        await body.fill('Immediate refresh recovery marker');
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        // Reload is refused until the captured edit is actually durable.
+        await page.reload({ timeout: 10_000 }).catch(() => {});
+        expect(dialogs).toEqual(['beforeunload']);
+        await expect(body).toContainText('Immediate refresh recovery marker', { timeout: 30_000 });
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Immediate refresh recovery marker');
+        await page.reload();
+        await expect(body).toContainText('Immediate refresh recovery marker', { timeout: 30_000 });
+        await info.attach('refresh-recovery', { body: JSON.stringify({ dialogs, recovered: await body.textContent() }), contentType: 'application/json' });
+    });
+
+    for (const fault of ['quota', 'abort'] as const) test(`${fault} failure is visible and explicit retry saves the retained edit`, async ({ page }, info) => {
+        await page.evaluate((fault) => {
+            const original = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                if (this.name !== 'posts') return original.apply(this, args);
+                if (fault === 'quota') throw new DOMException('Synthetic storage full', 'QuotaExceededError');
+                const request = original.apply(this, args);
+                this.transaction.abort();
+                return request;
+            };
+            (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut = () => { IDBObjectStore.prototype.put = original; };
+        }, fault);
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await body.fill('Quota retry recovery marker');
+        await expect(page.getByRole('button', { name: 'Retry document save', exact: true })).toBeVisible();
+        await expect(page.getByText('Your changes have not been saved locally.', { exact: true })).toBeVisible();
+        await expect(body).toContainText('Quota retry recovery marker', { timeout: 30_000 });
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Initial document text.');
+        await page.screenshot({ path: info.outputPath('quota-save-visible.png') });
+        await page.evaluate(() => (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut());
+        await page.getByRole('button', { name: 'Retry document save', exact: true }).click();
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Quota retry recovery marker');
+        await expect(page.getByRole('button', { name: 'Retry document save', exact: true })).toBeHidden();
+        await page.reload();
+        await expect(body).toContainText('Quota retry recovery marker', { timeout: 30_000 });
+    });
+
+    test('offline editing persists locally through reconnect and reload', async ({ context, page }, info) => {
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await context.setOffline(true);
+        await body.fill('Offline document recovery marker');
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Offline document recovery marker');
+        await context.setOffline(false);
+        await page.reload();
+        await expect(body).toContainText('Offline document recovery marker', { timeout: 30_000 });
+        await info.attach('offline-local-durability', { body: JSON.stringify({ recovered: await body.textContent(), cloudSyncEnabled: false }), contentType: 'application/json' });
+    });
+
+    test('two tabs refuse a stale save and preserve both the committed row and unsaved buffer', async ({ context, page }, info) => {
+        const other = await context.newPage();
+        try {
+            await other.goto('/__or3-document-journey-test');
+            const otherBody = other.getByRole('textbox', { name: 'Document body' });
+            await expect(otherBody).toContainText('Initial document text.', { timeout: 30_000 });
+            await page.getByRole('textbox', { name: 'Document body' }).fill('First tab committed content');
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
+            await otherBody.fill('Second tab unsaved content');
+            await expect(other.getByRole('button', { name: 'Retry document save', exact: true })).toBeVisible();
+            await expect(other.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
+            await expect(otherBody).toContainText('Second tab unsaved content');
+            await other.getByRole('button', { name: 'Retry document save', exact: true }).click();
+            await expect(other.getByText('Your changes have not been saved locally.', { exact: true })).toBeVisible();
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
+            await info.attach('two-tab-conflict', { body: JSON.stringify({ saved: await other.getByTestId('persisted-document-body').textContent(), unsaved: await otherBody.textContent() }), contentType: 'application/json' });
+        } finally { await other.close(); }
+    });
+});
+
 test.beforeEach(async ({ page }) => {
     await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
 });

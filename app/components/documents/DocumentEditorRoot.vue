@@ -1,5 +1,9 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
+        <div v-if="documentLoaded && state.status === 'error' && (state.pendingTitle !== undefined || state.pendingContent !== undefined)" class="document-status-banner" role="alert">
+            <p>Your changes have not been saved locally.</p>
+            <UButton color="neutral" variant="soft" label="Retry document save" @click="retryLocalSave" />
+        </div>
         <div v-if="documentLoaded && itemReadOnly" class="document-status-banner" role="status">
             <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
             <p>{{ availabilityMessage }}</p>
@@ -502,6 +506,27 @@ async function ensureLocalDurability(id = props.documentId, db = editorDb.value)
             ? currentState.lastError
             : new Error('Document could not be saved locally.');
     }
+}
+
+function retryLocalSave(): void {
+    void ensureLocalDurability().catch((caught) => {
+        console.error('[DocumentEditor] Local save failed', caught);
+    });
+}
+
+function onBeforePageUnload(event: BeforeUnloadEvent): void {
+    // Capture synchronously: the debounce may still hold the only copy. An
+    // unload-time IndexedDB write alone is not a durability acknowledgement.
+    captureContent();
+    const currentState = useDocumentState(props.documentId, editorDb.value);
+    if (currentState.pendingTitle === undefined && currentState.pendingContent === undefined) return;
+    event.preventDefault();
+    event.returnValue = '';
+    retryLocalSave();
+}
+
+function onDocumentVisibilityChange(): void {
+    if (document.visibilityState === 'hidden') retryLocalSave();
 }
 
 const ai = useDocumentAiAgent({
@@ -1007,6 +1032,8 @@ watch(findQuery, () => {
 });
 
 onMounted(() => {
+    window.addEventListener('beforeunload', onBeforePageUnload);
+    document.addEventListener('visibilitychange', onDocumentVisibilityChange);
     void loadActiveDocument(props.documentId);
     const root = rootElement.value;
     if (root && typeof ResizeObserver !== 'undefined') {
@@ -1021,6 +1048,8 @@ onMounted(() => {
     }
 });
 onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', onBeforePageUnload);
+    document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
     didUnmount = true;
     stopWorkspaceSubscription();
     itemSubscription?.unsubscribe();

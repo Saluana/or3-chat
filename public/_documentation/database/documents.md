@@ -96,7 +96,9 @@ Mounted editors capture and flush against their own DB before switching workspac
 
 Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
 
-Releasing a cached document drops heavy content and timers. The current `releaseDocument` implementation suppresses flush errors during release, so release alone is not a successful-save acknowledgement. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+Releasing a cached document drops heavy content and timers only when no staged or in-flight save remains. A failed flush retains the record, conflict baseline and edits for retry; release alone is not a successful-save acknowledgement. Reads also preserve an unsaved edit's original baseline and cannot replace a newer committed save. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+
+The mounted editor shows a persistent save-failure banner with **Retry document save** while edits remain unsaved. Hiding the page captures and flushes the current editor buffer. Refreshing or leaving the page with staged edits requests the browser's unsaved-change confirmation and starts a save; dismissing the confirmation keeps the buffer open. An unload-time write is not a durability receipt. Browsers may suppress confirmations without prior user interaction, and forcibly closing the browser or accepting the confirmation can still discard an uncommitted edit.
 
 ## Document AI proposals
 
