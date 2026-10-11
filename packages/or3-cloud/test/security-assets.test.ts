@@ -400,7 +400,7 @@ test('candidate verification reuses the exact built digest without rebuilding', 
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
   expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
   expect(workflow).toContain('digest: ${{ steps.build-app.outputs.digest }}');
-  expect(workflow).toContain('needs: [identity, source-validation, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
+  expect(workflow).toContain('needs: [identity, source-validation, chat-tools, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
   expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
   expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
   expect(workflow).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
@@ -559,7 +559,15 @@ test('candidate qualification runs against the final digest-bound manifest', () 
 
 test('candidate qualification leaves deep browser and host builds off the critical path', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  expect(candidate).not.toContain('bunx playwright install --with-deps chromium');
+  const source = candidate.match(/^  source-validation:[\s\S]*?(?=^  [a-z-]+:)/m)?.[0];
+  const builds = candidate.match(/^  build-(?:app|operator):[\s\S]*?(?=^  [a-z-]+:)/gm);
+  const tools = candidate.match(/^  chat-tools:[\s\S]*?(?=^  [a-z-]+:)/m)?.[0];
+  expect(source).toBeDefined();
+  expect(source).not.toContain('playwright');
+  expect(builds).toHaveLength(2);
+  for (const build of builds ?? []) expect(build).toContain('needs: [identity, source-validation]');
+  expect(tools).toContain('bun run test:e2e:chat-tools');
+  expect(tools).toContain('bun run test:e2e:chat-tools:cloud');
   expect(candidate).not.toContain('bun run build');
   expect(candidate).not.toContain('performance:production-build:check');
   expect(candidate).toContain('Build and push the application image once');

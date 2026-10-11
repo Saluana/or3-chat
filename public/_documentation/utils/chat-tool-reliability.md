@@ -44,8 +44,9 @@ Production-backed background integration tests also
 cover saved/running browser journals, reconnect after failed delivery, delayed
 plugin activation, workspace authorization and worker recovery.
 
-The Checks core job and release-candidate source validation require both browser
-lanes. `release:check` includes them as well. CI uploads receipts, screenshots,
+The Checks core job and a parallel release-candidate chat-tools job require both
+browser lanes. Candidate receipts require that job to pass while image builds
+can proceed after source validation. `release:check` includes them as well. CI uploads receipts, screenshots,
 and browser failure artifacts from `test-results/chat-tools` and
 `test-results/chat-tools-cloud`. Receipts identify the source commit, dirty state,
 command, case status and browser version; Cloud receipts describe the isolated
