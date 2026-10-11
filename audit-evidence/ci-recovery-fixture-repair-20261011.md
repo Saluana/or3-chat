@@ -108,16 +108,36 @@ Complete final-tree qualification remains pending; its hosted receipt is
 recorded on the PR, including any independently owned full-core blocker.
 
 A bounded full core run at `38a93f10` passed 4,105 tests / 427 files before
-bailing at the independently owned isolation test
+bailing at an environment-dependent isolation test
 `server/api/plugins/__tests__/isolation-capability.post.test.ts:547`,
 "refuses ai.complete without a host provider credential". Its mocked handler
 resolved `{ ok: true, result: { text: 'ok' } }` instead of rejecting with 503.
-The same case fails alone in the separate frozen-base worktree at
-`df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5`. This is a pre-existing full-core
-blocker, reported to the parent/isolation owner; no isolation source was edited.
+The same case initially failed alone in the separate frozen-base worktree at
+`df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5`, under the same inherited process
+environment. The initial baseline-blocker classification was incorrect:
+the endpoint intentionally falls back to `process.env.OPENROUTER_API_KEY`,
+while the test only empties its mocked runtime configuration. Removing that
+variable from the test process makes the original 503-denial assertion pass
+alone on both the recovery branch and frozen base. No variable value was read
+or printed. No isolation source, auth behavior or denial assertion was changed;
+no new work is assigned to the isolation owner for this local result.
 Receipts: `/tmp/or3-recovery-ci-full-final-head.log` and
 `/tmp/or3-recovery-ci-isolation-credential-base.log`. Both use synthetic/mocked
 providers; no model request was made. This is not a complete full-core pass.
+Clean comparison command (in each worktree):
+
+```sh
+env -u OPENROUTER_API_KEY PATH=/workspace/.tools/bun-linux-x64:$PATH \
+  timeout 90 bunx vitest run --project=core-node \
+  server/api/plugins/__tests__/isolation-capability.post.test.ts \
+  -t 'refuses ai.complete without a host provider credential' \
+  --reporter=dot --silent=passed-only
+```
+
+Clean receipts: `/tmp/or3-recovery-ci-isolation-credential-clean-current.log`
+and `/tmp/or3-recovery-ci-isolation-credential-clean-base.log` (1 pass each).
+Further full local qualification must unset the provider fallback variable;
+the hosted final-head run remains the complete CI receipt.
 
 This follow-up changes three canonical test fixtures only. Browser qualification
 remains tied to the prior application checkpoint; no new browser execution,
