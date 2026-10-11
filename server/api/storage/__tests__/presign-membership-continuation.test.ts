@@ -172,6 +172,58 @@ describe('storage signing membership continuation with real session caching', ()
             expect((await request(input())).status).toBe(200);
         });
     }
+    it.each(['removed', 'viewer', 'editor'] as const)('keeps concurrent download/upload authorization independent after admin changes membership to %s', async role => {
+        let resume!: () => void;
+        let bothEntered!: () => void;
+        let finalReads = 0;
+        const held = new Promise<void>(resolve => { resume = resolve; });
+        const started = new Promise<void>(resolve => { bothEntered = resolve; });
+        // Prime the shared session sequentially: this qualifies concurrent cache reuse,
+        // keeping this scenario independent of first-import mock initialization timing.
+        const warm = toWebHandler(createApp().use(downloadHandler));
+        expect((await warm(new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash }),
+        }))).status).toBe(200);
+        fixture.list.mockClear();
+        fixture.sign.mockClear();
+        let initialReads = 0;
+        let signers = 0;
+        let bothSigning!: () => void;
+        const signersStarted = new Promise<void>(resolve => { bothSigning = resolve; });
+        fixture.list.mockImplementation(async () => {
+            const snapshot = fixture.role ? [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }] : [];
+            if (++initialReads > 2 && finalReads < 2) {
+                finalReads++;
+                if (finalReads === 2) bothEntered();
+                await held;
+            }
+            return snapshot;
+        });
+        fixture.sign.mockImplementation(async () => {
+            if (++signers === 2) bothSigning();
+            await signersStarted; // both initial access checks completed before either final read
+            return { url: '/synthetic-download', expiresAt: Date.now() + 60_000 };
+        });
+        const input = (upload: boolean) => new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash, ...(upload ? { mime_type: 'image/png', size_bytes: 3 } : {}) }),
+        });
+        const read = toWebHandler(createApp().use(downloadHandler))(input(false));
+        const write = toWebHandler(createApp().use(uploadHandler))(input(true));
+        await Promise.race([started, read.then(() => { throw new Error('Download did not reach final membership read'); }), write.then(() => { throw new Error('Upload did not reach final membership read'); })]);
+        const admin = toWebHandler(createApp().use(role === 'removed' ? removeMemberHandler : setRoleHandler));
+        expect((await admin(new Request('http://synthetic.test/admin/mutate', { method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId: 'synthetic-workspace', userId: 'synthetic-internal', ...(role === 'removed' ? {} : { role }) }),
+        }))).status).toBe(200);
+        resume();
+        const [reader, writer] = await Promise.all([read, write]);
+        expect(reader.status).toBe(role === 'removed' ? 403 : 200);
+        expect(writer.status).toBe(role === 'editor' ? 200 : 403);
+        if (reader.status !== 200) expect(await reader.text()).not.toContain('/synthetic-download');
+        if (writer.status !== 200) expect(await writer.text()).not.toContain('/synthetic-download');
+        expect(fixture.sign).toHaveBeenCalledTimes(2);
+        expect(fixture.list).toHaveBeenCalledTimes(6); // two initial reads, two stale snapshots, two independent retries
+    });
+
     it.each(['unrelated-store', 'global'] as const)('handles %s invalidation during a membership read', async scope => {
         fixture.list.mockImplementationOnce(async () => {
             invalidateSharedSessionCacheForIdentity(scope === 'global' ? {} : { storeId: 'unrelated-store' });
