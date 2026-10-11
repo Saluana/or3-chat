@@ -243,7 +243,8 @@ describe('prompt library workspace continuation with real saved prompts', () => 
         const origin = await fixture('A'); const target = await fixture('B');
         for (const item of [origin, target]) await item.db.threads.put({ id: 'identical-modal-thread',
             title: 'Synthetic modal thread', system_prompt_id: item.promptId,
-            created_at: 1, updated_at: 1, clock: 1, deleted: false });
+            created_at: 1, updated_at: 1, clock: 1, deleted: false,
+            status: 'ready', pinned: false, forked: false });
         setActiveWorkspaceDb(origin.id);
         let release!: () => void;
         const gate = new Promise<void>(resolve => { release = resolve; });
