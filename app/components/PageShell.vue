@@ -767,7 +767,7 @@ if (import.meta.client) {
     useEventListener(window, 'beforeunload', (event: BeforeUnloadEvent) => {
         if (!workspaceTabsEnabled.value) return;
         const layoutSaved = workspaceTabs.persistenceStatus.value === 'ok' || workspaceTabs.retryPersistence();
-        if (layoutSaved && !workspaceTabDrafts.saveFailed.value) return;
+        if (layoutSaved && !workspaceTabDrafts.saveFailed.value && !workspaceTabDrafts.needsUnloadConfirmation()) return;
         event.preventDefault();
         event.returnValue = '';
     });
