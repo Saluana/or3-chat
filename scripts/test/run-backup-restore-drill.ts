@@ -33,6 +33,7 @@ assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), '
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
+const transactionCrashOnly = process.argv.includes('--transaction-crash-only');
 const archiveRaceOnly = process.argv.includes('--archive-race-only');
 const blobContentOnly = process.argv.includes('--blob-content-only');
 const alternateStorageOnly = process.argv.includes('--alternate-storage-only');
@@ -56,7 +57,7 @@ const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walF
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || sqliteSchemaOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(filesystemCompatOnly) + Number(blobContentOnly) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(transactionCrashOnly) + Number(filesystemCompatOnly) + Number(blobContentOnly) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -490,6 +491,34 @@ try {
       }
     };
   }
+  if (transactionCrashOnly) {
+    const before = Number(await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "console.log(require('node:fs').statSync('/data/sync.sqlite-wal').size)"]), source.directory));
+    const writer = spawn('docker', composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      `const fs=require('node:fs');const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite');db.pragma('cache_size=8');db.exec('BEGIN IMMEDIATE');db.prepare('UPDATE s_posts SET data_json=? WHERE workspace_id=? AND id=?').run(JSON.stringify({id:'drill-document',content:'UNCOMMITTED REPLACEMENT'}),${JSON.stringify(workspaceId)},'drill-document');db.exec('CREATE TABLE synthetic_uncommitted (id INTEGER PRIMARY KEY, bytes BLOB)');const insert=db.prepare('INSERT INTO synthetic_uncommitted VALUES (?, ?)');const bytes=Buffer.alloc(65536,0x71);for(let i=0;i<32;i++)insert.run(i,bytes);fs.writeFileSync('/data/synthetic-uncommitted.ready','ready');setTimeout(()=>{db.exec('ROLLBACK');db.close()},120000)`]),
+      { cwd: source.directory, stdio: 'ignore' });
+    const writerExit = new Promise<number>((resolveExit, reject) => {
+      writer.once('error', reject);
+      writer.once('exit', code => resolveExit(code ?? 1));
+    });
+    const deadline = Date.now() + 5_000;
+    let ready = { ready: false, walBytes: 0 };
+    while (Date.now() < deadline && !ready.ready) {
+      ready = JSON.parse(await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+        "const fs=require('node:fs');console.log(JSON.stringify({ready:fs.existsSync('/data/synthetic-uncommitted.ready'),walBytes:fs.statSync('/data/sync.sqlite-wal').size}))"]), source.directory));
+      if (!ready.ready) await new Promise(resolveWait => setTimeout(resolveWait, 100));
+    }
+    assert(ready.ready && ready.walBytes > before + 1024 * 1024, 'Real uncommitted transaction must spill over one MiB into WAL');
+    const container = await command(composeArgs(source.directory, 'local', ['ps', '-q', 'or3']), source.directory);
+    await command(['update', '--restart', 'no', container]);
+    await command(['kill', '--signal', 'KILL', container]);
+    assert.notEqual(await writerExit, 0, 'Writer must die before rollback/commit');
+    assert.equal(await command(['inspect', '--format', '{{.State.Running}}', container]), 'false');
+    evidence('actual app SIGKILL interrupts real uncommitted SQLite transaction after WAL spill', {
+      walBytesBefore: before, walBytesAfter: ready.walBytes, uncommittedBlobBytes: 32 * 65536,
+      fault: 'Changed original document and created/wrote a temporary table inside BEGIN IMMEDIATE, then killed the whole owned app container',
+    });
+  }
   let sourceBackup: string;
   try { sourceBackup = await backup(source); }
   finally { delete lifecycleFaults.beforeCommand; }
@@ -513,6 +542,13 @@ try {
   assert.equal(entries.some(name => name.endsWith('.meta.json')), !emptyStorageOnly);
   evidence(emptyStorageOnly ? 'real archive contains both SQLite databases and WALs, with no attachment payloads or sidecars'
     : 'real archive contains both SQLite databases, WALs, blob and sidecar');
+  if (transactionCrashOnly) {
+    await restoreCommand(source.directory, { yes: true }, [sourceBackup]);
+    const pendingTable = await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+      "const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite',{readonly:true,fileMustExist:true});console.log(db.prepare(\"SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name='synthetic_uncommitted'\").get().n);db.close()"]), source.directory);
+    assert.equal(pendingTable, '0');
+    evidence('native WAL verifier accepts genuine interrupted uncommitted frames; app discards pending schema and retains acknowledged baseline', await verify(source));
+  }
   await stopProject(source.directory, 'local');
   const target = await instance('target');
   await assert.rejects(restoreCommand(target.directory, { yes: true }, [sourceBackup]), /authentication failed|different.*identity/);
@@ -536,7 +572,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of filesystemCompatOnly || blobContentOnly || archiveRaceOnly || multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of transactionCrashOnly || filesystemCompatOnly || blobContentOnly || archiveRaceOnly || multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -574,7 +610,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!filesystemCompatOnly && !blobContentOnly && !archiveRaceOnly && !multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!transactionCrashOnly && !filesystemCompatOnly && !blobContentOnly && !archiveRaceOnly && !multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -1150,13 +1186,56 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     await startProject(target.directory, 'local', target.env);
     evidence('post-preflight archive-race recovery survives an actual cold restart', await verify(target));
   }
-  if (concurrencyOnly || multiWorkspaceOnly) {
-    await restoreCommand(target.directory, { yes: true }, [targetBackup]);
-    evidence(multiWorkspaceOnly ? 'managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments'
+  if (concurrencyOnly || multiWorkspaceOnly || transactionCrashOnly) {
+    if (transactionCrashOnly) await cp(join(targetBackup, 'data.tgz'), join(evidencePath, '..', 'transaction-crash-target-data.tgz'));
+    if (transactionCrashOnly) {
+      const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
+      const restored = await run(process.execPath, [cli, 'restore', targetBackup, '--yes'], target.directory);
+      assert(restored.ok, restored.stderr);
+      assert.match(restored.stdout, /Restored backup-/);
+      assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+    } else await restoreCommand(target.directory, { yes: true }, [targetBackup]);
+    evidence(transactionCrashOnly ? 'managed restore after transaction crash retains acknowledged records and exact attachment bytes'
+      : multiWorkspaceOnly ? 'managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments'
       : 'managed restore retains every acknowledged concurrent atomic batch', await verify(target));
+    if (transactionCrashOnly) {
+      for (const fault of ['committed-frame-corruption', 'invalid-index', 'missing-index']) {
+        const broken = join(root, `transaction-${fault}`);
+        const tree = join(root, `transaction-tree-${fault}`);
+        await cp(targetBackup, broken, { recursive: true });
+        await mkdir(tree);
+        const unpacked = await run('tar', ['xzf', join(broken, 'data.tgz'), '-C', tree]);
+        assert(unpacked.ok, unpacked.stderr);
+        const indexPath = join(tree, 'sync.sqlite-shm');
+        const index = await readFile(indexPath);
+        assert.equal(index.readUInt32LE(0), 3007000, 'This local native fixture uses little-endian SHM');
+        if (fault === 'committed-frame-corruption') {
+          const walPath = join(tree, 'sync.sqlite-wal');
+          const wal = await readFile(walPath);
+          const frame = 32 + (index.readUInt32LE(16) - 1) * (wal.readUInt32BE(8) + 24);
+          assert(wal.readUInt32BE(frame + 4) > 0, 'Fault must hit an actual committed frame covered by the unchanged index');
+          wal[frame + 24 + 100] ^= 0xff;
+          await writeFile(walPath, wal);
+        } else if (fault === 'invalid-index') {
+          index[0] ^= 1;
+          await writeFile(indexPath, index);
+        } else await rm(indexPath);
+        const packed = await run('tar', ['czf', join(broken, 'data.tgz'), '-C', tree, '.']);
+        assert(packed.ok, packed.stderr);
+        const manifest = JSON.parse(await readFile(join(broken, 'manifest.json'), 'utf8'));
+        manifest.dataSha256 = await sha256File(join(broken, 'data.tgz'));
+        const text = `${JSON.stringify(manifest, null, 2)}\n`;
+        await writeFile(join(broken, 'manifest.json'), text);
+        await writeBackupAuthentication(target.directory, broken, text);
+        await assert.rejects(restoreCommand(target.directory, { yes: true }, [broken]), /Invalid SQLite WAL frame checksum/);
+        assert.equal((await readState(target.directory)).incompleteOperation, undefined);
+        evidence(`${fault}: strict native refusal and verified snapshot recovery preserve every baseline record and attachment`, await verify(target));
+      }
+    }
     await stopProject(target.directory, 'local');
     await startProject(target.directory, 'local', target.env);
-    evidence(multiWorkspaceOnly ? 'both workspace settings, chats and attachment bytes remain distinct after another cold restart'
+    evidence(transactionCrashOnly ? 'acknowledged baseline records remain intact after another cold restart following transaction crash'
+      : multiWorkspaceOnly ? 'both workspace settings, chats and attachment bytes remain distinct after another cold restart'
       : 'acknowledged concurrent batches remain intact after another cold restart', await verify(target));
   }
   if (builtCliOnly || filesystemCompatOnly) {
@@ -1235,7 +1314,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, alternateStorageOnly, emptyStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, sqliteSchemaOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, transactionCrashOnly, alternateStorageOnly, emptyStorageOnly, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, sqliteSchemaOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
