@@ -1,8 +1,11 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { validateCanonicalBackupReferences } from '../backup/references';
+import { validateVolumeArchive } from '../backup/archive';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
+import { imageAtDigest } from '../deployment/identity';
 import { assertRestorableManagedAssets } from '../deployment/assets';
 import type { PendingOperation } from '../deployment/contracts';
 import { parseEnv, secretValues } from '../deployment/env';
@@ -46,6 +49,10 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   // Do this before recording a recovery operation: a capacity refusal has not
   // touched the live deployment and should not require an operator recovery.
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
+  // Snapshot capture already stops the app. Refuse invalid archive inventories
+  // before journaling or creating that snapshot; retain the later recheck too.
+  await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
+  await validateCanonicalBackupReferences(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
   const pending: PendingOperation = {
     id: id('restore'),
     operation: 'restore',
@@ -75,7 +82,10 @@ export async function restoreCommand(directory: string, flags: Flags, positional
       phase: 'snapshot-created',
     });
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
-    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, { recreateDataVolume });
+    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, {
+      recreateDataVolume,
+      beforeStart: () => updatePending(loaded.directory, loaded.state, { phase: 'starting-target' }),
+    });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const digest = await imageDigest(restoredEnv.OR3_IMAGE);
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', digest);
@@ -88,7 +98,12 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     const phase = loaded.state.incompleteOperation?.phase;
-    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous' || phase === 'starting-target';
+    if (phase === 'starting-target') {
+      loaded.state.lastError = `Restore of ${manifest.backupId} started the target but did not complete: ${original}. Writes may have been accepted, so the deployment was NOT restored automatically. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" only after confirming loss of post-replacement writes.`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError, { cause: error });
+    }
+    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous';
     if (targetMayHaveMutated && (loaded.state.incompleteOperation?.previousBackupPath || loaded.state.incompleteOperation?.previousBackupId)) {
       let recoveredMessage: string;
       try {

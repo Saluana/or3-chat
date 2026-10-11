@@ -1,9 +1,13 @@
 import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
 import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
+import { assertFilesystemPayloadHash } from '../src/backup/restore';
+import { assertInspectionProfile, inspectCanonicalReferences, QUALIFIED_MIGRATIONS, readBackupInventory } from '../../../scripts/docker/backup-inspect.mjs';
 
 // Each test drives several real CLI processes.
 setDefaultTimeout(30_000);
@@ -19,6 +23,149 @@ afterEach(async () => {
 });
 
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
+
+test('offline canonical inspection detects missing pairs by workspace and preserves legacy, pending and deleted metadata', async () => {
+  const fixture = await sandbox();
+  const path = join(fixture.root, 'canonical.sqlite');
+  const db = new Database(path);
+  db.exec('CREATE TABLE kysely_migration(name TEXT PRIMARY KEY); CREATE TABLE s_file_meta(workspace_id TEXT NOT NULL,id TEXT NOT NULL,data_json TEXT NOT NULL,deleted INTEGER NOT NULL,PRIMARY KEY(workspace_id,id));');
+  for (const name of QUALIFIED_MIGRATIONS) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
+  const sha = 'a'.repeat(64);
+  const md5 = 'b'.repeat(32);
+  const insert = (workspace: string, hash: string, payload: unknown, deleted = 0) => db.query('INSERT OR REPLACE INTO s_file_meta VALUES(?,?,?,?)').run(workspace, hash, JSON.stringify(payload), deleted);
+  insert('first', sha, { size_bytes: 3, storage_id: 'legacy-storage-id', extra: 'x'.repeat(108_000) });
+  insert('second', `SHA256:${sha}`, { sizeBytes: 3, storageId: 'another-id' });
+  insert('first', md5, { sizeBytes: 0, storageId: 'legacy-md5-id' });
+  insert('pending', sha, { size_bytes: 12 });
+  insert('deleted', sha, { size_bytes: 12, storage_id: 'removed' }, 1);
+  const header = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
+  const object = (workspace: string, algorithm: string, hash: string, size: number) => `-rw------- nonroot/nonroot ${size} 2026-10-11 10:16:23 ./storage/workspaces/${workspace}/${algorithm}_${hash}\n-rw------- nonroot/nonroot 2 2026-10-11 10:16:23 ./storage/workspaces/${workspace}/${algorithm}_${hash}.meta.json\n`;
+  const first = object('first', 'sha256', sha, 3);
+  const second = object('second', 'sha256', sha, 3);
+  const legacy = object('first', 'md5', md5, 0);
+  // The adapter is exercised against Bun's real SQLite engine. Only the
+  // driver's pragma method is adapted; inspection/query logic is production.
+  class OfflineDatabase {
+    private readonly db: Database;
+    constructor(file: string) { this.db = new Database(file, { readonly: true }); }
+    pragma(sql: string, options?: { simple: boolean }) { return options?.simple ? this.db.query(`PRAGMA ${sql}`).values()[0]?.[0] : this.db.exec(`PRAGMA ${sql}`); }
+    prepare(sql: string) { return this.db.query(sql); }
+    close() { this.db.close(); }
+  }
+  const inspect = (text: string) => inspectCanonicalReferences(OfflineDatabase, path, readBackupInventory(text), '/data/storage');
+  expect(inspect(header + first + second + legacy)).toMatchObject({ complete: true, liveAttachments: 3, inspectedMetadata: 4 });
+  expect(() => inspect(header + first + legacy)).toThrow('required by live canonical attachment metadata');
+  expect(() => inspect(header + second + legacy)).toThrow('required by live canonical attachment metadata');
+  expect(() => inspect(header + first + second)).toThrow('required by live canonical attachment metadata');
+  expect(() => inspect(header + first + second + legacy + 'lrwxrwxrwx nonroot/nonroot 0 2026-10-11 10:16:23 ./storage -> /outside\n')).toThrow('ancestor must be a directory');
+  expect(() => inspectCanonicalReferences(OfflineDatabase, path, readBackupInventory(header + first + second + legacy), '/outside')).toThrow('outside /data');
+  insert('first', sha, { size_bytes: 4, storage_id: 'still-live' });
+  expect(() => inspect(header + first + second + legacy)).toThrow('size mismatch');
+  insert('first', sha, { size_bytes: 3, storage_id: 'still-live' }, 2);
+  expect(() => inspect(header + first + second + legacy)).toThrow('deletion state');
+  db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
+  expect(() => inspect(header + first + second + legacy)).toThrow('migration history');
+  db.close();
+});
+
+test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.14', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
+  expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
+  expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');
+  expect(() => readBackupInventory(entry.replace('4096', String(193 * 1024 * 1024)))).toThrow('scratch resource');
+  expect(() => readBackupInventory(entry.replace('-rw-------', 'drwx------'))).toThrow('regular SQLite');
+});
+
+test('canonical missing-reference refusal precedes journal and live service mutation and cleans the scratch helper', async () => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  await fixture.reset();
+  await fixture.configure({ failures: [{ match: 'backup-inspect.mjs references', message: 'Backup is missing a regular payload or sidecar required by live canonical attachment metadata' }] });
+  const before = await fixture.readStateText();
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain('required by live canonical attachment metadata');
+  expect(await fixture.readStateText()).toBe(before);
+  const trace = await fixture.traceText();
+  expect(trace).not.toMatch(/compose .* (stop|down|restart)\b|compose .* up\b|volume rm|find \/data/);
+  expect(trace).toContain('rm --force or3-backup-inspection-');
+  expect(trace).toContain('--network none');
+});
+
+test('backup refuses an incomplete canonical archive, restarts the original app and removes only its unverified artifact', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: 'backup-inspect.mjs references', message: 'missing canonical attachment pair' }] });
+  const refused = await fixture.cli(['backup']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain('missing canonical attachment pair');
+  expect(refused.stderr).toContain('deeply healthy');
+  expect(await readdir(join(fixture.directory, '.or3-cloud/backups'))).toEqual([]);
+  expect(await fixture.traceText()).toContain('rm --force or3-backup-inspection-');
+});
+
+test('filesystem payload validation hashes real file chunks for SHA-256 and legacy MD5 and refuses changed bytes', async () => {
+  const fixture = await sandbox();
+  for (const bytes of [Buffer.alloc(0), Buffer.from('synthetic attachment'), Buffer.alloc(150_001, 0x93)]) {
+    const path = join(fixture.root, 'payload');
+    await writeFile(path, bytes);
+    for (const algorithm of ['sha256', 'md5'] as const) {
+      const digest = createHash(algorithm).update(bytes).digest('hex');
+      const validate = (expected: string) => {
+        const fd = openSync(path, 'r');
+        const chunk = Buffer.alloc(65_536);
+        try {
+          return assertFilesystemPayloadHash(expected, () => {
+            const count = readSync(fd, chunk, 0, chunk.length, null);
+            return count ? chunk.subarray(0, count) : undefined;
+          }, createHash);
+        } finally { closeSync(fd); }
+      };
+      expect(() => validate(`${algorithm}_${digest}`)).not.toThrow();
+      expect(() => validate(`${algorithm}_${digest.toUpperCase()}`)).not.toThrow();
+      expect(() => validate(`${algorithm}_${'0'.repeat(digest.length)}`)).toThrow('Filesystem payload hash mismatch');
+      if (bytes.length) {
+        const changed = Buffer.from(bytes);
+        changed[0] = changed[0]! ^ 0xff;
+        await writeFile(path, changed);
+        expect(() => validate(`${algorithm}_${digest}`)).toThrow('Filesystem payload hash mismatch');
+        await writeFile(path, bytes);
+      }
+    }
+  }
+});
+
+test('restore refuses sparse apparent bytes as reclaimable capacity before mutating state or data', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ volumeApparentBytes: 128 * 1024 * 1024, volumeAllocatedKiB: 1024, volumeFreeKiB: 96 * 1024 });
+  const id = await createBackup(fixture);
+  await fixture.reset();
+  const before = await fixture.readStateText();
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.stderr).toContain('Restore needs at least');
+  expect(await fixture.readStateText()).toBe(before);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
+
+test('restore counts allocated bytes it will reclaim while keeping backup payload sizes apparent', async () => {
+  const fixture = await sandbox();
+  const target = await createBackup(fixture);
+  await fixture.configure({ volumeApparentBytes: 128 * 1024 * 1024, volumeAllocatedKiB: 80 * 1024, volumeFreeKiB: 16 * 1024,
+    failures: [{ match: 'du -sk', times: 1, message: 'fixture running probe unavailable' }] });
+  await fixture.reset();
+  const restored = await fixture.cli(['restore', target, '--yes']);
+  expect(restored.exitCode, restored.output).toBe(0);
+  const [snapshot] = (await fixture.backupIds()).filter(id => id !== target);
+  const manifest = JSON.parse(await readFile(join(fixture.cloud, 'backups', snapshot, 'manifest.json'), 'utf8'));
+  expect(manifest.dataBytes).toBe(128 * 1024 * 1024);
+  const probes = (await fixture.trace()).filter(args => args.join(' ').includes('du -sk'));
+  expect(probes.length).toBeGreaterThan(1);
+  expect(probes[1]).toEqual(expect.arrayContaining(['run', '--network', 'none', '--read-only']));
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
 
 async function createBackup(fixture: Sandbox) {
   const before = await fixture.backupIds();

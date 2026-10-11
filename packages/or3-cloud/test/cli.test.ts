@@ -190,6 +190,8 @@ appendFileSync(${JSON.stringify(trace)}, JSON.stringify(args) + '\\n');
 if (args.includes('-i')) await Bun.stdin.bytes();
 const text = args.join(' ');
 if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
+else if (text.includes('backup-inspect.mjs inventory')) console.log(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+else if (text.includes('backup-inspect.mjs references')) console.log(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
 else if (args[0] === 'volume' && args[1] === 'inspect') {
   console.log(text.includes('.Labels') ? ${JSON.stringify(JSON.stringify(labels))} : ${JSON.stringify(state.volumeName)});
 } else if (text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(manifest.image)}]));
@@ -197,6 +199,7 @@ else if (text.includes('.Architecture')) console.log(args[0] === 'image' ? 'arm6
 else if (text.includes('imagetools inspect')) console.log(JSON.stringify({architecture:'arm64',manifests:[{platform:{architecture:'arm64'}},{platform:{architecture:'amd64'}}]}));
 else if (text.includes('df -Pk')) console.log('1000000');
 else if (text.includes('du -sb')) console.log('1000');
+else if (text.includes('du -sk')) console.log('1');
 else if (text.includes('stat -c')) console.log('0:0');
 else if (args[0] === 'compose' && args.includes('config')) {
   console.log(JSON.stringify({services:{or3:{image:${JSON.stringify(manifest.image)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}},ports:[{target:3000,published:3197,host_ip:'127.0.0.1',protocol:'tcp'}],volumes:[{type:'volume',source:'or3-data',target:'/data'}]}},volumes:{'or3-data':{name:${JSON.stringify(state.volumeName)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}}}}}));

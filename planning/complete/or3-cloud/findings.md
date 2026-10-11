@@ -14,6 +14,119 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- The backup restore drill found that restore/rollback verification failures
+  automatically extracted the pre-operation snapshot even after target startup
+  could accept writes. Both commands now journal `starting-target` before
+  startup and preserve target data on subsequent verification or completion
+  failure. Pre-start replacement failures retain automatic snapshot recovery;
+  post-start recovery requires an explicit data-loss choice. This builds on the
+  merged #235 backup/recovery work without enabling generation cleanup.
+- A real signed-archive omission test also restored an archive without
+  `auth.sqlite`: a sign-in request initialized an empty replacement, restore
+  reported success, and the synthetic account count fell from one to zero.
+  Archive validation now requires both managed database payloads before
+  extraction clears live data, while preserving tar errors on legacy POSIX
+  shells. Presence and checksums still do not prove referenced blob completeness;
+  the drill records that remaining semantic boundary and recovery from a
+  known-good archive.
+- The populated restore drill reproduced a committed FS sidecar whose blob
+  was absent from an otherwise valid authenticated archive: restore reported
+  success but attachment download returned 404. The archive preflight now
+  requires the matching payload for canonical SHA-256/MD5 sidecars under the
+  archived FS root, without a new manifest format. Uncommitted uploads,
+  temporary sidecars and opaque generation artifacts remain accepted; no
+  physical cleanup is enabled. This does not discover a database reference
+  when both its blob and sidecar are absent. That separate omission still
+  reports restore success and is recorded as data-integrity evidence, with
+  known-good recovery verified against real attachment bytes.
+- A signed archive with a 36-byte non-SQLite `sync.sqlite` payload passed
+  restore and deep health, cleared the operation journal, then failed native
+  inspection with `SQLITE_NOTADB` and authenticated session reads with HTTP 500.
+  Restore, rollback and snapshot recovery now require native read-only SQLite
+  `quick_check` and a nonempty schema before application startup. Failure
+  follows safe pre-start snapshot recovery; failed recovery keeps the journal.
+  The populated empty-schema case showed why this boundary matters: checking
+  after startup allowed initialization to recreate 30 tables with zero original
+  threads/messages, while restore reported success. The
+  check uses the restored image's driver and does not impose newer ownership
+  rules on legacy snapshots. Real known-good recovery restores all fixture
+  records and attachment bytes; this is integrity validation, not a complete
+  semantic audit or an early pre-extraction database check. Later startup and
+  terminal-state failures still preserve possibly accepted writes.
+- A 96 MiB synthetic filesystem exposed a sparse-file restore capacity defect:
+  a largely unallocated 128 MiB file inflated reclaim estimates, allowing a
+  120 MiB payload to clear live data and fail extraction with `ENOSPC`.
+  Automatic recovery failed, and explicit recovery could not fit the retained
+  snapshot. Restore now counts allocated blocks as reclaimable bytes while
+  backup manifests retain apparent payload sizes. The same signed archive is
+  refused before journal/service/data mutation; a separate physically allocated
+  pressure case still restores successfully by reclaiming actual blocks. No
+  archive format or cleanup behavior changes. The failing fixture's separate
+  known-good reset was test-only, not a successful managed recovery procedure.
+- Populated-main/WAL drills reproduced false restore success for damaged
+  headers and committed frame content: native integrity and baseline reads
+  stayed healthy while a later committed WAL-only record was missing. Intact
+  archives repaired the record. Custom header/frame gates were explored but
+  are now excluded from production: native recovery must decide which WAL
+  state is usable. These remain expected-record completeness limits; physical
+  database integrity does not establish every application record is present.
+- The two-workspace omission drill strengthened refusal assertions and exposed
+  late archive validation: a missing committed blob was refused only after
+  snapshot capture stopped the app and journaled target mutation, causing an
+  unnecessary snapshot restore and state rewrite. Restore and rollback now
+  run the existing read-only inventory validator before journaling/capture,
+  using the authenticated archived filesystem root and retaining the later
+  check. Two canonical command regressions failed before this change and pass
+  afterward; the real scoped fixture checks state/container preservation.
+- A signed archive containing one changed committed attachment byte passed
+  restore and SQLite integrity while download returned HTTP 200 with wrong
+  bytes under the original SHA-256 hash. Native pre-start verification now
+  streams canonical committed FS objects and verifies their existing SHA-256
+  or legacy-MD5 content-hash key with a 64 KiB buffer. Mismatch follows safe
+  snapshot recovery; metadata/contracts and physical cleanup remain unchanged.
+  Real-file regressions cover empty/multi-chunk objects, both algorithms and
+  uppercase hex. Missing payload plus sidecar remains a separate canonical
+  reference-completeness gap; production-scale hashing is not qualified.
+- A versioned app-owned offline inspection contract now checks canonical
+  live SQLite attachment metadata against the archive's workspace-scoped blob
+  and sidecar inventory, including size and regular-file ancestors. This closes
+  the reproduced both-payload-and-sidecar omission for SQLite 0.0.15/FS 0.0.11.
+  The trusted image executable, build-owned version descriptor, known migration
+  history and canonical-column checks fail closed for unsupported images,
+  drivers, schemas, roots and bounded-resource exhaustion. Inspection uses
+  scratch tmpfs before live mutation, readonly native SQLite without provider
+  migrations, and no archived code. Ordinary backups and requested targets use the
+  same contract. Internal safety captures preserve authenticated prior bytes
+  without claiming reference completeness, so existing missing objects do not
+  prevent a known-good repair. Recorded prior-snapshot recovery retains native
+  DB/FS integrity checks and warns about unqualified attachment completeness. Pending/deleted metadata, legacy hashes, uncommitted uploads
+  and opaque generations remain supported. Independent review reproduced and
+  corrected a linked-ancestor bypass, valid large-metadata refusal and blank
+  pending-ID mismatch before qualification. Older images without this contract
+  are explicitly unsupported; generic provider APIs require separate work.
+- The valid unrelated one-table sync.sqlite false-success is also refused by
+  this qualified canonical schema contract before mutation. Physical database
+  integrity still does not prove all expected records survived native WAL
+  recovery or that a missing canonical metadata record had no other references.
+- Review of the new WAL guard found a real compatibility regression: killing
+  an app during a two-MiB uncommitted transaction, restoring it, and accepting
+  later healthy writes left an obsolete same-salt WAL tail. The strict frame
+  guard rejected both the healthy backup and its automatic recovery snapshot.
+  A cache-aware follow-up passed with valid SHM but still refused otherwise
+  healthy cacheless tails. All experimental header/frame/index decoders are now excluded from
+  production restore and retained under scripts/test as offline diagnostics.
+  Native SQLite recovers healthy tails with valid, missing or corrupt SHM.
+  An invalid database candidate safely recovers the real known-good snapshot
+  with a discarded same-salt tail and no SHM; the strict diagnostic rejects
+  that same healthy snapshot. Committed-frame corruption remains an explicit
+  record-completeness limit. Independent native SQLite review passed twelve
+  healthy rollback/checkpoint cases with intact, missing, stale, corrupt,
+  empty or byte-swapped SHM. Six injected malformed headers also recovered
+  from a healthy checkpointed main, while the remaining custom header gate
+  would reject the previous snapshot. That gate is quarantined too. The
+  injected headers are not proof of a genuine host-crash artifact. Do not
+  apply any experimental WAL gate from the intermediate commits.
+
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.
   Lost-response recovery now reaches a bounded scoped lookup after retry exhaustion,
