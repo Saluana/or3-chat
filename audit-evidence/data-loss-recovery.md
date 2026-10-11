@@ -5,8 +5,12 @@ Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only
 
 **Latest source checkpoint:** `bf9db934cd80673ce836d7f17239c109d09e6fbd`
 protects an unread tab manifest after storage-read failure. Its 51 scoped tests,
-type checking, lint and native Chromium failure/reload probe pass; a fresh
-32-case combined qualification is running with no concurrent source edits.
+type checking, lint and native Chromium failure/reload probe pass. Its fresh
+combined run passed **32/32 in 9.1 minutes**: log
+`/tmp/or3-recovery-unavailable-layout-expanded-final-browser.log`. Source
+qualification began at `bf9db934`; evidence-only commit `f5ce0144` was made during
+the run without application changes. One Chromium worker, no concurrent source
+edits, Nuxt preparation, type checks or unit suites.
 The preceding `b7b3caf23f3685944fc8502f599f8d415ce64ca8` fixes
 runtime status writes publishing the temporary tab layout before restoration.
 Its two startup regressions and 49 tab-controller/persistence tests pass, as does
@@ -44,6 +48,10 @@ repair can let a pending startup restore finish and remove the toast during
 Playwright actionability checks. The harness accepts that race only after exact
 text recovery and removal of the failure notice. The subsequent combined run
 passed all 32 cases as recorded above.
+Verified remaining terminal-save failure: after 20 rejected assistant puts,
+coalescer disposal removed unload protection; storage repair did not retry the
+terminal response and refresh retained only its older durable prefix. Shared
+finalization owners need to coordinate a write-only recovery path.
 Open risk: competing browser-page drafts still share a canonical
 row/journal. Preserve-both design is documented and deliberately unimplemented.
 Natural hidden/OS-suspension coverage remains blocked by this browser environment.
@@ -118,8 +126,80 @@ type checking and changed-source lint pass in
 The fault leaves the temporary composer empty (recorded observation), raises a
 persistent warning, and writes no placeholder manifest. The subsequent actual
 reload produces one beforeunload confirmation and recovers the exact draft text
-with the original tab ID. A new 32-case combined run is in progress at this
-source checkpoint; no full combined qualification is yet claimed for it.
+with the original tab ID. The new combined run passed **32/32 in 9.1 minutes** at this application source
+checkpoint: `/tmp/or3-recovery-unavailable-layout-expanded-final-browser.log`.
+Evidence-only commit `f5ce0144` did not change application source during the run.
+
+## Corrupt-layout dependency qualification
+
+The mounted Chromium dependency probe repeated the merged #235 contract on the
+latest application source `bf9db934`: invalid JSON is copied aside before the
+fresh layout replaces it, **Download original** produces exactly the truncated
+synthetic bytes, the backup remains after download, **Discard original** removes
+only that backup, and the composer remains editable with a valid fresh layout.
+All assertions passed, with external requests denied. No source change was
+needed. Log `/tmp/or3-recovery-corrupt-layout-contract-browser.log`; receipts
+`test-results/recovery-corrupt-layout-contract/evidence.json` and
+`recovered-workspace.png`. This adds actual browser evidence beyond the scoped
+unit backup cases and qualifies compatibility of the unavailable-read barrier.
+
+## Mounted composer after a closed local connection
+
+At current application source `bf9db934`, a mounted Chromium composer durably
+saved its initial draft, then its production Dexie handle was explicitly closed
+(`or3-db`, `isOpen: false`). A subsequent editor change reopened that same local
+handle (`isOpen: true`) and was acknowledged in native IndexedDB without manual
+repair or Retry. Refresh recovered the exact expanded text. No source change was
+needed. This is mounted editor/native DB evidence; the earlier replacement-handle
+probe still has its separate UI-bypassed classification.
+
+The first attempt demanded a visible error and timed out; it did not read the
+post-edit row and is **not evidence of a defect**. The qualified probe distinguishes
+acknowledged success from visible failure and requires durable refresh recovery.
+Final log `/tmp/or3-recovery-mounted-closed-db-qualified-browser.log`; native
+receipts `test-results/recovery-mounted-closed-db-qualified/after-close.json` and
+`evidence.json`. External requests denied. This tests an explicit local connection
+close, not browser disk eviction or operating-system termination.
+
+## Rejected draft deletion across refresh
+
+Actual Chromium committed a synthetic draft, then native `workspace_tab_drafts`
+deletes threw quota while the user cleared the mounted composer. The save warning
+was visible, the original durable row remained, and a synchronous null discard
+journal recorded the user's intent. After an explicitly accepted refresh, the
+composer remained empty; failed journal cleanup showed **Retry restore**. Repair
+plus that visible action removed the old row, and another refresh stayed empty.
+The first probe incorrectly selected **Retry**, which was absent after restoration
+failed; that failed assertion is not a product defect. The qualified stage receipts
+record both failure notices and the correct action explicitly.
+
+No source fix needed. Log `/tmp/or3-recovery-failed-draft-delete-qualified-browser.log`;
+receipts `test-results/recovery-failed-draft-delete-qualified/before-refresh.json`,
+`after-rejected-reload.json`, `evidence.json` and `rejected-reload.png`. One real
+beforeunload dialog was deliberately accepted after preserving receipts. All
+external requests denied. This extends the previous unit-only failed-discard
+journal case through the mounted UI and native transaction boundary.
+
+## Offline/reconnect interrupted assistant response
+
+At the qualified application source `bf9db934`, mounted Chromium entered offline
+mode (`navigator.onLine: false`) after the assistant's initial prefix was confirmed
+in native IndexedDB. A deterministic TypeError interrupted the gated mocked
+Response body; generation stopped and the acknowledged prefix remained in the
+same assistant row. Reconnect and real refresh recovered that exact prefix, with
+one user row and no duplicate assistant IDs. The pre-refresh browser fetch
+instrument recorded one local scripted provider invocation. Playwright observed
+zero provider HTTP requests because the journey fixture resolves the Response
+inside the browser. External requests were denied throughout.
+
+The first counter assertion expected an HTTP request and failed after successful
+recovery; the corrected probe keeps local invocation and observed HTTP counts
+separate. The failed counter logs are retained. Qualified log
+`/tmp/or3-recovery-offline-stream-qualified-browser.log`; receipts
+`test-results/recovery-offline-stream-qualified/offline.json`, `evidence.json`
+and `offline-state.png`. No source change was needed. Provider interruption is
+synthetic: this does **not** establish that offline mode alone disconnects an
+existing real socket, nor meter in-browser provider invocations after reload.
 
 ## Terminal assistant-save failure — verified remaining limitation
 
@@ -888,8 +968,7 @@ The earlier 31/32 combined invocation remains recorded as failed. No fully passi
 32/32 post-fix combined invocation is claimed until it completes.
 
 Startup snapshot source fix committed as
-`bfa030ab65474aa4074b50fec6a88e163463cd1f`. Source/tests are committed; the report
-summary update and prospective assistant-save probe remain separate working
-items. The probe has not run and no assistant-save result is claimed.
-Portable artifacts are refreshed at this committed source checkpoint with the
-prior failed combined run and post-fix targeted results distinguished.
+`bfa030ab65474aa4074b50fec6a88e163463cd1f`. At that earlier checkpoint, source/tests were committed and the assistant-save
+probe had not yet run. Later transient, active persistent and terminal findings
+are recorded above. Portable artifacts now include the newer exact checkpoint,
+with prior failed combined runs and subsequent targeted results distinguished.
