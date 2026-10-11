@@ -21,6 +21,10 @@ const tests = [
     'server/utils/background-jobs/__tests__/stream-handler.tools.test.ts',
     'app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts',
 ];
+const preferencesOnly = process.argv.includes('--preferences-only');
+const selectedTests = preferencesOnly
+    ? tests.filter(file => file.endsWith('/useNotifications.test.ts'))
+    : tests;
 async function run(args: string[], cwd = root) {
     const process = Bun.spawn(args, { cwd, stdout: 'pipe', stderr: 'pipe' });
     const [output, errors, code] = await Promise.all([
@@ -39,11 +43,11 @@ try {
     await Bun.write(join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
         target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler',
     } }));
-    for (const file of tests) await Bun.write(join(directory, file), await Bun.file(join(root, file)).text());
-    const result = await run(['bun', 'x', 'vitest', 'run', ...tests,
+    for (const file of selectedTests) await Bun.write(join(directory, file), await Bun.file(join(root, file)).text());
+    const result = await run(['bun', 'x', 'vitest', 'run', ...selectedTests,
         '--bail=0', '--maxWorkers=2', '--reporter=dot', '--silent=passed-only',
         '--testNamePattern=keeps suspended (muteThread|unmuteThread) persistence|uses originating workspace mute preferences|retains (the )?admitted tracker account|redacts failed plugin file reads|fences plugin file read|native blob conversion|reports read completion|late palette action|shared preview workspace|held preview|displayed preview|cached-load continuation|gallery upload batch|gallery picker ownership|fences gallery|fences delayed palette|rechecks ownership after awaited PNG|held canonical ownership|membership becomes|awaited canonical ownership|former account completion|held quota|held canonical metadata|held signer|held workflow|shared thumbnail|held thumbnail|next workspace thumbnail|mounted thumbnail workspace consumers|held prefetch metadata'], directory);
-    await Bun.write(join(root, 'audit-evidence/workspace-isolation-20261011/baseline-regressions.txt'),
+    await Bun.write(join(root, `audit-evidence/workspace-isolation-20261011/${preferencesOnly ? 'mute-persistence-concurrent-base' : 'baseline-regressions'}.txt`),
         `Base: ${base}\nCommand: Bun Vitest canonical regression suites in a disposable worktree\n${result.output}\nExit status: ${result.code}\n`);
     console.log(result.output);
     if (result.code !== 1 || /Failed Suites|no tests/.test(result.output)) {
