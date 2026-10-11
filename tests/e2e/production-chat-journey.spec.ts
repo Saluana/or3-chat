@@ -940,6 +940,7 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     await page.reload();
     await expect(input).toHaveText('Draft that must survive a reload', { timeout: 30_000 });
     await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    await expect(page.getByTestId('draft-saved-versions')).toHaveCount(0);
     await info.attach('draft-after-reload', { contentType: 'application/json', body: JSON.stringify(await savedDrafts()) });
 
     // A reload straight after a keystroke, inside the capture debounce, must not lose it.
@@ -965,6 +966,10 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
     await page.reload();
     await expect(input).toBeVisible({ timeout: 30_000 });
     await expect(input).toHaveText('');
+    await expect(page.getByTestId('draft-saved-versions')).toHaveCount(0);
+    const screenshotPath = info.outputPath('quiet-composer-after-recovery.png');
+    await page.locator('#chat-input-main').screenshot({ path: screenshotPath, animations: 'disabled' });
+    await info.attach('quiet-composer-after-recovery', { path: screenshotPath, contentType: 'image/png' });
 });
 
 test('an unreadable saved tab layout is kept aside, can be downloaded or discarded, and the workspace stays usable', async ({ page, context }) => {

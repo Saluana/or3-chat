@@ -118,13 +118,13 @@ row and discard state, preserves displaced legacy content, and commits the
 writer head and canonical mirror. A delayed retry cannot resurrect a newer
 clear or an explicitly removed version. Reload hints select that page's saved
 branch; duplicated browser tabs receive independent writer identities.
-**Review saved draft versions** includes other branches and orphaned app-tab
-drafts. Selection durably archives the current editor before copying the chosen
-version, and rejects intervening edits or uncommitted attachments. Removal
-requires the exact displayed version. Saved drafts never expire or automatically
-evict one another: reaching the 200-version capacity fails visibly until the
-user explicitly discards versions. Removed versions retain only a lightweight
-sequence floor, without text or attachment references.
+The composer quietly restores its own saved branch without a draft-history
+panel or version-management controls. Other branches and orphaned app-tab
+drafts remain protected in local recovery storage. The recovery APIs archive
+the current buffer before restoring a version and require the exact version
+for removal. Recovery versions never automatically evict unsent content;
+reaching the 200-version capacity fails visibly. Explicitly removed versions
+retain only a sequence floor, without text or attachment references.
 
 Drafts retain text, editor JSON, settings, pasted blocks and attachment hashes;
 missing-file hashes and names survive recapture. File deletion checks both

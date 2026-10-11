@@ -833,7 +833,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, tabs and drafts, with refresh guards, exact current-snapshot journal/failure acknowledgements and scoped database-handle recovery and visible interrupted draft/attachment-read retries."
+                    "summary": "Preserve durable sends, native admission, tool policy, tabs and quiet draft autosave, with refresh guards and scoped retry after interrupted storage."
                 },
                 {
                     "name": "ai-preferences.md",
