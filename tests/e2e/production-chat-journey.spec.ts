@@ -267,13 +267,27 @@ test.describe('chat draft storage recovery faults', () => {
         const clientURL = draftRecoveryScripts.get(page)?.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
         expect(clientURL).toBeTruthy();
         await page.evaluate(async url => {
-            const client = await import(url!); const table = client.getDb().workspace_tab_drafts;
-            const put = table.put.bind(table);
-            const held: Array<{ row: unknown; resolve: (value: unknown) => void }> = [];
-            table.put = (row: unknown) => new Promise(resolve => { held.push({ row, resolve }); });
+            const client = await import(url!); const db = client.getDb();
+            const transaction = db.transaction.bind(db);
+            const held: Array<{ args: unknown[]; resolve: (value: unknown) => void; reject: (reason: unknown) => void }> = [];
+            // Hold before transaction entry. Suspending an individual put after
+            // native transaction entry lets IDB auto-commit; repairing that put
+            // directly bypasses the version/state transaction acknowledgment.
+            db.transaction = (...args: unknown[]) => {
+                const tables = args.slice(1, -1).flat() as Array<{ name?: string }>;
+                if (!String(args[0]).startsWith('rw') || !tables.some(table => table.name === 'workspace_tab_drafts')) {
+                    return transaction(...args);
+                }
+                return new Promise((resolve, reject) => { held.push({ args, resolve, reject }); });
+            };
             (window as unknown as { interruptedDraftSave: { count: () => number; repair: () => Promise<void> } }).interruptedDraftSave = {
                 count: () => held.length,
-                repair: async () => { table.put = put; for (const { row, resolve } of held) resolve(await put(row)); },
+                repair: async () => {
+                    db.transaction = transaction;
+                    for (const { args, resolve, reject } of held.splice(0)) {
+                        try { resolve(await transaction(...args)); } catch (error) { reject(error); }
+                    }
+                },
             };
         }, clientURL);
         const input = page.getByRole('textbox', { name: 'Message input' });
@@ -297,7 +311,7 @@ test.describe('chat draft storage recovery faults', () => {
         expect(dialogs).toEqual(['beforeunload']);
         const path = info.outputPath('interrupted-large-draft.json');
         await writeFile(path, JSON.stringify({ chars: marker.length, dialogs, recoveredChars: (await input.innerText()).length,
-            externalRequests: 'denied', fault: 'deferred local Dexie put before native transaction' }, null, 2));
+            externalRequests: 'denied', fault: 'deferred whole draft write before native transaction entry' }, null, 2));
         await info.attach('interrupted-large-draft', { path, contentType: 'application/json' });
     });
 
