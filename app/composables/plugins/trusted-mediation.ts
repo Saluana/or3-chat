@@ -324,7 +324,11 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
             } catch {
                 return denied('files.read');
             }
-            const file = await files.get(id);
+            const file = await files.get(id).catch(error => {
+                // An ended read must not hand over former-workspace error details.
+                if (ended()) return null;
+                throw error;
+            });
             if (ended()) return pluginError('stale-context', 'Plugin activation has ended');
             if (!file) return pluginError('not-found', 'Staged file was not found');
             if (readOptions?.signal?.aborted) return pluginError('aborted', 'File read cancelled');

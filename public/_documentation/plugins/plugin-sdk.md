@@ -254,7 +254,9 @@ Feature requirements are checked before setup. Portable clients return `unsuppor
 `files.read` rechecks this lifetime after loading bytes. A read handle obtained
 before the transition also checks lifetime before yielding bytes; returning to
 the original workspace does not revive that activation. Bytes already yielded
-remain with the caller.
+remain with the caller. Failures arriving after the transition return the
+generic stale-context message; active reads keep their normal error and retry
+behavior.
 
 `secrets` uses device-local `or3.plugin.<id>.secret.<key>` keys. Observed sign-out clears them; stale-session startup preserves them. Secrets are never workspace KV values. An unavailable browser store reports `host-unavailable`.
 

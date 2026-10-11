@@ -97,6 +97,44 @@ describe('trusted workspace Files contract', () => {
         });
     }
 
+    it.each(['changed', 'returned', 'disposed', 'unchanged'] as const)('redacts failed plugin file reads when activation is %s while preserving live recovery', async change => {
+        let release!: () => void;
+        let entered!: () => void;
+        let reads = 0;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        const started = new Promise<void>(resolve => { entered = resolve; });
+        const trusted = createTrustedHostContext({ pluginId: 'fixture.file-error', version: '1.0.0', workspaceId,
+            grants: ['files.read'], mediation: { files: {
+                put: async () => ({ id: 'synthetic-file-reference' }), list: async () => [],
+                get: async () => {
+                    if (++reads === 1) { entered(); await held; throw new Error('synthetic-private-origin-filename'); }
+                    return { name: 'synthetic-recovered.txt', mimeType: 'text/plain', bytes: new TextEncoder().encode('synthetic-recovered-file') };
+                },
+            } },
+        });
+        contexts.push(trusted);
+        const reading = trusted.context.files.read('synthetic-file-reference');
+        await started;
+        if (change === 'disposed') await trusted.dispose();
+        else if (change !== 'unchanged') {
+            const nextWorkspace = `plugin-file-error-${crypto.randomUUID()}`;
+            dbIds.push(nextWorkspace);
+            await setActiveWorkspaceDb(nextWorkspace).open();
+            if (change === 'returned') setActiveWorkspaceDb(workspaceId);
+        }
+        release();
+        expect(await reading).toMatchObject({ ok: false, error: change === 'unchanged'
+            ? { code: 'host-unavailable', message: 'synthetic-private-origin-filename' }
+            : { code: 'stale-context', message: 'Plugin activation has ended' } });
+        if (change === 'unchanged') {
+            const recovered = value(await trusted.context.files.read('synthetic-file-reference'));
+            const chunks: Uint8Array[] = [];
+            for await (const chunk of recovered) chunks.push(chunk);
+            expect(new TextDecoder().decode(chunks[0])).toBe('synthetic-recovered-file');
+            expect(await recovered.result).toMatchObject({ ok: true });
+        }
+    });
+
     it('fences an actual stored-file read after native blob conversion crosses a workspace change', async () => {
         const { trusted, ref } = await upload();
         let release!: () => void;
