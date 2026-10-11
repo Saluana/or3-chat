@@ -33,7 +33,8 @@ assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), '
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
-const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only');
+const workspaceOmissionOnly = process.argv.includes('--workspace-omission-only');
+const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only') || workspaceOmissionOnly;
 const builtCliOnly = process.argv.includes('--built-cli-only');
 const recoveryOnly = process.argv.includes('--recovery-only');
 const prestartCrashOnly = process.argv.includes('--prestart-crash-only');
@@ -191,7 +192,7 @@ async function authenticated(fixture: Instance) {
   assert.equal(session.session.role, 'owner');
   return { api, session };
 }
-async function verify(fixture: Instance) {
+async function verify(fixture: Instance, includeSecondary = true) {
   const { api, session } = await authenticated(fixture);
   assert.equal(session.session.workspace.id, workspaceId);
   const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
@@ -209,7 +210,7 @@ async function verify(fixture: Instance) {
   assert.deepEqual(replay.results.map(canonicalReceipt), (replayReceipt as { results: Array<Parameters<typeof canonicalReceipt>[0]> }).results.map(canonicalReceipt));
   assert(replay.results.every((result: { replayed?: boolean }) => result.replayed === true));
   assert.equal(replay.serverVersion, snapshot.highWatermark, 'Replay must not allocate new workspace versions');
-  if (secondWorkspace) {
+  if (secondWorkspace && includeSecondary) {
     await api('/api/workspaces/active', { id: secondWorkspace.id });
     const session = await (await api('/api/auth/session')).json();
     assert.equal(session.session.workspace.id, secondWorkspace.id);
@@ -237,7 +238,7 @@ async function verify(fixture: Instance) {
     "const Database=require('/app/.output/server/node_modules/better-sqlite3');for(const p of ['/data/auth.sqlite','/data/sync.sqlite']){const db=new Database(p,{readonly:true,fileMustExist:true});if(db.pragma('integrity_check',{simple:true})!=='ok'||db.pragma('foreign_key_check').length)process.exit(1);db.close()}console.log('integrity and foreign keys ok')"]), fixture.directory);
   assert.equal(integrity, 'integrity and foreign keys ok');
   return { rows: fixtureRows.length, attachmentBytes: fileBytes.length, integrity: 'ok', identity: 'owner and workspace preserved', replay: 'idempotent', capturedPairs,
-    ...(secondWorkspace ? { secondWorkspaceRows: secondWorkspace.rows.length, sharedHashBytesVerifiedPerWorkspace: true, duplicateRecordIdsScoped: true } : {}) };
+    ...(secondWorkspace && includeSecondary ? { secondWorkspaceRows: secondWorkspace.rows.length, sharedHashBytesVerifiedPerWorkspace: true, duplicateRecordIdsScoped: true } : {}) };
 }
 async function backup(fixture: Instance) {
   const previous = await import('node:fs/promises').then(fs => fs.readdir(join(fixture.directory, '.or3-cloud/backups')));
@@ -661,15 +662,17 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       evidence('explicit recovery after abrupt CLI death restores actual pre-mutation data and bytes', await verify(target));
     }
   }
-  if (deep || attachmentOnly) {
+  if (deep || attachmentOnly || workspaceOmissionOnly) {
     const missing = join(root, 'missing-archived-blob');
     const tree = join(root, 'missing-blob-tree');
     await cp(targetBackup, missing, { recursive: true });
     await mkdir(tree);
     const unpack = await run('tar', ['xzf', join(missing, 'data.tgz'), '-C', tree]);
     assert(unpack.ok, unpack.stderr);
-    const blob = join(tree, 'storage/workspaces', workspaceId, hash.replace(':', '_'));
+    const missingWorkspace = workspaceOmissionOnly ? secondWorkspace!.id : workspaceId;
+    const blob = join(tree, 'storage/workspaces', missingWorkspace, hash.replace(':', '_'));
     assert.deepEqual(await readFile(blob), fileBytes);
+    if (workspaceOmissionOnly) assert.deepEqual(await readFile(join(tree, 'storage/workspaces', workspaceId, hash.replace(':', '_'))), fileBytes);
     await rm(blob);
     const packed = await run('tar', ['czf', join(missing, 'data.tgz'), '-C', tree, '.']);
     assert(packed.ok, packed.stderr);
@@ -678,9 +681,15 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const text = `${JSON.stringify(manifest, null, 2)}\n`;
     await writeFile(join(missing, 'manifest.json'), text);
     await writeBackupAuthentication(target.directory, missing, text);
+    const beforeState = await readState(target.directory);
+    const beforeContainer = await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory);
     await assert.rejects(restoreCommand(target.directory, { yes: true }, [missing]), /sidecar without its required blob payload/);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    evidence('authenticated archive missing a committed sidecar payload is refused; live data and attachment remain intact', await verify(target));
+    assert.deepEqual(await readState(target.directory), beforeState);
+    assert.equal(await command(composeArgs(target.directory, 'local', ['ps', '-q', 'or3']), target.directory), beforeContainer);
+    evidence(workspaceOmissionOnly
+      ? 'second-workspace blob omission refused before mutation despite identical first-workspace hash; both scopes remain intact'
+      : 'authenticated archive missing a committed sidecar payload is refused; live data and attachment remain intact', await verify(target));
     // Pairing cannot detect a completed object whose blob and sidecar are both
     // absent. Preserve this narrower data-integrity boundary as real evidence.
     await rm(blob + '.meta.json');
@@ -692,6 +701,14 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     await writeBackupAuthentication(target.directory, missing, missingBothText);
     await restoreCommand(target.directory, { yes: true }, [missing]);
     await assert.rejects(verify(target), /404|File not found/);
+    if (workspaceOmissionOnly) {
+      const { api } = await authenticated(target);
+      await api('/api/workspaces/active', { id: workspaceId });
+      evidence('both second-workspace payload and sidecar omitted: first workspace stays intact while second download fails', {
+        firstWorkspace: await verify(target, false), secondWorkspaceDownload: 404,
+        boundary: 'Database-reference completeness remains unresolved; another workspace with the same hash must not satisfy this reference',
+      }, 'limitation');
+    }
     outcomes.push({ name: 'Authenticated, well-formed archive missing both a referenced blob and its sidecar passes structural restore; app download detects the omission',
       kind: 'limitation', detail: 'Pairing checks available committed sidecars; absent blob and sidecar cannot be discovered without database-reference validation. Deep health is not an attachment audit.' });
     console.log('DATA-INTEGRITY LIMITATION authenticated archive missing both blob and sidecar requires database-reference validation');
@@ -1006,7 +1023,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, multiWorkspaceOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

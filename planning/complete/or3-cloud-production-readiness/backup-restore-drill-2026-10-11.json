@@ -17,7 +17,11 @@
       "behavior": "Refuse canonical committed FS metadata sidecars missing their blob payload entry under the archived FS root; preserve uncommitted uploads, temporary sidecars and opaque generation artifacts; no new format or physical cleanup."
     }
   ],
-  "finalCliSourceRevision": "f195153bda7937462a7a85fc4d295ac89cebef44",
+  "finalCliSourceRevision": "c0f0c57650f060e6cb5edec88562a66e7547e309",
+  "archivePreflightFix": {
+    "commit": "c0f0c57650f060e6cb5edec88562a66e7547e309",
+    "behavior": "Restore and rollback run the existing read-only archive inventory validator before journaling or stopped snapshot capture, using the authenticated archived FS root and retaining the later recheck. Invalid payload inventories no longer cause avoidable service downtime, state rewriting or snapshot recovery."
+  },
   "walFrameFix": {
     "commit": "f195153bda7937462a7a85fc4d295ac89cebef44",
     "behavior": "Stream complete current-generation SQLite WAL frames and verify cumulative checksums before native opening with one bounded page/frame buffer. Refuse damage without hiding committed records; preserve stale reset tails and incomplete appends."
@@ -2401,6 +2405,224 @@
     ],
     "coverage": "Two real API-created workspaces with six fixture records each, colliding record IDs, distinct chat/settings payloads, identical attachment hash but distinct storage IDs and workspace paths. Owner memberships and active switching survive separate-instance restore, managed restore and cold restart."
   },
+  "actualAppWorkspaceOmissionBefore": {
+    "completed": false,
+    "cleanupFailed": false,
+    "cliRevision": "5c12345f9ffb49b9cc78fe88d565f17f48f80eaa",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "58ebbc23ed5800cc02c1c24c8dbe7a975fc8d99d9bf77dcb70a31654b6229f1a"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      }
+    ],
+    "stage": "Incomplete run deliberately retained: exact state-preservation assertion failed after missing-sidecar-payload refusal stopped/snapshotted/restored the app and changed updatedAt/lastError. Raw log is workspace-omission-before.log."
+  },
+  "actualAppWorkspaceOmissionAfter": {
+    "completed": true,
+    "cleanupFailed": false,
+    "recordedCliRevision": "5c12345f9ffb49b9cc78fe88d565f17f48f80eaa",
+    "qualifiedUncommittedSourceNowCommitted": "c0f0c57650f060e6cb5edec88562a66e7547e309",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "37528c4ce0c64df8ad6fb37115c5fbd5dfbdbc1eebff047b9d2286a229e11a70"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "second-workspace blob omission refused before mutation despite identical first-workspace hash; both scopes remain intact",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "both second-workspace payload and sidecar omitted: first workspace stays intact while second download fails",
+        "kind": "limitation",
+        "detail": {
+          "firstWorkspace": {
+            "rows": 6,
+            "attachmentBytes": 48,
+            "integrity": "ok",
+            "identity": "owner and workspace preserved",
+            "replay": "idempotent",
+            "capturedPairs": 0
+          },
+          "secondWorkspaceDownload": 404,
+          "boundary": "Database-reference completeness remains unresolved; another workspace with the same hash must not satisfy this reference"
+        }
+      },
+      {
+        "name": "Authenticated, well-formed archive missing both a referenced blob and its sidecar passes structural restore; app download detects the omission",
+        "kind": "limitation",
+        "detail": "Pairing checks available committed sidecars; absent blob and sidecar cannot be discovered without database-reference validation. Deep health is not an attachment audit."
+      },
+      {
+        "name": "known-good backup recovers attachment bytes after semantic omission",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "both workspace settings, chats and attachment bytes remain distinct after another cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      }
+    ],
+    "coverage": "Blob-only omission in second workspace refuses before exact state/container mutation despite first workspace retaining identical hash. Both-missing omission remains unresolved and fails only the second download; first workspace verified intact, both scopes recovered and cold restarted."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,
@@ -2875,20 +3097,20 @@
   "automatedChecks": [
     {
       "command": "bun test packages/or3-cloud/test",
-      "result": "245 pass, 0 fail, 1867 assertions across 7 files (103.38 seconds after WAL-frame fix)",
+      "result": "247 pass, 0 fail, 1881 assertions across 7 files (108.86 seconds after early archive preflight)",
       "coverage": "mocked Docker/provider lifecycle and contracts; final POSIX archive reader additionally qualified by actual containers"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts --test-name-pattern \"WAL (frame|header)\"",
-      "result": "2 pass, 107 assertions including both checksum byte orders, every single-byte header corruption, all short headers, native frames at 512/4096/65536-byte pages, stale tails and incomplete append tails. Two fixed big-endian frame assertions ran after the complete 245-test suite."
+      "result": "2 pass, 107 assertions including both checksum byte orders, every single-byte header corruption, all short headers, native frames at 512/4096/65536-byte pages, stale tails and incomplete append tails; all assertions included in final 247-test suite."
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-backup.test.ts",
-      "result": "38 backup tests pass as part of final 245-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
+      "result": "38 backup tests pass as part of final 247-test run; sparse/allocated regressions: 2 pass, 14 assertions, after 2 failures before fix"
     },
     {
       "command": "bun test packages/or3-cloud/test/cli-lifecycle.test.ts",
-      "result": "36 lifecycle tests pass as part of final 245-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction"
+      "result": "38 lifecycle tests pass as part of final 247-test run; native pre-start/recovery regression: 3 pass, 29 assertions, after 3 failures before stage correction; early archive preflight: 2 pass, 12 assertions, after 2 failed before fix"
     },
     {
       "command": "bun run --cwd packages/or3-cloud typecheck; bun run --cwd packages/or3-cloud build",

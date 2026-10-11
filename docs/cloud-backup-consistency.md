@@ -90,6 +90,12 @@ The local drill checks application semantics separately: an authenticated archiv
 missing both a referenced blob and its sidecar can still report restore success
 and then return 404 on attachment download. Pairing is not database-reference
 validation; deep health cannot establish that completeness.
+Restore and rollback run this read-only inventory preflight before journaling
+or capturing the pre-mutation snapshot, which itself stops the app. The stronger
+two-workspace drill exposed why checking only inside the replacement primitive
+was insufficient: a refused missing blob still stopped the service, recorded an
+operation and unnecessarily restored the recovery snapshot. Early refusal now
+preserves state and the running container; the later inventory recheck remains.
 
 ## Local restore qualification
 
@@ -118,6 +124,12 @@ uploads the same hash into both workspace directories with distinct scoped
 storage IDs. After separate-instance restore, managed restore and cold restart,
 it checks both memberships, active workspace switching, document/project/message
 references, different settings and exact attachment bytes in each scope.
+`--workspace-omission-only` adds two authenticated archive faults to that fixture:
+removing only the second workspace's blob must refuse before state/container
+mutation even though the first workspace retains the same hash. Removing both
+that blob and its sidecar records the unresolved reference-completeness gap,
+checks that the first workspace remains usable, then restores both scopes from
+the intact archive and checks another cold restart.
 The deep pass kills a separate restore process with SIGKILL after app startup,
 then checks that its durable journal protects a subsequently accepted write.
 `--crash-only` runs that process-death case with the source/target qualification.
