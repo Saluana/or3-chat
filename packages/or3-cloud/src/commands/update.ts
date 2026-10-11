@@ -403,7 +403,10 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
         if (migrateLegacyVolume && !recreateDataVolume) {
           await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, previousRootOwnership);
         }
-        await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, { recreateDataVolume });
+        await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, {
+          recreateDataVolume,
+          previousSafetySnapshot: true,
+        });
       } catch (restoreError) {
         throw new Error(`Update to ${targetVersion} failed, and automatic backup restoration also failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. Original update error: ${error instanceof Error ? error.message : String(error)}`);
       }

@@ -190,6 +190,8 @@ appendFileSync(${JSON.stringify(trace)}, JSON.stringify(args) + '\\n');
 if (args.includes('-i')) await Bun.stdin.bytes();
 const text = args.join(' ');
 if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
+else if (text.includes('backup-inspect.mjs inventory')) console.log(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+else if (text.includes('backup-inspect.mjs references')) console.log(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
 else if (args[0] === 'volume' && args[1] === 'inspect') {
   console.log(text.includes('.Labels') ? ${JSON.stringify(JSON.stringify(labels))} : ${JSON.stringify(state.volumeName)});
 } else if (text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(manifest.image)}]));

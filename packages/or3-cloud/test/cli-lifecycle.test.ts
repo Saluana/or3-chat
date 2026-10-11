@@ -181,10 +181,14 @@ test('a failure in the snapshot-created phase is resumed without replacing anyth
 test('a failure while replacing the target restores the verified snapshot and keeps the journal for confirmation', async () => {
   const fixture = await sandbox();
   // The first stop belongs to the snapshot; the second is the replacement.
-  await fixture.configure({ failures: [{ match: ' stop or3', skip: 1, times: 1, message: 'fixture stop failure' }] });
+  await fixture.configure({ failures: [
+    { match: ' stop or3', skip: 1, times: 1, message: 'fixture stop failure' },
+    { match: 'backup-inspect.mjs', message: 'Original image predates the canonical inspector' },
+  ] });
   const failed = await fixture.cli(['update']);
   expect(failed.exitCode).toBe(1);
   expect(failed.stderr).toContain(`Update to ${PACKAGE_VERSION} failed and was restored`);
+  expect(await fixture.traceText()).not.toContain('backup-inspect.mjs');
   const { state, env } = await fixtureState(fixture);
   expect(state).toMatchObject({ appVersion: OLD_VERSION, imageDigest: OLD_DIGEST });
   expect(env).toMatchObject({ OR3_VERSION: OLD_VERSION, OR3_IMAGE: fixture.image });
