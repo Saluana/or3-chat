@@ -9,6 +9,7 @@ export async function requireStorageWorkspaceAccess(
     event: H3Event,
     session: SessionContext,
     workspaceId: string,
+    permission: 'workspace.read' | 'workspace.write' = 'workspace.read',
 ): Promise<void> {
     if (!session.authenticated || !session.user?.id) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -29,5 +30,5 @@ export async function requireStorageWorkspaceAccess(
         throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
     }
     requireCan({ ...session, workspace: { id: membership.id, name: membership.name }, role: membership.role },
-        'workspace.read', { kind: 'workspace', id: workspaceId });
+        permission, { kind: 'workspace', id: workspaceId });
 }

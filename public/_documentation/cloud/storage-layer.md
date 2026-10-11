@@ -62,6 +62,11 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
     expiring, subject/workspace-bound, one-time upload intent.
 4.  **Presigning**: The queue receives a short-lived URL bound to the intent,
     object ID, SHA-256, byte length, and MIME type.
+    The host also rereads current `workspace.write` membership after quota
+    observations and after the signer returns. Removed or demoted writers
+    receive no upload URL. Provider-owned intents and reservations retain
+    their existing expiry and cleanup contract; the host does not cancel an
+    intent already allocated by a signer.
 5.  **Transfer**: The binary is uploaded directly to object storage.
 6.  **Commit**: The server rechecks actual object metadata/checksum and atomically
     consumes the intent/reservation. Replays and mismatched subjects or metadata fail.

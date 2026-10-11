@@ -37,6 +37,8 @@ vi.mock('../../../auth/session', () => ({
 }));
 
 const requireCanMock = vi.fn();
+vi.mock('../../../utils/storage/workspace-access', () => ({ requireStorageWorkspaceAccess: vi.fn() }));
+
 vi.mock('../../../auth/can', () => ({
     requireCan: requireCanMock as any,
 }));
