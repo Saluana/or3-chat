@@ -592,12 +592,15 @@ test('a restore that stops before data replacement restarts the original deploym
   expect((await fixture.cli(['status'])).stdout).toContain('Deep health: OK');
 });
 
-test('rollback returns to the recorded pre-update snapshot and clears the rollback point', async () => {
+test('rollback restores a recorded older-image safety snapshot without the new inspector', async () => {
   const fixture = await sandbox();
   expect((await fixture.cli(['update'])).exitCode).toBe(0);
   const updated = await fixtureState(fixture);
   expect(updated.state.rollback).toBeDefined();
   await fixture.reset();
+  // Published source images do not contain the newly introduced inspector.
+  // The recorded update snapshot must remain usable for managed rollback.
+  await fixture.configure({ failures: [{ match: 'backup-inspect.mjs', times: 10, message: 'Cannot find module backup-inspect.mjs' }] });
   const rolledBack = await fixture.cli(['rollback', '--yes']);
   expect(rolledBack.exitCode, rolledBack.output).toBe(0);
   expect(rolledBack.stdout).toContain(`Rolled back to OR3 ${OLD_VERSION}`);
@@ -607,6 +610,10 @@ test('rollback returns to the recorded pre-update snapshot and clears the rollba
   expect(state.incompleteOperation).toBeUndefined();
   expect(env).toMatchObject({ OR3_VERSION: OLD_VERSION, OR3_IMAGE: fixture.image });
   expect((await fixture.backupIds()).some((entry) => entry.startsWith('backup-before-rollback'))).toBe(true);
+  const calls = await fixture.traceText();
+  expect(calls).not.toContain('backup-inspect.mjs');
+  expect(calls).toContain('quick_check');
+  expect(calls).toContain('OR3_TAR_RESULT');
 });
 
 test('rollback refuses without confirmation, without a rollback point, and for a drifted point', async () => {

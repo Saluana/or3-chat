@@ -264,6 +264,13 @@ The deployment directory is mounted at its absolute host path, matching
 - Source multi-instance setups need shared canonical auth/workspace data, object storage, durable background state, and compatible rate-limit/coordination stores. Verify each provider's concurrency and locking model; do not share a local SQLite file over an arbitrary network filesystem. Memory jobs remain process-local.
 - Keep viewer suppression behavior in mind: viewer state is process-local.
 
+Managed rollback restores the authenticated immediate pre-update safety snapshot,
+including when its previous image predates the offline attachment inspector.
+Archive checks, native SQLite integrity and committed filesystem hashes still
+apply. This preserves the recorded prior state without certifying that every
+canonical attachment existed before the update. Ordinary requested restores
+continue to require the inspector.
+
 ## Contributor release qualification
 
 Stable promotion is an explicit contributor workflow. Follow the [release procedure](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/releasing.md) and its [acceptance checklist](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-release-checklist.md). Retain exact-artifact staging, backup/restore, rollback, and failure/recovery evidence; an ordinary deployment update is not a release qualification.

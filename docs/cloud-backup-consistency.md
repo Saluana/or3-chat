@@ -258,7 +258,7 @@ provider API. The image build records installed provider versions beside the
 standalone trusted `scripts/docker/backup-inspect.mjs`; the CLI never boots Nitro,
 runs migrations, imports provider internals or executes archived code.
 
-Ordinary backup verification and requested restore/rollback targets inspect archived
+Ordinary backup verification and requested restore targets inspect archived
 `sync.sqlite` and its optional WAL in a disposable network-denied helper before
 certifying canonical references. A live metadata record with a nonblank storage
 ID requires both regular blob and sidecar entries at the archived FS root,
@@ -280,11 +280,13 @@ coverage. Normal cleanup also removes the named helper on every failure path.
 Internal pre-mutation safety snapshots preserve and authenticate exact previous
 archive/config/assets bytes; they do not certify canonical completeness. This
 allows a validated known-good target to repair an already-incomplete live state.
-Recovery of a recorded safety snapshot keeps the existing native DB/FS integrity
+Recovery and managed rollback of a recorded safety snapshot keep the existing native DB/FS integrity
 checks, restores that prior state and warns that attachment completeness is not
 certified. It can therefore preserve pre-existing missing objects rather than
 preventing repair or rejecting an otherwise usable older-image safety snapshot.
-Requested targets and ordinary user backups cannot select this internal policy.
+Requested restore targets and ordinary user backups cannot select this internal policy.
+The immediate rollback point is authenticated against the recorded previous image,
+version and digest; it remains usable when that image predates the inspector.
 
 Older requested backup images without this executable/descriptor are explicitly unsupported,
 even if their provider package versions match; no cross-release compatibility
