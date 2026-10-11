@@ -55,6 +55,8 @@ interface DraftEntry {
 const drafts = new Map<string, DraftEntry>();
 const discardTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const dirty = new Map<string, { scope: WorkspaceDraftScope; tabId: string }>();
+/** Independent flushes may overlap; success for one tab cannot acknowledge another. */
+const failedDrafts = new Set<string>();
 const hydrations = new Map<string, { db: Or3DB; promise: Promise<void>; done: boolean }>();
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let retryArmed = false;
@@ -309,10 +311,15 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
         batch.map(async (entry) => ({ entry, saved: await persist(entry.scope, entry.tabId) }))
     );
     const failed = outcomes.filter((outcome) => !outcome.saved);
+    for (const { entry, saved } of outcomes) {
+        const key = memoryKey(entry.scope, entry.tabId);
+        if (saved) failedDrafts.delete(key);
+        else failedDrafts.add(key);
+    }
+    saveFailed.value = failedDrafts.size > 0;
     if (!failed.length) {
-        if (batch.length) {
+        if (batch.length && !failedDrafts.size) {
             failedRounds = 0;
-            saveFailed.value = false;
         }
         return;
     }
@@ -320,7 +327,6 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
         const key = memoryKey(entry.scope, entry.tabId);
         if (!dirty.has(key)) dirty.set(key, entry);
     }
-    saveFailed.value = true;
     failedRounds += 1;
     if (failedRounds <= MAX_SAVE_RETRIES && !persistTimer) {
         retryArmed = true;
@@ -504,7 +510,12 @@ export function useWorkspaceTabDrafts() {
         releaseDraftAttachments(draft);
         // Deleted right away: a pending debounce must not resurrect it. A failed delete is retried.
         void persist(scope, tabId).then((saved) => {
-            if (!saved) markDirty(scope, tabId);
+            if (saved) failedDrafts.delete(key);
+            else {
+                failedDrafts.add(key);
+                markDirty(scope, tabId);
+            }
+            saveFailed.value = failedDrafts.size > 0;
         });
         return draft;
     }

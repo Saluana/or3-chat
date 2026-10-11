@@ -824,7 +824,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool-loop policy, tab sessions and drafts, including layout refresh guards, exact journal acknowledgements and visible oversize save failures."
+                    "summary": "Preserve durable sends, native admission, tool-loop policy, tabs and drafts, including refresh guards, exact journal acknowledgements and per-tab failure acknowledgements."
                 },
                 {
                     "name": "ai-preferences.md",

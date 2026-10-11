@@ -147,6 +147,15 @@ function deferred<T>() {
     return { promise, resolve, reject };
 }
 
+async function clearDraftFixtures(): Promise<void> {
+    // These fixtures delete their entire workspace DB. Settle local draft
+    // discards first, so cleanup cannot strand writes against a closed handle.
+    useWorkspaceTabDrafts().clear();
+    await flushPromises();
+    await useWorkspaceTabDrafts().flush();
+    await flushPromises();
+}
+
 describe('ChatInputDropper', () => {
     // A file picker can outlive the access token. Renew cached authorization,
     // but never admit bytes after sign-out, a viewer downgrade or a workspace move.
@@ -176,6 +185,7 @@ describe('ChatInputDropper', () => {
             if (transition === 'workspace') expect(await getDb().file_meta.count()).toBe(0);
         } finally {
             cloudIntake.enabled = false; cloudIntake.session = null;
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null);
             for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
         }
@@ -223,6 +233,7 @@ describe('ChatInputDropper', () => {
         } finally {
             gate.resolve(); wrapper.unmount(); await flushPromises();
             create.mockRestore(); revoke.mockRestore();
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null);
             for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
         }
@@ -316,6 +327,7 @@ describe('ChatInputDropper', () => {
             expect(preference?.value).toBe(choice === 'explicit' ? JSON.stringify({ model: 'fixture/explicit', variant: 'nitro' }) : undefined);
         } finally {
             wrapper.unmount(); await flushPromises(); vi.unstubAllGlobals();
+            await clearDraftFixtures();
             setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
         }
     });

@@ -289,6 +289,50 @@ describe('durable workspace tab drafts', () => {
         expect(journalKeys()).toEqual([]);
     });
 
+    it('keeps another tab save failure visible when an overlapping successful flush finishes', async () => {
+        const { client, drafts, flush } = await reload();
+        const table = client.getDb().workspace_tab_drafts;
+        const put = table.put.bind(table);
+        let failSave!: () => void;
+        let finishSave!: () => Promise<void>;
+        const writes = vi.spyOn(table, 'put').mockImplementation(row => new Promise((resolve, reject) => {
+            if (row.tab_id === 'failed-tab') {
+                failSave = () => reject(new DOMException('Synthetic storage full', 'QuotaExceededError'));
+            } else {
+                finishSave = async () => { resolve(await put(row)); };
+            }
+        }) as never);
+        drafts.write('failed-tab', draft('Still unsaved'));
+        const failedFlush = flush();
+        await vi.waitFor(() => expect(failSave).toBeDefined());
+        drafts.write('saved-tab', draft('Independent saved buffer'));
+        const successfulFlush = flush();
+        await vi.waitFor(() => expect(finishSave).toBeDefined());
+        failSave();
+        await failedFlush;
+        expect(drafts.saveFailed.value).toBe(true);
+        await finishSave();
+        await successfulFlush;
+        expect(drafts.saveFailed.value).toBe(true);
+        expect(drafts.read('failed-tab')?.text).toBe('Still unsaved');
+        writes.mockRestore();
+        await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect(await table.count()).toBe(2);
+    });
+
+    it('clears a failed tab warning once its explicit discard is durable', async () => {
+        const { client, drafts, flush } = await reload();
+        const table = client.getDb().workspace_tab_drafts;
+        vi.spyOn(table, 'put').mockRejectedValueOnce(new DOMException('Synthetic quota', 'QuotaExceededError'));
+        drafts.write('failed-tab', draft('Discard this failed buffer'));
+        await flush();
+        expect(drafts.saveFailed.value).toBe(true);
+        drafts.discard('failed-tab');
+        await vi.waitFor(() => expect(drafts.saveFailed.value).toBe(false));
+        expect(await table.count()).toBe(0);
+    });
+
     it('recovers the last edit when the page unloaded before IndexedDB committed it', async () => {
         const first = await reload();
         const table = first.client.getDb().workspace_tab_drafts;
