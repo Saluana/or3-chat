@@ -10,6 +10,7 @@ import { setHookEngine } from '~/core/hooks/useHooks';
 import { testRuntimeConfig } from '~~/tests/setup';
 import * as session from '~/composables/auth/useSessionContext';
 import type { PluginFileLifecycle, PluginGrant, PluginResult } from '@or3/plugin-sdk';
+import { WorkspacePluginCoordinator } from '~~/shared/plugins/workspace-plugin-coordinator';
 
 // Risks: missing grants, stale revisions/workspaces, async policy races,
 // duplicate notifications, after-hook errors, premature byte deletion and
@@ -57,6 +58,81 @@ afterEach(async () => {
 });
 
 describe('trusted workspace Files contract', () => {
+    for (const boundary of ['native-conversion', 'iteration'] as const) {
+        it.each(['account-change', 'logout', 'same-account-refresh'] as const)(`joins plugin coordinator ${boundary} read lifetime for %s without a DB switch`, async transition => {
+            let active: ReturnType<typeof createTrustedHostContext> | null = null;
+            let holdCleanup = false;
+            let releaseCleanup!: () => void;
+            let cleanupEntered!: () => void;
+            const cleanupHeld = new Promise<void>(resolve => { releaseCleanup = resolve; });
+            const cleanupStarted = new Promise<void>(resolve => { cleanupEntered = resolve; });
+            const onError = vi.fn();
+            const coordinator = new WorkspacePluginCoordinator({
+                fetchManifest: async () => ({ workspaceId, revision: 'synthetic-files', enabledPluginIds: [], installedPluginIds: [], runtime: {} }),
+                onError,
+            });
+            coordinator.register({ name: 'synthetic-trusted-files',
+                async stop() {
+                    const previous = active; active = null;
+                    await previous?.dispose();
+                    if (holdCleanup) { cleanupEntered(); await cleanupHeld; }
+                },
+                async reconcile() {
+                    if (!active) {
+                        active = createTrustedHostContext({ pluginId: 'fixture.coordinated-files', version: '1.0.0', workspaceId,
+                            grants: ['files.read', 'files.write', 'files.catalog.write'] });
+                        contexts.push(active);
+                    }
+                },
+            });
+            let releaseRead = () => {};
+            let pendingTransition: Promise<void> | undefined;
+            try {
+                await coordinator.refresh({ workspaceId, sessionKey: 'synthetic-account-a' });
+                const trusted = active as ReturnType<typeof createTrustedHostContext> | null;
+                if (!trusted) throw new Error('Synthetic trusted activation was not created');
+                const { ref } = await upload(trusted);
+                const originalDb = getDb();
+                let reading: ReturnType<typeof trusted.context.files.read>;
+                if (boundary === 'native-conversion') {
+                    let entered!: () => void;
+                    const held = new Promise<void>(resolve => { releaseRead = resolve; });
+                    const started = new Promise<void>(resolve => { entered = resolve; });
+                    const nativeRead = NativeBlob.prototype.arrayBuffer;
+                    vi.spyOn(NativeBlob.prototype, 'arrayBuffer').mockImplementationOnce(async function(this: NativeBlob) {
+                        entered(); await held; return nativeRead.call(this);
+                    });
+                    reading = trusted.context.files.read(ref.id);
+                    await Promise.race([started, reading.then(() => { throw new Error('Fixture did not reach native conversion'); })]);
+                } else reading = Promise.resolve(await trusted.context.files.read(ref.id));
+                holdCleanup = transition !== 'same-account-refresh';
+                pendingTransition = coordinator.refresh({ workspaceId: transition === 'logout' ? null : workspaceId,
+                    sessionKey: transition === 'logout' ? null : transition === 'account-change' ? 'synthetic-account-b' : 'synthetic-account-a' });
+                if (holdCleanup) await cleanupStarted;
+                expect(getDb()).toBe(originalDb);
+                releaseRead();
+                const result = await reading;
+                if (boundary === 'native-conversion' && holdCleanup) {
+                    expect(result).toMatchObject({ ok: false, error: { code: 'stale-context' } });
+                } else {
+                    const stream = value(result);
+                    const chunks: Uint8Array[] = [];
+                    for await (const chunk of stream) chunks.push(chunk);
+                    expect(chunks.length).toBe(holdCleanup ? 0 : 1);
+                    if (!holdCleanup) expect(new TextDecoder().decode(chunks[0])).toBe('Original saffron bytes');
+                    expect(await stream.result).toMatchObject(holdCleanup ? { ok: false, error: { code: 'stale-context' } } : { ok: true });
+                }
+                if (holdCleanup) expect(active).toBeNull(); // Destination activation waits for teardown.
+                releaseCleanup();
+                await pendingTransition;
+                expect(onError).not.toHaveBeenCalled();
+            } finally {
+                holdCleanup = false; releaseRead(); releaseCleanup();
+                await pendingTransition;
+                await coordinator.dispose();
+            }
+        });
+    }
     for (const boundary of ['before-return', 'before-iteration'] as const) {
         it.each(['changed', 'returned', 'disposed', 'unchanged'] as const)(`fences plugin file read ${boundary} when activation is %s`, async change => {
             let release!: () => void;

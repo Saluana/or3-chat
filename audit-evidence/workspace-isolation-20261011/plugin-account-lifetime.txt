@@ -1,0 +1,114 @@
+Source commit: 2a860fca42df5e5250084f0b0a06afef20f49a80 plus six canonical file-lifetime orchestration cases.
+Command: bun x vitest run app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts app/composables/plugins/__tests__/trusted-v2-manager.test.ts shared/plugins/__tests__/lifecycle-coordinator.test.ts app/plugins/__tests__/workspace-db-logout.test.ts app/plugins/__tests__/auth-session-workspace-revision.test.ts --reporter=verbose --maxWorkers=2
+Exit status: 0
+Real coordinator/trusted SDK/IndexedDB; synthetic adapter cleanup held. Companion manager/logout/session suites retain their existing fixtures. No provider/model calls.
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator native-conversion read lifetime for account-change without a DB switch 161ms
+ ✓ |core-app| app/plugins/__tests__/workspace-db-logout.test.ts > workspace logout cleanup plugin > does not clear workspace DBs when sign-out is not confirmed 2495ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator native-conversion read lifetime for logout without a DB switch 125ms
+ ✓ |core-app| app/plugins/__tests__/workspace-db-logout.test.ts > workspace logout cleanup plugin > clears workspace DBs when session is unauthenticated and sign-out is confirmed 86ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator native-conversion read lifetime for same-account-refresh without a DB switch 131ms
+ ✓ |core-app| app/plugins/__tests__/workspace-db-logout.test.ts > workspace logout cleanup plugin > keeps PKCE markers while OpenRouter is returning to the callback page 94ms
+ ✓ |core-app| app/plugins/__tests__/workspace-db-logout.test.ts > workspace logout cleanup plugin > does not clear workspace DBs when session is authenticated 27ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator iteration read lifetime for account-change without a DB switch 83ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator iteration read lifetime for logout without a DB switch 87ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > joins plugin coordinator iteration read lifetime for same-account-refresh without a DB switch 57ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is changed 89ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is returned 81ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is disposed 42ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-return when activation is unchanged 36ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is changed 83ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is returned 87ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is disposed 44ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences plugin file read before-iteration when activation is unchanged 45ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is changed while preserving live recovery 85ms
+stderr | app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > retries an expired session on focus after a failed idle renewal
+[auth-session-refresh] Failed to refresh auth session: Error: offline
+    at /workspace/or3-chat/app/plugins/__tests__/auth-session-workspace-revision.test.ts:176:50
+    at file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///workspace/or3-chat/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
+
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > applies a newer storage revision and ignores an older one 21ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > does not reload on auth flip to signed-out when confirmation fails 4ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > reloads on auth flip to signed-out when confirmation succeeds 54ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > renews an idle session at expiry and schedules the renewed session 6ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > retries an expired session on focus after a failed idle renewal 8ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > does not loop when the server returns an unchanged expiry 2ms
+ ✓ |core-app| app/plugins/__tests__/auth-session-workspace-revision.test.ts > auth session cross-tab workspace refresh > cancels idle renewal when the session is signed out 3ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is returned while preserving live recovery 82ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is disposed while preserving live recovery 40ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > redacts failed plugin file reads when activation is unchanged while preserving live recovery 67ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > fences an actual stored-file read after native blob conversion crosses a workspace change 124ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is changed 105ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is returned 99ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is disposed 55ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > reports read completion after already-yielded bytes when activation is unchanged 51ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > cannot use a direct foreign file hash to read another workspace through the SDK 103ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > denies direct file reads without a grant before accessing stored bytes 59ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > pages metadata without fetching blobs and includes native documents 48ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > delivers committed lifecycle events and manages revisions, Trash and retained bytes 83ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses policy vetoes before commits and rejects mutation of hook snapshots 54ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses the change when a policy callback throws or returns a non-boolean 47ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > lets read-only members and hosts without Files activate file integrations 56ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > rechecks the row after asynchronous hooks and preserves a concurrent write 50ms
+stderr | app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > keeps committed writes successful if a notification hook fails
+[hooks] Error in action "workspace.files:action:after": Error: Observer unavailable
+    at /workspace/or3-chat/app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts:382:86
+    at wrapped (/workspace/or3-chat/app/composables/plugins/trusted-host-context.ts:582:209)
+    at /workspace/or3-chat/shared/hooks/hook-engine-core.ts:499:32
+    at invokeWithFallbackPriority (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:201:33)
+    at runAsyncBody (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:497:27)
+    at /workspace/or3-chat/shared/hooks/hook-engine-core.ts:530:17
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+    at callAsync (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:529:32)
+    at Object.doAction (/workspace/or3-chat/shared/hooks/hook-engine-core.ts:658:19)
+    at Object.doAction (/workspace/or3-chat/app/core/hooks/typed-hooks.ts:178:20)
+
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > keeps committed writes successful if a notification hook fails 60ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > requires explicit catalog and action grants, including for lifecycle subscriptions 39ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > binds actions and hooks to their activation and removes them on disposal 64ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > refuses a workspace switch during a before-hook without touching either workspace 126ms
+ ✓ |app-integration| app/composables/plugins/__tests__/trusted-workspace-files.integration.test.ts > trusted workspace Files contract > rechecks cloud membership after hooks and refuses read-only writes 53ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited fetch boundary 3ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited import boundary 0ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited register boundary 0ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited stop boundary 0ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited validation boundary 0ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > rejects superseded work after the awaited activation boundary 0ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > serializes same-ID operations while unrelated IDs progress 1ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > plugin lifecycle coordination > coalesces concurrent reconcile triggers so the latest pending state wins 2ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > shares workspace and approval eligibility while preserving execution modes 1ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > coalesces a refresh burst into one fetch and delivers one snapshot to all adapters 2ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > aborts old fetches and awaits every teardown before destination activation 1ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > fails closed on cleanup errors and retries teardown before activating 1ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > tears down on account changes within one workspace and on logout without fetching 1ms
+ ✓ |core-node| shared/plugins/__tests__/lifecycle-coordinator.test.ts > workspace plugin coordination > preserves the current workspace on transport or wrong-workspace responses 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > keeps a retained trusted context live across a identical manifest refresh 26ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > keeps a retained trusted context live across a add manifest refresh 3ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > keeps a retained trusted context live across a replace manifest refresh 3ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > keeps a retained trusted context live across a remove manifest refresh 3ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > reactivates a revoked descriptor when disable is immediately superseded by enable 1ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > revokes an active context immediately on replace 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > revokes an active context immediately on disable 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > revokes an active context immediately on workspace 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > revokes an active context immediately on stop 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > aborts pending setup on a changed manifest and never publishes the stale activation 1ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > activates verified host entries once and disposes on disable, replacement, and workspace exit 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > rejects stale activation after a workspace switch and never publishes it 0ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > disposes other plugins and retains a failed teardown for retry 1ms
+ ✓ |core-app| app/composables/plugins/__tests__/trusted-v2-manager.test.ts > trusted V2 client lifecycle > ignores entries that are not ready, approved, and host isolated 0ms
+
+ Test Files  5 passed (5)
+      Tests  75 passed (75)
+   Start at  11:44:15
+   Duration  6.58s (transform 3.63s, setup 726ms, import 3.65s, tests 5.57s, environment 1.91s)
+
