@@ -47,6 +47,29 @@ Prompt library built on the shared `posts` table (`postType: 'prompt'`) with Tip
 -   `db.prompts.list:filter:output`
 -   `db.prompts.delete:action:(soft|hard):(before|after)`
 
+## Default prompt preference
+
+`useDefaultPrompt()` exposes the selected workspace's readonly `defaultPromptId`,
+`ensureLoaded()`, `setDefaultPrompt(id)` and `clearDefaultPrompt()`. The preference
+uses the existing KV key `default_system_prompt_id`; no schema or API change is
+required. System Prompts Modal and Chat Settings consume this state.
+
+Workspace switching clears the singleton cache and reloads the selected workspace.
+An old read cannot replace that cache, even after switching away and returning.
+Concurrent callers in one workspace generation share the pending load. A failed
+current read returns `null` and a later load can retry.
+
+Set and clear capture their originating DB before awaiting a load. An admitted
+write may finish there after switching; it cannot change the destination's KV
+preference. The cache and `chat.systemPrompt.default:action:update` hook report the
+committed KV value, including input-filter transformations, after successful
+persistence. Failed writes propagate without publishing an uncommitted value. A
+write finishing in a previous workspace generation does not emit the UI update
+hook; returning to its DB refreshes the current cache from its canonical row.
+
+`getDefaultPromptId()` reads the DB captured at invocation directly. Callers that
+continue asynchronously remain responsible for their own workspace lifetime.
+
 ---
 
 ## Usage tips

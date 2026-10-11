@@ -224,7 +224,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Source API reference for saved prompts."
+                    "summary": "Saved prompt APIs and workspace-scoped default preference loading, committed updates and switch recovery."
                 },
                 {
                     "name": "document-revisions.md",
