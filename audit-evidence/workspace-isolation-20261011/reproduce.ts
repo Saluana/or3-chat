@@ -6,7 +6,6 @@ const root = process.cwd();
 const directory = await mkdtemp('/tmp/or3-isolation-base-');
 const base = 'df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5';
 const tests = [
-    'server/api/storage/__tests__/presign-upload-membership-continuation.test.ts',
     'server/api/storage/__tests__/presign-membership-continuation.test.ts',
     'app/composables/core/__tests__/useThumbnailUrlCache.test.ts',
     'app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts',

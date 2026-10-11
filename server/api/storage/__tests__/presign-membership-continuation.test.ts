@@ -5,7 +5,7 @@ import { _resetSharedSessionCache, invalidateSharedSessionCacheForIdentity } fro
 
 const fixture = vi.hoisted(() => ({
     role: 'owner' as 'owner' | 'viewer' | null,
-    query: vi.fn(), sign: vi.fn(), list: vi.fn(), storeAvailable: true,
+    query: vi.fn(), sign: vi.fn(), usage: vi.fn(), list: vi.fn(), storeAvailable: true,
 }));
 vi.mock('../../../auth/registry', () => ({ getAuthProvider: () => ({ getSession: async () => ({
     provider: 'synthetic-storage', user: { id: 'synthetic-subject' }, expiresAt: new Date(Date.now() + 60_000),
@@ -18,9 +18,12 @@ vi.mock('../../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => fi
     listUserWorkspaces: fixture.list,
 }) : undefined }));
 vi.mock('../../../sync/gateway/registry', () => ({ getActiveSyncGatewayAdapter: () => ({ queryCanonicalStorage: fixture.query }) }));
-vi.mock('../../../storage/gateway/registry', () => ({ getActiveStorageGatewayAdapter: () => ({ presignDownload: fixture.sign }) }));
+vi.mock('../../../storage/gateway/registry', () => ({ getActiveStorageGatewayAdapter: () => ({ presignDownload: fixture.sign, presignUpload: fixture.sign }) }));
 
-import handler from '../presign-download.post';
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
+vi.mock('../../../utils/storage/quota', () => ({ getWorkspaceStorageUsageSnapshot: fixture.usage }));
+import downloadHandler from '../presign-download.post';
+import uploadHandler from '../presign-upload.post';
 const hash = `sha256:${'a'.repeat(64)}`;
 const page = { items: [{ kind: 'metadata', hash, storageId: 'synthetic-object', mimeType: 'image/png', fileKind: 'image', updatedAt: 1 }], hasMore: false };
 
@@ -32,6 +35,7 @@ describe('storage signing membership continuation with real session caching', ()
         fixture.storeAvailable = true;
         fixture.list.mockReset().mockImplementation(async () => fixture.role ? [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }] : []);
         fixture.query.mockReset().mockResolvedValue(page);
+        fixture.usage.mockReset().mockResolvedValue({ usedBytes: 0, reservedBytes: 0, filesByHash: new Map() });
         fixture.sign.mockReset().mockResolvedValue({ url: '/synthetic-download', expiresAt: Date.now() + 60_000 });
         testRuntimeConfig.value = { ...testRuntimeConfig.value,
             auth: { ...testRuntimeConfig.value.auth, enabled: true, provider: 'synthetic-storage', registrationMode: 'closed' },
@@ -46,7 +50,7 @@ describe('storage signing membership continuation with real session caching', ()
         const held = new Promise<void>(resolve => { resume = resolve; });
         const started = new Promise<void>(resolve => { entered = resolve; });
         fixture.query.mockImplementationOnce(async () => { entered(); await held; return page; });
-        const request = toWebHandler(createApp().use(handler));
+        const request = toWebHandler(createApp().use(downloadHandler));
         const input = () => new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash }) });
         const response = request(input());
@@ -63,25 +67,31 @@ describe('storage signing membership continuation with real session caching', ()
         expect((await request(input())).status).toBe(200);
         expect(fixture.sign).toHaveBeenCalledOnce();
     });
-    for (const stage of ['canonical metadata', 'signer'] as const) {
-        it.each(['removed', 'viewer', 'owner'] as const)(`uses current membership %s after held ${stage} resumes`, async role => {
-            let resume!: () => void;
-            let entered!: () => void;
-            const held = new Promise<void>(resolve => { resume = resolve; });
-            const started = new Promise<void>(resolve => { entered = resolve; });
-            if (stage === 'canonical metadata') fixture.query.mockImplementationOnce(async () => { entered(); await held; return page; });
-            else fixture.sign.mockImplementationOnce(async () => { entered(); await held; return { url: '/synthetic-download', expiresAt: Date.now() + 60_000 }; });
-            const request = toWebHandler(createApp().use(handler));
-            const response = request(new Request('http://synthetic.test/presign', { method: 'POST',
-                headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash }),
-            }));
-            await Promise.race([started, response.then(() => { throw new Error('Fixture did not reach canonical read'); })]);
-            fixture.role = role === 'removed' ? null : role;
-            invalidateSharedSessionCacheForIdentity({ provider: 'synthetic-storage', providerUserId: 'synthetic-subject', storeId: 'synthetic-store' });
-            resume();
-            const result = await response;
-            expect(result.status).toBe(role === 'removed' ? 403 : 200);
-            expect(fixture.sign).toHaveBeenCalledTimes(role === 'removed' && stage === 'canonical metadata' ? 0 : 1);
-        });
+    for (const operation of ['download', 'upload'] as const) {
+        const stages = operation === 'download' ? ['canonical metadata', 'signer'] as const : ['quota', 'signer'] as const;
+        for (const stage of stages) {
+            it.each(['removed', 'viewer', 'owner'] as const)(`uses current membership %s for ${operation} after held ${stage} resumes`, async role => {
+                testRuntimeConfig.value.storage = { ...testRuntimeConfig.value.storage, workspaceQuotaBytes: 100_000 };
+                let resume!: () => void;
+                let entered!: () => void;
+                const held = new Promise<void>(resolve => { resume = resolve; });
+                const started = new Promise<void>(resolve => { entered = resolve; });
+                if (stage === 'canonical metadata') fixture.query.mockImplementationOnce(async () => { entered(); await held; return page; });
+                else if (stage === 'quota') fixture.usage.mockImplementationOnce(async () => { entered(); await held; return { usedBytes: 0, reservedBytes: 0, filesByHash: new Map() }; });
+                else fixture.sign.mockImplementationOnce(async () => { entered(); await held; return { url: '/synthetic-download', expiresAt: Date.now() + 60_000 }; });
+                const request = toWebHandler(createApp().use(operation === 'upload' ? uploadHandler : downloadHandler));
+                const response = request(new Request('http://synthetic.test/presign', { method: 'POST',
+                    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash, ...(operation === 'upload' ? { mime_type: 'image/png', size_bytes: 3 } : {}) }),
+                }));
+                await Promise.race([started, response.then(() => { throw new Error('Fixture did not reach canonical read'); })]);
+                fixture.role = role === 'removed' ? null : role;
+                invalidateSharedSessionCacheForIdentity({ provider: 'synthetic-storage', providerUserId: 'synthetic-subject', storeId: 'synthetic-store' });
+                resume();
+                const result = await response;
+                const permitted = operation === 'upload' ? role === 'owner' : role !== 'removed';
+                expect(result.status).toBe(permitted ? 200 : 403);
+                expect(fixture.sign).toHaveBeenCalledTimes(!permitted && stage !== 'signer' ? 0 : 1);
+            });
+        }
     }
 });
