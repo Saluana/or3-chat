@@ -35,7 +35,7 @@ export async function validateCanonicalBackupReferences(directory: string, env: 
     if (!Number.isFinite(freeKiB) || freeKiB < 0) throw new Error('Could not verify offline backup scratch capacity.');
     assertEnoughFreeSpace(freeKiB * 1024, inventory.bytes, 'Offline backup inspection scratch');
     await streamFileToCommand('docker', ['exec', '-i', helper, 'tar', '-xz', '-f', '-', '-C', '/scratch', ...inventory.selected], join(backupPath, 'data.tgz'), directory, secretValues(env));
-    const result = JSON.parse(await checked(['exec', helper, 'sh', '-c', NODE, 'or3-backup-inspection', INSPECTOR, 'references', env.OR3_STORAGE_FS_ROOT ?? '/data/storage']));
+    const result = JSON.parse(await checked(['exec', helper, 'sh', '-c', NODE, 'or3-backup-inspection', INSPECTOR, 'references', env.OR3_STORAGE_FS_ROOT ?? '/data/storage'])) as { contract: number; complete: boolean; liveAttachments: number };
     if (result.contract !== 1 || result.complete !== true || !Number.isSafeInteger(result.liveAttachments) || result.liveAttachments < 0) throw new Error('Offline canonical backup reference inspection did not complete.');
   } catch (error) { primary = error; }
   const cleanup = await run('docker', ['rm', '--force', helper], directory);

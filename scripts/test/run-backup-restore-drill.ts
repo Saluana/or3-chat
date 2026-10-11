@@ -212,7 +212,7 @@ async function authenticated(fixture: Instance) {
   assert.equal(session.session.role, 'owner');
   return { api, session };
 }
-async function verify(fixture: Instance, includeSecondary = true, expectedAttachmentBytes = fileBytes) {
+async function verify(fixture: Instance, includeSecondary = true, expectedAttachmentBytes = fileBytes, expectMissingPrimary = false) {
   const { api, session } = await authenticated(fixture);
   assert.equal(session.session.workspace.id, workspaceId);
   const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
@@ -228,9 +228,17 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
     assert.equal(exists, 'false', 'Legitimate empty-storage fixture must have no workspace object directories');
   } else {
     assert.equal(typeof storageId, 'string');
-    const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' })).json();
-    const original = await api(download.url);
-    assert.deepEqual(Buffer.from(await original.arrayBuffer()), expectedAttachmentBytes);
+    const request = () => api('/api/storage/presign-download', { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' });
+    if (expectMissingPrimary) {
+      await assert.rejects(request, /404|File not found/);
+      const absent = JSON.parse(await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
+        `const fs=require('node:fs');const path=${JSON.stringify(`${fixture.env.OR3_STORAGE_FS_ROOT}/workspaces/${workspaceId}/${hash.replace(':', '_')}`)};console.log(JSON.stringify({blob:fs.existsSync(path),sidecar:fs.existsSync(path+'.meta.json')}))`]), fixture.directory));
+      assert.deepEqual(absent, { blob: false, sidecar: false });
+    } else {
+      const download = await (await request()).json();
+      const original = await api(download.url);
+      assert.deepEqual(Buffer.from(await original.arrayBuffer()), expectedAttachmentBytes);
+    }
   }
   if (legacyAttachment) {
     const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash: legacyAttachment.hash,
@@ -1053,18 +1061,6 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       // short-write fixture, not proof of a real host crash producing it.
       await command(composeArgs(target.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
         "const Database=require('/app/.output/server/node_modules/better-sqlite3');const db=new Database('/data/sync.sqlite');const result=db.pragma('wal_checkpoint(TRUNCATE)');if(result[0]?.busy)throw Error('Synthetic checkpoint was busy');db.close()"]), target.directory);
-      const rejected = join(root, 'invalid-database-header-recovery');
-      await cp(targetBackup, rejected, { recursive: true });
-      await writeFile(join(tree, 'sync.sqlite'), Buffer.from('synthetic invalid requested database'));
-      await rm(join(tree, 'sync.sqlite-wal'), { force: true });
-      await rm(join(tree, 'sync.sqlite-shm'), { force: true });
-      const repack = await run('tar', ['czf', join(rejected, 'data.tgz'), '-C', tree, '.']);
-      assert(repack.ok, repack.stderr);
-      const rejectedManifest = JSON.parse(await readFile(join(rejected, 'manifest.json'), 'utf8'));
-      rejectedManifest.dataSha256 = await sha256File(join(rejected, 'data.tgz'));
-      const rejectedText = `${JSON.stringify(rejectedManifest, null, 2)}\n`;
-      await writeFile(join(rejected, 'manifest.json'), rejectedText);
-      await writeBackupAuthentication(target.directory, rejected, rejectedText);
       await stopProject(target.directory, 'local');
       // Mutate only the quiescent, disposable fixture. Main holds all records;
       // the sixteen bytes model an interrupted creation of the next WAL.
@@ -1403,9 +1399,10 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     const beforeBackups = new Set(await readdir(backups));
     await assert.rejects(backup(target), /required by live canonical attachment metadata/);
     assert.deepEqual(new Set(await readdir(backups)), beforeBackups);
+    assert.equal((await readState(target.directory)).incompleteOperation?.operation, 'backup');
+    await recoverCommand(target.directory);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    await assert.rejects(verify(target), /404|File not found/);
-    evidence('ordinary backup refuses existing missing blob-and-sidecar pair, restarts app and removes only unverified artifact');
+    evidence('ordinary backup refuses existing missing pair, removes unverified artifact; journal recovery retains records and untouched files', await verify(target, true, fileBytes, true));
     let interrupted = 0;
     lifecycleFaults.beforeCommand = (_command, args) => {
       if (args.join(' ').includes('quick_check') && interrupted++ === 0) throw new Error('Synthetic repair validation interruption');
@@ -1414,8 +1411,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     finally { delete lifecycleFaults.beforeCommand; }
     assert.equal(interrupted, 2);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    await assert.rejects(verify(target), /404|File not found/);
-    evidence('interrupted repair restores the exact prior incomplete byte state without certifying attachment completeness');
+    evidence('interrupted repair preserves prior missing-pair state, canonical records and untouched legacy/opaque files without certifying completeness', await verify(target, true, fileBytes, true));
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
     evidence('known-good managed restore repairs an already-incomplete live installation', await verify(target));
     await stopProject(target.directory, 'local');
