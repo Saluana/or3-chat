@@ -38,6 +38,8 @@ import type {
 
 export type CanonicalStorageQueryKind =
     | 'live_metadata'
+    /** Read-only accounting; requires capabilities.retainedStorageMetadata v1. */
+    | 'retained_metadata'
     | 'reference_edges'
     | 'active_reservations';
 
@@ -73,6 +75,16 @@ export interface CanonicalStorageReferenceEdge {
     sourceId: string;
 }
 
+/** Deleted materialized metadata is retained independently of sync-log GC.
+ * A delete-before-put placeholder has no known size; never report it as zero.
+ * Presence is not proof of on-disk bytes or permission to physically delete.
+ */
+export interface CanonicalStorageRetainedMetadataRecord
+    extends Omit<CanonicalStorageMetadataRecord, 'kind' | 'sizeBytes'> {
+    kind: 'retained_metadata';
+    sizeBytes?: number;
+}
+
 export interface CanonicalStorageReservationRecord {
     kind: 'reservation';
     reservationId: string;
@@ -83,6 +95,7 @@ export interface CanonicalStorageReservationRecord {
 
 export type CanonicalStorageRecord =
     | CanonicalStorageMetadataRecord
+    | CanonicalStorageRetainedMetadataRecord
     | CanonicalStorageReferenceEdge
     | CanonicalStorageReservationRecord;
 
@@ -165,6 +178,8 @@ export interface SyncGatewayAdapter {
         workspaceItems?: 'v1';
         /** `readChatHistory` resolves explicit and legacy project ownership (`project_ownership`). */
         projectOwnership?: 'v1';
+        /** Bounded deleted-metadata queries for read-only accounting, not deletion coordination. */
+        retainedStorageMetadata?: 'v1';
     };
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 

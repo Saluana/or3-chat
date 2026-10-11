@@ -49,6 +49,7 @@
                     <AdminSystemProviderActions
                         :actions="providerActions"
                         :is-owner="isOwner"
+                        :result="providerActionResult"
                         @run="runProviderAction"
                     />
                 </section>
@@ -119,6 +120,7 @@ const pending = computed(() => statusFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
+const providerActionResult = ref<{ label: string; value: unknown } | null>(null);
 
 const providerActions = computed(() => {
     if (!status.value) return [];
@@ -198,15 +200,19 @@ async function runProviderAction(action: {
     }
 
     try {
-        await $fetch('/api/admin/system/provider-action', {
+        providerActionResult.value = null;
+        const response = await $fetch<{ ok: boolean; result: unknown }>('/api/admin/system/provider-action', {
             method: 'POST',
             headers: ADMIN_HEADERS,
             body: { kind: action.kind, actionId: action.id },
         });
+        providerActionResult.value = { label: action.label, value: response.result };
+        const disabled = response.result !== null && typeof response.result === 'object'
+            && 'status' in response.result && response.result.status === 'disabled';
         toast.add({
-            title: 'Action completed',
-            description: `${action.label} executed successfully.`,
-            color: 'success',
+            title: disabled ? 'Action disabled' : 'Action completed',
+            description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
+            color: disabled ? 'warning' : 'success',
         });
     } catch (error: unknown) {
         toast.add({
