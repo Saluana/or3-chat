@@ -1,5 +1,12 @@
 // Run from the repository root with Bun; all fixtures are synthetic/local/mocked.
 const tests = [
+    'server/api/storage/__tests__/presign-upload-membership-continuation.test.ts',
+    'server/api/storage/__tests__/presign-membership-continuation.test.ts',
+    'app/composables/core/__tests__/useThumbnailUrlCache.test.ts',
+    'app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts',
+    'app/components/chat/__tests__/workspace-thumbnails.test.ts',
+    'app/components/search/__tests__/CommandPalette.test.ts',
+    'app/components/search/__tests__/CommandPaletteActionTray.test.ts',
     'server/api/jobs/__tests__/authorization.test.ts',
     'server/api/sync/__tests__/workspace-isolation.integration.test.ts',
     'app/core/search/command-palette/__tests__/workspace-isolation.integration.test.ts',

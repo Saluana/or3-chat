@@ -1,0 +1,32 @@
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 43 icons with 10.40KB(uncompressed) in size
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+app/composables/core/__tests__/useThumbnailUrlCache.test.ts(75,45): error TS2322: Type 'Promise<void>' is not assignable to type 'Promise<undefined>'.
+  Type 'void' is not assignable to type 'undefined'.
+app/composables/core/__tests__/useThumbnailUrlCache.test.ts(91,45): error TS2322: Type 'Promise<void>' is not assignable to type 'Promise<undefined>'.
+  Type 'void' is not assignable to type 'undefined'.
+/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node /workspace/or3-chat/node_modules/nuxt/bin/nuxt.mjs typecheck exited with code 2.
+error: script "type-check" exited with code 1

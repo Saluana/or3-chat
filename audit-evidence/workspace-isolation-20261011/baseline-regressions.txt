@@ -1,33 +1,33 @@
 Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
 Command: Bun Vitest canonical regression suites in a disposable worktree
 
- RUN  v4.1.11 /tmp/or3-isolation-base-JhkuvX
+ RUN  v4.1.11 /tmp/or3-isolation-base-wdLWCc
 
--------------------------------------------------xxxxxx-----------·x·xxxx·xx·----xxx-xx--------------x-------------------------x·xxx·xstdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
-{"level":"info","event":"background.tools.started","timestamp":"2026-10-11T09:09:25.373Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","userId":"owner","workspaceId":"workspace","threadId":"thread","messageId":"assistant","model":"test-model","requestedTools":["server_echo"]}
-{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T09:09:25.374Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":1}
-
-stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
-{"level":"info","event":"background.tools.call.received","timestamp":"2026-10-11T09:09:25.376Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":1,"toolCallId":"call-1","toolName":"server_echo","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"}}
+-------------------------------------------------·xxxxxx-----------x·xxxx·xx·---xxxxxxxxxxxxx-xxx-xx-------------x----xx--x-------------------------x·xxx·xstdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.started","timestamp":"2026-10-11T10:13:35.567Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","userId":"owner","workspaceId":"workspace","threadId":"thread","messageId":"assistant","model":"test-model","requestedTools":["server_echo"]}
+{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T10:13:35.570Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","iteration":1}
 
 stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
-{"level":"info","event":"background.tools.call.completed","timestamp":"2026-10-11T09:09:25.379Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","toolCallId":"call-1","toolName":"server_echo","status":"complete","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"},"resultMetadata":{"utf8Bytes":15,"fingerprint":"fnv1a32:dfcdb3f9"}}
+{"level":"info","event":"background.tools.call.received","timestamp":"2026-10-11T10:13:35.574Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","iteration":1,"toolCallId":"call-1","toolName":"server_echo","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"}}
 
 stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
-{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T09:09:25.380Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","iteration":2}
+{"level":"info","event":"background.tools.call.completed","timestamp":"2026-10-11T10:13:35.578Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","toolCallId":"call-1","toolName":"server_echo","status":"complete","argumentMetadata":{"utf8Bytes":14,"fingerprint":"fnv1a32:3b504582"},"resultMetadata":{"utf8Bytes":15,"fingerprint":"fnv1a32:dfcdb3f9"}}
 
 stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
-{"level":"info","event":"background.tools.completed","timestamp":"2026-10-11T09:09:25.381Z","jobId":"de030ec1-1a5f-4d10-ac84-6be92030e2ff","chunksReceived":1,"contentLength":6,"toolCalls":[{"id":"call-1","name":"server_echo","status":"complete"}]}
+{"level":"info","event":"background.tools.iteration.started","timestamp":"2026-10-11T10:13:35.579Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","iteration":2}
 
-·------------
+stdout | server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
+{"level":"info","event":"background.tools.completed","timestamp":"2026-10-11T10:13:35.583Z","jobId":"563aabbc-d9cd-45c0-b237-229b7669605e","chunksReceived":1,"contentLength":6,"toolCalls":[{"id":"call-1","name":"server_echo","status":"complete"}]}
 
- Test Files  6 failed (6)
-      Tests  24 failed | 7 passed | 116 skipped (147)
-   Start at  09:09:17
-   Duration  7.55s (transform 3.18s, setup 827ms, import 3.42s, tests 5.33s, environment 2.51s)
+·----------------···xx·--x-------x··x··xx·xx·
+
+ Test Files  12 failed (12)
+      Tests  49 failed | 17 passed | 134 skipped (200)
+   Start at  10:13:10
+   Duration  30.23s (transform 7.91s, setup 2.36s, import 12.99s, tests 35.77s, environment 5.73s)
 
 
-⎯⎯⎯⎯⎯⎯ Failed Tests 24 ⎯⎯⎯⎯⎯⎯⎯
+⎯⎯⎯⎯⎯⎯ Failed Tests 49 ⎯⎯⎯⎯⎯⎯⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences delayed palette image selection when the workspace is returned during metadata lookup
 AssertionError: expected true to be false // Object.is equality
@@ -46,7 +46,7 @@ AssertionError: expected true to be false // Object.is equality
     383|         } finally {
     384|             read.mockRestore();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery download delivery after a workspace change during its blob read
 AssertionError: expected "click" to be called +0 times, but got 1 times
@@ -58,7 +58,7 @@ AssertionError: expected "click" to be called +0 times, but got 1 times
     426|             }
     427|         } finally {
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery copy delivery after a workspace change during its blob read
 AssertionError: expected "copyImageBlobToClipboard" to be called +0 times, but got 1 times
@@ -70,7 +70,7 @@ AssertionError: expected "copyImageBlobToClipboard" to be called +0 times, but g
     426|             }
     427|         } finally {
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery upload batch ownership when the workspace is changed between file completions
 AssertionError: expected 1 to be +0 // Object.is equality
@@ -89,7 +89,7 @@ AssertionError: expected 1 to be +0 // Object.is equality
     469|             expect(await db.file_meta.count()).toBe(change === 'unchan…
     470|         } finally {
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery upload batch ownership when the workspace is returned between file completions
 AssertionError: expected 2 to be 1 // Object.is equality
@@ -108,7 +108,7 @@ AssertionError: expected 2 to be 1 // Object.is equality
     470|         } finally {
     471|             create.mockRestore();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery picker ownership when the workspace is changed before file selection
 AssertionError: expected 1 to be +0 // Object.is equality
@@ -127,7 +127,7 @@ AssertionError: expected 1 to be +0 // Object.is equality
     496|             expect(await db.file_meta.count()).toBe(change === 'unchan…
     497|         } finally {
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/49]⎯
 
  FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps gallery picker ownership when the workspace is returned before file selection
 AssertionError: expected 1 to be +0 // Object.is equality
@@ -146,7 +146,49 @@ AssertionError: expected 1 to be +0 // Object.is equality
     497|         } finally {
     498|             click.mockRestore();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/49]⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed after held canonical metadata resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed after held signer resumes
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ server/api/storage/__tests__/presign-membership-continuation.test.ts:83:35
+     81|             resume();
+     82|             const result = await response;
+     83|             expect(result.status).toBe(role === 'removed' ? 403 : 200);
+       |                                   ^
+     84|             expect(fixture.sign).toHaveBeenCalledTimes(role === 'remov…
+     85|         });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/49]⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held quota resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held quota resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held signer resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held signer resumes
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ server/api/storage/__tests__/presign-upload-membership-continuation.test.ts:60:35
+     58|             resume();
+     59|             const result = await response;
+     60|             expect(result.status).toBe(role === 'owner' ? 200 : 403);
+       |                                   ^
+     61|             expect(fixture.sign).toHaveBeenCalledTimes(role !== 'owner…
+     62|         });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/49]⎯
 
  FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks a recovered plain-text job after membership becomes viewer
 AssertionError: promise resolved "undefined" instead of rejecting
@@ -167,7 +209,7 @@ undefined
     994|         expect(fetch).not.toHaveBeenCalled();
     995|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/49]⎯
 
  FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > rechecks write membership after an awaited canonical ownership read
 AssertionError: promise resolved "undefined" instead of rejecting
@@ -188,7 +230,7 @@ undefined
     1014|         expect(fetch).not.toHaveBeenCalled();
     1015|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/49]⎯
 
  FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > uses current membership viewer when a held canonical ownership read resumes
  FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > uses current membership null when a held canonical ownership read resumes
@@ -210,7 +252,7 @@ undefined
     1041|         await vi.waitFor(() => expect(read).toHaveBeenCalled());
     1042|         role = nextRole;
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/49]⎯
 
  FAIL  |core-node| server/utils/background-jobs/__tests__/stream-handler.tools.test.ts > background usage through terminal history > blocks another model request after membership becomes viewer during a tool
 AssertionError: promise resolved "undefined" instead of rejecting
@@ -231,7 +273,164 @@ undefined
     1058|         expect(fetch).toHaveBeenCalledOnce();
     1059|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/49]⎯
+
+ FAIL  |core-node| server/utils/workflows/__tests__/plugin-server-bridge.test.ts > workflow server provider boundary > uses current membership viewer after a held workflow thread read resumes
+ FAIL  |core-node| server/utils/workflows/__tests__/plugin-server-bridge.test.ts > workflow server provider boundary > uses current membership null after a held workflow thread read resumes
+AssertionError: promise resolved "{}" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
+- }
++ {}
+
+ ❯ server/utils/workflows/__tests__/plugin-server-bridge.test.ts:69:77
+     67|             }) as unknown as SyncGatewayAdapter });
+     68|             const sending = config.client.chat.send({ chatRequest: { m…
+     69|             const outcome = nextRole === 'owner' ? sending : expect(se…
+       |                                                                             ^
+     70|             await vi.waitFor(() => expect(read.mock.calls.some(([, que…
+     71|             fixture.role = nextRole;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:54:46
+     52|         setActiveWorkspaceDb('consumer-thumbnails-b');
+     53|         await flushPromises();
+     54|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+     55|     });
+     56|     it.each(['gallery', 'hook'] as const)('clears settled former-works…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery
+AssertionError: expected 'PDForigin-synthetic-private.pdf Hide …' not to contain 'origin-synthetic-private.pdf'
+
+Expected: "origin-synthetic-private.pdf"
+Received: "PDForigin-synthetic-private.pdf Hide attachments"
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:68:49
+     66|         await flushPromises();
+     67|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+     68|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+       |                                                 ^
+     69|     });
+     70|     it.each(['gallery', 'hook'] as const)('discards a held PDF metadat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook
+AssertionError: expected { …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "kind": "pdf",
+  "name": "origin-synthetic-private.pdf",
+}
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:67:48
+     65|         setActiveWorkspaceDb('consumer-thumbnails-b');
+     66|         await flushPromises();
+     67|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+       |                                                ^
+     68|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+     69|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces
+AssertionError: expected 'PDForigin-synthetic-private.pdf Hide …' not to contain 'origin-synthetic-private.pdf'
+
+Expected: "origin-synthetic-private.pdf"
+Received: "PDForigin-synthetic-private.pdf Hide attachments"
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:81:49
+     79|         await flushPromises();
+     80|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+     81|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+       |                                                 ^
+     82|     });
+     83|     it.each(['gallery', 'hook', 'palette'] as const)('loads current-wo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces
+AssertionError: expected { …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "kind": "pdf",
+  "name": "origin-synthetic-private.pdf",
+}
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:80:48
+     78|         finish({ ...originMeta, kind: 'pdf', mime_type: 'application/p…
+     79|         await flushPromises();
+     80|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+       |                                                ^
+     81|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+     82|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the gallery
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the hook
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > loads current-workspace data for unchanged hash identifiers in the palette
+AssertionError: expected 'blob:consumer-origin' to be 'blob:consumer-current' // Object.is equality
+
+Expected: "blob:consumer-current"
+Received: "blob:consumer-origin"
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:98:55
+     96|         files.meta.mockResolvedValue({ ...originMeta, name: 'current-v…
+     97|         setActiveWorkspaceDb('consumer-thumbnails-b');
+     98|         await vi.waitFor(() => expect(displayedUrl()).toBe('blob:consu…
+       |                                                       ^
+     99|         expect(files.blob).toHaveBeenCalledTimes(2);
+    100|         const thumbnail = state?.thumbnails[hash];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/49]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch
+AssertionError: expected "click" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st click call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:117:27
+    115|         finish(new Blob(['origin synthetic attachment'], { type: 'text…
+    116|         await flushPromises();
+    117|         expect(click).not.toHaveBeenCalled();
+       |                           ^
+    118|     });
+    119| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes before
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -248,7 +447,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "c31894b0-0976-4954-8b54-a4b5b7ebabe8",
+            "id": "cb665163-28b9-4739-964a-affe72cc5973",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -274,7 +473,7 @@ Number of calls: 1
     1068|         mod.backgroundJobTrackers.clear();
     1069|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes before
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -290,7 +489,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "25991455-a00d-47d8-b9a0-6c8250b26e7b",
+            "id": "26236d23-078b-4485-bef9-8358498c4ddd",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -316,7 +515,7 @@ Number of calls: 1
     1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
     1068|         mod.backgroundJobTrackers.clear();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during mute read
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -333,7 +532,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "5b014d6e-5ac6-44a6-8384-4f2789b1bd87",
+            "id": "ed729dd2-5827-4c06-8d83-bc3a3b1b18e2",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -359,7 +558,7 @@ Number of calls: 1
     1068|         mod.backgroundJobTrackers.clear();
     1069|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during mute read
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -375,7 +574,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "49258339-c93a-4c32-bac0-14dd0d02e918",
+            "id": "098dfb0f-c965-4513-b177-3f5db7b7e044",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -401,7 +600,7 @@ Number of calls: 1
     1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
     1068|         mod.backgroundJobTrackers.clear();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through fallback after account access changes during logout
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -418,7 +617,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "f1028ef3-692b-42e4-ae8c-e72d2f7a5910",
+            "id": "bd3aed21-333f-4b03-95ca-28c234cd4af2",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -444,7 +643,7 @@ Number of calls: 1
     1068|         mod.backgroundJobTrackers.clear();
     1069|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/49]⎯
 
  FAIL  |core-app| app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts > backgroundJobs reattach + notifications > does not deliver a former account completion through hook after account access changes during logout
 AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
@@ -460,7 +659,7 @@ Received:
             "data": Object {
               "messageId": "msg-1",
             },
-            "id": "5ab30865-26c7-4862-90e4-e1655db5d4b0",
+            "id": "232dd475-605a-408c-a06b-b0b045abc801",
             "kind": "navigate",
             "label": "Open chat",
             "target": Object {
@@ -486,7 +685,20 @@ Number of calls: 1
     1067|         expect(notificationCreateMock).not.toHaveBeenCalled();
     1068|         mod.backgroundJobTrackers.clear();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/49]⎯
+
+ FAIL  |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > discards held prefetch metadata when the workspace is changed while thread/hash identifiers remain unchanged
+ FAIL  |core-app| app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts > message media prefetch controller > discards held prefetch metadata when the workspace is returned while thread/hash identifiers remain unchanged
+AssertionError: expected "vi.fn()" to be called once, but got 2 times
+ ❯ app/composables/chat/__tests__/useMessageMediaPrefetch.test.ts:178:30
+    176|         finish({ kind: 'image', width: 100, height: 100 });
+    177|         await controller.whenIdle();
+    178|         expect(cache.ensure).toHaveBeenCalledOnce();
+       |                              ^
+    179|         expect(cache.setIntrinsicSize).toHaveBeenCalledExactlyOnceWith…
+    180|         expect(loadBlob).toHaveBeenCalledOnce();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/49]⎯
 
  FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > invalidates cached URLs before another workspace can reuse an identifier
 AssertionError: expected 'blob:workspace-a' to be undefined
@@ -505,7 +717,7 @@ undefined
      30|         expect(revokeObjectUrl).toHaveBeenCalledWith('blob:workspace-a…
      31|         const lookupB = vi.fn(async () => ({ url: 'blob:workspace-b' }…
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/49]⎯
 
  FAIL  |core-app| app/composables/core/__tests__/usePreviewCache.test.ts > shared preview workspace isolation > cancels a held old-workspace read without replacing a new preview
 AssertionError: expected 'blob:workspace-a' to be 'blob:workspace-b' // Object.is equality
@@ -521,7 +733,100 @@ Received: "blob:workspace-a"
      44|         expect(await readingA).toBeUndefined();
      45|         expect(cache.peek('shared-hash')).toBe('blob:workspace-b');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/49]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash
+AssertionError: expected { status: 'ready', …(3) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "height": 800,
+  "status": "ready",
+  "url": "blob:decoded-image",
+  "width": 1200,
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:50:37
+     48|         await cache.ensure('shared', async () => raster());
+     49|         setActiveWorkspaceDb('thumbnail-isolation-b');
+     50|         expect(cache.get('shared')).toBeUndefined();
+       |                                     ^
+     51|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+     52|         const lookup = vi.fn(async () => raster());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/49]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail load without waiting on it in the next workspace
+AssertionError: expected "vi.fn()" to be called once, but got 0 times
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:65:24
+     63|         const lookup = vi.fn(async () => raster());
+     64|         const next = cache.ensure('shared', lookup);
+     65|         expect(lookup).toHaveBeenCalledOnce();
+       |                        ^
+     66|         finish(raster());
+     67|         expect(await previous).toBeUndefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/49]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will resolve after switching away and back
+AssertionError: expected { status: 'ready', …(1) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "status": "ready",
+  "url": "blob:decoded-image",
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:81:32
+     79|         setActiveWorkspaceDb('thumbnail-isolation-a');
+     80|         if (outcome === 'resolve') finish(); else fail(new Error('old …
+     81|         expect(await previous).toBeUndefined();
+       |                                ^
+     82|         expect(cache.get('shared')).toBeUndefined();
+     83|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/49]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will reject after switching away and back
+AssertionError: expected { status: 'error' } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "status": "error",
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:81:32
+     79|         setActiveWorkspaceDb('thumbnail-isolation-a');
+     80|         if (outcome === 'resolve') finish(); else fail(new Error('old …
+     81|         expect(await previous).toBeUndefined();
+       |                                ^
+     82|         expect(cache.get('shared')).toBeUndefined();
+     83|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/49]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will resolve
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > cannot replace or expire the next workspace thumbnail when an old decode will reject
+Error: Test timed out in 10000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:86:44
+     84|     });
+     85|
+     86|     it.each(['resolve', 'reject'] as const)('cannot replace or expire …
+       |                                            ^
+     87|         const cache = useThumbnailUrlCache({ graceMs: 1 });
+     88|         createObjectURL.mockReturnValueOnce('blob:old-decode').mockRet…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/49]⎯
 
  FAIL  |core-app| app/pages/images/__tests__/copy-image-to-clipboard.test.ts > copyImageBlobToClipboard > rechecks ownership after awaited PNG conversion before clipboard delivery
 AssertionError: promise resolved "undefined" instead of rejecting
@@ -542,7 +847,7 @@ undefined
      56|         expect(createPngBlob).toHaveBeenCalledOnce();
      57|         expect(write).not.toHaveBeenCalled();
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/49]⎯
 
  FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > does not display a held preview after switching workspaces
 AssertionError: expected true to be false // Object.is equality
@@ -561,7 +866,7 @@ AssertionError: expected true to be false // Object.is equality
     122|         wrapper.unmount();
     123|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/49]⎯
 
  FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > clears a displayed preview synchronously when the workspace changes
 AssertionError: expected true to be false // Object.is equality
@@ -580,7 +885,7 @@ AssertionError: expected true to be false // Object.is equality
     134|         wrapper.unmount();
     135|     });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/49]⎯
 
  FAIL  |core-app| app/pages/images/__tests__/image-viewer.cache.test.ts > ImageViewer preview cache reuse > discards an old cached-load continuation even after switching away and back
 AssertionError: expected true to be false // Object.is equality
@@ -599,7 +904,7 @@ AssertionError: expected true to be false // Object.is equality
     150|     });
     151|
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/24]⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/49]⎯
 
 
 Exit status: 1

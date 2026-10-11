@@ -7,7 +7,7 @@ let source = await readFile(join(root, 'scripts/test/run-workspace-cloud-e2e.ts'
 const replacements = [
     ["mkdtemp('/private/tmp/or3-workspace-cloud-e2e-')", "mkdtemp('/tmp/or3-workspace-cloud-e2e-')"],
     ["'--trace=on'];", "'--trace=on', '--config', join(sourceRoot, 'audit-evidence/workspace-isolation-20261011/playwright.config.ts')];"],
-    ["const output = join(sourceRoot, `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}-${development ? 'development' : 'installed'}`);", "const output = join(sourceRoot, 'audit-evidence/workspace-isolation-20261011/authenticated-provider-browser');"],
+    ["const output = join(sourceRoot, `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}-${development ? 'development' : 'installed'}`);", "const output = join(sourceRoot, 'audit-evidence/workspace-isolation-20261011/authenticated-provider-final-browser');"],
 ];
 for (const [before, after] of replacements) {
     if (!source.includes(before)) throw new Error('Qualification harness changed; inspect before adapting.');

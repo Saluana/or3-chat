@@ -140,3 +140,71 @@ for (const action of ['download', 'copy'] as const) {
         }
     });
 }
+
+for (const heldDecode of [false, true]) {
+    test(`native thumbnail ${heldDecode ? 'held decode' : 'cached blob'} cannot cross workspaces or overwrite recovery`, async ({ page }, info) => {
+        await open(page);
+        const receipt = await page.evaluate(async held => {
+            const clientPath = '/_nuxt/db/client.ts';
+            const filesPath = '/_nuxt/db/files.ts';
+            const cachePath = '/_nuxt/composables/core/useThumbnailUrlCache.ts';
+            const client = await import(clientPath);
+            const files = await import(filesPath);
+            const { useThumbnailUrlCache } = await import(cachePath);
+            const canvas = document.createElement('canvas');
+            canvas.width = 2; canvas.height = 2;
+            canvas.getContext('2d')!.fillRect(0, 0, 2, 2);
+            const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), 'image/png'));
+            await client.setActiveWorkspaceDb('native-thumbnail-a').open();
+            const meta = await files.createOrRefFile(blob, 'synthetic-a.png');
+            const cache = useThumbnailUrlCache();
+            const nativeDecode = Image.prototype.decode;
+            let release!: () => void;
+            let started!: () => void;
+            const pending = new Promise<void>(resolve => { release = resolve; });
+            const entered = new Promise<void>(resolve => { started = resolve; });
+            let oldUrl = '';
+            if (held) {
+                let intercepted = false;
+                Image.prototype.decode = function() {
+                    if (!intercepted) {
+                        intercepted = true; oldUrl = this.src; started(); return pending;
+                    }
+                    return nativeDecode.call(this);
+                };
+            }
+            try {
+                const oldEnsure = cache.ensure(meta.hash, () => files.getFileBlob(meta.hash));
+                if (held) await Promise.race([entered, oldEnsure.then(() => { throw new Error('Native decode was not reached'); })]);
+                else {
+                    const oldState = await oldEnsure;
+                    if (oldState?.status !== 'ready') throw new Error('Native PNG decode failed');
+                    oldUrl = oldState.url!;
+                }
+                await client.setActiveWorkspaceDb('native-thumbnail-b').open();
+                const immediateCached = cache.get(meta.hash);
+                const missingMeta = await files.getFileMeta(meta.hash);
+                const absent = await cache.ensure(meta.hash, () => files.getFileBlob(meta.hash));
+                const ownMeta = await files.createOrRefFile(blob, 'synthetic-b.png');
+                const fresh = await cache.ensure(ownMeta.hash, () => files.getFileBlob(ownMeta.hash));
+                release();
+                const oldResult = await oldEnsure;
+                const preserved = cache.get(ownMeta.hash);
+                let oldReadable = true;
+                try { await fetch(oldUrl); } catch { oldReadable = false; }
+                const actualBytes = fresh?.url ? await (await fetch(fresh.url)).arrayBuffer() : new ArrayBuffer(0);
+                const digest = await crypto.subtle.digest('SHA-256', actualBytes);
+                const deliveredHash = 'sha256:' + Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
+                return { immediateCached: !!immediateCached, missingMeta: !!missingMeta, absent: !!absent,
+                    oldDiscarded: held ? oldResult === undefined : true, oldReadable,
+                    freshStatus: fresh?.status, freshDifferentUrl: fresh?.url !== oldUrl,
+                    preserved: preserved === fresh, sameHash: ownMeta.hash === meta.hash,
+                    deliveredHashMatches: deliveredHash === ownMeta.hash };
+            } finally { release(); Image.prototype.decode = nativeDecode; }
+        }, heldDecode);
+        await info.attach('synthetic-native-thumbnail-receipt', { body: JSON.stringify(receipt), contentType: 'application/json' });
+        expect(receipt).toEqual({ immediateCached: false, missingMeta: false, absent: false,
+            oldDiscarded: true, oldReadable: false, freshStatus: 'ready', freshDifferentUrl: true,
+            preserved: true, sameHash: true, deliveredHashMatches: true });
+    });
+}

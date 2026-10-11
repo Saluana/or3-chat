@@ -269,7 +269,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 2,
-                    "summary": "Bounded indexed pages, summary queries, image eligibility, and workspace-scoped gallery uploads, artifact delivery, and viewer preview lifecycle."
+                    "summary": "Bounded indexed pages, summary queries, image eligibility, and workspace-scoped gallery uploads, artifact delivery, viewer previews, attachment thumbnail caches, and media prefetch lifetime."
                 },
                 {
                     "name": "attachments.md",
@@ -764,7 +764,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Authenticated storage, quota validation, bounded active/deleted/incomplete/disk observations, and remaining generation-coordinated cleanup requirements."
+                    "summary": "Authenticated storage, fresh read/write membership checks around download and upload signing, quota validation, bounded active/deleted/incomplete/disk observations, and remaining generation-coordinated cleanup requirements."
                 },
                 {
                     "name": "plugin-access-gating.md",

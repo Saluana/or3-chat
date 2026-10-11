@@ -1,12 +1,12 @@
 # Workspace isolation audit — synthetic local fixtures only
 
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (latest fetched `origin/or3-cloud`, 2026-10-11).
-Branch: `audit/workspace-isolation-20261011`. Current source/test head: `e13346dffc066208c25035ca6c97bbe8eb3f1745`.
+Branch: `audit/workspace-isolation-20261011`. Current source/test head: `f9ea3ce69b598bfca7e3a1978024a0b9f9d49655`.
 Nothing pushed, merged, deployed or released. PRs #234–#238 are already merged in this base. No dormant generation cleanup activation, approval bridge edits, document/editor persistence edits, PageShell.vue changes or ChatInputDropper.vue changes.
 
 ## Architecture and core-entry rationale
 
-Existing host caches, UI asynchronous continuations and server dispatch own these boundaries. Configuration/themes cannot fence asynchronous ownership; plugins cannot invalidate host-owned URLs reliably; storage providers cannot invalidate browser caches. These changes stay at those existing boundaries. Optional clipboard ownership assertions preserve other callers; canonical read-only tools retain `workspace.read` defaults. GalleryGrid and ImageViewer share the preview singleton.
+Existing host caches, UI asynchronous continuations and server dispatch own these boundaries. Configuration/themes cannot fence asynchronous ownership; plugins cannot invalidate host-owned URLs reliably; storage providers cannot invalidate browser caches. These changes stay at those existing boundaries. Optional clipboard ownership assertions preserve other callers; canonical read-only tools retain `workspace.read` defaults. GalleryGrid and ImageViewer share the preview singleton. Chat attachments, palette thumbnails and media prefetch share the separate raster-thumbnail singleton; its URL/decode lifetime and its consumers now follow workspace changes.
 
 ## Verified findings and source fixes
 
@@ -22,36 +22,44 @@ Every finding first failed a canonical regression assertion before its source fi
 | Download/clipboard deliver old-workspace bytes after awaited reads | Fences delivery after blob reads and PNG conversion; stale completion feedback is discarded. Same-workspace actions continue. | `918d4154342d3af36b55c496f07617ca26a9b6a3` |
 | Palette lookup reopens a viewer after A→B→A | Captures workspace generation, rather than checking only DB identity after metadata lookup. | `918d4154342d3af36b55c496f07617ca26a9b6a3` |
 
-`1df6fd07ac4fc9e23bb696c9745c9a5151591066` adds suspended canonical-read cases with membership removal, demotion and retained owner access. It changes tests only.
+| Shared attachment thumbnail cache and consumers retain former-workspace data | Invalidates cached/pending URLs, dimensions, refcounts and delayed load/decode publication. Clears rendered URLs/PDF names; fences attachment download; resets prefetch even when thread/hash identifiers remain unchanged. Fresh same-hash reads in the next workspace remain supported. | `447127182e20402f3179ad69e6b450fb78726ab6` |
+
+| Download signing survives membership removal during metadata/signing | Fresh membership is checked before signing and before URL delivery. Removal is denied; viewer reads remain supported; provider failures fail closed with 503. | `2ff00729047b5bc69a874a37250e46b6074ed1fb` |
+| Upload signing survives writer removal/demotion during quota/signing | Uses the same fresh guard with write permission before and after signing, preserving quota, intent and reservation contracts. | `f9ea3ce69b598bfca7e3a1978024a0b9f9d49655` |
+
+`1df6fd07ac4fc9e23bb696c9745c9a5151591066` adds suspended canonical-read cases with membership removal, demotion and retained owner access. It changes tests only. `1775648b8cf77d7b08f7a2add62119e4238a0846` adds six held workflow canonical-read cases covering viewer demotion, removal and continuing owner access; it also changes tests only.
 
 ## Integration / changed-file ownership
 
-Image ownership: `app/composables/core/usePreviewCache.ts`, `app/pages/images/{index,GalleryGrid,ImageViewer}.vue`, `copy-image-to-clipboard.ts`, their existing canonical tests, and `public/_documentation/database/files-select.md`.
+Image ownership: `app/composables/core/usePreviewCache.ts`, `app/pages/images/{index,GalleryGrid,ImageViewer}.vue`, `copy-image-to-clipboard.ts`, their existing canonical tests, `useThumbnailUrlCache.ts`, `useMessageThumbnails.ts`, `useMessageMediaPrefetch.ts`, `MessageAttachmentsGallery.vue`, `PaletteImageThumb.vue`, mounted consumer regressions, and `public/_documentation/database/files-select.md`.
 
 Shared authorization commit `c462d1fb` changes `server/utils/chat/{canonical-history-context,project-policy}.ts`, `server/utils/background-jobs/{stream-handler,plugin-server-services}.ts` and existing tests. **Exact behavior:** background model/workflow dispatch explicitly requests originating-workspace `workspace.write`; project-policy authorization is repeated after canonical ownership reads. Default read-only tool authorization remains read permission. No approval bridge internals or broad tool-loop redesign.
 
 Shared notification commits `8e712ce6` and `e13346df` change only `app/utils/chat/useAi-internal/backgroundJobNotifications.ts`, the existing reattachment/notification suite, and notification documentation. **Exact behavior:** outgoing completion detail/actions cannot be handed to a different current account, or to an identity cleared by logout during the mute lookup. Delivery starting with no available session keeps the existing tracker-scoped fallback contract.
 
-Parent was informed of both shared areas and accepted their narrowly reproduced isolation checks. Public background/notification docs and docmap summaries describe the changed boundaries. Integration/auth harness source, DB files, transfer queue, document/editor saves and other workers' files were left untouched. A temporary Linux qualification wrapper adapts only temp paths, system Chromium and evidence destination; it removes itself and its disposable profile.
+Parent was informed of both shared areas and accepted their narrowly reproduced isolation checks. Storage signing commits `2ff00729` and `f9ea3ce6` change only host presign-download/upload entry points, a new storage-specific fresh-membership helper, canonical tests and storage documentation. They preserve provider implementations, data contracts, quota accounting and cleanup. Successful signing adds two membership reads. A denied post-sign result may leave an already allocated intent/reservation to expire under its existing provider contract; the host never delivers that URL.
+
+Public background/notification docs and docmap summaries describe the changed boundaries. Integration/auth harness source, DB files, transfer queue, document/editor saves and other workers' files were left untouched. A temporary Linux qualification wrapper adapts only temp paths, system Chromium and evidence destination; it removes itself and its disposable profile.
 
 ## Permissions and provider boundaries
 
 No production access, real credentials, external scans, customer messaging, paid requests or publication. Network was used for repository fetch and Bun installation. Model calls in job tests are mocked fetch responses. Actual gallery browser tests deny non-loopback requests. Authenticated browser tests use loopback BasicAuth with disposable SQLite and filesystem stores, blank model keys and background streaming disabled; provider profiles are removed after testing.
 
-Installed qualification: SQLite `0.0.15`, filesystem `0.0.11`; `authenticated-provider-browser/profile.json` records exact installed paths, successful exit and temporary-data removal. This browser receipt ran at `807df495` before the later gallery-only and logout refinements.
+Installed qualification: SQLite `0.0.15`, filesystem `0.0.11`; `authenticated-provider-browser/profile.json` records exact installed paths, successful exit and temporary-data removal. The earlier browser receipt ran at `807df495`. The new `authenticated-provider-final-browser/profile.json` receipt qualifies the final source `f9ea3ce6` with the fresh read/write membership gates, exit 0 and temporary data removed.
 
 ## Validation and reproduction
 
 Use Bun 1.3.14; in this container `PATH=/workspace/.bun/bin:$PATH`.
 
-- `bun audit-evidence/workspace-isolation-20261011/verify.ts`: **32 files / 514 tests passed** at `e13346df`; exact commit/command/status are in `final-verification.txt`. Includes job endpoint direct identifiers/SSE revocation, sync boundaries, filesystem signed-link lifetime, canonical ownership/tools, persistence/recovery, real Dexie gallery, sidebar/image/command-palette search, leases/refcounts and account notifications.
-- `bun audit-evidence/workspace-isolation-20261011/reproduce.ts`: **24 failing assertions / 7 passing supported controls** against the frozen base, in `baseline-regressions.txt`; expected assertion failure exit is successful reproduction. Never checks out or changes the working source branch.
-- `bun audit-evidence/workspace-isolation-20261011/authenticated-browser.ts`: **2 authenticated browser scenarios passed** in `authenticated-browser.txt`. Includes fresh-device canonical search and original bytes, viewer read/write distinction, direct stale-workspace snapshot 403, membership removal and denied download signing, local offline queue/reconnect.
+- `bun audit-evidence/workspace-isolation-20261011/verify.ts`: **39 files / 579 tests passed** at `f9ea3ce6`; exact commit/command/status are in `final-verification.txt`. Includes job endpoint direct identifiers/SSE revocation, sync boundaries, filesystem signed-link lifetime, canonical ownership/tools, persistence/recovery, real Dexie gallery, sidebar/image/command-palette search, leases/refcounts and account notifications.
+- `bun audit-evidence/workspace-isolation-20261011/reproduce.ts`: **49 failing assertions / 17 passing controls** against the frozen base, in `baseline-regressions.txt`; expected assertion failure exit is successful reproduction. Never checks out or changes the working source branch.
+- `bun audit-evidence/workspace-isolation-20261011/authenticated-browser.ts`: **2 authenticated browser scenarios passed** again at final source `f9ea3ce6` in `authenticated-final-browser.txt` (earlier checkpoint preserved in `authenticated-browser.txt`). Includes fresh-device canonical search and original bytes, viewer read/write distinction, direct stale-workspace snapshot 403, membership removal and denied download signing, local offline queue/reconnect.
 - `bun run test:e2e:cloud --config=audit-evidence/workspace-isolation-20261011/playwright.config.ts`: **6 passed / 1 opt-in stress case skipped**; `browser-cloud-system-chromium.txt`.
 - `bun run test:e2e:cloud:stress --config=audit-evidence/workspace-isolation-20261011/playwright.config.ts`: **4 passed**, including 64 workspace switches, intermittent adapter faults and circuit recovery; `browser-stress.txt`.
 - Actual `/images` browser qualification: **5 scenarios have passing evidence**, with download and mocked-clipboard continuation cases in `gallery-browser-delivery.txt`, the two preview/recovery scenarios in `gallery-browser.txt` and the corrected chooser scenario in `gallery-browser-picker.txt`; command below; result and synthetic screenshots/traces are in `gallery-browser.txt` and `gallery-browser-artifacts/`. This adds real file chooser, IntersectionObserver previews, modal lifecycle, revoked object URLs, held preview reads and recovery, using Chromium IndexedDB. Initial harness failures (wrong Vite path, pre-hydration action, incorrect expected toast text) are setup evidence, not product defects.
-- `bun run type-check` with the synthetic environment below: **passed** on the final source/test head `e13346df`; result is `typecheck.txt` (exit 0).
-- Configured changed TypeScript source lint: `source-lint.txt`, exit 0; two preexisting optional-chain warnings. Repository ESLint intentionally excludes Vue and test files. Forced legacy notification-test lint exposes preexisting unsafe-any errors (`logout-notifications-lint.txt`); these unrelated existing lines were not rewritten. Vue is checked by typecheck and canonical/browser compilation.
+- Native raster-thumbnail browser qualification: **2 passed** at `44712718`, in `thumbnail-native-browser.txt`. Uses real IndexedDB/file APIs, canvas-generated valid PNG bytes, native Image.decode, URL revocation and byte-hash verification. A held old decode cannot replace a fresh same-hash thumbnail. Run the gallery command with `--grep "native thumbnail"`.
+- `bun run type-check` with the synthetic environment below: **passed** at the earlier checkpoint `e13346df` (`typecheck.txt`) and after the thumbnail changes (`thumbnail-typecheck.txt`, exit 0); `thumbnail-final-typecheck.txt` records the `44712718` qualification, and `signing-typecheck.txt` records the passing `2ff00729` qualification. Final upload-gate type checking passed at `f9ea3ce6` (`upload-signing-typecheck.txt`, exit 0).
+- Configured changed TypeScript source lint: `source-lint.txt`, exit 0; two preexisting optional-chain warnings. New thumbnail/prefetch TypeScript source lint passes without warnings (`thumbnail-lint.txt`). Download/upload signing source lint also passes (`signing-lint.txt`, `upload-signing-lint.txt`). Repository ESLint intentionally excludes Vue and test files. Forced legacy notification-test lint exposes preexisting unsafe-any errors (`logout-notifications-lint.txt`); these unrelated existing lines were not rewritten. Vue is checked by typecheck and canonical/browser compilation.
 
 ```sh
 PATH=/workspace/.bun/bin:$PATH \
@@ -67,11 +75,11 @@ OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false \
 OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run type-check
 ```
 
-Focused before/after logs preserve individual failing assertions. `verify.ts` lists the entire canonical coverage rather than claiming every repository test. Evidence runners never print credentials. Nuxt's dev harness sometimes leaves a lock referencing its own defunct process; only confirmed stale locks from these local runs were removed. That integration-harness issue was reported to its owner, without source changes.
+Focused before/after logs preserve individual failing assertions. `thumbnail-cleanup-before.txt` caught a transient error-cleanup regression in the uncommitted fix prototype; it was corrected before commit and is not claimed as a base defect. `thumbnail-typecheck-before.txt` caught a test mock Promise type mismatch, subsequently corrected. The last focused thumbnail run covered 26 tests in three new suites; the aggregate includes the additional 18 existing palette interaction tests. `verify.ts` lists the entire canonical coverage rather than claiming every repository test. Evidence runners never print credentials. Nuxt's dev harness sometimes leaves a lock referencing its own defunct process; only confirmed stale locks from these local runs were removed. That integration-harness issue was reported to its owner, without source changes.
 
 ## Deliverables
 
-`workspace-isolation-source.patch` contains only the source/test/docs changes through `e13346df`. `workspace-isolation-source.bundle` carries the seven local commits as `HEAD`, with the exact base as a prerequisite. `git bundle verify` passed; SHA-256 checksums are in `artifact-checksums.txt`. These artifacts and browser traces stay local and are excluded from the evidence commit. They can be imported or reviewed without remote publication.
+`workspace-isolation-source.patch` contains only the app/server/public source, test and documentation changes through `f9ea3ce6`. `workspace-isolation-source.bundle` carries the twelve local commits (including the earlier evidence checkpoint) as `HEAD`, with the exact base as a prerequisite. `git bundle verify` passed; SHA-256 checksums are in `artifact-checksums.txt`. These artifacts and browser traces stay local and are excluded from the evidence commit. They can be imported or reviewed without remote publication.
 
 ## Remaining limits and rollback
 
@@ -79,4 +87,4 @@ No live Convex/S3 qualification, paid model execution, production traffic, multi
 
 Dormant `useThreadSearch.ts` has a global legacy index without workspace fencing, but repository search found no active app/official plugin/SDK/documentation callers. Active sidebar search is a different guarded implementation and passes canonical tests. This is a latent-consumer risk, not a reproduced active product defect; no dormant helper or cleanup system was activated.
 
-All changes are local reversible commits without migrations. To undo source/test changes, revert `e13346df`, `1df6fd07`, `918d4154`, `807df495`, `8e712ce6`, `c462d1fb`, then `9450ef8b` in reverse order. Baseline behavior and the passing supported-operation controls are available in the evidence. No remote publication was authorized or performed.
+All changes are local reversible commits without migrations. To undo source/test changes, revert `f9ea3ce6`, `2ff00729`, `44712718`, `1775648b`, `e13346df`, `1df6fd07`, `918d4154`, `807df495`, `8e712ce6`, `c462d1fb`, then `9450ef8b` in reverse order. Baseline behavior and the passing supported-operation controls are available in the evidence. No remote publication was authorized or performed.

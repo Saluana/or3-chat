@@ -1,0 +1,130 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+xxxxxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears an already displayed palette thumbnail on workspace switching
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:54:46
+     52|         setActiveWorkspaceDb('consumer-thumbnails-b');
+     53|         await flushPromises();
+     54|         expect(wrapper.find('img').exists()).toBe(false);
+       |                                              ^
+     55|     });
+     56|     it.each(['gallery', 'hook'] as const)('clears settled former-works…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the gallery
+AssertionError: expected 'PDForigin-synthetic-private.pdf Hide …' not to contain 'origin-synthetic-private.pdf'
+
+Expected: "origin-synthetic-private.pdf"
+Received: "PDForigin-synthetic-private.pdf Hide attachments"
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:68:49
+     66|         await flushPromises();
+     67|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+     68|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+       |                                                 ^
+     69|     });
+     70|     it.each(['gallery', 'hook'] as const)('discards a held PDF metadat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > clears settled former-workspace PDF names in the hook
+AssertionError: expected { …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "kind": "pdf",
+  "name": "origin-synthetic-private.pdf",
+}
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:67:48
+     65|         setActiveWorkspaceDb('consumer-thumbnails-b');
+     66|         await flushPromises();
+     67|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+       |                                                ^
+     68|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+     69|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the gallery after switching workspaces
+AssertionError: expected 'PDForigin-synthetic-private.pdf Hide …' not to contain 'origin-synthetic-private.pdf'
+
+Expected: "origin-synthetic-private.pdf"
+Received: "PDForigin-synthetic-private.pdf Hide attachments"
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:81:49
+     79|         await flushPromises();
+     80|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+     81|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+       |                                                 ^
+     82|     });
+     83|     it('discards a held chat attachment download after a workspace swi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held PDF metadata read in the hook after switching workspaces
+AssertionError: expected { …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "kind": "pdf",
+  "name": "origin-synthetic-private.pdf",
+}
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:80:48
+     78|         finish({ ...originMeta, kind: 'pdf', mime_type: 'application/p…
+     79|         await flushPromises();
+     80|         if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+       |                                                ^
+     81|         if (wrapper) expect(wrapper.text()).not.toContain('origin-synt…
+     82|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > discards a held chat attachment download after a workspace switch
+AssertionError: expected "click" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st click call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:96:27
+     94|         finish(new Blob(['origin synthetic attachment'], { type: 'text…
+     95|         await flushPromises();
+     96|         expect(click).not.toHaveBeenCalled();
+       |                           ^
+     97|     });
+     98| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  09:29:09
+   Duration  2.35s (transform 468ms, setup 171ms, import 669ms, tests 816ms, environment 478ms)
+
