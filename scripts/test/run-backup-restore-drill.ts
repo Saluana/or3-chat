@@ -33,6 +33,7 @@ assert(image && !image.includes('@') && image.startsWith('or3-backup-drill:'), '
 const evidencePath = resolve(process.env.OR3_BACKUP_DRILL_EVIDENCE ?? 'output/backup-restore-drill.json');
 const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
+const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only');
 const builtCliOnly = process.argv.includes('--built-cli-only');
 const recoveryOnly = process.argv.includes('--recovery-only');
 const prestartCrashOnly = process.argv.includes('--prestart-crash-only');
@@ -47,7 +48,7 @@ const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walF
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(concurrencyOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -166,7 +167,9 @@ function client(fixture: Instance) {
 const evidence = (name: string, detail?: unknown, kind: 'passed' | 'limitation' = 'passed') => {
   outcomes.push({ name, kind, detail }); console.log(`${kind === 'passed' ? 'PASS' : 'LIMITATION'} ${name}`);
 };
-const fixtureRows: Array<{ tableName: string; pk: string; payload: Record<string, unknown> }> = [];
+type FixtureRow = { tableName: string; pk: string; payload: Record<string, unknown> };
+const fixtureRows: FixtureRow[] = [];
+let secondWorkspace: { id: string; storageId: string; rows: FixtureRow[] } | undefined;
 const fileBytes = Buffer.from('Synthetic backup document and attachment bytes.\n');
 const hash = `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`;
 let storageId: string;
@@ -206,6 +209,23 @@ async function verify(fixture: Instance) {
   assert.deepEqual(replay.results.map(canonicalReceipt), (replayReceipt as { results: Array<Parameters<typeof canonicalReceipt>[0]> }).results.map(canonicalReceipt));
   assert(replay.results.every((result: { replayed?: boolean }) => result.replayed === true));
   assert.equal(replay.serverVersion, snapshot.highWatermark, 'Replay must not allocate new workspace versions');
+  if (secondWorkspace) {
+    await api('/api/workspaces/active', { id: secondWorkspace.id });
+    const session = await (await api('/api/auth/session')).json();
+    assert.equal(session.session.workspace.id, secondWorkspace.id);
+    assert.equal(session.session.role, 'owner');
+    const snapshot = await (await api('/api/sync/snapshot', { scope: { workspaceId: secondWorkspace.id }, pageSize: 100, ...caps })).json();
+    for (const row of secondWorkspace.rows) {
+      const actual = snapshot.items.find((item: { pk: string; tableName: string }) => item.pk === row.pk && item.tableName === row.tableName);
+      assert(actual, `Missing secondary ${row.tableName}/${row.pk}`);
+      for (const [key, value] of Object.entries(row.payload)) assert.deepEqual(actual.payload[key], value, `secondary ${row.tableName}/${row.pk}/${key}`);
+    }
+    const download = await (await api('/api/storage/presign-download', { workspace_id: secondWorkspace.id, hash,
+      storage_id: secondWorkspace.storageId, file_kind_capability: 'v1' })).json();
+    assert.deepEqual(Buffer.from(await (await api(download.url)).arrayBuffer()), fileBytes);
+    await api('/api/workspaces/active', { id: workspaceId });
+    assert.equal((await (await api('/api/auth/session')).json()).session.workspace.id, workspaceId);
+  }
   let capturedPairs = 0;
   for (const pair of concurrentPairs) {
     const captured = pair.filter(pk => snapshot.items.some((item: { pk: string }) => item.pk === pk));
@@ -216,7 +236,8 @@ async function verify(fixture: Instance) {
   const integrity = await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e',
     "const Database=require('/app/.output/server/node_modules/better-sqlite3');for(const p of ['/data/auth.sqlite','/data/sync.sqlite']){const db=new Database(p,{readonly:true,fileMustExist:true});if(db.pragma('integrity_check',{simple:true})!=='ok'||db.pragma('foreign_key_check').length)process.exit(1);db.close()}console.log('integrity and foreign keys ok')"]), fixture.directory);
   assert.equal(integrity, 'integrity and foreign keys ok');
-  return { rows: fixtureRows.length, attachmentBytes: fileBytes.length, integrity: 'ok', identity: 'owner and workspace preserved', replay: 'idempotent', capturedPairs };
+  return { rows: fixtureRows.length, attachmentBytes: fileBytes.length, integrity: 'ok', identity: 'owner and workspace preserved', replay: 'idempotent', capturedPairs,
+    ...(secondWorkspace ? { secondWorkspaceRows: secondWorkspace.rows.length, sharedHashBytesVerifiedPerWorkspace: true, duplicateRecordIdsScoped: true } : {}) };
 }
 async function backup(fixture: Instance) {
   const previous = await import('node:fs/promises').then(fs => fs.readdir(join(fixture.directory, '.or3-cloud/backups')));
@@ -338,6 +359,35 @@ try {
   replayBody = { scope: { workspaceId }, ...caps, ops: fixtureRows.map(row => op(row.tableName, row.pk, row.payload)) };
   replayReceipt = await (await api('/api/sync/push', replayBody)).json();
   assert((replayReceipt as { results: Array<{ success: boolean }> }).results.every(result => result.success));
+  if (multiWorkspaceOnly) {
+    const created = await (await api('/api/workspaces', { name: 'Synthetic second restore workspace' })).json();
+    assert.equal(typeof created.id, 'string');
+    assert.notEqual(created.id, workspaceId);
+    await api('/api/workspaces/active', { id: created.id });
+    const upload = await (await api('/api/storage/presign-upload', { workspace_id: created.id, hash, name: 'second-drill.txt',
+      mime_type: 'text/plain', size_bytes: fileBytes.length, kind: 'file', file_kind_capability: 'v1' })).json();
+    const receipt = await (await api(upload.url, undefined, { method: upload.method ?? 'PUT', body: fileBytes,
+      headers: { ...upload.headers, 'content-type': 'text/plain' } })).json();
+    const secondStorageId = upload.storageId ?? receipt.storageId;
+    assert.notEqual(secondStorageId, storageId, 'Equal hashes in distinct workspaces need distinct scoped storage IDs');
+    await api('/api/storage/commit', { workspace_id: created.id, hash, storage_id: secondStorageId, intent_id: upload.intentId,
+      storage_provider_id: 'fs', mime_type: 'text/plain', size_bytes: fileBytes.length, name: 'second-drill.txt', kind: 'file', file_kind_capability: 'v1' });
+    const rows = fixtureRows.map(row => {
+      const payload = structuredClone(row.payload);
+      if (row.tableName === 'file_meta') { payload.storage_id = secondStorageId; payload.name = 'second-drill.txt'; }
+      if (row.tableName === 'threads') payload.title = 'Second workspace conversation';
+      if (row.tableName === 'messages') payload.content = 'Second workspace chat body';
+      if (row.tableName === 'posts') payload.title = 'Second workspace document';
+      if (row.tableName === 'projects') payload.name = 'Second workspace project';
+      if (row.tableName === 'kv') payload.value = { theme: 'light', nested: ['second workspace', 99] };
+      return { ...row, payload };
+    });
+    const pushed = await (await api('/api/sync/push', { scope: { workspaceId: created.id }, ...caps,
+      ops: rows.map(row => op(row.tableName, row.pk, row.payload)) })).json();
+    assert(pushed.results.every((result: { success: boolean }) => result.success));
+    secondWorkspace = { id: created.id, storageId: secondStorageId, rows };
+    await api('/api/workspaces/active', { id: workspaceId });
+  }
   evidence('populated source uses authenticated sync, real SQLite and FS attachment', await verify(source));
   let racingWrites: Array<Promise<unknown>> = [];
   if (deep || concurrencyOnly) {
@@ -418,7 +468,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -456,7 +506,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -907,12 +957,14 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       freeBeforeBytes: free, verification: await verify(target), volatileFixtureOnly: true,
     });
   }
-  if (concurrencyOnly) {
+  if (concurrencyOnly || multiWorkspaceOnly) {
     await restoreCommand(target.directory, { yes: true }, [targetBackup]);
-    evidence('managed restore retains every acknowledged concurrent atomic batch', await verify(target));
+    evidence(multiWorkspaceOnly ? 'managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments'
+      : 'managed restore retains every acknowledged concurrent atomic batch', await verify(target));
     await stopProject(target.directory, 'local');
     await startProject(target.directory, 'local', target.env);
-    evidence('acknowledged concurrent batches remain intact after another cold restart', await verify(target));
+    evidence(multiWorkspaceOnly ? 'both workspace settings, chats and attachment bytes remain distinct after another cold restart'
+      : 'acknowledged concurrent batches remain intact after another cold restart', await verify(target));
   }
   if (builtCliOnly) {
     const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
@@ -954,7 +1006,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, concurrencyOnly, multiWorkspaceOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'

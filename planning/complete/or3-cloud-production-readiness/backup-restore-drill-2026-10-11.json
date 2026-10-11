@@ -2303,6 +2303,104 @@
     ],
     "boundary": "At least one racing batch acknowledged before requesting stop. Every acknowledged pair must restore; interrupted/unknown requests may be wholly present or absent. App is stopped during archive capture."
   },
+  "actualAppMultipleWorkspaces": {
+    "completed": true,
+    "cleanupFailed": false,
+    "cliRevision": "e9c773c96198ac463024869ef5c6a1fa67c0ea9f",
+    "outcomes": [
+      {
+        "name": "populated source uses authenticated sync, real SQLite and FS attachment",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "source backup authenticated",
+        "kind": "passed",
+        "detail": {
+          "archiveSha256": "bb03abe63e311ca247c31c607213190eb074462cb76e0234e55697806daacdf6"
+        }
+      },
+      {
+        "name": "real archive contains both SQLite databases, WALs, blob and sidecar",
+        "kind": "passed"
+      },
+      {
+        "name": "managed restore refuses a foreign deployment before mutation",
+        "kind": "passed"
+      },
+      {
+        "name": "separate instance reads source archive after actual restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "second cold restart preserves chats/documents/attachment/settings and references",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "managed restore retains both workspace memberships, duplicate record IDs and independently scoped shared-hash attachments",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      },
+      {
+        "name": "both workspace settings, chats and attachment bytes remain distinct after another cold restart",
+        "kind": "passed",
+        "detail": {
+          "rows": 6,
+          "attachmentBytes": 48,
+          "integrity": "ok",
+          "identity": "owner and workspace preserved",
+          "replay": "idempotent",
+          "capturedPairs": 0,
+          "secondWorkspaceRows": 6,
+          "sharedHashBytesVerifiedPerWorkspace": true,
+          "duplicateRecordIdsScoped": true
+        }
+      }
+    ],
+    "coverage": "Two real API-created workspaces with six fixture records each, colliding record IDs, distinct chat/settings payloads, identical attachment hash but distinct storage IDs and workspace paths. Owner memberships and active switching survive separate-instance restore, managed restore and cold restart."
+  },
   "actualAppFilesystemCapacity": {
     "completed": true,
     "cleanupFailed": false,

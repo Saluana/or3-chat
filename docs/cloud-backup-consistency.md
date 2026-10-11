@@ -112,6 +112,12 @@ restored instance, after managed restore, and after another cold restart. This
 qualifies acknowledged writes before stop; capture itself runs with the app
 stopped. Requests interrupted by stop may have committed, so their restored
 pairs are allowed to be either wholly present or wholly absent.
+`--multi-workspace-only` creates a second workspace through the real API and
+stores six records per workspace with colliding IDs and distinct payloads. It
+uploads the same hash into both workspace directories with distinct scoped
+storage IDs. After separate-instance restore, managed restore and cold restart,
+it checks both memberships, active workspace switching, document/project/message
+references, different settings and exact attachment bytes in each scope.
 The deep pass kills a separate restore process with SIGKILL after app startup,
 then checks that its durable journal protects a subsequently accepted write.
 `--crash-only` runs that process-death case with the source/target qualification.
