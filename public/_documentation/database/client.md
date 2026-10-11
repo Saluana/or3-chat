@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `27` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `28` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -77,6 +77,18 @@ captured: `sync_quarantine` (corrupt outbox operations set aside with
 diagnostics; see the [sync layer](/documentation/cloud/sync-layer)) and
 `workspace_tab_drafts` (unsent composer drafts, scoped by account within the
 workspace database).
+
+Version 28 adds local-only `workspace_draft_versions` (`id`, `account_key`,
+`[account_key+tab_id]`, `kind`). It preserves every v27 row and queue without
+rewriting canonical data. Each page gets a fresh writer identity, with one
+sequenced recovery head per app tab, plus canonical state and discard markers.
+Competing snapshots and legacy canonical rows are preserved atomically before a
+set or discard can replace the canonical draft. Explicitly removed versions
+retain only a sequence floor, without content or attachment references, so a
+stale retry cannot resurrect them. The table is outside the sync allowlist.
+Workspace Backup includes it; backup Replace deliberately clears all tables.
+Older application builds cannot open a v28 database: retained v27 row shapes
+are backward readable, but executable downgrade compatibility is not promised.
 
 ---
 

@@ -1,4 +1,6 @@
 import { readonly, ref } from 'vue';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import type {
     LargeTextBlock,
     PersistedDraftAttachment,
@@ -6,8 +8,10 @@ import type {
     UploadedImage,
     WorkspaceDraftComposerSettings,
 } from '~/components/chat/chat-input/types';
-import { getActiveWorkspaceId, getDb, type Or3DB } from '~/db/client';
+import { getActiveWorkspaceId, getDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
 import { getFileBlob } from '~/db/files';
+import { newId } from '~/db/util';
+import { commitDraftVersion, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 
 export interface WorkspaceChatTabDraft {
@@ -40,9 +44,6 @@ const PERSIST_DEBOUNCE_MS = 400;
 /** After a failed write: retry at 2x, 4x, ... the debounce, up to this many times, then wait for the next edit or page hide. */
 const MAX_SAVE_RETRIES = 5;
 const MAX_RETRY_DELAY_MS = 30_000;
-/** Per account and workspace; least recently edited drafts are dropped first. */
-const MAX_PERSISTED_DRAFTS = 50;
-const PERSISTED_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Text, editor JSON and pasted blocks together. Larger drafts stay memory-only. */
 const MAX_PERSISTED_DRAFT_CHARS = 500_000;
 
@@ -65,8 +66,24 @@ let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let retryArmed = false;
 let failedRounds = 0;
 let lifecycleBound = false;
+let recoveryChannel: BroadcastChannel | undefined;
 /** True while a draft could not be written to local storage. */
 const saveFailed = ref(false);
+const versionsRevision = ref(0);
+// A duplicated tab clones sessionStorage. Identity is always new for this page.
+const writerId = newId();
+const sequences = new Map<string, number>();
+const baselines = new Map<string, DraftBaseline>();
+const hintKey = (scope: WorkspaceDraftScope, tab: string) => `or3:draft-restore:${encodeURIComponent(scope.key)}:${encodeURIComponent(tab)}`;
+function readHint(scope: WorkspaceDraftScope, tab: string): string | null {
+    try { return typeof window === 'undefined' ? null : window.sessionStorage.getItem(hintKey(scope, tab)); } catch { return null; }
+}
+function writeHint(scope: WorkspaceDraftScope, tab: string, writer: string): void {
+    try { window.sessionStorage.setItem(hintKey(scope, tab), writer); } catch { /* Recovery list remains available. */ }
+}
+function advanceSequence(key: string): number {
+    const next = (sequences.get(key) ?? 0) + 1; sequences.set(key, next); return next;
+}
 
 export function currentWorkspaceDraftScope(): WorkspaceDraftScope {
     let workspaceId = 'local';
@@ -84,10 +101,6 @@ export function currentWorkspaceDraftScope(): WorkspaceDraftScope {
 
 function memoryKey(scope: WorkspaceDraftScope, tabId: string): string {
     return `${scope.key}\u0000${tabId}`;
-}
-
-function rowId(scope: WorkspaceDraftScope, tabId: string): string {
-    return `${scope.accountKey}\u0000${tabId}`;
 }
 
 function releaseDraftAttachments(draft: WorkspaceChatTabDraft | undefined): void {
@@ -125,6 +138,7 @@ function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft |
                 : []
         ),
         ...(draft.attachmentRefs ?? []),
+        ...(draft.missingAttachments ?? []),
     ];
     if (!draft.text.trim() && !attachments.length && !draft.largeTextBlocks.length) return null;
     const serialized = JSON.stringify({
@@ -163,102 +177,73 @@ function fromPersisted(value: PersistedWorkspaceTabDraft): WorkspaceChatTabDraft
  * draft change is also journaled synchronously to localStorage. The journal is
  * merged when drafts load and removed once IndexedDB confirms the same change.
  */
-const JOURNAL_PREFIX = 'or3:tab-draft-journal:v1:';
+const LEGACY_JOURNAL_PREFIX = 'or3:tab-draft-journal:v1:';
+const JOURNAL_PREFIX = 'or3:tab-draft-journal:v2:';
 const MAX_JOURNAL_CHARS = 100_000;
-
 interface JournalRecord {
     tabId: string;
     updatedAt: number;
-    /** Null records a discard, so an older saved copy is not brought back. */
     draft: PersistedWorkspaceTabDraft | null;
+    writerId?: string;
+    sequence?: number;
+    baseline?: DraftBaseline;
 }
-
 function journalStorage(): Storage | null {
-    try {
-        return typeof window === 'undefined' ? null : window.localStorage;
-    } catch {
-        return null;
-    }
+    try { return typeof window === 'undefined' ? null : window.localStorage; } catch { return null; }
 }
-
-function journalKey(scope: WorkspaceDraftScope, tabId: string): string {
-    return `${JOURNAL_PREFIX}${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
+function journalKey(scope: WorkspaceDraftScope, tabId: string, sequence = sequences.get(memoryKey(scope, tabId)) ?? 0): string {
+    return `${JOURNAL_PREFIX}${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}:${writerId}:${sequence}`;
 }
-
 function writeJournal(scope: WorkspaceDraftScope, tabId: string, draft: PersistedWorkspaceTabDraft | null): void {
+    writeHint(scope, tabId, writerId);
     const storage = journalStorage();
     if (!storage || !scope.db) return;
     try {
-        const record: JournalRecord = { tabId, updatedAt: draft?.updatedAt ?? Date.now(), draft };
+        const record: JournalRecord = { tabId, updatedAt: draft?.updatedAt ?? Date.now(), draft,
+            writerId, sequence: sequences.get(memoryKey(scope, tabId)) ?? 0,
+            baseline: baselines.get(memoryKey(scope, tabId)) };
         const serialized = JSON.stringify(record);
         if (serialized.length > MAX_JOURNAL_CHARS) storage.removeItem(journalKey(scope, tabId));
         else storage.setItem(journalKey(scope, tabId), serialized);
-    } catch {
-        // Quota or blocked storage: the IndexedDB write still runs.
-    }
+    } catch { /* Native persistence still runs; unload guard checks the exact journal. */ }
 }
-
-/** Removes the journal once IndexedDB holds that change or a newer one. */
-function clearJournalCoveredBy(scope: WorkspaceDraftScope, tabId: string, savedAt: number,
-    savedDraft: PersistedWorkspaceTabDraft | null = null): void {
+function clearJournalCoveredBy(scope: WorkspaceDraftScope, tabId: string, sequence: number,
+    savedDraft: PersistedWorkspaceTabDraft | null): void {
     const storage = journalStorage();
     if (!storage) return;
     try {
-        const raw = storage.getItem(journalKey(scope, tabId));
-        if (!raw) return;
-        const record = JSON.parse(raw) as Partial<JournalRecord>;
-        if (typeof record.updatedAt !== 'number' || record.updatedAt < savedAt ||
-            (record.updatedAt === savedAt && JSON.stringify(record.draft) === JSON.stringify(savedDraft))) {
-            storage.removeItem(journalKey(scope, tabId));
-        }
-    } catch {
-        // An unreadable journal is dropped at the next load.
-    }
-}
-
-/** Journal records newer than what IndexedDB holds for this scope, keyed by tab; stale ones are removed. */
-function readNewerJournal(
-    scope: WorkspaceDraftScope,
-    savedAtByTab: Map<string, number>
-): JournalRecord[] {
-    const storage = journalStorage();
-    if (!storage) return [];
-    const prefix = `${JOURNAL_PREFIX}${encodeURIComponent(scope.key)}:`;
-    const keys: string[] = [];
-    for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key?.startsWith(prefix)) keys.push(key);
-    }
-    const cutoff = Date.now() - PERSISTED_DRAFT_TTL_MS;
-    const newer: JournalRecord[] = [];
-    for (const key of keys) {
-        try {
-            const record = JSON.parse(storage.getItem(key) ?? '') as JournalRecord;
-            const valid = typeof record.tabId === 'string' && typeof record.updatedAt === 'number'
-                && (record.draft === null || fromPersisted(record.draft));
-            // Millisecond timestamps can tie across successive edits. A journal
-            // still present was not acknowledged as the same saved snapshot.
-            const savedAt = savedAtByTab.get(record.tabId) ?? 0;
-            const newerThanSaved = record.updatedAt >= savedAt;
-            if (valid && record.updatedAt > cutoff && newerThanSaved) {
-                newer.push(record);
-            } else {
+        const prefix = `${JOURNAL_PREFIX}${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}:${writerId}:`;
+        const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => !!key?.startsWith(prefix));
+        for (const key of keys) {
+            const raw = storage.getItem(key); if (!raw) continue;
+            const record = JSON.parse(raw) as JournalRecord;
+            if (record.writerId === writerId && record.tabId === tabId && Number.isSafeInteger(record.sequence)
+                && record.sequence! <= sequence && key === journalKey(scope, tabId, record.sequence)
+                && (record.sequence! < sequence || JSON.stringify(record.draft) === JSON.stringify(savedDraft))
+                && (record.draft === null || fromPersisted(record.draft)) && storage.getItem(key) === raw) {
                 storage.removeItem(key);
             }
-        } catch {
-            storage.removeItem(key);
         }
-    }
-    return newer;
+    } catch { /* Unknown records remain available for recovery. */ }
 }
-
-async function pruneOldest(db: Or3DB, scope: WorkspaceDraftScope): Promise<void> {
-    const owned = db.workspace_tab_drafts.where('account_key').equals(scope.accountKey);
-    if (await owned.count() <= MAX_PERSISTED_DRAFTS) return;
-    const rows = await owned.sortBy('updated_at');
-    const pruned = rows.slice(0, rows.length - MAX_PERSISTED_DRAFTS);
-    await db.workspace_tab_drafts.bulkDelete(pruned.map(row => row.id));
-    for (const row of pruned) durableDrafts.delete(memoryKey(scope, row.tab_id));
+function readJournals(scope: WorkspaceDraftScope): Array<{ key: string; raw: string; record: JournalRecord }> {
+    const storage = journalStorage(); if (!storage) return [];
+    const prefixes = [JOURNAL_PREFIX, LEGACY_JOURNAL_PREFIX].map(prefix => `${prefix}${encodeURIComponent(scope.key)}:`);
+    const results: Array<{ key: string; raw: string; record: JournalRecord }> = [];
+    for (let index = 0; index < storage.length; index++) {
+        const key = storage.key(index); if (!key || !prefixes.some(prefix => key.startsWith(prefix))) continue;
+        const raw = storage.getItem(key); if (raw === null) continue;
+        // Malformed/unknown data must not be silently erased by migration.
+        const record = JSON.parse(raw) as JournalRecord;
+        if (typeof record.tabId !== 'string' || typeof record.updatedAt !== 'number'
+            || !(record.draft === null || fromPersisted(record.draft))
+            || (key.startsWith(JOURNAL_PREFIX) && (typeof record.writerId !== 'string'
+                || !Number.isSafeInteger(record.sequence) || record.sequence! < 0))) {
+            throw new Error('A saved draft journal could not be read.');
+        }
+        results.push({ key, raw, record });
+    }
+    return results;
 }
 
 /** Return the confirmed snapshot, or a rejected write to retain for retry. */
@@ -274,29 +259,19 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
     flight.count++;
     inFlightDrafts.set(key, flight);
     try {
-        // Read memory at write time so the newest edit wins over an older timer.
-        const startedAt = Date.now();
-        const entry = drafts.get(memoryKey(scope, tabId));
+        const entry = drafts.get(key);
         const persisted = entry ? toPersisted(entry.draft) : null;
         if (persisted === undefined) return { saved: false };
-        if (!persisted) {
-            await db.workspace_tab_drafts.delete(rowId(scope, tabId));
-            if (drafts.has(key)) durableDrafts.set(key, null);
-            else durableDrafts.delete(key);
-            clearJournalCoveredBy(scope, tabId, startedAt);
-            return { saved: true, persisted: null };
-        }
-        await db.workspace_tab_drafts.put({
-            id: rowId(scope, tabId),
-            account_key: scope.accountKey,
-            tab_id: tabId,
-            updated_at: persisted.updatedAt,
-            draft: persisted,
-        });
-        durableDrafts.set(key, persisted);
-        clearJournalCoveredBy(scope, tabId, persisted.updatedAt, persisted);
-        await pruneOldest(db, scope);
-        return { saved: true, persisted };
+        const sequence = sequences.get(key) ?? advanceSequence(key);
+        const journalReceipt = journalStorage()?.getItem(journalKey(scope, tabId, sequence));
+        const receipt = await commitDraftVersion(db, { account: scope.accountKey, tab: tabId,
+            writer: writerId, sequence, draft: persisted, baseline: baselines.get(key) });
+        if (!receipt.superseded && sequence === sequences.get(key)) baselines.set(key, receipt.baseline);
+        if (matchesCurrentDraftReceipt(key, receipt.persisted)) durableDrafts.set(key, receipt.persisted);
+        if (journalReceipt === journalStorage()?.getItem(journalKey(scope, tabId, sequence))) clearJournalCoveredBy(scope, tabId, sequence, receipt.persisted);
+        recoveryChannel?.postMessage({ db: db.name, account: scope.accountKey });
+        versionsRevision.value++;
+        return { saved: !receipt.superseded, persisted: receipt.persisted };
     } catch (error) {
         console.warn('[tab-drafts] Draft was not saved to local storage', error);
         return { saved: false };
@@ -369,6 +344,11 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
 function bindPageLifecycle(): void {
     if (lifecycleBound || typeof window === 'undefined') return;
     lifecycleBound = true;
+    if (typeof BroadcastChannel !== 'undefined') {
+        recoveryChannel = new BroadcastChannel('or3:draft-recovery:v1');
+        recoveryChannel.onmessage = () => { versionsRevision.value++; };
+    }
+    window.addEventListener('storage', event => { if (event.key?.startsWith('or3:tab-draft-journal:')) versionsRevision.value++; });
     window.addEventListener('pagehide', () => void flushWorkspaceTabDrafts());
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') void flushWorkspaceTabDrafts();
@@ -386,42 +366,46 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
         try {
             const rows = await db.workspace_tab_drafts
                 .where('account_key').equals(scope.accountKey).toArray();
-            const cutoff = Date.now() - PERSISTED_DRAFT_TTL_MS;
-            const expired = rows.filter((row) => row.updated_at < cutoff).map((row) => row.id);
-            if (expired.length) await db.workspace_tab_drafts.bulkDelete(expired);
-            for (const id of expired) {
-                const row = rows.find(row => row.id === id);
-                if (row) durableDrafts.delete(memoryKey(scope, row.tab_id));
+            const states = await db.workspace_draft_versions.where('account_key').equals(scope.accountKey).toArray();
+            const live = new Map(rows.filter(row => row.account_key === scope.accountKey).map(row => [row.tab_id, row]));
+            for (const row of rows) {
+                baselines.set(memoryKey(scope, row.tab_id), { canonical: row,
+                    state: states.find(state => state.kind === 'state' && state.tab_id === row.tab_id) ?? null });
             }
-            const live = new Map(rows.filter((row) => row.updated_at >= cutoff && row.account_key === scope.accountKey)
-                .map((row) => [row.tab_id, row]));
-            for (const row of live.values()) {
-                if (fromPersisted(row.draft)) durableDrafts.set(memoryKey(scope, row.tab_id), row.draft);
-            }
-            // Changes made just before the page unloaded may not have reached IndexedDB.
-            for (const record of readNewerJournal(scope, new Map([...live].map(([tabId, row]) => [tabId, row.updated_at])))) {
-                const key = memoryKey(scope, record.tabId);
-                if (record.draft === null) {
-                    const row = live.get(record.tabId);
-                    if (row) await db.workspace_tab_drafts.delete(row.id);
-                    durableDrafts.delete(key);
-                    live.delete(record.tabId);
-                    clearJournalCoveredBy(scope, record.tabId, record.updatedAt);
-                    continue;
+            const journalChoices = new Map<string, PersistedWorkspaceTabDraft | null>();
+            // Import every independent journal before cleanup. Clock ties/age cannot authorize loss.
+            for (const { key: journalStorageKey, raw, record } of readJournals(scope)) {
+                const recordWriter = record.writerId ?? `legacy-journal:${bytesToHex(sha256(new TextEncoder().encode(raw)))}`;
+                const receipt = await commitDraftVersion(db, { account: scope.accountKey, tab: record.tabId,
+                    writer: recordWriter, sequence: record.sequence ?? 1, draft: record.draft,
+                    baseline: record.baseline, archiveOnly: recordWriter !== writerId && readHint(scope, record.tabId) !== recordWriter });
+                const hint = readHint(scope, record.tabId);
+                if (!receipt.superseded && (hint === recordWriter || (!hint && !journalChoices.has(record.tabId)))) {
+                    journalChoices.set(record.tabId, receipt.persisted);
+                    writeHint(scope, record.tabId, recordWriter);
                 }
-                const draft = fromPersisted(record.draft);
-                live.delete(record.tabId);
-                if (draft && !drafts.has(key)) {
-                    drafts.set(key, { scope, tabId: record.tabId, draft });
-                    markDirty(scope, record.tabId);
+                const storage = journalStorage();
+                // v2 keys include sequence and are immutable. Legacy mutable keys remain untouched.
+                if (journalStorageKey.startsWith(JOURNAL_PREFIX) && storage?.getItem(journalStorageKey) === raw) storage.removeItem(journalStorageKey);
+            }
+            const versions = await listDraftVersions(db, scope.accountKey);
+            const tabs = new Set([...live.keys(), ...versions.map(row => row.tab_id), ...journalChoices.keys()]);
+            for (const tabId of tabs) {
+                const key = memoryKey(scope, tabId);
+                if (drafts.has(key) || dirty.has(key)) continue;
+                const hint = readHint(scope, tabId);
+                const hinted = versions.find(row => row.tab_id === tabId && row.writer_id === hint)
+                    ?? states.find(row => row.kind === 'retired' && row.tab_id === tabId && row.writer_id === hint);
+                const value = journalChoices.has(tabId) ? journalChoices.get(tabId)! : hinted ? hinted.draft : live.get(tabId)?.draft;
+                if (value !== undefined) durableDrafts.set(key, value);
+                const restored = value ? fromPersisted(value) : null;
+                if (restored) drafts.set(key, { scope, tabId, draft: restored });
+                if (journalChoices.has(tabId) && value) {
+                    advanceSequence(key); writeJournal(scope, tabId, value ?? null); markDirty(scope, tabId);
                 }
+                baselines.set(key, await readDraftBaseline(db, scope.accountKey, tabId));
             }
-            for (const row of live.values()) {
-                const key = memoryKey(scope, row.tab_id);
-                if (drafts.has(key)) continue;
-                const draft = fromPersisted(row.draft);
-                if (draft) drafts.set(key, { scope, tabId: row.tab_id, draft });
-            }
+            versionsRevision.value++;
         } catch (error) {
             hydrations.delete(scope.key);
             console.warn('[tab-drafts] Saved drafts could not be read', error);
@@ -467,12 +451,11 @@ function needsUnloadConfirmation(): boolean {
             if (draft?.attachments.some(item => item.status !== 'ready' || !item.hash)) return true;
             const current = draft ? toPersisted(draft) : null;
             if (current === undefined) return true;
-            const cutoff = Date.now() - PERSISTED_DRAFT_TTL_MS;
             const durable = durableDrafts.get(key);
-            if (durable !== undefined && (durable === null || durable.updatedAt >= cutoff) && samePersistedContent(current, durable)) continue;
+            if (durable !== undefined && samePersistedContent(current, durable)) continue;
             const raw = journalStorage()?.getItem(journalKey(scope, tabId));
             const record = raw ? JSON.parse(raw) as JournalRecord : null;
-            if (record?.tabId === tabId && record.updatedAt >= cutoff &&
+            if (record?.tabId === tabId && record.writerId === writerId && record.sequence === sequences.get(key) &&
                 (record.draft === null || fromPersisted(record.draft)) && samePersistedContent(current, record.draft)) continue;
             return true;
         } catch {
@@ -565,6 +548,7 @@ export function useWorkspaceTabDrafts() {
         const key = memoryKey(scope, tabId);
         clearDiscardTimer(key);
         drafts.set(key, { scope, tabId, draft });
+        advanceSequence(key);
         const persisted = toPersisted(draft);
         if (persisted !== undefined) writeJournal(scope, tabId, persisted);
         markDirty(scope, tabId);
@@ -580,6 +564,7 @@ export function useWorkspaceTabDrafts() {
         const draft = drafts.get(key)?.draft;
         drafts.delete(key);
         dirty.delete(key);
+        advanceSequence(key);
         writeJournal(scope, tabId, null);
         releaseDraftAttachments(draft);
         // Deleted right away: a pending debounce must not resurrect it. A failed delete is retried.
@@ -615,8 +600,54 @@ export function useWorkspaceTabDrafts() {
         for (const { scope, tabId } of [...drafts.values()]) discard(tabId, scope);
     }
 
+    async function listVersions(scope = currentWorkspaceDraftScope()): Promise<WorkspaceDraftVersionRow[]> {
+        return scope.db ? listDraftVersions(scope.db, scope.accountKey) : [];
+    }
+    async function restoreVersion(tabId: string, version: WorkspaceDraftVersionRow, scope = currentWorkspaceDraftScope(), isCurrent: () => boolean = () => true): Promise<void> {
+        if (!scope.db || version.account_key !== scope.accountKey) throw new Error('Draft account changed.');
+        if (drafts.get(memoryKey(scope, tabId))?.draft.attachments.some(item => item.status !== 'ready' || !item.hash)) {
+            throw new Error('Wait for your attachments to finish saving, or remove the failed files, before restoring another draft.');
+        }
+        const before = JSON.stringify(drafts.get(memoryKey(scope, tabId))?.draft ? toPersisted(drafts.get(memoryKey(scope, tabId))!.draft) : null);
+        markDirty(scope, tabId); await flushWorkspaceTabDrafts();
+        const key = memoryKey(scope, tabId);
+        const current = drafts.get(key)?.draft;
+        const snapshot = current ? toPersisted(current) : null;
+        if (JSON.stringify(snapshot) !== before || !samePersistedContent(snapshot ?? null, durableDrafts.get(key) ?? null) || failedDrafts.has(key)) {
+            throw new Error('Your current draft changed or could not be saved. Retry before restoring another version.');
+        }
+        // Copy, never move/delete the selected alternative. Recheck the displayed version.
+        const fresh = (await listDraftVersions(scope.db, scope.accountKey)).find(row => row.id === version.id);
+        if (JSON.stringify(fresh) !== JSON.stringify(version)) throw new Error('This saved draft changed. Review it again.');
+        if (!isCurrent() || drafts.get(key)?.draft.attachments.some(item => item.status !== 'ready' || !item.hash) || JSON.stringify(drafts.get(key)?.draft ? toPersisted(drafts.get(key)!.draft) : null) !== before) {
+            throw new Error('Your current draft changed. Review saved versions again.');
+        }
+        // Selection intentionally replaces this writer's head: archive the live buffer first.
+        if (snapshot) await commitDraftVersion(scope.db, { account: scope.accountKey, tab: tabId,
+            writer: newId(), sequence: 1, draft: snapshot, archiveOnly: true });
+        if (!isCurrent() || drafts.get(key)?.draft.attachments.some(item => item.status !== 'ready' || !item.hash) || JSON.stringify(drafts.get(key)?.draft ? toPersisted(drafts.get(key)!.draft) : null) !== before) {
+            throw new Error('Your current draft changed. Review saved versions again.');
+        }
+        const restored = version.draft ? fromPersisted(version.draft) : null;
+        if (restored) write(tabId, { ...restored, updatedAt: Date.now() }, scope);
+        else discard(tabId, scope);
+        await flushWorkspaceTabDrafts();
+        if (failedDrafts.has(key)) throw new Error('The selected draft could not be saved. It remains available in saved versions.');
+    }
+    async function discardVersion(version: WorkspaceDraftVersionRow, scope = currentWorkspaceDraftScope()): Promise<void> {
+        if (!scope.db) throw new Error('Browser storage is unavailable.');
+        const key = memoryKey(scope, version.tab_id);
+        if (version.writer_id === writerId && (drafts.has(key) || dirty.has(key) || inFlightDrafts.has(key))) {
+            throw new Error('Clear this draft in its editor and wait for its save before discarding the saved version.');
+        }
+        await removeDraftVersion(scope.db, scope.accountKey, version); versionsRevision.value++;
+        recoveryChannel?.postMessage({ db: scope.db.name, account: scope.accountKey });
+    }
+
     return {
-        read, load, isLoaded, write, discard, discardAfter, clear,
+        read, load, isLoaded, write, discard, discardAfter, clear, listVersions, restoreVersion, discardVersion,
+        versionsRevision: readonly(versionsRevision),
+        writerId,
         scope: currentWorkspaceDraftScope,
         flush: flushWorkspaceTabDrafts,
         needsUnloadConfirmation,

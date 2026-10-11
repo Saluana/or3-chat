@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
+import { Blob as NodeBlob } from 'node:buffer';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { restoreMany } from '../files';
+import { restoreMany, softDeleteFile, softDeleteMany, hardDeleteMany } from '../files';
+import { commitDraftVersion, listDraftVersions, removeDraftVersion } from '../workspace-draft-recovery';
 import { getDb } from '../client';
 import type { FileMeta } from '../schema';
 
@@ -30,7 +32,26 @@ describe('restoreMany', () => {
         const db = getDb();
         await db.open();
         await db.file_meta.clear();
+        await db.file_blobs.clear();
+        await db.workspace_tab_drafts.clear();
+        await db.workspace_draft_versions.clear();
         mocks.doAction.mockClear();
+    });
+
+    it('protects recovery-only attachment bytes through every deletion API until the exact version is discarded', async () => {
+        const db = getDb();
+        await db.file_meta.put({ hash: 'recovery-only', name: 'synthetic.png', kind: 'image', mime_type: 'image/png', size_bytes: 3, deleted: false, ref_count: 0, clock: 1, created_at: 1, updated_at: 1 });
+        await db.file_blobs.put({ hash: 'recovery-only', blob: new NodeBlob(['png']) as unknown as Blob });
+        await commitDraftVersion(db, { account: 'local', tab: 'orphan-attachment', writer: 'synthetic-file-owner', sequence: 1, archiveOnly: true,
+            draft: { version: 1, text: 'recoverable file', attachments: [{ hash: 'recovery-only', name: 'synthetic.png', mime: 'image/png', kind: 'image' }], largeTextBlocks: [], updatedAt: 1 } });
+        expect(await db.workspace_tab_drafts.count()).toBe(0);
+        await expect(softDeleteFile('recovery-only')).rejects.toThrow('saved draft version');
+        await expect(softDeleteMany(['recovery-only'])).rejects.toThrow('saved draft version');
+        await expect(hardDeleteMany(['recovery-only'])).rejects.toThrow('saved draft version');
+        expect((await db.file_blobs.get('recovery-only'))?.blob.size).toBe(3);
+        await removeDraftVersion(db, 'local', (await listDraftVersions(db, 'local'))[0]!);
+        expect(await hardDeleteMany(['recovery-only'])).toEqual(['recovery-only']);
+        expect(await db.file_blobs.get('recovery-only')).toBeUndefined();
     });
 
     it('restores deleted files', async () => {

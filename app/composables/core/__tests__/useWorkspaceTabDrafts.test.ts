@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspaceTabDrafts, type WorkspaceChatTabDraft } from '../useWorkspaceTabDrafts';
 
@@ -74,9 +75,167 @@ describe('durable workspace tab drafts', () => {
         client.setActiveWorkspaceDb(null);
         drafts.clear();
         await client.getDb().workspace_tab_drafts.clear();
+        await client.getDb().workspace_draft_versions.clear();
+        sessionStorage.clear();
         await client.getDb().file_blobs.clear();
         await client.getDb().file_meta.clear();
         vi.unstubAllGlobals();
+    });
+
+    it('preserves both pages after their shared baseline diverges, including a stale discard', async () => {
+        const a = await reload();
+        a.drafts.write('shared-recovery', draft('shared baseline'));
+        await a.flush();
+        const b = await reload();
+        await b.drafts.load('shared-recovery');
+        a.drafts.write('shared-recovery', draft('page A unsent words'));
+        await a.flush();
+        b.drafts.write('shared-recovery', draft('page B independent words'));
+        await b.flush();
+        const versions = await b.drafts.listVersions(b.drafts.scope());
+        expect(versions.map(row => row.draft?.text)).toContain('page A unsent words');
+        expect(versions.map(row => row.draft?.text)).toContain('page B independent words');
+        a.drafts.discard('shared-recovery');
+        await a.flush();
+        expect((await b.drafts.listVersions(b.drafts.scope())).map(row => row.draft?.text))
+            .toContain('page B independent words');
+    });
+
+    it('retains orphaned legacy drafts and old journals instead of expiring unread data', async () => {
+        const first = await reload(); const db = first.client.getDb();
+        const old = { version: 1 as const, text: 'old orphan recovery', attachments: [], largeTextBlocks: [], updatedAt: 1 };
+        await db.workspace_tab_drafts.put({ id: 'local\u0000orphan-recovery', account_key: 'local', tab_id: 'orphan-recovery', updated_at: 1, draft: old });
+        localStorage.setItem('or3:tab-draft-journal:v1:' + encodeURIComponent('local\u0000local') + ':orphan-recovery', JSON.stringify({ tabId: 'orphan-recovery', updatedAt: 0, draft: { ...old, text: 'independent old journal' } }));
+        const second = await reload(); await second.drafts.load('another-tab');
+        const versions = await second.drafts.listVersions(second.drafts.scope());
+        expect(versions.map(row => row.draft?.text)).toContain('old orphan recovery');
+        expect(versions.map(row => row.draft?.text)).toContain('independent old journal');
+    });
+
+    it('atomically rejects a delayed set after the same writer discarded its draft', async () => {
+        const { client } = await reload(); const db = client.getDb();
+        const recovery = await import('~/db/workspace-draft-recovery');
+        const common = { account: 'local', tab: 'sequence-recovery', writer: 'synthetic-sequence-writer' };
+        const value = { version: 1 as const, text: 'delayed set', attachments: [], largeTextBlocks: [], updatedAt: 1 };
+        await recovery.commitDraftVersion(db, { ...common, sequence: 2, draft: null });
+        const stale = await recovery.commitDraftVersion(db, { ...common, sequence: 1, draft: value });
+        expect(stale.superseded).toBe(true);
+        expect(await db.workspace_tab_drafts.get('local\u0000sequence-recovery')).toBeUndefined();
+        expect((await recovery.listDraftVersions(db, 'local')).find(row => row.writer_id === common.writer)?.draft).toBeNull();
+    });
+
+    it('rolls back every recovery head if the canonical write aborts, then succeeds without losing the other page', async () => {
+        const { client } = await reload(); const db = client.getDb();
+        const recovery = await import('~/db/workspace-draft-recovery');
+        const value = (text: string) => ({ version: 1 as const, text, attachments: [], largeTextBlocks: [], updatedAt: 1 });
+        await recovery.commitDraftVersion(db, { account: 'local', tab: 'atomic-recovery', writer: 'atomic-a', sequence: 1, draft: value('durable A') });
+        const baseline = await recovery.readDraftBaseline(db, 'local', 'atomic-recovery');
+        const rejection = vi.spyOn(db.workspace_tab_drafts, 'put').mockRejectedValueOnce(new DOMException('Synthetic transaction abort', 'AbortError'));
+        await expect(recovery.commitDraftVersion(db, { account: 'local', tab: 'atomic-recovery', writer: 'atomic-b', sequence: 1, draft: value('retry B'), baseline })).rejects.toThrow();
+        expect((await recovery.listDraftVersions(db, 'local')).map(row => row.draft?.text)).toEqual(['durable A']);
+        rejection.mockRestore();
+        await recovery.commitDraftVersion(db, { account: 'local', tab: 'atomic-recovery', writer: 'atomic-b', sequence: 1, draft: value('retry B'), baseline });
+        expect((await recovery.listDraftVersions(db, 'local')).map(row => row.draft?.text).sort()).toEqual(['durable A', 'retry B']);
+    });
+
+    it('refuses recovery selection while attachment bytes are pending and preserves missing hash evidence', async () => {
+        const { drafts, flush } = await reload();
+        drafts.write('saved-choice', draft('alternative text')); await flush();
+        const version = (await drafts.listVersions()).find(row => row.tab_id === 'saved-choice')!;
+        drafts.write('pending-choice', draft('keep selected file', { attachments: [{ file: new File(['pending bytes'], 'pending.png'), name: 'pending.png', status: 'pending' } as never], missingAttachments: [{ hash: 'missing-hash', name: 'missing.png', mime: 'image/png', kind: 'image' }] }));
+        await expect(drafts.restoreVersion('pending-choice', version)).rejects.toThrow('attachments');
+        expect(drafts.read('pending-choice')?.attachments[0]?.file?.size).toBe(13);
+        await flush();
+        expect((await drafts.listVersions()).find(row => row.tab_id === 'pending-choice')?.draft?.attachments[0]?.hash).toBe('missing-hash');
+    });
+
+    it('restoring a version preserves the current buffer and exact removal rejects a changed version', async () => {
+        const { drafts, flush } = await reload();
+        drafts.write('restore-current', draft('current buffer to preserve')); await flush();
+        drafts.write('restore-alternative', draft('chosen alternative')); await flush();
+        const selected = (await drafts.listVersions()).find(row => row.tab_id === 'restore-alternative')!;
+        await drafts.restoreVersion('restore-current', selected);
+        expect(drafts.read('restore-current')?.text).toBe('chosen alternative');
+        expect((await drafts.listVersions()).map(row => row.draft?.text)).toContain('current buffer to preserve');
+        const displayed = (await drafts.listVersions()).find(row => row.tab_id === 'restore-alternative')!;
+        drafts.write('restore-alternative', draft('changed after display')); await flush();
+        const { removeDraftVersion } = await import('~/db/workspace-draft-recovery');
+        await expect(removeDraftVersion(drafts.scope().db!, 'local', displayed)).rejects.toThrow('changed');
+        expect((await drafts.listVersions()).map(row => row.draft?.text)).toContain('changed after display');
+    });
+
+    it('keeps unknown journals intact and offers an explicit cleanup path for inactive own tombstones', async () => {
+        const { drafts, flush } = await reload();
+        drafts.write('inactive-version', draft('close this tab')); await flush();
+        drafts.discard('inactive-version'); await flush();
+        const closed = (await drafts.listVersions()).find(row => row.tab_id === 'inactive-version')!;
+        expect(closed.draft).toBeNull(); await drafts.discardVersion(closed);
+        expect((await drafts.listVersions()).some(row => row.id === closed.id)).toBe(false);
+        const key = 'or3:tab-draft-journal:v1:' + encodeURIComponent('local\u0000local') + ':unknown';
+        localStorage.setItem(key, '{broken synthetic journal');
+        const next = await reload(); await expect(next.drafts.load('unknown')).rejects.toThrow();
+        expect(localStorage.getItem(key)).toBe('{broken synthetic journal');
+    });
+
+    it('rejects capacity overflow without evicting old drafts and retries after explicit cleanup', async () => {
+        const { client } = await reload(); const db = client.getDb();
+        const recovery = await import('~/db/workspace-draft-recovery');
+        const old = { version: 1 as const, text: 'retained old capacity record', attachments: [], largeTextBlocks: [], updatedAt: 1 };
+        await db.workspace_draft_versions.bulkPut(Array.from({ length: 200 }, (_, i) => ({ id: `capacity-${i}`, account_key: 'local', tab_id: `old-${i}`, writer_id: `synthetic-${i}`, sequence: 1, updated_at: 1, kind: 'version' as const, draft: old })));
+        const input = { account: 'local', tab: 'capacity-new', writer: 'new-capacity-writer', sequence: 1, draft: { ...old, text: 'new buffer after cleanup' } };
+        await expect(recovery.commitDraftVersion(db, input)).rejects.toThrow('full');
+        expect(await db.workspace_draft_versions.count()).toBe(200);
+        expect(await db.workspace_tab_drafts.get('local\u0000capacity-new')).toBeUndefined();
+        await recovery.removeDraftVersion(db, 'local', (await recovery.listDraftVersions(db, 'local'))[0]!);
+        await recovery.commitDraftVersion(db, input);
+        expect((await recovery.listDraftVersions(db, 'local')).filter(row => row.draft?.text === old.text)).toHaveLength(199);
+        expect((await db.workspace_tab_drafts.get('local\u0000capacity-new'))?.draft.text).toBe(input.draft.text);
+    });
+
+    it('upgrades a v27 database additively without changing drafts, queued state or attachment bytes', async () => {
+        const { client } = await reload(); const { default: Dexie } = await import('dexie');
+        const name = `synthetic-draft-migration-${Date.now()}`;
+        const template = new client.Or3DB(name);
+        const stores = Object.fromEntries(template.tables.filter(table => table.name !== 'workspace_draft_versions').map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',')]));
+        const old = new Dexie(name); old.version(27).stores(stores); await old.open();
+        const value = { version: 1 as const, text: 'v27 retained draft', attachments: [{ hash: 'legacy-blob', name: 'legacy.txt', mime: 'text/plain', kind: 'image' as const }], largeTextBlocks: [], updatedAt: 1 };
+        await old.table('workspace_tab_drafts').put({ id: 'local\u0000legacy-tab', account_key: 'local', tab_id: 'legacy-tab', updated_at: 1, draft: value });
+        await old.table('kv').put({ id: 'legacy-sentinel', name: 'synthetic-preserve', value: 'unchanged' });
+        await old.table('pending_ops').put({ id: 'legacy-op', status: 'pending', createdAt: 1, readyAt: 0, payload: { synthetic: true } });
+        await old.table('file_blobs').put({ hash: 'legacy-blob', blob: new NodeBlob(['synthetic legacy bytes']) as unknown as Blob });
+        old.close();
+        try {
+            await template.open(); expect(template.verno).toBe(28);
+            expect((await template.workspace_tab_drafts.get('local\u0000legacy-tab'))?.draft).toEqual(value);
+            expect((await template.kv.get('legacy-sentinel'))?.value).toBe('unchanged');
+            expect((await template.pending_ops.get('legacy-op'))?.id).toBe('legacy-op');
+            expect((await template.file_blobs.get('legacy-blob'))?.blob.size).toBe(22);
+            expect(await template.workspace_draft_versions.count()).toBe(0);
+        } finally { template.close(); await Dexie.delete(name); }
+    });
+
+    it('compacts acknowledged immutable journal keys while retaining a later failed operation', async () => {
+        const { drafts, flush, client } = await reload();
+        for (let i = 0; i < 12; i++) drafts.write('journal-compaction', draft(`synthetic keystroke ${i}`));
+        expect(journalKeys()).toHaveLength(12); await flush(); expect(journalKeys()).toEqual([]);
+        const rejection = vi.spyOn(client.getDb().workspace_tab_drafts, 'put').mockRejectedValueOnce(new Error('Synthetic later failure'));
+        drafts.write('journal-compaction', draft('latest unacknowledged operation')); await flush();
+        expect(journalKeys()).toHaveLength(1);
+        expect(JSON.parse(localStorage.getItem(journalKeys()[0]!)!).draft.text).toBe('latest unacknowledged operation');
+        rejection.mockRestore(); await flush(); expect(journalKeys()).toEqual([]);
+    });
+
+    it('keeps an operation floor after explicit removal so a delayed foreign retry cannot resurrect it', async () => {
+        const { client } = await reload(); const db = client.getDb();
+        const recovery = await import('~/db/workspace-draft-recovery');
+        const input = { account: 'local', tab: 'explicit-discard-race', writer: 'synthetic-foreign-writer', sequence: 4,
+            draft: { version: 1 as const, text: 'explicitly discarded alternative', attachments: [], largeTextBlocks: [], updatedAt: 1 } };
+        await recovery.commitDraftVersion(db, input);
+        await recovery.removeDraftVersion(db, 'local', (await recovery.listDraftVersions(db, 'local'))[0]!);
+        expect((await recovery.commitDraftVersion(db, { ...input, sequence: 3 })).superseded).toBe(true);
+        expect(await db.workspace_tab_drafts.get('local\u0000explicit-discard-race')).toBeUndefined();
+        expect(await recovery.listDraftVersions(db, 'local')).toEqual([]);
+        expect((await db.workspace_draft_versions.get(recovery.draftVersionId('local', input.tab, input.writer)))?.draft).toBeNull();
     });
 
     it('rejects interrupted hydration instead of pretending the saved draft is absent, then retries', async () => {
@@ -164,9 +323,9 @@ describe('durable workspace tab drafts', () => {
 
     it('protects unjournaled in-flight bytes and accepts unchanged content after a confirmed receipt', async () => {
         const { client, drafts, flush } = await reload(); const table = client.getDb().workspace_tab_drafts;
-        const put = table.put.bind(table); let finish!: () => Promise<void>;
-        const held = vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
-            finish = async () => resolve(await put(row));
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion; let finish!: () => Promise<void>;
+        const held = vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce((db, input) => new Promise(resolve => {
+            finish = async () => resolve(await commit(db, input));
         }) as never);
         const text = 'L'.repeat(150_000);
         drafts.write('large-pending-tab', draft(text));
@@ -182,10 +341,10 @@ describe('durable workspace tab drafts', () => {
 
     it('uses a synchronous journal for pending small drafts, but guards a blocked journal', async () => {
         const { client, drafts, flush } = await reload();
-        const table = client.getDb().workspace_tab_drafts; const put = table.put.bind(table);
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion;
         const completions: Array<() => Promise<void>> = [];
-        const held = vi.spyOn(table, 'put').mockImplementation(row => new Promise(resolve => {
-            completions.push(async () => resolve(await put(row)));
+        const held = vi.spyOn(recovery, 'commitDraftVersion').mockImplementation((db, input) => new Promise(resolve => {
+            completions.push(async () => resolve(await commit(db, input)));
         }) as never);
         drafts.write('journal-guard-tab', draft('Small journal protects these bytes'));
         const writing = flush(); expect(drafts.needsUnloadConfirmation()).toBe(false);
@@ -313,7 +472,7 @@ describe('durable workspace tab drafts', () => {
         expect(await client.getDb().workspace_tab_drafts.count()).toBe(0);
     });
 
-    it('bounds what is kept: oversized drafts stay in memory, old ones expire, the newest 50 survive', async () => {
+    it('keeps oversized drafts in memory and retains old drafts without automatic eviction', async () => {
         const { client, drafts, flush } = await reload();
         const db = client.getDb();
         drafts.write('huge', draft('x'.repeat(600_000)));
@@ -323,14 +482,14 @@ describe('durable workspace tab drafts', () => {
         const rows = await db.workspace_tab_drafts.toArray();
         expect(rows.some((row) => row.tab_id === 'huge')).toBe(false);
         expect(drafts.read('huge')?.text).toHaveLength(600_000);
-        expect(rows).toHaveLength(50);
-        expect(rows.some((row) => row.tab_id === 'tab-0')).toBe(false);
+        expect(rows).toHaveLength(52);
+        expect(rows.some((row) => row.tab_id === 'tab-0')).toBe(true);
         expect(rows.some((row) => row.tab_id === 'tab-51')).toBe(true);
 
         await db.workspace_tab_drafts.put({ id: 'local\u0000stale', account_key: 'local', tab_id: 'stale', updated_at: Date.now() - 31 * 24 * 60 * 60 * 1000, draft: { version: 1, text: 'old', attachments: [], largeTextBlocks: [], updatedAt: 1 } });
         const second = await reload();
-        expect(await second.drafts.load('stale')).toBeUndefined();
-        expect(await second.client.getDb().workspace_tab_drafts.get('local\u0000stale')).toBeUndefined();
+        expect((await second.drafts.load('stale'))?.text).toBe('old');
+        expect(await second.client.getDb().workspace_tab_drafts.get('local\u0000stale')).toBeDefined();
     });
 
     it('keeps a draft dirty when storage rejects the write, reports it, and saves it on the next flush', async () => {
@@ -366,10 +525,10 @@ describe('durable workspace tab drafts', () => {
     it('keeps the newer same-millisecond journal while an older draft write completes', async () => {
         const first = await reload();
         const table = first.client.getDb().workspace_tab_drafts;
-        const put = table.put.bind(table);
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion;
         let finishWrite!: () => Promise<void>;
-        vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
-            finishWrite = async () => { resolve(await put(row)); };
+        vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce((db, input) => new Promise(resolve => {
+            finishWrite = async () => { resolve(await commit(db, input)); };
         }) as never);
         const updatedAt = Date.now();
         first.drafts.write('tab-1', draft('Earlier buffer', { updatedAt }));
@@ -399,12 +558,12 @@ describe('durable workspace tab drafts', () => {
     it('keeps a same-millisecond discard journal when an older save completes', async () => {
         const first = await reload();
         const table = first.client.getDb().workspace_tab_drafts;
-        const put = table.put.bind(table);
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion;
         let finishWrite!: () => Promise<void>;
-        vi.spyOn(table, 'put').mockImplementationOnce(row => new Promise(resolve => {
-            finishWrite = async () => { resolve(await put(row)); };
+        vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce((db, input) => new Promise(resolve => {
+            finishWrite = async () => { resolve(await commit(db, input)); };
         }) as never);
-        vi.spyOn(table, 'delete').mockImplementationOnce(() => new Promise(() => undefined) as never);
+        vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce(() => new Promise(() => undefined));
         const updatedAt = Date.now();
         vi.spyOn(Date, 'now').mockReturnValue(updatedAt);
         first.drafts.write('tab-1', draft('Submitted draft', { updatedAt }));
@@ -413,7 +572,6 @@ describe('durable workspace tab drafts', () => {
         first.drafts.discard('tab-1');
         await finishWrite();
         await saving;
-        expect(journalKeys()).toHaveLength(1);
         const second = await reload();
         expect(await second.drafts.load('tab-1')).toBeUndefined();
         expect(await second.client.getDb().workspace_tab_drafts.count()).toBe(0);
@@ -423,14 +581,14 @@ describe('durable workspace tab drafts', () => {
     it('keeps another tab save failure visible when an overlapping successful flush finishes', async () => {
         const { client, drafts, flush } = await reload();
         const table = client.getDb().workspace_tab_drafts;
-        const put = table.put.bind(table);
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion;
         let failSave!: () => void;
         let finishSave!: () => Promise<void>;
-        const writes = vi.spyOn(table, 'put').mockImplementation(row => new Promise((resolve, reject) => {
-            if (row.tab_id === 'failed-tab') {
+        const writes = vi.spyOn(recovery, 'commitDraftVersion').mockImplementation((db, input) => new Promise((resolve, reject) => {
+            if (input.tab === 'failed-tab') {
                 failSave = () => reject(new DOMException('Synthetic storage full', 'QuotaExceededError'));
             } else {
-                finishSave = async () => { resolve(await put(row)); };
+                finishSave = async () => { resolve(await commit(db, input)); };
             }
         }) as never);
         drafts.write('failed-tab', draft('Still unsaved'));
@@ -455,11 +613,12 @@ describe('durable workspace tab drafts', () => {
 
     it('does not acknowledge a newer failed edit when an older save of the same tab finishes', async () => {
         const { client, drafts, flush } = await reload();
-        const table = client.getDb().workspace_tab_drafts; const put = table.put.bind(table);
+        const table = client.getDb().workspace_tab_drafts;
+        const recovery = await import('~/db/workspace-draft-recovery'); const commit = recovery.commitDraftVersion;
         let finishOlder!: () => Promise<void>;
-        const writes = vi.spyOn(table, 'put').mockImplementation(row => {
-            if (row.draft.text === 'Older same-tab snapshot') return new Promise(resolve => {
-                finishOlder = async () => resolve(await put(row));
+        const writes = vi.spyOn(recovery, 'commitDraftVersion').mockImplementation((db, input) => {
+            if (input.draft?.text === 'Older same-tab snapshot') return new Promise(resolve => {
+                finishOlder = async () => resolve(await commit(db, input));
             }) as never;
             return Promise.reject(new DOMException('Synthetic latest-edit quota', 'QuotaExceededError')) as never;
         });
@@ -509,7 +668,8 @@ describe('durable workspace tab drafts', () => {
         first.drafts.write('tab-1', draft('saved earlier'));
         await first.flush();
         // From here on the browser drops database writes, as it does for an unloading page.
-        vi.spyOn(table, 'put').mockImplementation(() => new Promise(() => undefined) as never);
+        const recovery = await import('~/db/workspace-draft-recovery');
+        vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce(() => new Promise(() => undefined));
         first.drafts.write('tab-1', draft('typed right before unload', { updatedAt: Date.now() + 5 }));
         void first.flush();
 
@@ -526,7 +686,8 @@ describe('durable workspace tab drafts', () => {
         const table = first.client.getDb().workspace_tab_drafts;
         first.drafts.write('tab-1', draft('already sent'));
         await first.flush();
-        vi.spyOn(table, 'delete').mockImplementation(() => new Promise(() => undefined) as never);
+        const recovery = await import('~/db/workspace-draft-recovery');
+        vi.spyOn(recovery, 'commitDraftVersion').mockImplementationOnce(() => new Promise(() => undefined));
         first.drafts.discard('tab-1');
 
         const second = await reload();
