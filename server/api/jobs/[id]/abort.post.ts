@@ -10,6 +10,7 @@ import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { emitJobStatus } from '../../../utils/background-jobs/viewers';
+import { logBackgroundEvent } from '../../../utils/background-jobs/logging';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 
 function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowMessageData | undefined {
@@ -45,6 +46,7 @@ function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowM
  * - Only the job owner can abort their job.
  */
 export default defineEventHandler(async (event) => {
+    setHeader(event, 'Cache-Control', 'no-store, private');
     requireCloudMutation(event);
     const jobId = getRouterParam(event, 'id');
 
@@ -71,20 +73,32 @@ export default defineEventHandler(async (event) => {
     const provider = await getJobProvider();
     const job = await provider.getJob(jobId, userId);
     if (!job) {
-        return { aborted: false, message: 'Job not found or already complete' };
+        return { aborted: false, state: 'not_found', message: 'Job not found or already complete' };
     }
     await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.write');
-    const workflowState = stoppedWorkflowState(job.workflow_state);
-    if (workflowState !== job.workflow_state) {
-        await provider.updateJob(jobId, { workflow_state: workflowState });
+    if (job.status !== 'streaming') {
+        return { aborted: false, state: 'already_terminal', status: job.status };
     }
-    const aborted = await provider.abortJob(jobId, userId);
+    let aborted: boolean;
+    try {
+        aborted = await provider.abortJob(jobId, userId);
+    } catch (error) {
+        logBackgroundEvent('error', 'background.job.abort-error', { jobId, userId,
+            error: error instanceof Error ? error.message : String(error) });
+        setResponseStatus(event, 500);
+        return { aborted: false, state: 'abort_error', message: 'Failed to stop the job; remote state is unknown' };
+    }
 
     if (!aborted) {
-        // Could be: job not found, not authorized, or already complete
-        return { aborted: false, message: 'Job not found or already complete' };
+        // A job may have finished between the initial read and the stop.
+        const current = await provider.getJob(jobId, userId);
+        if (!current) return { aborted: false, state: 'not_found' };
+        if (current.status !== 'streaming') return { aborted: false, state: 'already_terminal', status: current.status };
+        setResponseStatus(event, 502);
+        return { aborted: false, state: 'abort_rejected', message: 'Provider refused to stop the job; remote work may still be running' };
     }
 
+    const workflowState = stoppedWorkflowState(job.workflow_state);
     emitJobStatus(jobId, 'aborted', {
         content: job.content,
         contentLength: job.content.length,
@@ -95,6 +109,7 @@ export default defineEventHandler(async (event) => {
 
     return {
         aborted: true,
+        state: 'aborted',
         status: 'aborted',
         workflow_state: workflowState
     };

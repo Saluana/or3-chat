@@ -138,6 +138,7 @@ behind the authenticated SSR routes and provider adapters described above.
 | Background chat start | Resolved session | Active workspace/thread/message | `ai.background` | Editor, owner |
 | Background workflow start/HITL | Resolved session | Active workspace/workflow/job | `workspace.write` and `ai.background` for start | Editor, owner and job owner |
 | Job status/stream | Resolved session matched to stored job | Origin workspace/job | `workspace.read` | Job owner with membership |
+| Admission recovery lookup | Resolved session matched to scoped admission key | Origin workspace/admission/job | `workspace.read` | Job owner with current membership |
 | Job abort | Resolved session matched to stored job | Origin workspace/job | `workspace.write` | Job owner with editor/owner role |
 | Foreground client tool | Admitted request context | Thread/message/call | request allowlist plus declared tool capability | Enabled client runtime only |
 | Background server tool | Authenticated job context | Workspace/thread/message/call | `tool.execute` plus tool-specific policy | Editor/owner after allowlist and schema validation |

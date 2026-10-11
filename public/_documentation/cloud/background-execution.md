@@ -6,6 +6,7 @@ This document covers the implementation currently wired in:
 
 - Chat background streaming (`/api/openrouter/stream` with `_background: true`)
 - Background job status/reattach APIs (`/api/jobs/:id/status`, `/api/jobs/:id/stream`, `/api/jobs/:id/abort`)
+- Admission recovery (`GET /api/jobs/admission/:admissionId?workspaceId=...`)
 - Workflow package background execution (`/api/plugins/or3-workflows/workflows/background`)
 - Workflow package HITL responses (`/api/plugins/or3-workflows/workflows/hitl`)
 
@@ -122,6 +123,23 @@ to the in-process marker, which is best-effort and logged.
 Admissions created before scoped keys were introduced remain cancellable by their
 known job ID; the new admission-cancellation route does not target their raw keys.
 
+Stop responses distinguish `aborted`, `cancel_requested` (admission marker recorded),
+`already_terminal`, `not_found`, `abort_rejected`, and `abort_error`. A refused or
+failed stop never projects a workflow as stopped. An admission stop failure returns
+`pending: false`, because a marker alone cannot prove an existing job stopped.
+
+### Recovering a lost admission response
+
+After bounded transport retries reuse the same admission ID, the client makes one
+bounded lookup in the originating workspace. The lookup requires current read
+membership and uses the same user/workspace/admission key as creation and cancellation.
+It returns job identity, status, and the stored version-1 history contract. Provider
+failure remains an unknown outcome rather than a misleading 404.
+The client checks the history version and thread/message identity before attaching.
+Completed, failed, and aborted jobs also reattach so retained output can be projected
+without another generation. Explicit admission refusals and caller cancellation do
+not trigger recovery.
+
 ### Terminal retention and transport errors
 
 Terminal jobs are retained for 24 hours (`completedJobRetentionMs`) as the
@@ -216,6 +234,11 @@ When tools are included in the background request, the server switches to `consu
   job stream. One browser tab claims the call, executes the exact admitted
   definition through the client registry, and posts a bounded result before
   the server resumes the same tool loop.
+- Claim responses include the reviewed argument fingerprint. The memory provider
+  snapshots a digest of the tool name and actual arguments at claim time and
+  recomputes it at settlement, rejecting replacement arguments even if their
+  metadata digest was copied. Existing external providers retain their current
+  claim-token contract; the optional snapshot field alone does not upgrade them.
 - Detached trackers remain active across chat navigation. On startup, recent
   pending rows are restored so browser calls can resume after reload. A local
   execution journal retries completed delivery and reports an unknown outcome
