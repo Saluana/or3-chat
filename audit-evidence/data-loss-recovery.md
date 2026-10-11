@@ -3,8 +3,14 @@
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (remote `or3-cloud`, fetched October 11).
 Branch: `audit/data-loss-recovery-20261011`. Fresh isolated cloud container only.
 
-**Latest source checkpoint:** `bf9db934cd80673ce836d7f17239c109d09e6fbd`
-protects an unread tab manifest after storage-read failure. Its 51 scoped tests,
+**Latest source checkpoint:** `c65df47fb91570fefa1d218a695e46d41b9f7894`
+fixes four verified coalescer receipt/teardown races. It passes 27 scoped tests,
+type checking, lint, actual Chromium independent-writer dialogs with mocked
+writes, and the mounted native five-failure retry/refresh case. A fresh combined
+32-case run began at this exact source at 13:54 UTC, with no concurrent source
+edits, Nuxt preparation, unit suites or type checks. That pending invocation
+is not yet a passing qualification.
+The preceding `bf9db934cd80673ce836d7f17239c109d09e6fbd` protects an unread tab manifest after storage-read failure. Its 51 scoped tests,
 type checking, lint and native Chromium failure/reload probe pass. Its fresh
 combined run passed **32/32 in 9.1 minutes**: log
 `/tmp/or3-recovery-unavailable-layout-expanded-final-browser.log`. Source
@@ -55,6 +61,44 @@ finalization owners need to coordinate a write-only recovery path.
 Open risk: competing browser-page drafts still share a canonical
 row/journal. Preserve-both design is documented and deliberately unimplemented.
 Natural hidden/OS-suspension coverage remains blocked by this browser environment.
+
+## Coalescer teardown/concurrency follow-up (parent requested)
+
+New source commit `c65df47fb91570fefa1d218a695e46d41b9f7894` is narrowly
+qualified below and awaits combined browser qualification.
+Prior committed HEAD before this change:
+`85d1bac53f3f5e641b3aad660d2616dd9cb1a51f`; last application source `bf9db934`
+qualified 32/32. Four new regressions fail against that coalescer: a successful
+older retry removes protection for a newer dirty suffix, a queued flush returns
+while a newer prepared write remains pending, a waiting callback starts after
+disposal, and a newly invoked flush writes after disposal. RED with bail disabled:
+`/tmp/or3-recovery-stream-guard-races-unit-red.log` (**4 failed, 4 passed**).
+
+The committed narrow fix keeps failed-write protection while newer deltas remain,
+joins the current in-flight chain repeatedly, and prevents waiting/new writes or
+deltas after disposal begins. The already prepared write still drains. No shared
+foreground/continuation/finalization caller changed. Final scoped qualification:
+**27 tests passed** in `/tmp/or3-recovery-stream-guard-races-unit-qualified.log`,
+including propagation of the newer joined failure, idle retry cancellation,
+independent failed writers and repeated disposal. Type checking and lint passed:
+`/tmp/or3-recovery-stream-guard-races-typecheck.log`,
+`/tmp/or3-recovery-stream-guard-races-lint.log`. Chromium utility/real-dialog qualification also passed: independent failed
+writers installed exactly two guards; disposing one and a late rejecting writer
+left the newer dirty suffix protected by one real beforeunload dialog. Final
+acknowledgement removed the last guard and actual refresh succeeded without a
+second dialog. Persistence callbacks were mocked; this is production utility
+plus actual browser-dialog evidence, not native IndexedDB or mounted-stream
+evidence. Log `/tmp/or3-recovery-coalescer-guard-lifecycle-qualified-browser.log`,
+`test-results/recovery-coalescer-guard-lifecycle-qualified/evidence.json`. The first
+probe stopped before exercising guards because the lazy module was not yet loaded.
+The mounted native save-failure regression also passed on this source:
+five rejected puts during dismissed refresh, followed by repair, acknowledged
+save, guard removal and actual refresh preserving the expanded prefix. One
+unchanged assistant ID, one user row, one mocked provider invocation. Log
+`/tmp/or3-recovery-assistant-persistent-guard-races-qualified-browser.log`,
+`test-results/recovery-assistant-persistent-guard-races-qualified/evidence.json`.
+The new combined qualification remains pending; the prior 32/32 result does not qualify
+this newer committed source. The terminal-save limitation remains unchanged.
 
 ## Permanent assistant-write rejection and active progress protection
 
@@ -218,6 +262,26 @@ and `before-crash.png`. This establishes renderer-failure recovery **after journ
 acknowledgement** for a small text draft; it does not cover pre-capture keystrokes,
 a whole-browser/storage-process crash, physical disk corruption, OS power loss,
 or unjournalable large buffers. The dormant generation cleanup system remains off.
+
+## Renderer crash during partial attachment persistence
+
+The follow-up mounted Chromium case committed a 68-byte synthetic PNG while
+native draft puts were rejected. The prior durable draft still had its earlier
+text and **zero attachment references**; only the acknowledged recovery journal
+contained the new text and image hash. An actual `Page.crash` event bypassed unload.
+A new page recovered the exact text under the original row ID, displayed the
+attachment removal control, persisted its hash reference, and read back all
+68 original bytes exactly. No application source change was needed.
+
+Probe `audit-evidence/renderer-crash-attachment-probe.ts`; log
+`/tmp/or3-recovery-renderer-crash-attachment-qualified-browser.log`; native
+receipts `test-results/recovery-renderer-crash-attachment/before-crash.json` and
+`evidence.json`. The first attempt stopped before intake because the production
+composer creates its file chooser on the Add attachments action; no crash or
+attachment assertion occurred in that setup failure. The qualified case uses
+the actual chooser. All external requests denied. This is renderer failure after
+both file-byte commit and journal acknowledgement, not recovery before either
+boundary nor whole-browser/OS/storage-process failure.
 
 ## Terminal assistant-save failure — verified remaining limitation
 
