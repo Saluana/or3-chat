@@ -10,8 +10,10 @@ import type { CanonicalStorageQueryRequest } from '../../../sync/gateway/types';
 const fixtures = vi.hoisted(() => ({
     session: null as SessionContext | null,
     query: vi.fn(),
+    workspaces: vi.fn(),
 }));
-vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => fixtures.session }));
+vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => fixtures.session, getAuthorizationRevision: () => 0 }));
+vi.mock('../../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => ({ listUserWorkspaces: fixtures.workspaces }) }));
 vi.mock('#imports', () => ({
     useRuntimeConfig: () => ({ auth: { enabled: true }, storage: { enabled: true } }),
 }));
@@ -72,6 +74,9 @@ describe('filesystem download HTTP isolation and signed-link lifetime', () => {
             ['alice:ws-a', 'owner'], ['alice:ws-b', 'editor'],
             ['bob:ws-a', 'editor'], ['bob:ws-b', 'owner'],
         ]);
+        fixtures.workspaces.mockReset().mockImplementation(async (userId: string) => Array.from(memberships.entries())
+            .filter(([key]) => key.startsWith(`${userId}:`))
+            .map(([key, role]) => ({ id: key.slice(userId.length + 1), name: 'Synthetic', role })));
         canonical = new Map(['ws-a', 'ws-b'].map((workspaceId) => [workspaceId, new CanonicalStorageContractFixture({ workspaceId })]));
         const objectPath = resolveFsObjectPath(root, 'ws-a', hash);
         await mkdir(dirname(objectPath), { recursive: true });
@@ -112,6 +117,46 @@ describe('filesystem download HTTP isolation and signed-link lifetime', () => {
         const response = await presign('ws-a');
         expect(response.status).toBe(403);
         expect(fixtures.query).not.toHaveBeenCalled();
+    });
+
+    it('does not redirect filesystem scope through a foreign canonical storage identifier', async () => {
+        const originRecord = canonical.get('ws-a')!.records.find(record => record.kind === 'metadata');
+        if (!originRecord || originRecord.kind !== 'metadata') throw new Error('Missing synthetic origin metadata');
+        canonical.get('ws-b')!.records.push({ ...originRecord, storageId: `ws-a:${hash}` });
+        select('bob', 'ws-b');
+        const missing = await presign('ws-b');
+        expect(missing.status).toBe(404);
+        const objectPath = resolveFsObjectPath(root, 'ws-b', hash);
+        await mkdir(dirname(objectPath), { recursive: true });
+        await writeFile(objectPath, content);
+        await writeFile(getFsObjectMetadataPath(objectPath), '{}');
+        const scoped = await presign('ws-b');
+        expect(scoped.status).toBe(200);
+        const body = await scoped.json();
+        expect(body.storageId).toBe(`ws-b:${hash}`);
+        await rm(resolveFsObjectPath(root, 'ws-a', hash));
+        const response = await download(body.url);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toBe(content);
+    });
+
+    it('rejects a foreign S3 object key before any provider I/O, while a scoped key reaches object verification', async () => {
+        const { S3StorageGatewayAdapter } = await import('../../../../node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js');
+        const { buildS3ObjectKey, buildS3MarkerKey } = await import('../../../../node_modules/or3-provider-s3/dist/runtime/server/storage/s3-keys.js');
+        const send = vi.fn(async (_command: unknown) => { throw new Error('synthetic object verification failure; no network'); });
+        const adapter = new S3StorageGatewayAdapter({ region: 'synthetic-region', bucket: 'synthetic-bucket',
+            accessKeyId: 'synthetic-key', secretAccessKey: 'synthetic-secret', endpoint: 'https://synthetic.invalid',
+            forcePathStyle: true, keyPrefix: 'synthetic-prefix/', urlTtlSeconds: 60, requireChecksum: true }, { client: { send } });
+        const key = (workspaceId: string) => buildS3ObjectKey({ keyPrefix: 'synthetic-prefix/', workspaceId, hash });
+        const requestFor = (storageId: string) => toWebHandler(createApp().use(event => adapter.presignDownload(event,
+            { workspaceId: 'ws-b', hash, storageId, mimeType: 'text/plain' })))(new Request('http://synthetic.test/provider'));
+        const foreign = await requestFor(key('ws-a'));
+        expect(foreign.status).toBe(400);
+        expect(send).not.toHaveBeenCalled();
+        const scoped = await requestFor(key('ws-b'));
+        expect(scoped.status).toBe(502);
+        expect(send).toHaveBeenCalledOnce();
+        expect(send).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ Key: buildS3MarkerKey(key('ws-b')) }) }));
     });
 
     it('makes another workspace hash and a deleted metadata row indistinguishable', async () => {

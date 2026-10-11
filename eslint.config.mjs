@@ -16,6 +16,7 @@ const existingProjects = nuxtProjects
     .filter((path) => existsSync(new URL(path, import.meta.url)))
     .map((path) => path.replace('./.nuxt/tsconfig.', './tsconfig.eslint.'));
 const lintProject = './tsconfig.eslint.json';
+const auditProject = './tsconfig.eslint.audit.json';
 
 export default [
     {
@@ -25,8 +26,8 @@ export default [
             parser: tsParser,
             parserOptions: {
                 project: existingProjects.length
-                    ? [...existingProjects, lintProject]
-                    : [lintProject],
+                    ? [...existingProjects, lintProject, auditProject]
+                    : [lintProject, auditProject],
                 tsconfigRootDir: import.meta.dirname,
             },
         },
@@ -38,6 +39,15 @@ export default [
             '@typescript-eslint/no-explicit-any': 'warn',
             '@typescript-eslint/no-unsafe-assignment': 'error',
             '@typescript-eslint/no-unnecessary-condition': 'warn',
+        },
+    },
+    {
+        // Audit runners keep Bun types even when another project includes them.
+        files: ['audit-evidence/**/*.ts', 'audit-evidence/**/*.tsx'],
+        languageOptions: {
+            parserOptions: {
+                project: [auditProject],
+            },
         },
     },
     {

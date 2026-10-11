@@ -1,0 +1,4 @@
+Parent HEAD: fef3e275; pending default prompt patch
+Command: bun x eslint app/composables/chat/useDefaultPrompt.ts
+
+Exit status: 0

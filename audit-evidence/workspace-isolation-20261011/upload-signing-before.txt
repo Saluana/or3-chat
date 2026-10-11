@@ -1,0 +1,44 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ × |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held quota resumes 30ms
+   → expected 200 to be 403 // Object.is equality
+ × |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held quota resumes 3ms
+   → expected 200 to be 403 // Object.is equality
+ ✓ |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership owner after held quota resumes 2ms
+ × |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held signer resumes 2ms
+   → expected 200 to be 403 // Object.is equality
+ × |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held signer resumes 2ms
+   → expected 200 to be 403 // Object.is equality
+ ✓ |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership owner after held signer resumes 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held quota resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held quota resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership removed after held signer resumes
+ FAIL  |core-node| server/api/storage/__tests__/presign-upload-membership-continuation.test.ts > upload signing membership continuation with real session caching > uses current membership viewer after held signer resumes
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ server/api/storage/__tests__/presign-upload-membership-continuation.test.ts:63:35
+     61|             resume();
+     62|             const result = await response;
+     63|             expect(result.status).toBe(role === 'owner' ? 200 : 403);
+       |                                   ^
+     64|             expect(fixture.sign).toHaveBeenCalledTimes(role !== 'owner…
+     65|         });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  10:11:40
+   Duration  2.03s (transform 1.23s, setup 203ms, import 1.56s, tests 42ms, environment 1ms)
+

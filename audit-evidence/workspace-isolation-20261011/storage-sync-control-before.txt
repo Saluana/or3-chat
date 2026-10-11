@@ -1,0 +1,30 @@
+Source commit 25faca8e154151eff23626d0cb4125ee063b3e1b; seven existing storage/sync control suites. One presign-expiry fixture failed because it lacked the new guard dependency; not a base security finding.
+Exit status: 1
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+···························································································x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-expiry.test.ts > presign expiry handling > uses provider expiry when available (upload)
+Error: Workspace store unavailable
+ ❯ createError server/api/storage/__tests__/presign-expiry.test.ts:22:21
+     20|     setHeader: setHeaderMock,
+     21|     createError: (opts: { statusCode: number; statusMessage?: string }…
+     22|         const err = new Error(opts.statusMessage ?? 'Error') as Error …
+       |                     ^
+     23|             statusCode: number;
+     24|         };
+ ❯ requireStorageWorkspaceAccess server/utils/storage/workspace-access.ts:24:15
+ ❯ server/api/storage/presign-upload.post.ts:197:11
+ ❯ server/api/storage/__tests__/presign-expiry.test.ts:160:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  1 failed | 91 passed (93)
+   Start at  11:36:27
+   Duration  3.39s (transform 1.14s, setup 1.32s, import 473ms, tests 2.41s, environment 4ms)
+

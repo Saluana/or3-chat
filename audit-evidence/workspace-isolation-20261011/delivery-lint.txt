@@ -1,0 +1,6 @@
+
+/workspace/or3-chat/app/pages/images/index.vue
+  0:0  warning  File ignored because no matching configuration was supplied
+
+✖ 1 problem (0 errors, 1 warning)
+

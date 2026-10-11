@@ -1,0 +1,14 @@
+Commit: 19c8782a6e16c36f5d8d7dc9e696438d180e42d0
+Command: /workspace/.bun/bin/bun x vitest run tests/unit/workspace-db-cache.test.ts app/composables/workspace/__tests__/active-workspace-revision.test.ts app/composables/core/__tests__/useWorkspaceTabs.test.ts app/composables/core/__tests__/useWorkspaceTabPersistence.test.ts --reporter=dot --silent=passed-only --maxWorkers=2
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+···························································
+
+ Test Files  4 passed (4)
+      Tests  59 passed (59)
+   Start at  12:54:58
+   Duration  3.79s (transform 541ms, setup 728ms, import 1.09s, tests 1.40s, environment 2.70s)
+
+
+Exit status: 0

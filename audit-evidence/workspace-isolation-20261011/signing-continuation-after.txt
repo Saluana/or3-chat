@@ -1,0 +1,49 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 404 when auth or storage flags are disabled 171ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 400 for body schema failures 5ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 400 for invalid expires_in_ms bounds/type 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 400 for invalid disposition values 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 400 for a non-canonical hash 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 401 when session is unauthenticated 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 403 when workspace.read fails 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 429 and Retry-After when rate limited 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 500 when adapter is missing 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns a generic 404 for missing, soft-deleted, or pending metadata 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > uses provider expiresAt when provided 4ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > falls back to default expiry when provider omits expiresAt 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > records metrics and rate limit accounting on success 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > forwards expiry/disposition to adapter 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > forces generic files to inert attachment downloads despite caller hints 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > returns 426 before presigning a generic file for an older reader 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > passes through download method/headers/storageId from adapter response 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > rejects a declared oversized body with 413 before reading it 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > rejects an oversized chunked body with 413 as soon as the limit is crossed 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > answers 400 for JSON null 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > answers 400 for a JSON string 0ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > answers 400 for a JSON number 0ms
+ ✓ |core-node| server/api/storage/__tests__/presign-download.post.test.ts > POST /api/storage/presign-download > request body bounds > answers 400 for malformed JSON 1ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > serves an authorized owner and ignores forged provider object selection 58ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > denies foreign workspace signing before querying its canonical metadata 6ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > makes another workspace hash and a deleted metadata row indistinguishable 8ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > refuses an already-issued link for another user in the same workspace 10ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > refuses an already-issued link for the owner after workspace switching 7ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > refuses an already-issued link for a removed member 5ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > preserves authorized viewer downloads after a role downgrade 6ms
+ ✓ |core-node| server/api/storage/__tests__/download-isolation.test.ts > filesystem download HTTP isolation and signed-link lifetime > enforces the issued link expiry and rejects tampering 12ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider unavailable 25ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider failed-read 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider foreign-only 3ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed after held canonical metadata resumes 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer after held canonical metadata resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner after held canonical metadata resumes 2ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer after held signer resumes 1ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner after held signer resumes 1ms
+
+ Test Files  3 passed (3)
+      Tests  40 passed (40)
+   Start at  10:09:51
+   Duration  1.70s (transform 1.27s, setup 504ms, import 1.74s, tests 361ms, environment 3ms)
+

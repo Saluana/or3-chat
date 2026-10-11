@@ -100,7 +100,10 @@ Prompt results open the selected prompt directly in edit mode. The
 and a fresh editor respectively.
 
 If an action fails, the palette stays open, keeps your active result, and shows
-a recoverable error message so you can retry or pick something else.
+a recoverable error message so you can retry or pick something else. If you
+switch workspaces while an action is pending, its later result cannot close the
+current palette or display the previous workspace's failure message. This also
+applies when you switch away and return before the result arrives.
 
 Actions can be unavailable rather than hidden. A greyed row labelled
 *Unavailable* explains the reason on hover, for example when the pane limit is

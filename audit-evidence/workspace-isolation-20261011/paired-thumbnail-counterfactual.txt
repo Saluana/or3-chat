@@ -1,0 +1,82 @@
+Base: 82254f38e123366c83594a046f1593fba93e734b
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-9nH6ac
+
+xx·------------
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed | 12 skipped (15)
+   Start at  12:42:15
+   Duration  2.59s (transform 655ms, setup 185ms, import 900ms, tests 750ms, environment 516ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace changed
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:paired-target' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-target",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 2
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:69:45
+     67|             first.unmount();
+     68|             await vi.advanceTimersByTimeAsync(15_001);
+     69|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(curre…
+       |                                             ^
+     70|             expect(second.find('img').attributes('src')).toBe(currentU…
+     71|             second.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |core-app| app/components/chat/__tests__/workspace-thumbnails.test.ts > mounted thumbnail workspace consumers > keeps a shared palette thumbnail retained while a second consumer survives workspace returned
+AssertionError: expected "vi.fn()" to not be called with arguments: [ 'blob:paired-return' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-origin",
+  ]
+
+  2nd vi.fn() call:
+
+  [
+-   "blob:paired-return",
++   "blob:paired-target",
+  ]
+
+  3rd vi.fn() call:
+
+Compared values have no visual difference.
+
+
+Number of calls: 3
+
+ ❯ app/components/chat/__tests__/workspace-thumbnails.test.ts:69:45
+     67|             first.unmount();
+     68|             await vi.advanceTimersByTimeAsync(15_001);
+     69|             expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(curre…
+       |                                             ^
+     70|             expect(second.find('img').attributes('src')).toBe(currentU…
+     71|             second.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+Exit status: 1

@@ -1,0 +1,13 @@
+Source checkpoint: aa9d94b7 (latest runtime source f3468423fb342be1720564ef090101835230fb65)
+Synthetic local fixtures only; no paid/provider requests.
+Recorded process exit: 0
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+······················································
+
+ Test Files  10 passed (10)
+      Tests  54 passed (54)
+   Start at  11:10:29
+   Duration  4.12s (transform 833ms, setup 1.31s, import 890ms, tests 1.33s, environment 2.58s)
+

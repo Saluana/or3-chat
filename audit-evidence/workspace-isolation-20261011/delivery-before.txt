@@ -1,0 +1,37 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+-------xx---------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery download delivery after a workspace change during its blob read
+AssertionError: expected "click" to be called +0 times, but got 1 times
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:393:62
+    391|                 copy.mockClear();
+    392|                 await (action === 'download' ? vm.handleDownload(row) …
+    393|                 expect(action === 'download' ? click : copy).toHaveBee…
+       |                                                              ^
+    394|             }
+    395|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences gallery copy delivery after a workspace change during its blob read
+AssertionError: expected "copyImageBlobToClipboard" to be called +0 times, but got 1 times
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:393:62
+    391|                 copy.mockClear();
+    392|                 await (action === 'download' ? vm.handleDownload(row) …
+    393|                 expect(action === 'download' ? click : copy).toHaveBee…
+       |                                                              ^
+    394|             }
+    395|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 skipped (18)
+   Start at  08:55:42
+   Duration  2.64s (transform 1.16s, setup 158ms, import 738ms, tests 1.08s, environment 462ms)
+

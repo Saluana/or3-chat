@@ -340,6 +340,9 @@ describe('registered canonical history authorization', () => {
         expect(reads).toEqual([]); expect(getJobCount()).toBe(1);
     });
     it('rejects unavailable canonical execution before job creation and admits explicit browser placement', async () => {
+        // Read-only history remains available to viewers; generation requires a writer.
+        registerAuthWorkspaceStore({ id: 'history-owner', create: () => ({ listUserWorkspaces: async () =>
+            [{ id: 'workspace', name: 'Workspace', role: 'editor' }] }) as unknown as AuthWorkspaceStore });
         adapter.capabilities = { backgroundGenerationHistory: 'v1' };
         adapter.admitChatGeneration = async () => ({ status: 'admitted', replayed: false, serverVersion: 1 });
         adapter.finalizeChatGeneration = async () => ({ status: 'committed', replayed: false, serverVersion: 2 });
@@ -362,6 +365,8 @@ describe('registered canonical history authorization', () => {
         expect(getChatJobExecution(saved!)?.body._toolRuntime).toEqual({ get_message: 'client', search_parent: 'client' });
     });
     it.each([null, 'project'])('checks new chat ownership after canonical admission (%s)', async projectId => {
+        registerAuthWorkspaceStore({ id: 'history-owner', create: () => ({ listUserWorkspaces: async () =>
+            [{ id: 'workspace', name: 'Workspace', role: 'editor' }] }) as unknown as AuthWorkspaceStore });
         // A first turn has no canonical thread until admission. Its admitted
         // owner, rather than a caller-supplied policy, must gate dispatch.
         adapter.capabilities = { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' };

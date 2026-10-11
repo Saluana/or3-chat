@@ -1,5 +1,6 @@
 import type { PreviewCacheOptions } from '~/config/preview-cache';
 import { resolvePreviewCacheOptions } from '~/config/preview-cache';
+import { subscribeActiveWorkspaceDb } from '~/db/client';
 
 export type { PreviewCacheOptions } from '~/config/preview-cache';
 
@@ -281,6 +282,7 @@ type PreviewCacheInstance = ReturnType<typeof usePreviewCache>;
 
 let sharedCache: PreviewCacheInstance | null = null;
 let sharedOptions: PreviewCacheOptions | null = null;
+let stopSharedWorkspace: (() => void) | null = null;
 
 /**
  * `useSharedPreviewCache`
@@ -291,6 +293,7 @@ let sharedOptions: PreviewCacheOptions | null = null;
  * Behavior:
  * Initializes once and reuses the same cache. In dev mode, logs when callers
  * attempt to change cache sizing after initialization.
+ * Workspace changes revoke cached URLs and cancel pending loads before reuse.
  *
  * Constraints:
  * - Configuration is locked after the first call
@@ -309,6 +312,8 @@ export function useSharedPreviewCache(
     if (!sharedCache) {
         sharedCache = usePreviewCache(overrides);
         sharedOptions = sharedCache.options;
+        const cache = sharedCache;
+        stopSharedWorkspace = subscribeActiveWorkspaceDb(() => cache.flushAll());
     } else if (
         import.meta.dev &&
         overrides &&
@@ -353,6 +358,8 @@ export function useSharedPreviewCache(
  * ```
  */
 export function resetSharedPreviewCache() {
+    stopSharedWorkspace?.();
+    stopSharedWorkspace = null;
     if (!sharedCache) return;
     sharedCache.flushAll();
     sharedCache = null;

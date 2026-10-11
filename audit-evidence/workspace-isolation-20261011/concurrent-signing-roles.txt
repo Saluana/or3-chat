@@ -1,0 +1,56 @@
+Runtime source: d57ffb71f295db77e17da2b89d4b688dc93bbd72
+Host HEAD: 42b3ac61, test-only concurrency additions in working tree
+Command: PATH=/workspace/.bun/bin:$PATH bun x vitest run server/api/storage/__tests__/presign-membership-continuation.test.ts --testNamePattern=concurrent\ download/upload --reporter=verbose
+Exit status: 0
+Coverage: two requests share an already-resolved cached session; both signers reach a barrier, both final membership reads hold owner snapshots; real admin removal/demotion advances store-wide revision; independent read/write retries preserve intended roles. Initial unprimed fixture timed out before both final boundaries and is not product evidence (ignored concurrent-signing-setup.txt). Cold concurrent session resolution was not qualified here.
+
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider unavailable
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider failed-read
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fails closed and recovers after membership provider foreign-only
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership editor for download when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership editor for upload when its before signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > bounds retries under repeated membership invalidation before signing
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership editor for download when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership editor for upload when its after signing lookup returns a stale snapshot
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > bounds retries under repeated membership invalidation after signing
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > preserves the read when an unrelated identity is invalidated during membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences download when an admin route changes membership removed during final membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences download when an admin route changes membership viewer during final membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences download when an admin route changes membership editor during final membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences upload when an admin route changes membership removed during final membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences upload when an admin route changes membership viewer during final membership lookup
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > fences upload when an admin route changes membership editor during final membership lookup
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > keeps concurrent download/upload authorization independent after admin changes membership to removed 32ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > keeps concurrent download/upload authorization independent after admin changes membership to viewer 7ms
+ ✓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > keeps concurrent download/upload authorization independent after admin changes membership to editor 4ms
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > handles unrelated-store invalidation during a membership read
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > handles global invalidation during a membership read
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download after held canonical metadata resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download after held canonical metadata resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for download after held canonical metadata resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download after held signer resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for download after held signer resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for download after held signer resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload after held quota resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload after held quota resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for upload after held quota resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload after held signer resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload after held signer resumes
+ ↓ |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership owner for upload after held signer resumes
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 38 skipped (41)
+   Start at  10:53:00
+   Duration  1.79s (transform 1.07s, setup 177ms, import 1.37s, tests 45ms, environment 0ms)
+

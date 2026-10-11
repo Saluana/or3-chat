@@ -472,6 +472,71 @@ function workspaceBStorage() {
     };
 }
 
+describe('tab restoration lookup ownership', () => {
+    function snapshot(id: string) {
+        return JSON.stringify({
+            schemaVersion: 1,
+            tabs: [{ id, resource: { kind: 'document', documentId: id },
+                cachedTitle: id, createdAt: 1, lastActivatedAt: 1, ephemeral: false }],
+            activeTabId: id, visibleTabIds: [id], activeVisibleIndex: 0, savedAt: 1,
+        });
+    }
+
+    it.each([
+        ['switch', 'success'], ['switch', 'failure'],
+        ['return', 'success'], ['return', 'failure'],
+    ] as const)('discards held restore %s / %s after its scope expires', async (transition, outcome) => {
+        const fake = createHost();
+        const gate = deferred();
+        const entries = new Map([
+            ['or3:workspace-tabs:v1:workspace-a:standard', snapshot('old-a')],
+            ['or3:workspace-tabs:v1:workspace-b:standard', snapshot('current-b')],
+        ]);
+        const onError = vi.fn();
+        let firstLookup = true;
+        const tabs = createTabs(fake, {
+            onError,
+            storage: { getItem: key => entries.get(key) ?? null,
+                setItem: (key, value) => { entries.set(key, value); } },
+            filterRestoredTabs: async restored => {
+                if (firstLookup) {
+                    firstLookup = false;
+                    await gate.promise;
+                }
+                return restored.map(tab => tab.id);
+            },
+        });
+        const oldRestore = tabs.restore();
+        await expect(tabs.switchScope('workspace-b', 'standard')).resolves.toBe(true);
+        let currentId = 'current-b';
+        if (transition === 'return') {
+            entries.set('or3:workspace-tabs:v1:workspace-a:standard', snapshot('fresh-a'));
+            await expect(tabs.switchScope('workspace-a', 'standard')).resolves.toBe(true);
+            currentId = 'fresh-a';
+        }
+        if (outcome === 'failure') gate.reject(new Error('Former-workspace lookup detail'));
+        else gate.resolve();
+        await expect(oldRestore).resolves.toBe(false);
+        expect(tabs.tabs.value.map(tab => tab.id)).toEqual([currentId]);
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'document', documentId: currentId });
+        expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('reports a current lookup failure and preserves its validated snapshot', async () => {
+        const fake = createHost();
+        const onError = vi.fn();
+        const error = new Error('Current metadata lookup failed');
+        const tabs = createTabs(fake, {
+            onError,
+            storage: { getItem: () => snapshot('current-a'), setItem() {} },
+            filterRestoredTabs: async () => { throw error; },
+        });
+        await expect(tabs.restore()).resolves.toBe(true);
+        expect(onError).toHaveBeenCalledWith(error, { tabId: 'current-a', action: 'filter-restore' });
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'document', documentId: 'current-a' });
+    });
+});
+
 describe('useWorkspaceTabs concurrent operations', () => {
     it.each([false, true])('waits for outgoing activation before closing its tab (save succeeds: %s)', async (saveSucceeds) => {
         const fake = createHost();

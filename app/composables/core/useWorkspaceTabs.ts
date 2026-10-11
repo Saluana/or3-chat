@@ -511,6 +511,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
                     };
                 }
             } catch (error) {
+                if (generation !== scopeGeneration) return false;
                 // Local metadata may be unavailable while the shell starts.
                 // Keep a validated snapshot rather than discarding a session.
                 options.onError?.(error, {

@@ -1,0 +1,178 @@
+Base: df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-CjtnLn
+
+xx··xx·xxxxx
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 3 passed (12)
+   Start at  13:45:29
+   Duration  4.05s (transform 647ms, setup 245ms, import 951ms, tests 1.87s, environment 733ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > keeps a suspended default preference write in its originating workspace (switch, A-new)
+AssertionError: expected 'A-new' to be 'B-existing' // Object.is equality
+
+Expected: "B-existing"
+Received: "A-new"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:71:102
+     69|         try { release(); await writing; }
+     70|         finally { release(); }
+     71|         expect((await target.db.kv.where('name').equals('default_syste…
+       |                                                                                                      ^
+     72|         expect((await where('name').equals('default_system_prompt_id')…
+     73|         await prompt.ensureLoaded();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > keeps a suspended default preference write in its originating workspace (switch, null)
+AssertionError: expected null to be 'B-existing' // Object.is equality
+
+- Expected:
+"B-existing"
+
++ Received:
+null
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:71:102
+     69|         try { release(); await writing; }
+     70|         finally { release(); }
+     71|         expect((await target.db.kv.where('name').equals('default_syste…
+       |                                                                                                      ^
+     72|         expect((await where('name').equals('default_system_prompt_id')…
+     73|         await prompt.ensureLoaded();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not publish a captured origin default after a newer destination load (success)
+AssertionError: expected 'A-existing' to be 'B-existing' // Object.is equality
+
+Expected: "B-existing"
+Received: "A-existing"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:107:50
+    105|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+    106|             release(); await oldLoad;
+    107|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+       |                                                  ^
+    108|             expect(await getDefaultPromptId()).toBe('B-existing');
+    109|         } finally { release(); await oldLoad; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not publish a captured origin default after a newer destination load (failure)
+AssertionError: expected null to be 'B-existing' // Object.is equality
+
+- Expected:
+"B-existing"
+
++ Received:
+null
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:107:50
+    105|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+    106|             release(); await oldLoad;
+    107|             expect(prompt.defaultPromptId.value).toBe('B-existing');
+       |                                                  ^
+    108|             expect(await getDefaultPromptId()).toBe('B-existing');
+    109|         } finally { release(); await oldLoad; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > does not report an uncommitted preference when the KV write fails, and recovers on retry
+AssertionError: expected 'current-new' to be 'Current-existing' // Object.is equality
+
+Expected: "Current-existing"
+Received: "current-new"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:137:46
+    135|         await expect(prompt.setDefaultPrompt('current-new')).rejects.t…
+    136|         expect(await getDefaultPromptId()).toBe('Current-existing');
+    137|         expect(prompt.defaultPromptId.value).toBe('Current-existing');
+       |                                              ^
+    138|         expect(changed).not.toHaveBeenCalled();
+    139|         await prompt.setDefaultPrompt('current-new');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > suppresses old-workspace update hooks when an admitted KV write completes after switching
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "A-new",
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:169:29
+    167|         expect(await getDefaultPromptId()).toBe('B-existing');
+    168|         expect(prompt.defaultPromptId.value).toBe('B-existing');
+    169|         expect(changed).not.toHaveBeenCalled();
+       |                             ^
+    170|     });
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > recovers the current default after an initial KV read failure
+AssertionError: expected null to be 'Current-existing' // Object.is equality
+
+- Expected:
+"Current-existing"
+
++ Received:
+null
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:193:46
+    191|         failedRead.mockRestore();
+    192|         await prompt.ensureLoaded();
+    193|         expect(prompt.defaultPromptId.value).toBe('Current-existing');
+       |                                              ^
+    194|         expect(await getDefaultPromptId()).toBe('Current-existing');
+    195|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > reports the committed default when a KV input filter transforms the preference
+AssertionError: expected 'requested-default' to be 'canonical-default' // Object.is equality
+
+Expected: "canonical-default"
+Received: "requested-default"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:207:46
+    205|         await prompt.setDefaultPrompt('requested-default');
+    206|         expect(await getDefaultPromptId()).toBe('canonical-default');
+    207|         expect(prompt.defaultPromptId.value).toBe('canonical-default');
+       |                                              ^
+    208|         expect(changed).toHaveBeenCalledWith('canonical-default');
+    209|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  |app-integration| app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts > default prompt workspace continuation with real KV > reports overlapping current-workspace writes in actual commit order
+AssertionError: expected 'second-admitted' to be 'first-admitted' // Object.is equality
+
+Expected: "first-admitted"
+Received: "second-admitted"
+
+ ❯ app/composables/chat/__tests__/useDefaultPrompt.workspace.integration.test.ts:235:50
+    233|             release(); await first;
+    234|             expect(await getDefaultPromptId()).toBe('first-admitted');
+    235|             expect(prompt.defaultPromptId.value).toBe('first-admitted'…
+       |                                                  ^
+    236|             expect(changed.mock.calls).toEqual([['second-admitted'], […
+    237|         } finally { release(); await first; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+Exit status: 1

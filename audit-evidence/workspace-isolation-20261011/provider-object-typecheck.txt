@@ -1,0 +1,33 @@
+Source commit: 82254f38e123366c83594a046f1593fba93e734b
+Command: synthetic BasicAuth/SQLite/FS environment documented in README; bun run type-check
+Exit status: 1; test-only canonical-record union narrowing corrected in 4e123288. Subsequent 191821d0 and f1a3af0e full typechecks pass.
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 43 icons with 10.40KB(uncompressed) in size
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+server/api/storage/__tests__/download-isolation.test.ts(123,86): error TS2345: Argument of type '{ storageId: string; kind: "metadata"; hash: string; sizeBytes: number; mimeType?: string | undefined; name?: string | undefined; fileKind?: "file" | "image" | "pdf" | undefined; updatedAt: number; } | { ...; } | { ...; } | { ...; }' is not assignable to parameter of type 'CanonicalStorageRecord'.
+  Object literal may only specify known properties, and 'storageId' does not exist in type 'CanonicalStorageReferenceEdge'.
+/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node /workspace/or3-chat/node_modules/nuxt/bin/nuxt.mjs typecheck exited with code 2.
+error: script "type-check" exited with code 1

@@ -9,6 +9,8 @@ type ClipboardItemCtor = {
 
 export type CopyImageBlobToClipboardOptions = {
     preferredMimeType?: string | null;
+    /** Fence delivery when the caller's workspace changes during conversion. */
+    assertCurrent?: () => void;
     clipboard?: ClipboardWriteLike;
     clipboardItemCtor?: ClipboardItemCtor;
     supportsMimeType?: (mimeType: string) => boolean;
@@ -122,11 +124,13 @@ export async function copyImageBlobToClipboard(
 
     for (const mimeType of directMimeCandidates) {
         if (!supportsMimeType(mimeType)) continue;
+        options.assertCurrent?.();
         try {
             await writeBlobToClipboard(blob, mimeType, clipboard, clipboardItemCtor);
             return;
         } catch (error) {
             lastError = error;
+            options.assertCurrent?.();
         }
     }
 
@@ -139,6 +143,7 @@ export async function copyImageBlobToClipboard(
 
     try {
         const pngBlob = await (options.createPngBlob ?? toPngBlob)(blob);
+        options.assertCurrent?.();
         await writeBlobToClipboard(
             pngBlob,
             'image/png',

@@ -1,0 +1,92 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+xxxx···
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash
+AssertionError: expected { status: 'ready', …(3) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "height": 800,
+  "status": "ready",
+  "url": "blob:decoded-image",
+  "width": 1200,
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:50:37
+     48|         await cache.ensure('shared', async () => raster());
+     49|         setActiveWorkspaceDb('thumbnail-isolation-b');
+     50|         expect(cache.get('shared')).toBeUndefined();
+       |                                     ^
+     51|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+     52|         const lookup = vi.fn(async () => raster());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail load without waiting on it in the next workspace
+AssertionError: expected "vi.fn()" to be called once, but got 0 times
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:65:24
+     63|         const lookup = vi.fn(async () => raster());
+     64|         const next = cache.ensure('shared', lookup);
+     65|         expect(lookup).toHaveBeenCalledOnce();
+       |                        ^
+     66|         finish(raster());
+     67|         expect(await previous).toBeUndefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will resolve after switching away and back
+AssertionError: expected { status: 'ready', …(1) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "status": "ready",
+  "url": "blob:decoded-image",
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:81:32
+     79|         setActiveWorkspaceDb('thumbnail-isolation-a');
+     80|         if (outcome === 'resolve') finish(); else fail(new Error('old …
+     81|         expect(await previous).toBeUndefined();
+       |                                ^
+     82|         expect(cache.get('shared')).toBeUndefined();
+     83|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |core-app| app/composables/core/__tests__/useThumbnailUrlCache.test.ts > useThumbnailUrlCache image readiness > discards a held thumbnail decode that will reject after switching away and back
+AssertionError: expected { status: 'error' } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "status": "error",
+}
+
+ ❯ app/composables/core/__tests__/useThumbnailUrlCache.test.ts:81:32
+     79|         setActiveWorkspaceDb('thumbnail-isolation-a');
+     80|         if (outcome === 'resolve') finish(); else fail(new Error('old …
+     81|         expect(await previous).toBeUndefined();
+       |                                ^
+     82|         expect(cache.get('shared')).toBeUndefined();
+     83|         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-ima…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 3 passed (7)
+   Start at  09:24:24
+   Duration  2.06s (transform 291ms, setup 157ms, import 519ms, tests 667ms, environment 514ms)
+

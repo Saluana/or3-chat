@@ -1,0 +1,78 @@
+Source verified in commit: 447127182e20402f3179ad69e6b450fb78726ab6
+Command: README gallery browser command with --grep "native thumbnail" --output=thumbnail-native-artifacts
+[WebServer] $ tsx scripts/cli/dev.ts --host "127.0.0.1" --port "3121"
+
+[WebServer] (node:12805) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:12816) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] [or3-local] or3-provider-basic-auth: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-basic-auth/package.json'
+
+[WebServer] [or3-local] or3-provider-clerk: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-clerk/package.json'
+[WebServer] [or3-local] or3-provider-convex: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-convex/package.json'
+[WebServer] [or3-local] or3-provider-fs: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-fs/package.json'
+[WebServer] [or3-local] or3-provider-s3: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-s3/package.json'
+[WebServer] [or3-local] or3-provider-sqlite: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite/package.json'
+[WebServer] [or3-local] or3-provider-sqlite-tests: using installed package. Local provider unavailable: ENOENT: no such file or directory, open '/workspace/or3-provider-sqlite-tests/package.json'
+
+[WebServer] 
+[WebServer]  ERROR  (node:12823) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use node --trace-warnings ... to show where the warning was created)
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored.
+[WebServer] 
+
+[WebServer] 
+[WebServer]  WARN  Plugin "nuxt:devtools:config-retriever" defines Vite-specific hooks (configResolved) in a plugin returned from applyToEnvironment. These hooks will be ignored. (x2)
+[WebServer] 
+
+[WebServer] (node:12968) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:12969) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 2 tests using 1 worker
+
+(node:13084) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/2] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:145:5 › native thumbnail cached blob cannot cross workspaces or overwrite recovery
+[2/2] [chromium] › audit-evidence/workspace-isolation-20261011/gallery-browser.e2e.ts:145:5 › native thumbnail held decode cannot cross workspaces or overwrite recovery
+  2 passed (1.2m)
+
+Exit status: 0

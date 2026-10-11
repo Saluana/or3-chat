@@ -1,0 +1,28 @@
+Source: 9ec8bf5b plus test-only concurrent refinement committed as 1189ce84
+Command: bun x vitest run app/composables/notifications/__tests__/useNotifications.test.ts --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 0; 16 passed, same case count with stronger independent-destination-write assertion
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across workspace transition 251ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across account transition 220ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across logout transition 200ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across workspace-return transition 144ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended muteThread persistence in its origin across unchanged transition 130ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across workspace transition 181ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across account transition 129ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across logout transition 131ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across workspace-return transition 130ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > keeps suspended unmuteThread persistence in its origin across unchanged transition 131ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > rolls back a failed origin mute write and recovers without changing the destination 134ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > rebinds notifications to new workspace db on session workspace switch 101ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > orders notifications by newest first 55ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > mutes and unmutes threads via kv store 56ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > handles malformed muted threads data safely 53ms
+ ✓ |core-app| app/composables/notifications/__tests__/useNotifications.test.ts > useNotifications > tracks unread count reactively 53ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  12:27:05
+   Duration  3.70s (transform 517ms, setup 233ms, import 702ms, tests 2.10s, environment 459ms)
+

@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+-------·x·-----------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > fences delayed palette image selection when the workspace is returned during metadata lookup
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:382:35
+    380|         try {
+    381|             await vm.openPaletteSelection(row.hash);
+    382|             expect(vm.showViewer).toBe(change === 'unchanged');
+       |                                   ^
+    383|         } finally {
+    384|             read.mockRestore();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 18 skipped (21)
+   Start at  08:57:30
+   Duration  2.62s (transform 1.09s, setup 160ms, import 646ms, tests 1.18s, environment 406ms)
+

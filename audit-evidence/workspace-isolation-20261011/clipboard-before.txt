@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+-x---
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/pages/images/__tests__/copy-image-to-clipboard.test.ts > copyImageBlobToClipboard > rechecks ownership after awaited PNG conversion before clipboard delivery
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ app/pages/images/__tests__/copy-image-to-clipboard.test.ts:55:12
+     53|             createPngBlob,
+     54|             assertCurrent: () => { if (!current) throw new Error('work…
+     55|         })).rejects.toThrow('workspace changed');
+       |            ^
+     56|         expect(createPngBlob).toHaveBeenCalledOnce();
+     57|         expect(write).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  08:56:01
+   Duration  781ms (transform 71ms, setup 157ms, import 21ms, tests 11ms, environment 397ms)
+

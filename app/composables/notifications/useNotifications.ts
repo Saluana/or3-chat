@@ -348,10 +348,11 @@ export function useNotifications(): NotificationsComposable {
 
     const persistMutedThreads = async (muted: string[]): Promise<void> => {
         const key = mutedThreadsKeyForUser(userId.value);
-        await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
-            const existing = await db.kv.get(key);
+        const originDb = db;
+        await originDb.transaction('rw', getWriteTxTableNames(originDb, 'kv'), async () => {
+            const existing = await originDb.kv.get(key);
             const now = nowSec();
-            await db.kv.put({
+            await originDb.kv.put({
                 id: key,
                 name: key,
                 value: JSON.stringify(muted),

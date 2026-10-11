@@ -1,0 +1,21 @@
+{
+  "profile": "Basic Auth + native SQLite + fs storage",
+  "sourceRoot": "/workspace/or3-chat",
+  "providers": [
+    {
+      "name": "or3-provider-sqlite",
+      "path": "/workspace/or3-chat/node_modules/or3-provider-sqlite",
+      "version": "0.0.15",
+      "mode": "installed"
+    },
+    {
+      "name": "or3-provider-fs",
+      "path": "/workspace/or3-chat/node_modules/or3-provider-fs",
+      "version": "0.0.11",
+      "mode": "installed"
+    }
+  ],
+  "port": 39837,
+  "temporaryDataRemoved": true,
+  "exitCode": 0
+}

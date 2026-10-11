@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { createGunzip } from 'node:zlib';
 import type { Mode } from '../deployment/contracts';
 import { secretValues } from '../deployment/env';
@@ -113,14 +113,65 @@ export async function restoreVolumeArchive(directory: string, mode: Mode, env: R
   );
 }
 
-export async function validateVolumeArchive(directory: string, _mode: Mode, env: Record<string, string>, backupPath: string) {
+export async function validateVolumeArchive(directory: string, _mode: Mode, env: Record<string, string>, backupPath: string, archivedStorageRoot?: string) {
+  const storageRoot = posix.relative('/data', archivedStorageRoot ?? env.OR3_STORAGE_FS_ROOT ?? '/data/storage');
+  // Only the managed /data tree is captured. Do not interpret unrelated
+  // metadata or opaque generation artifacts as current filesystem objects.
+  const storagePrefix = storageRoot === '..' || storageRoot.startsWith('../') || posix.isAbsolute(storageRoot)
+    ? '' : `${storageRoot ? `${storageRoot}/` : ''}workspaces/`;
   await streamFileToCommand(
     'docker',
     [
       'run', '--rm', '-i', '--network', 'none', '--read-only',
       '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
       '--entrypoint', 'sh', env.OR3_IMAGE, '-c',
-      'tar tzf - >/dev/null',
+      // A structurally valid archive can still omit a database. Starting the
+      // app may create an empty replacement and make deep health green while
+      // accounts or canonical workspace data have been lost. Require both
+      // fixed-profile payloads before extraction can clear the live volume.
+      // A committed FS sidecar also requires its canonical blob entry. Orphan
+      // uploads and temporary/opaque generation artifacts remain valid. awk
+      // is already part of the managed image's free-space probe contract.
+      // Pass tar's exit status through the stream too: legacy /bin/sh may not
+      // support pipefail, and a listing error must never be hidden by a reader.
+      `{ tar tzf -; printf '\\nOR3_TAR_RESULT:%s\\n' "$?"; } | awk -v prefix="$1" '
+{
+  entry = $0
+  sub(/^\\.\\//, "", entry)
+  if (entry == "auth.sqlite") auth = 1
+  if (entry == "sync.sqlite") sync = 1
+  if (entry ~ /^OR3_TAR_RESULT:[0-9]+$/) {
+    seen_status = 1
+    sub(/^OR3_TAR_RESULT:/, "", entry)
+    tar_status = entry
+    next
+  }
+  if (prefix != "" && index(entry, prefix) == 1) {
+    path = substr(entry, length(prefix) + 1)
+    if (split(path, parts, "/") != 2 || parts[1] !~ /^[a-zA-Z0-9_-]+$/) next
+    key = parts[2]
+    sidecar = sub(/[.]meta[.]json$/, "", key)
+    if ((key ~ /^sha256_[a-fA-F0-9]+$/ && length(key) == 71) || (key ~ /^md5_[a-fA-F0-9]+$/ && length(key) == 36)) {
+      if (sidecar) metadata[entry] = 1
+      else payloads[entry] = 1
+    }
+  }
+}
+END {
+  if (!seen_status || tar_status != "0") exit 1
+  if (!auth || !sync) {
+    print "Backup archive is missing required managed database payloads (auth.sqlite and sync.sqlite)." > "/dev/stderr"
+    exit 1
+  }
+  for (entry in metadata) {
+    payload = entry
+    sub(/[.]meta[.]json$/, "", payload)
+    if (!(payload in payloads)) {
+      print "Backup archive contains a committed filesystem metadata sidecar without its required blob payload." > "/dev/stderr"
+      exit 1
+    }
+  }
+}'`, 'or3-archive-validation', storagePrefix,
     ],
     join(backupPath, 'data.tgz'),
     directory,

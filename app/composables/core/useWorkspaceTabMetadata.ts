@@ -1,5 +1,5 @@
-import { shallowReactive } from 'vue';
-import { getDb } from '~/db/client';
+import { getCurrentScope, onScopeDispose, shallowReactive } from 'vue';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import type { WorkspaceTab } from '~/core/workspace-tabs/types';
 
@@ -18,14 +18,36 @@ function fallbackTitle(tab: WorkspaceTab): string {
 
 /**
  * Batch title resolver. It deliberately refreshes one compact map rather than
- * creating a database live query for every open tab.
+ * creating a database live query for every open tab. Workspace changes clear
+ * the map and invalidate pending reads, including switches back to the same DB.
  */
 export function useWorkspaceTabMetadata() {
     const metadata = shallowReactive(new Map<string, WorkspaceTabMetadata>());
     const { getPaneApp } = usePaneApps();
     let requestGeneration = 0;
+    let workspaceGeneration = getWorkspaceGeneration();
+
+    function synchronizeScope(): void {
+        const current = getWorkspaceGeneration();
+        if (current === workspaceGeneration) return;
+        workspaceGeneration = current;
+        requestGeneration++;
+        metadata.clear();
+    }
+
+    if (getCurrentScope()) {
+        const stopWorkspace = typeof window === 'undefined'
+            ? () => undefined
+            : subscribeActiveWorkspaceDb(synchronizeScope);
+        onScopeDispose(() => {
+            stopWorkspace();
+            requestGeneration++;
+            metadata.clear();
+        });
+    }
 
     async function refresh(tabs: readonly WorkspaceTab[]): Promise<void> {
+        synchronizeScope();
         const generation = ++requestGeneration;
         const threadIds = tabs.flatMap((tab) =>
             tab.resource.kind === 'chat' && tab.resource.threadId
@@ -40,6 +62,7 @@ export function useWorkspaceTabMetadata() {
             threadIds.length ? db.threads.bulkGet(threadIds) : Promise.resolve([]),
             documentIds.length ? db.posts.bulkGet(documentIds) : Promise.resolve([]),
         ]);
+        synchronizeScope();
         if (generation !== requestGeneration) return;
         const threadTitles = new Map(
             threads.flatMap((thread) =>
@@ -93,6 +116,7 @@ export function useWorkspaceTabMetadata() {
     }
 
     function titleFor(tab: WorkspaceTab): WorkspaceTabMetadata {
+        synchronizeScope();
         return metadata.get(tab.id) ?? {
             title: tab.cachedTitle || fallbackTitle(tab),
             fullTitle: tab.cachedTitle || fallbackTitle(tab),

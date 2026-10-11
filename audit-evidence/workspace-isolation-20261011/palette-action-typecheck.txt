@@ -1,0 +1,30 @@
+Commit: f3468423fb342be1720564ef090101835230fb65
+Command: PATH=/workspace/.bun/bin:$PATH AUTH_PROVIDER=basic-auth OR3_AUTH_PROVIDER=basic-auth OR3_BASIC_AUTH_JWT_SECRET=<synthetic fixture value> OR3_SYNC_PROVIDER=sqlite SYNC_PROVIDER=sqlite OR3_STORAGE_PROVIDER=fs STORAGE_PROVIDER=fs OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run type-check
+Exit status: 0
+
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 43 icons with 10.40KB(uncompressed) in size
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/workspace/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/workspace/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+

@@ -1,0 +1,3 @@
+Commit: d57ffb71f295db77e17da2b89d4b688dc93bbd72
+Command: bun x eslint server/auth/session.ts server/utils/storage/workspace-access.ts
+Exit status: 0; no warnings or errors.

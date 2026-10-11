@@ -18,6 +18,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
 import { getFileBlob, getFileMeta } from '~/db/files';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 const props = defineProps<{
@@ -36,6 +37,7 @@ const url = ref<string | undefined>();
 
 let observer: IntersectionObserver | null = null;
 let retainedHash: string | null = null;
+let loadToken = 0;
 
 function tooLarge(): boolean {
     const bytes = props.sizeBytes;
@@ -43,6 +45,8 @@ function tooLarge(): boolean {
 }
 
 function releaseCurrent(): void {
+    loadToken++;
+    url.value = undefined;
     if (!retainedHash) return;
     cache.release(retainedHash);
     retainedHash = null;
@@ -54,9 +58,12 @@ async function load(hash: string): Promise<void> {
     releaseCurrent();
     if (!hash || tooLarge()) return;
     retainedHash = hash;
+    const generation = getWorkspaceGeneration();
+    const token = ++loadToken;
     cache.retain(hash);
     const state = await cache.ensure(hash, async () => {
         const meta = await getFileMeta(hash).catch(() => undefined);
+        if (generation !== getWorkspaceGeneration()) return null;
         if (
             !meta ||
             meta.kind !== 'image' ||
@@ -68,7 +75,7 @@ async function load(hash: string): Promise<void> {
         return blob;
     });
     // The row may have been recycled to another image while the blob loaded.
-    if (retainedHash !== hash) return;
+    if (token !== loadToken || generation !== getWorkspaceGeneration() || retainedHash !== hash) return;
     url.value = state?.status === 'ready' ? state.url : undefined;
 }
 
@@ -99,7 +106,20 @@ watch(
     }
 );
 
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    // The shared cache already cleared the previous workspace's references.
+    retainedHash = null;
+    releaseCurrent();
+    if (observer && rootRef.value) {
+        observer.disconnect();
+        observer.observe(rootRef.value);
+    } else {
+        void load(props.hash);
+    }
+});
+
 onBeforeUnmount(() => {
+    stopWorkspace();
     observer?.disconnect();
     observer = null;
     releaseCurrent();

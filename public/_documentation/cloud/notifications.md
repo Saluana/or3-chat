@@ -2,6 +2,24 @@
 
 The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled.
 
+A background-job tracker keeps its known originating account when callers reuse
+the job identifier. A request from another account does not replace that owner
+or its tracker metadata. Same-account reuse and filling a previously unknown
+account remain supported.
+
+Detached completion checks the originating workspace's thread mute settings.
+An identically named thread in the active workspace has independent preferences.
+Mute and unmute writes retain the workspace database and user key captured when
+the operation starts, including when a workspace switch occurs during storage.
+Same-account completions can still notify after switching workspaces; older
+trackers without an origin DB retain the active-workspace lookup fallback.
+
+Detached chat completions cannot deliver their error details or navigation actions
+to a different authenticated account, including an account change during the
+asynchronous mute lookup. Switching workspaces within the same account retains
+completion notifications. When no session is available, the existing tracker-user
+fallback remains available.
+
 ---
 
 ## Overview
@@ -293,3 +311,5 @@ interface NotificationAction {
 - [Auth System](/documentation/cloud/auth-system) - Authentication architecture
 - [Hooks](/documentation/hooks/overview) - Hook system documentation
 - [Troubleshooting](/documentation/cloud/troubleshooting) - Common issues and solutions
+
+A completion that begins under an authenticated account is also discarded if logout clears that identity while its mute settings are being read. Delivery that starts with no available session keeps the existing tracker-scoped fallback for local and unavailable-session operation.

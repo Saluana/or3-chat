@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+-------x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |app-integration| app/pages/images/__tests__/useImageGallery.integration.test.ts > useImageGallery integration > keeps a gallery upload batch out of the next workspace between file completions
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ app/pages/images/__tests__/useImageGallery.integration.test.ts:384:52
+    382|             } as unknown as Event);
+    383|             const nextDb = setActiveWorkspaceDb(nextWorkspace);
+    384|             expect(await nextDb.file_meta.count()).toBe(0);
+       |                                                    ^
+    385|             expect(await db.file_meta.count()).toBe(1);
+    386|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  08:36:17
+   Duration  2.62s (transform 1.21s, setup 169ms, import 722ms, tests 999ms, environment 517ms)
+

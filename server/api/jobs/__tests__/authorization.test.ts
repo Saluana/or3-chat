@@ -44,14 +44,19 @@ vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => ide
 vi.mock('#imports', () => ({ useRuntimeConfig: () => (globalThis as unknown as { useRuntimeConfig: () => unknown }).useRuntimeConfig() }));
 vi.mock('../../../utils/background-jobs/lifecycle', () => ({ claimAndRunBackgroundJob: vi.fn(async () => true) }));
 const membership = vi.hoisted(() => ({ role: null as 'owner' | 'editor' | 'viewer' | null,
-    active: false, onLookup: null as (() => Promise<void>) | null }));
+    active: false, onLookup: null as (() => Promise<void>) | null, captureNextLookup: false }));
 vi.mock('../../../auth/store/registry', () => ({
     getAuthWorkspaceStore: () => ({
         listUserWorkspaces: async () => {
+            const captured = membership.captureNextLookup ? [
+                ...(membership.role ? [{ id: 'revoked-workspace', name: 'Original', role: membership.role }] : []),
+                ...(membership.active ? [{ id: 'remaining-workspace', name: 'Current', role: 'editor' }] : []),
+            ] : null;
+            membership.captureNextLookup = false;
             const hook = membership.onLookup;
             membership.onLookup = null;
             await hook?.();
-            return [
+            return captured ?? [
                 ...(membership.role ? [{ id: 'revoked-workspace', name: 'Original', role: membership.role }] : []),
                 ...(membership.active ? [{ id: 'remaining-workspace', name: 'Current', role: 'editor' }] : []),
             ];
@@ -69,6 +74,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         membership.role = null;
         membership.active = false;
         membership.onLookup = null;
+        membership.captureNextLookup = false;
         resetSyncRateLimits();
         vi.stubEnv('DISABLE_RATE_LIMIT', '0');
         for (const name of ['defineEventHandler', 'getRouterParam', 'getQuery', 'setHeader', 'setResponseStatus', 'sendStream', 'readBody'] as const) {
@@ -543,6 +549,45 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         } finally {
             await reader.cancel();
         }
+    });
+
+    it.each(['removed', 'viewer'] as const)('reauthorizes later SSE output when an earlier captured membership read finishes after %s transition', async role => {
+        membership.role = 'editor';
+        const jobId = await createRevokedWorkspaceJob();
+        const handler = (await import('../[id]/stream.get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/stream', handler)));
+        const response = await send(new Request(`http://chat.example.test/api/jobs/${jobId}/stream`));
+        const reader = response.body!.getReader();
+        let release!: () => void;
+        let entered!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        const started = new Promise<void>(resolve => { entered = resolve; });
+        const first = 'authorized-before-transition';
+        const later = 'synthetic-after-transition-output';
+        try {
+            await reader.read();
+            membership.captureNextLookup = true;
+            membership.onLookup = async () => { entered(); await held; };
+            emitJobDelta(jobId, first, { contentLength: 'private workspace content'.length + first.length, chunksReceived: 1 });
+            await started;
+            membership.role = role === 'removed' ? null : 'viewer';
+            identity.session.workspace.id = 'another-active-workspace';
+            emitJobDelta(jobId, later, { contentLength: 'private workspace content'.length + first.length + later.length, chunksReceived: 2 });
+            release();
+            let delivered = '';
+            while (true) {
+                const next = await reader.read();
+                if (next.done) break;
+                delivered += new TextDecoder().decode(next.value);
+                if (role === 'viewer' && delivered.includes(later)) break;
+            }
+            // The first batch was captured/authorized before transition; that alone is permitted.
+            expect(delivered).toContain(first);
+            if (role === 'removed') {
+                expect(delivered).not.toContain(later);
+                expect(hasJobViewers(jobId)).toBe(false);
+            } else expect(delivered).toContain(later);
+        } finally { release(); await reader.cancel(); }
     });
 
     it('keeps authorized live deltas in order while rechecking membership', async () => {

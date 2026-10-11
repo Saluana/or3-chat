@@ -14,6 +14,24 @@ Run `npx @or3/cloud doctor` and `npx @or3/cloud status` from the managed deploym
 
 Before a recovery experiment, retain a verified backup and its separate authentication key. Restore and rollback can replace newer data; review the recorded snapshot and intended result before confirming either. A backup on the same disk does not protect against disk loss.
 
+The restore reader refuses archives missing either managed database or a blob
+paired with a canonical committed filesystem sidecar. It preserves uncommitted
+uploads and generation artifacts. These checks do not audit every database
+reference. Before app startup, restore also verifies both extracted databases
+with the restored image's native SQLite driver in a network-denied helper.
+A failure follows safe pre-start snapshot recovery; failed recovery keeps the
+journal and requires an explicit retry. For attachments,
+if both a referenced blob and its sidecar are absent, structural
+restore can still succeed while attachment download returns 404. Always verify
+a previously uploaded original after restart; deep health alone cannot prove
+attachment completeness.
+
+Restore preflight measures free bytes on the actual managed data filesystem and
+adds only allocated blocks it can reclaim by clearing that volume. Large sparse
+files do not supply their logical size as free capacity. Backup payload sizes
+remain logical bytes because extraction can expand sparse contents. Keep the
+required reserve and free space available before retrying a capacity refusal.
+
 ## Monitoring and Health Checks
 
 - Liveness/readiness endpoint: `GET /api/health`
@@ -118,6 +136,15 @@ failed check is not restored automatically — the journal is preserved for an
 explicit `recover --finish` or `recover --restore --yes`. While any incomplete
 operation is recorded, `start` and `restart` refuse so an ambiguous deployment
 cannot be resurrected; `stop` and read-only observation remain available.
+
+Restore and rollback also record `starting-target` before requesting application
+startup. A startup, image/health verification, or completion-recording failure
+after this boundary preserves the target and its journal because application
+writes may already have been accepted. Inspect `recover --dry-run`; returning to
+the pre-operation snapshot requires `recover --restore --yes` and discards those
+later writes. Automatic snapshot recovery remains limited to failures before
+target startup. Restore/rollback do not record the update-only target-ready proof
+required by `recover --finish`.
 
 This release is the compatibility bridge: it reads managed state schemas 1 and
 2 but writes schema 1. A release qualified to write schema 2 declares that in
@@ -236,6 +263,13 @@ The deployment directory is mounted at its absolute host path, matching
 - The managed Basic Auth + SQLite + filesystem profile is a single-host deployment. Sticky routing alone does not replicate its accounts, records, or files.
 - Source multi-instance setups need shared canonical auth/workspace data, object storage, durable background state, and compatible rate-limit/coordination stores. Verify each provider's concurrency and locking model; do not share a local SQLite file over an arbitrary network filesystem. Memory jobs remain process-local.
 - Keep viewer suppression behavior in mind: viewer state is process-local.
+
+Managed rollback restores the authenticated immediate pre-update safety snapshot,
+including when its previous image predates the offline attachment inspector.
+Archive checks, native SQLite integrity and committed filesystem hashes still
+apply. This preserves the recorded prior state without certifying that every
+canonical attachment existed before the update. Ordinary requested restores
+continue to require the inspector.
 
 ## Contributor release qualification
 

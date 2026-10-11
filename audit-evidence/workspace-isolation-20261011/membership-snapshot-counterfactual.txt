@@ -1,0 +1,83 @@
+Intermediate source before the revision fence: f9ea3ce69b598bfca7e3a1978024a0b9f9d49655
+Command: Bun Vitest canonical regression suites in a disposable worktree
+
+ RUN  v4.1.11 /tmp/or3-isolation-base-f4KDMA
+
+---x··xx·xx··xx·x·------------
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 7 passed | 15 skipped (30)
+   Start at  10:33:21
+   Duration  1.96s (transform 1.19s, setup 219ms, import 1.49s, tests 63ms, environment 1ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download when its before signing lookup returns a stale snapshot
+AssertionError: expected "vi.fn()" to be called +0 times, but got 1 times
+ ❯ server/api/storage/__tests__/presign-membership-continuation.test.ts:94:38
+     92|                 expect(result.status).toBe(permitted ? 200 : 403);
+     93|                 if (!permitted) expect(await result.text()).not.toCont…
+     94|                 expect(fixture.sign).toHaveBeenCalledTimes(!permitted …
+       |                                      ^
+     95|             });
+     96|         }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload when its before signing lookup returns a stale snapshot
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload when its before signing lookup returns a stale snapshot
+AssertionError: expected "vi.fn()" to be called +0 times, but got 1 times
+ ❯ server/api/storage/__tests__/presign-membership-continuation.test.ts:94:38
+     92|                 expect(result.status).toBe(permitted ? 200 : 403);
+     93|                 if (!permitted) expect(await result.text()).not.toCont…
+     94|                 expect(fixture.sign).toHaveBeenCalledTimes(!permitted …
+       |                                      ^
+     95|             });
+     96|         }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > bounds retries under repeated membership invalidation before signing
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > bounds retries under repeated membership invalidation after signing
+AssertionError: expected 200 to be 503 // Object.is equality
+
+- Expected
++ Received
+
+- 503
++ 200
+
+ ❯ server/api/storage/__tests__/presign-membership-continuation.test.ts:107:35
+    105|                 body: JSON.stringify({ workspace_id: 'synthetic-worksp…
+    106|             }));
+    107|             expect(result.status).toBe(503);
+       |                                   ^
+    108|             expect(await result.text()).not.toContain('/synthetic-down…
+    109|             expect(fixture.list).toHaveBeenCalledTimes(stage === 'befo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for download when its after signing lookup returns a stale snapshot
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership removed for upload when its after signing lookup returns a stale snapshot
+ FAIL  |core-node| server/api/storage/__tests__/presign-membership-continuation.test.ts > storage signing membership continuation with real session caching > uses current membership viewer for upload when its after signing lookup returns a stale snapshot
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ server/api/storage/__tests__/presign-membership-continuation.test.ts:92:39
+     90|                 const result = await response;
+     91|                 const permitted = role !== 'removed' && (operation ===…
+     92|                 expect(result.status).toBe(permitted ? 200 : 403);
+       |                                       ^
+     93|                 if (!permitted) expect(await result.text()).not.toCont…
+     94|                 expect(fixture.sign).toHaveBeenCalledTimes(!permitted …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+
+Exit status: 1

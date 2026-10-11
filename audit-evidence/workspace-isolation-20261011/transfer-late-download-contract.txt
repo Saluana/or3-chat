@@ -1,0 +1,42 @@
+Source: a85fbecb73c6a121aadfc4a3b35c44642de8de9b plus two tests subsequently committed separately
+Command: bun x vitest run app/core/storage/__tests__/transfer-queue.test.ts --bail=0 --reporter=verbose --maxWorkers=2
+Exit status: 0; 29 passed
+Qualification: existing canonical synthetic table adapters and mocked presign/fetch, not a real provider run. Late results ignore abort; body cancelled, origin requeued, destination identical IDs untouched. Runtime unchanged.
+
+ RUN  v4.1.11 /workspace/or3-chat
+
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > runs successful upload flow (presign -> upload -> commit -> metadata persistence) 13ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > uploads a zero-byte generic file without treating an empty response as a failure 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > defaults fs token upload URLs to PUT when presign method is missing 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > runs successful download flow with hash verification and blob persistence 4ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rejects MIME mismatches and aborts streaming downloads over the hard cap 6ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > records a recoverable outcome without deleting metadata or cache on one 404 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > treats missing storage_id as pending upload without mutating metadata 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > persists recoverable transfer state and requires an explicit retry 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > re-queues remote_missing downloads on enqueue so later blob availability can succeed 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > accepts downloads with missing or octet-stream content-type using file_meta mime 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > keeps generic downloads inert even when metadata has an active MIME 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > cancels in-flight transfer on workspace switch and explicit cancellation 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > requeues a transfer interrupted by a workspace switch 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > requeues a workspace-switch abort reported as a generic fetch failure 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > requeues a running transfer in a freshly opened workspace database after eviction 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > settles an in-flight transfer only against its captured workspace database 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rejects an uncooperative late download presign after a workspace switch with overlapping IDs 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rejects an uncooperative late download response after a workspace switch with overlapping IDs 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > enforces concurrency cap 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > supports backoff progression and caps delay 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > persists retry_at so immediate pumping cannot bypass backoff 2ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > treats 413 uploads as non-retryable permanent failure 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > waitForTransfer handles done/failed/not-found/timeout and ensureDownloadedBlob uses cache 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > waitForTransfer rejects pending_upload as a recoverable error 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > ensureDownloadedBlob returns undefined when download parks as pending_upload 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rejects a workspace switch during the initial blob read before enqueueing 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > disposes timers, waiters, lease renewals, and running requests idempotently 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rejects upload via policy filter and cleans old done/failed transfers 1ms
+ ✓ |core-app| app/core/storage/__tests__/transfer-queue.test.ts > FileTransferQueue > rebinds to active db when old db is closed during workspace handoff 1ms
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Start at  12:21:48
+   Duration  1.57s (transform 526ms, setup 186ms, import 653ms, tests 58ms, environment 464ms)
+
