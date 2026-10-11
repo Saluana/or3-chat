@@ -101,6 +101,8 @@ These are per-run counts, **not summed unique test counts**.
 | User-turn save faults | 2 passed | Actual Chromium quota rejection and transaction abort; retained composer, zero provider calls before acceptance, retry/reload with one user turn (`/tmp/or3-recovery-user-save-final.log`) |
 | User-turn save classification + Stop/detach regressions | 120 passed, one existing skipped | Unit/fake IndexedDB and scripted providers; two suites (`/tmp/or3-recovery-user-abort-final-unit.log`) |
 | Overlapping draft flush failures + durable discard | 44 passed | Draft/composer suites, unit/component evidence; one tab's successful flush cannot erase another unresolved failure (`/tmp/or3-recovery-overlapping-drafts-final.log`) |
+| Retained drafts after database handle replacement | 45 passed | Source/component cases; old destination retained after another workspace becomes active (`/tmp/or3-recovery-replaced-handle-green.log`) |
+| Database handle replacement browser probe | Passed | Actual Chromium IndexedDB + production composable; UI bypassed. Closed handle stayed closed, replacement saved the original/late buffer, other workspace had zero rows (`/tmp/or3-recovery-handle-replacement-browser.log`) |
 
 Source failure evidence: `/tmp/or3-recovery-unit-red.log`,
 `/tmp/or3-recovery-read-red.log`, `/tmp/or3-recovery-stale-read-red.log`,
@@ -138,6 +140,21 @@ Type-check and source ESLint also passed after this fix
   refresh cases passed after the change (`/tmp/or3-recovery-failure-status-browser.log`).
   Type-check passed (`/tmp/or3-recovery-overlap-typecheck.log`); source ESLint
   had zero errors and four existing warnings (`/tmp/or3-recovery-overlap-eslint.log`).
+
+`d14fa4c5` — retained drafts after handle replacement:
+
+- Reproduced a visible pending draft whose retries kept using an LRU-closed
+  original handle after the workspace had loaded a replacement. The regression
+  failed with `DatabaseClosedError` (`/tmp/or3-recovery-replaced-handle-red.log`).
+- A retry may use an already-restored, open handle for the same scope key and
+  database name. It does not reopen the old handle or fall back to the active
+  workspace. Both the original retry and a late callback retain their origin.
+- 45 source/component cases, type-check and source ESLint passed. Browser
+  evidence uses `audit-evidence/handle-replacement-probe.ts`, which imports the
+  production modules already loaded by the isolated page and exercises real
+  Chromium IndexedDB. This proves the persistence boundary, **not the complete
+  workspace-switch UI flow**. Its first URL-discovery attempt ended cleanly;
+  observing actual script requests corrected the probe, which then passed.
 
 Browser artifacts are in `test-results/recovery-documents`,
 `test-results/recovery-stream`, `test-results/recovery-chat-storage`, and
