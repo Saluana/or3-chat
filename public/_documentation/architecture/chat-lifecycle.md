@@ -150,3 +150,9 @@ Selected attachments remain reactive throughout persistence. A ready/hash or
 error transition after the initial draft flush triggers another draft capture,
 so an upload that finishes late still persists its restorable file reference.
 The original intake ownership and cancellation checks apply throughout.
+
+An attachment in the error state keeps a composer alert naming the failed file
+even after its transient error toast expires. The existing toast Retry remains
+available during that toast; afterward the user can remove and attach the file
+again. Removing a failed attachment or starting/succeeding at retry clears its
+persistent alert. A preview alone does not acknowledge file durability.

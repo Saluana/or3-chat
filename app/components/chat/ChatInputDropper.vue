@@ -15,6 +15,10 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
+            <p v-if="failedAttachmentNames.length" role="alert" class="text-sm text-(--md-error)">
+                Attachments could not be saved: {{ failedAttachmentNames.join(', ') }}.
+                Remove and attach those files again.
+            </p>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
                 <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
@@ -916,6 +920,9 @@ const {
         }
     },
 });
+const failedAttachmentNames = computed(() => attachments.value
+    .filter(attachment => attachment.status === 'error')
+    .map(attachment => attachment.name));
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
     numResults: 2,

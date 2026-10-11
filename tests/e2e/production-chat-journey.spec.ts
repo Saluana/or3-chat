@@ -314,6 +314,45 @@ test.describe('chat draft storage recovery faults', () => {
         await info.attach('attachment-save-retry', { path, contentType: 'application/json' });
     });
 
+    test('an unresolved attachment failure stays visible after its transient toast expires', async ({ page }, info) => {
+        const marker = 'Persistent rejected attachment buffer';
+        const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill(marker);
+        await expect.poll(() => savedTexts(page)).toContain(marker);
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs') throw new DOMException('Synthetic persistent attachment quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+            (window as unknown as { restoreRejectedAttachmentPut: () => void }).restoreRejectedAttachmentPut = () => { IDBObjectStore.prototype.put = put; };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+        // Cross the real eight-second error-toast duration, without virtual-clock interference.
+        await page.waitForTimeout(9_000);
+        const notice = page.getByRole('alert').filter({ hasText: 'Attachments could not be saved' });
+        const path = info.outputPath('persistent-attachment-failure.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page),
+            visibleErrorNotice: await notice.count(), transientRetryButtons: await page.getByRole('button', { name: 'Retry', exact: true }).count(),
+            externalRequests: 'denied', elapsedToastIntervalMs: 9_000 }, null, 2));
+        await expect(notice).toBeVisible();
+        await expect(notice).toContainText(fixturePng.name);
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+        await page.getByRole('button', { name: 'Remove image', exact: true }).click();
+        await expect(notice).toHaveCount(0);
+        await page.evaluate(() => (window as unknown as { restoreRejectedAttachmentPut: () => void }).restoreRejectedAttachmentPut());
+        const reselection = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await reselection).setFiles(fixturePng);
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await expect(notice).toHaveCount(0);
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    });
+
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
         await page.evaluate(() => {
             const original = Storage.prototype.setItem;

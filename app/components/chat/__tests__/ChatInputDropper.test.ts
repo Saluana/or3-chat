@@ -611,6 +611,19 @@ describe('ChatInputDropper', () => {
         }
     });
 
+    it('keeps attachment storage failure visible until the failed file is removed', async () => {
+        vi.mocked(persistAttachment).mockImplementationOnce(async attachment => { attachment.status = 'error'; });
+        const wrapper = mount(ChatInputDropper, { props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            mockFiles.value = [new NativeFile(['synthetic rejected bytes'], 'rejected.png', { type: 'image/png' })] as unknown as FileList;
+            await flushPromises();
+            expect(wrapper.get('[role="alert"]').text()).toContain('Attachments could not be saved: rejected.png');
+            await wrapper.get('[aria-label="Remove image"]').trigger('click');
+            expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        } finally { wrapper.unmount(); }
+    });
+
     it('persists an attachment that becomes ready after the pending draft was already flushed', async () => {
         const previous = process.client; process.client = true;
         const workspace = `draft-delayed-attachment-${crypto.randomUUID()}`;

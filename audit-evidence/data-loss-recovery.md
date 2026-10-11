@@ -570,3 +570,27 @@ established in this environment. Physical IndexedDB quota exhaustion, forced
 browser termination, suppressed/accepted confirmation, eviction and disk
 corruption remain untested. Cloud reconnect evidence is mocked/local, without
 live authenticated sync. Detailed distinctions and blockers appear above.
+
+## Attachment failure visibility after toast expiry
+
+Chromium reproduced an unresolved attachment quota rejection with a visible
+preview but no error notice and no Retry button after the real eight-second
+error-toast interval. Its saved reference count was zero:
+`/tmp/or3-recovery-attachment-warning-browser-red.log`,
+`test-results/recovery-attachment-warning-red/*/persistent-attachment-failure.json`.
+
+The composer now keeps an alert naming failed attachments until they are
+removed or their status leaves error. It offers the existing remove/reselect
+recovery path; the existing toast Retry and shared error reporting stay intact.
+No raw error details are rendered. The 58-test draft/composer suite passed
+(`/tmp/or3-recovery-attachment-warning-final-unit.log`), credential-free type
+check passed (`/tmp/or3-recovery-attachment-warning-final-typecheck.log`).
+Chromium passed in 26.9 seconds: native quota rejection, nine-second real expiry,
+no transient Retry remaining, persistent filename notice, remove → reselect
+after repaired storage → durable reference → reload with text and image.
+`/tmp/or3-recovery-attachment-warning-final-browser.log`; receipt
+`test-results/recovery-attachment-warning-final/*/persistent-attachment-failure.json`.
+
+Delayed completion source commit: `c0d56ef8f73016e88aa3721da267eb8ae38d6cf7`.
+Final type-check for that preceding source checkpoint also passed in
+`/tmp/or3-recovery-attachment-checkpoint-typecheck.log`.
