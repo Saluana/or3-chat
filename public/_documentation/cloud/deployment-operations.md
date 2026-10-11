@@ -119,6 +119,15 @@ explicit `recover --finish` or `recover --restore --yes`. While any incomplete
 operation is recorded, `start` and `restart` refuse so an ambiguous deployment
 cannot be resurrected; `stop` and read-only observation remain available.
 
+Restore and rollback also record `starting-target` before requesting application
+startup. A startup, image/health verification, or completion-recording failure
+after this boundary preserves the target and its journal because application
+writes may already have been accepted. Inspect `recover --dry-run`; returning to
+the pre-operation snapshot requires `recover --restore --yes` and discards those
+later writes. Automatic snapshot recovery remains limited to failures before
+target startup. Restore/rollback do not record the update-only target-ready proof
+required by `recover --finish`.
+
 This release is the compatibility bridge: it reads managed state schemas 1 and
 2 but writes schema 1. A release qualified to write schema 2 declares that in
 its package metadata and migrates only a deployment at or above the declared

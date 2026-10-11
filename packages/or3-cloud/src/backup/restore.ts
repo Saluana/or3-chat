@@ -49,7 +49,7 @@ export async function restoreBackupData(
   state: ManagedState,
   env: Record<string, string>,
   backupPath: string,
-  options: { recreateDataVolume?: boolean } = {},
+  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void> } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
   assertRestorableManagedAssets(manifest);
@@ -95,6 +95,9 @@ export async function restoreBackupData(
   await writeSecure(deploymentPaths(directory).env, serializeEnv(restoredEnv));
   await restoreManagedAssets(directory, backupPath, manifest);
   await restoreVolumeArchive(directory, state.mode, restoredEnv, backupPath);
+  // The caller journals the point at which application writes become possible
+  // before requesting startup. Recovery snapshots keep their existing phase.
+  await options.beforeStart?.();
   await startProject(directory, state.mode, restoredEnv);
   return manifest;
 }

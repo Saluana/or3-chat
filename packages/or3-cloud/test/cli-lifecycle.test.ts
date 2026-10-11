@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { installedManagedAssetChecksums } from '../src/deployment/assets';
 import { serializeEnv, parseEnv } from '../src/deployment/env';
 import { PACKAGE_VERSION } from '../src/package-info';
+import { restoreCommand } from '../src/commands/restore';
+import { rollbackCommand } from '../src/commands/rollback';
+import { lifecycleFaults } from '../src/lifecycle-faults';
 import type { ManagedState } from '../src/deployment/contracts';
 import { NEW_DIGEST, OLD_DIGEST, OLD_VERSION, REPOSITORY, createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
@@ -21,6 +24,7 @@ async function sandbox(options?: Parameters<typeof createSandbox>[0]) {
   return created;
 }
 afterEach(async () => {
+  for (const key of Object.keys(lifecycleFaults)) delete lifecycleFaults[key as keyof typeof lifecycleFaults];
   await Promise.all(sandboxes.splice(0).map((entry) => entry.cleanup()));
 });
 
@@ -479,6 +483,77 @@ test('a restore whose snapshot restoration also fails stays journaled and is rec
   expect(state.incompleteOperation).toBeUndefined();
   expect(state.lastError).toContain('Interrupted restore was rolled back to pre-mutation snapshot');
 });
+
+// A started target can accept application writes before Compose/deep-health
+// verification finishes. Failure after that boundary must retain its data and
+// journal, rather than silently extracting the pre-mutation snapshot again.
+for (const operation of ['restore', 'rollback'] as const) {
+  for (const failure of [' up -d', '{{.Image}}']) {
+    test(`${operation} preserves the target when ${failure.trim()} fails after replacement`, async () => {
+      const fixture = await sandbox();
+      expect((await fixture.cli(['backup'])).exitCode).toBe(0);
+      const [target] = await fixture.backupIds();
+      if (operation === 'rollback') {
+        const state = await fixture.readState();
+        state.rollback = { appVersion: OLD_VERSION, image: fixture.image, imageDigest: OLD_DIGEST, backupId: target, createdAt: state.updatedAt };
+        await fixture.writeState(state);
+      }
+      await fixture.reset();
+      await fixture.configure({ failures: [{ match: failure, times: 1, message: 'fixture target verification failure' }] });
+      const result = await fixture.cli(operation === 'restore' ? ['restore', target, '--yes'] : ['rollback', '--yes']);
+      expect(result.exitCode, result.output).toBe(1);
+      expect(result.stderr).toContain('NOT restored automatically');
+      expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+      expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
+
+      await fixture.configure({ failures: [] });
+      const dryRun = await fixture.cli(['recover', '--dry-run', '--json']);
+      expect(dryRun.exitCode, dryRun.output).toBe(0);
+      expect(JSON.parse(dryRun.stdout)).toMatchObject({ operation, phase: 'starting-target', dataLoss: true, decision: { action: 'require-explicit-restore' } });
+      expect((await fixture.cli(['recover'])).exitCode).toBe(1);
+      expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
+      const recovered = await fixture.cli(['recover', '--restore', '--yes']);
+      expect(recovered.exitCode, recovered.output).toBe(0);
+      expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+      expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(2);
+    });
+  }
+  test(`${operation} preserves the target when terminal state recording fails`, async () => {
+    const fixture = await sandbox();
+    expect((await fixture.cli(['backup'])).exitCode).toBe(0);
+    const [target] = await fixture.backupIds();
+    if (operation === 'rollback') {
+      const state = await fixture.readState();
+      state.rollback = { appVersion: OLD_VERSION, image: fixture.image, imageDigest: OLD_DIGEST, backupId: target, createdAt: state.updatedAt };
+      await fixture.writeState(state);
+    }
+    await fixture.reset();
+    let started = false;
+    let failed = false;
+    lifecycleFaults.beforeCommand = (_command, args) => {
+      if (args[0] === 'inspect' && args.includes('{{.Image}}')) started = true;
+    };
+    lifecycleFaults.beforeStateWrite = () => {
+      if (started && !failed) { failed = true; throw new Error('fixture terminal commit failure'); }
+    };
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${join(fixture.root, 'bin')}:${previousPath}`;
+    try {
+      await expect(operation === 'restore'
+        ? restoreCommand(fixture.directory, { yes: true }, [target])
+        : rollbackCommand(fixture.directory, { yes: true })).rejects.toThrow('NOT restored automatically');
+    } finally {
+      process.env.PATH = previousPath;
+      delete lifecycleFaults.beforeCommand;
+      delete lifecycleFaults.beforeStateWrite;
+    }
+    expect(failed).toBe(true);
+    expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
+    expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
+    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  });
+}
 
 test('a restore that stops before data replacement restarts the original deployment', async () => {
   const fixture = await sandbox();

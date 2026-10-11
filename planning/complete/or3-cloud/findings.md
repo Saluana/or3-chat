@@ -14,6 +14,14 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- The backup restore drill found that restore/rollback verification failures
+  automatically extracted the pre-operation snapshot even after target startup
+  could accept writes. Both commands now journal `starting-target` before
+  startup and preserve target data on subsequent verification or completion
+  failure. Pre-start replacement failures retain automatic snapshot recovery;
+  post-start recovery requires an explicit data-loss choice. This builds on the
+  merged #235 backup/recovery work without enabling generation cleanup.
+
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.
   Lost-response recovery now reaches a bounded scoped lookup after retry exhaustion,

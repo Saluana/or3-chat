@@ -76,7 +76,10 @@ export async function rollbackCommand(directory: string, flags: Flags) {
       phase: 'snapshot-created',
     });
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
-    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, { recreateDataVolume });
+    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, {
+      recreateDataVolume,
+      beforeStart: () => updatePending(loaded.directory, loaded.state, { phase: 'starting-target' }),
+    });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
     nextState.rollback = undefined;
@@ -88,7 +91,12 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     const phase = loaded.state.incompleteOperation?.phase;
-    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous' || phase === 'starting-target';
+    if (phase === 'starting-target') {
+      loaded.state.lastError = `Rollback to ${point.appVersion} started the target but did not complete: ${original}. Writes may have been accepted, so the deployment was NOT restored automatically. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" only after confirming loss of post-replacement writes.`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError, { cause: error });
+    }
+    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous';
     if (targetMayHaveMutated && (loaded.state.incompleteOperation?.previousBackupPath || loaded.state.incompleteOperation?.previousBackupId)) {
       let recoveredMessage: string;
       try {
