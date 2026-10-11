@@ -1064,7 +1064,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
       await stopProject(target.directory, 'local');
       // Mutate only the quiescent, disposable fixture. Main holds all records;
       // the sixteen bytes model an interrupted creation of the next WAL.
-      await command(['run', '--rm', '--network', 'none', '--read-only', '--user', '0',
+      await command(['run', '--rm', '--network', 'none', '--read-only',
         '--memory', '64m', '--pids-limit', '16', '--cap-drop', 'ALL',
         '-v', `${(await readState(target.directory)).volumeName}:/data`, '--entrypoint', nodePath, image!, '-e',
         `const fs=require('node:fs');fs.writeFileSync('/data/sync.sqlite-wal',Buffer.from('${originalWal.subarray(0, 16).toString('hex')}','hex'));fs.rmSync('/data/sync.sqlite-shm',{force:true})`]);
