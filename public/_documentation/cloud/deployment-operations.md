@@ -17,7 +17,10 @@ Before a recovery experiment, retain a verified backup and its separate authenti
 The restore reader refuses archives missing either managed database or a blob
 paired with a canonical committed filesystem sidecar. It preserves uncommitted
 uploads and generation artifacts. These checks do not audit every database
-reference: if both a referenced blob and its sidecar are absent, structural
+reference. Restore also verifies both databases with the restored image's native
+SQLite driver in read-only mode before reporting success; a failed integrity
+check keeps the journal and requires explicit recovery. For attachments,
+if both a referenced blob and its sidecar are absent, structural
 restore can still succeed while attachment download returns 404. Always verify
 a previously uploaded original after restart; deep health alone cannot prove
 attachment completeness.

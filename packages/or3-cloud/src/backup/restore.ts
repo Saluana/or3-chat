@@ -5,11 +5,14 @@ import {
   restoreManagedAssets,
 } from '../deployment/assets';
 import type { BackupManifest, ManagedState } from '../deployment/contracts';
-import { dashboardUpdatesEnabled, parseEnv, serializeEnv, withoutDashboardOperator } from '../deployment/env';
+import { dashboardUpdatesEnabled, parseEnv, secretValues, serializeEnv, withoutDashboardOperator } from '../deployment/env';
 import { imageAtDigest } from '../deployment/identity';
 import { deploymentPaths } from '../deployment/paths';
 import { updatePending } from '../deployment/state-store';
 import { removeDashboardOperator } from '../runtime/dashboard-operator';
+import { run } from '../runtime/command-runner';
+import { composeArgs } from '../runtime/compose';
+import { containerNodeCommand } from '../runtime/health';
 import { pullAndRequireImage, requireImageDigest } from '../runtime/images';
 import { startProject, stopProject } from '../runtime/project';
 import {
@@ -20,6 +23,7 @@ import {
   setManagedVolumeRootOwnership,
 } from '../runtime/volumes';
 import { readText, writeSecure } from '../util/fs';
+import { redact } from '../util/primitives';
 import {
   assertEnoughFreeSpace,
   gzipUncompressedBytes,
@@ -27,6 +31,23 @@ import {
   validateVolumeArchive,
 } from './archive';
 import { assertBackupMatchesDeployment, readManifest, recordedBackupPath } from './manifests';
+
+// Deep health only opens database files; that also succeeds for a non-SQLite
+// payload. Use the restored image's native driver, without changing data or
+// imposing current-release ownership on legitimate older recovery snapshots.
+const VERIFY_RESTORED_DATABASES_SCRIPT = `
+const Database = require('/app/.output/server/node_modules/better-sqlite3');
+const paths = [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean);
+if (paths.length !== 2) throw new Error('Both managed database paths must be configured');
+for (const path of paths) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    if (db.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('SQLite quick_check failed');
+    const tables = db.prepare("select count(*) as count from sqlite_master where type = 'table'").get().count;
+    if (tables < 1) throw new Error('Restored database has no tables');
+  } finally { db.close(); }
+}
+`;
 
 export async function assertRestoreFreeSpace(
   directory: string,
@@ -99,6 +120,12 @@ export async function restoreBackupData(
   // before requesting startup. Recovery snapshots keep their existing phase.
   await options.beforeStart?.();
   await startProject(directory, state.mode, restoredEnv);
+  const databaseCheck = await run('docker', composeArgs(directory, state.mode, [
+    'exec', '-T', 'or3', ...containerNodeCommand(VERIFY_RESTORED_DATABASES_SCRIPT),
+  ]), directory);
+  if (!databaseCheck.ok) {
+    throw new Error(`Restored SQLite database integrity verification failed. ${redact(databaseCheck.stderr, secretValues(restoredEnv))}`);
+  }
   return manifest;
 }
 

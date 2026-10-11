@@ -39,6 +39,16 @@ The three plans are directionally aligned, but there are several conflicts and m
   when both its blob and sidecar are absent. That separate omission still
   reports restore success and is recorded as data-integrity evidence, with
   known-good recovery verified against real attachment bytes.
+- A signed archive with a 36-byte non-SQLite `sync.sqlite` payload passed
+  restore and deep health, cleared the operation journal, then failed native
+  inspection with `SQLITE_NOTADB` and authenticated session reads with HTTP 500.
+  Restore, rollback and snapshot recovery now require native read-only SQLite
+  `quick_check` and a nonempty schema after startup before completion. Failure
+  preserves the explicit-recovery journal and possible accepted writes. The
+  check uses the restored image's driver and does not impose newer ownership
+  rules on legacy snapshots. Real known-good recovery restores all fixture
+  records and attachment bytes; this is integrity validation, not a complete
+  semantic audit or an early pre-extraction database check.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

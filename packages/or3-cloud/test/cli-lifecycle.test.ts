@@ -607,3 +607,28 @@ test('rollback refuses without confirmation, without a rollback point, and for a
   expect(drifted.stderr).toContain('no longer matches its recorded image/version');
   expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
 });
+
+for (const operation of ['restore', 'rollback'] as const) {
+  test(`${operation} cannot commit a deeply healthy target whose native database check fails`, async () => {
+    const fixture = await sandbox();
+    expect((await fixture.cli(['backup'])).exitCode).toBe(0);
+    const [target] = await fixture.backupIds();
+    if (operation === 'rollback') {
+      const state = await fixture.readState();
+      state.rollback = { appVersion: OLD_VERSION, image: fixture.image, imageDigest: OLD_DIGEST, backupId: target, createdAt: state.updatedAt };
+      await fixture.writeState(state);
+    }
+    await fixture.reset();
+    await fixture.configure({ failures: [{ match: 'quick_check', times: 1, message: 'fixture SQLITE_NOTADB' }] });
+    const result = await fixture.cli(operation === 'restore' ? ['restore', target, '--yes'] : ['rollback', '--yes']);
+    expect(result.exitCode, result.output).toBe(1);
+    expect(result.stderr).toContain('fixture SQLITE_NOTADB');
+    expect(result.stderr).toContain('NOT restored automatically');
+    expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
+    expect((await fixture.cli(['recover'])).exitCode).toBe(1);
+    await fixture.configure({ failures: [] });
+    expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
+    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  });
+}
