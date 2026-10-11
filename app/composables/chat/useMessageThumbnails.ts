@@ -6,6 +6,7 @@ import {
     type ThumbState,
 } from '~/composables/core/useThumbnailUrlCache';
 import { truncateAttachmentName } from '~/utils/chat/truncateAttachmentName';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type MessageWithAttachments = {
@@ -48,9 +49,12 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     }
 
     async function ensureThumb(hash: string) {
+        const generation = getWorkspaceGeneration();
+        const current = () => isComponentActive && generation === getWorkspaceGeneration();
         if (pdfMeta[hash]) return;
 
         const meta = await getFileMeta(hash).catch(() => undefined);
+        if (!current()) return;
         if (meta && meta.kind === 'pdf') {
             pdfMeta[hash] = { name: meta.name, kind: meta.kind };
             delete thumbnails[hash];
@@ -75,9 +79,10 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
 
         try {
             const state = await thumbUrlCache.ensure(hash, async () => {
-                const blob = await (await import('~/db/files')).getFileBlob(
-                    hash
-                );
+                const files = await import('~/db/files');
+                if (generation !== getWorkspaceGeneration()) return null;
+                const blob = await files.getFileBlob(hash);
+                if (generation !== getWorkspaceGeneration()) return null;
                 thumbUrlCache.setIntrinsicSize(
                     hash,
                     meta.width,
@@ -87,12 +92,14 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
                 return blob;
             });
 
+            if (!current()) return;
             if (state) {
                 thumbnails[hash] = state;
             } else {
                 delete thumbnails[hash];
             }
         } catch {
+            if (!current()) return;
             thumbnails[hash] = { status: 'error' };
         }
     }
@@ -100,53 +107,55 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     const currentHashes = new Set<string>();
     let isComponentActive = true;
 
-    watch(
-        hashList,
-        async (list) => {
-            const nextSet = new Set(list);
-            const newHashes: string[] = [];
+    async function syncHashes(list: string[]) {
+        const generation = getWorkspaceGeneration();
+        const nextSet = new Set(list);
+        const newHashes: string[] = [];
 
-            for (const hash of nextSet) {
-                if (!currentHashes.has(hash)) {
-                    if (!thumbnails[hash]) {
-                        thumbnails[hash] = { status: 'loading' };
-                        newHashes.push(hash);
-                    } else if (thumbnails[hash].status === 'loading') {
-                        newHashes.push(hash);
-                    }
+        for (const hash of nextSet) {
+            if (!currentHashes.has(hash)) {
+                if (!thumbnails[hash]) {
+                    thumbnails[hash] = { status: 'loading' };
+                    newHashes.push(hash);
+                } else if (thumbnails[hash].status === 'loading') {
+                    newHashes.push(hash);
                 }
             }
+        }
 
-            if (newHashes.length > 0) {
-                await Promise.all(newHashes.map((hash) => ensureThumb(hash)));
-            }
+        if (newHashes.length > 0) {
+            await Promise.all(newHashes.map((hash) => ensureThumb(hash)));
+        }
+        if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
 
-            for (const hash of nextSet) {
-                if (!currentHashes.has(hash)) {
-                    const state = thumbnails[hash];
-                    if (state?.status === 'ready') {
-                        if (!isComponentActive) {
-                            retainThumb(hash);
-                            releaseThumb(hash);
-                            return;
-                        }
-                        retainThumb(hash);
-                        currentHashes.add(hash);
-                    }
+        for (const hash of nextSet) {
+            if (!currentHashes.has(hash)) {
+                const state = thumbnails[hash];
+                if (state?.status === 'ready') {
+                    retainThumb(hash);
+                    currentHashes.add(hash);
                 }
             }
+        }
 
-            for (const hash of Array.from(currentHashes)) {
-                if (!nextSet.has(hash)) {
-                    currentHashes.delete(hash);
-                    releaseThumb(hash);
-                }
+        for (const hash of Array.from(currentHashes)) {
+            if (!nextSet.has(hash)) {
+                currentHashes.delete(hash);
+                releaseThumb(hash);
             }
-        },
-        { immediate: true }
-    );
+        }
+    }
+    watch(hashList, syncHashes, { immediate: true });
+
+    const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+        for (const key of Object.keys(thumbnails)) delete thumbnails[key];
+        for (const key of Object.keys(pdfMeta)) delete pdfMeta[key];
+        currentHashes.clear();
+        void syncHashes(hashList.value);
+    });
 
     onBeforeUnmount(() => {
+        stopWorkspace();
         isComponentActive = false;
         for (const hash of currentHashes) releaseThumb(hash);
         currentHashes.clear();

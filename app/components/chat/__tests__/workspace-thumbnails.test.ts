@@ -1,0 +1,119 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
+import { defineComponent, h, ref } from 'vue';
+import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
+import MessageAttachmentsGallery from '../MessageAttachmentsGallery.vue';
+import PaletteImageThumb from '../../search/PaletteImageThumb.vue';
+
+const files = vi.hoisted(() => ({ meta: vi.fn(), blob: vi.fn() }));
+vi.mock('~/db/files', () => ({ getFileMeta: files.meta, getFileBlob: files.blob }));
+const hash = `sha256:${'a'.repeat(64)}`;
+const originMeta = { hash, kind: 'image', name: 'origin-synthetic-name.png', mime_type: 'image/png', width: 1, height: 1 };
+const raster = () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' });
+let wrappers: VueWrapper[] = [];
+beforeEach(() => {
+    setActiveWorkspaceDb('consumer-thumbnails-a');
+    files.meta.mockReset().mockResolvedValue(originMeta);
+    files.blob.mockReset().mockResolvedValue(raster());
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:consumer-origin'), revokeObjectURL: vi.fn() });
+    vi.stubGlobal('Image', class { src = ''; decode = async () => undefined; });
+    vi.stubGlobal('IntersectionObserver', undefined);
+});
+afterEach(() => {
+    for (const wrapper of wrappers) wrapper.unmount();
+    wrappers = [];
+    setActiveWorkspaceDb(null);
+    const shared = (globalThis as typeof globalThis & { __or3ThumbUrlCache?: {
+        stopWorkspace?: () => void; cleanupTimers: Map<string, ReturnType<typeof setTimeout>>;
+    } }).__or3ThumbUrlCache;
+    shared?.stopWorkspace?.();
+    shared?.cleanupTimers.forEach(clearTimeout);
+    delete (globalThis as typeof globalThis & { __or3ThumbUrlCache?: unknown }).__or3ThumbUrlCache;
+    evictWorkspaceDb('consumer-thumbnails-a');
+    evictWorkspaceDb('consumer-thumbnails-b');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
+function mountHook() {
+    let state!: ReturnType<typeof useMessageThumbnails>;
+    wrappers.push(mount(defineComponent({ setup() {
+        state = useMessageThumbnails(ref({ file_hashes: [hash] }));
+        return () => h('div');
+    } })));
+    return state;
+}
+describe('mounted thumbnail workspace consumers', () => {
+    it('clears an already displayed palette thumbnail on workspace switching', async () => {
+        const wrapper = mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic image', fallbackIcon: 'image' } });
+        wrappers.push(wrapper);
+        await vi.waitFor(() => expect(wrapper.find('img').exists()).toBe(true));
+        files.meta.mockResolvedValue(undefined);
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(false);
+    });
+    it.each(['gallery', 'hook'] as const)('clears settled former-workspace PDF names in the %s', async kind => {
+        files.meta.mockResolvedValue({ ...originMeta, kind: 'pdf', mime_type: 'application/pdf', name: 'origin-synthetic-private.pdf' });
+        const state = kind === 'hook' ? mountHook() : undefined;
+        const wrapper = kind === 'gallery' ? mount(MessageAttachmentsGallery, { props: { hashes: [hash] } }) : undefined;
+        if (wrapper) wrappers.push(wrapper);
+        await flushPromises();
+        if (state) expect(state.pdfMeta[hash]?.name).toBe('origin-synthetic-private.pdf');
+        if (wrapper) expect(wrapper.text()).toContain('origin-synthetic-private.pdf');
+        files.meta.mockResolvedValue(undefined);
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        await flushPromises();
+        if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+        if (wrapper) expect(wrapper.text()).not.toContain('origin-synthetic-private.pdf');
+    });
+    it.each(['gallery', 'hook'] as const)('discards a held PDF metadata read in the %s after switching workspaces', async kind => {
+        let finish!: (meta: typeof originMeta) => void;
+        files.meta.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const state = kind === 'hook' ? mountHook() : undefined;
+        const wrapper = kind === 'gallery' ? mount(MessageAttachmentsGallery, { props: { hashes: [hash] } }) : undefined;
+        if (wrapper) wrappers.push(wrapper);
+        await vi.waitFor(() => expect(files.meta).toHaveBeenCalledOnce());
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        finish({ ...originMeta, kind: 'pdf', mime_type: 'application/pdf', name: 'origin-synthetic-private.pdf' });
+        await flushPromises();
+        if (state) expect(state.pdfMeta[hash]).toBeUndefined();
+        if (wrapper) expect(wrapper.text()).not.toContain('origin-synthetic-private.pdf');
+    });
+    it.each(['gallery', 'hook', 'palette'] as const)('loads current-workspace data for unchanged hash identifiers in the %s', async kind => {
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:consumer-origin').mockReturnValue('blob:consumer-current');
+        const state = kind === 'hook' ? mountHook() : undefined;
+        const wrapper = kind === 'gallery'
+            ? mount(MessageAttachmentsGallery, { props: { hashes: [hash] } })
+            : kind === 'palette' ? mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic image', fallbackIcon: 'image' } }) : undefined;
+        if (wrapper) wrappers.push(wrapper);
+        const displayedUrl = () => {
+            const thumbnail = state?.thumbnails[hash];
+            if (thumbnail?.status === 'ready') return thumbnail.url;
+            return wrapper?.find('img').exists() ? wrapper.find('img').attributes('src') : undefined;
+        };
+        await vi.waitFor(() => expect(displayedUrl()).toBe('blob:consumer-origin'));
+        files.meta.mockResolvedValue({ ...originMeta, name: 'current-valid.png', width: 2, height: 3 });
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        await vi.waitFor(() => expect(displayedUrl()).toBe('blob:consumer-current'));
+        expect(files.blob).toHaveBeenCalledTimes(2);
+        const thumbnail = state?.thumbnails[hash];
+        if (thumbnail?.status === 'ready') expect(thumbnail).toMatchObject({ width: 2, height: 3 });
+    });
+
+    it('discards a held chat attachment download after a workspace switch', async () => {
+        files.meta.mockResolvedValue({ ...originMeta, kind: 'file', mime_type: 'text/plain' });
+        const wrapper = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });
+        wrappers.push(wrapper);
+        await flushPromises();
+        let finish!: (blob: Blob) => void;
+        files.blob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        await wrapper.get('.message-attachment-file-download').trigger('click');
+        await vi.waitFor(() => expect(files.blob).toHaveBeenCalledOnce());
+        setActiveWorkspaceDb('consumer-thumbnails-b');
+        finish(new Blob(['origin synthetic attachment'], { type: 'text/plain' }));
+        await flushPromises();
+        expect(click).not.toHaveBeenCalled();
+    });
+});

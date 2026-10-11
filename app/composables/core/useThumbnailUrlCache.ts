@@ -1,3 +1,4 @@
+import { subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     classifyFileBlob,
     isSupportedRasterMimeType,
@@ -22,6 +23,9 @@ type GlobalThumbCache = {
     cleanupTimers: Map<string, ReturnType<typeof setTimeout>>;
     intrinsicSizes: Map<string, ThumbIntrinsicSize>;
     graceMs: number;
+    epoch: number;
+    pendingUrls: Set<string>;
+    stopWorkspace?: () => void;
 };
 
 type GlobalWithThumbCache = typeof globalThis & {
@@ -38,7 +42,25 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
             cleanupTimers: new Map<string, ReturnType<typeof setTimeout>>(),
             intrinsicSizes: new Map<string, ThumbIntrinsicSize>(),
             graceMs,
+            epoch: 0,
+            pendingUrls: new Set(),
         };
+        const shared = g.__or3ThumbUrlCache;
+        shared.stopWorkspace = subscribeActiveWorkspaceDb(() => {
+            shared.epoch++;
+            for (const timer of shared.cleanupTimers.values()) clearTimeout(timer);
+            const urls = new Set(shared.pendingUrls);
+            for (const state of shared.cache.values()) if (state.url) urls.add(state.url);
+            for (const url of urls) {
+                try { URL.revokeObjectURL(url); } catch { /* best-effort cleanup */ }
+            }
+            shared.pendingUrls.clear();
+            shared.cache.clear();
+            shared.inflight.clear();
+            shared.refCounts.clear();
+            shared.cleanupTimers.clear();
+            shared.intrinsicSizes.clear();
+        });
     } else {
         g.__or3ThumbUrlCache.graceMs = graceMs;
     }
@@ -53,7 +75,8 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
  *
  * Behavior:
  * Deduplicates inflight loads, tracks reference counts, and schedules cleanup
- * after a grace period to allow quick reuse.
+ * after a grace period to allow quick reuse within the current workspace.
+ * Workspace changes revoke cached/pending URLs and discard old reads/decodes.
  *
  * Constraints:
  * - Object URLs are revoked when ref count drops to zero after the grace period
@@ -144,51 +167,56 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
         hash: string,
         loader: () => Promise<Blob | null | undefined>
     ): Promise<ThumbState | undefined> => {
+        const epoch = globalCache.epoch;
+        const current = () => epoch === globalCache.epoch;
         const cached = globalCache.cache.get(hash);
         if (cached) return cached;
 
         const inflight = globalCache.inflight.get(hash);
         if (inflight) {
             await inflight;
-            return globalCache.cache.get(hash);
+            return current() ? globalCache.cache.get(hash) : undefined;
         }
 
         const p = (async () => {
+            let url: string | undefined;
+            const discardUrl = () => {
+                if (url && globalCache.pendingUrls.delete(url)) {
+                    try { URL.revokeObjectURL(url); } catch { /* best-effort cleanup */ }
+                }
+            };
             try {
                 const blob = await loader();
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                try {
-                    const classification = await classifyFileBlob(blob);
-                    if (classification.kind !== 'image') {
-                        URL.revokeObjectURL(url);
-                        globalCache.cache.set(hash, { status: 'error' });
-                        return;
-                    }
-                    await decodeImage(url, blob);
-                } catch {
-                    URL.revokeObjectURL(url);
+                if (!blob || !current()) return;
+                url = URL.createObjectURL(blob);
+                globalCache.pendingUrls.add(url);
+                const classification = await classifyFileBlob(blob);
+                if (!current()) { discardUrl(); return; }
+                if (classification.kind !== 'image') {
+                    discardUrl();
                     globalCache.cache.set(hash, { status: 'error' });
                     return;
                 }
+                await decodeImage(url, blob);
+                if (!current()) { discardUrl(); return; }
+                globalCache.pendingUrls.delete(url);
                 const size = globalCache.intrinsicSizes.get(hash);
-                globalCache.cache.set(hash, {
-                    status: 'ready',
-                    url,
-                    ...size,
-                });
+                globalCache.cache.set(hash, { status: 'ready', url, ...size });
             } catch {
-                globalCache.cache.set(hash, { status: 'error' });
-            } finally {
-                globalCache.inflight.delete(hash);
-                if ((globalCache.refCounts.get(hash) || 0) === 0) {
-                    scheduleCleanup(hash);
-                }
+                discardUrl();
+                if (current()) globalCache.cache.set(hash, { status: 'error' });
             }
         })();
 
         globalCache.inflight.set(hash, p);
         await p;
+        if (!current()) return undefined;
+        // A discarded old load must not remove the next workspace's promise or
+        // schedule cleanup against its current same-hash retention.
+        if (globalCache.inflight.get(hash) === p) {
+            globalCache.inflight.delete(hash);
+            if ((globalCache.refCounts.get(hash) || 0) === 0) scheduleCleanup(hash);
+        }
         return globalCache.cache.get(hash);
     };
 

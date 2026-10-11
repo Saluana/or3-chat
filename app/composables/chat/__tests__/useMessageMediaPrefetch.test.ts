@@ -1,5 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMessageMediaPrefetchController } from '../useMessageMediaPrefetch';
+import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+
+const controllers: ReturnType<typeof createMessageMediaPrefetchController>[] = [];
+function createController(options: Parameters<typeof createMessageMediaPrefetchController>[0]) {
+    const controller = createMessageMediaPrefetchController(options);
+    controllers.push(controller);
+    return controller;
+}
+afterEach(() => {
+    for (const controller of controllers.splice(0)) controller.dispose();
+    setActiveWorkspaceDb(null);
+    evictWorkspaceDb('prefetch-isolation-a');
+    evictWorkspaceDb('prefetch-isolation-b');
+});
 
 function createCache() {
     const states = new Map<string, { status: 'ready' | 'error' }>();
@@ -25,7 +39,7 @@ describe('message media prefetch controller', () => {
         const cache = createCache();
         let active = 0;
         let maxActive = 0;
-        const controller = createMessageMediaPrefetchController({
+        const controller = createController({
             cache,
             concurrency: 4,
             loadMeta: async () => ({ kind: 'image', width: 640, height: 480 }),
@@ -55,7 +69,7 @@ describe('message media prefetch controller', () => {
 
     it('deduplicates hashes and releases resources outside the range', async () => {
         const cache = createCache();
-        const controller = createMessageMediaPrefetchController({
+        const controller = createController({
             cache,
             loadMeta: async () => ({ kind: 'image' }),
             loadBlob: async () => new Blob(['image'], { type: 'image/png' }),
@@ -88,7 +102,7 @@ describe('message media prefetch controller', () => {
             if (hash === 'old') await firstGate;
             return new Blob(['image'], { type: 'image/png' });
         });
-        const controller = createMessageMediaPrefetchController({
+        const controller = createController({
             cache,
             concurrency: 1,
             loadMeta: async (hash) => ({
@@ -127,7 +141,7 @@ describe('message media prefetch controller', () => {
         const loadBlob = vi.fn(async () =>
             new Blob(['bytes'], { type: 'image/png' })
         );
-        const controller = createMessageMediaPrefetchController({
+        const controller = createController({
             cache,
             loadMeta,
             loadBlob,
@@ -144,6 +158,30 @@ describe('message media prefetch controller', () => {
         expect(cache.ensure).not.toHaveBeenCalled();
     });
 
+    it.each(['changed', 'returned'] as const)('discards held prefetch metadata when the workspace is %s while thread/hash identifiers remain unchanged', async change => {
+        setActiveWorkspaceDb('prefetch-isolation-a');
+        const cache = createCache();
+        let finish!: (meta: { kind: string; width: number; height: number }) => void;
+        const loadMeta = vi.fn()
+            .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
+            .mockResolvedValue({ kind: 'image', width: 200, height: 300 });
+        const loadBlob = vi.fn(async () => new Blob(['current-scope'], { type: 'image/png' }));
+        const controller = createController({ cache, concurrency: 1, loadMeta, loadBlob });
+        const messages = [{ file_hashes: ['shared'] }];
+        controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
+        await vi.waitFor(() => expect(loadMeta).toHaveBeenCalledOnce());
+        setActiveWorkspaceDb('prefetch-isolation-b');
+        if (change === 'returned') setActiveWorkspaceDb('prefetch-isolation-a');
+        controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
+        finish({ kind: 'image', width: 100, height: 100 });
+        await controller.whenIdle();
+        expect(cache.ensure).toHaveBeenCalledOnce();
+        expect(cache.setIntrinsicSize).toHaveBeenCalledExactlyOnceWith('shared', 200, 300);
+        expect(loadBlob).toHaveBeenCalledOnce();
+        expect(cache.release).toHaveBeenCalledExactlyOnceWith('shared');
+        expect(cache.retain).toHaveBeenCalledTimes(2);
+    });
+
     it('cannot release a same-hash retention acquired by a newer epoch', async () => {
         const cache = createCache();
         let releaseOldMeta!: () => void;
@@ -151,7 +189,7 @@ describe('message media prefetch controller', () => {
             releaseOldMeta = resolve;
         });
         let metaCalls = 0;
-        const controller = createMessageMediaPrefetchController({
+        const controller = createController({
             cache,
             concurrency: 1,
             loadMeta: async () => {

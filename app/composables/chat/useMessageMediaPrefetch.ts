@@ -1,3 +1,4 @@
+import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { parseHashes } from '~/utils/files/attachments';
 import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
@@ -29,6 +30,7 @@ export interface MessageMediaPrefetchOptions {
 /**
  * Warms image blobs for a virtual range without mounting message rows.
  * Resources remain retained while their hashes are inside the latest range.
+ * Workspace changes reset queued work even when thread/hash IDs are unchanged.
  */
 export function createMessageMediaPrefetchController(
     options: MessageMediaPrefetchOptions = {}
@@ -152,8 +154,11 @@ export function createMessageMediaPrefetchController(
         notifyIdle();
     };
 
+    const stopWorkspace = subscribeActiveWorkspaceDb(reset);
+
     const dispose = () => {
         if (disposed) return;
+        stopWorkspace();
         reset();
         disposed = true;
     };
