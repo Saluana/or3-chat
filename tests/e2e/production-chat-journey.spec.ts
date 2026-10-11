@@ -353,6 +353,56 @@ test.describe('chat draft storage recovery faults', () => {
         await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
     });
 
+    test('a partial composer attachment batch preserves its first file and retries the second with exact bytes', async ({ page }, info) => {
+        const marker = 'Synthetic partial composer attachment batch'; const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill(marker); await expect.poll(() => savedTexts(page)).toContain(marker);
+        const second = { ...fixturePng, name: 'synthetic-second-composer.png',
+            buffer: Buffer.concat([fixturePng.buffer, Buffer.from('synthetic-second-composer-file')]) };
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put; let blobWrites = 0;
+            IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+                if (this.name === 'file_blobs' && ++blobWrites === 2) throw new DOMException('Synthetic second composer file quota', 'QuotaExceededError');
+                return put.apply(this, args);
+            };
+        });
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles([fixturePng, second]);
+        const notice = page.getByRole('alert').filter({ hasText: 'Attachments could not be saved' });
+        await expect(notice).toContainText(second.name);
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(2);
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(1);
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect.poll(() => savedAttachmentReferences(page)).toBe(2);
+        await expect(notice).toHaveCount(0);
+        const savedBytes = await page.evaluate(async () => {
+            const bytes: number[][] = [];
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                const rows = await new Promise<Array<{ blob: Blob }>>((resolve, reject) => {
+                    const request = db.transaction('file_blobs', 'readonly').objectStore('file_blobs').getAll();
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                for (const row of rows) bytes.push(Array.from(new Uint8Array(await row.blob.arrayBuffer())));
+                db.close();
+            }
+            return bytes;
+        });
+        expect(savedBytes).toHaveLength(2);
+        expect(savedBytes).toEqual(expect.arrayContaining([Array.from(fixturePng.buffer), Array.from(second.buffer)]));
+        await page.reload();
+        await expect(input).toHaveText(marker, { timeout: 45_000 });
+        await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(2);
+        await expect(notice).toHaveCount(0);
+        const path = info.outputPath('partial-composer-batch.json');
+        await writeFile(path, JSON.stringify({ savedReferences: await savedAttachmentReferences(page), exactByteLengths: savedBytes.map(bytes => bytes.length),
+            firstReferenceSurvivedSecondQuota: true, reloadImageCount: 2, externalRequests: 'denied' }, null, 2));
+        await info.attach('partial-composer-batch', { path, contentType: 'application/json' });
+    });
+
     test('a failed tab layout save keeps its warning and retry restores the new draft after reload', async ({ page }, info) => {
         await page.evaluate(() => {
             const original = Storage.prototype.setItem;

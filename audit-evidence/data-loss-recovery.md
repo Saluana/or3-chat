@@ -612,3 +612,22 @@ This is mounted Chromium/editor + production store evidence using a deterministi
 callback delay around an actual local IndexedDB read. It extends the unit-only
 late-read regressions of `115df23a`; no further source change was needed.
 Persistent attachment visibility source commit: `b382349b`.
+
+## Partial composer attachment batch and exact-byte recovery
+
+Actual Chromium committed the first selected image, then rejected the second
+file's blob transaction with synthetic quota. The persistent notice named only
+the failed file, while the draft retained the first durable reference. Existing
+Retry completed the second upload without another editor edit. Both stored blobs
+matched the selected byte arrays exactly (68 and 98 bytes), both references
+remained after reload, and the failed-file notice cleared. Passed in 11.2 seconds:
+`/tmp/or3-recovery-partial-composer-batch-browser.log`;
+`test-results/recovery-partial-composer-batch/*/partial-composer-batch.json`.
+No new source change was needed. The preceding stale-document-read source/test
+checkpoint passed credential-free type-check in
+`/tmp/or3-recovery-late-document-read-typecheck.log`.
+
+The bounded recovery selector currently lists 32 cases in three files:
+`/tmp/or3-recovery-expanded-list.log`. These listed cases are not yet a claim of
+a fully passing combined invocation; its result will be recorded separately.
+Stale-read browser regression commit: `f06e6da0`.
