@@ -114,6 +114,8 @@ Composer drafts are separate from that manifest. They live in memory and also pe
 
 Concurrent draft flushes can finish out of order. A successful write clears only that tab's failure; it cannot dismiss another tab's unresolved save warning. A confirmed explicit discard clears the corresponding failure once its deletion is durable.
 
+An inactive workspace's database handle can close while its unsaved buffer remains in memory. After that workspace/account is restored, retries may use its already-loaded replacement handle only when the database name also matches. A late callback retains its captured destination; the active workspace never becomes an implicit fallback, and the closed handle is not reopened.
+
 The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
 
 A newer activation supersedes older work. Editor sessions are resolved by pane/tab identity, which matters when a document appears in more than one split. Capture outgoing edits and verify local durability before rebinding; do not assume the saved database snapshot contains everything currently visible in an editor.

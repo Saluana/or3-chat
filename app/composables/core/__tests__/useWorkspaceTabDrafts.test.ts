@@ -161,6 +161,39 @@ describe('durable workspace tab drafts', () => {
         expect(await workspaceADb.workspace_tab_drafts.count()).toBe(1);
     });
 
+    it('retries a retained draft in its original workspace after that DB handle is replaced', async () => {
+        const { client, drafts, flush } = await reload();
+        const original = client.setActiveWorkspaceDb('draft-closed-origin');
+        await original.open();
+        const capturedScope = drafts.scope();
+        const rejection = vi.spyOn(original.workspace_tab_drafts, 'put')
+            .mockRejectedValue(new DOMException('Synthetic quota', 'QuotaExceededError'));
+        drafts.write('retained-tab', draft('Recover after handle replacement'));
+        await flush();
+        expect(drafts.saveFailed.value).toBe(true);
+        rejection.mockRestore();
+        const other = client.setActiveWorkspaceDb('draft-closed-other');
+        await other.open();
+        client.evictWorkspaceDb('draft-closed-origin');
+        expect(original.isOpen()).toBe(false);
+        const replacement = client.setActiveWorkspaceDb('draft-closed-origin');
+        await replacement.open();
+        expect(replacement).not.toBe(original);
+        expect((await drafts.load('retained-tab'))?.text).toBe('Recover after handle replacement');
+        await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect((await replacement.workspace_tab_drafts.toArray())[0]?.draft.text).toBe('Recover after handle replacement');
+        expect(await other.workspace_tab_drafts.count()).toBe(0);
+        client.setActiveWorkspaceDb('draft-closed-other');
+        drafts.write('retained-tab', draft('Late callback still belongs to the origin'), capturedScope);
+        await flush();
+        expect((await replacement.workspace_tab_drafts.toArray())[0]?.draft.text).toBe('Late callback still belongs to the origin');
+        expect(await other.workspace_tab_drafts.count()).toBe(0);
+        expect(original.isOpen()).toBe(false);
+        drafts.discard('retained-tab', capturedScope);
+        await flush();
+    });
+
     it('deletes the saved draft on discard, even before a pending write fires', async () => {
         const { client, drafts, flush } = await reload();
         drafts.write('tab-1', draft('saved'));

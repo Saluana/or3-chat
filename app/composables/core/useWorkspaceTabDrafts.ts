@@ -260,8 +260,12 @@ async function pruneOldest(db: Or3DB, accountKey: string): Promise<void> {
 
 /** Resolves false when storage rejected the write, so the caller can keep the draft dirty. */
 async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<boolean> {
-    const db = scope.db;
+    let db = scope.db;
     if (!db) return true;
+    // LRU eviction may close the captured handle while its buffer is retained.
+    // A restored handle can acknowledge that same account/workspace only.
+    const restoredDb = hydrations.get(scope.key)?.db;
+    if (!db.isOpen() && restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
     try {
         // Read memory at write time so the newest edit wins over an older timer.
         const startedAt = Date.now();
