@@ -1,7 +1,7 @@
 # Workspace isolation audit — synthetic local fixtures only
 
 Base: `df1be2c8213477a9ee7c41c2cc0d4fb48b7f2cf5` (latest fetched `origin/or3-cloud`, 2026-10-11).
-Branch: `audit/workspace-isolation-20261011`. Latest runtime fix: `c0b50a8efa57165e8ace56a2635f1e25dedede9f`. Current source/test review export head: `f1421e2d7f1cd931a05e055195ae23bad4d03571`.
+Branch: `audit/workspace-isolation-20261011`. Latest runtime fix: `c0b50a8efa57165e8ace56a2635f1e25dedede9f`. Current source/test review export head: `55cc59ddb8c9eda50e1ef31d6bc9f9cc79442fe7`.
 Nothing pushed, merged, deployed or released. PRs #234–#238 are already merged in this base. No dormant generation cleanup activation, approval bridge edits, document/editor persistence edits, PageShell.vue changes or ChatInputDropper.vue changes.
 
 ## Architecture and core-entry rationale
@@ -131,7 +131,7 @@ Focused before/after logs preserve individual failing assertions. `thumbnail-cle
 
 ## Deliverables
 
-`workspace-isolation-source.patch` contains only the app/server/public source, test and documentation changes and required `vitest.config.ts` test configuration through `4b67b696c7cf348711ee9ff125f7f605c3b38359`. These are local host-source review exports. The earlier provider-open observation was reclassified as documented request-time authorization, with no reproduced scope bypass; see the contract review below. `workspace-isolation-source.bundle` carries the 56 local commits (including evidence checkpoints and later test-only qualifications) as `HEAD`, with the exact base as a prerequisite. `git bundle verify` passed; SHA-256 checksums are in `artifact-checksums.txt`. These artifacts and browser traces stay local and are excluded from the evidence commit. They can be imported or reviewed without remote publication.
+`workspace-isolation-source.patch` contains only the app/server/public source, test and documentation changes and required `vitest.config.ts` test configuration through `55cc59ddb8c9eda50e1ef31d6bc9f9cc79442fe7`. These are local host-source review exports. The earlier provider-open observation was reclassified as documented request-time authorization, with no reproduced scope bypass; see the contract review below. `workspace-isolation-source.bundle` carries the 59 local commits (including evidence checkpoints and later test-only qualifications) as `HEAD`, with the exact base as a prerequisite. `git bundle verify` passed; SHA-256 checksums are in `artifact-checksums.txt`. These artifacts and browser traces stay local and are excluded from the evidence commit. They can be imported or reviewed without remote publication.
 
 ## Remaining limits and rollback
 
