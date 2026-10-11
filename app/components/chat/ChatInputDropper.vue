@@ -1033,7 +1033,7 @@ watch(tabDrafts.saveFailed, (failed) => {
     toast.add({
         id: 'draft-save-failed',
         title: 'Draft could not be saved',
-        description: 'Your unsent message is still here, but it will not survive a reload. Browser storage may be full or blocked.',
+        description: 'Your unsent message is still here, but the latest changes will not survive a reload. Browser storage may be full or blocked, or this draft may be too large.',
         color: 'warning',
         duration: 0,
         actions: [{ label: 'Retry', onClick: () => void tabDrafts.flush() }],
