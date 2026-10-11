@@ -48,6 +48,45 @@ export function isValidSqliteWalHeader(header: Uint8Array) {
   return first === view.getUint32(24) && second === view.getUint32(28);
 }
 
+/** Stream current-generation WAL frames; checkpoint reuse can leave older salts behind. */
+export function assertValidSqliteWalFrames(
+  header: Uint8Array,
+  byteLength: number,
+  readFrame: (offset: number, size: number) => Uint8Array,
+) {
+  if (!isValidSqliteWalHeader(header)) throw new Error('Invalid SQLite WAL header');
+  if (!Number.isSafeInteger(byteLength) || byteLength < 32) throw new Error('Invalid SQLite WAL size');
+  const wal = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  const frameSize = wal.getUint32(8) + 24;
+  const littleEndian = wal.getUint32(0) === 0x377f0682;
+  let first = wal.getUint32(24);
+  let second = wal.getUint32(28);
+  let checkedFrames = 0;
+  let offset = 32;
+  let staleTail = false;
+  for (; byteLength - offset >= frameSize; offset += frameSize) {
+    const bytes = readFrame(offset, frameSize);
+    if (bytes.byteLength !== frameSize) throw new Error('Could not read SQLite WAL frame');
+    const frame = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (frame.getUint32(8) !== wal.getUint32(16) || frame.getUint32(12) !== wal.getUint32(20)) {
+      staleTail = true;
+      break;
+    }
+    for (let word = 0; word < frameSize; word += 8) {
+      // Only the first eight header bytes and page content enter the checksum.
+      if (word === 8) word = 24;
+      first = (first + frame.getUint32(word, littleEndian) + second) >>> 0;
+      second = (second + frame.getUint32(word + 4, littleEndian) + first) >>> 0;
+    }
+    if (first !== frame.getUint32(16) || second !== frame.getUint32(20)) {
+      throw new Error('Invalid SQLite WAL frame checksum');
+    }
+    checkedFrames++;
+  }
+  // SQLite ignores an incomplete final frame after an interrupted append.
+  return { checkedFrames, staleTail, partialTailBytes: staleTail ? 0 : byteLength - offset };
+}
+
 // Deep health only opens database files; that also succeeds for a non-SQLite
 // payload. Startup can also initialize an empty database. Use the restored
 // image's native driver before starting the application, without changing data or
@@ -56,6 +95,8 @@ const VERIFY_RESTORED_DATABASES_SCRIPT = `
 const fs = require('node:fs');
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
 const validWalHeader = ${isValidSqliteWalHeader.toString()};
+const isValidSqliteWalHeader = validWalHeader;
+const validWalFrames = ${assertValidSqliteWalFrames.toString()};
 const paths = [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean);
 if (paths.length !== 2) throw new Error('Both managed database paths must be configured');
 for (const path of paths) {
@@ -70,6 +111,16 @@ for (const path of paths) {
       const fd = fs.openSync(walPath, 'r');
       try {
         if (fs.readSync(fd, header, 0, 32, 0) !== 32 || !validWalHeader(header)) throw new Error('Invalid SQLite WAL header');
+        const frame = Buffer.alloc(header.readUInt32BE(8) + 24);
+        validWalFrames(header, info.size, (offset, size) => {
+          let read = 0;
+          while (read < size) {
+            const count = fs.readSync(fd, frame, read, size - read, offset + read);
+            if (!count) break;
+            read += count;
+          }
+          return frame.subarray(0, read);
+        });
       } finally { fs.closeSync(fd); }
     }
   }

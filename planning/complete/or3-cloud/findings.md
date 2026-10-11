@@ -70,8 +70,17 @@ The three plans are directionally aligned, but there are several conflicts and m
   verification now checks the documented 32-byte WAL header before opening
   the database, allowing empty checkpointed WALs and preserving legacy path
   resolution. This is independent of provider schema and changes no archive
-  format. Actual refusal/recovery preserves the committed record; complete
-  committed-frame checksums and expected record inventory remain unqualified.
+  format. Actual refusal/recovery preserves the committed record.
+- The next real WAL drill retained a valid header but corrupted current-frame
+  content: native integrity and baseline reads remained healthy while restore
+  dropped the committed WAL-only record. Pre-start validation now streams
+  current-generation frames and checks their cumulative checksums with a
+  page-sized buffer. Old-salt tails after reuse and incomplete append tails
+  retain SQLite's existing recovery semantics. A complete same-generation
+  frame with a bad checksum is conservatively refused, including a torn
+  uncommitted frame; this does not repair damaged input. Truncation or altered
+  salts can still resemble legitimate interrupted/reused tails, so expected
+  record inventory remains a separate semantic completeness boundary.
 
 - PR #233 review preserves the current context/usage, workflow scope, workspace
   authorization, mutation intent, and concurrent claim rate-admission boundaries.

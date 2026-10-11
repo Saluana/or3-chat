@@ -1,10 +1,11 @@
 import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
 import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
-import { isValidSqliteWalHeader } from '../src/backup/restore';
+import { assertValidSqliteWalFrames, isValidSqliteWalHeader } from '../src/backup/restore';
 
 // Each test drives several real CLI processes.
 setDefaultTimeout(30_000);
@@ -33,6 +34,52 @@ test('WAL header validation accepts a real header and refuses every single-byte 
     expect(validate(corrupted)).toBe(false);
   }
   for (let length = 0; length < 32; length++) expect(validate(valid.subarray(0, length))).toBe(false);
+});
+
+test('WAL frame validation checks real native checksums and allows stale reuse and incomplete uncommitted tails', async () => {
+  const fixture = await sandbox();
+  for (const pageSize of [512, 4096, 65536]) {
+    const path = join(fixture.root, `frames-${pageSize}.sqlite`);
+    const db = new Database(path);
+    try {
+      db.exec(`PRAGMA page_size=${pageSize}; PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE records(id TEXT PRIMARY KEY, value TEXT);`);
+      db.run('INSERT INTO records VALUES (?, ?)', 'committed', 'synthetic committed WAL record');
+      const wal = await readFile(`${path}-wal`);
+      const frameSize = pageSize + 24;
+      const header = wal.subarray(0, 32);
+      expect(isValidSqliteWalHeader(header)).toBe(true);
+      const validate = (bytes: Uint8Array) => assertValidSqliteWalFrames(header, bytes.byteLength,
+        (offset: number, size: number) => bytes.subarray(offset, offset + size));
+      const valid = validate(wal);
+      expect(valid.checkedFrames).toBe((wal.length - 32) / frameSize);
+      expect(valid.staleTail).toBe(false);
+      for (const offset of [32, 32 + 4, 32 + 16, 32 + 24 + 100, wal.length - 1]) {
+        const damaged = Buffer.from(wal);
+        damaged[offset] = damaged[offset]! ^ 0xff;
+        expect(() => validate(damaged)).toThrow('Invalid SQLite WAL frame checksum');
+      }
+      const staleFrame = Buffer.from(wal.subarray(32, 32 + frameSize));
+      staleFrame[8] = staleFrame[8]! ^ 0xff;
+      const reused = validate(Buffer.concat([wal, staleFrame]));
+      expect(reused.checkedFrames).toBe(valid.checkedFrames);
+      expect(reused.staleTail).toBe(true);
+      const interrupted = validate(Buffer.concat([wal, wal.subarray(32, 32 + 100)]));
+      expect(interrupted.checkedFrames).toBe(valid.checkedFrames);
+      expect(interrupted.partialTailBytes).toBe(100);
+      expect(db.query('SELECT value FROM records WHERE id=?').get('committed')).toEqual({ value: 'synthetic committed WAL record' });
+    } finally { db.close(); }
+  }
+  // Fixed big-endian checksum vector: page/commit=1 followed by 4096 zero bytes.
+  const header = Buffer.from('377f0683002de218000010000000000063ab680c9fc69e5379b04ee3c04fd4ef', 'hex');
+  const frame = Buffer.alloc(24 + 4096);
+  frame.writeUInt32BE(1, 0);
+  frame.writeUInt32BE(1, 4);
+  header.copy(frame, 8, 16, 24);
+  frame.writeUInt32BE(0x60c19537, 16);
+  frame.writeUInt32BE(0x10df20b8, 20);
+  expect(assertValidSqliteWalFrames(header, 32 + frame.length, () => frame).checkedFrames).toBe(1);
+  frame[100] = 1;
+  expect(() => assertValidSqliteWalFrames(header, 32 + frame.length, () => frame)).toThrow('Invalid SQLite WAL frame checksum');
 });
 
 test('restore refuses sparse apparent bytes as reclaimable capacity before mutating state or data', async () => {
