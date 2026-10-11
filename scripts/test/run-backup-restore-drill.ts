@@ -35,6 +35,7 @@ const deep = process.argv.includes('--deep');
 const concurrencyOnly = process.argv.includes('--concurrency-only');
 const archiveRaceOnly = process.argv.includes('--archive-race-only');
 const blobContentOnly = process.argv.includes('--blob-content-only');
+const filesystemCompatOnly = process.argv.includes('--filesystem-compat-only');
 const workspaceOmissionOnly = process.argv.includes('--workspace-omission-only');
 const multiWorkspaceOnly = process.argv.includes('--multi-workspace-only') || workspaceOmissionOnly;
 const builtCliOnly = process.argv.includes('--built-cli-only');
@@ -51,7 +52,7 @@ const walCorruptionOnly = process.argv.includes('--wal-corruption-only') || walF
 const sqliteOnly = process.argv.includes('--sqlite-only') || sqliteWalOnly || walCorruptionOnly;
 const sparseOnly = process.argv.includes('--sparse-capacity-only');
 const capacityOnly = process.argv.includes('--capacity-only') || sparseOnly;
-assert(Number(deep) + Number(blobContentOnly) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
+assert(Number(deep) + Number(filesystemCompatOnly) + Number(blobContentOnly) + Number(archiveRaceOnly) + Number(concurrencyOnly) + Number(multiWorkspaceOnly) + Number(builtCliOnly) + Number(recoveryOnly) + Number(crashOnly) + Number(browserOnly) + Number(journalOnly) + Number(attachmentOnly) + Number(sqliteOnly) + Number(capacityOnly) <= 1, 'Choose one qualification mode.');
 assert(!process.env.DOCKER_HOST || process.env.DOCKER_HOST.startsWith('unix://'), 'Remote Docker is forbidden.');
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
 if (browserOnly && proxyKeys.some(key => process.env[key])) {
@@ -173,6 +174,8 @@ const evidence = (name: string, detail?: unknown, kind: 'passed' | 'limitation' 
 type FixtureRow = { tableName: string; pk: string; payload: Record<string, unknown> };
 const fixtureRows: FixtureRow[] = [];
 let secondWorkspace: { id: string; storageId: string; rows: FixtureRow[] } | undefined;
+let legacyAttachment: { hash: string; storageId: string; bytes: Buffer } | undefined;
+const extraFilesystemFiles: Array<{ name: string; sha256: string }> = [];
 const fileBytes = Buffer.from('Synthetic backup document and attachment bytes.\n');
 const hash = `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`;
 let storageId: string;
@@ -206,6 +209,16 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
   const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' })).json();
   const original = await api(download.url);
   assert.deepEqual(Buffer.from(await original.arrayBuffer()), expectedAttachmentBytes);
+  if (legacyAttachment) {
+    const download = await (await api('/api/storage/presign-download', { workspace_id: workspaceId, hash: legacyAttachment.hash,
+      storage_id: legacyAttachment.storageId, file_kind_capability: 'v1' })).json();
+    assert.deepEqual(Buffer.from(await (await api(download.url)).arrayBuffer()), legacyAttachment.bytes);
+  }
+  if (extraFilesystemFiles.length) {
+    const script = `const fs=require('node:fs'),crypto=require('node:crypto');const root=${JSON.stringify(`/data/storage/workspaces/${workspaceId}/`)};console.log(JSON.stringify(${JSON.stringify(extraFilesystemFiles)}.map(item=>({name:item.name,sha256:crypto.createHash('sha256').update(fs.readFileSync(root+item.name)).digest('hex')}))))`;
+    const observed = JSON.parse(await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), fixture.directory));
+    assert.deepEqual(observed, extraFilesystemFiles, 'Native verification must preserve uncommitted/temporary/opaque files without rewriting bytes');
+  }
   const replay = await (await api('/api/sync/push', replayBody)).json();
   const canonicalReceipt = (result: { opId: string; success: boolean; serverVersion: number; applied?: boolean }) =>
     ({ opId: result.opId, success: result.success, serverVersion: result.serverVersion, applied: result.applied });
@@ -359,6 +372,32 @@ try {
     { tableName: 'projects', pk: 'drill-project', payload: { ...base, id: 'drill-project', name: 'Synthetic project', data: [{ kind: 'doc', id: 'drill-document' }] } },
     { tableName: 'kv', pk: 'drill-settings', payload: { id: 'drill-settings', name: 'backup_drill_settings', value: { theme: 'retro', nested: ['retained', 42] }, clock: 1, created_at: 1, updated_at: 1 } },
   );
+  if (filesystemCompatOnly) {
+    const bytes = Buffer.from('Synthetic legacy MD5 attachment bytes.\n');
+    const legacyHash = `md5:${createHash('md5').update(bytes).digest('hex')}`;
+    legacyAttachment = { hash: legacyHash, storageId: `${workspaceId}:${legacyHash}`, bytes };
+    fixtureRows.push({ tableName: 'file_meta', pk: legacyHash, payload: { ...base, hash: legacyHash, name: 'legacy-drill.txt',
+      mime_type: 'text/plain', kind: 'file', size_bytes: bytes.length, storage_id: legacyAttachment.storageId, storage_provider_id: 'fs' } });
+    fixtureRows.find(row => row.tableName === 'messages')!.payload.file_hashes = JSON.stringify([hash, legacyHash]);
+    const large = Buffer.alloc(150_001, 0x93);
+    const empty = Buffer.alloc(0);
+    const wrong = Buffer.from('Uncommitted upload bytes do not yet match their future key.');
+    const temporaryKey = `sha256_${createHash('sha256').update('future committed bytes').digest('hex')}`;
+    const fixtures = [
+      { name: legacyHash.replace(':', '_'), bytes },
+      { name: `sha256_${createHash('sha256').update(large).digest('hex')}`, bytes: large },
+      { name: `sha256_${createHash('sha256').update(empty).digest('hex')}`, bytes: empty },
+      { name: temporaryKey, bytes: wrong },
+      { name: `${temporaryKey}.meta.json.tmp-fixture`, bytes: Buffer.from('{}') },
+      { name: 'opaque-generation-fixture.blob', bytes: Buffer.from('Opaque generation bytes retained') },
+      { name: 'opaque-generation-fixture.blob.meta.json', bytes: Buffer.from('{}') },
+    ];
+    for (const item of fixtures) extraFilesystemFiles.push({ name: item.name, sha256: createHash('sha256').update(item.bytes).digest('hex') });
+    // Local filesystem fixtures simulate a pre-existing legacy object and
+    // retained artifacts; they do not exercise a new MD5 upload contract.
+    const script = `const fs=require('node:fs');const root=${JSON.stringify(`/data/storage/workspaces/${workspaceId}/`)};const files=${JSON.stringify(fixtures.map(item => ({ name: item.name, base64: item.bytes.length === large.length ? undefined : item.bytes.toString('base64'), large: item.bytes.length === large.length })))};for(const item of files){fs.writeFileSync(root+item.name,item.large?Buffer.alloc(150001,0x93):Buffer.from(item.base64,'base64'))}for(const name of files.slice(0,3).map(item=>item.name))fs.writeFileSync(root+name+'.meta.json',JSON.stringify({workspace_id:${JSON.stringify(workspaceId)},hash:name.replace('_',':'),committed_at:new Date().toISOString()}))`;
+    await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), source.directory);
+  }
   replayBody = { scope: { workspaceId }, ...caps, ops: fixtureRows.map(row => op(row.tableName, row.pk, row.payload)) };
   replayReceipt = await (await api('/api/sync/push', replayBody)).json();
   assert((replayReceipt as { results: Array<{ success: boolean }> }).results.every(result => result.success));
@@ -471,7 +510,7 @@ try {
     assert(accepted.results.every((result: { success: boolean }) => result.success));
   }
   const targetBackup = await backup(target);
-  for (const fault of blobContentOnly || archiveRaceOnly || multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
+  for (const fault of filesystemCompatOnly || blobContentOnly || archiveRaceOnly || multiWorkspaceOnly || concurrencyOnly || builtCliOnly || recoveryOnly || crashOnly || browserOnly || journalOnly || attachmentOnly || sqliteOnly || capacityOnly ? [] : ['missing-data', 'missing-config', 'missing-asset', 'checksum', 'future-schema', 'version-mismatch', 'corrupt-tar',
     ...(deep ? ['missing-auth-database', 'missing-sync-database'] : [])]) {
     const path = join(root, fault);
     await cp(targetBackup, path, { recursive: true });
@@ -509,7 +548,7 @@ try {
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
     evidence(`restore rejects ${fault}; target is intact`, await verify(target));
   }
-  if (!blobContentOnly && !archiveRaceOnly && !multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
+  if (!filesystemCompatOnly && !blobContentOnly && !archiveRaceOnly && !multiWorkspaceOnly && !concurrencyOnly && !builtCliOnly && !recoveryOnly && !crashOnly && !browserOnly && !journalOnly && !attachmentOnly && !sqliteOnly && !capacityOnly) {
     // Fail the extraction process after volume clearing. The safe pre-start
     // automatic recovery must restore actual data, not merely return exit 0.
     const interrupted = join(root, 'interrupted-extraction');
@@ -1068,13 +1107,14 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     evidence(multiWorkspaceOnly ? 'both workspace settings, chats and attachment bytes remain distinct after another cold restart'
       : 'acknowledged concurrent batches remain intact after another cold restart', await verify(target));
   }
-  if (builtCliOnly) {
+  if (builtCliOnly || filesystemCompatOnly) {
     const cli = fileURLToPath(new URL('../../packages/or3-cloud/dist/cli.mjs', import.meta.url));
     const restored = await run(process.execPath, [cli, 'restore', targetBackup, '--yes'], target.directory);
     assert(restored.ok, restored.stderr);
     assert.match(restored.stdout, /Restored backup-/);
     assert.equal((await readState(target.directory)).incompleteOperation, undefined);
-    evidence('built CLI dispatcher restores real archive with lease and serialized native database/WAL checks', await verify(target));
+    evidence(filesystemCompatOnly ? 'built CLI native helper accepts legacy MD5, empty/multi-chunk committed objects and preserves temporary/uncommitted/opaque fixtures'
+      : 'built CLI dispatcher restores real archive with lease and serialized native database/WAL checks', await verify(target));
     await stopProject(target.directory, 'local');
     await startProject(target.directory, 'local', target.env);
     evidence('built CLI restore survives another actual cold restart', await verify(target));
@@ -1108,7 +1148,7 @@ await restoreCommand(${JSON.stringify(target.directory)}, { yes: true }, [${JSON
     } catch (error) { cleanupFailed = true; outcomes.push({ name: 'cleanup failure', kind: 'cleanup-failure', detail: String(error) }); }
   }
   await mkdir(join(evidencePath, '..'), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
+  await writeFile(evidencePath, `${JSON.stringify({ completed, cleanupFailed, deep, filesystemCompatOnly, blobContentOnly, archiveRaceOnly, concurrencyOnly, multiWorkspaceOnly, workspaceOmissionOnly, builtCliOnly, recoveryOnly, crashOnly, prestartCrashOnly, browserOnly, journalOnly, attachmentOnly, sqliteOnly, sqliteWalOnly, walCorruptionOnly, walFrameOnly, walTailOnly, capacityOnly, sparseOnly, nodePath, cliRevision, sourceRevision, image, imageDigest: digest, packageVersion: PACKAGE_VERSION,
     outcomes, boundaries: ['Internal Docker networks and network-none extraction; no model requests.',
       'Cross-instance transfer uses production raw archive primitive after source authentication; managed foreign-identity gate is tested separately.',
       browserOnly ? 'Fresh-browser conversation/document read qualification; other UI flows and external provider stacks are not covered.'
