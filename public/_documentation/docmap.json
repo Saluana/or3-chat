@@ -224,7 +224,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Saved prompt APIs and workspace-scoped default preference loading, committed updates and switch recovery."
+                    "summary": "Saved prompt APIs, workspace-scoped default preference updates, and modal library loading and close behavior."
                 },
                 {
                     "name": "document-revisions.md",

@@ -70,6 +70,18 @@ hook; returning to its DB refreshes the current cache from its canonical row.
 `getDefaultPromptId()` reads the DB captured at invocation directly. Callers that
 continue asynchronously remain responsible for their own workspace lifetime.
 
+The core System Prompts Modal closes when the workspace changes and clears its
+visible library cache and pending confirmation/action selection. Reopen it to load
+the selected workspace's library. A
+captured list finishing after switching, closing or unmounting cannot publish
+rows, selection or failure feedback, or clear the selected workspace's default.
+Current-workspace loading still repairs a default that no longer exists in that
+library. Refreshes admitted after closure perform no library read. Thread/pane
+selection loading and leaving edit view also retain their modal/workspace
+generation; an old continuation cannot replace a freshly opened context. These UI
+guards do not define the lifetime of editor saves, mutation actions or caller
+selection callbacks.
+
 ---
 
 ## Usage tips

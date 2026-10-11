@@ -734,6 +734,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     createPrompt,
     listPrompts,
@@ -801,6 +802,7 @@ const threadPromptId = ref<string | null>(null);
 const pendingPromptId = ref<string | null>(null);
 const searchInputRef = ref<{ inputRef?: HTMLInputElement } | null>(null);
 let openGeneration = 0;
+let promptListGeneration = 0;
 let promptEditorLoadPromise: Promise<unknown> | null = null;
 
 const { activePromptId, clearActivePrompt } = useActivePrompt();
@@ -809,6 +811,24 @@ const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
 const { countTokensBatch } = useTokenizer();
 const tokenCounts = ref<Record<string, number>>({});
 let tokenCountGeneration = 0;
+
+// A fresh open request must choose the new workspace's library and context.
+// Closing alone cannot cancel an already captured list's preference repair.
+const stopWorkspace = typeof window === 'undefined' ? () => undefined : subscribeActiveWorkspaceDb(() => {
+    openGeneration++;
+    promptListGeneration++;
+    tokenCountGeneration++;
+    prompts.value = [];
+    selectedPromptId.value = null;
+    deleteConfirmId.value = null;
+    promptActionsId.value = null;
+    threadPromptId.value = null;
+    pendingPromptId.value = null;
+    tokenCounts.value = {};
+    errorMessage.value = '';
+    loading.value = false;
+    if (props.showModal) emit('update:showModal', false);
+});
 
 const closeIcon = useIcon('ui.close');
 const allIcon = useIcon('catalog.all');
@@ -1004,10 +1024,20 @@ function formatDate(timestamp: number): string {
 }
 
 async function loadPrompts(): Promise<void> {
+    const db = getDb();
+    const workspaceGeneration = getWorkspaceGeneration();
+    const opened = openGeneration;
+    const generation = ++promptListGeneration;
+    const current = () => props.showModal && opened === openGeneration &&
+        generation === promptListGeneration && db === getDb() &&
+        workspaceGeneration === getWorkspaceGeneration();
+    if (!current()) return;
     loading.value = true;
     errorMessage.value = '';
     try {
-        prompts.value = await listPrompts();
+        const nextPrompts = await listPrompts();
+        if (!current()) return;
+        prompts.value = nextPrompts;
         if (
             defaultPromptId.value &&
             !prompts.value.some(
@@ -1016,6 +1046,7 @@ async function loadPrompts(): Promise<void> {
         ) {
             await clearDefaultPrompt();
         }
+        if (!current()) return;
         if (
             selectedPromptId.value &&
             !prompts.value.some(
@@ -1026,22 +1057,27 @@ async function loadPrompts(): Promise<void> {
         }
         selectedPromptId.value ??= prompts.value[0]?.id ?? null;
     } catch (error) {
+        if (!current()) return;
         errorMessage.value =
             error instanceof Error ? error.message : 'Failed to load prompts.';
     } finally {
-        loading.value = false;
+        if (current()) loading.value = false;
     }
 }
 
 async function loadSelectionContext(): Promise<void> {
-    if (props.threadId) {
-        threadPromptId.value =
-            (await getThreadSystemPrompt(props.threadId)) ?? null;
-    } else {
-        threadPromptId.value = null;
-    }
-    pendingPromptId.value = props.paneId
-        ? getPanePendingPrompt(props.paneId) ?? null
+    const db = getDb();
+    const workspaceGeneration = getWorkspaceGeneration();
+    const opened = openGeneration;
+    const threadId = props.threadId;
+    const paneId = props.paneId;
+    const selection = threadId ? await getThreadSystemPrompt(threadId) : null;
+    if (!props.showModal || opened !== openGeneration || db !== getDb() ||
+        workspaceGeneration !== getWorkspaceGeneration() ||
+        threadId !== props.threadId || paneId !== props.paneId) return;
+    threadPromptId.value = selection ?? null;
+    pendingPromptId.value = paneId
+        ? getPanePendingPrompt(paneId) ?? null
         : null;
 }
 
@@ -1112,7 +1148,12 @@ async function startEditing(id: string): Promise<void> {
 }
 
 async function stopEditing(): Promise<void> {
+    const db = getDb();
+    const workspaceGeneration = getWorkspaceGeneration();
+    const opened = openGeneration;
     await loadPrompts();
+    if (!props.showModal || opened !== openGeneration || db !== getDb() ||
+        workspaceGeneration !== getWorkspaceGeneration()) return;
     editingPromptId.value = null;
     view.value = 'detail';
 }
@@ -1255,6 +1296,8 @@ watch(
         if (value) void initializeForOpen();
         else if (previous) {
             openGeneration += 1;
+            promptListGeneration += 1;
+            loading.value = false;
             emit('closed');
         }
     },
@@ -1287,7 +1330,9 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    stopWorkspace();
     openGeneration += 1;
+    promptListGeneration += 1;
     tokenCountGeneration += 1;
 });
 </script>
