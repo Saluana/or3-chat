@@ -57,6 +57,11 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run lint
+        # Typed lint retains several Nuxt TypeScript programs. Bound its heap
+        # above Node's ~4 GiB default, leaving room on the 7 GiB runner for
+        # native allocations and the OS. Keep all rules and warnings enforced.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
   performance:
     name: Strict performance budgets

@@ -11,6 +11,7 @@ import { readProviderMetadata } from './shared/cloud/provider-metadata';
 import { modulePackageName, resolveModuleEntry } from './shared/config/module-resolution';
 import { buildApplicationPlan } from './shared/config/application-plan';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
+import { compactClientChunksPlugin } from './plugins/vite-compact-client-chunks';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
@@ -657,7 +658,12 @@ export default defineNuxtConfig({
         resolve: {
             // Math renderers accept the root KaTeX patch release. Share it
             // instead of bundling rehype's older copy alongside Mermaid's.
-            dedupe: ['katex'],
+            // These nested copies satisfy the root versions' declared ranges.
+            // Share their state and helpers across Nuxt UI, Reka and Nuxt.
+            dedupe: [
+                'katex', '@floating-ui/core', '@floating-ui/dom',
+                '@floating-ui/utils', '@vueuse/shared', 'ufo',
+            ],
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
             // and deployment images where those checkouts do not exist.
@@ -730,6 +736,7 @@ export default defineNuxtConfig({
         },
         plugins: [
             stripBrokenOpenRouterSourcemapsPlugin(),
+            compactClientChunksPlugin(),
             themeCompilerPlugin({
                 failOnError: true,
                 showWarnings: true,
@@ -737,6 +744,7 @@ export default defineNuxtConfig({
         ],
         worker: {
             format: 'es',
+            plugins: () => [compactClientChunksPlugin()],
         },
         build: {
             rolldownOptions: {
@@ -782,6 +790,8 @@ export default defineNuxtConfig({
     hooks: {
         'vite:extendConfig'(config, { isClient }) {
             if (!isClient) return;
+            // Terser folds more emitted expressions; Oxc then prints the result
+            // compactly (notably tokenizer tables). Keep compression bounded.
             const output = config.build?.rolldownOptions?.output;
             if (!output || Array.isArray(output)) return;
             const splitting = output.codeSplitting;
@@ -790,6 +800,8 @@ export default defineNuxtConfig({
             // Clone the client output: mutating it also changes Nuxt's SSR config.
             Object.assign(config, { build: {
                 ...config.build,
+                minify: 'terser',
+                terserOptions: { maxWorkers: 2, compress: { passes: 2 } },
                 rolldownOptions: {
                     ...config.build?.rolldownOptions,
                     output: {
