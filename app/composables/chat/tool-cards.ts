@@ -46,7 +46,7 @@ export function registerToolCardBinding(input: ToolCardBinding): RegistrationHan
         );
     if (
         input.source.kind === 'page' &&
-        typeof input.source.module?.mount !== 'function'
+        typeof (input.source.module as typeof input.source.module | null | undefined)?.mount !== 'function'
     )
         throw new TypeError('Card module requires mount');
     if (

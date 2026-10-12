@@ -349,7 +349,7 @@ export async function captureAutomaticMemories(
                     state,
                     key!,
                     scope.signal,
-                    useRuntimeConfig().public.openRouter?.baseUrl,
+                    (useRuntimeConfig().public as { openRouter?: { baseUrl?: string } }).openRouter?.baseUrl,
                     validate,
                 );
         }

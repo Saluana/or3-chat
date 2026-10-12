@@ -25,7 +25,7 @@ export function createTrustedWorkspaceStorage(input: {
             const encoded = JSON.stringify(value, (_key, item) => {
                 if (item === undefined || typeof item === 'function' || typeof item === 'symbol' || (typeof item === 'number' && !Number.isFinite(item))) throw new Error('Invalid JSON value');
                 return item;
-            });
+            }) as string | undefined;
             if (encoded === undefined || new TextEncoder().encode(encoded).byteLength > 32 * 1024) throw new Error('Value exceeds 32 KiB');
             return encoded;
         } catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : 'Invalid JSON value'), { code: 'invalid-input' }); }

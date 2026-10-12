@@ -54,7 +54,7 @@ async function open(page: Page) {
     await page.goto('/images');
     await expect(page.getByRole('heading', { name: 'Image library' })).toBeVisible({ timeout: 60_000 });
     await page.waitForLoadState('networkidle');
-    await page.waitForFunction(() => (document.querySelector('#__nuxt') as unknown as { __vue_app__?: { _instance?: { isMounted: boolean } } })?.__vue_app__?._instance?.isMounted);
+    await page.waitForFunction(() => (document.querySelector('#__nuxt') as unknown as { __vue_app__?: { _instance?: { isMounted: boolean } } } | null)?.__vue_app__?._instance?.isMounted);
     const welcome = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
     if (await welcome.isVisible()) await welcome.click();
 }
@@ -389,7 +389,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
         const { getGlobalMultiPaneApi } = await import(path) as typeof import("../../app/utils/multiPaneApi.ts");
         const api = getGlobalMultiPaneApi();
         if (!api) throw new Error('Actual pane navigation API unavailable');
-        await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
+        await api.setPaneThread(api.activePaneIndex.value, 'identical-rendered-thread');
     });
     await expect(messageRow).toBeVisible();
     await expect(messageRow).toContainText('Synthetic rendered target workspace message');
@@ -401,7 +401,7 @@ test('rendered chat identifiers stay scoped through workspace switching and reco
         const { getGlobalMultiPaneApi } = await import(path) as typeof import("../../app/utils/multiPaneApi.ts");
         const api = getGlobalMultiPaneApi();
         if (!api) throw new Error('Actual pane navigation API unavailable');
-        await api.setPaneThread(api.activePaneIndex.value ?? 0, 'identical-rendered-thread');
+        await api.setPaneThread(api.activePaneIndex.value, 'identical-rendered-thread');
     });
     await expect(messageRow).toBeVisible();
     await expect(messageRow).toContainText('Synthetic rendered origin workspace message');
@@ -563,7 +563,7 @@ for (const transition of ['switch', 'close-first'] as const) {
         await page.route('**/api/jobs/**', route => route.abort());
         await page.goto('/');
         await page.waitForLoadState('networkidle');
-        await page.waitForFunction(() => (document.querySelector('#__nuxt') as NuxtRoot).__vue_app__?._instance?.isMounted);
+        await page.waitForFunction(() => (document.querySelector('#__nuxt') as Partial<NuxtRoot>).__vue_app__?._instance.isMounted);
         await page.evaluate(async mode => {
             const clientPath = '/_nuxt/db/client.ts';
             const hooksPath = '/_nuxt/core/hooks/useHooks.ts';
@@ -598,7 +598,7 @@ for (const transition of ['switch', 'close-first'] as const) {
         }, transition);
         try {
             await expect(page.getByRole('button', { name: 'Close system prompts', exact: true })).toBeVisible({ timeout: 30_000 });
-            await page.waitForFunction(() => (window as unknown as FixtureWindow).__nativePromptLibrary!?.entered);
+            await page.waitForFunction(() => (window as unknown as FixtureWindow).__nativePromptLibrary?.entered);
             await expect(page.getByText('Loading prompts…', { exact: true })).toBeVisible();
             if (transition === 'close-first') await page.getByRole('button', { name: 'Close system prompts', exact: true }).click();
             await page.evaluate(async () => {

@@ -663,7 +663,8 @@ export async function prepareMessageAppend(input: MessageCreate) {
 
 /** Hook-free append for guarded callers sharing their atomic write. */
 export async function appendMessageRows(db: Or3DB, input: MessageCreate): Promise<Message> {
-    const transaction = Dexie.currentTransaction;
+    // Dexie's declaration omits the absent outside-transaction case.
+    const transaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
     if (!transaction || transaction.db !== db || transaction.mode !== 'readwrite')
         throw new Error('Message append requires its captured write transaction.');
     const value = parseOrThrow(MessageCreateSchema, input);

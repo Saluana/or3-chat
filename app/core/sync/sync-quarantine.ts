@@ -140,7 +140,7 @@ async function coveredByLiveOp(
 
 async function reconstruct(
     tx: Transaction,
-    op: PendingOp,
+    op: Omit<PendingOp, 'operation'> & { operation: unknown },
     local: unknown,
     tombstone: unknown,
     deviceId: string
@@ -248,17 +248,19 @@ export async function quarantineOpInTx(
     source: SyncQuarantineRow['source'],
     deviceId: string
 ): Promise<PendingOp | null> {
-    const id = typeof op?.id === 'string' && op.id ? op.id : createRuntimeUuid();
+    // Stored queue entries may predate or violate the current declared shape.
+    const rawOp = op as Partial<PendingOp> | null | undefined;
+    const id = typeof rawOp?.id === 'string' && op.id ? op.id : createRuntimeUuid();
     const entries = tx.table('sync_quarantine');
     const existing = await entries.get(id) as SyncQuarantineRow | undefined;
     if (existing && existing.status !== 'quarantined') {
         // Already resolved; a racing writer put the row back. Drop the stale copy only.
-        if (typeof op?.id === 'string') await tx.table('pending_ops').delete(op.id);
+        if (typeof rawOp?.id === 'string') await tx.table('pending_ops').delete(op.id);
         return null;
     }
 
-    const tableName = typeof op?.tableName === 'string' ? op.tableName : '';
-    const pk = typeof op?.pk === 'string' ? op.pk : '';
+    const tableName = typeof rawOp?.tableName === 'string' ? op.tableName : '';
+    const pk = typeof rawOp?.pk === 'string' ? op.pk : '';
     const synced = isSyncedTable(tableName) && !!pk;
     const local: unknown = synced ? await tx.table(tableName).get(pk) : undefined;
     const tombstone: unknown = synced ? await tx.table('tombstones').get(`${tableName}:${pk}`) : undefined;
@@ -275,7 +277,7 @@ export async function quarantineOpInTx(
         ...(outcome.kind === 'repaired' ? { repairedOpId: outcome.op.id } : {}),
     };
     await entries.put(row);
-    if (typeof op?.id === 'string') await tx.table('pending_ops').delete(op.id);
+    if (typeof rawOp?.id === 'string') await tx.table('pending_ops').delete(op.id);
     if (outcome.kind !== 'repaired') return null;
     await tx.table('pending_ops').add(outcome.op);
     return outcome.op;
@@ -286,7 +288,7 @@ async function readOps(tx: Transaction, statuses: readonly string[]): Promise<Pe
     for (const status of statuses) {
         ops.push(...await tx.table('pending_ops').where('status').equals(status).toArray() as PendingOp[]);
     }
-    return ops.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || String(a.id).localeCompare(String(b.id)));
+    return ops.sort((a: Partial<PendingOp>, b: Partial<PendingOp>) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || String(a.id).localeCompare(String(b.id)));
 }
 
 /**
@@ -355,7 +357,7 @@ export async function pruneResolvedQuarantine(db: Or3DB, now = Date.now()): Prom
 /** Retention must never fail a recovery or discard that already committed. */
 export async function pruneResolvedQuarantineBestEffort(db: Or3DB): Promise<void> {
     // Hand-built database stubs in tests have no quarantine table to prune.
-    if (!db.sync_quarantine) return;
+    if (!(db as Partial<Or3DB>).sync_quarantine) return;
     try {
         await pruneResolvedQuarantine(db);
     } catch (error) {

@@ -23,7 +23,7 @@ export interface NativeRecoveryCheckpoint {
 }
 async function fingerprint(value: unknown): Promise<string> {
     const pending = sha256Hex(JSON.stringify(value));
-    return Dexie.currentTransaction ? Dexie.waitFor(pending) : pending;
+    return (Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined) ? Dexie.waitFor(pending) : pending;
 }
 export function recoveryProjectFingerprint(context: import('~/utils/projects/types').ProjectContextSnapshot): Promise<string> {
     return fingerprint(context);

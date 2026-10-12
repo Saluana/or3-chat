@@ -47,7 +47,7 @@ export default defineEventHandler((event) => {
     const maxAge = Math.floor(verified.payload.exp - Date.now() / 1000);
     if (maxAge <= 0) return;
 
-    const protocol = getProxyRequestProtocol(event, normalizeProxyTrustConfig(config.security?.proxy));
+    const protocol = getProxyRequestProtocol(event, normalizeProxyTrustConfig((config as { security?: typeof config.security }).security?.proxy));
     setCookie(event, INVITE_TOKEN_COOKIE, token, {
         httpOnly: true,
         sameSite: 'lax',

@@ -14,7 +14,7 @@ export async function assertServerProjectExecutionSupported(
     permission: 'workspace.read' | 'workspace.write' = 'workspace.read',
 ) {
     if (!context.subject || !context.workspaceId || !context.threadId) return;
-    const providerId = useRuntimeConfig().public?.sync?.provider;
+    const providerId = (useRuntimeConfig() as { public?: { sync?: { provider?: string } } }).public?.sync?.provider;
     if (!providerId)
         throw new Error(
             'Canonical project ownership is unavailable without a sync provider.',

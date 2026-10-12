@@ -59,7 +59,8 @@ export async function resolveThreadProjection(threadId: string, db: Or3DB = getD
             if (!enforce) return;
             const seen = new Set<string>();
             let current: Message | undefined = summary;
-            while (current) {
+            // Every inherited lookup either returns a message or throws below.
+            for (;;) {
                 if (seen.has(current.id)) throw new CompactionHistoryError('cyclic_lineage', 'Summary provenance is cyclic.');
                 seen.add(current.id);
                 const data = current.data as Record<string, unknown> | undefined;

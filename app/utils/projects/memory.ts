@@ -265,7 +265,7 @@ async function classifySavedMemory(
             state,
             key!,
             scope.signal,
-            useRuntimeConfig().public.openRouter?.baseUrl,
+            (useRuntimeConfig().public as { openRouter?: { baseUrl?: string } }).openRouter?.baseUrl,
             validate,
         );
     if (import.meta.dev)

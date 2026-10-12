@@ -79,7 +79,7 @@ export function createTrustedRuntimeServices(input: {
                     const thread = await input.db.threads.get(origin.threadId);
                     if (!row || row.deleted || row.role !== 'assistant' || row.thread_id !== origin.threadId
                         || row.stream_id !== origin.streamId || !thread || thread.deleted
-                        || (input.messageTypes && !input.messageTypes.has((row.data as { type?: string })?.type ?? '')))
+                        || (input.messageTypes && !input.messageTypes.has((row.data as { type?: string } | null | undefined)?.type ?? '')))
                         throw new Error('The originating plugin message is no longer available.');
                     if (await resolveChatProject(input.db, origin.threadId))
                         throw new Error('This plugin cannot capture project context. Use a normal project chat.');

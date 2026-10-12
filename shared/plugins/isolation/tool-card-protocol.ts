@@ -160,7 +160,7 @@ export function validateCardHostMessage(value: unknown): value is CardHostMessag
             (message.stylesheet === undefined ||
                 typeof message.stylesheet === 'string') &&
             message.module.byteLength +
-                new TextEncoder().encode((message.stylesheet as string) ?? '')
+                new TextEncoder().encode((message.stylesheet as string | undefined) ?? '')
                     .byteLength <=
                 TOOL_CARD_BUNDLE_BYTES &&
             validateCardSnapshot(message.snapshot)

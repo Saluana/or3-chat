@@ -42,7 +42,7 @@ export async function loadToolCardBundle(
                         if (!reader) throw new Error('bundle-unavailable');
                         const chunks: Uint8Array[] = [];
                         let size = 0;
-                        while (true) {
+                        for (;;) {
                             const next = await reader.read();
                             if (next.done) break;
                             size += next.value.byteLength;

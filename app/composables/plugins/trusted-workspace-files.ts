@@ -63,7 +63,7 @@ export function createTrustedWorkspaceFiles(input: {
         return item;
     }
     const catalog: PluginFilesCatalogClient = {
-        list: (options = {}) => run('files.catalog.read', async scope => {
+        list: (options: NonNullable<Parameters<PluginFilesCatalogClient['list']>[0]> | null = {}) => run('files.catalog.read', async scope => {
             if (!options || typeof options !== 'object' || Array.isArray(options)) throw invalid('Invalid catalog list options.');
             const limit = options.limit ?? 50;
             if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || (options.trashed !== undefined && typeof options.trashed !== 'boolean')) {
@@ -87,7 +87,7 @@ export function createTrustedWorkspaceFiles(input: {
             const result = await catalogWorkspaceFile(scope, fileId, { restore: true });
             return workspaceFileSnapshot(scope, result.post);
         }),
-        update: (id, observed, changes) => run('files.catalog.write', async scope => {
+        update: (id, observed, changes: Parameters<PluginFilesCatalogClient['update']>[2] | null | undefined) => run('files.catalog.write', async scope => {
             identifier(id); revision(observed);
             if (!changes || (changes.title === undefined && changes.trashed === undefined)
                 || (changes.title !== undefined && (typeof changes.title !== 'string' || !changes.title.trim() || changes.title.length > 500))
@@ -103,7 +103,7 @@ export function createTrustedWorkspaceFiles(input: {
             await removeWorkspaceFile(scope, id, observed);
         }),
     };
-    function registerAction(action: PluginFileAction) {
+    function registerAction(action: PluginFileAction | null | undefined) {
         // Grants only; `run` checks workspace access and the selected revision.
         input.allow('files.actions.register'); input.allow('files.catalog.read');
         if (!action || typeof action.id !== 'string' || !action.id.trim() || action.id.length > 100
