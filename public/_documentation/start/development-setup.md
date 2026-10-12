@@ -43,6 +43,50 @@ port when other apps already use it. Browser data belongs to each origin: the IP
 and HTTPS hostname have separate local workspaces. Export a Workspace Backup when
 transferring local data to another origin.
 
+### If the dev page loads only its shell through Serve
+
+Check failed JavaScript requests, not just the HTML response. The unbundled development
+app loads many modules. If Serve returns **502** for modules and its daemon logs show
+`connect: connection reset by peer`, use a native HTTP/1.1 HTTPS listener with TCP
+forwarding. This avoids the HTTP/2 proxy's upstream connection burst while keeping
+the original HTTP dev server available. TLS reaches Nuxt itself, so origin checks
+see the correct HTTPS protocol; TLS-terminated TCP forwarding to an HTTP backend
+does not preserve that information.
+
+Get a certificate for your machine's Tailscale hostname and enable the optional
+loopback-only development listener before starting the app:
+
+```bash
+tailscale_host="your-machine.your-tailnet.ts.net"
+tls_dir="$(mktemp -d)"
+tailscale cert --cert-file "$tls_dir/dev.crt" --key-file "$tls_dir/dev.key" "$tailscale_host"
+export OR3_DEV_HTTPS_CERT="$tls_dir/dev.crt"
+export OR3_DEV_HTTPS_KEY="$tls_dir/dev.key"
+export OR3_DEV_HTTPS_PORT=3445
+export OR3_TRUST_PROXY=true
+export __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="$tailscale_host"
+bun run dev -- --host 0.0.0.0 --port 3000
+```
+
+In another terminal, forward a free tailnet port to that TLS listener:
+
+```bash
+tailscale serve --bg --tcp=3443 tcp://127.0.0.1:3445
+```
+
+Open `https://your-machine.your-tailnet.ts.net:3443`. Although Serve describes this
+as TCP forwarding, the browser URL is HTTPS. If that port already has an HTTPS
+Serve mapping, remove only that mapping with `tailscale serve --https=3443 off`
+before switching modes. Keep certificate files outside the checkout, renew them
+with `tailscale cert` before expiry, and restart the dev server after replacing
+them or changing listener settings. Omitting both certificate variables disables
+the extra listener. Live module updates and WebSockets use the same Nuxt handlers.
+The native listener replaces incoming forwarding headers on both HTTP and HTTPS
+with the actual connection details before Nuxt's internal development proxy. With
+this listener enabled, `OR3_TRUST_PROXY=true` lets the Nitro worker use those headers
+for protocol, host, and client-address checks. Do not apply that setting to an
+unprotected server that accepts forwarding headers directly from clients.
+
 ## Choose a development mode
 
 | Command | Purpose |

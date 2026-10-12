@@ -190,6 +190,34 @@
         @apply mx-1;
     }
 
+    /* Center family disclosures in the same column as chat/document icons. */
+    .sidebar-family-header {
+        position: relative;
+    }
+
+    .sidebar-family-header .sb-btn-icon {
+        visibility: hidden;
+    }
+
+    .sidebar-family-toggle {
+        position: absolute;
+        inset-inline-start: calc(0.25rem + 0.625rem + 9px);
+        z-index: 1;
+        transform: translateX(-50%);
+        color: color-mix(in oklab, var(--md-on-surface-variant) 70%, transparent);
+        background: transparent !important;
+    }
+
+    .sidebar-family-toggle:hover,
+    .sidebar-family-toggle:focus-visible {
+        background: var(--md-surface-hover) !important;
+    }
+
+    .sidebar-family-header:hover .sidebar-family-toggle,
+    .sidebar-family-toggle:focus-visible {
+        color: color-mix(in oklab, var(--md-on-surface) 80%, transparent);
+    }
+
     .unified-sb-item-active {
         background: color-mix(
             in srgb,

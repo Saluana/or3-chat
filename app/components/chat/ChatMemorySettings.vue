@@ -8,8 +8,8 @@
                     <span class="chat-memory-description block truncate">{{ expanded ? 'Manage context and automatic compaction.' : usageLabel }}</span>
                 </span>
             </button>
-            <UButton v-if="inProgress" size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0" @click="emit('cancel')">Cancel</UButton>
-            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Compact now</UButton>
+            <UButton v-if="inProgress" size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:px-2! max-md:text-xs! max-md:leading-4!" @click="emit('cancel')">Cancel</UButton>
+            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:px-2! max-md:text-xs! max-md:leading-4!" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Compact</UButton>
         </div>
         <div v-show="expanded" :id="detailsId" class="chat-memory-details">
             <div data-context-indicator :aria-busy="state.pending">

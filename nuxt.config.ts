@@ -5,6 +5,7 @@ import { basename, resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
+import { attachDevHttpsListener } from './shared/dev/https-listener';
 import { discoverNonCorePlugins } from './shared/plugins/safe-mode';
 import { requiredProviderModules } from './shared/cloud/provider-compatibility';
 import { readProviderMetadata } from './shared/cloud/provider-metadata';
@@ -883,8 +884,9 @@ export default defineNuxtConfig({
                 );
             }
         },
-        listen(_server, listener) {
+        async listen(server, listener) {
             if (isWizardUiProcess) return;
+            await attachDevHttpsListener(server);
             const url =
                 listener &&
                 typeof (listener as { url?: unknown }).url === 'string'

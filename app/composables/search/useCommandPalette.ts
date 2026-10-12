@@ -65,7 +65,7 @@ export interface CommandPaletteController {
     close(): void;
     toggle(): void;
     setActive(key: string): void;
-    activateByPointer(key: string): Promise<void>;
+    activateByPointer(key: string, previewOnly?: boolean): Promise<void>;
     hoverActive(key: string): void;
     releaseHoverLock(): void;
     moveActive(delta: number): void;
@@ -499,12 +499,14 @@ async function runPrimary(): Promise<void> {
  * locks the preview, even when search already made that row active. A second
  * click on the same still-active row executes its primary action.
  */
-async function activateByPointer(key: string): Promise<void> {
-    if (pointerArmedKey.value === key && activeKey.value === key) {
+async function activateByPointer(key: string, previewOnly = false): Promise<void> {
+    if (!previewOnly && pointerArmedKey.value === key && activeKey.value === key) {
         await runPrimary();
         return;
     }
-    pointerArmedKey.value = key;
+    // A mobile sheet can be dismissed and reopened without arming a second
+    // tap to navigate. Desktop keeps its select-then-open interaction.
+    pointerArmedKey.value = previewOnly ? null : key;
     hoverLock.value = 'pointer';
     setActiveKey(key);
 }

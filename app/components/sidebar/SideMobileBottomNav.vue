@@ -156,14 +156,14 @@
                     >
                         <div
                             class="more-sheet-handle-hit"
-                            @pointerdown="onHandlePointerDown"
+                            v-bind="sheetHandleProps"
                         >
                             <div class="more-sheet-handle" aria-hidden="true" />
                         </div>
 
                         <header
                             class="more-sheet-header"
-                            @pointerdown="onHandlePointerDown"
+                            v-bind="sheetHandleProps"
                         >
                             <template v-if="!infoOpen">
                                 <h2
@@ -480,7 +480,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
+import { computed, provide, ref, watch } from 'vue';
+import { useBottomSheetDrag } from '~/composables/ui/useBottomSheetDrag';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { navigateTo, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
@@ -604,12 +605,13 @@ const moreOpen = ref(false);
 const moreDialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const infoOpen = ref(false);
 const sheetPanelRef = ref<HTMLElement | null>(null);
-const dragY = ref(0);
-const isDragging = ref(false);
 const dismissByDrag = ref(false);
-
-const SHEET_DISMISS_PX = 110;
-const SHEET_DISMISS_VELOCITY = 0.55;
+const {
+    offset: dragY,
+    isDragging,
+    handleProps: sheetHandleProps,
+    reset: resetSheetDrag,
+} = useBottomSheetDrag(moreOpen, () => { void dismissSheetByDrag(); });
 
 const panelStyle = computed(() => {
     if (dragY.value <= 0 && !isDragging.value) return undefined;
@@ -627,72 +629,6 @@ const backdropStyle = computed(() => {
     };
 });
 
-let activePointerId: number | null = null;
-let dragStartY = 0;
-let dragStartOffset = 0;
-let lastPointerY = 0;
-let lastPointerTs = 0;
-let dragVelocity = 0;
-
-function cleanupDragListeners() {
-    window.removeEventListener('pointermove', onSheetPointerMove);
-    window.removeEventListener('pointerup', onSheetPointerUp);
-    window.removeEventListener('pointercancel', onSheetPointerUp);
-}
-
-function onHandlePointerDown(event: PointerEvent) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
-    // Don't start a drag from interactive controls inside the header.
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('button, a, input, textarea, select')) return;
-
-    event.preventDefault();
-    isDragging.value = true;
-    activePointerId = event.pointerId;
-    dragStartY = event.clientY;
-    dragStartOffset = dragY.value;
-    lastPointerY = event.clientY;
-    lastPointerTs = event.timeStamp;
-    dragVelocity = 0;
-
-    window.addEventListener('pointermove', onSheetPointerMove, {
-        passive: false,
-    });
-    window.addEventListener('pointerup', onSheetPointerUp);
-    window.addEventListener('pointercancel', onSheetPointerUp);
-}
-
-function onSheetPointerMove(event: PointerEvent) {
-    if (!isDragging.value || event.pointerId !== activePointerId) return;
-    event.preventDefault();
-    const delta = event.clientY - dragStartY;
-    dragY.value = Math.max(0, dragStartOffset + delta);
-    const dt = event.timeStamp - lastPointerTs;
-    if (dt > 0) {
-        dragVelocity = (event.clientY - lastPointerY) / dt;
-    }
-    lastPointerY = event.clientY;
-    lastPointerTs = event.timeStamp;
-}
-
-function onSheetPointerUp(event: PointerEvent) {
-    if (event.pointerId !== activePointerId) return;
-    cleanupDragListeners();
-    isDragging.value = false;
-    activePointerId = null;
-
-    const shouldDismiss =
-        dragY.value >= SHEET_DISMISS_PX ||
-        dragVelocity >= SHEET_DISMISS_VELOCITY;
-
-    if (shouldDismiss) {
-        void dismissSheetByDrag();
-        return;
-    }
-
-    dragY.value = 0;
-}
-
 async function dismissSheetByDrag() {
     dismissByDrag.value = true;
     const height = sheetPanelRef.value?.offsetHeight || window.innerHeight;
@@ -708,10 +644,7 @@ async function dismissSheetByDrag() {
 
 function closeMore() {
     if (dismissByDrag.value) return;
-    cleanupDragListeners();
-    isDragging.value = false;
-    activePointerId = null;
-    dragY.value = 0;
+    resetSheetDrag();
     moreOpen.value = false;
     infoOpen.value = false;
 }
@@ -720,13 +653,8 @@ watch(moreOpen, (open) => {
     if (!import.meta.client) return;
     if (!open) {
         infoOpen.value = false;
-        dragY.value = 0;
-        isDragging.value = false;
+        resetSheetDrag();
     }
-});
-
-onBeforeUnmount(() => {
-    cleanupDragListeners();
 });
 
 function tileAccent(index: number) {

@@ -1,4 +1,5 @@
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
 import {
     useDashboardNavigation,
     type DashboardNavigationResult,
@@ -99,9 +100,11 @@ export function createPaletteHostContext(
             if (opened.status === 'superseded') {
                 return { ok: true, superseded: true, closeOnSuccess: false };
             }
-            return opened.status === 'activated'
-                ? { ok: true }
-                : failure('navigation-failed', 'Unable to open resource');
+            if (opened.status !== 'activated') {
+                return failure('navigation-failed', 'Unable to open resource');
+            }
+            closeSidebarIfMobile();
+            return { ok: true };
         } catch (error) {
             return failure(
                 'navigation-failed',
@@ -135,9 +138,11 @@ export function createPaletteHostContext(
                     const index = api.panes.value.length;
                     api.addPane();
                     await api.setPaneThread(index, threadId ?? '');
+                    closeSidebarIfMobile();
                     return { ok: true };
                 }
                 await api.setPaneThread(api.activePaneIndex.value, threadId ?? '');
+                closeSidebarIfMobile();
                 return { ok: true };
             } catch (error) {
                 return failure(
@@ -171,6 +176,7 @@ export function createPaletteHostContext(
                         threadId: '',
                         messages: [],
                     });
+                    closeSidebarIfMobile();
                     return { ok: true };
                 }
                 api.updatePane(api.activePaneIndex.value, {
@@ -179,6 +185,7 @@ export function createPaletteHostContext(
                     threadId: '',
                     messages: [],
                 });
+                closeSidebarIfMobile();
                 return { ok: true };
             } catch (error) {
                 return failure(
@@ -212,11 +219,13 @@ export function createPaletteHostContext(
                         return failure('disabled', 'Pane capacity reached');
                     }
                     await api.newPaneForApp(appId, { initialRecordId: recordId });
+                    closeSidebarIfMobile();
                     return { ok: true };
                 }
                 await api.setPaneApp(api.activePaneIndex.value, appId, {
                     recordId,
                 });
+                closeSidebarIfMobile();
                 return { ok: true };
             } catch (error) {
                 return failure(
@@ -237,7 +246,9 @@ export function createPaletteHostContext(
                 );
             }
             try {
-                return (await deps.activateWorkspaceTab(tabId))
+                const activated = await deps.activateWorkspaceTab(tabId);
+                if (activated) closeSidebarIfMobile();
+                return activated
                     ? { ok: true }
                     : failure('not-found', 'This tab is no longer open');
             } catch (error) {

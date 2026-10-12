@@ -70,23 +70,33 @@ Removing the prefix (or clicking **All**) searches everything again.
 | `Tab` / `Shift+Tab` (in tray) | Cycle through the tray's actions |
 | `Esc` | Close the palette |
 
-Hovering previews a row until you click one. The first click selects that row
+On desktop, hovering previews a row until you click one. The first click selects that row
 and locks its preview; click the same row again (or press `Enter`) to open it.
 Clicking a different row moves the lock without opening anything.
 
 ## Preview panel
 
-The active result is previewed on the right (below the list on narrow screens):
+On desktop, the active result is previewed on the right (below the list on tablet screens):
 a snippet or description, key metadata, and a thumbnail for images. Previews are
 read-only and never navigate on their own. If a preview cannot be loaded the
 palette says so and still lets you open the result.
 
-On short screens, including the visible area above a phone keyboard, the preview
-is hidden so search results and actions retain space. Secondary actions collapse
-behind **More** and scroll when expanded. With very little vertical space, use
-**Actions** and **Results** beside the query to switch between the two panels.
-The close control remains visible in landscape. The dialog follows Safari’s
-visible viewport when its keyboard opens or pans the page.
+On phones, search uses the full available height for results, with compact
+category filters and a **Cancel** control beside the query. Tapping a chat,
+document, project, prompt, image, file, or plugin record dismisses the keyboard
+and opens a preview in a bottom slideover. The preview and its actions scroll
+independently. Drag the handle down or close the slideover to return to the same query and list position;
+tap the result again to preview it again. Its **Open** action navigates to it.
+Commands, open tabs, settings, and dashboard entries run on the first tap.
+The background stays fixed while search is open. With the iOS keyboard visible,
+swipes scroll the results or category filters without panning the page behind them.
+Flicks continue smoothly after release and stop when you touch again or reach
+the end of the scroll area.
+
+On short desktop or tablet screens, the inline preview is hidden and secondary
+actions collapse behind **More**. With very little vertical space, use **Actions**
+and **Results** beside the query to switch between the two panels. The dialog
+follows Safari’s visible viewport when its keyboard opens or pans the page.
 
 ## Actions
 

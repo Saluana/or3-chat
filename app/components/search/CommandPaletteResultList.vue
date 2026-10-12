@@ -56,6 +56,7 @@
                     :key="result.key"
                     :id="optionId(result.key)"
                     role="option"
+                    tabindex="-1"
                     :aria-selected="result.key === activeKey"
                     :aria-disabled="result.primaryAction.disabled || undefined"
                     class="or3-palette-option mx-1.5 sm:mx-2 flex cursor-pointer items-center gap-2.5 rounded-[var(--md-border-radius)] border-l-2 px-2 py-1.5 transition-colors duration-[var(--app-motion-duration-fast,75ms)] ease-[var(--app-motion-easing-standard,ease)]"
@@ -67,6 +68,8 @@
                     @mouseenter="emit('hover', result.key)"
                     @mousemove="emit('hover', result.key)"
                     @click="onRowClick(result.key)"
+                    @keydown.enter.prevent="onRowClick(result.key)"
+                    @keydown.space.prevent="onRowClick(result.key)"
                 >
                     <PaletteImageThumb
                         v-if="result.categoryId === 'image'"
@@ -88,16 +91,17 @@
 
                     <span class="min-w-0 flex-1">
                         <span
-                            class="block truncate text-[13.5px] font-medium leading-tight text-[color:var(--md-on-surface)]"
+                            class="or3-palette-option-title block truncate text-[13.5px] font-medium leading-tight text-[color:var(--md-on-surface)]"
                         >
                             {{ result.title }}
                         </span>
                         <span
                             v-if="rowDetail(result)"
-                            class="mt-0.5 block truncate text-[11.5px] leading-tight text-[color:var(--md-on-surface-variant)]"
+                            class="or3-palette-option-detail mt-0.5 block truncate text-[11.5px] leading-tight text-[color:var(--md-on-surface-variant)]"
                         >
                             {{ rowDetail(result) }}
                         </span>
+                        <span v-if="timeLabel(result.updatedAt)" class="mt-1 block text-[11px] text-[color:var(--md-on-surface-variant)] sm:hidden">{{ timeLabel(result.updatedAt) }}</span>
                     </span>
 
                     <span
@@ -110,7 +114,7 @@
                     <template v-else>
                         <span
                             v-if="timeLabel(result.updatedAt)"
-                            class="shrink-0 text-[10.5px] tabular-nums text-[color:var(--md-on-surface-variant)]/80"
+                            class="hidden sm:block shrink-0 text-[10.5px] tabular-nums text-[color:var(--md-on-surface-variant)]/80"
                             :class="result.key === activeKey ? 'sm:hidden' : ''"
                         >
                             {{ timeLabel(result.updatedAt) }}
@@ -124,6 +128,7 @@
                             ↵
                         </span>
                     </template>
+                    <UIcon v-if="!['command', 'tab', 'setting', 'dashboard'].includes(result.categoryId)" :name="chevronIcon" class="h-4 w-4 shrink-0 text-[color:var(--md-on-surface-variant)] sm:hidden" aria-hidden="true" />
                 </li>
             </template>
         </ul>
@@ -208,6 +213,7 @@ const listboxId = PALETTE_LISTBOX_ID;
 const loadingIcon = useIcon('ui.loading');
 const alertIcon = useIcon('ui.warning');
 const searchIcon = useIcon('palette.search');
+const chevronIcon = useIcon('ui.chevron.right');
 const { iconForResult } = usePaletteIcons();
 
 const resultCount = computed(() =>
