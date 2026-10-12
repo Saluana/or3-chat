@@ -683,7 +683,7 @@ for (const action of ['muteThread', 'unmuteThread'] as const) {
             try {
                 for (let i = 0; i < 40 && !state.isThreadMuted('origin-existing'); i++) await new Promise(resolve => requestAnimationFrame(resolve));
                 if (!state.isThreadMuted('origin-existing')) throw new Error('Synthetic origin preferences did not load');
-                originDb.kv.get = (...args: any[]) => {
+                originDb.kv.get = (...args: Parameters<typeof originalGet>) => {
                     const result = originalGet(...args);
                     if (!originDb.constructor.currentTransaction || args[0] !== key) return result;
                     enter(); return originDb.constructor.waitFor(held).then(() => result);

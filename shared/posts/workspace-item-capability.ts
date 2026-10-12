@@ -14,7 +14,7 @@ export function hasWorkspaceItemSemantics(tableName: string, payload: unknown): 
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
     const row = payload as Record<string, unknown>;
     if (tableName === 'posts') {
-        if ((row.post_type ?? row.postType) === FILE_CATALOG_POST_TYPE || Object.values(PROJECT_POST_TYPES).includes((row.post_type ?? row.postType) as any)) return true;
+        if ((row.post_type ?? row.postType) === FILE_CATALOG_POST_TYPE || (Object.values(PROJECT_POST_TYPES) as readonly unknown[]).includes(row.post_type ?? row.postType)) return true;
         const meta = decoded(row.meta);
         if (Array.isArray(meta)) return meta.some(entry => entry?.key === WORKSPACE_ITEM_META_KEY);
         return !!meta && typeof meta === 'object'

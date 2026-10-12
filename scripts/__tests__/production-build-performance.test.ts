@@ -1,6 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, test } from 'vitest';
+import { build } from 'vite';
+import { compactClientChunksPlugin } from '../../plugins/vite-compact-client-chunks';
 import { inspectProductionBuild } from '../performance/production-build.perf';
 
 const roots: string[] = [];
@@ -118,5 +122,66 @@ describe('production build performance inspection', () => {
         expect(() => inspectProductionBuild(root)).toThrow(
             'Production client assets are missing'
         );
+    });
+});
+
+describe('production client bundle formatting', () => {
+    async function compile(source: string, sourcemap = false) {
+        const root = fixture();
+        const entry = resolve(root, 'entry.mjs');
+        writeFileSync(entry, source);
+        await build({
+            configFile: false,
+            root,
+            publicDir: false,
+            logLevel: 'silent',
+            plugins: [compactClientChunksPlugin()],
+            build: {
+                outDir: resolve(root, 'dist'),
+                sourcemap,
+                minify: 'terser',
+                terserOptions: { maxWorkers: 1, compress: { passes: 2 } },
+                rolldownOptions: {
+                    input: entry,
+                    preserveEntrySignatures: 'strict',
+                    output: { format: 'es', entryFileNames: 'bundle.mjs' },
+                },
+            },
+        });
+        return resolve(root, 'dist', 'bundle.mjs');
+    }
+
+    test('emits executable modules preserving token strings, regexes and live bindings', async () => {
+        const output = await compile(String.raw`
+            const table = { 0: "word", 1: "'quote'", 2: "雪\nline" };
+            export let sequence = 0;
+            export function next() { return ++sequence; }
+            export function read() {
+                return { tokens: Object.values(table), quoted: /['"\\]/.test('"'), unicode: "🙂" };
+            }
+        `);
+        const emitted = await import(pathToFileURL(output).href) as {
+            read(): unknown; next(): number; sequence: number;
+        };
+        expect(emitted.read()).toEqual({ tokens: ['word', "'quote'", '雪\nline'], quoted: true, unicode: '🙂' });
+        expect(emitted.next()).toBe(1);
+        expect(emitted.next()).toBe(2);
+        expect(emitted.sequence).toBe(2);
+    });
+
+    test('preserves debug stack traces to the original throw site', async () => {
+        const output = await compile([
+            'export const text = "雪\\nquote: \\"";',
+            'export function fail() {',
+            '    throw new Error("source-map-fixture");',
+            '}',
+        ].join('\n'), true);
+        const stack = execFileSync(process.execPath, [
+            '--enable-source-maps', '--input-type=module', '-e',
+            `const emitted = await import(${JSON.stringify(pathToFileURL(output).href)});
+             try { emitted.fail(); } catch (error) { console.log(error.stack); }`,
+        ], { encoding: 'utf8' });
+        expect(stack).toContain('Error: source-map-fixture');
+        expect(stack).toMatch(/entry\.mjs:3:11\b/);
     });
 });
