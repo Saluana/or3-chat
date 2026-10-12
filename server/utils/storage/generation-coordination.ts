@@ -15,16 +15,16 @@ export function requireExternalStorageGenerationPair(
     sync: SyncGatewayAdapter | null,
     storage: StorageGatewayAdapter | null,
 ): ExternalStorageGenerationCoordinatorV1 {
-    const coordinator = sync?.storageGenerationCoordinator;
-    const storageCapability = storage?.externalStorageGenerations;
+    const coordinator = sync?.storageGenerationCoordinator as (Omit<ExternalStorageGenerationCoordinatorV1, 'version'> & { version: unknown }) | undefined;
+    const storageCapability = storage?.externalStorageGenerations as (Omit<NonNullable<StorageGatewayAdapter['externalStorageGenerations']>, 'version'> & { version: unknown }) | undefined;
     const methods = ['registerVerifiedGeneration', 'getGeneration', 'claimGeneration', 'completeDeletion'] as const;
     if (!sync || !storage || !validProviderId(sync.id) || !validProviderId(storage.id)
         || !validProviderId(storageCapability?.syncProviderId) || !validProviderId(coordinator?.storageProviderId)
         || sync.capabilities?.externalStorageGenerations !== 'v1'
-        || storageCapability?.version !== 1 || storageCapability.syncProviderId !== sync.id
-        || coordinator?.version !== 1 || coordinator.storageProviderId !== storage.id
+        || storageCapability.version !== 1 || storageCapability.syncProviderId !== sync.id
+        || coordinator.version !== 1 || coordinator.storageProviderId !== storage.id
         || !methods.every(method => typeof coordinator[method] === 'function')) {
         throw createError({ statusCode: 503, statusMessage: 'External storage generation coordination is unavailable' });
     }
-    return coordinator;
+    return coordinator as ExternalStorageGenerationCoordinatorV1;
 }

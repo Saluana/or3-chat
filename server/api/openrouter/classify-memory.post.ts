@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     requireCan(
         session,
         'workspace.write',
-        session?.workspace?.id
+        session.workspace?.id
             ? { kind: 'workspace', id: session.workspace.id }
             : undefined,
     );
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Invalid memory classification input.',
         });
     if (
-        !session?.authenticated ||
+        !session.authenticated ||
         !session.user?.id ||
         body.data.workspaceId !== session.workspace?.id
     )
@@ -145,7 +145,7 @@ export default defineEventHandler(async (event) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
     event.node.req.on('aborted', abort);
-    event.node.res?.on('close', abort);
+    (event.node as { res?: typeof event.node.res }).res?.on('close', abort);
     try {
         return await classifyMemoryReference(
             input.state,
@@ -155,6 +155,6 @@ export default defineEventHandler(async (event) => {
         );
     } finally {
         event.node.req.off('aborted', abort);
-        event.node.res?.off('close', abort);
+        (event.node as { res?: typeof event.node.res }).res?.off('close', abort);
     }
 });

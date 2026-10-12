@@ -286,7 +286,7 @@ export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): 
                 modalities: request.modalities, configuration, usage: params.contextPolicy?.measuredUsage,
                 countText: countTokensApprox });
         });
-    while (true) {
+    for (;;) {
         try { return await admit(); }
         catch (error) {
             if (!(error instanceof ChatContextAdmissionError) || error.code !== 'context_full' || !params.projectContext) throw error;
@@ -1088,7 +1088,7 @@ export async function startBackgroundStream(params: {
             }
         } catch (error) {
             if (params.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
-            const admissionError = error as BackgroundAdmissionError;
+            const admissionError = error as BackgroundAdmissionError | null | undefined;
             if (admissionError?.backgroundAdmissionRetryable === false && !admissionError.backgroundAdmissionUncertain) {
                 throw error;
             }
@@ -1150,7 +1150,7 @@ export async function recoverBackgroundJob(
     if (!response.ok) throw new Error(`Admission recovery failed: ${response.status}`);
     const result = await readResponseJsonWithIdleDeadline<{
         jobId?: unknown; status?: unknown; threadId?: unknown; messageId?: unknown; historyVersion?: unknown;
-    }>(response, { signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
+    } | null>(response, { signal, timeoutMs: options.idleTimeoutMs ?? 3_000 });
     if (!result || typeof result.jobId !== 'string' || !result.jobId ||
         typeof result.threadId !== 'string' || typeof result.messageId !== 'string' ||
         result.historyVersion !== 1 ||
@@ -1316,7 +1316,7 @@ export async function validateBackgroundClientToolClaim(params: {
         body: JSON.stringify({ callId: params.callId, claimToken: params.claimToken }),
     }, { signal: params.signal, timeoutMs: 5000 });
     if (!response.ok) throw new Error('Tool approval expired or is no longer authorized.');
-    const body = await readResponseJsonWithIdleDeadline<{ valid?: unknown }>(response, { signal: params.signal, timeoutMs: 5000 });
+    const body = await readResponseJsonWithIdleDeadline<{ valid?: unknown } | null>(response, { signal: params.signal, timeoutMs: 5000 });
     if (body?.valid !== true) throw new Error('Tool approval could not be verified.');
 }
 

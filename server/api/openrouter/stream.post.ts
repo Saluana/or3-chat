@@ -486,9 +486,10 @@ export default defineEventHandler(async (event) => {
     // 'close' event can never report a later disconnect (before provider
     // headers or mid-stream). A response that finished normally has nothing
     // left to cancel. `once` removes the listener when the response closes.
-    const res = event.node.res;
+    const res = event.node.res as Partial<typeof event.node.res> | undefined;
     const onClientClose = () => {
-        if (res.writableFinished) return;
+        // Registered below only when this captured response supplies once().
+        if (res!.writableFinished) return;
         logBgStream('api-stream-foreground-client-closed', {});
         ac.abort();
     };

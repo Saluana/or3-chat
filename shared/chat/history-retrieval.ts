@@ -125,7 +125,7 @@ function describe(state: Awaited<ReturnType<typeof scope>>, row: Row, limit: num
 /** One registered tool service owns its cursor signing key; no history cache is introduced. */
 export function createHistoryRetrievalService() {
     const secret = crypto.getRandomValues(new Uint8Array(32));
-    const subtle = globalThis.crypto?.subtle;
+    const subtle = (globalThis as { crypto?: Partial<Crypto> }).crypto?.subtle;
     let key: Promise<CryptoKey> | undefined;
     const signingKey = () => key ??= subtle!.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
     async function sign(body: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {

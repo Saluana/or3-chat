@@ -54,6 +54,11 @@ async function run(): Promise<number> {
                     OR3_AUTH_AUTO_PROVISION: 'false',
                     OR3_SYNC_ENABLED: 'false',
                     OR3_CLOUD_SYNC_ENABLED: 'false',
+                    // Auth needs a workspace store even with sync transfer off.
+                    // Keep the harness on local SQLite, never the Convex default.
+                    OR3_SYNC_PROVIDER: 'sqlite',
+                    OR3_SQLITE_DB_PATH: join(dataDir, 'workspace.sqlite'),
+                    OR3_BASIC_AUTH_DB_PATH: join(dataDir, 'auth.sqlite'),
                     OR3_STORAGE_ENABLED: 'false',
                     OR3_CLOUD_STORAGE_ENABLED: 'false',
                     OR3_ADMIN_AUTH_E2E_HARNESS: 'true',

@@ -61,7 +61,8 @@ export function readToolCardStates(value: unknown): ToolCardStateMap | undefined
             typeof entry !== 'object'
         )
             continue;
-        const e = entry as ToolCardStateEntry;
+        // Stored/synchronized entries are not trusted until this guard passes.
+        const e = entry as Record<string, unknown>;
         if (e.v !== 1 || !Number.isFinite(e.updated_at) || !('state' in e)) continue;
         try {
             const copy = jsonCardValue(e) as ToolCardStateEntry;

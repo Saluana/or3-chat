@@ -609,7 +609,8 @@ export async function chatFamilyIds(db: Or3DB, threadId: string): Promise<string
 export async function moveChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null,
     options: { family?: boolean } = {}) {
     scope.assertCurrent('write');
-    const transaction = Dexie.currentTransaction;
+    // Dexie's declaration omits the absent outside-transaction case.
+    const transaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
     if (!transaction || transaction.db !== scope.db || transaction.mode !== 'readwrite')
         throw new Error('Chat membership requires its captured write transaction.');
     // Ownership is judged once, from one snapshot, before any member moves.

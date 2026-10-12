@@ -34,6 +34,8 @@ interface SyncEngineState {
 }
 
 let engineState: SyncEngineState | null = null;
+// Teardown callbacks and awaits can replace/clear this global state.
+const readEngineState = (): SyncEngineState | null => engineState;
 let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
 let stopInFlight: Promise<void> | null = null;
@@ -190,23 +192,23 @@ async function stopSyncEngine(): Promise<void> {
         }
 
         // Stop outbox
-        engineState?.outboxManager.stop();
-        engineState?.hookBridge.stop();
-        await engineState?.subscriptionManager.stop();
-        engineState?.gcManager.stop();
+        readEngineState()?.outboxManager.stop();
+        readEngineState()?.hookBridge.stop();
+        await readEngineState()?.subscriptionManager.stop();
+        readEngineState()?.gcManager.stop();
 
         // Dispose provider
         try {
-            await engineState?.provider.dispose();
+            await readEngineState()?.provider.dispose();
         } catch (error) {
             console.warn('[sync-engine] Provider dispose failed:', error);
         }
 
-        if (engineState) {
-            const scopeKey = `${engineState.scope.workspaceId}:${engineState.scope.projectId ?? 'default'}`;
+        if (readEngineState()) {
+            const scopeKey = `${readEngineState()!.scope.workspaceId}:${readEngineState()!.scope.projectId ?? 'default'}`;
             cleanupSubscriptionManager(scopeKey);
-            cleanupCursorManager(engineState.db.name, engineState.scope);
-            cleanupHookBridge(engineState.db.name);
+            cleanupCursorManager(readEngineState()!.db.name, readEngineState()!.scope);
+            cleanupHookBridge(readEngineState()!.db.name);
         }
 
         engineState = null;
@@ -222,10 +224,14 @@ export async function setupSyncEngine(): Promise<void> {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
+    const publicConfig = runtimeConfig.public as {
+        admin?: { basePath?: string };
+        sync?: { enabled?: boolean; provider?: string };
+    };
     // Admin pages are currently mounted at `/admin/*` (canonical).
     // `admin.basePath` is treated as an alias that redirects to `/admin/*`.
     const defaultAdminBasePath = '/admin';
-    const adminBasePath = runtimeConfig.public.admin?.basePath || defaultAdminBasePath;
+    const adminBasePath = publicConfig.admin?.basePath || defaultAdminBasePath;
 
     function isPrefix(path: string, base: string): boolean {
         if (base === '/') return true;
@@ -244,12 +250,12 @@ export async function setupSyncEngine(): Promise<void> {
         return window.location.pathname || '/';
     }
 
-    if (!runtimeConfig.public.sync?.enabled) {
+    if (!publicConfig.sync?.enabled) {
         if (import.meta.dev) console.log('[sync-engine] Sync disabled, skipping sync');
         return;
     }
 
-    const providerId = runtimeConfig.public.sync?.provider ?? 'gateway';
+    const providerId = publicConfig.sync.provider ?? 'gateway';
     const ssrAuthEnabled = Boolean(runtimeConfig.public.ssrAuthEnabled);
     if (ssrAuthEnabled) {
         try {

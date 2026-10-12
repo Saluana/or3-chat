@@ -302,7 +302,7 @@ export function createTrustedHostContext(
     const workspaceFiles = createTrustedWorkspaceFiles({ pluginId: input.pluginId,
         workspaceId: input.workspaceId ?? 'local', db: activationDb, signal: controller.signal,
         allow, current: () => !ended(), cleanup });
-    const access = createTrustedNetworkAccess({ pluginId: input.pluginId, db: activationDb, current: () => !ended(), hostOrigin: globalThis.location?.origin ?? 'https://localhost', destinations: input.mediation?.approvedDestinations,
+    const access = createTrustedNetworkAccess({ pluginId: input.pluginId, db: activationDb, current: () => !ended(), hostOrigin: (globalThis as { location?: Location }).location?.origin ?? 'https://localhost', destinations: input.mediation?.approvedDestinations,
         confirm: (origins, purpose) => services?.confirmOrigins(origins, purpose) ?? Promise.resolve(false),
         connectOrigins: async () => { if (!granted.has('workspace.connections.read') || !services) return []; const result = await services.connections.list(); return result.ok ? result.value.flatMap(row => row.baseUrl ? [row.baseUrl] : []) : []; },
     });
@@ -709,7 +709,7 @@ export function createTrustedHostContext(
         limits: services?.limits ?? input.mediation?.limits,
         requestAccess: async (value) => { allow('network.http'); return access.requestAccess(value); },
         revokeAccess: async (value) => { allow('network.http'); return access.revokeAccess(value); },
-        ownOrigin: globalThis.location?.origin,
+        ownOrigin: (globalThis as { location?: Location }).location?.origin,
         secrets: input.mediation?.secrets,
         files: input.mediation?.files,
         posts: input.mediation?.posts,

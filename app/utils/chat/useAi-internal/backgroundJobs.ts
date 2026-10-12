@@ -224,13 +224,13 @@ async function executePendingClientTool(
     const dispatch = (async () => {
         const returned = await claimBackgroundClientTool(tracker.jobId, callId);
         if (!returned) return;
-        const claim = structuredClone(returned);
+        const claim = structuredClone(returned) as Omit<typeof returned, 'call' | 'context'> & Partial<Pick<typeof returned, 'call' | 'context'>>;
         if (!claim.call || !claim.context || claim.call.id !== callId || claim.call.name !== toolName ||
             claim.context.workspaceId !== tracker.workspaceId || claim.context.threadId !== tracker.threadId ||
             claim.context.messageId !== tracker.messageId || !Number.isFinite(claim.claimExpiresAt)) {
             throw new Error('Tool claim does not match the originating request.');
         }
-        const identity = { jobId: tracker.jobId, userId: tracker.userId ?? '',
+        const identity = { jobId: tracker.jobId, userId: (tracker as Partial<typeof tracker>).userId ?? '',
             ...claim.context, call: claim.call };
         // Only documented call fields are identity: the legacy diagnostic digest
         // is not authorization and must not affect the cryptographic binding.
@@ -291,7 +291,7 @@ async function executePendingClientTool(
                 };
             } else {
                 const registry = useToolRegistry();
-                let validationFailed = false;
+                const validation = { failed: false };
                 const execution = await registry.executeTool(
                     claim.call.name,
                     claim.call.arguments,
@@ -312,12 +312,12 @@ async function executePendingClientTool(
                                 claimToken: claim.claimToken, signal: abortController.signal });
                             assertLocalClaim();
                         } catch (error) {
-                            validationFailed = true;
+                            validation.failed = true;
                             throw error;
                         }
                     } }
                 );
-                if (validationFailed) throw new Error('Tool approval could not be revalidated; execution remains unconfirmed.');
+                if (validation.failed) throw new Error('Tool approval could not be revalidated; execution remains unconfirmed.');
                 // Logout may have scrubbed the journal while the handler was
                 // finishing. Never put its result back into signed-out storage.
                 if (!canDispatch() || (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||

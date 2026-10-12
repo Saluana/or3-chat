@@ -71,7 +71,7 @@ async function extract(
             });
         }, 30000);
         signal.addEventListener('abort', abort, { once: true });
-        worker.onmessage = (event: MessageEvent<Extraction>) => {
+        worker.onmessage = (event: MessageEvent<Extraction | null | undefined>) => {
             // PDF.js also emits its worker protocol's readiness message on this port.
             // Only our extraction result can complete the intake operation.
             if (typeof event.data?.ok !== 'boolean') return;

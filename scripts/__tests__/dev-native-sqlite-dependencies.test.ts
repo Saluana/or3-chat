@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync } from 'node:fs';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { prepareLocalProviders, resolveDevProviderModule } from '../../shared/dev/local-providers';
+import { prepareConvexBackend } from '../../shared/dev/convex-backend';
 import {
     ensureNativeSqliteDependencies,
     isNativeAddonAbiMismatch,
@@ -19,6 +20,51 @@ const nativeAddonMismatch = new Error(
 NODE_MODULE_VERSION 137. This version of Node.js requires
 NODE_MODULE_VERSION 147.`,
 );
+
+describe('source startup backend selection', () => {
+    const roots: string[] = [];
+    afterEach(() => {
+        for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+    });
+
+    // A synthetic CLI records invocation; it cannot deploy or contact Convex.
+    function fixture() {
+        const root = mkdtempSync(join(tmpdir(), 'or3-backend-selection-'));
+        roots.push(root);
+        mkdirSync(join(root, 'dist'));
+        mkdirSync(join(root, 'scripts'));
+        const entry = join(root, 'dist/module.mjs');
+        const receipt = join(root, 'receipt.json');
+        writeFileSync(entry, 'export default {};');
+        writeFileSync(join(root, 'scripts/init.mjs'), `
+            import { writeFileSync } from 'node:fs';
+            writeFileSync(${JSON.stringify(receipt)}, JSON.stringify(process.argv.slice(2)));
+        `);
+        return { root, receipt, modules: { 'or3-provider-convex/nuxt': entry } };
+    }
+
+    it.each([
+        { OR3_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false' },
+        { OR3_CLOUD_SYNC_ENABLED: 'false', OR3_CLOUD_STORAGE_ENABLED: 'false', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true' },
+    ])('does not run a backend updater for disabled Cloud features: %j', async (flags) => {
+        const f = fixture();
+        writeFileSync(join(f.root, '.env'), 'SSR_AUTH_ENABLED=true\nOR3_SYNC_ENABLED=true\nOR3_STORAGE_ENABLED=true\n');
+        const env = { SSR_AUTH_ENABLED: 'true', AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite', ...flags };
+        expect(await prepareConvexBackend(f.root, env, f.modules)).toMatchObject(env);
+        expect(existsSync(f.receipt)).toBe(false);
+    });
+
+    it.each([
+        { OR3_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false' },
+        { OR3_SYNC_PROVIDER: 'sqlite', OR3_STORAGE_ENABLED: 'true', NUXT_PUBLIC_STORAGE_PROVIDER: 'convex' },
+        { OR3_SYNC_PROVIDER: 'sqlite', OR3_CLOUD_STORAGE_ENABLED: 'true', OR3_STORAGE_ENABLED: 'false', NUXT_PUBLIC_STORAGE_PROVIDER: 'convex' },
+        { OR3_SYNC_PROVIDER: 'sqlite', OR3_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false', OR3_CONNECT_ENABLED: 'true', OR3_CONNECT_PROVIDER: 'convex' },
+    ])('retains startup preparation for selected Convex features: %j', async (flags) => {
+        const f = fixture();
+        await prepareConvexBackend(f.root, { SSR_AUTH_ENABLED: 'true', ...flags }, f.modules);
+        expect(JSON.parse(readFileSync(f.receipt, 'utf8'))).toEqual(['deploy']);
+    });
+});
 
 // Exercise the real launcher and subprocess boundary without starting Nuxt or
 // writing application databases. The installed CLI fixture reports its runtime.

@@ -17,6 +17,7 @@ export function createStreamWriteCoalescer(options?: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight: Promise<void> | undefined;
     let disposed = false;
+    const isDisposed = (): boolean => disposed;
     let failedWrite = false;
     let unloadGuardBound = false;
 
@@ -38,7 +39,7 @@ export function createStreamWriteCoalescer(options?: {
         timer = undefined;
     }
     function scheduleIdleFlush() {
-        if (disposed || timer !== undefined || inFlight || dirtyEvents === 0 || !onIdleFlush)
+        if (isDisposed() || timer !== undefined || inFlight || dirtyEvents === 0 || !onIdleFlush)
             return;
         timer = setTimeout(() => {
             timer = undefined;
@@ -56,7 +57,7 @@ export function createStreamWriteCoalescer(options?: {
 
     return {
         markDirty(bytes = 0) {
-            if (disposed) return;
+            if (isDisposed()) return;
             dirtyEvents += 1;
             dirtyBytes += Math.max(0, bytes);
             scheduleIdleFlush();
@@ -77,12 +78,12 @@ export function createStreamWriteCoalescer(options?: {
             updateUnloadGuard();
         },
         async flush(write: () => Promise<void>) {
-            if (disposed) return;
+            if (isDisposed()) return;
             // Another waiting caller may prepare the next snapshot first. Join
             // that write too; returning while it is pending is not a flush receipt.
             while (inFlight) {
                 await inFlight;
-                if (disposed) return;
+                if (isDisposed()) return;
             }
             if (dirtyEvents === 0) return;
             // Acknowledge only the snapshot entering this write. Deltas that

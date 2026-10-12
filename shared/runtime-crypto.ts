@@ -4,7 +4,8 @@ export async function sha256Bytes(input: string | ArrayBuffer | ArrayBufferView)
     const bytes = typeof input === 'string' ? new TextEncoder().encode(input)
         : input instanceof ArrayBuffer ? new Uint8Array(input.slice(0))
             : Uint8Array.from(new Uint8Array(input.buffer, input.byteOffset, input.byteLength));
-    const subtle = globalThis.crypto?.subtle;
+    // DOM declarations assume a secure context; HTTP origins may omit subtle.
+    const subtle = (globalThis as { crypto?: Partial<Crypto> }).crypto?.subtle;
     if (subtle) return new Uint8Array(await subtle.digest('SHA-256', bytes));
     const { sha256 } = await import('@noble/hashes/sha2.js');
     return Uint8Array.from(sha256(bytes));
