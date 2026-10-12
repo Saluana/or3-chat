@@ -72,6 +72,8 @@ export interface AiSettingsV1 {
     /** Null means the full advertised model capacity; values remain independent of model selection. */
     maxContextTokens: number | null;
     autoCompactContext: boolean;
+    /** Estimated context usage that triggers automatic compaction, in 10% steps. */
+    autoCompactThresholdPercent: number;
 }
 
 /** A request-scoped scalar snapshot; the DB handle identifies its captured origin. */
@@ -95,6 +97,7 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     defaultModelVariant: DEFAULT_MODEL_VARIANT,
     maxContextTokens: null,
     autoCompactContext: false,
+    autoCompactThresholdPercent: 80,
 };
 
 // Module-level singleton state
@@ -115,6 +118,10 @@ function coerceStringOrNull(v: unknown): string | null {
     if (typeof v === 'string') return v;
     if (typeof v === 'number' || typeof v === 'boolean') return String(v);
     return null;
+}
+
+function isAutoCompactThreshold(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 10 && value <= 100 && value % 10 === 0;
 }
 
 export function sanitizeAiSettings(
@@ -140,6 +147,8 @@ export function sanitizeAiSettings(
         fixedModelId: fixedModelId ?? defaults.fixedModelId,
         maxContextTokens: typeof inObj.maxContextTokens === 'number' && Number.isSafeInteger(inObj.maxContextTokens) && inObj.maxContextTokens > 0
             ? inObj.maxContextTokens : null,
+        autoCompactThresholdPercent: isAutoCompactThreshold(inObj.autoCompactThresholdPercent)
+            ? inObj.autoCompactThresholdPercent : defaults.autoCompactThresholdPercent,
         autoCompactContext: typeof inObj.autoCompactContext === 'boolean' ? inObj.autoCompactContext : defaults.autoCompactContext,
         defaultModelVariant: sanitizeModelVariant(
             inObj.defaultModelVariant,
@@ -288,6 +297,9 @@ export function useAiSettings() {
         if (patch.maxContextTokens !== undefined && patch.maxContextTokens !== null &&
             (!Number.isSafeInteger(patch.maxContextTokens) || patch.maxContextTokens <= 0)) {
             throw new Error('Maximum context must be a positive safe integer or Use model limit.');
+        }
+        if (patch.autoCompactThresholdPercent !== undefined && !isAutoCompactThreshold(patch.autoCompactThresholdPercent)) {
+            throw new Error('Automatic compaction threshold must be from 10 to 100 in steps of 10 percent.');
         }
         await persistSettings({ ...patch });
     }

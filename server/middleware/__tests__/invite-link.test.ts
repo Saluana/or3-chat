@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IncomingMessage, ServerResponse } from 'http';
 import { Socket } from 'net';
 import { createEvent, type H3Event } from 'h3';
-import { createInviteToken } from '../../auth/invite-token';
+import { createInviteToken, verifyInviteToken } from '../../auth/invite-token';
 import { getInviteTokenFromEvent, INVITE_TOKEN_COOKIE } from '../../auth/registration';
 
 const SECRET = 'invite-link-test-secret';
@@ -85,5 +85,20 @@ describe('invite link middleware', () => {
         const event = makeEvent(`/?invite=${encodeURIComponent(token(3600))}`);
         await run(event);
         expect(setCookie(event)).toEqual([]);
+    });
+});
+
+
+describe('invite token purpose and framing', () => {
+    it('rejects extra segments and unknown purposes without changing legacy links', () => {
+        const legacy = token(3600);
+        expect(verifyInviteToken(legacy, SECRET).ok).toBe(true);
+        expect(verifyInviteToken(legacy + '.extra', SECRET).ok).toBe(false);
+        const unknown = createInviteToken({ purpose: 'other', workspaceId: 'workspace-1', email: 'invitee@example.com', exp: Date.now()/1000+3600 } as never, SECRET);
+        expect(verifyInviteToken(unknown, SECRET).ok).toBe(false);
+    });
+    it('verifies a signup invitation without a destination workspace', () => {
+        const payload = { purpose: 'signup' as const, invite_id: 'signup-id', email: 'invitee@example.com', exp: Math.floor(Date.now()/1000)+3600 };
+        expect(verifyInviteToken(createInviteToken(payload, SECRET), SECRET)).toEqual({ ok: true, payload });
     });
 });

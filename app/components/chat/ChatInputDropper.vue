@@ -965,14 +965,18 @@ watch([promptText, () => attachments.value.slice(), () => largeTextBlocks.value.
     }, { flush: 'sync' });
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
+function automaticCompactionDue() {
+    const preview = contextPreview.state.value;
+    if (preview.pending || !preview.admission || !('budget' in preview.admission)) return false;
+    return preview.admission.estimate.input_tokens / preview.admission.budget.effective_context_tokens
+        >= aiSettings.value.autoCompactThresholdPercent / 100;
+}
 let autoCompactionAttempt: string | undefined;
-watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, props.contextRevision,
+watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, aiSettings.value.autoCompactThresholdPercent, props.contextRevision,
     props.threadId, props.loading, props.streaming, compactionInProgress.value], async () => {
     if (!import.meta.client || componentDisposed || !aiSettings.value.autoCompactContext || !props.threadId || !props.compactThread
         || props.loading || props.streaming || compactionInProgress.value || props.compactionBlockedReason) return;
-    const preview = contextPreview.state.value;
-    if (preview.pending || !preview.admission || !('budget' in preview.admission)
-        || preview.admission.estimate.input_tokens / preview.admission.budget.effective_context_tokens < 0.8) return;
+    if (!automaticCompactionDue()) return;
     const threadId = props.threadId; const generation = getWorkspaceGeneration();
     const history = Array.isArray(props.contextRevision) ? props.contextRevision : [];
     const anchor = history.at(-1)?.id;
@@ -982,14 +986,14 @@ watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, pr
     autoCompactionAttempt = attempt;
     try {
         if (!await claimAutomaticCompaction(threadId, () => !componentDisposed && props.threadId === threadId
-            && !props.loading && !props.streaming && aiSettings.value.autoCompactContext && !compactionInProgress.value)) return;
+            && !props.loading && !props.streaming && aiSettings.value.autoCompactContext && !compactionInProgress.value && automaticCompactionDue())) return;
     }
     catch (error) {
         if (!(error instanceof CompactionError)) console.warn('[chat-memory] Could not check automatic compaction eligibility.');
         return;
     }
     if (componentDisposed || props.threadId !== threadId || getWorkspaceGeneration() !== generation || props.loading || props.streaming
-        || !aiSettings.value.autoCompactContext || compactionInProgress.value) return;
+        || !aiSettings.value.autoCompactContext || compactionInProgress.value || !automaticCompactionDue()) return;
     await compactFromSettings();
 });
 async function compactFromSettings() {

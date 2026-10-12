@@ -105,7 +105,7 @@ for (const [label, viewport] of [
         // Complete the invite journey through the installed provider's UI,
         // registration endpoint and real SQLite membership provisioning.
         // A cookie or a mocked registration response alone cannot prove this.
-        test('completes invite-only sign-up from an invite link', async ({ page, browser }, info) => {
+        for (const kind of ['team', 'signup'] as const) test(`completes invite-only sign-up from a ${kind} invite link`, async ({ page, browser }, info) => {
             const origin = new URL(info.project.use.baseURL!).origin;
             const owner = await browser.newContext({ baseURL: origin });
             const email = `invite-${label}-${crypto.randomUUID()}@example.test`;
@@ -125,9 +125,9 @@ for (const [label, viewport] of [
                     data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
                 });
                 expect(admin.ok(), await admin.text()).toBe(true);
-                const created = await owner.request.post('/api/admin/workspace/invites/create', {
+                const created = await owner.request.post(kind === 'signup' ? '/api/admin/signup-invites/create' : '/api/admin/workspace/invites/create', {
                     headers: { origin, 'x-or3-admin-intent': 'admin' },
-                    data: { workspaceId, email, role: 'viewer' },
+                    data: kind === 'signup' ? { email } : { workspaceId, email, role: 'viewer' },
                 });
                 expect(created.ok(), await created.text()).toBe(true);
                 inviteUrl = (await created.json()).invite.inviteUrl;
@@ -160,19 +160,26 @@ for (const [label, viewport] of [
                 const payload = await response.json();
                 expect(payload.appAccessAllowed).toBe(true);
                 expect(payload.session).toMatchObject({
-                    authenticated: true, provider: 'basic-auth', role: 'viewer',
-                    user: { email }, workspace: { id: workspaceId },
+                    authenticated: true, provider: 'basic-auth', role: kind === 'signup' ? 'owner' : 'viewer',
+                    user: { email },
+                });
+                if (kind === 'team') expect(payload.session.workspace.id).toBe(workspaceId);
+                else {
+                    expect(payload.session.workspace.id).not.toBe(workspaceId);
+                    expect(payload.session.workspace.name).toBe('My Workspace');
+                }
+                expect(payload.session.workspace).toMatchObject({ id: expect.any(String),
                 });
             };
             await verifySession();
             await page.reload();
             await verifySession();
             await expect(page.locator('.ProseMirror p.is-editor-empty')).not.toHaveAttribute('data-placeholder', SIGN_IN_PROMPT);
-            await info.attach(`completed-invite-${label}`, {
+            await info.attach(`completed-${kind}-invite-${label}`, {
                 body: JSON.stringify({ email, workspaceId, registrationStatus: registered.status(), sessionAfterReload: true }),
                 contentType: 'application/json',
             });
-            await info.attach(`completed-invite-${label}-screen`, { body: await page.screenshot(), contentType: 'image/png' });
+            await info.attach(`completed-${kind}-invite-${label}-screen`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         test('signed-in user without a key still gets the OpenRouter connect flow', async ({ page }, info) => {

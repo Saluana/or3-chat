@@ -24,6 +24,28 @@
                 <label :for="switchId" class="text-[0.8125rem]">Auto-compact when context is high</label>
                 <USwitch :id="switchId" :model-value="settings.autoCompactContext" color="info" :ui="{ base: 'data-[state=checked]:bg-blue-500! data-[state=unchecked]:bg-gray-300!', thumb: 'bg-white!' }" aria-label="Auto-compact when context is high" :disabled="saving" @update:model-value="setAutomatic" />
             </div>
+            <div v-if="settings.autoCompactContext" class="chat-memory-threshold">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <span :id="thresholdLabelId" class="text-xs">Compact at context usage</span>
+                    <span class="chat-memory-threshold-value">{{ thresholdPercent }}%</span>
+                </div>
+                <USlider
+                    v-model="thresholdPercent"
+                    :min="10"
+                    :max="100"
+                    :step="10"
+                    size="sm"
+                    color="info"
+                    :ui="{ track: 'rounded-full! bg-(--md-surface-variant)!', range: 'rounded-full! bg-blue-500!', thumb: 'rounded-full! bg-white! ring-blue-500!' }"
+                    :aria-labelledby="thresholdLabelId"
+                    :aria-describedby="thresholdDescriptionId"
+                    :aria-valuetext="`${thresholdPercent}% context usage`"
+                    :disabled="saving"
+                    @change="saveThreshold"
+                />
+                <div class="mt-2 flex justify-between text-[0.6875rem] text-(--md-on-surface-variant)" aria-hidden="true"><span>10%</span><span>100%</span></div>
+                <p :id="thresholdDescriptionId" class="chat-memory-description mt-2">Compacts when estimated context reaches this level.</p>
+            </div>
             <div class="chat-memory-history-section">
                 <UPopover v-model:open="historyOpen" :content="{ align: 'start', sideOffset: 8 }" @update:open="(open: boolean) => open && loadVersions()">
                     <button type="button" class="chat-memory-history" :disabled="!threadId" aria-label="Version history">
@@ -61,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch, useId } from 'vue';
+import { computed, ref, shallowRef, watch, useId, nextTick } from 'vue';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import type { Thread } from '~/db/schema';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
@@ -74,6 +96,9 @@ const emit = defineEmits<{ (e: 'compact' | 'cancel' | 'close'): void }>();
 const { settings, set } = useAiSettings();
 const expanded = ref(false);
 const detailsId = useId();
+const thresholdLabelId = useId(); const thresholdDescriptionId = useId();
+const thresholdPercent = ref(settings.value.autoCompactThresholdPercent);
+watch(() => settings.value.autoCompactThresholdPercent, value => { thresholdPercent.value = value; });
 const switchId = useId(); const saving = ref(false); const saveError = ref('');
 const known = computed(() => Boolean(props.state.admission && 'budget' in props.state.admission));
 const percent = computed(() => props.state.admission && 'budget' in props.state.admission
@@ -85,6 +110,14 @@ const inProgress = computed(() => props.compactionState && ['capturing', 'genera
 async function setAutomatic(enabled: boolean) {
     saving.value = true; saveError.value = '';
     try { await set({ autoCompactContext: enabled }); } catch { saveError.value = 'Could not save this setting. Try again.'; }
+    finally { saving.value = false; }
+}
+async function saveThreshold() {
+    // Keyboard commits precede the slider model update.
+    await nextTick();
+    saving.value = true; saveError.value = '';
+    try { await set({ autoCompactThresholdPercent: thresholdPercent.value }); }
+    catch { thresholdPercent.value = settings.value.autoCompactThresholdPercent; saveError.value = 'Could not save this setting. Try again.'; }
     finally { saving.value = false; }
 }
 const historyOpen = ref(false); const historyLoading = ref(false); const historyError = ref('');
@@ -147,6 +180,16 @@ async function openVersion(id: string) {
     font-weight: 400 !important;
 }
 .chat-memory-compact:hover:not(:disabled) { background: color-mix(in srgb, var(--md-on-surface) 9%, var(--md-surface)) !important; }
+.chat-memory-threshold {
+    margin-top: 0.75rem; padding: 0.75rem;
+    background: color-mix(in srgb, var(--md-on-surface) 3%, var(--md-surface));
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+}
+.chat-memory-threshold-value {
+    padding: 0.125rem 0.5rem; border-radius: 999px;
+    background: color-mix(in srgb, var(--ui-info) 12%, var(--md-surface));
+    font-size: 0.75rem; font-weight: 550; font-variant-numeric: tabular-nums;
+}
 .chat-memory-history-section {
     margin-top: 0.75rem; padding-top: 0.5rem;
     border-top: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, var(--md-surface));

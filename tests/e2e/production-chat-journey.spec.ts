@@ -1068,6 +1068,44 @@ test('compaction chat memory lives under system prompt in settings, with working
     await page.getByRole('button', { name: /Original conversation/ }).click();
     await expect(page.locator('[data-compaction-card]')).toHaveCount(0);
 });
+test('auto-compaction threshold slider follows the toggle and persists 10 percent steps', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto(`${chatPage}?compaction=1&meter=1`);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    const openSettings = async () => {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: /^Context & compaction/ }).click();
+    };
+    await openSettings();
+    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
+    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
+    const slider = memory.getByRole('slider', { name: 'Compact at context usage' });
+    await expect(slider).toHaveCount(0);
+    await automatic.click();
+    await expect(slider).toHaveAttribute('aria-valuenow', '80');
+    await expect(slider).toHaveAttribute('aria-valuemin', '10');
+    await expect(slider).toHaveAttribute('aria-valuemax', '100');
+    await slider.focus(); await slider.press('ArrowRight');
+    await expect(slider).toHaveAttribute('aria-valuenow', '90');
+    await expect(slider).toHaveAttribute('aria-valuetext', '90% context usage');
+    await expect(automatic).toBeEnabled();
+    await automatic.click(); await expect(slider).toHaveCount(0);
+    await expect(automatic).toBeEnabled();
+    await automatic.click(); await expect(slider).toHaveAttribute('aria-valuenow', '90');
+    await expect(automatic).toBeEnabled();
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    await openSettings();
+    await expect(automatic).toBeChecked();
+    await expect(slider).toHaveAttribute('aria-valuenow', '90');
+    await slider.focus(); await slider.press('ArrowLeft');
+    await expect(slider).toHaveAttribute('aria-valuenow', '80');
+    const shot = info.outputPath('auto-compaction-threshold.png');
+    await page.screenshot({ path: shot, animations: 'disabled' });
+    await info.attach('auto-compaction-threshold', { path: shot, contentType: 'image/png' });
+});
+
 test('compaction composer meter updates configuration, media and accessible warning thresholds', async ({ page }, info) => {
     test.setTimeout(120_000);
     const injectionWarnings: string[] = [];

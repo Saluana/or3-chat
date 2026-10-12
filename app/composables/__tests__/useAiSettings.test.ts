@@ -97,6 +97,27 @@ describe('useAiSettings', () => {
         expect(sanitizeAiSettings({ version: 1 })).toMatchObject({ maxContextTokens: null });
     });
 
+    it('persists automatic compaction thresholds and rejects values outside the percentage steps', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        expect(api.load().autoCompactThresholdPercent).toBe(80);
+        for (const value of [10, 50, 80, 100]) {
+            await api.set({ autoCompactThresholdPercent: value });
+            expect(JSON.parse((await getKvByName('ai_settings'))!.value!).autoCompactThresholdPercent).toBe(value);
+        }
+        for (const value of [0, -10, 15, 110, Infinity, NaN]) {
+            await expect(api.set({ autoCompactThresholdPercent: value })).rejects.toThrow(/10.*100.*10/i);
+            expect(api.load().autoCompactThresholdPercent).toBe(100);
+        }
+        for (const value of [undefined, '70', 0, 15, 110, Infinity, NaN]) {
+            expect(sanitizeAiSettings({ autoCompactThresholdPercent: value }).autoCompactThresholdPercent).toBe(80);
+        }
+        await api.set({ autoCompactContext: false });
+        expect(api.load().autoCompactThresholdPercent).toBe(100);
+        await api.reset();
+        expect(api.load().autoCompactThresholdPercent).toBe(80);
+    });
+
     it('rejects a stale preference write when workspace changes during its load', async () => {
         const dbA = getDb();
         await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, masterSystemPrompt: 'A', maxContextTokens: 1_000_000 }), dbA);

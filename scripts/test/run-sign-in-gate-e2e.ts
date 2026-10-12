@@ -37,7 +37,7 @@ try {
             'tests/e2e/cloud-sign-in-gate.spec.ts',
             '--workers=1',
             '--reporter=line',
-            '--trace=on',
+            '--trace=off',
             ...process.argv.slice(2),
         ],
         {
