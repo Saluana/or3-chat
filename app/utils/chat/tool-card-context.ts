@@ -52,6 +52,7 @@ export function createToolCardContext(input: {
     let queued = false;
     let stateSequence = 0;
     let optimistic: { state: unknown; sequence: number } | undefined;
+    const currentOptimistic = () => optimistic;
     const notify = () => {
         if (queued || controller.signal.aborted) return;
         queued = true;
@@ -139,7 +140,7 @@ export function createToolCardContext(input: {
                     committedState = copy;
                     committedSequence = sequence;
                 }
-                if (!controller.signal.aborted && optimistic?.sequence === sequence) {
+                if (!controller.signal.aborted && currentOptimistic()?.sequence === sequence) {
                     optimistic = undefined;
                     values.state = committedState;
                     notify();

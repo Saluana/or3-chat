@@ -196,8 +196,10 @@ export async function buildProjectContext(
         const revision = entry.source.value.revisions.find(
             (r) => r.id === entry.source.value.current_revision_id,
         )!;
+        // I/O above can interleave with source-mode updates; re-read it here.
+        const modeAfterIo = (): string => entry.source.value.mode;
         if (
-            entry.source.value.mode === 'relevant' &&
+            modeAfterIo() === 'relevant' &&
             revision.text_hash &&
             ['ready', 'partial'].includes(revision.status)
         ) {
@@ -892,7 +894,7 @@ export async function filterProjectToolResult(
         const value = JSON.parse(result) as {
             version?: unknown;
             workspaceId?: unknown;
-            results?: Array<{ source?: { kind: string; id: string }; [key: string]: unknown }>;
+            results?: Array<{ source?: { kind: string; id: string }; [key: string]: unknown } | null | undefined>;
             [key: string]: unknown;
         };
         if (

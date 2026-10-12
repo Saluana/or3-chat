@@ -99,22 +99,24 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     let lastIndexedCount = -1;
     let lastQueryToken = 0;
     let disposed = false;
+    // Unmount may run while an index/search promise is pending.
+    const isDisposed = (): boolean => disposed;
     let indexBuild: Promise<void> | null = null;
     const idToModel = computed<Record<string, OpenRouterModel>>(() => Object.fromEntries(models.value.map(model => [model.id, model])));
 
     async function ensureIndex() {
-        if (!process.client || disposed) return;
+        if (!process.client || isDisposed()) return;
         if (indexBuild) return await indexBuild;
         if (models.value.length === lastIndexedCount) return;
         indexBuild = (async () => {
             busy.value = true;
             try {
-                while (!disposed && models.value.length !== lastIndexedCount) {
+                while (!isDisposed() && models.value.length !== lastIndexedCount) {
                     const snapshot = models.value.slice();
                     let db: OramaInstance | null = null;
                     try { db = await buildIndex(snapshot); }
                     catch (error) { console.warn('[useModelSearch] Using substring search; index unavailable:', error); }
-                    if (disposed) return;
+                    if (isDisposed()) return;
                     if (snapshot.length !== models.value.length) continue;
                     currentDb = db;
                     lastIndexedCount = snapshot.length;
@@ -130,7 +132,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         return models.value.filter(model => `${model.id}\n${model.canonical_slug ?? ''}\n${model.name}\n${model.description ?? ''}`.toLowerCase().includes(lower)).slice(0, 100);
     };
     async function runSearch(token: number) {
-        if (disposed || token !== lastQueryToken) return;
+        if (isDisposed() || token !== lastQueryToken) return;
         const raw = query.value.trim();
         ready.value = true;
         if (!raw) {
@@ -165,10 +167,10 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         }
         results.value = fallbackSearch(raw);
         await ensureIndex();
-        if (disposed || token !== lastQueryToken || !currentDb) return;
+        if (isDisposed() || token !== lastQueryToken || !currentDb) return;
         try {
             const r = await searchWithIndex(currentDb, raw, 100);
-            if (disposed || token !== lastQueryToken) return;
+            if (isDisposed() || token !== lastQueryToken) return;
             const hits = (Array.isArray(r.hits) ? r.hits : []) as Array<{
                 document?: { id?: string };
                 id?: string;
@@ -185,7 +187,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
                 );
             results.value = mapped.length ? mapped : fallbackSearch(raw);
         } catch (err) {
-            if (disposed || token !== lastQueryToken) return;
+            if (isDisposed() || token !== lastQueryToken) return;
             results.value = fallbackSearch(raw);
 
             console.warn(

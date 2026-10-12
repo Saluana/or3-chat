@@ -60,12 +60,12 @@ async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: str
         throw new Error('This file is still referenced by retained workspace content.');
     }
     // An unsent draft keeps its attachments only as hash references.
-    if (db.workspace_tab_drafts && await db.workspace_tab_drafts
-        .filter(row => row.draft?.attachments?.some(attachment => targets.has(attachment.hash)) ?? false).first()) {
+    if ((db as Partial<typeof db>).workspace_tab_drafts && await db.workspace_tab_drafts
+        .filter((row: { draft?: { attachments?: Array<{ hash: string }> } | null }) => row.draft?.attachments?.some(attachment => targets.has(attachment.hash)) ?? false).first()) {
         throw new Error('This file is attached to an unsent draft. Send or discard the draft first.');
     }
-    if (db.workspace_draft_versions && await db.workspace_draft_versions
-        .filter(row => row.kind === 'version' && (row.draft?.attachments?.some(attachment => targets.has(attachment.hash)) ?? false)).first()) {
+    if ((db as Partial<typeof db>).workspace_draft_versions && await db.workspace_draft_versions
+        .filter((row: { kind: string; draft?: { attachments?: Array<{ hash: string }> } | null }) => row.kind === 'version' && (row.draft?.attachments?.some(attachment => targets.has(attachment.hash)) ?? false)).first()) {
         throw new Error('This file is attached to a saved draft version. Review and discard that version first.');
     }
 
@@ -173,7 +173,8 @@ function createFileDeletePayload(
 
 /** Hook-free reference update for callers owning an atomic write transaction. */
 export async function changeFileRefRows(hash: string, delta: number, db = getDb()) {
-    const transaction = Dexie.currentTransaction;
+    // Dexie's declaration omits the absent outside-transaction case.
+    const transaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
     if (!transaction || transaction.db !== db || transaction.mode !== 'readwrite')
         throw new Error('File references require their captured write transaction.');
     const meta = await db.file_meta.get(hash);
@@ -389,7 +390,7 @@ export async function createOrRefFile(
         };
     });
     await notifyFileRefChanges(referenceChanges);
-    if (createdNew) {
+    if (wasCreated()) {
         try { await hooks.doAction('db.files.create:action:after', actionPayload); }
         catch (error) { console.warn('[files] File committed; notification failed', error); }
     }

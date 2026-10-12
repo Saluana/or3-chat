@@ -63,6 +63,7 @@ const durableDrafts = new Map<string, PersistedWorkspaceTabDraft | null>();
 const inFlightDrafts = new Map<string, { scope: WorkspaceDraftScope; tabId: string; count: number }>();
 const hydrations = new Map<string, { db: Or3DB; promise: Promise<void>; done: boolean }>();
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
+const hasPersistTimer = (): boolean => Boolean(persistTimer);
 let retryArmed = false;
 let failedRounds = 0;
 let lifecycleBound = false;
@@ -155,7 +156,8 @@ function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft |
     return JSON.parse(serialized) as PersistedWorkspaceTabDraft;
 }
 
-function fromPersisted(value: PersistedWorkspaceTabDraft): WorkspaceChatTabDraft | null {
+type UntrustedPersistedDraft = Omit<PersistedWorkspaceTabDraft, 'version' | 'attachments'> & { version?: unknown; attachments?: Array<PersistedWorkspaceTabDraft['attachments'][number] | null | undefined> };
+function fromPersisted(value: UntrustedPersistedDraft | null | undefined): WorkspaceChatTabDraft | null {
     if (
         !value || value.version !== 1 || typeof value.text !== 'string'
         || !Array.isArray(value.attachments) || !Array.isArray(value.largeTextBlocks)
@@ -165,7 +167,7 @@ function fromPersisted(value: PersistedWorkspaceTabDraft): WorkspaceChatTabDraft
         text: value.text,
         editorJson: value.editorJson,
         attachments: [],
-        attachmentRefs: value.attachments.filter((ref) => typeof ref?.hash === 'string' && ref.hash),
+        attachmentRefs: value.attachments.filter((ref): ref is PersistedWorkspaceTabDraft['attachments'][number] => typeof ref?.hash === 'string' && Boolean(ref.hash)),
         largeTextBlocks: value.largeTextBlocks,
         composer: value.composer,
         updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
@@ -332,7 +334,7 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
         if (!dirty.has(key)) dirty.set(key, entry);
     }
     failedRounds += 1;
-    if (failedRounds <= MAX_SAVE_RETRIES && !persistTimer) {
+    if (failedRounds <= MAX_SAVE_RETRIES && !hasPersistTimer()) {
         retryArmed = true;
         persistTimer = setTimeout(
             () => void flushWorkspaceTabDrafts(),
@@ -401,7 +403,7 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
                 const restored = value ? fromPersisted(value) : null;
                 if (restored) drafts.set(key, { scope, tabId, draft: restored });
                 if (journalChoices.has(tabId) && value) {
-                    advanceSequence(key); writeJournal(scope, tabId, value ?? null); markDirty(scope, tabId);
+                    advanceSequence(key); writeJournal(scope, tabId, value); markDirty(scope, tabId);
                 }
                 baselines.set(key, await readDraftBaseline(db, scope.accountKey, tabId));
             }
