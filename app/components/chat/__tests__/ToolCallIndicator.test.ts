@@ -19,6 +19,21 @@ const global = {
 };
 
 describe('ToolCallIndicator', () => {
+    it.each(['workspace_create_document', 'workspace_update_project', 'workspace_propose_document_edit'])(
+        'shows a failed %s without claiming success in the collapsed summary', name => {
+            const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
+                { id: 'failed-write', name, status: 'error', error: 'Tool execution timed out' },
+                { id: 'read', name: 'workspace_read', status: 'complete', result: 'Found a source' },
+            ] }, global });
+            const summary = wrapper.find('summary').text();
+            expect(summary).toContain('failed');
+            expect(summary).toContain(name);
+            expect(summary).toContain('Read workspace sources');
+            expect(summary).not.toMatch(/Created document|Updated project|ready for review/);
+            expect(wrapper.text()).toContain('Tool execution timed out');
+        }
+    );
+
     it('exposes a host proposal review card without treating model prose or unrelated tools as saved changes', async () => {
         const result = JSON.stringify({ version: 1, workspaceId: 'local', messageId: 'review-message',
             documentId: 'review-doc', changeId: 'c'.repeat(64), status: 'pending_review', saved: false,

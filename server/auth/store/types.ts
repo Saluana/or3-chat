@@ -5,10 +5,8 @@
  * Defines the abstract persistence layer for SSR Auth. This interface decouples
  * session resolution from specific backend technologies (e.g., Convex, SQL, etc.).
  *
- * Current Status:
- * **Internal / Under Construction**.
- * Session resolution currently uses direct Convex imports for expediency.
- * This interface outlines the target architecture for multi-backend support.
+ * The selected sync provider registers the canonical user/workspace store.
+ * Core session resolution depends on this contract, never on a backend SDK.
  */
 import type { WorkspaceRole } from '~/core/hooks/hook-types';
 
@@ -55,6 +53,26 @@ export type InviteProvisionResult =
       }
     | { ok: false; reason: InviteAcceptanceFailureReason };
 
+/** Signup invites admit a new account, without joining the inviter's workspace.
+ * All timestamps in this additive contract are milliseconds since the epoch. */
+export interface SignupInviteSummary {
+    id: string;
+    email: string;
+    status: WorkspaceInviteStatus;
+    expires_at: number;
+    created_at: number;
+    created_by_admin: string;
+    revoked_at?: number | null;
+    accepted_at?: number | null;
+    user_id?: string | null;
+    workspace_id?: string | null;
+}
+export type SignupFailureReason = InviteAcceptanceFailureReason | 'account_exists';
+export type SignupValidationResult = { ok: true } | { ok: false; reason: SignupFailureReason };
+export type SignupProvisionResult =
+    | { ok: true; user_id: string; workspace_id: string; workspace_name: string; created: boolean }
+    | { ok: false; reason: SignupFailureReason };
+
 /**
  * Purpose:
  * Interface for auth-related workspace and user persistence.
@@ -65,6 +83,12 @@ export type InviteProvisionResult =
  * - Abstract multi-tenant scoping logic.
  */
 export interface AuthWorkspaceStore {
+    // Advertise these together only when acceptance is a single backend transaction.
+    createSignupInvite?(input: { id: string; email: string; token_hash: string; expires_at: number; created_by_admin: string }): Promise<{ id: string }>;
+    listSignupInvites?(input: { limit: number; cursor?: string }): Promise<{ invites: SignupInviteSummary[]; next_cursor: string | null }>;
+    revokeSignupInvite?(input: { id: string }): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'already_used' }>;
+    validateSignupInvite?(input: { id: string; email: string; token_hash: string }): Promise<SignupValidationResult>;
+    acceptSignupInviteAndProvisionUser?(input: { invite_id: string; token_hash: string; provider: string; provider_user_id: string; email: string; display_name?: string }): Promise<SignupProvisionResult>;
     /**
      * Purpose:
      * Resolves an existing internal user without provisioning a new record.

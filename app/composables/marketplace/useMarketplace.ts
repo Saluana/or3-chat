@@ -75,14 +75,15 @@ function rememberDismissedOperation(operationId: string): void {
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
  * goes through these two helpers and the result is narrowed by the caller.
  */
-async function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> {
+async function apiGet<T>(url: string, signal?: AbortSignal, query?: { workspaceId: string }): Promise<T> {
     const request = $fetch as unknown as (
         input: string,
         init?: Record<string, unknown>
     ) => Promise<unknown>;
-    // The signal is only passed when one exists so signal-less requests keep
-    // their exact call shape (`$fetch(url)`).
-    return (await (signal === undefined ? request(url) : request(url, { signal }))) as T;
+    // Keep signal-less, query-less requests in their existing shape.
+    return (await (signal === undefined && query === undefined ? request(url) : request(url, {
+        ...(signal === undefined ? {} : { signal }), ...(query === undefined ? {} : { query }),
+    }))) as T;
 }
 
 async function apiPost<T>(
@@ -1303,7 +1304,9 @@ export function useMarketplaceInstalled() {
             // A separate system-admin cookie can authorize management even when
             // the ordinary Chat session has no deploymentAdmin flag.
             try {
-                response = await apiGet<InstalledResponse>('/api/admin/plugins-page');
+                const targetWorkspaceId = expectedWorkspaceId ?? session?.workspace?.id;
+                response = await apiGet<InstalledResponse>('/api/admin/plugins-page', undefined,
+                    targetWorkspaceId ? { workspaceId: targetWorkspaceId } : undefined);
                 adminLoaded = true;
             } catch (caught) {
                 const failure = caught as { statusCode?: number; status?: number } | null;
@@ -1366,14 +1369,14 @@ export function useMarketplaceInstalled() {
         if (!(await load(getCachedSessionContext()?.workspace?.id ?? null))) throw new MarketplaceRefreshError();
     };
 
-    const mutate = async (url: string, body: Record<string, unknown>, reason: 'local-admin-change' | 'manifest-revision-change'): Promise<void> => {
+    const mutate = async (url: string, body: Record<string, unknown>, reason: 'local-admin-change' | 'manifest-revision-change', workspaceScoped = true): Promise<void> => {
         assertFresh();
         if (!workspaceId.value) throw new Error('Refresh installed plugins before making another change.');
         const targetWorkspaceId = workspaceId.value;
         const requestGeneration = generation;
         mutating.value = true;
         try {
-            await apiPost(url, { body: { ...body, expectedWorkspaceId: targetWorkspaceId } });
+            await apiPost(url, { body: { ...body, ...(workspaceScoped ? { expectedWorkspaceId: targetWorkspaceId } : {}) } });
             reconcile(reason);
             if (requestGeneration !== generation) return;
             await refreshCommitted();
@@ -1390,7 +1393,7 @@ export function useMarketplaceInstalled() {
         mutate('/api/admin/plugins/workspace-enable', { pluginId, enabled: enable }, 'local-admin-change');
     const uninstall = (pluginId: string, expectedPackageDigest: string) =>
         canManageSitePlugins.value
-            ? mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change')
+            ? mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change', false)
             : Promise.reject(new Error('An administrator must remove plugins.'));
     const rollbackReview = (pluginId: string) =>
         canManageSitePlugins.value
@@ -1403,7 +1406,7 @@ export function useMarketplaceInstalled() {
                 expectedPreviousDigest: review.previousDigest,
                 expectedPointerRevision: review.pointerRevision,
                 expectedEnabledWorkspaceSha256: review.enabledWorkspaceSha256,
-            }, 'manifest-revision-change')
+            }, 'manifest-revision-change', false)
             : Promise.reject(new Error('An administrator must roll back plugins.'));
 
     /** Updates are candidates: same lifecycle, promoted through the package API. */

@@ -70,6 +70,10 @@ for (const fixture of priorityCases) test(fixture.name, async ({ page }) => {
     const stored = await snapshot(page);
     expect(stored.results.filter(result => result.status === 'error')).toHaveLength(fixture.errors);
     expect(stored.calls.some(call => call.status === 'loading')).toBe(false);
+    if (fixture.name === 'handler throws an oversized error') {
+        expect(stored.results[0]!.content.length).toBeLessThan(1024);
+        expect(JSON.stringify(stored)).not.toContain('private-fixture-secret');
+    }
     for (const call of fixture.rounds.flat()) expect(stored.results.some(result => result.callId === call.id)).toBe(true);
     for (const result of stored.results) {
         expect(result.threadId).toBe(stored.threadId);

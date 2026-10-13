@@ -16,7 +16,7 @@ const adminFetchOptions = {
 type MaybeRef<T> = T | Ref<T>;
 
 export function useAdminSession() {
-    return useFetch<{ authenticated: boolean; kind: string }>(
+    return useFetch<{ authenticated: boolean; kind: string; workspace?: { id: string; name: string } | null }>(
         '/api/admin/auth/session',
         {
             key: 'admin:auth:session',

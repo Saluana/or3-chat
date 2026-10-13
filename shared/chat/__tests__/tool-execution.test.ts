@@ -40,13 +40,15 @@ describe('executeWithAbortTimeout', () => {
 
     it('propagates caller cancellation as abort, not timeout', async () => {
         const caller = new AbortController();
+        const handler = vi.fn(() => new Promise<string>(() => undefined));
         const execution = executeWithAbortTimeout({
             signal: caller.signal,
             timeoutMs: 1_000,
-            execute: () => new Promise(() => undefined),
+            execute: handler,
         });
         caller.abort();
         await expect(execution).rejects.toBeInstanceOf(ToolExecutionAbortedError);
+        expect(handler).not.toHaveBeenCalled();
     });
 
     it('does not classify an ordinary error containing timeout as a timeout', async () => {

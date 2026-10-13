@@ -1,10 +1,18 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-export interface InviteTokenPayload {
+export interface WorkspaceInviteTokenPayload {
     workspaceId: string;
     email: string;
     exp: number;
 }
+
+export interface SignupInviteTokenPayload {
+    purpose: 'signup';
+    invite_id: string;
+    email: string;
+    exp: number;
+}
+export type InviteTokenPayload = WorkspaceInviteTokenPayload | SignupInviteTokenPayload;
 
 function base64UrlEncode(input: string): string {
     return Buffer.from(input, 'utf8').toString('base64url');
@@ -40,8 +48,9 @@ export function verifyInviteToken(
     secret: string,
     nowMs = Date.now()
 ): { ok: true; payload: InviteTokenPayload } | { ok: false; reason: 'malformed' | 'invalid_signature' | 'expired' | 'invalid_payload' } {
-    const [payloadB64, signature] = token.split('.');
-    if (!payloadB64 || !signature) {
+    const parts = token.split('.');
+    const [payloadB64, signature] = parts;
+    if (token.length > 4096 || parts.length !== 2 || !payloadB64 || !signature || !/^[A-Za-z0-9_-]+$/.test(payloadB64) || !/^[A-Za-z0-9_-]{43}$/.test(signature)) {
         return { ok: false, reason: 'malformed' };
     }
 
@@ -58,9 +67,12 @@ export function verifyInviteToken(
     }
 
     if (
-        typeof parsed.workspaceId !== 'string' ||
-        typeof parsed.email !== 'string' ||
-        typeof parsed.exp !== 'number'
+        !parsed || typeof parsed !== 'object' ||
+        typeof parsed.email !== 'string' || !parsed.email.trim() ||
+        !Number.isSafeInteger(parsed.exp) ||
+        ('purpose' in parsed
+            ? parsed.purpose !== 'signup' || typeof parsed.invite_id !== 'string' || !parsed.invite_id
+            : typeof parsed.workspaceId !== 'string' || !parsed.workspaceId)
     ) {
         return { ok: false, reason: 'invalid_payload' };
     }

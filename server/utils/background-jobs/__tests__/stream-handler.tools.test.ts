@@ -289,6 +289,39 @@ describe('consumeBackgroundStreamWithTools', () => {
         );
     });
 
+    it.each(['empty-error', 'large-error', 'object-result', 'undefined-result'] as const)(
+        'continues with a bounded tool error after %s', async failure => {
+            registerServerTool(toolDef, () => {
+                if (failure === 'empty-error') throw new Error('');
+                if (failure === 'large-error') throw new Error('token=private-fixture-secret ' + 'detail '.repeat(50_000));
+                return (failure === 'object-result' ? { value: 'invalid' } : undefined) as unknown as string;
+            }, { override: true });
+            const { provider, updateJob, completeJob, failJob } = createProvider({ status: 'streaming' });
+            const fetchMock = vi.fn()
+                .mockResolvedValueOnce(makeToolCallResponse())
+                .mockResolvedValueOnce(makeTextResponse('Recovered after tool failure'));
+            vi.stubGlobal('fetch', fetchMock);
+            await consumeBackgroundStreamWithTools({
+                jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [toolDef] },
+                apiKey: 'key', referer: 'http://localhost:3000', provider,
+                context: { body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                    threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000' },
+            });
+            expect(failJob).not.toHaveBeenCalled();
+            expect(completeJob).toHaveBeenCalledWith('job-1', 'Recovered after tool failure');
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            const body = JSON.parse(fetchMock.mock.calls[1]![1].body);
+            const result = body.messages.find((message: { role: string }) => message.role === 'tool');
+            expect(result).toMatchObject({ tool_call_id: 'call-1', content: [{ type: 'text', text: expect.stringContaining('Error executing tool') }] });
+            expect(result.content[0].text.length).toBeLessThan(1024);
+            expect(result.content[0].text).not.toContain('private-fixture-secret');
+            const failed = updateJob.mock.calls.flatMap(call => call[1].tool_calls ?? [])
+                .find(call => call.id === 'call-1' && call.status === 'error');
+            expect(failed?.error).toBeTruthy();
+            expect(failed?.transcript?.status).toBe('error');
+        }
+    );
+
     it('parks a client tool call with a restart-safe continuation', async () => {
         const statusRef = { status: 'streaming' as const };
         const { provider, updateJob, updateJobExecution, completeJob } =

@@ -29,6 +29,7 @@ async function reservePort(): Promise<number> {
 const dataDir = await mkdtemp(join(tmpdir(), 'or3-sign-in-gate-e2e-'));
 try {
     const port = await reservePort();
+    const httpsPort = await reservePort();
     const child = Bun.spawn(
         [
             'bunx',
@@ -50,6 +51,8 @@ try {
                 AUTH_PROVIDER: 'basic-auth',
                 OR3_AUTH_PROVIDER: 'basic-auth',
                 OR3_GUEST_ACCESS_ENABLED: 'false',
+                // Rapid disposable browser contexts share a loopback IP; production guards are unchanged.
+                DISABLE_RATE_LIMIT: '1',
                 OR3_AUTH_REGISTRATION_MODE: 'invite_only',
                 OR3_AUTH_AUTO_PROVISION: 'false',
                 OR3_AUTH_INVITE_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
@@ -71,10 +74,14 @@ try {
                 OR3_ADMIN_DATA_DIR: join(dataDir, 'admin'),
                 OR3_ADMIN_USERNAME: 'sign-in-gate-admin',
                 OR3_ADMIN_PASSWORD: 'DisposableSignInGateAdmin!123',
+                // The admin scope regression prepares an inactive V2 ZIP candidate.
+                OR3_PLUGIN_RUNTIME_V2_ENABLED: 'true',
+                OR3_PLUGIN_MODULE_LOADER_V2_ENABLED: 'true',
                 OPENROUTER_API_KEY: '',
                 OR3_OPENROUTER_API_KEY: '',
                 NUXT_OPENROUTER_API_KEY: '',
                 OR3_SIGN_IN_GATE_E2E_HARNESS: 'true',
+                OR3_DEV_HTTPS_PORT: String(httpsPort),
                 PW_PORT: String(port),
                 PW_SKIP_WEB_SERVER: 'false',
             },
