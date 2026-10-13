@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync invariants and native atomic private-workspace signup invitations; D1 support limits."
+                    "summary": "SQLite auth/sync invariants, native atomic private-workspace signup invitations, qualified Cloud backup migration history, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
