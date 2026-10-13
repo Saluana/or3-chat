@@ -250,15 +250,6 @@ function forwardResize(payload: ResizePayload) {
     margin-inline-start: -2px;
 }
 
-/* ── Loading spinner ── */
-:deep(.blank2-chat-dropper .chat-input-loading-indicator) {
-    bottom: 1rem;
-    top: auto;
-    right: 3.5rem;
-    transform: none;
-    opacity: 0.6;
-}
-
 /* ── Action buttons (attach / settings) ── */
 :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
 :deep(.blank2-chat-dropper .chat-input-settings-btn button) {
@@ -470,6 +461,9 @@ function forwardResize(payload: ResizePayload) {
         content: '';
         position: absolute;
         inset: -6px -2px;
+        width: auto;
+        height: auto;
+        transform: none;
     }
 
     :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-send-btn),
@@ -489,6 +483,9 @@ function forwardResize(payload: ResizePayload) {
         content: '';
         position: absolute;
         inset: -6px;
+        width: auto;
+        height: auto;
+        transform: none;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachment-btn .iconify),

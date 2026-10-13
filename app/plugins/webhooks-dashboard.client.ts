@@ -14,7 +14,7 @@ export default defineNuxtPlugin(() => {
         pages: [
             {
                 id: 'webhooks-manage',
-                title: 'Manage Webhooks',
+                title: 'Webhooks',
                 icon: 'i-lucide-webhook',
                 description: 'Create, test, and inspect webhook deliveries',
                 component: async () =>

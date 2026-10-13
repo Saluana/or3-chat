@@ -1,5 +1,9 @@
 # Install and manage plugins
 
+**Configuration ready** means the required settings and connections are complete.
+Plugins that operate on a document or message keep their selection requirement
+and explain how to supply it.
+
 Open **Dashboard → Marketplace** to find plugins approved for your site, see
 what is installed, and manage updates. A plugin's selected code version is
 shared by the instance; whether it is enabled is decided per workspace.

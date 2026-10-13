@@ -44,7 +44,7 @@
 
         <template v-else>
             <div class="composer-row">
-                <input ref="attachmentInput" class="sr-only" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
+                <input ref="attachmentInput" hidden tabindex="-1" aria-hidden="true" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
                 <div class="composer-actions composer-actions-leading">
                     <UButton :icon="icons.plus" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
                     <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />

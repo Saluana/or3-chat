@@ -97,8 +97,8 @@ function toSummary(
         id: record.jobId,
         sourceId: BACKGROUND_CHAT_ACTIVITY_SOURCE_ID,
         title: record.model
-            ? `Background chat · ${record.model}`
-            : 'Background chat generation',
+            ? `Chat response · ${record.model}`
+            : 'Chat response',
         kind: 'background-chat' as const,
         status,
         startedAt: iso(record.startedAt),

@@ -1,6 +1,6 @@
-# Your Library
+# Your Marketplace library
 
-**Dashboard → Library** shows plugin releases acquired by your marketplace
+**Dashboard → Marketplace library** shows plugin releases acquired by your marketplace
 account. Connect that account to the local OR3 user you are signed in as, then
 install an acquired release or request an administrator to install it.
 
@@ -10,7 +10,7 @@ not merge accounts.
 
 ## Connect your account
 
-1. Sign in to Chat and open **Dashboard → Library**.
+1. Sign in to Chat and open **Dashboard → Marketplace library**.
 2. Choose **Connect marketplace account**. Note the comparison code and open
    the verification link.
 3. Sign in on the marketplace and compare the code before approving the link.

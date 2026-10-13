@@ -1040,6 +1040,13 @@ export function useMultiPane(
         // Resolve pane app definition
         const appDef = getPaneApp(appId);
         if (!appDef) {
+            // Restored apps can register after the shell mounts. Preserve the
+            // resource so PaneUnknown renders until its component is available.
+            pane.mode = appId;
+            pane.documentId = opts.recordId;
+            pane.threadId = "";
+            pane.pendingThreadId = undefined;
+            pane.messages = [];
             if (import.meta.dev) {
                 console.warn(
                     `[multiPane] setPaneApp: Pane app "${appId}" not registered`

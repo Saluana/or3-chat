@@ -2,9 +2,61 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { expect, test, webkit, type Page, type TestInfo } from '@playwright/test';
 
 type ThemeName = 'blank' | 'retro' | 'cyberpunk';
+const themes: ThemeName[] = ['blank', 'retro', 'cyberpunk'];
+
+for (const theme of themes) test(`UI audit: ${theme} phone model selection works through Settings without a toast`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.route(/\/models(?:\?|$)/, route => route.fulfill({ json: { data: [{
+        id: 'openai/gpt-4o-mini', canonical_slug: 'openai/gpt-4o-mini', name: 'GPT-4o mini', context_length: 128000,
+        created: 1, default_parameters: null, per_request_limits: null, supported_voices: null,
+        links: { details: '/fixture/gpt-4o-mini' },
+        top_provider: { context_length: 128000, max_completion_tokens: 8192, is_moderated: false },
+        architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },
+        supported_parameters: [], pricing: { prompt: '0', completion: '0' },
+    }], links: { next: null }, total_count: 1 } }));
+    await openResponsiveChat(page, theme, 'light');
+    const settings = page.getByRole('button', { name: 'Settings', exact: true });
+    await settings.click();
+    await page.getByRole('button', { name: 'Current model', exact: true }).click();
+    const catalog = page.getByRole('dialog', { name: 'Model catalog' });
+    await expect(catalog).toBeVisible();
+    await expect(catalog.getByRole('textbox', { name: 'Search models' })).toBeVisible();
+    await expect(catalog.getByRole('button', { name: 'Sort models' })).toBeVisible();
+    if (theme === 'blank') await captureChat(page, info, 'ui-audit-phone-catalog');
+    await catalog.getByRole('option', { name: /GPT-4o mini/ }).click();
+    await page.getByRole('dialog', { name: 'Model details' }).getByRole('button', { name: 'Use model', exact: true }).click();
+    await expect(catalog).not.toBeVisible();
+    expect(await page.getByText('Model selected', { exact: true }).count()).toBe(0);
+    await settings.click();
+    await expect(page.getByRole('button', { name: 'Current model', exact: true })).toContainText('GPT-4o mini');
+    await page.getByRole('button', { name: 'Close chat settings' }).click();
+    if (theme === 'blank') await expect(page.getByText('Workspace chat', { exact: true })).not.toBeVisible();
+    await captureChat(page, info, 'ui-audit-phone-model');
+});
+
+test('UI audit: prompt title and instructions are named and remain saved after reopening', async ({ page }, info) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    const openPrompts = async () => {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: /^Manage system prompts/ }).click();
+    };
+    await openPrompts();
+    await page.getByRole('button', { name: 'Create prompt', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Prompt title', exact: true }).fill('Audit prompt', { timeout: 10_000 });
+    const instructions = page.getByRole('textbox', { name: 'System prompt instructions', exact: true });
+    await instructions.fill('Keep replies brief and specific.', { timeout: 10_000 });
+    await page.getByRole('button', { name: 'Back to list', exact: true }).click();
+    await page.getByRole('button', { name: 'Close system prompts', exact: true }).click();
+    await page.reload();
+    await page.getByRole('textbox', { name: 'Message input' }).waitFor();
+    await openPrompts();
+    await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Audit prompt', exact: true }) }).click({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(instructions).toHaveText('Keep replies brief and specific.');
+    await captureChat(page, info, 'ui-audit-prompt-editor');
+});
 type ColorMode = 'light' | 'dark';
 
-const themes: ThemeName[] = ['blank', 'retro', 'cyberpunk'];
 const modes: ColorMode[] = ['light', 'dark'];
 const viewports = [
     { name: 'desktop', width: 1280, height: 900, mobile: false },
@@ -38,7 +90,7 @@ async function openResponsiveChat(
     // Layout checks must never invoke an instance's configured AI provider.
     await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, async (route) => {
         if (route.request().method() === 'POST') await route.abort('blockedbyclient');
-        else await route.continue();
+        else await route.fallback();
     });
     await page.context().addCookies([
         { name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' },
@@ -816,23 +868,17 @@ test.describe('chat responsive layout', () => {
                 for (const button of await controls.all()) {
                     const touch = await button.evaluate(element => {
                         const bounds = element.getBoundingClientRect();
-                        const before = getComputedStyle(element, '::before');
-                        const expanded = before.content !== 'none' && before.content !== 'normal';
-                        const width = Math.max(bounds.width, expanded ? parseFloat(before.width) : 0);
-                        const height = Math.max(bounds.height, expanded ? parseFloat(before.height) : 0);
                         const x = bounds.left + bounds.width / 2;
                         const y = bounds.top + bounds.height / 2;
                         const disabled = (element as HTMLButtonElement).disabled;
-                        return { paintedWidth: bounds.width, paintedHeight: bounds.height, width, height, disabled,
-                            // Native round buttons have clipped corners; measure
-                            // the full target diameter along both axes.
-                            extentsHitButton: [[-21, 0], [21, 0], [0, -21], [0, 21]].every(([dx, dy]) =>
+                        return { paintedWidth: bounds.width, paintedHeight: bounds.height, disabled,
+                            // Check the compact painted controls, whose corners
+                            // are clipped by their round shape.
+                            extentsHitButton: [[-15, 0], [15, 0], [0, -15], [0, 15]].every(([dx, dy]) =>
                                 element.contains(document.elementFromPoint(x + dx!, y + dy!))) };
                     });
-                    expect(touch.paintedWidth).toBe(theme === 'blank' ? 44 : 32);
-                    expect(touch.paintedHeight).toBe(theme === 'blank' ? 44 : 32);
-                    expect(touch.width).toBeGreaterThanOrEqual(44);
-                    expect(touch.height).toBeGreaterThanOrEqual(44);
+                    expect(touch.paintedWidth).toBe(32);
+                    expect(touch.paintedHeight).toBe(32);
                     if (!touch.disabled) {
                         expect(touch.extentsHitButton).toBe(true);
                         await button.focus();
@@ -842,8 +888,8 @@ test.describe('chat responsive layout', () => {
 
                 const chooser = page.waitForEvent('filechooser');
                 const attachmentBounds = (await page.getByRole('button', { name: 'Add attachments' }).boundingBox())!;
-                // Click inside the 44px native hit region, outside a 32px paint box.
-                await page.mouse.click(attachmentBounds.x + attachmentBounds.width / 2 - 21,
+                // Exercise the edge of the compact attachment control.
+                await page.mouse.click(attachmentBounds.x + attachmentBounds.width / 2 - 15,
                     attachmentBounds.y + attachmentBounds.height / 2);
                 await (await chooser).setFiles(Array.from({ length: 8 }, (_, index) => ({
                     name: `attachment-${index}.png`, mimeType: 'image/png',

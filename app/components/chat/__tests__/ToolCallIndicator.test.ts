@@ -168,8 +168,10 @@ describe('ToolCallIndicator', () => {
             global,
         });
 
-        expect(wrapper.find('summary').text()).toContain('or3sal_tasks_create_list');
-        expect(wrapper.find('summary').text()).toContain('or3sal_tasks_search_lists');
+        expect(wrapper.find('summary').text()).toContain('Or3sal tasks create list');
+        expect(wrapper.find('summary').text()).toContain('Or3sal tasks search lists');
+        expect(wrapper.find('.tool-call-expanded-content').text()).toContain('or3sal_tasks_create_list');
+        expect(wrapper.find('.tool-call-expanded-content').text()).toContain('or3sal_tasks_search_lists');
         expect(wrapper.find('summary').text()).not.toContain('files');
         expect(wrapper.find('summary').text()).not.toContain('workspace');
     });
@@ -190,7 +192,7 @@ describe('ToolCallIndicator', () => {
         });
 
         expect(wrapper.text()).toContain(
-            'Waiting for this browser · search lists'
+            'Waiting for this browser · Search lists'
         );
     });
 });

@@ -63,6 +63,17 @@ describe('useMultiPane - newPaneForApp', () => {
         g.__or3MultiPaneApi = undefined;
     });
 
+    // Startup may restore a tab before its plugin registers. Keeping chat mode
+    // would display unrelated content beneath the restored app's tab title.
+    it('retains a restored app and record while its registration is pending', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+        await multiPane.setPaneApp(0, 'pending-plugin', { recordId: 'saved-record' });
+        expect(multiPane.panes.value[0]).toMatchObject({
+            mode: 'pending-plugin', documentId: 'saved-record', threadId: '', messages: [],
+        });
+    });
+
     it('creates a new pane for a registered app', async () => {
         const { useMultiPane } = await import('../useMultiPane');
         const { usePaneApps } = await import('../usePaneApps');

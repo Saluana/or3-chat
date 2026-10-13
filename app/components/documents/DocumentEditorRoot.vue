@@ -259,7 +259,7 @@
             </Transition>
         </div>
 
-        <input ref="imageInput" class="sr-only" type="file" accept="image/*" multiple @change="onImageInput" />
+        <input ref="imageInput" hidden tabindex="-1" aria-hidden="true" type="file" accept="image/*" multiple @change="onImageInput" />
 
         <AppModal v-model:open="linkDialogOpen" title="Edit link" description="Add a safe web address to the selected text.">
             <template #default>

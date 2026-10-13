@@ -1,7 +1,7 @@
 <template>
     <section class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
+            <div v-if="showHeading !== false">
                 <h2 class="text-lg font-semibold text-[var(--md-on-surface)]">
                     {{ admin ? 'Admin Webhooks' : 'Webhooks' }}
                 </h2>
@@ -13,7 +13,7 @@
                 color="primary"
                 @click="$emit('create')"
             >
-                New Webhook
+                Create webhook
             </UButton>
         </div>
 
@@ -40,13 +40,6 @@
             <p class="mt-1 text-sm text-[var(--md-on-surface)] opacity-60">
                 Create your first webhook to start receiving outbound events.
             </p>
-            <UButton
-                class="mt-4"
-                color="primary"
-                @click="$emit('create')"
-            >
-                Create Webhook
-            </UButton>
         </div>
 
         <div v-else class="space-y-2">
@@ -169,6 +162,7 @@ import type {
 } from './types';
 
 defineProps<{
+    showHeading?: boolean;
     admin?: boolean;
     webhooks: ManagedWebhook[];
     loading: boolean;

@@ -8,7 +8,7 @@
                     v-model="sidebarQuery"
                     v-bind="searchInputProps"
                     name="sidebar-search"
-                    aria-label="Search chats, documents, and projects"
+                    aria-label="Filter sidebar by title"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
@@ -219,7 +219,7 @@ const searchInputProps = computed(() => {
         ...(searchInputOverrides.value as any),
         // Slot provides trailing content; don't also enable empty trailing-icon chrome.
         trailingIcon: undefined,
-        placeholder: 'Search chats, documents, projects...',
+        placeholder: 'Filter by title...',
         ui: mergedUi,
     };
 });

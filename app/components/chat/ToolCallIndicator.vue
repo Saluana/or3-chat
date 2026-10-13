@@ -59,9 +59,10 @@
                         <span
                             class="min-w-0 font-medium leading-5 text-[var(--md-on-surface)]"
                         >
-                            {{ call.label || call.name }}
+                            {{ toolLabel(call) }}
                         </span>
                     </div>
+                    <code class="ml-5 text-xs opacity-60">{{ call.name }}</code>
                     <pre
                         v-if="call.args"
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
@@ -114,6 +115,7 @@
 import { computed, defineAsyncComponent, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { useIcon } from '~/composables/useIcon';
 import { workspaceDocumentChangeReceipt, workspaceSourceReceipts, type WorkspaceSourceReceipt } from '~/utils/chat/workspace-source-receipts';
 
@@ -137,6 +139,11 @@ const emit = defineEmits<{
     resize: [];
 }>();
 
+const toolRegistry = useToolRegistry();
+function toolLabel(call: ToolCall): string {
+    return call.label || toolRegistry.getTool(call.name)?.definition.ui?.label
+        || call.name.replace(/[_-]+/g, ' ').replace(/^./, character => character.toUpperCase());
+}
 const loaderIcon = useIcon('chat.tool.loader');
 const searchIcon = useIcon('ui.search');
 
@@ -217,7 +224,7 @@ const groupLabel = computed(() => {
     );
     if (waitingForBrowser.length > 0) {
         const names = waitingForBrowser
-            .map((call) => call.label || call.name)
+            .map((call) => toolLabel(call))
             .filter((label, index, all) => all.indexOf(label) === index);
         return `Waiting for this browser · ${names.join(', ')}`;
     }
@@ -254,7 +261,7 @@ const groupLabel = computed(() => {
             .map((call) => call.name === 'workspace_create_document' ? running ? 'Creating document' : 'Created document'
                 : call.name === 'workspace_update_project' ? running ? 'Updating project' : 'Updated project'
                 : call.name === 'workspace_propose_document_edit' ? running ? 'Preparing document changes' : 'Document changes ready for review'
-                : call.label || call.name)
+                : toolLabel(call))
             .filter((label, index, all) => all.indexOf(label) === index)
     );
     return labels.join(', ') || (running ? 'Working' : 'Completed activity');

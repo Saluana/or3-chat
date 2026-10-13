@@ -1066,7 +1066,7 @@ function toolCannotScope(name: string) {
                         <div class="project-create-actions">
                             <UButton
                                 :icon="newChatIcon"
-                                label="New chat"
+                                :label="`New chat in ${state.project?.name || 'project'}`"
                                 color="neutral"
                                 class="project-start theme-btn"
                                 :disabled="busy"
@@ -1075,7 +1075,7 @@ function toolCannotScope(name: string) {
                             <UButton
                                 v-if="documentsEnabled"
                                 :icon="newDocumentIcon"
-                                label="New document"
+                                :aria-label="`New document in ${state.project?.name || 'project'}`" label="New document"
                                 color="neutral"
                                 variant="ghost"
                                 class="project-new-document theme-btn"
@@ -1125,7 +1125,7 @@ function toolCannotScope(name: string) {
                         <input
                             ref="upload"
                             type="file"
-                            class="sr-only"
+                            hidden tabindex="-1" aria-hidden="true"
                             :multiple="!replace"
                             :disabled="busy"
                             accept=".pdf,.docx,.txt,.md,.csv,image/png,image/jpeg,image/webp,image/gif"
@@ -1323,7 +1323,7 @@ function toolCannotScope(name: string) {
                             :key="source.row.id"
                             class="project-source space-y-3"
                         >
-                            <div class="flex items-start gap-2.5 min-w-0">
+                            <div class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 min-w-0">
                                 <span class="project-source-icon shrink-0"
                                     ><UIcon
                                         :name="
@@ -1334,7 +1334,7 @@ function toolCannotScope(name: string) {
                                         class="size-4"
                                 /></span>
                                 <div class="min-w-0 flex-1">
-                                    <h2 class="font-medium text-sm break-words">
+                                    <h2 class="project-source-title font-medium text-sm break-words">
                                         {{ source.value.title }}
                                     </h2>
                                     <p
@@ -1351,7 +1351,7 @@ function toolCannotScope(name: string) {
                                 </div>
                                 <UButton
                                     v-if="source.value.current_revision_id"
-                                    label="Preview"
+                                    label="Preview" class="col-start-2 justify-self-start"
                                     color="neutral"
                                     variant="ghost"
                                     size="xs"
@@ -2387,6 +2387,15 @@ function toolCannotScope(name: string) {
 .project-source {
     padding: 12px 0 16px;
     border-bottom: 1px solid var(--md-outline-variant);
+}
+.project-source-title {
+    width: 100%;
+    margin: 0;
+    font-size: .875rem;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: normal;
+    overflow-wrap: anywhere;
 }
 .project-source-icon {
     display: grid;

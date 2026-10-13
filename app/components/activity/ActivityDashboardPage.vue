@@ -32,8 +32,7 @@
                 <div>
                     <h2 class="font-semibold">Choose an activity</h2>
                     <p class="mt-1 max-w-md text-sm text-[var(--md-on-surface-variant)]">
-                        Inspect results, approvals, artifacts, failures, and the
-                        events that led to the current state.
+                        Select an activity to view its results and approvals.
                     </p>
                 </div>
             </div>

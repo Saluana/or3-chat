@@ -76,6 +76,14 @@ vi.mock('~/utils/errors', () => ({
 }));
 
 describe('useWorkspaceBackup stream export', () => {
+    // A restore must preserve existing records unless replacement or conflict
+    // overwrite is explicitly selected by the user.
+    it('starts an import without clearing or overwriting existing records', async () => {
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        expect(backup.state.importMode.value).toBe('append');
+        expect(backup.state.overwriteValues.value).toBe(false);
+    });
     beforeEach(() => {
         vi.clearAllMocks();
 
