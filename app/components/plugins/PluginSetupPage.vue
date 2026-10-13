@@ -6,10 +6,12 @@
  * legacy direct setup URL. The server remains the source of truth for the plan,
  * settings, connections and first action.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref } from 'vue';
 import PluginSetupPanel from './PluginSetupPanel.vue';
 import type { SetupPlan } from '~~/shared/plugins/setup/plan';
 import { usePaneApps } from '~/composables/core/usePaneApps';
+import { openInstalledPluginPane } from '~/composables/plugins/portable-pane';
+import { getPortableClientSource } from '~/composables/plugins/portable-client-runtime';
 
 type SetupPlanResponse = {
     plan: SetupPlan | null;
@@ -38,6 +40,7 @@ type SetupPlanResponse = {
     packageDigest: string | null;
     operationId: string | null;
     setupRevision: number;
+    selectionStatus?: string | null;
 };
 
 const props = defineProps<{
@@ -75,6 +78,20 @@ const currentSetupRevision = computed(() => data.value?.setupRevision ?? 0);
 const { listPaneApps } = usePaneApps();
 const workspaceApp = computed(() => listPaneApps.value.find(app => app.pluginId === props.pluginId));
 const pluginLabel = computed(() => workspaceApp.value?.label || props.pluginId);
+const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
+// Trusted workspace apps already expose their interface without a selected
+// document. Portable operations keep the server's selection handoff unchanged.
+const opensWorkspaceApp = computed(() => Boolean(workspaceApp.value)
+    && !getPortableClientSource(props.pluginId)
+    && data.value?.plan?.status === 'ready'
+    && data.value.selectionStatus !== 'candidate'
+    && !data.value.operationId);
+const firstAction = computed(() => {
+    const action = data.value?.firstAction;
+    return action && opensWorkspaceApp.value
+        ? { ...action, contextKind: 'workspace' as const, ready: true, reason: undefined }
+        : action;
+});
 const busy = ref(false);
 const message = ref<string | null>(null);
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -201,6 +218,10 @@ async function runFirstAction(): Promise<void> {
     if (busy.value) return;
     busy.value = true;
     try {
+        if (opensWorkspaceApp.value) {
+            if (await openInstalledPluginPane(props.pluginId)) closeDashboard();
+            return;
+        }
         const result = await $fetch<{
             status: string;
             handoff?: { label: string; contextKind: string };
@@ -269,7 +290,7 @@ onMounted(() => {
             :plugin-id="props.pluginId"
             :plan="data.plan"
             :status="data.status"
-            :first-action="data.firstAction"
+            :first-action="firstAction!"
             :busy="busy"
             :durable-connections="data.durableConnections"
             :credentials-available="data.credentialsAvailable"
@@ -288,7 +309,7 @@ onMounted(() => {
         </p>
 
         <div
-            v-if="data && !data.firstAction.ready && data.firstAction.reasonCode === 'selection-required'"
+            v-if="data && !opensWorkspaceApp && !data.firstAction.ready && data.firstAction.reasonCode === 'selection-required'"
             class="text-xs opacity-70"
             role="note"
         >

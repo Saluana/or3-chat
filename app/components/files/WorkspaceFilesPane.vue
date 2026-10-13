@@ -655,10 +655,10 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     <p>{{ trash ? 'Restore files you want to keep.' : 'Your documents and uploads, all in one place.' }}</p>
                 </div>
                 <div class="files-header-actions">
-                    <UButton size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
-                    <UButton size="workspace" label="Upload" :icon="icons.upload.value" :disabled="busy || readOnly" @click="uploadInput?.click()" />
-                    <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
-                        { label: trash ? 'Show active files' : 'Show Trash', icon: icons.trash.value, onSelect: () => { trash = !trash; } },
+                    <UButton v-if="!trash" size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
+                    <UButton v-if="!trash" size="workspace" label="Upload" :icon="icons.upload.value" :disabled="busy || readOnly" @click="uploadInput?.click()" />
+                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" :aria-pressed="trash" @click="trash = !trash" />
+                    <UDropdownMenu v-if="!trash" :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
                         { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
                     ]">
                         <UButton size="workspace" :icon="icons.more.value" aria-label="Files options" color="neutral" variant="ghost" square />

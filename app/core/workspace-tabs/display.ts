@@ -1,6 +1,12 @@
 import type { WorkspaceTab, WorkspaceTabStatus } from './types';
 
-export function workspaceTabTitle(tab: WorkspaceTab): string {
+export function workspaceTabTitle(tab: WorkspaceTab, tabs: readonly WorkspaceTab[] = []): string {
+    if (tab.resource.kind === 'chat' && !tab.resource.threadId && (!tab.cachedTitle || tab.cachedTitle === 'New chat')) {
+        const blanks = tabs.filter((entry) => entry.resource.kind === 'chat' && !entry.resource.threadId)
+            .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+        const index = blanks.findIndex((entry) => entry.id === tab.id);
+        if (blanks.length > 1 && index >= 0) return `New chat ${index + 1}`;
+    }
     if (tab.cachedTitle) return tab.cachedTitle;
     if (tab.resource.kind === 'chat') {
         return tab.resource.threadId ? 'Chat' : 'New chat';

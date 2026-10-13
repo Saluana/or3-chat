@@ -59,7 +59,7 @@ const props = defineProps<{
     readonly firstAction: {
         operationId: string;
         label: string;
-        contextKind: 'selected' | 'sample';
+        contextKind: 'selected' | 'sample' | 'workspace';
         ready: boolean;
         reason?: string;
     };
@@ -472,7 +472,9 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                 </UButton>
                 <span class="text-xs opacity-70">
                     {{
-                        firstAction.contextKind === 'sample'
+                        firstAction.contextKind === 'workspace'
+                            ? 'Opens in your workspace'
+                            : firstAction.contextKind === 'sample'
                             ? 'Runs on the package sample'
                             : 'Runs on your selection'
                     }}

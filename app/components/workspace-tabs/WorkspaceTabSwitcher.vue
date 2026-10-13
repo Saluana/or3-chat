@@ -98,7 +98,7 @@
                         </span>
                         <span class="workspace-tab-switcher-option-text">
                             <span class="workspace-tab-switcher-option-title">
-                                {{ workspaceTabTitle(tab) }}
+                                {{ workspaceTabTitle(tab, props.tabs) }}
                             </span>
                             <span class="workspace-tab-switcher-option-kind">
                                 {{ workspaceTabKindLabel(tab) }}
@@ -117,8 +117,8 @@
                         v-bind="closeRowButtonProps"
                         square
                         :icon="closeIcon"
-                        :aria-label="`Close ${workspaceTabTitle(tab)}`"
-                        :title="`Close ${workspaceTabTitle(tab)}`"
+                        :aria-label="`Close ${workspaceTabTitle(tab, props.tabs)}`"
+                        :title="`Close ${workspaceTabTitle(tab, props.tabs)}`"
                         @click.stop="emit('close', tab.id)"
                     />
                 </div>
@@ -430,7 +430,7 @@ const filteredTabs = computed(() => {
     if (!needle) return sortedTabs.value;
     return sortedTabs.value.filter((tab) => {
         const haystack = [
-            workspaceTabTitle(tab),
+            workspaceTabTitle(tab, props.tabs),
             workspaceTabKindLabel(tab),
             tab.resource.kind,
         ]

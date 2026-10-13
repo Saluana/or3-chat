@@ -138,7 +138,8 @@
         "plugin-runtime:runtime-controls:check": "bun x vitest run shared/plugins/__tests__/runtime-controls.test.ts",
         "plugin-runtime:cli:check": "bun x vitest run scripts/__tests__/plugin-runtime-cli.test.ts scripts/__tests__/plugin-runtime-v1-codemod.test.ts",
         "dev:offline": "tsx scripts/cli/dev.ts --or3-offline",
-        "test:e2e:tool-cards": "env OR3_PLUGIN_CONTRIBUTION_V2_SURFACES=chat-tool-cards OR3_TOOL_CARDS_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --workers=1 --reporter=line --output=test-results/tool-cards/browser"
+        "test:e2e:tool-cards": "env OR3_PLUGIN_CONTRIBUTION_V2_SURFACES=chat-tool-cards OR3_TOOL_CARDS_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --workers=1 --reporter=line --output=test-results/tool-cards/browser",
+        "test:e2e:ui-audit": "env OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3131 bunx playwright test tests/e2e/theme-token-migrations.spec.ts --grep \"UI audit:|touch attachments and settings remain reachable|keeps drafts and split-pane controls usable at every size\" --workers=1 --reporter=line --output=test-results/ui-audit"
     },
     "bin": {
         "or3-cloud": "./bin/or3-cloud.js",

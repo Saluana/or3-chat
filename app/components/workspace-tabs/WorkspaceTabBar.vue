@@ -51,7 +51,7 @@
                     :aria-describedby="visibleDescriptionId(tab)"
                     :tabindex="tab.id === activeTabId ? 0 : -1"
                     class="workspace-tab"
-                    :title="workspaceTabTitle(tab)"
+                    :title="workspaceTabTitle(tab, props.tabs)"
                     @click="onTabClick($event, tab.id)"
                     @auxclick="onAuxClick($event, tab.id)"
                     @contextmenu.prevent="openContextMenu($event, tab.id)"
@@ -61,7 +61,7 @@
                         :icon="resourceIcon(tab)"
                         class="workspace-tab-icon"
                     />
-                    <span class="workspace-tab-title">{{ workspaceTabTitle(tab) }}</span>
+                    <span class="workspace-tab-title">{{ workspaceTabTitle(tab, props.tabs) }}</span>
                     <span
                         v-if="statusFor(tab.id) !== 'idle'"
                         class="workspace-tab-status"
@@ -82,8 +82,8 @@
                     type="button"
                     data-tab-close
                     class="workspace-tab-close"
-                    :aria-label="`Close ${workspaceTabTitle(tab)}`"
-                    :title="`Close ${workspaceTabTitle(tab)}`"
+                    :aria-label="`Close ${workspaceTabTitle(tab, props.tabs)}`"
+                    :title="`Close ${workspaceTabTitle(tab, props.tabs)}`"
                     @click.stop="requestClose(tab.id)"
                     @pointerdown.stop
                 >
@@ -228,7 +228,7 @@ const pendingCloseFocus = ref<{ tabId: string; index: number } | null>(null);
 const contextMenuTitle = computed(() => {
     const tabId = contextMenu.value?.tabId;
     const tab = tabId ? props.tabs.find((entry) => entry.id === tabId) : undefined;
-    return tab ? workspaceTabTitle(tab) : 'workspace tab';
+    return tab ? workspaceTabTitle(tab, props.tabs) : 'workspace tab';
 });
 const contextMenuStyle = computed(() =>
     contextMenu.value
