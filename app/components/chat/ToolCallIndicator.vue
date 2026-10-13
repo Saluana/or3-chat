@@ -213,6 +213,7 @@ const isRunning = computed(() =>
 const kinds = computed(() => {
     const groups = new Map<ToolKind, ToolCall[]>();
     for (const call of props.toolCalls) {
+        if (call.status === 'error') continue;
         const kind = toolKind(call);
         groups.set(kind, [...(groups.get(kind) ?? []), call]);
     }
@@ -229,6 +230,9 @@ const groupLabel = computed(() => {
         return `Waiting for this browser · ${names.join(', ')}`;
     }
     const labels: string[] = [];
+    for (const call of props.toolCalls) {
+        if (call.status === 'error') labels.push(`${call.label || call.name} failed`);
+    }
     const running = isRunning.value;
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;
     if (count('edit'))
@@ -267,6 +271,7 @@ const groupLabel = computed(() => {
     return labels.join(', ') || (running ? 'Working' : 'Completed activity');
 });
 const groupIcon = computed(() => {
+    if (props.toolCalls.some(call => call.status === 'error')) return 'i-lucide-circle-alert';
     if (kinds.value.size !== 1) return 'i-lucide-pencil';
     if (kinds.value.has('edit')) return 'i-lucide-pencil';
     if (kinds.value.has('read')) return 'i-lucide-file-search';
@@ -314,6 +319,7 @@ function formatResult(result: string): string {
 }
 
 function iconForCall(call: ToolCall): string {
+    if (call.status === 'error') return 'i-lucide-circle-alert';
     const kind = toolKind(call);
     if (kind === 'edit') return 'i-lucide-pencil';
     if (kind === 'read') return 'i-lucide-file-search';

@@ -20,7 +20,93 @@ const SidebarRailUtilityButtonConfig = {
     class: `${SidebarRailButtonConfig.class} text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]!`,
 };
 
+// Project settings use the same surface, border and elevation tokens as the sidebar.
+const ProjectSettingsFieldConfig = {
+    ui: {
+        base: 'border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))]! bg-[var(--md-surface)]! text-[var(--md-on-surface)]! text-[17px]! ring-0! shadow-[var(--app-elevation-low)]! hover:border-[color:var(--md-primary)]! focus-visible:border-[color:var(--md-primary)]! focus-visible:outline-2! focus-visible:outline-[var(--md-primary)]! focus-visible:outline-offset-2!',
+    },
+};
+const ProjectSettingsSelectConfig = {
+    ...ProjectSettingsFieldConfig,
+    ui: {
+        ...ProjectSettingsFieldConfig.ui,
+        base: `${ProjectSettingsFieldConfig.ui.base} min-h-[var(--app-control-height-medium,40px)]! max-md:min-h-[44px]!`,
+        content: 'bg-[var(--md-surface)]! text-[var(--md-on-surface)]! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))]! ring-0! shadow-[var(--app-elevation-medium)]!',
+        item: 'text-[17px]!',
+        trailingIcon: 'size-6!',
+    },
+};
+const ProjectSettingsButtonConfig = {
+    size: 'sm',
+    variant: 'outline',
+    class: 'text-[17px]! min-h-[var(--app-control-height-small,32px)]! max-md:min-h-[44px]! ring-0! focus-visible:outline-2! focus-visible:outline-[var(--md-primary)]! focus-visible:outline-offset-2!',
+};
+
+// Native project fields retain Blank's geometry and browser validation.
+const ProjectResourceFieldConfig = {
+    class: 'border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))]! bg-[var(--md-surface)]! text-[var(--md-on-surface)]! text-[17px]! shadow-[var(--app-elevation-low)]! focus-visible:outline-2! focus-visible:outline-[var(--md-primary)]! focus-visible:outline-offset-2!',
+};
+const ProjectResourceMenuConfig = {
+    ui: {
+        content: 'bg-[var(--md-surface)]! text-[var(--md-on-surface)]! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))]! ring-0! shadow-[var(--app-elevation-medium)]!',
+        item: 'text-[17px]! min-h-[var(--app-control-height-medium,40px)]! max-md:min-h-[44px]!',
+        itemLeadingIcon: 'size-6!',
+    },
+};
+
 export const sidebarOverrides = {
+    /* --- Project Knowledge and Memory --- */
+    'input#sidebar.project-content.field': ProjectResourceFieldConfig,
+    'textarea#sidebar.project-content.field': ProjectResourceFieldConfig,
+    'select#sidebar.project-content.field': {
+        class: `${ProjectResourceFieldConfig.class} min-h-[var(--app-control-height-medium,40px)]! max-md:min-h-[44px]!`,
+    },
+    'button#sidebar.project-content.action': ProjectSettingsButtonConfig,
+    'button#sidebar.project-content.save': {
+        ...ProjectSettingsButtonConfig,
+        color: 'primary',
+        variant: 'solid',
+        class: `${ProjectSettingsButtonConfig.class} bg-[var(--md-primary)]! text-[var(--md-on-primary)]! hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]!`,
+        ui: { leadingIcon: 'size-6!' },
+    },
+    'button#sidebar.project-content.source-menu-item': {
+        variant: 'ghost',
+        class: 'border-0! shadow-none! text-[17px]! min-h-[var(--app-control-height-medium,40px)]! max-md:min-h-[44px]! text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+        ui: { leadingIcon: 'size-6!' },
+    },
+    'popover#sidebar.project-content.source-menu': ProjectResourceMenuConfig,
+    'dropdownmenu#sidebar.project-content.memory-menu': ProjectResourceMenuConfig,
+    'button#sidebar.project-content.memory-actions': {
+        variant: 'ghost',
+        class: 'border-0! shadow-none! size-8! max-md:size-11! p-0! text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! focus-visible:outline-2! focus-visible:outline-[var(--md-primary)]! focus-visible:outline-offset-2!',
+        ui: { leadingIcon: 'size-6!' },
+    },
+    /* --- Project settings --- */
+    'textarea#sidebar.project-settings.instructions': ProjectSettingsFieldConfig,
+    'textarea#sidebar.project-settings.repositories': ProjectSettingsFieldConfig,
+    'selectmenu#sidebar.project-settings.model': ProjectSettingsSelectConfig,
+    'input#sidebar.project-settings.tool-search': {
+        ...ProjectSettingsFieldConfig,
+        ui: {
+            ...ProjectSettingsFieldConfig.ui,
+            base: `${ProjectSettingsFieldConfig.ui.base} h-[var(--app-control-height-medium,40px)]! max-md:h-[44px]!`,
+            leadingIcon: 'size-6!',
+        },
+    },
+    'select#sidebar.project-settings.permission': ProjectSettingsSelectConfig,
+    'button#sidebar.project-settings.save': {
+        ...ProjectSettingsButtonConfig,
+        color: 'primary',
+        variant: 'solid',
+        class: `${ProjectSettingsButtonConfig.class} disabled:opacity-100! disabled:bg-[var(--md-surface-container-low)]! disabled:text-[var(--md-on-surface-variant)]! disabled:shadow-none!`,
+    },
+    'button#sidebar.project-settings.discard': ProjectSettingsButtonConfig,
+    'button#sidebar.project-settings.action': ProjectSettingsButtonConfig,
+    'button#sidebar.project-settings.remove': {
+        ...ProjectSettingsButtonConfig,
+        ui: { leadingIcon: 'size-6!' },
+    },
+    'switch#sidebar.project-settings.memory': { size: 'md' },
     /* --- core --- */
     'button#sidebar.unified-item.trigger': {
         class: 'flex items-center justify-center shadow-none!',

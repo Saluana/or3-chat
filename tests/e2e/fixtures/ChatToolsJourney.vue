@@ -85,7 +85,11 @@ onMounted(async () => {
             await originDb.kv.put({ id: ledgerKey, value: [...entries, { callId: context.callId, tool: name, startedAt }] });
             timings.set(context.callId, { startedAt });
             try {
-                if (name === 'test_fail') throw new Error('deliberate fixture failure');
+                if (name === 'test_fail') {
+                    if (args.value === 'empty-error') throw new Error('');
+                    if (args.value === 'large-error') throw new Error('token=private-fixture-secret ' + 'detail '.repeat(50_000));
+                    throw new Error('deliberate fixture failure');
+                }
                 if (name === 'test_slow') await new Promise<void>((resolve, reject) => {
                     const stop = () => reject(context.abortSignal.reason ?? new DOMException('Canceled', 'AbortError'));
                     context.abortSignal.addEventListener('abort', stop, { once: true });

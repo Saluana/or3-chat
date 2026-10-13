@@ -37,13 +37,14 @@ export default defineEventHandler((event) => {
     if (!isSsrAuthEnabled(event)) return;
 
     const config = useRuntimeConfig(event);
-    if (resolveRegistrationMode(config) !== 'invite_only') return;
+    const mode = resolveRegistrationMode(config);
+    if (mode === 'disabled') return;
     const secret = (config.auth as { invite?: { tokenSecret?: string } } | undefined)?.invite?.tokenSecret;
     if (!secret) return;
 
     const token = invite.trim();
     const verified = verifyInviteToken(token, secret);
-    if (!verified.ok) return;
+    if (!verified.ok || (mode === 'open' && !('purpose' in verified.payload))) return;
     const maxAge = Math.floor(verified.payload.exp - Date.now() / 1000);
     if (maxAge <= 0) return;
 

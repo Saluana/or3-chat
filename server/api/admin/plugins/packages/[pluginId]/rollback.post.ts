@@ -1,18 +1,14 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../../admin/api';
-import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
     pluginPackageServices,
-    readPluginStateSnapshot,
-    restorePluginStateSnapshot,
 } from '../../../../../admin/plugins/package-operation-support';
 import { revokeHostActivationsForPlugin } from '../../../../../utils/plugins/isolation/activation-registry';
 import { prepareRollbackWorkspacePreflight } from '../../../../../admin/plugins/rollback-workspaces';
 
 const BodySchema = z.object({
-    workspaceId: z.string().min(1).optional(), expectedWorkspaceId: z.string().min(1).optional(),
     expectedCurrentDigest: z.string().regex(/^sha256-[a-f0-9]{64}$/),
     expectedPreviousDigest: z.string().regex(/^sha256-[a-f0-9]{64}$/),
     expectedPointerRevision: z.number().int().nonnegative(),
@@ -20,7 +16,7 @@ const BodySchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
-    const context = await requireAdminApiContext(event, {
+    await requireAdminApiContext(event, {
         ownerOnly: true,
         mutation: true,
         superAdminOnly: true,
@@ -30,8 +26,6 @@ export default defineEventHandler(async (event) => {
     if (!pluginId || !body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
-    assertExpectedAdminWorkspace(context, body.data.expectedWorkspaceId);
-    const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
     const services = pluginPackageServices(getWorkspaceSettingsStore(event));
     const pointer = await services.pointers.readPointer(pluginId);
     if (!pointer?.current || !pointer.previous || pointer.current.packageDigest !== body.data.expectedCurrentDigest ||
@@ -51,9 +45,6 @@ export default defineEventHandler(async (event) => {
         // All enabled workspaces were reviewed by preflightWorkspaces. The
         // initiating admin workspace may be disabled and is not a state target.
         storedStateVersion: null,
-        snapshotState: () => readPluginStateSnapshot(services, workspaceId, pluginId),
-        restoreState: (snapshot) =>
-            restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
     });
     if (result.status === 'blocked') {
         throw createError({ statusCode: 409, statusMessage: result.stage === 'workspaces'
@@ -70,7 +61,6 @@ export default defineEventHandler(async (event) => {
         try {
             await event.context.adminHooks?.doAction('admin.plugin:action:rolled-back', {
                 id: pluginId,
-                workspaceId,
             });
         } catch {
             // A post-commit observer cannot turn a committed pointer swap into
@@ -78,5 +68,5 @@ export default defineEventHandler(async (event) => {
             console.warn('[plugin-rollback] Post-commit admin hook failed', { pluginId });
         }
     }
-    return { ok: true, workspaceId, ...result };
+    return { ok: true, ...result };
 });

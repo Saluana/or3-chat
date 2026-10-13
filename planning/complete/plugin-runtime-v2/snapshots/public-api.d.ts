@@ -4345,7 +4345,7 @@ export declare function defineTool<T extends Record<string, unknown>>(def: ToolD
  * 1. Add the hook name to `AdminHookKey`.
  * 2. Add the payload signature to `AdminHookPayloadMap`.
  */
-export type AdminHookKey = 'admin.plugin:action:installed' | 'admin.plugin:action:enabled' | 'admin.plugin:action:disabled' | 'admin.user:action:role_changed' | 'admin.workspace:action:created' | 'admin.workspace:action:deleted';
+export type AdminHookKey = 'admin.plugin:action:rolled-back' | 'admin.plugin:action:uninstalled-v2' | 'admin.plugin:action:installed' | 'admin.plugin:action:enabled' | 'admin.plugin:action:disabled' | 'admin.user:action:role_changed' | 'admin.workspace:action:created' | 'admin.workspace:action:deleted';
 export interface AdminHookPayloadMap {
     'admin.plugin:action:installed': [
         payload: {
@@ -4354,6 +4354,15 @@ export interface AdminHookPayloadMap {
             version: string;
         }
     ];
+    'admin.plugin:action:rolled-back': [payload: {
+        id: string;
+        workspaceId?: string;
+    }];
+    'admin.plugin:action:uninstalled-v2': [payload: {
+        id: string;
+        workspaceId?: string;
+        retainedPackageDigests: readonly string[];
+    }];
     'admin.plugin:action:enabled': [payload: {
         id: string;
         workspaceId: string;

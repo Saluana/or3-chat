@@ -298,6 +298,8 @@ Admin hooks run on the server admin engine (`event.context.adminHooks`, see `ser
 | Key                                  | Kind   | Args (tuple)                                                                            | Returns |
 | ------------------------------------ | ------ | --------------------------------------------------------------------------------------- | ------- |
 | `admin.plugin:action:installed`      | action | `[{ id: string; kind: 'plugin' \| 'theme' \| 'admin_plugin'; version: string }]`        | —       |
+| `admin.plugin:action:rolled-back` | action | `[{ id: string; workspaceId?: string }]` (shared rollback may omit workspace) | — |
+| `admin.plugin:action:uninstalled-v2` | action | `[{ id: string; workspaceId?: string; retainedPackageDigests: readonly string[] }]` (shared uninstall may omit workspace) | — |
 | `admin.plugin:action:enabled`        | action | `[{ id: string; workspaceId: string }]`                                                 | —       |
 | `admin.plugin:action:disabled`       | action | `[{ id: string; workspaceId: string }]`                                                 | —       |
 | `admin.user:action:role_changed`     | action | `[{ workspaceId: string; userId: string; role: 'owner' \| 'editor' \| 'viewer' }]`      | —       |

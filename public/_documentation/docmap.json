@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, and on-demand history/SDK execution."
+                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -128,7 +128,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 4,
-                    "summary": "Curated catalog of hook names, argument shapes, return values, and known emitters, checked against the payload map and production call sites. Typed-only rows are not runtime events."
+                    "summary": "Typed client and server hooks, including global plugin rollback and uninstall payloads."
                 }
             ]
         },
@@ -398,7 +398,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Register trusted client and server tools with CSP-compatible draft-07 validation, owned lifecycle, runtime admission, and request authorization."
+                    "summary": "Register trusted client and server tools with CSP-compatible draft-07 validation, runtime admission, cancellation guards, bounded failures, and request authorization."
                 },
                 {
                     "name": "manual-context-compaction.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, shared responsive modal headers, CSS and scoped theme rules."
+                    "summary": "Style components with tokens, theme-aware tab icons, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers, CSS and scoped theme rules."
                 },
                 {
                     "name": "package-install.md",
@@ -602,7 +602,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Set up managed Cloud or develop the configured SSR application from source, with runtime-aware SQLite startup checks."
+                    "summary": "Managed Cloud setup, first login, private signup invites, and existing workspace team invitations."
                 },
                 {
                     "name": "configure.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Cloud identity, workspace permissions, session refresh and rate admission, and OpenRouter credential lifecycle across logout and account changes."
+                    "summary": "Account identities, private signup invitations, team membership, and independent instance administration."
                 },
                 {
                     "name": "background-execution.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Setup and operating guide for the default-stack auth provider."
+                    "summary": "Basic Auth credentials, invite preflight across request and cookie sources, and sign-in retry with a replacement invitation."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Configure SQLite sync runtimes, native drivers, workspace Files and Trash admission, and persistence invariants."
+                    "summary": "SQLite auth/sync invariants, native atomic private-workspace signup invitations, qualified Cloud backup migration history, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Install Convex and automate backend updates from source startup, preserving custom files and checking deployed compatibility."
+                    "summary": "Convex setup, atomic private-workspace signup invitations, and bounded legacy email-index backfill."
                 },
                 {
                     "name": "provider-s3.md",
@@ -866,7 +866,7 @@
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Find, configure, enable, update, restore, and remove plugins, with recovery steps for interrupted installations."
+                    "summary": "Install shared plugins and upload V2 candidates to an explicit workspace; separate Instance and Workspace controls."
                 },
                 {
                     "name": "library.md",
@@ -956,7 +956,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 1,
-                    "summary": "Separate trusted extension API for administrator pages and overview widgets, with install, rebuild, and lifecycle limitations."
+                    "summary": "Trusted admin extensions and instance-wide plugin lifecycle hooks with optional workspace attribution."
                 },
                 {
                     "name": "tool-cards.md",

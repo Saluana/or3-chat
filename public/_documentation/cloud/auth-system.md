@@ -4,17 +4,19 @@ Cloud login verifies who you are; workspace membership and permissions decide wh
 
 ## Sign in, invitations, and workspaces
 
-Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account, then invite people through the workspace/admin invitation flow. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
+Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account. In **Admin → Signup invites**, invite someone to use the instance: acceptance creates their own private workspace with them as its sole owner. To share an existing workspace, use its **Team invites** controls and choose a membership role. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
 
 When SSR auth is on and guest access is off, the chat composer shows "Sign in to start chatting" to a signed-out visitor, and sending shows the same prompt instead of asking for an OpenRouter key. Nothing is sent. Static and local builds, and deployments with guest access on, keep the OpenRouter connect flow. The prompt points to Login (sidebar, or the menu's More sheet on mobile) because auth providers do not yet expose a way for the app to open their sign-in UI directly.
 
-Invite links (`/?invite=TOKEN` from the admin invitation flow) keep the token when the root page becomes `/chat`. On an invite-only instance the server also stores a valid token in the HttpOnly `or3_invite_token` cookie until it expires (`server/middleware/invite-link.ts`). Session resolution reads it for a user it has not seen before and clears it when the invite is accepted, so providers whose sign-up happens in their own UI (Clerk) need no invite code, and a redirect or new tab after sign-up does not lose the invite. The Basic Auth provider also reads the link from its account control and opens registration with the token filled in (on mobile, when the visitor opens More). Signed-out mobile visitors on an invite link are told where to find Login.
+Invite links (`/?invite=TOKEN` from the admin invitation flow) keep the token when the root page becomes `/chat`. The server stores valid signup tokens in open or invite-only mode, and team tokens in invite-only mode in the HttpOnly `or3_invite_token` cookie until it expires (`server/middleware/invite-link.ts`). Session resolution reads it for a user it has not seen before and clears it when the invite is accepted, so providers whose sign-up happens in their own UI (Clerk) need no invite code, and a redirect or new tab after sign-up does not lose the invite. The Basic Auth provider also reads the link from its account control and opens registration with the token filled in (on mobile, when the visitor opens More). Signed-out mobile visitors on an invite link are told where to find Login.
 
 A user can belong to multiple workspaces. Each request resolves one active workspace and its membership role. Switching workspaces refreshes the session and switches the browser's Dexie database to `or3-db-${workspaceId}`. It does not merge or delete the old workspace data.
 
 The store honors `users.active_workspace_id`. Workspace switches are coordinated across tabs using a monotonic revision, so a late response cannot commit an older selection. If data looks empty after login or switching, check the resolved workspace before resetting local storage.
 
 Background jobs remain tied to their original workspace when you switch. Reading their status or stream requires current membership there; stopping them requires an editor or owner role there. Open streams recheck membership through their existing reconciliation loop and close when access is revoked. Jobs without a recorded workspace cannot be accessed safely and are denied.
+
+A signup invite never joins the inviter’s workspace or copies its data. If Basic Auth credentials were created but signup was interrupted, choose **Already registered? Sign in** with the same email and password. Keep the valid invite, or paste a replacement from an administrator. Revoking an invite does not delete credentials. Provider credentials alone do not grant access to protected OR3 data.
 
 ## Two user identifiers
 
@@ -74,6 +76,8 @@ Managed-key streaming and background admission require `Content-Type: applicatio
 ## Deployment administration
 
 The `/admin/*` panel requires the super-admin `or3_admin` cookie obtained from the admin login credentials. A workspace owner is not automatically a deployment admin. A persisted `deploymentAdmin` grant permits deployment-level `admin.access` checks but does not, on its own, unlock super-admin panel routes.
+
+Instance settings, Administrators, signup invites, and the Plugins **Instance** tab require no Chat account or selected workspace. The Plugins **Workspace** tab targets its URL-selected workspace; switching Chat workspaces does not retarget it. Removing a workspace member removes that membership, not their account or membership elsewhere.
 
 Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
 

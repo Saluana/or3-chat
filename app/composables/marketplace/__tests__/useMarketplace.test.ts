@@ -167,7 +167,7 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         fetchMock.mockResolvedValue({ ...pageResponse, packagePlugins: [{ pluginId: 'sample.plugin' }] });
         const installed = useMarketplaceInstalled();
         expect(await installed.load('ws-1')).toBe(true);
-        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins-page');
+        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins-page', { query: { workspaceId: 'ws-1' } });
         expect(installed.canManageSitePlugins.value).toBe(true);
         expect(installed.canManageWorkspacePlugins.value).toBe(true);
     });
@@ -189,6 +189,11 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/workspace-enable', expect.objectContaining({
             body: expect.objectContaining({ expectedWorkspaceId: 'ws-1' }),
         }));
+        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/packages/sample.plugin/uninstall', expect.objectContaining({
+            body: { expectedPackageDigest: 'sha256-test' },
+        }));
+        const rollbackRequest = fetchMock.mock.calls.find(([url]) => url === '/api/admin/plugins/packages/sample.plugin/rollback');
+        expect(rollbackRequest?.[1].body).not.toHaveProperty('expectedWorkspaceId');
     });
 
     it('signals when an install operation completes', async () => {

@@ -8,6 +8,14 @@ Open **Dashboard → Marketplace** to find plugins approved for your site, see
 what is installed, and manage updates. A plugin's selected code version is
 shared by the instance; whether it is enabled is decided per workspace.
 
+## Administrator scope
+
+**Admin → Plugins → Instance** loads without selecting a workspace. It contains site catalog approvals, shared package inventory, rollouts/defaults, source installation, rollback, and uninstall. Shared rollback checks every enabled workspace; uninstall disables the package across all workspaces and retains saved data. Both keep their existing exact-package and lifecycle protections.
+
+**Workspace** contains enablement, configuration, permission grants, development admission, and canary/promotion checks for the explicitly selected workspace. Workspace details link directly here. The URL preserves the target and plugin/rollout links; changing the Chat workspace does not change an admin target. A restricted workspace administrator remains limited to their authorized workspace.
+
+For a V2 ZIP or URL upload, a system administrator first opens **Workspace** and chooses the target workspace. Expand **Advanced source plugins and development admission**, then use **Add from .zip** or **Add from URL**. The upload prepares an inactive candidate for that explicit workspace; review permissions, run its canary, and promote it before activation. The source-install setting must be enabled. Instance uploads remain available for legacy source plugins, and restricted workspace administrators cannot upload site code.
+
 ## Before installing
 
 You need an authenticated OR3 Cloud workspace and a site configured for
@@ -38,7 +46,7 @@ an arbitrary download URL. The installation records its progress, so refreshing
 or closing the page does not erase completed work.
 
 An empty Discover list can mean the administrator has not approved any releases
-for the site. In **Admin → Plugins → Site catalog**, a system administrator
+for the site. In **Admin → Plugins → Instance → Site catalog**, a system administrator
 reviews a signed exact release and chooses **Approve for this site**. Hiding a
 listing blocks new acquisition and enablement; it does not stop workspaces
 already running it. A purchase in Library does not bypass site approval.

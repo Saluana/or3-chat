@@ -59,6 +59,20 @@ enforce byte limits on arguments/results, pass an `AbortSignal`, and apply a
 10-second default timeout. The server registration can set its own
 `timeoutMs`.
 
+Stopping a call before its handler starts prevents invocation. Once a handler
+starts, it must honor its `AbortSignal`; cancellation cannot undo external side
+effects. The client's `assertToolAuthorized()` commit guard checks the handler's
+timeout signal before and after awaited authorization, so a handler resuming
+after timeout cannot make a guarded write.
+
+Thrown handler errors become non-empty tool failures in both runtimes. Their
+messages use the shared credential redactor and are capped at 400 characters
+before logging, persistence, rendering, or model continuation. Non-string server
+results are rejected like non-string client results. A throwing client
+`available()` callback excludes that tool and records its error without breaking
+the remaining catalog. Failed calls are labeled as failures in the collapsed
+activity summary, including when sibling calls succeed.
+
 Parameter schemas use JSON Schema draft-07. Browser and server validation
 interpret schemas without `eval` or `new Function`, so the production CSP
 does not need `unsafe-eval`. Malformed schemas, unknown keywords and unresolved

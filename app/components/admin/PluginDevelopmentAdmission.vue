@@ -30,6 +30,7 @@ interface CandidatePreview {
     readonly revision: string;
 }
 
+const props = defineProps<{ workspaceId?: string }>();
 const toast = useToast();
 const eligibility = ref<Eligibility | null>(null);
 const eligibilityError = ref<string | null>(null);
@@ -145,6 +146,8 @@ async function admit(): Promise<void> {
     admitNote.value = null;
     try {
         const form = new FormData();
+        if (!props.workspaceId) { admitNote.value = 'Choose a workspace first.'; return; }
+        form.append('workspaceId', props.workspaceId);
         form.append('package', packageFile.value);
         form.append('source', sourceFile.value);
         form.append('receipt', receiptFile.value);
@@ -208,7 +211,7 @@ async function admit(): Promise<void> {
  */
 async function runBrowserCheck(): Promise<void> {
     if (!admitted.value) return;
-    await developmentCanary.runBrowserCheck(admitted.value.pluginId);
+    await developmentCanary.runBrowserCheck(admitted.value.pluginId, props.workspaceId);
 }
 
 async function exportVerification(): Promise<void> {    if (!admitted.value) return;
@@ -227,6 +230,7 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
                 body: {
                     pluginId: admitted.value.pluginId,
                     packageDigest: admitted.value.packageDigest,
+                    workspaceId: props.workspaceId,
                     scope: verificationScope.value,
                     ...(verificationScope.value === 'recorded-interaction-check' ? { attestedInteraction: true } : {}),
                 },

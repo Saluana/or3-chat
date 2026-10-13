@@ -79,6 +79,11 @@ machine-readable report with per-check timings to
 `output/release/preflight.json`. The candidate Docker build is the
 authoritative production build; this gate does not build a second host copy.
 
+The gate also checks the generated plugin compatibility inventory and the installed
+SQLite/filesystem versions against the offline backup inspector's qualified profile.
+When upgrading those providers, qualify
+their actual migration history and update the inspector before building an image.
+
 Use `--full` only for a local deep-validation run. The scheduled **Extended
 validation** workflow owns full tests, browser suites, production asset
 budgets, compatibility checks, and performance baselines outside the Cloud
@@ -129,8 +134,8 @@ in `packages/create-or3-chat/first-party-versions.json` are already available
 on npm:
 
 ```bash
-npm view or3-provider-basic-auth@0.0.11 version
-npm view or3-provider-sqlite@0.0.15 version
+npm view or3-provider-basic-auth@0.0.13 version
+npm view or3-provider-sqlite@0.0.17 version
 npm view or3-provider-fs@0.0.11 version
 ```
 

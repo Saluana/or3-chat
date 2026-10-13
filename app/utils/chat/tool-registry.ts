@@ -21,6 +21,7 @@ import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
 import { validateToolArguments, validateToolDefinition } from '~~/shared/chat/tool-schema';
 import {
     executeWithAbortTimeout,
+    toolExecutionErrorMessage,
     ToolExecutionTimeoutError,
 } from '~~/shared/chat/tool-execution';
 import {
@@ -226,8 +227,17 @@ async function withTimeout(
         return {
             result: null,
             timedOut: isTimeout,
-            error: e instanceof Error ? e.message : String(e),
+            error: toolExecutionErrorMessage(e),
         };
+    }
+}
+
+function isToolAvailable(tool: RegisteredTool, context: ToolAvailabilityContext): boolean {
+    try {
+        return !tool.available || tool.available(context);
+    } catch (error) {
+        tool.lastError.value = toolExecutionErrorMessage(error);
+        return false;
     }
 }
 
@@ -384,7 +394,7 @@ export function useToolRegistry() {
      */
     function getEnabledDefinitions(context: ToolAvailabilityContext = { workspaceId: null, threadId: null }): ToolDefinition[] {
         return Array.from(registryState.tools.values())
-            .filter((tool) => tool.enabled.value && (!tool.available || tool.available(context)))
+            .filter((tool) => tool.enabled.value && isToolAvailable(tool, context))
             .map((tool) => tool.definition);
     }
 
@@ -419,7 +429,7 @@ export function useToolRegistry() {
             };
         }
 
-        if (tool.available && !tool.available(context ?? { workspaceId: null, threadId: null })) {
+        if (!isToolAvailable(tool, context ?? { workspaceId: null, threadId: null })) {
             return { result: null, toolName, error: `Tool "${toolName}" is unavailable for this conversation context.`, timedOut: false };
         }
 
@@ -480,7 +490,7 @@ export function useToolRegistry() {
                     if (JSON.stringify((await readProjectPolicy(projectScope.db,owner)).settings.tools[toolName] ?? null) !== projectPolicy) throw new Error('Project tool policy changed before execution.');
                 }
             } catch (error) {
-                return { result: null, toolName, error: error instanceof Error ? error.message : 'Project policy refused execution.', timedOut: false };
+                return { result: null, toolName, error: toolExecutionErrorMessage(error), timedOut: false };
             }
         }
 
@@ -494,7 +504,7 @@ export function useToolRegistry() {
                 throw new Error('The originating workspace is no longer available.');
             if (getTool(toolName) !== tool
                 || !toolDefinitionEquals(tool.definition, capturedDefinition)
-                || (tool.available && !tool.available(context ?? { workspaceId: null, threadId: null }))
+                || !isToolAvailable(tool, context ?? { workspaceId: null, threadId: null })
                 || (!admission?.ignoreGlobalEnabled && !tool.enabled.value)
                 || (admission && tool.runtime === 'server')) {
                 throw new Error('Tool availability or its admitted definition changed before execution.');
@@ -521,7 +531,7 @@ export function useToolRegistry() {
             await assertToolAuthorized();
         }
         catch (error) {
-            return { result: null, toolName, error: error instanceof Error ? error.message : 'Tool authorization changed.', timedOut: false };
+            return { result: null, toolName, error: toolExecutionErrorMessage(error), timedOut: false };
         }
         const baseContext = context ?? {
             subject: null,
@@ -535,7 +545,14 @@ export function useToolRegistry() {
         const execution = await withTimeout(
             (abortSignal) => tool.handler(
                 parsed.value,
-                { ...baseContext, ...(context?.threadId ? { projectId: projectOwner } : {}), abortSignal, assertToolAuthorized }
+                { ...baseContext, ...(context?.threadId ? { projectId: projectOwner } : {}), abortSignal,
+                    assertToolAuthorized: async () => {
+                        // The timeout cancels this child signal, not the caller's.
+                        abortSignal.throwIfAborted();
+                        await assertToolAuthorized();
+                        abortSignal.throwIfAborted();
+                    },
+                }
             ),
             baseContext.abortSignal,
             DEFAULT_TIMEOUT_MS
@@ -549,7 +566,7 @@ export function useToolRegistry() {
                     execution.result = await filterProjectToolResult(projectScope, context.threadId, projectOwner, toolName, execution.result);
                 }
             } catch (error) {
-                return { result: null, toolName, error: error instanceof Error ? error.message : 'Project context changed during execution.', timedOut: false };
+                return { result: null, toolName, error: toolExecutionErrorMessage(error), timedOut: false };
             }
         }
 

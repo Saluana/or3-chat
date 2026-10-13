@@ -406,6 +406,8 @@ if (full) {
     await requireCommand('Populated workspace performance gate', 'bun', ['run', 'scripts/performance/compare-populated-workspace.ts'], fixedProfile);
 }
 await requireCommand('Registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs']);
+await requireCommand('Offline backup inspection profile', 'bun', ['run', 'scripts/docker/prepare-backup-inspection.mjs']);
+await requireCommand('Plugin compatibility inventory', 'bun', ['run', 'plugin-runtime:compatibility:check']);
 await requireCommand(
     'Cloud version and provider contract',
     'bun',

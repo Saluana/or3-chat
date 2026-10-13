@@ -16,6 +16,8 @@
  */
 
 export type AdminHookKey =
+    | 'admin.plugin:action:rolled-back'
+    | 'admin.plugin:action:uninstalled-v2'
     | 'admin.plugin:action:installed'
     | 'admin.plugin:action:enabled'
     | 'admin.plugin:action:disabled'
@@ -27,6 +29,8 @@ export interface AdminHookPayloadMap {
     'admin.plugin:action:installed': [
         payload: { id: string; kind: 'plugin' | 'theme' | 'admin_plugin'; version: string }
     ];
+    'admin.plugin:action:rolled-back': [payload: { id: string; workspaceId?: string }];
+    'admin.plugin:action:uninstalled-v2': [payload: { id: string; workspaceId?: string; retainedPackageDigests: readonly string[] }];
     'admin.plugin:action:enabled': [payload: { id: string; workspaceId: string }];
     'admin.plugin:action:disabled': [payload: { id: string; workspaceId: string }];
     'admin.user:action:role_changed': [
