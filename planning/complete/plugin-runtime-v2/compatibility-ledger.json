@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "42cc09ccb4078e55390188f199cba7f9a4b76bed36e0b1456192b6d3ac99a171",
+      "apiSha256": "6853a82f85a4648911ebc06f7a2d0d4c64240c72e9a64fc64b8a9ade2b922d45",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2935,7 +2935,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 88,
+              "line": 90,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2951,7 +2951,7 @@
               "source": "app/composables/chat/useAiSettings.ts",
               "line": 66,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    autoCompactContext: boolean;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
             }
           ]
         },
@@ -3003,7 +3003,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 78,
+              "line": 80,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CapturedContextPreference {\n    readonly db: Or3DB;\n    readonly workspaceGeneration: number;\n    readonly maxContextTokens: number | null;\n}"
             }
@@ -3277,9 +3277,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 90,
+              "line": 92,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    autoCompactContext: false,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
             }
           ]
         },
@@ -4115,7 +4115,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 86,
+              "line": 88,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5657,7 +5657,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 120,
+                "line": 127,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5666,7 +5666,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 120,
+              "line": 127,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6527,7 +6527,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 279,
+                "line": 288,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6536,7 +6536,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 279,
+              "line": 288,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -11686,7 +11686,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "ea9068cbb4542de0448c111ed180d588a807c94f0b6fdcdf1c47462ebfda52ba",
+      "apiSha256": "c3e88c4c10512fb4055129b129494ee4331b95f4c7b9a31942ed0dd1aabb99cd",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11707,7 +11707,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 45,
+              "line": 46,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -11721,7 +11721,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 59,
+              "line": 60,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -11735,7 +11735,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 42,
+              "line": 43,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -11749,7 +11749,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -11763,7 +11763,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 91,
+              "line": 92,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
@@ -11777,7 +11777,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 90,
+              "line": 91,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }"
             }
@@ -11791,7 +11791,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 51,
+              "line": 52,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -11805,7 +11805,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 110,
+              "line": 111,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -11819,7 +11819,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 66,
+              "line": 67,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -11836,7 +11836,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 240,
+                "line": 250,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -11845,7 +11845,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 240,
+              "line": 250,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -11855,7 +11855,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "9cdf883679a0f29eb72140d9540eb9f65b979d8c371d7d3c28629ca12261304f",
+      "apiSha256": "a3a2c926023607404fcc1d07e87a54d4330145d20d1269c456d984433465241e",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11900,7 +11900,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 59,
+              "line": 60,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -11914,7 +11914,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -11970,7 +11970,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 51,
+              "line": 52,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -11998,7 +11998,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 66,
+              "line": 67,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -12015,7 +12015,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 240,
+                "line": 250,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12024,7 +12024,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 240,
+              "line": 250,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -12034,7 +12034,7 @@
     },
     {
       "source": "server/hooks/admin-hook-types.ts",
-      "apiSha256": "9e5abe5adca40833763c212364fe19f04e238b664cad00dfc57b54e75aebfccb",
+      "apiSha256": "6e3bac4f89ae5c7354a9b946cf4c63b8424c6acfd1f53dee0ca18e54ce308e9d",
       "runtime": "server",
       "publicPaths": [
         "~~/server/hooks/admin-hook-types"
@@ -12053,7 +12053,7 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 51,
+              "line": 55,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminActionHookName = AdminHookKey;"
             }
@@ -12069,7 +12069,7 @@
               "source": "server/hooks/admin-hook-types.ts",
               "line": 18,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type AdminHookKey =\n    | 'admin.plugin:action:installed'\n    | 'admin.plugin:action:enabled'\n    | 'admin.plugin:action:disabled'\n    | 'admin.user:action:role_changed'\n    | 'admin.workspace:action:created'\n    | 'admin.workspace:action:deleted';"
+              "text": "export type AdminHookKey =\n    | 'admin.plugin:action:rolled-back'\n    | 'admin.plugin:action:uninstalled-v2'\n    | 'admin.plugin:action:installed'\n    | 'admin.plugin:action:enabled'\n    | 'admin.plugin:action:disabled'\n    | 'admin.user:action:role_changed'\n    | 'admin.workspace:action:created'\n    | 'admin.workspace:action:deleted';"
             }
           ]
         },
@@ -12081,9 +12081,9 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 26,
+              "line": 28,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AdminHookPayloadMap {\n    'admin.plugin:action:installed': [\n        payload: { id: string; kind: 'plugin' | 'theme' | 'admin_plugin'; version: string }\n    ];\n    'admin.plugin:action:enabled': [payload: { id: string; workspaceId: string }];\n    'admin.plugin:action:disabled': [payload: { id: string; workspaceId: string }];\n    'admin.user:action:role_changed': [\n        payload: { workspaceId: string; userId: string; role: 'owner' | 'editor' | 'viewer' }\n    ];\n    'admin.workspace:action:created': [\n        payload: {\n            workspaceId: string;\n            name: string;\n            ownerUserId: string;\n            createdBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n    'admin.workspace:action:deleted': [\n        payload: {\n            workspaceId: string;\n            deletedBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n}"
+              "text": "export interface AdminHookPayloadMap {\n    'admin.plugin:action:installed': [\n        payload: { id: string; kind: 'plugin' | 'theme' | 'admin_plugin'; version: string }\n    ];\n    'admin.plugin:action:rolled-back': [payload: { id: string; workspaceId?: string }];\n    'admin.plugin:action:uninstalled-v2': [payload: { id: string; workspaceId?: string; retainedPackageDigests: readonly string[] }];\n    'admin.plugin:action:enabled': [payload: { id: string; workspaceId: string }];\n    'admin.plugin:action:disabled': [payload: { id: string; workspaceId: string }];\n    'admin.user:action:role_changed': [\n        payload: { workspaceId: string; userId: string; role: 'owner' | 'editor' | 'viewer' }\n    ];\n    'admin.workspace:action:created': [\n        payload: {\n            workspaceId: string;\n            name: string;\n            ownerUserId: string;\n            createdBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n    'admin.workspace:action:deleted': [\n        payload: {\n            workspaceId: string;\n            deletedBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n}"
             }
           ]
         },
@@ -12095,7 +12095,7 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 55,
+              "line": 59,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferAdminHookCallback<K extends AdminActionHookName> = (\n    ...args: AdminHookPayloadMap[K]\n) => unknown;"
             }
@@ -12109,7 +12109,7 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 59,
+              "line": 63,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferAdminHookParams<K extends AdminActionHookName> = AdminHookPayloadMap[K];"
             }
@@ -12123,7 +12123,7 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 61,
+              "line": 65,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferAdminHookReturn<K extends AdminActionHookName> =\n    AdminHookPayloadMap[K] extends [infer R, ...Tail<AdminHookPayloadMap[K]>] ? R : never;"
             }
@@ -12244,7 +12244,7 @@
     },
     {
       "source": "server/hooks/index.ts",
-      "apiSha256": "0c09a18e275a97c15fbba6b91859fd29655445c3e822ba56075b17a347991c11",
+      "apiSha256": "5dc23b28ba7e22eb98ee42b18cef711a91067299bf1c07cc26233d56a1bb597f",
       "runtime": "server",
       "publicPaths": [
         "~~/server/hooks"
@@ -12263,7 +12263,7 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 51,
+              "line": 55,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminActionHookName = AdminHookKey;"
             }
@@ -12279,7 +12279,7 @@
               "source": "server/hooks/admin-hook-types.ts",
               "line": 18,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type AdminHookKey =\n    | 'admin.plugin:action:installed'\n    | 'admin.plugin:action:enabled'\n    | 'admin.plugin:action:disabled'\n    | 'admin.user:action:role_changed'\n    | 'admin.workspace:action:created'\n    | 'admin.workspace:action:deleted';"
+              "text": "export type AdminHookKey =\n    | 'admin.plugin:action:rolled-back'\n    | 'admin.plugin:action:uninstalled-v2'\n    | 'admin.plugin:action:installed'\n    | 'admin.plugin:action:enabled'\n    | 'admin.plugin:action:disabled'\n    | 'admin.user:action:role_changed'\n    | 'admin.workspace:action:created'\n    | 'admin.workspace:action:deleted';"
             }
           ]
         },
@@ -12291,9 +12291,9 @@
           "declarations": [
             {
               "source": "server/hooks/admin-hook-types.ts",
-              "line": 26,
+              "line": 28,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AdminHookPayloadMap {\n    'admin.plugin:action:installed': [\n        payload: { id: string; kind: 'plugin' | 'theme' | 'admin_plugin'; version: string }\n    ];\n    'admin.plugin:action:enabled': [payload: { id: string; workspaceId: string }];\n    'admin.plugin:action:disabled': [payload: { id: string; workspaceId: string }];\n    'admin.user:action:role_changed': [\n        payload: { workspaceId: string; userId: string; role: 'owner' | 'editor' | 'viewer' }\n    ];\n    'admin.workspace:action:created': [\n        payload: {\n            workspaceId: string;\n            name: string;\n            ownerUserId: string;\n            createdBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n    'admin.workspace:action:deleted': [\n        payload: {\n            workspaceId: string;\n            deletedBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n}"
+              "text": "export interface AdminHookPayloadMap {\n    'admin.plugin:action:installed': [\n        payload: { id: string; kind: 'plugin' | 'theme' | 'admin_plugin'; version: string }\n    ];\n    'admin.plugin:action:rolled-back': [payload: { id: string; workspaceId?: string }];\n    'admin.plugin:action:uninstalled-v2': [payload: { id: string; workspaceId?: string; retainedPackageDigests: readonly string[] }];\n    'admin.plugin:action:enabled': [payload: { id: string; workspaceId: string }];\n    'admin.plugin:action:disabled': [payload: { id: string; workspaceId: string }];\n    'admin.user:action:role_changed': [\n        payload: { workspaceId: string; userId: string; role: 'owner' | 'editor' | 'viewer' }\n    ];\n    'admin.workspace:action:created': [\n        payload: {\n            workspaceId: string;\n            name: string;\n            ownerUserId: string;\n            createdBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n    'admin.workspace:action:deleted': [\n        payload: {\n            workspaceId: string;\n            deletedBy: { kind: 'super_admin' | 'workspace_admin'; id: string };\n        }\n    ];\n}"
             }
           ]
         },
@@ -12408,7 +12408,7 @@
     },
     {
       "source": "server/utils/chat/tool-registry.ts",
-      "apiSha256": "2625afe22c96efbf47b77c6c1252f70f5172f513fcc5d57cb664bbe5fee91692",
+      "apiSha256": "f8bf168a7ebb9a0e308e17e093c7b92fbdcdad9728fd02272f5f9a82d5c6f9c8",
       "runtime": "server",
       "publicPaths": [
         "~~/server/utils/chat/tool-registry"
@@ -12429,7 +12429,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 34,
+              "line": 35,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -12446,7 +12446,7 @@
               "resolvedReturnType": "Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 170,
+                "line": 175,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
               }
@@ -12455,7 +12455,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 170,
+              "line": 175,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
             }
@@ -12472,7 +12472,7 @@
               "resolvedReturnType": "RegisteredServerTool | undefined",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 133,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
               }
@@ -12481,7 +12481,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 133,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
             }
@@ -12495,7 +12495,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 31,
+              "line": 32,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -12512,7 +12512,7 @@
               "resolvedReturnType": "RegisteredServerTool[]",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 137,
+                "line": 142,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listServerTools(): RegisteredServerTool[];"
               }
@@ -12521,7 +12521,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 137,
+              "line": 142,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listServerTools(): RegisteredServerTool[];"
             }
@@ -12535,7 +12535,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 42,
+              "line": 43,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredServerTool {\n    definition: ToolDefinition;\n    handler: ContextualToolHandler<Record<string, unknown>>;\n    runtime: ToolRuntime;\n    timeoutMs: number;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    owner: symbol;\n}"
             }
@@ -12552,7 +12552,7 @@
               "resolvedReturnType": "() => boolean",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 87,
+                "line": 92,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
               }
@@ -12561,7 +12561,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 87,
+              "line": 92,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
             }
@@ -12575,7 +12575,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 51,
+              "line": 52,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterServerToolOptions {\n    runtime?: ToolRuntime;\n    timeoutMs?: number;\n    override?: boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
@@ -12589,7 +12589,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 40,
+              "line": 41,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12606,7 +12606,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 128,
+                "line": 133,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterServerTool(name: string): void;"
               }
@@ -12615,7 +12615,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 128,
+              "line": 133,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterServerTool(name: string): void;"
             }
@@ -12632,7 +12632,7 @@
               "resolvedReturnType": "{ valid: true; } | { valid: false; error: string; }",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 142,
+                "line": 147,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
               }
@@ -12641,7 +12641,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 142,
+              "line": 147,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
             }
