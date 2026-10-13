@@ -558,10 +558,11 @@ describe('chat document tools', () => {
         expect(readProject.error).toBeUndefined();
         expect(readProject.result).not.toContain('private-record');
         expect(readProject.result).not.toContain('plugin-private');
+        const savedPosts = await getDb().posts.toArray();
         const stale = await registry.executeTool('workspace_create_document', JSON.stringify(args),
             { ...context, callId: 'stale-association' }, { definition: tool.definition });
         expect(stale.error).toMatch(/changed/i);
-        expect(await getDb().posts.count()).toBe(1);
+        expect(await getDb().posts.toArray()).toEqual(savedPosts);
     });
     it.each(['Project A', '  Project A  '])('replays project creation with name %j without duplicating storage', async (name) => {
         disposers.push(registerWorkspaceChatTools());

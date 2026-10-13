@@ -333,3 +333,15 @@ An interrupted or uncertain request is recovered by leaving the cursor where it 
 ### Outcome reporting
 
 Auxiliary inference never interrupts chat. Real failures (a non-2xx response with its status and `Retry-After`, a timeout, an invalid response) are reported once through `reportError` with `silent: true`, `severity: 'warn'` and tags `{ domain: 'memory', op: 'capture' | 'classify' }`. They reach the console and the `error:raised` / `error:memory` hooks but never a toast, a retry button or the chat. Expected invalidations (stale evidence, moved chats, changed credentials, a declined or already-processed batch, revoked workspace access) are not failures and are only logged in development. Successful saves are observable through the normal `db.posts` hooks. No historical backfill, durable inference queue, embeddings or new database table is introduced. Request context selects at most four matching automatic memories (or four recent entries for a handoff) plus explicit memories ranked by query match and recency within a 12 KiB budget. The receipt's `omitted_memory_count` counts explicit memories left out of the request, whether the budget or context admission removed them. Memories travel in their own context message, which context admission may drop after optional sources and chat summaries; instructions and the brief stay required. A project holds at most 500 live memories. Query terms ignore common stop words for memories, sources and chat continuity. All automatic memories remain editable/deletable in the normal Memory list and retain source-chat links.
+
+## Project editing and evidence validity
+
+`readProjectPolicy` resolves the canonical brief from the settings record. A project with no settings record uses its creation description as its initial brief. Saving settings mirrors that brief to `projects.description` in the same transaction, including explicit empty text, so project lists and search stay consistent. The workspace tool’s description edit updates the same settings value.
+
+`saveProjectDocument` commits a prepared document and a default relevant Knowledge binding atomically. Sidebar creation, project chat tool creation, and notes use this path. A refused binding rolls back the document and membership. Workspace and tool authorization still run inside the caller’s captured transaction.
+
+Automatic memory selection validates the source chat’s current ownership and exclusion state and checks referenced messages still exist. Manual memories are independent saved references. Invalid automatic records remain editable in Memory but are not included in turns or handoffs.
+
+`projectToolRequiresApproval` supplies the same mandatory-approval rule to execution and the permission picker. Sidebar editor drafts are kept only in the kept-alive page, isolated by project and cleared on workspace change.
+
+Run `bun run test:e2e:projects` for the deterministic project browser journeys. The review regression writes a screenshot and JSON receipt through Playwright attachments. No live inference is required.

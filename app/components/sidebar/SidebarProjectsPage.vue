@@ -28,6 +28,7 @@ import {
 import {
     captureProjectOperation,
     projectToolEnabled,
+    projectToolRequiresApproval,
 } from '~/utils/projects/context';
 import { relatedChatsNotice } from '~/utils/projects/related-chats';
 import { useToast } from '#imports';
@@ -57,6 +58,7 @@ import type { Project, Thread, Post } from '~/db/schema';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useOr3Config } from '~/composables/useOr3Config';
+import SidebarProjectActions from './SidebarProjectActions.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
@@ -70,6 +72,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'new-project'): void;
+    (e: 'rename-project' | 'delete-project', projectId: string): void;
     (e: 'add-document-to-project-root', projectId: string): void;
     (
         e:
@@ -214,10 +217,10 @@ const unavailableTools = computed(() =>
     matchingTools.value.filter((tool) => !toolReady(tool)),
 );
 function toolModeValue(name: string) {
-    return (
+    const mode =
         settings.value.tools[name]?.mode ??
-        (projectToolEnabled(settings.value, name) ? 'enabled' : 'disabled')
-    );
+        (projectToolEnabled(settings.value, name) ? 'enabled' : 'disabled');
+    return mode === 'enabled' && projectToolRequiresApproval(name) ? 'ask' : mode;
 }
 const toolModes: Array<{
     label: string;
@@ -292,6 +295,30 @@ function releasePreview() {
     previewText.value = '';
     previewLocations.value = [];
 }
+// Drafts live with this kept-alive page and are discarded on workspace changes.
+function captureDraft() {
+    return {
+        tab: tab.value,
+        settings: dirty.value ? settings.value : null,
+        editRevision: editRevision.value,
+        briefEditing: briefEditing.value,
+        sourceInput: sourceInput.value,
+        noteTitle: noteTitle.value,
+        noteText: noteText.value,
+        documentId: documentId.value,
+        fileId: fileId.value,
+        memory: memory.value,
+        creatingMemory: creatingMemory.value,
+        editingMemory: editingMemory.value,
+    };
+}
+const drafts = new Map<string, ReturnType<typeof captureDraft>>();
+function rememberDraft(projectId: string) {
+    if (state.value?.project.id !== projectId) return;
+    if (dirty.value || briefEditing.value || sourceInput.value || creatingMemory.value || editingMemory.value)
+        drafts.set(projectId, JSON.parse(JSON.stringify(captureDraft())));
+    else drafts.delete(projectId);
+}
 function connect() {
     subscription?.unsubscribe();
     controller.abort();
@@ -314,6 +341,25 @@ function connect() {
     creatingMemory.value = false;
     editingMemory.value = null;
     releasePreview();
+    const draft = drafts.get(id.value);
+    drafts.delete(id.value);
+    tab.value = draft?.tab ?? 'Overview';
+    if (draft) {
+        if (draft.settings) {
+            settings.value = draft.settings;
+            editRevision.value = draft.editRevision;
+            dirty.value = true;
+        }
+        briefEditing.value = draft.briefEditing;
+        sourceInput.value = draft.sourceInput;
+        noteTitle.value = draft.noteTitle;
+        noteText.value = draft.noteText;
+        documentId.value = draft.documentId;
+        fileId.value = draft.fileId;
+        memory.value = draft.memory;
+        creatingMemory.value = draft.creatingMemory;
+        editingMemory.value = draft.editingMemory;
+    }
     subscribePage();
 }
 function subscribePage() {
@@ -346,7 +392,8 @@ function subscribePage() {
                         : false,
             };
         });
-        const current = projectId
+        const project = projectId ? await captured.db.projects.get(projectId) : null;
+        const current = project && !project.deleted
             ? await readProjectWorkspace(captured.db, projectId)
             : null;
         const all =
@@ -413,6 +460,11 @@ function subscribePage() {
             allChats.value = value.all;
             projects.value = value.list;
             state.value = value.current;
+            if (projectId && !value.current) {
+                drafts.delete(projectId);
+                id.value = '';
+                return;
+            }
             const processing = value.current?.sources.flatMap(source => source.value.revisions)
                 .filter(revision => revision.status === 'processing') ?? [];
             if (processing.length) {
@@ -462,11 +514,13 @@ onActivated(() => {
     subscribePage();
 });
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    drafts.clear();
+    state.value = null;
     id.value = '';
     connect();
 });
-watch(id, () => {
-    tab.value = 'Overview';
+watch(id, (_next, previous) => {
+    if (previous) rememberDraft(previous);
     connect();
 });
 connect();
@@ -530,7 +584,7 @@ function cancelBriefEdit() {
 }
 async function editInlineBrief() {
     if (!state.value || busy.value) return;
-    settings.value.brief = state.value.settings.brief || state.value.project.description || '';
+    settings.value.brief = state.value.settings.brief;
     dirty.value = JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
     briefEditing.value = true;
     await nextTick();
@@ -837,6 +891,13 @@ function toolCannotScope(name: string) {
                 :disabled="!state"
                 @click="tab = 'Settings'"
             />
+            <SidebarProjectActions
+                v-if="id && state"
+                :name="state.project.name"
+                :disabled="busy"
+                @rename="emit('rename-project', id)"
+                @delete="emit('delete-project', id)"
+            />
         </header>
         <p
             v-if="error"
@@ -918,6 +979,12 @@ function toolCannotScope(name: string) {
                                         : 'i-lucide-pin'
                                 "
                                 @click="run(() => pin(entry.project.id))"
+                            />
+                            <SidebarProjectActions
+                                :name="entry.project.name"
+                                :disabled="busy"
+                                @rename="emit('rename-project', entry.project.id)"
+                                @delete="emit('delete-project', entry.project.id)"
                             />
                         </div>
                     </div>
@@ -1010,11 +1077,11 @@ function toolCannotScope(name: string) {
                                         class="project-muted min-w-0 text-xs leading-relaxed whitespace-pre-wrap line-clamp-2"
                                         aria-label="Project brief"
                                     >
-                                        {{ state.settings.brief || state.project.description || 'Add a project brief' }}
+                                        {{ state.settings.brief || 'Add a project brief' }}
                                     </p>
                                     <UButton
                                         :icon="editIcon"
-                                        :aria-label="state.settings.brief || state.project.description ? 'Edit project brief' : 'Add project brief'"
+                                        :aria-label="state.settings.brief ? 'Edit project brief' : 'Add project brief'"
                                         square
                                         size="xs"
                                         color="neutral"
@@ -1813,8 +1880,8 @@ function toolCannotScope(name: string) {
                                     class="project-muted text-xs leading-relaxed"
                                 >
                                     Choose what OR3 can use. Sending,
-                                    publishing, and deleting still require
-                                    approval.
+                                    publishing, deleting, and external tools require
+                                    approval. Those tools offer Off or Ask first.
                                 </p>
                             </div>
                             <UInput
@@ -1881,7 +1948,7 @@ function toolCannotScope(name: string) {
                                                         .name,
                                                 )
                                             "
-                                            :items="toolModes"
+                                            :items="projectToolRequiresApproval(tool.definition.function.name) ? toolModes.slice(0, 2) : toolModes"
                                             value-key="value"
                                             :aria-label="
                                                 'Permission for ' +

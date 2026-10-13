@@ -27,7 +27,7 @@
                         </UFormField>
                         <UFormField
                             v-bind="formFieldProps"
-                            label="Description"
+                            label="Brief"
                             name="description"
                         >
                             <UTextarea
@@ -35,7 +35,8 @@
                                 :model-value="description"
                                 class="w-full"
                                 :rows="3"
-                                placeholder="Optional description"
+                                placeholder="Optional brief"
+                                :maxlength="8000"
                                 @update:model-value="
                                     emit('update:description', String($event ?? ''))
                                 "

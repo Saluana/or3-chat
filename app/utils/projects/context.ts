@@ -110,9 +110,21 @@ export async function buildProjectContext(
         manualBudget -= bytes;
         return true;
     });
+    const automaticMemories = [];
+    for (const memory of state.memories.filter(memory => memory.value.origin === 'automatic')) {
+        const sourceId = memory.value.source_thread_id;
+        if (!sourceId || state.settings.excluded_chat_ids.includes(sourceId) ||
+            (await resolveChatProject(scope.db, sourceId).catch(() => null)) !== projectId) continue;
+        if (memory.value.source_message_id) {
+            const message = await scope.db.messages.get(memory.value.source_message_id);
+            if (!message || message.deleted || message.thread_id !== sourceId) continue;
+        }
+        automaticMemories.push(memory);
+    }
+    scope.assertCurrent();
     const selectedMemories = [
         ...selectedManual,
-        ...state.memories.filter(memory => memory.value.origin === 'automatic' &&
+        ...automaticMemories.filter(memory =>
             (purpose === 'handoff' || scoreMemory(memory.value.text) > 0))
             .sort((a, b) => scoreMemory(b.value.text) - scoreMemory(a.value.text) || b.row.updated_at - a.row.updated_at)
             .slice(0, 4),
@@ -691,6 +703,12 @@ export function projectToolEnabled(
     );
 }
 
+/** Tools without a host-owned effect classification always need approval. */
+export function projectToolRequiresApproval(name: string): boolean {
+    return !SCOPED_TOOLS.has(name) ||
+        /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(name);
+}
+
 /** Execution gate re-resolves trusted local ownership/policy; model arguments never grant approval. */
 export async function assertProjectToolAllowed(
     scope: WorkspaceOperationScope,
@@ -823,11 +841,8 @@ async function authorizeProjectTool(
         !approved &&
         // External tools have no host-owned read/write classification. Their
         // names and model arguments cannot authorize a publishing action.
-        (!SCOPED_TOOLS.has(name) ||
+        (projectToolRequiresApproval(name) ||
             rule?.mode === 'ask' ||
-            /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(
-                name,
-            ) ||
             (name === 'workspace_update_project' &&
                 args.operation === 'remove_item'))
     ) {
