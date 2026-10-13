@@ -62,7 +62,7 @@
             <UIcon name="lucide:activity" class="size-8 text-[var(--md-outline)]" />
             <p class="text-sm font-medium">No {{ filterLabel.toLowerCase() }} activity</p>
             <p class="text-xs text-[var(--md-on-surface-variant)]">
-                {{ filter === 'failed' ? 'Choose another filter to see completed or running work.' : 'New work will appear here automatically.' }}
+                New work will appear here automatically.
             </p>
         </div>
 

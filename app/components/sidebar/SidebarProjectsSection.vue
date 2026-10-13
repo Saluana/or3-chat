@@ -1,7 +1,7 @@
 <template>
     <div class="mt-4 space-y-2">
         <SidebarGroupHeader
-            label="Recent projects"
+            label="Projects"
             :collapsed="collapsed"
             action-label="+ New project"
             @toggle="emit('toggle-collapse')"

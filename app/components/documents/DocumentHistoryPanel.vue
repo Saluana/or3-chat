@@ -1,20 +1,17 @@
 <template>
     <div v-theme="'document.history'" class="history-panel" data-context="document">
-        <div class="history-heading">
-            <strong>Saved versions</strong>
-            <UButton
-                v-if="!readOnly && createCheckpoint"
-                :icon="plusIcon"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                block
-                class="checkpoint-button"
-                label="Save version"
-                :loading="busy"
-                @click="checkpoint"
-            />
-        </div>
+        <UButton
+            v-if="!readOnly && createCheckpoint"
+            :icon="plusIcon"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            block
+            class="checkpoint-button"
+            label="Save version"
+            :loading="busy"
+            @click="checkpoint"
+        />
 
         <div v-if="loading" class="empty-state">Loading history…</div>
         <div v-else-if="!revisions.length" class="empty-state">
@@ -214,8 +211,6 @@ onMounted(load);
 
 <style scoped>
 .history-panel { display: grid; gap: 1.1rem; }
-.history-heading { display: grid; gap: .85rem; }
-.history-heading strong { font-size: 1.05rem; line-height: 1.25; }
 .checkpoint-button { justify-content: center; }
 .empty-state { min-height: 12rem; display: grid; place-content: center; justify-items: center; gap: .45rem; text-align: center; color: var(--md-on-surface-variant); font-size: .875rem; }
 .empty-state svg { width: 1.5rem; height: 1.5rem; }
@@ -258,7 +253,7 @@ onMounted(load);
 .revision-copy { min-width: 0; display: grid; gap: .28rem; }
 .revision-copy strong { overflow: hidden; font-size: .875rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .revision-meta { display: flex; align-items: center; gap: .4rem; min-width: 0; }
-.revision-copy small { min-width: 0; overflow: hidden; color: var(--md-on-surface-variant); font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }
+.revision-copy small { min-width: 0; overflow: hidden; color: var(--md-on-surface-variant); font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
 .revision-chevron { width: .9rem; height: .9rem; color: var(--md-on-surface-variant); }
 .preview-body {
     min-height: 4rem;

@@ -1,14 +1,6 @@
 <template>
     <section class="space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div v-if="showHeading !== false">
-                <h2 class="text-lg font-semibold text-[var(--md-on-surface)]">
-                    {{ admin ? 'Admin Webhooks' : 'Webhooks' }}
-                </h2>
-                <p class="mt-0.5 text-sm text-[var(--md-on-surface)] opacity-60">
-                    {{ admin ? 'Manage instance-level webhooks and custom Nitro hook subscriptions.' : 'Manage outbound webhook subscriptions for your current workspace.' }}
-                </p>
-            </div>
+        <div class="flex justify-end">
             <UButton
                 color="primary"
                 @click="$emit('create')"
@@ -162,7 +154,6 @@ import type {
 } from './types';
 
 defineProps<{
-    showHeading?: boolean;
     admin?: boolean;
     webhooks: ManagedWebhook[];
     loading: boolean;

@@ -20,7 +20,6 @@
 
         <div class="section-card">
         <WebhooksList
-            :show-heading="false"
             :webhooks="webhooks"
             :loading="pending"
             :error-message="errorMessage"

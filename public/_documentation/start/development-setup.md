@@ -1,10 +1,5 @@
 # Develop OR3 from source
 
-Run `bun run test:e2e:ui-audit` for the focused UI audit browser regressions.
-It starts an isolated local server on port 3131, blocks AI generation, and saves
-repeatable model-selection, touch-control, prompt-editor, and draft-restoration screenshots across
-Blank, Retro, and Cyberpunk in `test-results/ui-audit`.
-
 Use this path to change OR3 itself or work on a trusted source extension. To run a managed deployment, use [Cloud setup](/documentation/cloud/setup). To build a portable plugin, start with [your first plugin](/documentation/plugins/first-plugin).
 
 ## Install and start
@@ -202,7 +197,7 @@ Development can also alias the adjacent Scroll checkout when valid. Use `OR3_USE
 
 ## Verify a change
 
-Run the narrowest affected existing test files, or `bun run test:changed`. `bun run test` runs the fast core lane; integration, scripts, release policy, and plugin compatibility have separate lanes. Use the named E2E harness for browser journeys rather than a broad command that also runs credential or paid-network suites.
+Run the narrowest affected existing test files, or `bun run test:changed`. `bun run test` runs the fast core lane; integration, scripts, release policy, and plugin compatibility have separate lanes. Use the named E2E harness for browser journeys rather than a broad command that also runs credential or paid-network suites. `bun run test:e2e:ui-audit` runs the focused UI journeys (model selection, composer controls, prompts, drafts) across the Blank, Retro, and Cyberpunk themes with AI generation blocked; screenshots are saved in `test-results/ui-audit`.
 
 CI runs `bun run lint:changed -- <changed files>`. TypeScript audit runners under
 `audit-evidence/` use `tsconfig.eslint.audit.json`, with pinned Bun types and the

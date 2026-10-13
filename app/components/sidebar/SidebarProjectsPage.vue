@@ -1066,7 +1066,7 @@ function toolCannotScope(name: string) {
                         <div class="project-create-actions">
                             <UButton
                                 :icon="newChatIcon"
-                                :label="`New chat in ${state.project?.name || 'project'}`"
+                                label="New chat"
                                 color="neutral"
                                 class="project-start theme-btn"
                                 :disabled="busy"
@@ -1075,7 +1075,7 @@ function toolCannotScope(name: string) {
                             <UButton
                                 v-if="documentsEnabled"
                                 :icon="newDocumentIcon"
-                                :aria-label="`New document in ${state.project?.name || 'project'}`" label="New document"
+                                label="New document"
                                 color="neutral"
                                 variant="ghost"
                                 class="project-new-document theme-btn"

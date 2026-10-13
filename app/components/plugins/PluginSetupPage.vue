@@ -313,8 +313,8 @@ onMounted(() => {
             class="text-xs opacity-70"
             role="note"
         >
-            Select text in a document or a message, then open this plugin from its
-            selection actions. Configuration is saved separately from that selection.
+            Select text in a document or message, then open this plugin from the
+            selection actions.
         </div>
 
         <ul v-if="data?.problems?.length" class="text-xs opacity-70">

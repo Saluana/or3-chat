@@ -3,8 +3,6 @@
         id="dashboard-theme-page-container"
         class="dashboard-page-frame text-sm"
     >
-        <p class="dashboard-page-description">Changes save automatically.</p>
-
         <nav
             class="theme-studio-tabs"
             role="tablist"

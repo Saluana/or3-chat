@@ -657,7 +657,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                 <div class="files-header-actions">
                     <UButton v-if="!trash" size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
                     <UButton v-if="!trash" size="workspace" label="Upload" :icon="icons.upload.value" :disabled="busy || readOnly" @click="uploadInput?.click()" />
-                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" :aria-pressed="trash" @click="trash = !trash" />
+                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" @click="trash = !trash" />
                     <UDropdownMenu v-if="!trash" :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
                         { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
                     ]">

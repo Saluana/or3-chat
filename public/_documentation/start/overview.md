@@ -27,8 +27,7 @@ When several unsent chats are open, their tabs are numbered in creation order
 so you can distinguish drafts. A restored app keeps its app identity while its
 plugin loads; an unavailable app shows an explanation instead of a chat composer.
 
-Dashboard **Back** returns one level at a time. Its breadcrumb also opens the
-parent section or Dashboard directly. In **Files**, use **Trash** to view deleted
+Dashboard **Back** names the page it returns to and goes up one level at a time. In **Files**, use **Trash** to view deleted
 items and **Back to files** to return. Restore is available on each deleted item;
 creation and upload controls belong to the active Files view.
 

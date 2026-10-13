@@ -12,11 +12,8 @@
             </h2>
             <p class="text-sm opacity-70 text-[var(--md-on-surface-variant)]">
                 This app is still loading or is not enabled in this workspace.
+                If it stays unavailable, check Marketplace → Installed.
             </p>
-            <p class="text-xs opacity-50 text-[var(--md-on-surface-variant)]">
-                If it stays unavailable, check Marketplace → Installed, then reload.
-            </p>
-            <details class="text-xs opacity-70"><summary>App details</summary><code>{{ mode }}</code></details>
         </div>
     </div>
 </template>

@@ -2,10 +2,6 @@
     <div id="dashboard-ai-page-container" class="dashboard-page-frame text-sm">
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
-        <p class="dashboard-page-description">
-            Defaults for new chats. You can override them in each chat.
-        </p>
-
         <section
             id="dashboard-ai-master-prompt-section"
             class="section-card space-y-4"

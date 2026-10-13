@@ -41,7 +41,6 @@
                 {{ sourceLabel }}
               </span>
             </div>
-            <details class="text-xs text-[var(--md-on-surface-variant)]"><summary>Activity details</summary><p>Kind: {{ detail.kind }} · Run: {{ detail.id }}</p></details>
             <h1 class="text-lg font-semibold text-[var(--md-on-surface)]">
               {{ detail.title }}
             </h1>

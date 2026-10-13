@@ -50,7 +50,7 @@
                 >
                     <UButton
                         id="dashboard-back-button"
-                        :aria-label="state.activePageId && landingPages.length > 1 ? `Back to ${headerPluginLabel}` : 'Back to Dashboard'"
+                        :aria-label="`Back to ${backLabel}`"
                         v-bind="backButtonProps"
                         class="text-[20px] gap-0.5"
                         @click="goBack()"
@@ -59,16 +59,8 @@
                             class="h-6 w-6"
                             :name="useIcon('ui.chevron.left').value"
                         />
+                        <span class="pr-1 text-sm font-semibold">{{ backLabel }}</span>
                     </UButton>
-                    <div
-                        v-if="state.activePageId && landingPages.length > 1"
-                        id="dashboard-page-breadcrumb"
-                        class="ml-2 font-semibold text-sm truncate"
-                    >
-                        <button type="button" class="hover:underline focus-visible:underline" @click="reset()">Dashboard</button>
-                        <span aria-hidden="true"> / </span>
-                        <button type="button" class="hover:underline focus-visible:underline" @click="handlePluginClick(state.activePluginId!)">{{ headerPluginLabel }}</button>
-                    </div>
                 </div>
                 <div
                     v-if="state.error"
@@ -200,8 +192,14 @@ const {
     openPlugin,
     openPage,
     goBack,
-    reset,
 } = useDashboardNavigation({ baseItems: coreItems });
+
+// Back always goes up one level; name where it lands.
+const backLabel = computed(() =>
+    state.activePageId && landingPages.value.length > 1
+        ? headerPluginLabel.value
+        : 'Dashboard'
+);
 
 const dashboardItems = computed(() =>
     projectProfileItems('dashboard', rawDashboardItems.value)

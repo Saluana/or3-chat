@@ -12,12 +12,12 @@
                     :content="{
                         side: 'right',
                     }"
-                    text="New workspace chat"
+                    text="New chat"
                 >
                     <UButton
                         v-bind="newChatButtonProps"
                         id="btn-new-chat"
-                        aria-label="New workspace chat"
+                        aria-label="New chat"
                         class="flex items-center justify-center"
                         @click="emit('new-chat')"
                     ></UButton>

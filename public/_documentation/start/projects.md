@@ -6,9 +6,7 @@ The Home sidebar has a **Projects** navigation row below Chats and Documents. It
 
 Project Home brings together the brief, links to **Knowledge** and **Memory**, and a time-grouped activity list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. The single top back button returns to the project from a section, then to **Home** when you entered through a Home shortcut or **Projects** when you entered through the list. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects. **New project** opens the shared creation modal with a title and optional description; creating from the Projects page opens the new project's home in the sidebar. Browsing a project preserves the active pane and workspace tabs; opening or creating a chat uses the chat pane as usual.
 
-The brief appears beneath the project title as a compact two-line preview. Its pencil expands an inline editor on Project Home, prefilled with the brief or project description. **Save brief** saves and collapses the editor; **Cancel** or Escape discards the draft. **New chat in [project]** and **New document** sit together below the title. New document creates an untitled OR3 document in this project and opens its editor. The action is hidden when documents are disabled.
-
-Browsing another project leaves each chat’s ownership unchanged.
+The brief appears beneath the project title as a compact two-line preview. Its pencil expands an inline editor on Project Home, prefilled with the brief or project description. **Save brief** saves and collapses the editor; **Cancel** or Escape discards the draft. **New chat** and **New document** sit together below the title. New document creates an untitled OR3 document in this project and opens its editor. The action is hidden when documents are disabled.
 
 ## Knowledge
 

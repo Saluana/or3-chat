@@ -12,7 +12,7 @@ On a Cloud instance, sign in if requested. The operator may supply an instance k
 
 ## 2. Choose a model and send a message
 
-Open a chat and choose a model in **Settings → Model catalog**. On phones, **Settings → Current model** also opens it. Favorite models appear in the desktop model selector. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
+Open a chat and choose a model in **Settings**: use the model row on a phone, or **Model catalog** to browse every model. Favorite models also appear in the desktop model selector. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
 
 The input clears once your message is saved, without waiting for the model to respond. If sending is blocked before the message is saved, your draft and attachments stay in the input. If the model fails after saving, retry from the saved conversation.
 

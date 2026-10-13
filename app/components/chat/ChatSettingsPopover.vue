@@ -51,7 +51,7 @@
             :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
         >
             <UButton
-                v-if="(isMobile || !containerWidth || containerWidth <= 400) && !modelItems.length"
+                v-if="narrowComposer && !modelItems.length"
                 variant="ghost"
                 color="neutral"
                 aria-label="Current model"
@@ -68,7 +68,7 @@
             </UButton>
             <!-- Favorites stay one click away; fresh accounts open the catalog. -->
             <USelectMenu
-                v-else-if="isMobile || !containerWidth || containerWidth <= 400"
+                v-else-if="narrowComposer"
                 v-model="selectedModel"
                 :items="modelItems"
                 value-key="value"
@@ -267,6 +267,7 @@
                     />
                 </UButton>
                 <UButton
+                    v-if="!(narrowComposer && !modelItems.length)"
                     v-bind="modelCatalogButtonProps"
                     class="chat-settings-popover-button chat-settings-nav-button"
                     @click="emit('open-model-catalog')"
@@ -682,6 +683,11 @@ const modelItems = computed(() =>
                 slug: string;
             } => Boolean(item)
         )
+);
+
+// Narrow composers have no inline model selector; the first row replaces it.
+const narrowComposer = computed(
+    () => isMobile.value || !props.containerWidth || props.containerWidth <= 400
 );
 
 const selectedProviderSlug = computed(() =>
