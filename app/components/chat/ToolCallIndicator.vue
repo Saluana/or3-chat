@@ -231,7 +231,7 @@ const groupLabel = computed(() => {
     }
     const labels: string[] = [];
     for (const call of props.toolCalls) {
-        if (call.status === 'error') labels.push(`${call.label || call.name} failed`);
+        if (call.status === 'error') labels.push(`${toolLabel(call)} failed`);
     }
     const running = isRunning.value;
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;
