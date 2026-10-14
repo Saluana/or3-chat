@@ -79,7 +79,8 @@
                     <div class="overview-divider" />
                     <div class="overview-stat">
                         <span>Reading time</span>
-                        <strong>{{ stats.readingMinutes }} <small>min</small></strong>
+                        <strong v-if="stats.readingMinutes">{{ stats.readingMinutes }} <small>min</small></strong>
+                        <strong v-else>—</strong>
                     </div>
                 </UCard>
 

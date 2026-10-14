@@ -128,6 +128,7 @@ import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import { formatShortcut } from '~/utils/keyboard-shortcuts';
 import { isMobile } from '~/state/global';
 const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
 const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
@@ -226,13 +227,9 @@ const searchInputProps = computed(() => {
 
 const { open: openCommandPalette } = useCommandPalette();
 
-const searchShortcutLabel = computed(() => {
-    if (!import.meta.client) return '⌘K';
-    const ua = navigator.userAgent || '';
-    const platform = navigator.platform || '';
-    const isApple = /Mac|iPhone|iPad|iPod/i.test(`${platform} ${ua}`);
-    return isApple ? '⌘K' : 'Ctrl+K';
-});
+const searchShortcutLabel = computed(() =>
+    import.meta.client ? formatShortcut('k') : '⌘K'
+);
 
 const searchClearButtonProps = computed(() => {
     return {

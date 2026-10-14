@@ -40,7 +40,7 @@
                             ? activeFamilyIds.has(item.item.family.rootId)
                             : activeIds.includes(item.item.id)"
                         :time-display="
-                            formatTimeDisplay(item.item.lastMessageAt ?? item.item.updatedAt, item.groupKey)
+                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
                         "
                         :class="[
                             'mb-0.5',

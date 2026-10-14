@@ -101,7 +101,7 @@
                             : allActiveIds.includes(item.item.id)"
                         :time-display="
                             formatTimeDisplay(
-                                item.item.lastMessageAt ?? item.item.updatedAt,
+                                item.item.updatedAt,
                                 item.groupKey
                             )
                         "

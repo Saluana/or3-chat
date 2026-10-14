@@ -1192,7 +1192,7 @@ function toolCannotScope(name: string) {
                         <div class="project-create-actions">
                             <UButton
                                 :icon="newChatIcon"
-                                :label="`New chat in ${state.project?.name || 'project'}`"
+                                :aria-label="`New chat in ${state.project?.name || 'project'}`" label="New chat"
                                 color="neutral"
                                 class="project-start theme-btn"
                                 :disabled="busy"
