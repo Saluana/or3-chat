@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "6853a82f85a4648911ebc06f7a2d0d4c64240c72e9a64fc64b8a9ade2b922d45",
+      "apiSha256": "befb57e08ee16a03e836e6a856afa081cdc690c213e5dd01340afe3a096da9b2",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3153,7 +3153,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 15,
+              "line": 17,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CreateProjectInput {\n    name: string;\n    description?: string | null;\n    id?: string;\n}"
             }
@@ -3319,7 +3319,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 21,
+              "line": 23,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DeleteProjectOptions {\n    soft?: boolean;\n}"
             }
@@ -7339,7 +7339,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectsCrud.ts",
-                "line": 25,
+                "line": 27,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectsCrud();"
               }
@@ -7348,7 +7348,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 25,
+              "line": 27,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectsCrud();"
             }
