@@ -57,6 +57,11 @@ beforeEach(async () => {
     wrapper = mount(Host, { global: { stubs: {
         SidebarTimeGroupedList: defineComponent({ template: '<div><slot name="header" /></div>' }),
         USelectMenu: true, USelect: true, USwitch: true,
+        UTextarea: defineComponent({
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        }),
         UPopover: defineComponent({ template: '<div><slot /><slot name="content" /></div>' }),
     } } });
 });
