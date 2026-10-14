@@ -486,7 +486,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .getByRole('button', { name: 'Pin project', exact: true })
         .click();
     const search = navigation.getByRole('textbox', {
-        name: 'Search chats, documents, and projects',
+        name: 'Filter sidebar by title',
     });
     await search.fill('Sidebar project');
     await expect(

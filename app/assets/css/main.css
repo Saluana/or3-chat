@@ -129,13 +129,21 @@ body,
 	max-width: 100%;
 	min-width: 0;
 	margin-inline: auto;
-	/* Matches the AppModal header gutter so page content aligns with its title. */
-	padding: 1.5rem;
+	/* AppModal owns fixed pixel geometry, independent of theme font size. */
+	padding: 24px;
 	display: flex;
 	flex-direction: column;
 	gap: var(--app-space-section, 1rem);
 	box-sizing: border-box;
 	overflow-x: clip;
+}
+
+#dashboard-page-header {
+	padding-inline: 24px;
+}
+
+#dashboard-landing-grid {
+	padding: 24px;
 }
 
 /* Structural containment so theme-owned .section-card chrome can't blow past the viewport. */
@@ -205,10 +213,29 @@ input:placeholder-shown {
 	text-transform: uppercase;
 }
 
-@media (max-width: 639px) {
+/* AppModal also switches to its compact gutter on short screens and when
+   Safari's visual viewport shrinks independently of the layout viewport. */
+@media (max-width: 639px), (max-height: 500px) {
 	.dashboard-page-frame {
-		padding: 1rem;
+		padding: 16px;
 	}
+
+	#dashboard-page-header {
+		padding-inline: 16px;
+	}
+
+	#dashboard-landing-grid {
+		padding: 16px;
+	}
+}
+
+.app-modal[data-compact-viewport] .dashboard-page-frame,
+.app-modal[data-compact-viewport] #dashboard-landing-grid {
+	padding: 16px;
+}
+
+.app-modal[data-compact-viewport] #dashboard-page-header {
+	padding-inline: 16px;
 }
 
 h1,

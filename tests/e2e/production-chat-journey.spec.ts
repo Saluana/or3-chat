@@ -807,7 +807,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
         const nav = page.getByRole('navigation', { name: 'Sidebar navigation' });
         await expect(nav).toBeVisible();
-        const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+        const search = page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true });
         await search.fill('Sidebar typing remains visible');
         await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(524);
         await expect(nav).toBeHidden();
@@ -1209,7 +1209,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByRole('button', { name: 'Chats', exact: true }).click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
     await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await expect(members).toHaveCount(0);
-    const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+    const search = page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true });
     await search.fill('alternative');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(toggle).toBeDisabled(); await expect(members).toHaveCount(1);
     await expect(members).toContainText('Branch'); await expect(members).toContainText('Launch checklist · alternative');
@@ -2034,7 +2034,7 @@ test.describe('production chat journey', () => {
         await send(page, 'journey:palette handoff');
         await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
         // The reply text is not in the title, so the sidebar list cannot match it.
-        await page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true }).fill('deterministic');
+        await page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true }).fill('deterministic');
         await expect(page.getByText('No matches found', { exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Search inside messages', exact: true }).click();
         await expect(page.locator('[data-test="command-palette"]')).toBeVisible();
