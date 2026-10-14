@@ -476,6 +476,14 @@
             </div>
             </template>
         </UModal>
+        <ConfirmDialog
+            v-model="confirmDisconnectOpen"
+            title="Disconnect OpenRouter?"
+            message="Your OpenRouter key will be removed from this browser. You'll need to connect again before you can keep chatting."
+            confirm-text="Disconnect"
+            danger
+            @confirm="disconnectOpenRouter"
+        />
     </nav>
 </template>
 
@@ -498,6 +506,7 @@ import {
 import SidebarAuthButtonFallback from '~/components/sidebar/SidebarAuthButtonFallback.client.vue';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
+import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { state } from '~/state/global';
 
 /** Keep nested auth menus on-screen inside the mobile More sheet. */
@@ -590,11 +599,16 @@ const connectAriaLabel = computed(() => {
 function onConnectClick() {
     if (connectManaged.value) return;
     if (isConnected.value) {
-        state.value.openrouterKey = null;
-        openrouter.logoutOpenRouter();
+        confirmDisconnectOpen.value = true;
     } else {
         openrouter.startLogin();
     }
+}
+
+const confirmDisconnectOpen = ref(false);
+function disconnectOpenRouter() {
+    state.value.openrouterKey = null;
+    openrouter.logoutOpenRouter();
 }
 
 // Mode badge (Local / Cloud) — same semantics as SideBottomNav

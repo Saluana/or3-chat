@@ -184,8 +184,9 @@ const themeButtonProps = computed(() => {
     color: var(--md-on-surface) !important;
     background: var(--md-surface) !important;
     border-color: var(--md-primary) !important;
-    border-width: var(--md-border-width-strong);
-    box-shadow: inset 0 0 0 var(--md-border-width) var(--md-primary);
+    /* Themes may set these widths to 0; the selected card still needs an outline. */
+    border-width: max(var(--md-border-width-strong, 0px), 1px);
+    box-shadow: inset 0 0 0 max(var(--md-border-width, 0px), 1px) var(--md-primary);
 }
 .theme-option-btn:hover {
     color: var(--md-on-surface) !important;

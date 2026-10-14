@@ -1,4 +1,5 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
+import { deriveThreadTitle } from '~/utils/chat/thread-title';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, recoverySourceFingerprint, recoveryProjectFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
@@ -2338,9 +2339,7 @@ export function useChat(
                 requestScope.originDb,
                 {
                     id: admissionThreadId,
-                    title:
-                        content.trim().split(/\s+/).slice(0, 6).join(' ') ||
-                        'New Thread',
+                    title: deriveThreadTitle(content),
                     last_message_at: nowSec(),
                     parent_thread_id: null,
                     system_prompt_id: newPromptSelection || null,

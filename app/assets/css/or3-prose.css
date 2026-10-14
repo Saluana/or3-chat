@@ -87,6 +87,12 @@
     font-size: 0.9em;
 }
 
+/* Typography adds literal backticks around inline code; the chip styling already marks it. */
+.or3-prose :deep(code)::before,
+.or3-prose :deep(code)::after {
+    content: none;
+}
+
 .or3-prose :deep(pre) {
     padding: 1rem;
     border-radius: var(--md-border-radius);
@@ -190,11 +196,17 @@
 }
 
 .or3-prose :deep(blockquote) {
-    border-left: var(--md-border-width-strong) solid var(--md-primary);
+    border-left: max(var(--md-border-width-strong, 0px), 3px) solid var(--md-primary);
     padding-left: 1rem;
     margin: 1rem 0;
-    font-style: italic;
-    color: var(--md-on-surface);
+    font-style: normal;
+    color: var(--md-on-surface-variant);
+}
+
+/* Don't wrap quoted text in auto-inserted curly quotes. */
+.or3-prose :deep(blockquote p)::before,
+.or3-prose :deep(blockquote p)::after {
+    content: none;
 }
 
 .or3-prose :deep(ul),
@@ -279,6 +291,11 @@
 /* Optional hover highlight */
 .or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
     background: var(--md-surface-container-high);
+}
+
+/* A trailing newline in the source renders as an empty, numbered last line. */
+.or3-prose :deep([data-streamdown='code'] .line:last-child:has(> [data-streamdown='code-line-number']:only-child)) {
+    display: none;
 }
 
 .or3-prose :deep([data-streamdown='code-line-number']) {

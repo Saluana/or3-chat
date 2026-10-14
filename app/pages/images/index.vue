@@ -873,7 +873,7 @@ const searchInputProps = computed(() => {
 
                 <div class="image-library-summary">
                     <span class="text-xs opacity-65">Stored locally</span>
-                    <strong>{{ formatCount(counts.all) }} active images</strong>
+                    <strong>{{ formatCount(counts.all) }} {{ counts.all === 1 ? 'image' : 'images' }}</strong>
                 </div>
             </aside>
 
@@ -1033,7 +1033,7 @@ const searchInputProps = computed(() => {
                         :name="useIcon('dashboard.images').value"
                         class="h-8 w-8"
                     />
-                    <strong>No images found</strong>
+                    <strong>{{ searchQuery ? 'No images found' : 'No images yet' }}</strong>
                     <span>
                         {{
                             searchQuery
@@ -1198,6 +1198,9 @@ const searchInputProps = computed(() => {
         margin-top: 0.4rem;
         padding: 0.8rem 0.7rem 0.2rem;
         border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-outline-variant);
+    }
+    .image-library-summary strong {
+        font-size: 0.875rem;
     }
 }
 </style>

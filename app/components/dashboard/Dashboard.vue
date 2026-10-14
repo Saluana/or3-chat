@@ -69,6 +69,13 @@
                         <span aria-hidden="true"> / </span>
                         <button type="button" class="hover:underline focus-visible:underline" @click="handlePluginClick(state.activePluginId!)">{{ headerPluginLabel }}</button>
                     </div>
+                    <div
+                        v-else
+                        id="dashboard-page-breadcrumb"
+                        class="ml-2 font-semibold text-sm truncate"
+                    >
+                        <button type="button" class="hover:underline focus-visible:underline" @click="reset()">Dashboard</button>
+                    </div>
                 </div>
                 <div
                     v-if="state.error"

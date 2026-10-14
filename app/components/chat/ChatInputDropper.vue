@@ -282,7 +282,7 @@
                         >PDF</span
                     >
                     <span
-                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
+                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-2 px-1 wrap-break-word"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
                     >
@@ -317,14 +317,14 @@
                         >TXT</span
                     >
                     <span
-                        class="chat-input-attachment-text-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
+                        class="chat-input-attachment-text-inner-name text-[11px] leading-snug line-clamp-2 px-1 wrap-break-word"
                         :title="block.previewFull"
                     >
                         {{ block.preview }}
                     </span>
                     <span
-                        class="chat-input-attachment-text-inner-wordcount mt-1 text-[10px] opacity-70"
-                        >{{ block.wordCount }}w</span
+                        class="chat-input-attachment-text-inner-wordcount mt-1 text-[10px] opacity-70 whitespace-nowrap"
+                        >{{ block.wordCount.toLocaleString() }} {{ block.wordCount === 1 ? 'word' : 'words' }}</span
                     >
                 </div>
                 <UButton

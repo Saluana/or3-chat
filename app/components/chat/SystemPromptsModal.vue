@@ -708,7 +708,7 @@
                         </template>
 
                         <div
-                            v-else
+                            v-else-if="prompts.length"
                             class="flex h-full items-center justify-center p-8 text-center text-sm text-[var(--md-on-surface-variant)]"
                         >
                             Select a prompt to see its details.

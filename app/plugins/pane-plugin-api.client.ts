@@ -1,4 +1,5 @@
 import { nowSec } from '~/db/util';
+import { deriveThreadTitle } from '~/utils/chat/thread-title';
 import { defineNuxtPlugin } from '#imports';
 import { create, tx } from '~/db';
 import { reportError, err as coreErr } from '~/utils/errors';
@@ -220,7 +221,7 @@ async function ensureThread(
     const m = mp();
     if (!m?.setPaneThread) return err('no_thread_bind', 'Cannot bind thread');
     const t: { id: string } = await create.thread({
-        title: title.split(/\s+/).slice(0, 6).join(' ') || 'New Thread',
+        title: deriveThreadTitle(title),
         last_message_at: nowSec(),
         parent_thread_id: null,
         system_prompt_id: null,
