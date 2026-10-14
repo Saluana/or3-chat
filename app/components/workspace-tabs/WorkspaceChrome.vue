@@ -161,7 +161,7 @@ const activeTab = computed(
     () => props.tabs.find((tab) => tab.id === props.activeTabId) ?? props.tabs[0]
 );
 const activeTitle = computed(() =>
-    activeTab.value ? workspaceTabTitle(activeTab.value) : 'OR3'
+    activeTab.value ? workspaceTabTitle(activeTab.value, props.tabs) : 'OR3'
 );
 const activeIcon = computed(() => {
     if (!activeTab.value) return tabsIcon.value;

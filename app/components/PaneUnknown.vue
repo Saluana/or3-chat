@@ -16,6 +16,7 @@
             <p class="text-xs opacity-50 text-[var(--md-on-surface-variant)]">
                 If it stays unavailable, check Marketplace → Installed, then reload.
             </p>
+            <details class="text-xs opacity-70"><summary>App details</summary><code>{{ mode }}</code></details>
         </div>
     </div>
 </template>

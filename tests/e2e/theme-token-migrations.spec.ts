@@ -34,6 +34,23 @@ for (const theme of themes) test(`UI audit: ${theme} phone model selection works
     await captureChat(page, info, 'ui-audit-phone-model');
 });
 
+test('UI audit: blank tabs have distinct names and retain independent drafts after reload', async ({ page }, info) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('First unsent draft');
+    await page.locator('.workspace-tab-new').first().click();
+    await input.fill('Second unsent draft');
+    await expect(page.getByRole('tab', { name: 'New chat 1', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'New chat 2', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'New chat 1', exact: true }).click();
+    await expect(input).toHaveText('First unsent draft');
+    await page.reload();
+    await expect(input).toHaveText('First unsent draft');
+    await page.getByRole('tab', { name: 'New chat 2', exact: true }).click();
+    await expect(input).toHaveText('Second unsent draft');
+    await captureChat(page, info, 'ui-audit-draft-tabs');
+});
+
 test('UI audit: prompt title and instructions are named and remain saved after reopening', async ({ page }, info) => {
     await openResponsiveChat(page, 'blank', 'light');
     const openPrompts = async () => {

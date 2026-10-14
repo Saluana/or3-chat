@@ -37,6 +37,16 @@ const sampleTabs: WorkspaceTab[] = [
 ];
 
 describe('workspace tab display helpers', () => {
+    it('distinguishes blank chats consistently after tabs are reordered', () => {
+        const blank = (id: string, createdAt: number): WorkspaceTab => ({
+            id, createdAt, lastActivatedAt: createdAt, cachedTitle: 'New chat',
+            resource: { kind: 'chat', threadId: null }, ephemeral: true,
+        });
+        const first = blank('first', 1), second = blank('second', 2);
+        expect(workspaceTabTitle(first, [second, first])).toBe('New chat 1');
+        expect(workspaceTabTitle(second, [first, second])).toBe('New chat 2');
+        expect(workspaceTabTitle({ ...second, cachedTitle: 'My draft' }, [first, second])).toBe('My draft');
+    });
     it('resolves titles and icons for each resource kind', () => {
         expect(
             workspaceTabTitle({

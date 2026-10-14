@@ -23,11 +23,14 @@ Open tabs are restored separately for each workspace and layout profile. If you 
 
 Tab title caches also reset when the workspace changes. Tabs with the same identifiers in different workspaces use their own saved titles while fresh metadata loads; late lookups from an earlier workspace cannot replace them.
 
-A restored app keeps its app identity while its
+When several unsent chats are open, their tabs are numbered in creation order
+so you can distinguish drafts. A restored app keeps its app identity while its
 plugin loads; an unavailable app shows an explanation instead of a chat composer.
 
 Dashboard **Back** returns one level at a time. Its breadcrumb also opens the
-parent section or Dashboard directly.
+parent section or Dashboard directly. In **Files**, use **Trash** to view deleted
+items and **Back to files** to return. Restore is available on each deleted item;
+creation and upload controls belong to the active Files view.
 
 ## Keep a backup
 

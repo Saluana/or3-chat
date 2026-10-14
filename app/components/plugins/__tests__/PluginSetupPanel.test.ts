@@ -31,6 +31,17 @@ function panel() {
 }
 
 describe('setup patch acknowledgements', () => {
+    it('describes a workspace app launch without requesting a document selection', async () => {
+        const wrapper = panel();
+        await wrapper.setProps({ firstAction: {
+            operationId: 'open', label: 'Open task lists', contextKind: 'workspace', ready: true,
+        } as never });
+        expect(wrapper.text()).toContain('Opens in your workspace');
+        expect(wrapper.text()).not.toContain('Runs on your selection');
+        await wrapper.findAll('button').find(button => button.text() === 'Open task lists')!.trigger('click');
+        expect(wrapper.emitted('run-first-action')).toHaveLength(1);
+        wrapper.unmount();
+    });
     it('keeps edits made during a save and prevents a second submission replacing its acknowledgement', async () => {
         const wrapper = panel();
         expect(wrapper.findAll('input')).toHaveLength(1);

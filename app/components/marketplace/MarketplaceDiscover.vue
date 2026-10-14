@@ -1017,6 +1017,7 @@ function blockActionLabel(block: { action: string }): string | null {
                     </template>
                 </p>
                 <div class="flex flex-wrap gap-2">
+                    <UButton color="neutral" variant="outline" @click="navigation.openPage('marketplace', 'installed')">Manage in Installed</UButton>
                     <UButton
                         color="neutral"
                         variant="soft"

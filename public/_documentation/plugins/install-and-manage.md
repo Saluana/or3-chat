@@ -1,8 +1,13 @@
 # Install and manage plugins
 
 **Configuration ready** means the required settings and connections are complete.
-Plugins that operate on a document or message keep their selection requirement
-and explain how to supply it.
+Trusted workspace apps can open their interface directly from Configure; they do
+not require an unrelated document selection. Plugins that operate on a document
+or message keep their selection requirement and explain how to supply it.
+
+Discover's **Manage in Installed** action opens workspace access and browser
+checks. Installation on the site and enablement in your current workspace are
+separate steps.
 
 Open **Dashboard → Marketplace** to find plugins approved for your site, see
 what is installed, and manage updates. A plugin's selected code version is

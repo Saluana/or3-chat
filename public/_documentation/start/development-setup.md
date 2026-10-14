@@ -1,5 +1,10 @@
 # Develop OR3 from source
 
+Run `bun run test:e2e:ui-audit` for the focused UI audit browser regressions.
+It starts an isolated local server on port 3131, blocks AI generation, and saves
+repeatable model-selection, touch-control, prompt-editor, and draft-restoration screenshots across
+Blank, Retro, and Cyberpunk in `test-results/ui-audit`.
+
 Use this path to change OR3 itself or work on a trusted source extension. To run a managed deployment, use [Cloud setup](/documentation/cloud/setup). To build a portable plugin, start with [your first plugin](/documentation/plugins/first-plugin).
 
 ## Install and start

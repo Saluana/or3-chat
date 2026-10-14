@@ -312,6 +312,7 @@ const terminalReason = computed(() => {
             <p class="mt-1">
                 Ask your administrator to enable marketplace account linking so you can view your purchased plugins.
             </p>
+            <NuxtLink v-if="installer.canInstall.value" to="/documentation/plugins/library" class="mt-2 inline-block underline">Administrator setup guide</NuxtLink>
         </div>
 
         <div
