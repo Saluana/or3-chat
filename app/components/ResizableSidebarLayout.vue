@@ -328,6 +328,28 @@ function drawerFocusableElements(): HTMLElement[] {
     );
 }
 
+let drawerFocusFrame: number | undefined;
+function revealDrawerFocusAfterLayout(): void {
+    if (!mobileDrawerOpen.value) return;
+    if (drawerFocusFrame !== undefined) cancelAnimationFrame(drawerFocusFrame);
+    // Viewport resize and virtual-row measurement can both follow focus.
+    // Wait for their layout/anchor updates before revealing the current control.
+    drawerFocusFrame = requestAnimationFrame(() => {
+        drawerFocusFrame = requestAnimationFrame(() => {
+            drawerFocusFrame = undefined;
+            const active = document.activeElement;
+            if (mobileDrawerOpen.value && active instanceof HTMLElement &&
+                sidebarElement.value?.contains(active)) {
+                active.scrollIntoView({ block: 'center', inline: 'nearest' });
+            }
+        });
+    });
+}
+useResizeObserver(sidebarElement, revealDrawerFocusAfterLayout);
+onBeforeUnmount(() => {
+    if (drawerFocusFrame !== undefined) cancelAnimationFrame(drawerFocusFrame);
+});
+
 function onSidebarKeydown(event: KeyboardEvent): void {
     if (!mobileDrawerOpen.value) return;
     if (event.key === 'Escape') {
@@ -345,6 +367,7 @@ function onSidebarKeydown(event: KeyboardEvent): void {
                 ? event.shiftKey ? focusable.length - 1 : 0
                 : (current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
             focusable[next]?.focus();
+            revealDrawerFocusAfterLayout();
         }
     }
 }

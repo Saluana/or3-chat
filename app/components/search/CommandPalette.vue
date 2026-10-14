@@ -712,6 +712,8 @@ watch(activeKey, async (key, previous) => {
     max-height: 40%;
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* Focus reveal must stay inside fractional viewport/scrollport edges. */
+    scroll-padding-block: 1px;
 }
 .or3-palette-mobile-actions .or3-palette-action-heading,
 .or3-palette-mobile-actions .or3-palette-action-empty { display: none; }

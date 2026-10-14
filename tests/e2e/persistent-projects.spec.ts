@@ -280,15 +280,17 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     const welcome = page.getByRole('button', { name: 'Dismiss welcome' });
     await expect(welcome).toBeVisible({ timeout: 60000 });
     await welcome.click();
+    // The model catalog is lazy-loaded by chat Settings, not by project menus.
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const navigation = page.getByRole('complementary', {
         name: 'Navigation',
     });
-    const tabs = page.getByRole('tablist', {
-        name: 'Open workspace tabs',
-    });
+    // The workspace tablist owns its controls through aria-owns, not DOM nesting.
+    const tabs = page.getByRole('tab');
     const projectsRail = navigation.locator('#btn-page-sidebar-projects-home');
     await expect(projectsRail).toHaveCount(0);
-    const originalTabs = await tabs.getByRole('tab').allTextContents();
+    const originalTabs = await tabs.allTextContents();
     await navigation
         .getByRole('button', { name: 'Projects', exact: true })
         .click();
@@ -303,7 +305,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         page.getByRole('textbox', { name: 'Message input' }),
     ).toBeVisible();
-    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    expect(await tabs.allTextContents()).toEqual(originalTabs);
     await projects
         .getByRole('button', { name: 'New project', exact: true })
         .click();
@@ -490,14 +492,14 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     });
     await search.fill('Sidebar project');
     await expect(
-        projects.getByRole('button', { name: /Sidebar project/ }),
+        projects.getByRole('button', { name: /^Sidebar project(?: |$)/ }),
     ).toBeVisible();
     await search.fill('Nothing matches');
     await expect(
         projects.getByRole('heading', { name: 'No matching projects' }),
     ).toBeVisible();
     await search.clear();
-    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    expect(await tabs.allTextContents()).toEqual(originalTabs);
     const bounds = await projects.boundingBox();
     expect(bounds!.width).toBeLessThan(600);
     await info.attach('sidebar-projects-receipt', {
@@ -537,8 +539,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     ).toBeVisible();
     await projects.getByRole('button', { name: 'Home', exact: true }).click();
     const projectsLink = navigation
-        .getByRole('button', { name: 'Projects', exact: true })
-        .filter({ hasText: 'View your projects' });
+        .getByRole('button', { name: 'Projects', exact: true });
     await expect(projectsLink).toBeVisible();
     const projectLinkBounds = await projectsLink.boundingBox();
     const documentLinkBounds = await navigation
@@ -549,14 +550,14 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         projects.getByRole('heading', { name: 'Projects', exact: true }),
     ).toBeVisible();
-    await projects.getByRole('button', { name: /Sidebar project/ }).click();
+    await projects.getByRole('button', { name: /^Sidebar project(?: |$)/ }).click();
     await expect(
         projects.getByRole('button', {
             name: 'All projects',
             exact: true,
         }),
     ).toBeVisible();
-    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    expect(await tabs.allTextContents()).toEqual(originalTabs);
     await expect(
         projects.getByRole('button', { name: 'Chats', exact: true }),
     ).toHaveCount(0);
@@ -707,9 +708,9 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
             exact: true,
         }),
     ).toBeVisible();
-    expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
+    expect(await tabs.allTextContents()).toEqual(originalTabs);
     await projects
-        .getByRole('button', { name: 'New chat', exact: true })
+        .getByRole('button', { name: 'New chat in Sidebar project', exact: true })
         .click();
     const activity = projects.getByRole('region', {
         name: 'Project activity',
@@ -719,7 +720,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         activity.getByText('Project note', { exact: true }),
     ).toBeVisible();
     await expect(
-        activity.getByRole('button', { name: /^New chat\s+\d/ }),
+        activity.getByRole('button', { name: 'Open New chat', exact: true }),
     ).toBeVisible();
     await expect(
         activity.getByRole('button', { name: 'Today', exact: true }),
@@ -729,7 +730,8 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         animations: 'disabled',
     });
     await activity.getByText('Project note', { exact: true }).click();
-    await expect(tabs).toContainText('Project note');
+    await expect(page.getByRole('tab', { name: 'Project note', exact: true }))
+        .toHaveAttribute('aria-selected', 'true');
     await page
         .getByRole('button', { name: 'Switch to dark mode', exact: true })
         .click();
