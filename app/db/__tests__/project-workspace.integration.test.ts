@@ -1553,12 +1553,78 @@ describe('automatic memory retrieval budget', () => {
         await db.threads.put({ id: 'recall', project_id: 'a', status: 'ready',
             clock: 1, created_at: 1, updated_at: 1, deleted: false, pinned: false, forked: false });
         for (let i = 0; i < 10; i++) await saveProjectMemory(scope(), 'a', {
-            text: 'Database constraint ' + i, origin: 'automatic' }, 'auto-recall-' + i);
+            text: 'Database constraint ' + i, origin: 'automatic', source_thread_id: 'recall' }, 'auto-recall-' + i);
         await saveProjectMemory(scope(), 'a', { text: 'Explicit project reference.' }, 'manual-recall');
         const matching = await buildProjectContext(scope(), 'recall', 'database constraints', false);
         expect(matching!.receipt.memories).toHaveLength(5);
         expect(matching!.receipt.memories.some(m => m.id === 'manual-recall')).toBe(true);
         const unrelated = await buildProjectContext(scope(), 'recall', 'apples and nutrition', false);
         expect(unrelated!.receipt.memories.map(m => m.id)).toEqual(['manual-recall']);
+    });
+});
+
+// Regression contracts: committed automatic memories must respect later evidence
+// exclusion/ownership/deletion; project documents and knowledge commit together;
+// the displayed brief, request brief and project description must agree.
+describe('project review regressions', () => {
+    it.each(['excluded', 'moved', 'deleted', 'message-deleted'] as const)(
+        'stops recalling automatic evidence after it is %s while retaining manual memory', async change => {
+            await db.threads.bulkPut(['evidence', 'consumer'].map(id => ({ id, project_id: 'a', status: 'ready' as const,
+                deleted: false, pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 })));
+            await db.messages.put({ id: 'evidence-message', thread_id: 'evidence', role: 'user', index: 1,
+                data: { content: 'Saffron launches Friday.' }, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+            for (const automatic of [true, false]) await saveProjectMemory(scope(), 'a', {
+                text: 'Saffron launches Friday.', ...(automatic ? { origin: 'automatic' as const } : {}),
+                source_thread_id: 'evidence', source_message_id: 'evidence-message',
+            }, automatic ? 'automatic-evidence' : 'manual-evidence');
+            expect((await buildProjectContext(scope(), 'consumer', 'Saffron', false))!.receipt.memories).toHaveLength(2);
+            if (change === 'excluded') await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), excluded_chat_ids: ['evidence'] }, null);
+            if (change === 'moved') await moveChatToProject(scope(), 'evidence', 'b');
+            if (change === 'deleted') await db.threads.update('evidence', { deleted: true });
+            if (change === 'message-deleted') await db.messages.update('evidence-message', { deleted: true });
+            for (const purpose of ['turn', 'handoff'] as const) {
+                const context = await buildProjectContext(scope(), 'consumer', 'Saffron', false, 'a', purpose);
+                expect(context!.receipt.memories.map(memory => memory.id)).toEqual(['manual-evidence']);
+            }
+        },
+    );
+    it.each(['sidebar', 'tool'] as const)('makes %s-created project documents readable and rolls back a refused binding', async entry => {
+        await db.threads.put({ id: 'doc-chat', project_id: 'a', status: 'ready', deleted: false,
+            pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+        const create = async (requestId: string) => {
+            if (entry === 'sidebar') return (await useProjectsCrud().createDocumentEntry('a'))!.id;
+            const { createWorkspaceDocument } = await import('~/utils/chat/workspace-document-create');
+            const { workspaceRevision } = await import('~/utils/chat/workspace-items');
+            const result = JSON.parse(await createWorkspaceDocument({ title: 'Project output',
+                content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Saffron output' }] }] },
+                project: { id: 'a', revision: await workspaceRevision((await db.projects.get('a'))!) },
+            }, { subject: null, workspaceId: 'local', threadId: 'doc-chat', messageId: null,
+                callId: requestId, requestId, abortSignal: new AbortController().signal }));
+            return result.source.id as string;
+        };
+        const id = await create('readable-document');
+        await expect(assertProjectToolAllowed(scope(), 'doc-chat', 'workspace_read', { item: { kind: 'document', id } })).resolves.toBeUndefined();
+        const workspace = await readProjectWorkspace(db, 'a');
+        expect(workspace.sources.map(source => [source.value.item_id, source.value.mode])).toEqual([[id, 'relevant']]);
+        const before = await db.projects.get('a');
+        const docs = await db.posts.where('postType').equals('doc').count();
+        hookActions.mockImplementation(async (name, payload) => {
+            if (name === 'db.posts.upsert:action:before' && (payload as any)?.entity?.postType === 'or3:project-source') throw new Error('Binding refused');
+        });
+        await expect(create('refused-document')).rejects.toThrow('Binding refused');
+        expect(await db.posts.where('postType').equals('doc').count()).toBe(docs);
+        expect(await db.projects.get('a')).toEqual(before);
+    });
+    it('keeps creation, request context, edits and clearing on the same brief', async () => {
+        const id = await useProjectsCrud().createProject({ name: 'Brief project', description: 'Initial brief' });
+        await db.threads.put({ id: 'brief-chat', project_id: id, status: 'ready', deleted: false,
+            pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+        expect((await buildProjectContext(scope(), 'brief-chat', 'brief', false))!.receipt.brief).toBe('Initial brief');
+        for (const brief of ['Revised brief', '']) {
+            const state = await readProjectWorkspace(db, id);
+            await saveProjectSettings(scope(), id, { ...state.settings, brief }, state.settingsRow ?? null);
+            expect((await db.projects.get(id))!.description ?? '').toBe(brief);
+            expect((await buildProjectContext(scope(), 'brief-chat', 'brief', false))!.receipt.brief).toBe(brief);
+        }
     });
 });

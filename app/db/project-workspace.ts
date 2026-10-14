@@ -48,7 +48,7 @@ export async function readProjectPolicy(db: Or3DB, projectId: string) {
     const settings =
         settingsRow && !settingsRow.deleted
             ? readProjectSettings(settingsRow.content)
-            : defaultProjectSettings();
+            : { ...defaultProjectSettings(), brief: project.description ?? '' };
     return { project, settings, settingsRow: settingsRow && !settingsRow.deleted ? settingsRow : undefined };
 }
 
@@ -255,6 +255,13 @@ async function save(
                         )) !== projectId
                     )
                         throw new Error('Memory evidence unavailable.');
+                }
+            }
+            if (type === PROJECT_POST_TYPES.settings && !deleted) {
+                const { brief } = ProjectSettingsSchema.parse(content);
+                if ((project.description ?? '') !== brief) {
+                    await scope.db.projects.put({ ...project, description: brief,
+                        updated_at: nowSec(), clock: nextClock(project.clock) });
                 }
             }
             if (type === PROJECT_POST_TYPES.source && !deleted) {
@@ -468,11 +475,17 @@ export async function saveProjectNote(scope: WorkspaceOperationScope, projectId:
         type: 'doc', content: input.text.split('\n').map(text => ({ type: 'paragraph', content: text ? [{ type: 'text', text }] : [] })),
     } });
     const revision = await workspaceRevision(prepared.row);
-    const value = ProjectSourceSchema.parse({ item_id: prepared.row.id, kind: 'document', title: prepared.row.title, mode: 'relevant',
-        current_revision_id: revision, revisions: [{ id: revision, status: 'ready', coverage: 'full', created_at: nowSec() }] });
-    const row = await save(scope, projectId, PROJECT_POST_TYPES.source, value, newId(), null, [], false, PostSchema.parse(prepared.row));
+    const saved = await saveProjectDocument(scope, projectId, prepared.row, revision);
     try { await prepared.afterCommit(); }
     catch (error) { console.warn('[projects] Note committed; notification failed', error); }
+    return saved;
+}
+
+/** Commit a prepared document and its project knowledge in one transaction. */
+export async function saveProjectDocument(scope: WorkspaceOperationScope, projectId: string, document: Post, revision: string) {
+    const value = ProjectSourceSchema.parse({ item_id: document.id, kind: 'document', title: document.title, mode: 'relevant',
+        current_revision_id: revision, revisions: [{ id: revision, status: 'ready', coverage: 'full', created_at: nowSec() }] });
+    const row = await save(scope, projectId, PROJECT_POST_TYPES.source, value, newId(), null, [], false, PostSchema.parse(document));
     return { row, value };
 }
 export async function deleteProjectRecord(

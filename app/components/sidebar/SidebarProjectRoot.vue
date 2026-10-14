@@ -39,43 +39,11 @@
                             class="project-add-icon w-4 h-4"
                         />
                     </button>
-                    <UPopover
-                        v-model:open="menuOpen"
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <button
-                            class="project-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
-                            @click.stop
-                            :aria-label="`Actions for project ${project.name}`"
-                        >
-                            <UIcon
-                                :name="iconMore"
-                                class="project-menu-icon w-4 h-4"
-                            />
-                        </button>
-                        <template #content>
-                            <div
-                                class="project-menu-content p-1 w-48 space-y-1"
-                            >
-                                <UButton
-                                    v-bind="renameButtonProps"
-                                    class="w-full justify-start cursor-pointer"
-                                    @click.stop.prevent="menuOpen = false; emit('rename')"
-                                    >Rename project</UButton
-                                >
-                                <UButton
-                                    v-bind="deleteButtonProps"
-                                    class="w-full justify-start cursor-pointer text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15"
-                                    @click.stop.prevent="menuOpen = false; emit('delete')"
-                                    >Delete project</UButton
-                                >
-                            </div>
-                        </template>
-                    </UPopover>
+                    <SidebarProjectActions
+                        :name="project.name"
+                        @rename="emit('rename')"
+                        @delete="emit('delete')"
+                    />
                 </div>
             </span>
         </div>
@@ -83,14 +51,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
-import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
+import SidebarProjectActions from './SidebarProjectActions.vue';
 const { openProjectSidebar } = useProjectSidebar();
 const toast = useToast();
-const menuOpen = ref(false);
 async function openHome() {
     try {
         await openProjectSidebar(props.project.id);
@@ -107,9 +73,6 @@ const iconExpand = useIcon('shell.expand');
 const iconCollapse = useIcon('shell.collapse');
 const iconNewChat = useIcon('sidebar.new_chat');
 const iconNewNote = useIcon('sidebar.new_note');
-const iconMore = useIcon('ui.more');
-const iconEdit = useIcon('ui.edit');
-const iconTrash = useIcon('ui.trash');
 
 interface Project {
     id: string;
@@ -129,14 +92,4 @@ const emit = defineEmits<{
     (e: 'rename'): void;
     (e: 'delete'): void;
 }>();
-
-const renameButtonProps = useSidebarProjectActionButtonProps({
-    identifier: 'sidebar.project-rename',
-    icon: iconEdit.value,
-});
-
-const deleteButtonProps = useSidebarProjectActionButtonProps({
-    identifier: 'sidebar.project-delete',
-    icon: iconTrash.value,
-});
 </script>

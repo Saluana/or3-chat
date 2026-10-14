@@ -1,6 +1,8 @@
 import { del, type Project } from '~/db';
-import { chatFamilyIds, chatOwnerIn, moveChatProjectRows, notifyChatProjectMove } from '~/db/project-workspace';
+import { chatFamilyIds, chatOwnerIn, moveChatProjectRows, notifyChatProjectMove, saveProjectDocument } from '~/db/project-workspace';
 import { prepareProjectWrite } from '~/db/projects';
+import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
+import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { prepareDocumentCreate } from '~/db/documents';
 import { createThreadInDb } from '~/db/threads';
 import { captureProjectOperation } from '~/utils/projects/context';
@@ -33,7 +35,7 @@ export function useProjectsCrud() {
         const payload: Project = {
             id,
             name,
-            description: input.description?.trim() || null,
+            description: ProjectSettingsSchema.shape.brief.parse(input.description?.trim() ?? ''),
             data: [],
             created_at: now,
             updated_at: now,
@@ -116,31 +118,8 @@ export function useProjectsCrud() {
         if (!initial || initial.deleted) return null;
         const document = await prepareDocumentCreate({ title: 'Untitled' });
         scope.assertCurrent('write');
-        const project = await db.projects.get(projectId);
-        if (!project || project.deleted) throw new Error('Project unavailable.');
-        const entries = normalizeProjectData(project.data);
-        entries.push({
-            id: document.row.id,
-            name: document.row.title || 'Untitled',
-            kind: 'doc',
-        });
-        const prepared = await prepareProjectWrite({
-            ...project,
-            data: mergeProjectEntries(project.data, entries),
-            updated_at: nowSec(),
-        }, 'upsert');
-        if (prepared.row.id !== projectId || prepared.row.deleted) throw new Error('A project hook changed the operation target.');
-        const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'posts', 'file_meta']), async () => {
-            scope.assertCurrent('write');
-            const current = await db.projects.get(projectId);
-            if (!current || current.deleted || current.clock !== project.clock)
-                throw new Error('Project changed. Reload before adding a document.');
-            const next = { ...prepared.row, clock: nextClock(current.clock) };
-            await db.posts.put(document.row);
-            await db.projects.put(next);
-            return next;
-        });
-        try { await document.afterCommit(); await prepared.afterCommit(saved); }
+        await saveProjectDocument(scope, projectId, document.row, await workspaceRevision(document.row));
+        try { await document.afterCommit(); }
         catch (error) { console.warn('Project document saved; after-create hook failed.', error); }
         return { id: document.row.id, title: document.row.title };
     }

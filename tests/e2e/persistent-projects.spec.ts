@@ -333,7 +333,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .getByPlaceholder('Project title')
         .fill('Sidebar project');
     await newProjectDialog
-        .getByPlaceholder('Optional description')
+        .getByPlaceholder('Optional brief')
         .fill('Created with the shared project modal.');
     await page.screenshot({ path: info.outputPath('new-project-modal.png') });
     await newProjectDialog
@@ -1511,4 +1511,47 @@ test('project handoff keeps captured project context and supports evidence exclu
         body: JSON.stringify(requests, null, 2),
         contentType: 'application/json',
     });
+});
+
+// Full sidebar event forwarding and real menu/dialog controls are the owning
+// boundary for managing projects beyond Home's five shortcuts.
+test('project review fixes keep drafts and expose management for every project', async ({ page }, info) => {
+    await page.goto('/chat');
+    await page.getByRole('button', { name: 'Dismiss welcome' }).click();
+    const navigation = page.getByRole('complementary', { name: 'Navigation' });
+    await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+    const projects = page.getByRole('region', { name: 'Projects', exact: true });
+    for (let index = 0; index < 7; index++) {
+        if (index) await openAllProjects(page);
+        await createProject(page, `Review project ${index}`);
+    }
+    await openAllProjects(page);
+    const first = projects.getByRole('listitem').filter({ hasText: 'Review project 0' });
+    await first.getByRole('button', { name: 'Project actions for Review project 0' }).click();
+    await page.getByRole('button', { name: 'Rename project', exact: true }).click();
+    const rename = page.getByRole('dialog', { name: 'Rename project', exact: true });
+    await rename.getByPlaceholder('Project name').fill('Reviewed project');
+    await rename.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(rename).not.toBeVisible();
+    await projects.getByRole('button', { name: 'Reviewed project', exact: true }).click();
+    await projects.getByRole('button', { name: 'Add project brief' }).click();
+    await projects.getByRole('textbox', { name: 'Project brief', exact: true }).fill('Unsaved project plan');
+    await openAllProjects(page);
+    await projects.getByRole('button', { name: 'Review project 1', exact: true }).click();
+    await openAllProjects(page);
+    await projects.getByRole('button', { name: 'Reviewed project', exact: true }).click();
+    await expect(projects.getByRole('textbox', { name: 'Project brief', exact: true })).toHaveValue('Unsaved project plan');
+    await projects.getByRole('button', { name: 'Save brief' }).click();
+    await expect(projects.getByLabel('Project brief', { exact: true })).toHaveText('Unsaved project plan');
+    await projects.getByRole('button', { name: 'Project actions for Reviewed project' }).click();
+    await page.getByRole('button', { name: 'Delete project', exact: true }).click();
+    const deletion = page.getByRole('dialog', { name: 'Delete project', exact: true });
+    await deletion.getByRole('button', { name: /delete/i }).click();
+    await expect(deletion).not.toBeVisible();
+    await openAllProjects(page);
+    await expect(projects.getByRole('button', { name: 'Reviewed project', exact: true })).toHaveCount(0);
+    const screenshot = info.outputPath('projects-review-fixed.png');
+    await page.screenshot({ path: screenshot });
+    await info.attach('projects-review-fixed', { path: screenshot, contentType: 'image/png' });
+    await info.attach('projects-review-receipt', { body: JSON.stringify({ renamedBeyondHomeLimit: true, preservedDraft: true, savedBrief: true, deletedFromHeader: true }), contentType: 'application/json' });
 });

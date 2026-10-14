@@ -1,3 +1,5 @@
+import { readProjectPolicy, saveProjectSettings } from '~/db/project-workspace';
+import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 import type { Project } from '~/db/schema';
 import { prepareProjectWrite } from '~/db/projects';
 import { getWriteTxTableNames, nextClock, nowSec } from '~/db/util';
@@ -91,7 +93,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
             const loaded = await readWorkspaceItem(scope, { kind: 'project', id });
             return JSON.stringify({ version: 1, workspaceId: scope.workspaceId, source: loaded.source, status: 'saved', replay: true });
         }
-        proposed = { id, name: args.name.trim(), description: typeof args.description === 'string' ? args.description : '',
+        proposed = { id, name: args.name.trim(), description: ProjectSettingsSchema.shape.brief.parse(args.description ?? ''),
             data: [], created_at: nowSec(), updated_at: nowSec(), deleted: false, clock: 0 };
     } else {
         if (typeof args.projectId !== 'string' || typeof args.revision !== 'string') throw new Error('Read the identified project first.');
@@ -105,7 +107,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
             proposed.name = args.name.trim();
         } else if (operation === 'set_description') {
             if (typeof args.description !== 'string') throw new Error('Supply the requested project description.');
-            proposed.description = args.description;
+            proposed.description = ProjectSettingsSchema.shape.brief.parse(args.description);
         } else if (operation === 'add_item' || operation === 'remove_item') {
             const candidate = args.item;
             if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)
@@ -126,7 +128,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     if (prepared.row.id !== proposed.id || prepared.row.deleted) throw new Error('A project hook changed the operation target.');
     scope.assertCurrent('write');
     let saved = prepared.row;
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta'] }), async () => {
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta', 'messages'], includeTombstones: true }), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
         const current = await scope.db.projects.get(proposed.id);
@@ -166,6 +168,11 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         scope.assertCurrent('write');
         saved = { ...prepared.row, clock: base ? nextClock(base.clock) : prepared.row.clock };
         await scope.db.projects.put(saved);
+        if (operation === 'set_description') {
+            const policy = await readProjectPolicy(scope.db, saved.id);
+            await saveProjectSettings(scope, saved.id, { ...policy.settings, brief: saved.description ?? '' }, policy.settingsRow ?? null);
+            await context.assertToolAuthorized?.();
+        }
         scope.assertCurrent('write');
     });
     try { await prepared.afterCommit(saved); } catch (error) { console.warn('Project saved; after-write hook failed.', error); }

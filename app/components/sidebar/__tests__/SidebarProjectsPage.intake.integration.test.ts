@@ -57,6 +57,11 @@ beforeEach(async () => {
     wrapper = mount(Host, { global: { stubs: {
         SidebarTimeGroupedList: defineComponent({ template: '<div><slot name="header" /></div>' }),
         USelectMenu: true, USelect: true, USwitch: true,
+        UTextarea: defineComponent({
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        }),
         UPopover: defineComponent({ template: '<div><slot /><slot name="content" /></div>' }),
     } } });
 });
@@ -167,4 +172,43 @@ it.each(['hidden', 'home', 'other project'] as const)('finishes an admitted proj
         await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
     }
     await vi.waitFor(() => expect(wrapper.text()).toContain('notes.txt'));
+});
+
+// These lifecycle cases exercise the actual kept-alive editor, without a new
+// test-only API. Upload coverage above cannot detect loss of unsaved form state.
+it.each(['brief', 'settings', 'note', 'memory'] as const)('retains the %s draft across project navigation', async kind => {
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
+    let selector = '';
+    if (kind === 'brief') {
+        await wrapper.get('button[aria-label="Add project brief"]').trigger('click');
+        selector = '#project-inline-brief-editor';
+    } else if (kind === 'settings') {
+        await wrapper.get('button[title="Project settings"]').trigger('click');
+        selector = 'textarea[aria-label="Instructions"]';
+    } else if (kind === 'note') {
+        await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
+        await wrapper.get('button[label="Write a note"]').trigger('click');
+        selector = 'textarea[aria-label="Note text"]';
+    } else {
+        await wrapper.get('button[aria-label="Memory"]').trigger('click');
+        await wrapper.get('button[aria-label="Add memory"]').trigger('click');
+        selector = 'textarea[aria-label="New project memory"]';
+    }
+    await wrapper.get(selector).setValue('Keep my draft');
+    projectId.value = 'b'; await nextTick();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Project B'));
+    projectId.value = 'a'; await nextTick();
+    await vi.waitFor(() => expect(wrapper.find(selector).exists()).toBe(true));
+    expect((wrapper.get(selector).element as HTMLTextAreaElement).value).toBe('Keep my draft');
+});
+
+it('offers only enforceable permissions for external tools', async () => {
+    wrapper.unmount();
+    toolCatalog.tools = [{ definition: { type: 'function', function: { name: 'external_read', description: 'Read external content', parameters: { type: 'object', properties: {} } }, ui: { label: 'External read' } }, runtime: 'client', enabled: ref(true) }];
+    wrapper = mount(SidebarProjectsPage, { global: { stubs: { SidebarTimeGroupedList: defineComponent({ template: '<div><slot name="header" /></div>' }),
+        USelect: defineComponent({ props: ['items', 'modelValue'], template: '<select :value="modelValue"><option v-for="item in items" :value="item.value">{{ item.label }}</option></select>' }), USelectMenu: true } } });
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
+    await wrapper.get('button[title="Project settings"]').trigger('click');
+    const permission = wrapper.get('select[aria-label="Permission for External read"]');
+    expect(permission.findAll('option').map(option => option.text())).toEqual(['Off', 'Ask first']);
 });
