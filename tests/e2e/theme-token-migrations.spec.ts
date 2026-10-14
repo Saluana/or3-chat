@@ -1148,14 +1148,16 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
         };
         await expectIcons(initialTheme);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        // The dashboard dialog is titled after its current page.
         const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
         await dashboard.getByRole('button', { name: 'Settings', exact: true }).click();
-        await dashboard.getByRole('button', { name: /Theme Settings/i }).click();
+        await page.getByRole('dialog', { name: 'Settings' })
+            .getByRole('button', { name: /Theme Settings/i }).click();
+        const themeDialog = page.getByRole('dialog', { name: 'Theme Settings' });
         for (const theme of ['retro', 'cyberpunk', 'blank'] as const) {
             await selectThemeAndMode(page, theme, 'light');
-            await page.getByRole('dialog', { name: 'Dashboard' })
-                .getByRole('button', { name: 'Close', exact: true }).click();
-            await expect(page.getByRole('dialog', { name: 'Dashboard' })).toBeHidden();
+            await themeDialog.getByRole('button', { name: 'Close', exact: true }).click();
+            await expect(themeDialog).toBeHidden();
             await expectIcons(theme);
             await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
         }

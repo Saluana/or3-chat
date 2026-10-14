@@ -36,5 +36,5 @@ Token-based colors replace it.
 ## Verification
 
 - `bunx vitest run app/theme` (18 files, 139 tests) and `bun run test:changed` pass.
-- Playwright `theme-token-migrations.spec.ts` (UI audit subset and full spec) against the harness server.
+- Playwright `theme-token-migrations.spec.ts` against the journey-harness server: 45 of 60 pass across all three themes (UI audit, drafts/split panes, touch controls, focus traps, composer layouts, appearance tokens, icons). The other 15 (`dialogs follow Safari keyboard…`, `dialogs fit phones…`, `image preview…`, `nested prompt confirmation…`) fail identically on the base commit. They wait for a "Create your first project" sidebar button that a fresh workspace doesn't show, or for a command-palette "Result actions" group. This PR refreshes the Theme Studio selectors, which had stopped every appearance-token case and the icon test before their assertions.
 - ESLint on the changed TypeScript and `git diff --check` are clean. `bun run theme:build-css` matches the committed `public/themes/blank.css`.
