@@ -23,8 +23,14 @@ Open tabs are restored separately for each workspace and layout profile. If you 
 
 Tab title caches also reset when the workspace changes. Tabs with the same identifiers in different workspaces use their own saved titles while fresh metadata loads; late lookups from an earlier workspace cannot replace them.
 
+A restored app keeps its app identity while its
+plugin loads; an unavailable app shows an explanation instead of a chat composer.
+
+Dashboard **Back** returns one level at a time. Its breadcrumb also opens the
+parent section or Dashboard directly.
+
 ## Keep a backup
 
-Open **Workspace Backup** from the dashboard to export the active workspace as a JSONL backup. Keep the downloaded file somewhere safe. Import validates a backup and offers merge or replace behavior; replace removes the active workspace's existing data. Export before restoring or resetting browser storage.
+Open **Workspace Backup** from the dashboard to export the active workspace as a JSONL backup. Keep the downloaded file somewhere safe. Import validates a backup and defaults to **Append & merge** with conflict overwrite off, preserving existing records. Choose **Replace workspace** explicitly to remove the active workspace's existing data. Export before restoring or resetting browser storage.
 
 Local data belongs to this browser profile and site origin. Private browsing, clearing site data, and changing the host or port can make the original workspace unavailable. Cloud sync and backups serve different purposes: sync shares changes, while a saved backup gives you a recovery point.

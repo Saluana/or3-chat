@@ -59,9 +59,10 @@
                         <span
                             class="min-w-0 font-medium leading-5 text-[var(--md-on-surface)]"
                         >
-                            {{ call.label || call.name }}
+                            {{ toolLabel(call) }}
                         </span>
                     </div>
+                    <code class="ml-5 text-xs opacity-60">{{ call.name }}</code>
                     <pre
                         v-if="call.args"
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
@@ -114,6 +115,7 @@
 import { computed, defineAsyncComponent, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { useIcon } from '~/composables/useIcon';
 import { workspaceDocumentChangeReceipt, workspaceSourceReceipts, type WorkspaceSourceReceipt } from '~/utils/chat/workspace-source-receipts';
 
@@ -137,6 +139,11 @@ const emit = defineEmits<{
     resize: [];
 }>();
 
+const toolRegistry = useToolRegistry();
+function toolLabel(call: ToolCall): string {
+    return call.label || toolRegistry.getTool(call.name)?.definition.ui?.label
+        || call.name.replace(/[_-]+/g, ' ').replace(/^./, character => character.toUpperCase());
+}
 const loaderIcon = useIcon('chat.tool.loader');
 const searchIcon = useIcon('ui.search');
 
@@ -206,6 +213,7 @@ const isRunning = computed(() =>
 const kinds = computed(() => {
     const groups = new Map<ToolKind, ToolCall[]>();
     for (const call of props.toolCalls) {
+        if (call.status === 'error') continue;
         const kind = toolKind(call);
         groups.set(kind, [...(groups.get(kind) ?? []), call]);
     }
@@ -217,11 +225,14 @@ const groupLabel = computed(() => {
     );
     if (waitingForBrowser.length > 0) {
         const names = waitingForBrowser
-            .map((call) => call.label || call.name)
+            .map((call) => toolLabel(call))
             .filter((label, index, all) => all.indexOf(label) === index);
         return `Waiting for this browser · ${names.join(', ')}`;
     }
     const labels: string[] = [];
+    for (const call of props.toolCalls) {
+        if (call.status === 'error') labels.push(`${toolLabel(call)} failed`);
+    }
     const running = isRunning.value;
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;
     if (count('edit'))
@@ -254,12 +265,13 @@ const groupLabel = computed(() => {
             .map((call) => call.name === 'workspace_create_document' ? running ? 'Creating document' : 'Created document'
                 : call.name === 'workspace_update_project' ? running ? 'Updating project' : 'Updated project'
                 : call.name === 'workspace_propose_document_edit' ? running ? 'Preparing document changes' : 'Document changes ready for review'
-                : call.label || call.name)
+                : toolLabel(call))
             .filter((label, index, all) => all.indexOf(label) === index)
     );
     return labels.join(', ') || (running ? 'Working' : 'Completed activity');
 });
 const groupIcon = computed(() => {
+    if (props.toolCalls.some(call => call.status === 'error')) return 'i-lucide-circle-alert';
     if (kinds.value.size !== 1) return 'i-lucide-pencil';
     if (kinds.value.has('edit')) return 'i-lucide-pencil';
     if (kinds.value.has('read')) return 'i-lucide-file-search';
@@ -307,6 +319,7 @@ function formatResult(result: string): string {
 }
 
 function iconForCall(call: ToolCall): string {
+    if (call.status === 'error') return 'i-lucide-circle-alert';
     const kind = toolKind(call);
     if (kind === 'edit') return 'i-lucide-pencil';
     if (kind === 'read') return 'i-lucide-file-search';

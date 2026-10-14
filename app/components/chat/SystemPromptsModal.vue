@@ -9,6 +9,7 @@
     >
         <template #actions>
             <UButton
+                v-if="prompts.length && view !== 'edit'"
                 v-bind="headerActionButtonProps"
                 class="sm:hidden"
                 data-test="system-prompts-new"
@@ -19,6 +20,7 @@
                 New
             </UButton>
             <UButton
+                v-if="prompts.length && view !== 'edit'"
                 v-bind="headerActionButtonProps"
                 class="hidden sm:inline-flex"
                 data-test="system-prompts-new-desktop"

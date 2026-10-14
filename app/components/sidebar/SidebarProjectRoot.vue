@@ -4,30 +4,25 @@
         :data-project-id="project.id"
     >
         <div
-            role="button"
-            tabindex="0"
             class="project-root-toggle relative group w-full flex items-center hover:bg-[var(--md-surface-hover)] px-3 gap-2 h-10 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
-            @click="openHome"
-            @keydown.enter.self="openHome"
-            @keydown.space.self.prevent="openHome"
         >
-            <button type="button" class="inline-flex items-center justify-center shrink-0 size-[18px]" aria-label="Expand project shortcuts" @click.stop="emit('toggle-expand')"><UIcon
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-[18px] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${project.name} shortcuts`" :aria-expanded="expanded" @click.stop="emit('toggle-expand')"><UIcon
                 :name="expanded ? iconExpand : iconCollapse"
                 class="project-icon shrink-0 w-[18px] h-[18px] text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80 transition-colors"
                 active-class="text-[color:var(--md-primary)]"
             /></button>
-            <span class="project-label truncate text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
+            <button type="button" @click="openHome" :aria-label="`Open project ${project.name}`" class="project-label h-full focus-visible:outline-2 focus-visible:outline-(--md-focus-ring) truncate text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
                 project.name
-            }}</span>
+            }}</button>
             <span
                 class="project-actions-container ms-auto inline-flex gap-1 items-center"
             >
                 <div class="project-quick-actions flex items-center gap-1">
                     <!-- Quick add buttons (appear on hover) -->
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
+                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 sm:group-focus-within/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-chat')"
-                        aria-label="Add chat to project"
+                        :aria-label="`New chat in ${project.name}`"
                     >
                         <UIcon
                             :name="iconNewChat"
@@ -35,9 +30,9 @@
                         />
                     </button>
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
+                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 sm:group-focus-within/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-document')"
-                        aria-label="Add document to project"
+                        :aria-label="`New document in ${project.name}`"
                     >
                         <UIcon
                             :name="iconNewNote"

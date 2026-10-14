@@ -30,7 +30,7 @@ Caddy handles HTTPS and proxies over the private Compose network. Do not expose 
 
 ## First login and invitations
 
-Managed registration is invite-only. The bootstrap account is the initial owner; anonymous visitors cannot create accounts. Invite others through the in-product workspace/admin invitation flow. The OR3 account and the `/admin` panel initially use the bootstrap credentials, but their passwords and sessions are separate after setup.
+Managed registration is invite-only. The bootstrap account is the initial owner; anonymous visitors cannot create accounts. Use **Admin → Signup invites** to give a new user their own private workspace. Use **Workspaces → a workspace → Team invites** when you intend to share that workspace. Signup invites need provider support from the updated Basic Auth and SQLite packages; older deployments retain team invites until updated through the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md). The OR3 account and the `/admin` panel initially use the bootstrap credentials, but their passwords and sessions are separate after setup.
 
 Connect an OpenRouter account or paste an OpenRouter key to send AI messages. Cloud account credentials do not provide model access. See [accounts and access](/documentation/cloud/auth-system) for the distinction.
 

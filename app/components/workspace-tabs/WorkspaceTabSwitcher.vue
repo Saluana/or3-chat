@@ -165,7 +165,6 @@ import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/typ
 import {
     WORKSPACE_TAB_SORT_OPTIONS,
     sortWorkspaceTabs,
-    workspaceTabFallbackIcon,
     workspaceTabKindLabel,
     workspaceTabOpenedLabel,
     workspaceTabStatusDescription,
@@ -173,6 +172,7 @@ import {
     type WorkspaceTabSortId,
 } from '~/core/workspace-tabs/display';
 import { useIcon } from '~/composables/useIcon';
+import { useWorkspaceTabIcon } from '~/composables/core/useWorkspaceTabIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import AppIcon from '~/components/ui/AppIcon.vue';
 
@@ -205,6 +205,7 @@ const query = ref('');
 const sortId = ref<WorkspaceTabSortId>('recent');
 const sortOptions = [...WORKSPACE_TAB_SORT_OPTIONS];
 
+const tabIcon = useWorkspaceTabIcon();
 const closeIcon = useIcon('shell.pane.close');
 const newTabIcon = useIcon('shell.tab.new');
 const searchIcon = useIcon('shell.tabs.search');
@@ -445,7 +446,7 @@ watch(open, (isOpen) => {
 });
 
 function iconFor(tab: WorkspaceTab): string {
-    return props.iconByTabId?.get(tab.id) || workspaceTabFallbackIcon(tab);
+    return tabIcon(tab, props.iconByTabId?.get(tab.id));
 }
 
 function statusFor(tabId: string): WorkspaceTabStatus {

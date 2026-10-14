@@ -64,7 +64,7 @@ export function useDevelopmentCanary() {
     };
 
     /** Export the canary-bound developer verification receipt as a JSON download. */
-    const exportCanaryReceipt = async (pluginId: string, packageDigest: string): Promise<boolean> => {
+    const exportCanaryReceipt = async (pluginId: string, packageDigest: string, workspaceId?: string): Promise<boolean> => {
         try {
             const result = (await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
                 '/api/admin/plugins/development/verification',
@@ -72,7 +72,7 @@ export function useDevelopmentCanary() {
                     method: 'POST',
                     credentials: 'include',
                     headers: { ...ADMIN_HEADERS, 'content-type': 'application/json' },
-                    body: { pluginId, packageDigest, scope: 'runtime-canary' },
+                    body: { pluginId, packageDigest, workspaceId, scope: 'runtime-canary' },
                 }
             )) as { receipt: Record<string, unknown> };
             const blob = new Blob([`${JSON.stringify(result.receipt, null, 2)}\n`], { type: 'application/json' });

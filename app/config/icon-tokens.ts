@@ -13,6 +13,10 @@ export const DEFAULT_ICONS = {
     'shell.tab.new': 'i-lucide:plus',
     'shell.tabs': 'i-lucide:copy',
     'shell.tabs.search': 'i-lucide:search',
+    'shell.tab.chat': 'i-lucide-message-circle',
+    'shell.tab.document': 'i-lucide-file-text',
+    'shell.tab.app': 'i-lucide-panels-top-left',
+    'shell.tab.close': 'i-lucide-x',
 
     // Chat Interface
     'chat.send': 'pixelarticons:arrow-up',
@@ -44,7 +48,7 @@ export const DEFAULT_ICONS = {
     'chat.tool.loader': 'pixelarticons:loader',
     'chat.tool.check': 'pixelarticons:check',
     'chat.tool.error': 'pixelarticons:close',
-    'chat.tool.wrench': 'pixelarticons:wrench',
+    'chat.tool.wrench': 'pixelarticons:tools',
 
     // Sidebar
     'sidebar.search': 'pixelarticons:search',
@@ -64,6 +68,12 @@ export const DEFAULT_ICONS = {
     'sidebar.page.home': 'pixelarticons:home',
     'sidebar.page.messages': 'pixelarticons:comment',
     'sidebar.page.default': 'pixelarticons:view-grid',
+    'sidebar.page.files': 'i-lucide-files',
+    'sidebar.project.memory': 'i-lucide-bookmark',
+    'sidebar.project.knowledge.upload': 'i-lucide-upload',
+    'sidebar.project.knowledge.document': 'i-lucide-file-text',
+    'sidebar.project.knowledge.file': 'i-lucide-file',
+    'sidebar.project.knowledge.saved-file': 'i-lucide-paperclip',
 
     // Common UI
     'ui.check': 'pixelarticons:check',

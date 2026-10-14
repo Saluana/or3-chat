@@ -2,15 +2,19 @@
 
 Open **Projects** in the sidebar to search, pin, create, or return to a workspace. Project Home has recent activity and links to Knowledge, Memory, and Settings. Each chat has one owning project; opening another project does not change a turn already in progress.
 
+Click anywhere on a project card, including its padding, to open it with one click. The pin button only changes pinning. Opening a project remains available while a pin save is pending; keyboard users can open the focused card with Enter or Space.
+
 The Home sidebar has a **Projects** navigation row below Chats and Documents. It opens the full project list. Home shows up to five recent project shortcuts; **Show more** opens the full list when there are additional projects. Projects is a Home destination and does not add an icon to the collapsed rail or mobile bottom navigation. Expanded Home shortcuts load their children on demand, and the full Projects list renders only the rows near the visible area. Explicit workspace-profile navigation restrictions still apply.
 
 Project Home brings together the brief, links to **Knowledge** and **Memory**, and a time-grouped activity list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. The single top back button returns to the project from a section, then to **Home** when you entered through a Home shortcut or **Projects** when you entered through the list. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects. **New project** opens the shared creation modal with a title and optional brief; creating from the Projects page opens the new project's home in the sidebar. Browsing a project preserves the active pane and workspace tabs; opening or creating a chat uses the chat pane as usual.
 
-The brief appears beneath the project title as a compact two-line preview. Its pencil expands an inline editor on Project Home, prefilled with the saved brief. **Save brief** saves and collapses the editor; **Cancel** or Escape discards the draft. **New chat** and **New document** sit together below the title. New document creates an untitled OR3 document in this project, adds it to Knowledge with **Use when relevant**, and opens its editor. Documents created by project chat tools use the same Knowledge binding, so they can be read in later turns. The action is hidden when documents are disabled.
+The brief appears beneath the project title as a compact two-line preview. Its pencil expands an inline editor on Project Home, prefilled with the saved brief. **Save brief** saves and collapses the editor; **Cancel** or Escape discards the draft. **New chat in [project]** and **New document** sit together below the title. New document creates an untitled OR3 document in this project, adds it to Knowledge with **Use when relevant**, and opens its editor. Documents created by project chat tools use the same Knowledge binding, so they can be read in later turns. The action is hidden when documents are disabled.
 
 Project actions on every list row and the project header offer **Rename Project** and **Delete Project**, including projects outside Home’s five shortcuts. Deletion uses the existing recoverable delete flow.
 
 Unfinished brief, settings, note, and memory edits remain in this sidebar when you visit another project and return. Drafts stay in memory for the current workspace; switching workspaces or reloading clears them. Save edits before reloading. Clearing and saving a brief leaves it empty. The displayed brief is the same one sent with project chat.
+
+Browsing another project leaves each chat’s ownership unchanged.
 
 ## Knowledge
 

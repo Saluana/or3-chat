@@ -87,7 +87,7 @@
                     @click.stop="requestClose(tab.id)"
                     @pointerdown.stop
                 >
-                    <UIcon name="i-lucide-x" />
+                    <UIcon :name="closeIcon" />
                 </button>
             </div>
         </div>
@@ -133,11 +133,12 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
 import {
-    workspaceTabFallbackIcon,
     workspaceTabStatusDescription,
     workspaceTabTitle,
 } from '~/core/workspace-tabs/display';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+import { useWorkspaceTabIcon } from '~/composables/core/useWorkspaceTabIcon';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
     type WorkspaceNewTabItem,
@@ -185,6 +186,8 @@ const emit = defineEmits<{
     'copy-link': [tabId: string];
 }>();
 
+const tabIcon = useWorkspaceTabIcon();
+const closeIcon = useIcon('shell.tab.close');
 const strip = ref<HTMLElement | null>(null);
 const tabElements = new Map<string, HTMLElement>();
 type TabRect = { id: string; left: number; right: number; width: number };
@@ -255,7 +258,7 @@ function setTabElement(
 }
 
 function resourceIcon(tab: WorkspaceTab): string {
-    return props.iconByTabId?.get(tab.id) || workspaceTabFallbackIcon(tab);
+    return tabIcon(tab, props.iconByTabId?.get(tab.id));
 }
 
 function statusFor(tabId: string): WorkspaceTabStatus {

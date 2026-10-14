@@ -226,7 +226,6 @@ textarea::-webkit-scrollbar-thumb:hover {
 
     .chat-input-main .chat-input-bottom-controls .chat-input-model-select,
     .chat-input-main .chat-input-bottom-controls .chat-input-composer-actions,
-    .chat-input-main .chat-input-bottom-controls-left > span,
     .chat-input-main .chat-input-attachments {
         display: none !important;
     }

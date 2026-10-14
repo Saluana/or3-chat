@@ -34,6 +34,8 @@ export function toolResponse(calls: FixtureCall[]): string {
 export const priorityCases: { name: string; rounds: FixtureCall[][]; executions: number; errors: number; pattern?: RegExp }[] = [
     { name: '1 successful tool', rounds: [[fixtureCall('success')]], executions: 1, errors: 0 },
     { name: '2 handler throws', rounds: [[fixtureCall('failure', 'test_fail')]], executions: 1, errors: 1, pattern: /deliberate fixture failure/ },
+    { name: 'handler throws an empty error', rounds: [[fixtureCall('empty-error', 'test_fail', 'empty-error')]], executions: 1, errors: 1, pattern: /Tool execution failed/ },
+    { name: 'handler throws an oversized error', rounds: [[fixtureCall('large-error', 'test_fail', 'large-error')]], executions: 1, errors: 1, pattern: /token=\[redacted\]/ },
     { name: '3 tool never responds', rounds: [[fixtureCall('timeout', 'test_slow')]], executions: 1, errors: 1, pattern: /timed out/ },
     { name: '4 invalid JSON', rounds: [[{ id: 'json', name: 'test_echo', args: '{invalid' }]], executions: 0, errors: 1, pattern: /JSON/i },
     { name: '5 wrong argument types', rounds: [[fixtureCall('types', 'test_write_once', 42)]], executions: 0, errors: 1, pattern: /string|validation/i },

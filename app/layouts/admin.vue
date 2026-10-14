@@ -339,6 +339,7 @@ function openWorkspaceSelector() {
 
 function onWorkspaceSelected(workspace: AdminWorkspaceSelection) {
     selectWorkspace(workspace);
+    if (route.path.startsWith('/admin/plugins')) void navigateTo({ path: route.path, query: { ...route.query, scope: 'workspace', workspaceId: workspace.id } });
 }
 
 // Handle errors
@@ -396,7 +397,7 @@ const isWorkspaceAdmin = computed(
     () => adminSession.value?.kind === 'workspace_admin'
 );
 const showWorkspaceContext = computed(
-    () => hasWorkspace.value && route.path.startsWith('/admin/plugins')
+    () => hasWorkspace.value && route.path.startsWith('/admin/plugins') && route.query.scope === 'workspace' && selectedWorkspace.value?.id === route.query.workspaceId
 );
 
 const navLinks = computed<NavLink[]>(() => {
@@ -405,6 +406,8 @@ const navLinks = computed<NavLink[]>(() => {
     if (isSuperAdmin.value) {
         base.push(
             { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
+            { label: 'Signup invites', to: '/admin/signup-invites', icon: 'i-lucide-mail-plus', section: 'Site' },
+            { label: 'Administrators', to: '/admin/admin-users', icon: 'i-lucide-shield', section: 'Site' },
             { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },
             { label: 'UI & Branding', to: '/admin/branding', icon: brandingIcon, section: 'Experience' },
             { label: 'Features', to: '/admin/features', icon: featuresIcon, section: 'Experience' },

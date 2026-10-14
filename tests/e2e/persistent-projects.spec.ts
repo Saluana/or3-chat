@@ -155,6 +155,91 @@ test.afterEach(async ({ page }, info) => {
         contentType: 'application/json',
     });
 });
+test('project cards open on the first click and while pinning is pending', async ({ page }, info) => {
+    await page.context().addCookies([
+        { name: 'or3_active_theme', value: 'retro', domain: '127.0.0.1', path: '/' },
+    ]);
+    await page.addInitScript(() => localStorage.setItem('activeTheme', 'retro'));
+    await page.goto('/__or3-projects-journey');
+    const projects = page.getByRole('region', { name: 'Projects', exact: true });
+    await expect(projects).toBeVisible({ timeout: 60000 });
+    await createProject(page, 'Clickable project');
+    const heading = projects.getByRole('heading', { name: 'Clickable project', exact: true });
+    const allProjects = projects.getByRole('button', { name: 'All projects', exact: true });
+    const openButton = projects.getByRole('button', { name: 'Clickable project', exact: true });
+
+    // Padding clicks previously hit the styled wrapper without a click handler.
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewport);
+        for (const edge of ['left', 'top', 'bottom'] as const) {
+            await allProjects.click();
+            const card = projects.locator('.unified-sb-item').filter({ hasText: 'Clickable project' });
+            await card.scrollIntoViewIfNeeded();
+            const bounds = (await card.boundingBox())!;
+            await page.mouse.click(
+                bounds.x + (edge === 'left' ? 5 : bounds.width / 3),
+                bounds.y + (edge === 'top' ? 5 : edge === 'bottom' ? bounds.height - 5 : bounds.height / 2),
+            );
+            await expect(heading).toBeVisible({ timeout: 3000 });
+        }
+    }
+    for (const key of ['Enter', 'Space']) {
+        await allProjects.click();
+        await openButton.press(key);
+        await expect(heading).toBeVisible();
+    }
+    await allProjects.click();
+    await projects.getByRole('button', { name: 'Pin project', exact: true }).click();
+    await expect(projects.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+    await expect(projects.getByRole('button', { name: 'Unpin project', exact: true })).toBeVisible();
+
+    // Hold a real storage transaction so pinning cannot finish before opening.
+    await page.evaluate(async () => {
+        const name = (await indexedDB.databases()).find(entry => entry.name?.startsWith('or3-db'))?.name;
+        if (!name) throw new Error('Project database is unavailable.');
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open(name);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const transaction = db.transaction('posts', 'readwrite');
+        let held = true;
+        const keepAlive = () => {
+            const request = transaction.objectStore('posts').get('sidebar-navigation-lock');
+            request.onsuccess = () => { if (held) keepAlive(); };
+        };
+        keepAlive();
+        const host = window as typeof window & { releaseProjectPin?: () => void };
+        host.releaseProjectPin = () => {
+            held = false;
+            db.close();
+            delete host.releaseProjectPin;
+        };
+    });
+    try {
+        await projects.getByRole('button', { name: 'Unpin project', exact: true }).click();
+        await openButton.click();
+        await expect(allProjects).toBeVisible({ timeout: 3000 });
+    } finally {
+        await page.evaluate(() => {
+            (window as typeof window & { releaseProjectPin?: () => void }).releaseProjectPin?.();
+        });
+    }
+    await expect(heading).toBeVisible();
+    const screenshot = info.outputPath('project-card-open.png');
+    await projects.screenshot({ path: screenshot });
+    await info.attach('project-card-open', { path: screenshot, contentType: 'image/png' });
+    const receipt = info.outputPath('project-card-click-receipt.json');
+    await writeFile(receipt, JSON.stringify({
+        firstClickOpens: ['left padding', 'top padding', 'bottom padding'],
+        viewportWidths: [1280, 390],
+        keyboardOpens: ['Enter', 'Space'],
+        pinDoesNotNavigate: true,
+        navigationDuringPendingPin: true,
+    }, null, 2));
+    await info.attach('project-card-click-receipt', { path: receipt, contentType: 'application/json' });
+});
+
 test('Projects stays in the sidebar while browsing, creating, pinning and searching', async ({
     page,
 }, info) => {

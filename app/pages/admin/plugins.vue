@@ -19,8 +19,15 @@
             </p>
         </div>
 
+        <nav class="flex gap-2" aria-label="Plugin scope">
+            <UButton v-if="session?.kind === 'super_admin'" :variant="workspaceScope ? 'soft' : 'solid'" @click="changeScope('instance')">Instance</UButton>
+            <UButton :variant="workspaceScope ? 'solid' : 'soft'" @click="changeScope('workspace')">Workspace</UButton>
+            <UButton v-if="workspaceScope && session?.kind === 'super_admin'" color="neutral" variant="soft" @click="showWorkspaceSelector = true">Choose workspace</UButton>
+        </nav>
+        <p v-if="workspaceScope && !selectedWorkspaceId" class="text-sm opacity-70">Choose a workspace to manage its enablement, permissions, and setup.</p>
+        <p v-if="pageError" class="text-sm" role="alert">{{ pageError.message }}</p>
         <nav class="flex flex-wrap gap-2" aria-label="Plugin management sections">
-            <UButton v-if="canManageSitePlugins" size="sm" color="neutral" variant="soft" to="#site-plugin-catalog">Site catalog</UButton>
+            <UButton v-if="canManageSitePlugins && !workspaceScope" size="sm" color="neutral" variant="soft" to="#site-plugin-catalog">Site catalog</UButton>
             <UButton v-if="canManageSitePlugins && v2Packages.length" size="sm" color="neutral" variant="soft" to="#managed-v2">Installed packages</UButton>
             <UButton size="sm" color="neutral" variant="soft" to="/chat?dashboard=marketplace&page=updates">Updates</UButton>
         </nav>
@@ -38,7 +45,7 @@
             </UButton>
         </div>
 
-        <section v-if="canManageSitePlugins" id="site-plugin-catalog" class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
+        <section v-if="canManageSitePlugins && !workspaceScope" id="site-plugin-catalog" class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h3 class="text-lg font-medium">Site catalog approvals</h3>
@@ -78,7 +85,8 @@
         <details class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
             <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Advanced source plugins and development admission</summary>
             <div class="space-y-4 border-t border-[var(--md-outline-variant)] p-4">
-        <PluginDevelopmentAdmission />
+        <PluginDevelopmentAdmission v-if="workspaceScope && selectedWorkspaceId" :key="selectedWorkspaceId" :workspace-id="selectedWorkspaceId" />
+        <p v-else class="text-sm opacity-70">Use the Workspace tab to admit a development candidate and review its workspace permissions.</p>
 
         <div
             v-if="rebuildRequired && rebuildAvailable"
@@ -113,8 +121,12 @@
                     <p class="text-xs opacity-70">
                         Add or uninstall site-wide; activate per workspace.
                     </p>
+                    <p v-if="canManageSitePlugins && extensionInstallEnabled" class="mt-1 text-xs opacity-70">
+                        <template v-if="workspaceScope && selectedWorkspaceId">V2 uploads are prepared for {{ workspaceContextName }}. Review permissions and run the canary before promotion.</template>
+                        <template v-else>For V2 packages, open the Workspace tab and choose a workspace before uploading.</template>
+                    </p>
                 </div>
-                <div v-if="canManageSitePlugins && extensionInstallEnabled" class="flex flex-wrap items-center gap-2">
+                <div v-if="canManageSitePlugins && extensionInstallEnabled && (!workspaceScope || selectedWorkspaceId)" class="flex flex-wrap items-center gap-2">
                      <!-- Input hidden mostly, custom button triggers it -->
                     <input
                         ref="fileInput"
@@ -169,7 +181,7 @@
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <UBadge :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
+                            <UBadge v-if="workspaceScope && selectedWorkspaceId" :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
                                 {{ enabledSet.has(plugin.id) ? 'Active' : 'Inactive' }}
                             </UBadge>
                         </div>
@@ -182,6 +194,7 @@
                             :variant="enabledSet.has(plugin.id) ? 'soft' : 'solid'"
                             :disabled="!isOwner || toggleLoading[plugin.id]"
                             :loading="toggleLoading[plugin.id]"
+                            v-if="workspaceScope && selectedWorkspaceId"
                             @click="togglePlugin(plugin.id)"
                         >
                             {{ enabledSet.has(plugin.id) ? 'Deactivate' : 'Activate' }}
@@ -190,7 +203,7 @@
                             size="sm"
                             color="error"
                             variant="ghost"
-                            :disabled="!canManageSitePlugins"
+                            v-if="canManageSitePlugins && !workspaceScope"
                             @click="uninstallPlugin(plugin.id)"
                         >
                             Uninstall
@@ -198,7 +211,7 @@
                         
                         <div class="flex-1"></div>
 
-                        <UPopover
+                        <UPopover v-if="workspaceScope && selectedWorkspaceId"
                             :content="{
                                 side: 'left',
                                 align: 'end',
@@ -255,6 +268,7 @@
                                     <div class="text-xs font-semibold uppercase opacity-60">Configuration (JSON)</div>
                                     <UTextarea
                                         v-model="settingsByPlugin[plugin.id]"
+                                        :aria-label="`Configuration JSON for ${plugin.id}`"
                                         :rows="6"
                                         size="xs"
                                         :disabled="!isOwner"
@@ -282,7 +296,7 @@
         </details>
 
         <div id="managed-v2"
-            v-if="canManageSitePlugins && v2Packages.length > 0"
+            v-if="v2Packages.length > 0"
             class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
         >
             <div class="mb-4">
@@ -327,7 +341,7 @@
                         <UButton v-if="statusFor(packagePlugin).action === 'configure' && selectedWorkspaceId && chatWorkspaceId === selectedWorkspaceId" size="xs" color="neutral" variant="soft" :to="`/chat?dashboard=marketplace&plugin=${encodeURIComponent(packagePlugin.pluginId)}&workspace=${encodeURIComponent(selectedWorkspaceId ?? '')}&setup=1`">Open workspace setup</UButton>
                         <p v-else-if="statusFor(packagePlugin).action === 'configure'" class="w-full text-xs opacity-70">Select {{ workspaceContextName || selectedWorkspaceId }} in Chat, then open this plugin’s Configure page.</p>
                         <UButton
-                            v-if="packagePlugin.pointer?.current"
+                            v-if="workspaceScope && selectedWorkspaceId && packagePlugin.pointer?.current"
                             size="xs"
                             color="neutral"
                             :loading="v2ActionLoading[packagePlugin.pluginId]"
@@ -336,7 +350,7 @@
                             Review selected permissions
                         </UButton>
                         <UButton
-                            v-if="packagePlugin.pointer?.candidate"
+                            v-if="workspaceScope && selectedWorkspaceId && packagePlugin.pointer?.candidate"
                             size="xs"
                             color="neutral"
                             :loading="v2ActionLoading[packagePlugin.pluginId]"
@@ -348,12 +362,13 @@
                             size="xs"
                             :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
                             :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            v-if="workspaceScope && selectedWorkspaceId"
                             @click="runV2Canary(packagePlugin.pluginId)"
                         >
                             Run canary
                         </UButton>
                         <UButton
-                            v-if="packagePlugin.pointer?.candidate"
+                            v-if="workspaceScope && selectedWorkspaceId && packagePlugin.pointer?.candidate"
                             size="xs"
                             color="neutral"
                             :loading="developmentCanary.busyPluginId.value === packagePlugin.pluginId"
@@ -365,11 +380,11 @@
                             {{ developmentCanary.notes.value[packagePlugin.pluginId] }}
                         </p>
                         <UButton
-                            v-if="packagePlugin.localAdmission && packagePlugin.pointer?.candidate"
+                            v-if="workspaceScope && selectedWorkspaceId && packagePlugin.localAdmission && packagePlugin.pointer?.candidate"
                             size="xs"
                             color="neutral"
                             variant="ghost"
-                            @click="developmentCanary.exportCanaryReceipt(packagePlugin.pluginId, packagePlugin.pointer.candidate.packageDigest)"
+                            @click="developmentCanary.exportCanaryReceipt(packagePlugin.pluginId, packagePlugin.pointer.candidate.packageDigest, selectedWorkspaceId || undefined)"
                         >
                             Export verification receipt
                         </UButton>
@@ -378,6 +393,7 @@
                             color="primary"
                             :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
                             :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            v-if="workspaceScope && selectedWorkspaceId"
                             @click="promoteV2Candidate(packagePlugin.pluginId, packagePlugin.pointer?.candidate?.packageDigest)"
                         >
                             Promote
@@ -386,6 +402,7 @@
                             size="xs"
                             :disabled="!packagePlugin.pointer?.previous || v2ActionLoading[packagePlugin.pluginId]"
                             :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            v-if="canManageSitePlugins && !workspaceScope"
                             @click="rollbackV2Package(packagePlugin.pluginId)"
                         >
                             Roll back
@@ -395,11 +412,12 @@
                             :color="enabledSet.has(packagePlugin.pluginId) ? 'neutral' : 'primary'"
                             :disabled="!packagePlugin.pointer?.current || toggleLoading[packagePlugin.pluginId]"
                             :loading="toggleLoading[packagePlugin.pluginId]"
+                            v-if="workspaceScope && selectedWorkspaceId"
                             @click="togglePlugin(packagePlugin.pluginId)"
                         >
                             {{ enabledSet.has(packagePlugin.pluginId) ? 'Deactivate workspace' : 'Activate workspace' }}
                         </UButton>
-                        <UButton size="xs" color="neutral" variant="soft" :disabled="!packagePlugin.pointer?.current" @click="rolloutPluginId = rolloutPluginId === packagePlugin.pluginId ? null : packagePlugin.pluginId">
+                        <UButton v-if="canManageSitePlugins && !workspaceScope" size="xs" color="neutral" variant="soft" :disabled="!packagePlugin.pointer?.current" @click="rolloutPluginId = rolloutPluginId === packagePlugin.pluginId ? null : packagePlugin.pluginId">
                             Enable or disable workspaces
                         </UButton>
                         <UButton
@@ -407,12 +425,13 @@
                             color="error"
                             variant="ghost"
                             :disabled="v2ActionLoading[packagePlugin.pluginId]"
+                            v-if="canManageSitePlugins && !workspaceScope"
                             @click="uninstallV2Package(packagePlugin.pluginId)"
                         >
                             Uninstall package
                         </UButton>
                     </div>
-                    <AdminPluginWorkspaceRollout v-if="rolloutPluginId === packagePlugin.pluginId" :plugin-id="packagePlugin.pluginId" :version="packagePlugin.display?.version ?? null" />
+                    <AdminPluginWorkspaceRollout v-if="!workspaceScope && rolloutPluginId === packagePlugin.pluginId" :plugin-id="packagePlugin.pluginId" :version="packagePlugin.display?.version ?? null" />
                 </div>
             </div>
         </div>
@@ -452,7 +471,6 @@ import {
     withSerializedAccessPolicy,
     type AccessEditorState,
 } from '~/utils/admin/plugin-access-policy';
-import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 import PluginDevelopmentAdmission from '~/components/admin/PluginDevelopmentAdmission.vue';
 import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
@@ -475,10 +493,10 @@ type ManagedV2Package = {
         candidate: { packageDigest: string } | null;
         previous: { packageDigest: string } | null;
     } | null;
-    workspaceEnabled: boolean;
+    workspaceEnabled: boolean | null;
     siteApproval?: 'approved' | 'required' | 'unknown';
-    grantReview?: 'current' | 'required' | 'unknown';
-    setup?: 'ready' | 'required' | 'blocked' | 'unknown';
+    grantReview?: 'current' | 'required' | 'unknown' | null;
+    setup?: 'ready' | 'required' | 'blocked' | 'unknown' | null;
     display?: {
         version: string | null;
         selectedDigest: string | null;
@@ -499,23 +517,35 @@ type ManagedV2Package = {
     adminUpload?: boolean;
 };
 
-const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
-    useAdminWorkspaceGate(async () => {
-        await refreshPage();
-    });
-
+const route = useRoute();
+const router = useRouter();
 const { data: session } = useAdminSession();
+const workspaceScope = computed(() => session.value?.kind === 'workspace_admin' || route.query.scope === 'workspace' || (route.query.scope !== 'instance' && typeof route.query.workspaceId === 'string'));
+const selectedWorkspaceId = computed(() => workspaceScope.value
+    ? session.value?.kind === 'workspace_admin' ? session.value.workspace?.id ?? null
+        : typeof route.query.workspaceId === 'string' ? route.query.workspaceId : null
+    : null);
+const showWorkspaceSelector = ref(false);
+async function changeScope(scope: 'instance' | 'workspace') {
+    await router.replace({ query: { ...route.query, scope, ...(scope === 'instance' ? { workspaceId: undefined } : {}) } });
+}
+function onWorkspaceSelected(workspace: { id: string; name: string }) {
+    showWorkspaceSelector.value = false;
+    void router.replace({ query: { ...route.query, scope: 'workspace', workspaceId: workspace.id } });
+}
 const {
-    data: pageData,
+    data: rawPageData,
+    error: pageError,
     status,
     refresh: refreshPage,
 } = useFetch<{
     plugins: ExtensionItem[];
     role?: string;
     canManageSitePlugins: boolean;
-    workspaceId: string;
-    workspaceName?: string;
-    enabledPlugins: string[];
+    workspaceId: string | null;
+    workspaceName?: string | null;
+    workspaceState: { workspaceId: string; enabledPlugins: string[] } | null;
+    enabledPlugins: string[] | null;
     packagePlugins: ManagedV2Package[];
 }>('/api/admin/plugins-page', {
     query: computed(() => ({
@@ -524,10 +554,13 @@ const {
     credentials: 'include',
     server: false,
     immediate: false,
-    dedupe: 'defer',
+    key: computed(() => `admin:plugins:${selectedWorkspaceId.value ?? 'instance'}`),
+    watch: false,
+    dedupe: 'cancel',
 });
+const pageData = computed(() => rawPageData.value?.workspaceId === selectedWorkspaceId.value ? rawPageData.value : null);
 const isOwner = computed(() => pageData.value?.role === 'owner');
-const canManageSitePlugins = computed(() => pageData.value?.canManageSitePlugins === true);
+const canManageSitePlugins = computed(() => session.value?.kind === 'super_admin');
 type SiteCatalogCard = { pluginId: string; name?: string; summary?: string; latestRelease?: { version?: string } | null };
 type SiteCatalogPolicy = { pluginId: string; revision: number; catalogVisible: boolean; futureDefaultEnabled: boolean; approvedRelease: { version: string } };
 const siteCatalogCards = ref<SiteCatalogCard[]>([]);
@@ -562,7 +595,9 @@ async function loadSiteCatalog() {
 }
 function searchSiteCatalog() { siteCatalogPage.value = 1; void loadSiteCatalog(); }
 function changeSiteCatalogPage(delta: number) { siteCatalogPage.value += delta; void loadSiteCatalog(); }
-watch(canManageSitePlugins, (allowed) => { if (allowed) void loadSiteCatalog(); }, { immediate: true });
+onMounted(() => {
+    watch(canManageSitePlugins, (allowed) => { if (allowed) void loadSiteCatalog(); }, { immediate: true });
+});
 async function reviewSiteRelease(pluginId: string, version?: string) {
     if (!version || siteCatalogBusy.value) return;
     siteCatalogBusy.value = pluginId;
@@ -621,10 +656,7 @@ async function hideSiteRelease(pluginId: string) {
         siteCatalogBusy.value = null;
     }
 }
-const { selectedWorkspace } = useAdminWorkspaceContext();
-const workspaceContextName = computed(
-    () => selectedWorkspace.value?.name || pageData.value?.workspaceName
-);
+const workspaceContextName = computed(() => workspaceScope.value ? pageData.value?.workspaceName ?? (session.value?.kind === 'workspace_admin' ? session.value.workspace?.name : null) ?? selectedWorkspaceId.value : null);
 
 // 4. Extension Management
 const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useExtensionManagement(
@@ -716,13 +748,13 @@ function focusSiteCatalog() {
     (document.querySelector('#site-plugin-catalog input') as HTMLInputElement | null)?.focus();
 }
 const rolloutPluginId = ref<string | null>(null);
-const route = useRoute();
 watch([v2Packages, () => route.query.plugin], ([packages, plugin]) => {
     if (typeof plugin === 'string' && packages.some((entry) => entry.pluginId === plugin)) rolloutPluginId.value = plugin;
 }, { immediate: true });
 const portableActivations = usePortableActivations();
 const trustedV2Activations = useTrustedV2Activations();
 function statusFor(entry: ManagedV2Package) {
+    if (!selectedWorkspaceId.value) return { state: entry.startup.status === 'ready' ? 'installed' : 'needs-attention', label: entry.startup.status === 'ready' ? 'Installed' : 'Needs attention', reason: 'Shared package selection. Choose a workspace to see enablement and runtime status.', action: null };
     return describePluginStatus(
         pluginLifecycleView(entry, selectedWorkspaceId.value || null, portableActivations, trustedV2Activations),
         {
@@ -744,6 +776,11 @@ const accessByPlugin = reactive<
         AccessEditorState
     >
 >({});
+watch(selectedWorkspaceId, () => {
+    for (const key of Object.keys(settingsByPlugin)) delete settingsByPlugin[key];
+    for (const key of Object.keys(accessByPlugin)) delete accessByPlugin[key];
+    enabledSet.value = new Set();
+});
 const toggleLoading = reactive<Record<string, boolean>>({});
 const v2ActionLoading = reactive<Record<string, boolean>>({});
 const { confirm } = useConfirmDialog();
@@ -762,21 +799,23 @@ watch(() => pageData.value, (val) => {
     }
 }, { immediate: true });
 
-watch(
-    [() => session.value?.kind, selectedWorkspaceId],
-    ([kind, workspaceId]) => {
-        if (
-            kind === 'workspace_admin' ||
-            (kind === 'super_admin' && workspaceId)
-        ) {
-            void refreshPage();
-        }
-    },
-    { immediate: true }
-);
+// Keep client-only fetches out of SSR and the initial hydration render.
+onMounted(() => {
+    watch(
+        [() => session.value?.kind, selectedWorkspaceId],
+        ([kind]) => {
+            if (kind === 'workspace_admin' || kind === 'super_admin') {
+                void refreshPage();
+            }
+        },
+        { immediate: true }
+    );
+});
 
 // Actions
 async function setEnabled(pluginId: string, enabled: boolean) {
+    if (!selectedWorkspaceId.value) return;
+    const target = selectedWorkspaceId.value;
     const res = await $fetch<{ ok: boolean; enabled: string[] }>(
         '/api/admin/plugins/workspace-enable',
         {
@@ -789,7 +828,7 @@ async function setEnabled(pluginId: string, enabled: boolean) {
             headers: ADMIN_HEADERS,
         }
     );
-    enabledSet.value = new Set(res.enabled);
+    if (selectedWorkspaceId.value === target) enabledSet.value = new Set(res.enabled);
     requestWorkspacePluginReconcile('local-admin-change');
 }
 
@@ -848,6 +887,8 @@ async function runV2PackageAction(
     body: Record<string, unknown> = {}
 ) {
     if (!canManageSitePlugins.value || v2ActionLoading[pluginId]) return;
+    const workspaceId = selectedWorkspaceId.value;
+    if ((action === 'canary' || action === 'promote') && !workspaceId) return;
     v2ActionLoading[pluginId] = true;
     try {
         const result = await $fetch<{ ok: boolean; code?: string }>(
@@ -855,7 +896,7 @@ async function runV2PackageAction(
             {
                 method: 'POST',
                 body: {
-                    workspaceId: selectedWorkspaceId.value,
+                    ...(action === 'uninstall' || action === 'rollback' ? {} : { workspaceId }),
                     ...body,
                 },
                 headers: ADMIN_HEADERS,
@@ -886,7 +927,8 @@ async function runV2Canary(pluginId: string) {
 }
 
 async function reviewV2Permissions(pluginId: string, target: 'current' | 'candidate') {
-    if (!canManageSitePlugins.value || v2ActionLoading[pluginId]) return;
+    if (!canManageSitePlugins.value || !selectedWorkspaceId.value || v2ActionLoading[pluginId]) return;
+    const targetWorkspaceId = selectedWorkspaceId.value;
     v2ActionLoading[pluginId] = true;
     try {
         const review = await $fetch<{
@@ -896,7 +938,7 @@ async function reviewV2Permissions(pluginId: string, target: 'current' | 'candid
             reviewStatus: string;
             version: string;
         }>(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/review`, {
-            query: { workspaceId: selectedWorkspaceId.value, target },
+            query: { workspaceId: targetWorkspaceId, target },
         });
         if (review.reviewStatus === 'current') {
             toast.add({ title: 'Permissions already reviewed', color: 'info' });
@@ -911,12 +953,12 @@ async function reviewV2Permissions(pluginId: string, target: 'current' | 'candid
             noteTone: 'warning',
             confirmText: 'Approve permissions',
         });
-        if (!approved) return;
+        if (!approved || selectedWorkspaceId.value !== targetWorkspaceId) return;
         await $fetch(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/grants`, {
             method: 'POST',
             headers: ADMIN_HEADERS,
             body: {
-                workspaceId: selectedWorkspaceId.value,
+                workspaceId: targetWorkspaceId,
                 approvedGrants: review.requestedGrants,
                 expectedPackageDigest: review.packageDigest,
                 expectedAuthoritySha256: review.authoritySha256,
@@ -962,7 +1004,7 @@ async function rollbackV2Package(pluginId: string) {
         if (!approved) return;
         await $fetch(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/rollback`, {
             method: 'POST', headers: ADMIN_HEADERS,
-            body: { workspaceId: selectedWorkspaceId.value, expectedCurrentDigest: review.currentDigest,
+            body: { expectedCurrentDigest: review.currentDigest,
                 expectedPreviousDigest: review.previousDigest, expectedPointerRevision: review.pointerRevision,
                 expectedEnabledWorkspaceSha256: review.enabledWorkspaceSha256 },
         });
@@ -975,17 +1017,22 @@ async function rollbackV2Package(pluginId: string) {
 }
 
 async function uninstallV2Package(pluginId: string) {
+    const digest = v2Packages.value.find(p => p.pluginId === pluginId)?.pointer?.current?.packageDigest;
+    if (!digest) return;
     const confirmed = await confirm({
         title: 'Uninstall V2 package',
-        message: `Remove the global V2 package pointer for "${pluginId}"? Package bytes and workspace data are retained.`,
+        message: `Uninstall this package from every workspace on the instance: "${pluginId}"? Package bytes and workspace data are retained.`,
         danger: true,
+        importantNote: `Selected package: ${digest}. This disables the plugin in every workspace.`,
         confirmText: 'Uninstall package',
     });
     if (!confirmed) return;
-    await runV2PackageAction(pluginId, 'uninstall');
+    await runV2PackageAction(pluginId, 'uninstall', { expectedPackageDigest: digest });
 }
 
 async function loadSettings(pluginId: string) {
+    const targetWorkspaceId = selectedWorkspaceId.value;
+    if (!targetWorkspaceId) return;
     if (settingsByPlugin[pluginId]) return;
     const res = await $fetch<{
         settings: Record<string, unknown>;
@@ -1003,6 +1050,7 @@ async function loadSettings(pluginId: string) {
             },
         }
     );
+    if (selectedWorkspaceId.value !== targetWorkspaceId) return;
     settingsByPlugin[pluginId] = JSON.stringify(res.settings ?? {}, null, 2);
     accessByPlugin[pluginId] = deserializeAccessEditor(
         res.effectiveAccessPolicy
@@ -1010,7 +1058,7 @@ async function loadSettings(pluginId: string) {
 }
 
 async function saveSettings(pluginId: string) {
-    if (!isOwner.value) return;
+    if (!isOwner.value || !selectedWorkspaceId.value) return;
     const raw = settingsByPlugin[pluginId] || '{}';
     let parsed: Record<string, unknown> = {};
     try {

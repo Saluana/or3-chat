@@ -70,8 +70,7 @@ const monogramFont = computed(() =>
     <span
         class="inline-flex items-center justify-center shrink-0 select-none"
         :style="tileStyle"
-        role="img"
-        :aria-label="info.name"
+        aria-hidden="true"
         :title="info.name"
     >
         <UIcon

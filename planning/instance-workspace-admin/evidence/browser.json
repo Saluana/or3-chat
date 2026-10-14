@@ -1,0 +1,62 @@
+{
+  "passed": true,
+  "changedJourneys": 8,
+  "fullSignInRegression": 15,
+  "adminAuthJourneys": 3,
+  "trace": "off",
+  "cases": {
+    "completed-signup-invite-mobile": {
+      "inviteKind": "signup",
+      "email": "invite-mobile-2fc1b118-5585-446b-b03f-8f6ea02f712f@example.test",
+      "inviterWorkspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "workspaceId": "918eea22-9423-49da-a56f-c034f562d4a9",
+      "role": "owner",
+      "registrationStatus": 200,
+      "sessionAfterReload": true
+    },
+    "native-signup-race": {
+      "preflightLeftNoCredentials": true,
+      "singleWinner": "revoked",
+      "replayChecked": false
+    },
+    "completed-team-invite-desktop": {
+      "inviteKind": "team",
+      "email": "invite-desktop-ca68ef02-ea1e-42b4-b482-f533ac6e98f7@example.test",
+      "inviterWorkspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "workspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "role": "viewer",
+      "registrationStatus": 200,
+      "sessionAfterReload": true
+    },
+    "interrupted-signup-receipt": {
+      "completed": true,
+      "privateWorkspace": "2667ea57-6ffc-40ef-a09b-472cc07bbff8",
+      "originalInviteRevoked": true,
+      "replacementAccepted": true
+    },
+    "completed-team-invite-mobile": {
+      "inviteKind": "team",
+      "email": "invite-mobile-33cf1434-705d-4410-9e20-f02a1c6cb554@example.test",
+      "inviterWorkspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "workspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "role": "viewer",
+      "registrationStatus": 200,
+      "sessionAfterReload": true
+    },
+    "completed-signup-invite-desktop": {
+      "inviteKind": "signup",
+      "email": "invite-desktop-cd668c55-d30d-4ba7-b4a6-95f244e46e94@example.test",
+      "inviterWorkspaceId": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "workspaceId": "ec48cdc8-d2a9-43ab-abd1-4549a8493d41",
+      "role": "owner",
+      "registrationStatus": 200,
+      "sessionAfterReload": true
+    },
+    "plugin-scope-receipt": {
+      "explicitTarget": "5aefc212-757a-4baf-8e3b-a518450e031c",
+      "chatWorkspace": "cdd2f009-d26f-471e-b23b-c90df2ea90a6",
+      "preservedDeepLink": true,
+      "instanceNeedsNoWorkspace": true
+    }
+  }
+}

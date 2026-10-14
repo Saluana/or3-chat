@@ -129,7 +129,7 @@ vi.mock('#app', async () => {
 
 // Mock useThemeOverrides globally
 vi.mock('~/composables/useThemeResolver', () => ({
-    useThemeOverrides: () => ({ value: {} }),
+    useThemeOverrides: () => computed(() => ({})),
     useThemeResolver: () => ({
         activeTheme: { value: 'light' },
         resolveOverrides: () => ({}),

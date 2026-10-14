@@ -256,3 +256,7 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 - Admin plugin enablement is stored in `kv`, but runtime loading of installed plugins in the main app still needs a dedicated loader that filters by `plugins.enabled`. Until that is wired, enabling a plugin will not activate its UI extensions.
 - Restart/rebuild endpoints now block in development mode to avoid Nitro worker exits; operators should restart the dev server manually.
+
+## Instance administration and private signup (2026-10-12)
+
+The [simplified admin plan](../../instance-workspace-admin/tasks.md) separates instance controls from explicit workspace targets. Signup invitations live in the selected AuthWorkspaceStore and atomically create a recipient-only private workspace; team invites retain their existing behavior. Basic Auth keeps its credential database and supports ordinary sign-in retry. Native SQLite and trusted Convex mutations own canonical acceptance. Shared plugin rollback/uninstall retain all-workspace safeguards without fabricated workspace attribution. A general user directory remains deferred. Verification is recorded in the linked plan.

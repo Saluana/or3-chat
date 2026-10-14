@@ -75,6 +75,7 @@ const props = defineProps<{
     readonly fieldErrors?: Readonly<Record<string, string>>;
     /** How many credentials this plugin currently has stored. */
     readonly storedConnections: number;
+    readonly busy?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -214,7 +215,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                 :color="status.status === 'ready' ? 'success' : status.blocked ? 'error' : 'warning'"
                 variant="soft"
             >
-                {{ status.label }}
+                {{ status.status === 'ready' ? 'Configuration ready' : status.label }}
             </UBadge>
         </header>
 
@@ -464,7 +465,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                     size="sm"
                     color="primary"
                     variant="solid"
-                    :disabled="!firstAction.ready"
+                    :disabled="busy || !firstAction.ready"
                     @click="emit('run-first-action')"
                 >
                     {{ firstAction.label }}

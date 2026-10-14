@@ -1005,7 +1005,7 @@ function resolvePaneComponent(pane: PaneState): Component {
     }
 
     // Custom pane app
-    const app = getPaneApp(pane.mode);
+    const app = listPaneApps.value.find((entry) => entry.id === pane.mode);
     if (import.meta.dev && !app?.component) {
         console.warn('[PageShell] Missing component for pane mode', pane.mode);
     }

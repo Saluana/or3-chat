@@ -26,11 +26,11 @@
                             : toolsView ? 'Tools' : 'Chat settings'
                     }}
                 </h2>
-                <p class="chat-settings-subtitle">
+                <p v-if="toolsView" class="chat-settings-subtitle">
                     {{
                         activeGroup
                             ? `${activeGroup.tools.length} tools`
-                            : toolsView ? 'Choose a tool category.' : 'Customize how your chats work.'
+                            : 'Choose a tool category.'
                     }}
                 </p>
             </div>
@@ -61,7 +61,7 @@
             >
                 <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="32" :tile="true" />
                 <span class="chat-settings-row-copy min-w-0 text-left">
-                    <span class="chat-settings-row-title truncate">{{ selectedModel || 'Choose a model' }}</span>
+                    <span class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
                     <span class="chat-settings-row-description truncate">Browse available models</span>
                 </span>
                 <UIcon :name="iconChevronDown" class="size-4 shrink-0" aria-hidden="true" />
@@ -86,7 +86,7 @@
                     />
                     <span class="chat-settings-row-copy min-w-0">
                         <span class="chat-settings-row-title truncate">
-                            {{ selectedModel || 'Select a model' }}
+                            {{ selectedModelLabel }}
                         </span>
                         <span class="chat-settings-row-description truncate">
                             Current model for this chat
@@ -656,7 +656,11 @@ const closeButtonProps = computed(() => {
 });
 
 // Favorites model dropdown (narrow composers). Rows open the menu directly.
-const { favoriteModels } = useModelStore();
+const { favoriteModels, catalog } = useModelStore();
+const selectedModelLabel = computed(() => {
+    const model = catalog.value.find(row => row.id === selectedModel.value || row.canonical_slug === selectedModel.value);
+    return model?.name || selectedModel.value?.split('/').at(-1) || 'Choose a model';
+});
 
 function providerSlugFor(modelId: string): string {
     return getProviderSlug({ id: modelId });
@@ -667,7 +671,7 @@ const modelItems = computed(() =>
         .map((model) => {
             const value = model.canonical_slug ?? model.id;
             if (!value) return null;
-            return { label: value, value, slug: providerSlugFor(value) };
+            return { label: model.name || value, value, slug: providerSlugFor(value) };
         })
         .filter(
             (

@@ -8,7 +8,7 @@
  * - Aggregates installed plugins and their enabled status for the current workspace
  * - Reduces round-trips for initial page load
  */
-import { defineEventHandler, getQuery } from 'h3';
+import { createError, defineEventHandler, getQuery, setResponseHeader } from 'h3';
 import { requireAdminApiContext } from '../../admin/api';
 import { listInstalledExtensions } from '../../admin/extensions/extension-manager';
 import { getEnabledPlugins, getPluginGrantReview } from '../../admin/plugins/workspace-plugin-store';
@@ -46,10 +46,13 @@ export default defineEventHandler(async (event) => {
         ownerOnly: true,
         allowWorkspaceAdmin: true,
     });
-    const workspaceId = resolveAdminWorkspaceTarget(
-        context,
-        getQuery(event).workspaceId
-    );
+    setResponseHeader(event, 'Cache-Control', 'no-store');
+    const requested = getQuery(event).workspaceId;
+    if (requested !== undefined && (typeof requested !== 'string' || !requested.trim() || requested.length > 256)) throw createError({ statusCode: 400, statusMessage: 'Invalid workspace ID' });
+    const workspaceId = isSuperAdmin(context) && requested === undefined
+        ? null : resolveAdminWorkspaceTarget(context, requested);
+    const workspace = workspaceId ? await getWorkspaceAccessStore(event).getWorkspace({ workspaceId }) : null;
+    if (workspaceId && !workspace) throw createError({ statusCode: 404, statusMessage: 'Workspace not found' });
     
     const settingsStore = getWorkspaceSettingsStore(event);
     const canManageSitePlugins = isSuperAdmin(context);
@@ -57,13 +60,12 @@ export default defineEventHandler(async (event) => {
     // Parallel fetch instead of sequential
     const [extensions, enabledPlugins] = await Promise.all([
         listInstalledExtensions(),
-        getEnabledPlugins(settingsStore, workspaceId)
+        workspaceId ? getEnabledPlugins(settingsStore, workspaceId) : Promise.resolve(null)
     ]);
     const packagePlugins = canManageSitePlugins
         ? await (async () => {
               const sitePolicies = new SitePluginPolicyStore();
               const sitePolicyReady = await ensureSitePolicyMigrated(sitePolicies).then(() => true).catch(() => false);
-              const workspace = await getWorkspaceAccessStore(event).getWorkspace({ workspaceId });
               const connections = resolveConnectionService();
               const packages = new ImmutablePluginPackageStore();
               const pointers = new PluginPackagePointerStore(undefined, packages);
@@ -105,7 +107,7 @@ export default defineEventHandler(async (event) => {
                       ]).then(([local, upload]) => local || upload).catch(() => null) : null,
                       sitePolicies.read(pluginId).catch(() => null),
                   ]);
-                  const grantReview = selectedDigest && startup?.status === 'ready'
+                  const grantReview = workspaceId && selectedDigest && startup?.status === 'ready'
                       ? await (async () => {
                           try {
                               const candidate = await packageGrantCandidate({
@@ -120,7 +122,7 @@ export default defineEventHandler(async (event) => {
                       })()
                       : 'unknown' as const;
                   const ownerUserId = workspace?.ownerUserId;
-                  const setup = selectedDigest && startup?.status === 'ready' && ownerUserId
+                  const setup = workspaceId && selectedDigest && startup?.status === 'ready' && ownerUserId
                       ? await packageNeedsNoSetup(packages, pluginId, selectedDigest).then((noSetup) => noSetup
                           ? 'ready' as const : loadSetupState({
                           event, pluginId, workspaceId, ownerUserId,
@@ -134,13 +136,13 @@ export default defineEventHandler(async (event) => {
                   return {
                       pluginId,
                       pointer,
-                      workspaceEnabled: enabledPlugins.includes(pluginId),
+                      workspaceEnabled: enabledPlugins?.includes(pluginId) ?? null,
                       // Pending facts are explicit; neither package storage nor
                       // an admin cookie proves browser activation or setup.
                       siteApproval: selectedAdmission || (sitePolicy?.catalogVisible && sitePolicy.approvedRelease.packageTreeSha256 === selectedDigest)
                           ? 'approved' as const : sitePolicyReady ? 'required' as const : 'unknown' as const,
-                      grantReview,
-                      setup,
+                      grantReview: workspaceId ? grantReview : null,
+                      setup: workspaceId ? setup : null,
                       startup: {
                           status: startup?.status ?? 'blocked',
                           selectedSlot: startup?.selectedSlot ?? null,
@@ -174,10 +176,8 @@ export default defineEventHandler(async (event) => {
         role: isSuperAdmin(context) ? 'owner' : context.session?.role,
         canManageSitePlugins,
         workspaceId,
-        workspaceName:
-            context.session?.workspace?.id === workspaceId
-                ? context.session.workspace.name
-                : undefined,
+        workspaceName: workspace?.name ?? null,
+        workspaceState: workspaceId ? { workspaceId, enabledPlugins } : null,
         enabledPlugins,
         packagePlugins,
     };

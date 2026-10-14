@@ -3,16 +3,7 @@
         id="dashboard-theme-page-container"
         class="dashboard-page-frame text-sm"
     >
-        <header class="dashboard-page-intro">
-            <div>
-                <p class="dashboard-page-eyebrow">Appearance</p>
-                <h1 class="dashboard-page-title">Theme studio</h1>
-                <p class="dashboard-page-description">
-                    Start with a theme, then customize one part of its
-                    appearance at a time. Changes apply live as you work.
-                </p>
-            </div>
-        </header>
+        <p class="dashboard-page-description">Changes save automatically.</p>
 
         <nav
             class="theme-studio-tabs"

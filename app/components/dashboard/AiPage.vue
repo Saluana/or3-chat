@@ -2,16 +2,9 @@
     <div id="dashboard-ai-page-container" class="dashboard-page-frame text-sm">
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
-        <header class="dashboard-page-intro">
-            <div>
-                <p class="dashboard-page-eyebrow">Settings</p>
-                <h1 class="dashboard-page-title">AI preferences</h1>
-                <p class="dashboard-page-description">
-                    Set the defaults applied when a new conversation starts. You
-                    can still change the model and prompt per thread.
-                </p>
-            </div>
-        </header>
+        <p class="dashboard-page-description">
+            Defaults for new chats. You can override them in each chat.
+        </p>
 
         <section
             id="dashboard-ai-master-prompt-section"
@@ -31,13 +24,13 @@
                         Master system prompt
                     </h2>
                     <p id="ai-master-help" class="supporting-text mt-1">
-                        Prepended to new chats and combined with thread-level
-                        instructions. Keep it short and general.
+                        Applies to new chats alongside each thread’s instructions.
                     </p>
                 </div>
             </div>
             <UTextarea
                 id="dashboard-ai-master-textarea"
+                aria-labelledby="ai-section-master-prompt"
                 v-bind="masterPromptTextareaProps"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
@@ -101,6 +94,7 @@
                         </h2>
                         <p class="supporting-text mt-1">
                             Choose how new chats pick their starting model.
+                            Changes here save automatically.
                         </p>
                     </div>
                 </div>
@@ -296,11 +290,6 @@
             <p v-if="resetError" id="ai-reset-error" class="basis-full text-sm text-error" role="alert">{{ resetError }}</p>
         </section>
 
-        <p class="ai-settings-note">
-            <UIcon :name="useIcon('ui.hint').value" class="h-4 w-4" />
-            Model defaults apply immediately. The master prompt is saved when
-            you choose Save changes.
-        </p>
     </div>
 </template>
 
@@ -622,16 +611,6 @@ const resetButtonProps = computed(() => {
 .ai-model-picker {
     padding-top: 1rem;
     border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-outline-variant);
-}
-.ai-settings-note {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    padding: 0.5rem;
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    font-size: 0.7rem;
-    opacity: 0.72;
 }
 .model-mode-btn {
     text-transform: none;

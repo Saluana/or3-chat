@@ -10,7 +10,7 @@ vi.mock('h3', () => ({
     createError: (input: { statusCode: number; statusMessage: string }) => Object.assign(new Error(input.statusMessage), input),
 }));
 vi.mock('../../../../../admin/api', () => ({ requireAdminApiContext: async () => ({}) }));
-vi.mock('../../../../../admin/workspace-target', () => ({ assertExpectedAdminWorkspace: vi.fn(), resolveAdminWorkspaceTarget: () => 'ws-admin' }));
+vi.mock('../../../../../admin/workspace-target', () => ({ assertExpectedAdminWorkspace: vi.fn(), resolveAdminWorkspaceTarget: () => { throw new Error('No workspace selected'); } }));
 vi.mock('../../../../../admin/stores/registry', () => ({ getWorkspaceSettingsStore: () => ({}) }));
 vi.mock('../../../../../admin/plugins/package-operation-support', () => ({
     pluginPackageServices: () => ({

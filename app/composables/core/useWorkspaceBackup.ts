@@ -193,7 +193,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         isImporting: ref(false),
         progress: ref(0),
         currentStep: ref('idle'),
-        importMode: ref('replace'),
+        importMode: ref('append'),
         overwriteValues: ref(false),
         backupMeta: ref(null),
         backupFormat: ref(null),

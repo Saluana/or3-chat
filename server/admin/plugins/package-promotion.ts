@@ -92,7 +92,7 @@ export interface PromotePluginPackageInput {
     readonly pointerWriteOptions?: PackagePointerWriteOptions;
 }
 
-export interface RollbackPluginPackageInput {
+interface RollbackPluginPackageBase {
     readonly pluginId: string;
     /** HTTP callers require all three expectations from the reviewed impact. */
     readonly expectedCurrentDigest?: Sha256;
@@ -105,10 +105,6 @@ export interface RollbackPluginPackageInput {
     }) => Promise<{ readonly checked: number; readonly blocking: readonly { readonly workspaceId: string; readonly code: string }[] }>;
     readonly pointerWriteOptions?: PackagePointerWriteOptions;
     readonly storedStateVersion: number | null;
-    readonly snapshotState: () => CandidateStateValue | Promise<CandidateStateValue>;
-    readonly restoreState: (
-        snapshot: CandidateStateValue
-    ) => void | Promise<void>;
     readonly migrateState?: (input: {
         readonly from: PluginPackagePointerTarget;
         readonly to: PluginPackagePointerTarget;
@@ -116,6 +112,15 @@ export interface RollbackPluginPackageInput {
     }) => void | Promise<void>;
     readonly now?: () => number;
 }
+
+export type RollbackPluginPackageInput = RollbackPluginPackageBase & (
+    | { readonly preflightWorkspaces: NonNullable<RollbackPluginPackageBase['preflightWorkspaces']>;
+        readonly snapshotState?: () => CandidateStateValue | Promise<CandidateStateValue>;
+        readonly restoreState?: (snapshot: CandidateStateValue) => void | Promise<void> }
+    | { readonly preflightWorkspaces?: undefined;
+        readonly snapshotState: () => CandidateStateValue | Promise<CandidateStateValue>;
+        readonly restoreState: (snapshot: CandidateStateValue) => void | Promise<void> }
+);
 
 function blockedPromote(
     stage: Extract<PromotePluginPackageResult, { status: 'blocked' }>['stage'],
@@ -512,7 +517,7 @@ export class PluginPackagePromotionService {
                 return blockedRollback('state', 'rollback-migration-required', state);
             }
 
-            const snapshot = state ? structuredClone(await input.snapshotState()) as CandidateStateValue : null;
+            const snapshot = state ? structuredClone(await input.snapshotState!()) as CandidateStateValue : null;
             try {
                 if (state?.status === 'migration-required' && snapshot !== null) {
                     await input.migrateState?.({
@@ -522,7 +527,7 @@ export class PluginPackagePromotionService {
                     });
                 }
             } catch (error) {
-                if (snapshot !== null) await input.restoreState(snapshot);
+                if (snapshot !== null) await input.restoreState!(snapshot);
                 return blockedRollback(
                     'migration',
                     error instanceof Error ? error.message : 'migration-failed',
@@ -550,7 +555,7 @@ export class PluginPackagePromotionService {
             };
             const finalPreflight = await preflight();
             if (finalPreflight) {
-                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState(snapshot);
+                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState!(snapshot);
                 return finalPreflight;
             }
             const rolledBack = (): RollbackPluginPackageResult => {
@@ -569,7 +574,7 @@ export class PluginPackagePromotionService {
             } catch (error) {
                 const persisted = await this.pointers.readPointer(input.pluginId).catch(() => null);
                 if (pointerWasCommitted(persisted, next)) return rolledBack();
-                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState(snapshot);
+                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState!(snapshot);
                 return blockedRollback(
                     'pointer-write',
                     error instanceof Error ? error.message : 'pointer-write-failed',
