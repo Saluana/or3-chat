@@ -29,7 +29,7 @@
                 <UInput
                     v-model="search"
                     aria-label="Search workspaces"
-                    placeholder="Search workspaces..."
+                    placeholder="Search workspaces…"
                     :icon="searchIcon"
                     class="flex-1 min-w-[200px]"
                 />

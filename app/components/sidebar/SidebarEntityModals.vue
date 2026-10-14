@@ -2,8 +2,8 @@
     <SidebarRenameEntityModal
         :modal-props="renameModalProps"
         :open="showRenameModal"
-        :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-        :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
+        :title="isRenamingDoc ? 'Rename document' : 'Rename chat'"
+        :placeholder="isRenamingDoc ? 'Document title' : 'Chat title'"
         :icon="iconEdit"
         :value="renameTitle"
         @update:open="emit('update:showRenameModal', $event)"
@@ -24,12 +24,17 @@
     <AppModal
         v-bind="deleteThreadModalProps"
         :open="showDeleteModal"
-        title="Delete thread"
+        title="Delete chat"
         @update:open="emit('update:showDeleteModal', $event)"
     >
         <template #default>
             <p class="text-sm opacity-70">
-                {{ threadHasDescendants ? 'This conversation has branches. Move it to Trash to preserve their original links.' : 'This will permanently remove the thread and its messages.' }}
+                <template v-if="threadHasDescendants">
+                    {{ targetLabel('This chat') }} has branches. Move it to Trash to preserve their original links.
+                </template>
+                <template v-else>
+                    {{ targetLabel('This chat') }} and its messages will be permanently deleted.
+                </template>
             </p>
         </template>
         <template #footer>
@@ -57,7 +62,12 @@
     >
         <template #default>
             <p class="text-sm opacity-70">
-                {{ documentTrashEnabled ? 'This document can be restored from Files Trash. Its history and shared files remain retained.' : 'This will permanently remove the document.' }}
+                <template v-if="documentTrashEnabled">
+                    {{ targetLabel('This document') }} will move to Files Trash, where you can restore it. Its history and shared files are kept.
+                </template>
+                <template v-else>
+                    {{ targetLabel('This document') }} will be permanently deleted.
+                </template>
             </p>
         </template>
         <template #footer>
@@ -82,8 +92,8 @@
     >
         <template #default>
             <p class="text-sm opacity-70">
-                This will remove the project from the sidebar. Project data will
-                be soft-deleted and can be recovered.
+                {{ targetLabel('This project') }} will be removed from the sidebar.
+                Its data is soft-deleted and can be recovered.
             </p>
         </template>
         <template #footer>
@@ -106,7 +116,7 @@ import AppModal from '~/components/ui/AppModal.vue';
 import SidebarRenameEntityModal from './SidebarRenameEntityModal.vue';
 import SidebarRenameProjectModal from './SidebarRenameProjectModal.vue';
 
-defineProps<{
+const props = defineProps<{
     renameModalProps: Record<string, unknown>;
     showRenameModal: boolean;
     renameTitle: string;
@@ -128,7 +138,15 @@ defineProps<{
 
     deleteProjectModalProps: Record<string, unknown>;
     showDeleteProjectModal: boolean;
+
+    deleteTargetTitle?: string;
 }>();
+
+/** Quote the item's name when known, e.g. “Weekly notes”; otherwise use the fallback. */
+function targetLabel(fallback: string): string {
+    const title = props.deleteTargetTitle?.trim();
+    return title ? `“${title}”` : fallback;
+}
 
 const emit = defineEmits<{
     (e: 'update:showRenameModal', value: boolean): void;

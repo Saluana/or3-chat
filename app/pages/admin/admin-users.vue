@@ -25,7 +25,7 @@
                         v-model="searchQuery"
                         id="admin-user-search"
                         name="admin-user-search"
-                        placeholder="Search by email..."
+                        placeholder="Search by email…"
                         icon="i-heroicons-magnifying-glass"
                         class="flex-1"
                     />

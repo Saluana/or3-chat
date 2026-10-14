@@ -39,7 +39,7 @@
                         >
                             <template #trailing>
                                 <kbd class="docs-search-kbd" aria-hidden="true"
-                                    >⌘K</kbd
+                                    >{{ docsSearchShortcut }}</kbd
                                 >
                             </template>
                         </UInput>
@@ -310,6 +310,7 @@ import {
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
+import { formatShortcut } from '~/utils/keyboard-shortcuts';
 import DocsSidebarNav from '~/components/documentation/DocsSidebarNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -540,7 +541,7 @@ const searchInputProps = computed(() => {
         .trim();
     const { ui: _ignoredUi, ...rest } = merged;
     return {
-        placeholder: 'Search docs...',
+        placeholder: 'Search docs…',
         size: 'md' as const,
         leadingIcon: useIcon('ui.search').value,
         ...rest,
@@ -652,7 +653,11 @@ watch(docmapData, (newData) => {
     }
 });
 
+// Apple glyphs on the server; switch to Ctrl+K after mount on other platforms.
+const docsSearchShortcut = ref('⌘K');
+
 onMounted(async () => {
+    docsSearchShortcut.value = formatShortcut('k');
     useShikiHighlighter();
 
     if (!docmapData.value) {

@@ -7,7 +7,7 @@
     >
         <h2
             id="theme-section-reset"
-            class="font-heading text-base uppercase tracking-wide group-heading"
+            class="dashboard-section-title"
         >
             Reset
         </h2>
@@ -17,22 +17,22 @@
                 class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('light')"
             >
-                Reset Light Mode
+                Reset light mode
             </UButton>
             <UButton
                 v-bind="resetButtonProps"
                 class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('dark')"
             >
-                Reset Dark Mode
+                Reset dark mode
             </UButton>
             <UButton
                 v-bind="resetButtonProps"
-                variant="subtle"
+                color="error"
                 class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('all')"
             >
-                Reset All
+                Reset all
             </UButton>
         </div>
 
@@ -101,8 +101,8 @@ const resetButtonProps = computed(() => ({
 }));
 
 const modalTitle = computed(() => {
-    if (resetTarget.value === 'all') return 'Reset All Themes';
-    return `Reset ${resetTarget.value === 'light' ? 'Light' : 'Dark'} Theme`;
+    if (resetTarget.value === 'all') return 'Reset all themes';
+    return `Reset ${resetTarget.value === 'light' ? 'light' : 'dark'} theme`;
 });
 
 const modalTargetLabel = computed(() => {

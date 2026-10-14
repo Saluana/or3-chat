@@ -9,7 +9,7 @@
                 !active,
         }"
     >
-        <button type="button" class="flex flex-1 min-w-0 -my-2.5 items-center gap-2.5 py-2.5 pr-7 text-left rounded-[var(--md-border-radius-small)] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`Open ${item.title || 'Untitled'}`" @click="emit('select', item.id)">
+        <button type="button" class="flex flex-1 min-w-0 -my-2.5 items-center gap-2.5 py-2.5 pr-7 sm:pr-0 text-left rounded-[var(--md-border-radius-small)] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`Open ${item.title || 'Untitled'}`" @click="emit('select', item.id)">
         <!-- Icon -->
         <slot name="icon"><UIcon
             :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
@@ -38,7 +38,7 @@
 
         <!-- Time Label (desktop only - hide on hover, show action button instead) -->
         <span
-            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0! sb-item-time"
+            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0! group-focus-within:opacity-0! sb-item-time"
             :class="
                 active
                     ? 'text-[color:var(--md-primary)] opacity-80! sb-item-time-active'
@@ -91,21 +91,21 @@
                         <UButton
                             v-bind="actionButtonProps('rename')"
                             class="w-full justify-start"
-                            @click="emit('rename', item)"
+                            @click="actionsOpen = false; emit('rename', item)"
                         >
                             {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Rename original conversation' : 'Rename' }}
                         </UButton>
                         <UButton
                             v-bind="actionButtonProps('add-to-project')"
                             class="w-full justify-start"
-                            @click="emit('add-to-project', item)"
+                            @click="actionsOpen = false; emit('add-to-project', item)"
                         >
                             Add to project
                         </UButton>
                         <UButton
                             v-bind="actionButtonProps('delete')"
                             class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
-                            @click="emit('delete', item)"
+                            @click="actionsOpen = false; emit('delete', item)"
                         >
                             {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Delete original conversation' : 'Delete' }}
                         </UButton>

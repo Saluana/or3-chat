@@ -8,7 +8,7 @@
         <div>
             <h2
                 id="theme-section-typography"
-                class="font-heading text-base uppercase tracking-wide group-heading"
+                class="dashboard-section-title"
             >
                 Typography
             </h2>

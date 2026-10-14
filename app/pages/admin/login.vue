@@ -198,7 +198,7 @@ async function handleLogin() {
         }
         toast.add({
             title: 'Login successful',
-            description: 'Redirecting to admin dashboard...',
+            description: 'Redirecting to admin dashboard…',
             color: 'success',
         });
 

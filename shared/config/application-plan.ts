@@ -398,9 +398,15 @@ export function buildApplicationPlan(input: {
                 allowUserOverride:
                     or3CloudConfig.services.llm?.openRouter
                         ?.allowUserOverride ?? true,
-                hasInstanceKey: Boolean(
-                    or3CloudConfig.services.llm?.openRouter?.instanceApiKey,
-                ),
+                // The server only lends the instance key to signed-in sessions
+                // (stream.post.ts requires can()), so don't advertise it to
+                // local/static clients that could never use it; they'd skip the
+                // key prompt and every send would fail with "sign in".
+                hasInstanceKey:
+                    effectiveSsrAuthEnabled &&
+                    Boolean(
+                        or3CloudConfig.services.llm?.openRouter?.instanceApiKey,
+                    ),
                 requireUserKey:
                     or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
                     false,

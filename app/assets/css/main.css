@@ -190,6 +190,12 @@ body,
 	overflow-wrap: break-word;
 }
 
+/* Long placeholders on narrow screens end in "…" instead of cutting a word.
+   Only while empty, so typed text keeps normal scrolling. */
+input:placeholder-shown {
+	text-overflow: ellipsis;
+}
+
 .dashboard-section-title {
 	color: var(--md-on-surface);
 	font-size: 0.9rem;

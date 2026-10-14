@@ -20,7 +20,7 @@
                 <div class="project-quick-actions flex items-center gap-1">
                     <!-- Quick add buttons (appear on hover) -->
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 sm:group-focus-within/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
+                        class="project-add-btn cursor-pointer sm:hidden sm:group-hover/project-root:inline-flex sm:group-focus-within/project-root:inline-flex inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-chat')"
                         :aria-label="`New chat in ${project.name}`"
                     >
@@ -30,7 +30,7 @@
                         />
                     </button>
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 sm:group-focus-within/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
+                        class="project-add-btn cursor-pointer sm:hidden sm:group-hover/project-root:inline-flex sm:group-focus-within/project-root:inline-flex inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-document')"
                         :aria-label="`New document in ${project.name}`"
                     >

@@ -105,13 +105,13 @@
                 <ToolbarButton
                     v-if="!isCompactToolbar"
                     :icon="icons.undo"
-                    label="Undo (⌘Z)"
+                    :label="`Undo (${shortcut('z')})`"
                     @activate="editor?.chain().focus().undo().run()"
                 />
                 <ToolbarButton
                     v-if="!isCompactToolbar"
                     :icon="icons.redo"
-                    label="Redo (⇧⌘Z)"
+                    :label="`Redo (${shortcut('z', true)})`"
                     @activate="editor?.chain().focus().redo().run()"
                 />
                 <UDropdownMenu
@@ -186,8 +186,8 @@
                 <article v-theme="'document.canvas'" class="document-canvas">
                     <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
                     <p class="document-byline">
-                        <span>{{ stats.words.toLocaleString() }} words</span>
-                        <span>{{ stats.readingMinutes }} min read</span>
+                        <span>{{ stats.words.toLocaleString() }} {{ stats.words === 1 ? 'word' : 'words' }}</span>
+                        <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
                     </p>
 
                     <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" />
@@ -304,6 +304,7 @@
 <script setup lang="ts">
 import { shouldLockDocumentAiEditor } from '~/composables/documents/documentAiLifecycle';
 import AppModal from '~/components/ui/AppModal.vue';
+import { formatShortcut, isApplePlatform } from '~/utils/keyboard-shortcuts';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
@@ -934,7 +935,20 @@ async function loadActiveDocument(id: string) {
     documentLoaded.value = true;
     loadingDocument.value = false;
     registerActiveSession(id);
+    focusIfJustCreated();
     emit('ready', id);
+}
+
+// A document created moments ago with nothing in it: put the caret in the body
+// so the user can start typing, unless they're already typing somewhere else.
+function focusIfJustCreated(): void {
+    const record = state.value.record;
+    const current = editor.value;
+    if (!record || !current || itemReadOnly.value || !current.isEmpty) return;
+    if (Date.now() / 1000 - record.created_at > 10) return;
+    const active = document.activeElement as HTMLElement | null;
+    if (active?.isContentEditable || active?.matches?.('input, textarea, select')) return;
+    current.commands.focus('start');
 }
 
 watch(documentId, async (id, previous) => {
@@ -1110,11 +1124,18 @@ function setBlockType(value: string | number | undefined) {
     else chain.toggleHeading({ level: Number(value.slice(-1)) as 1 | 2 | 3 }).run();
 }
 
+// Resolved after mount so server and first client render agree (Apple glyphs).
+const appleShortcuts = ref(true);
+onMounted(() => { appleShortcuts.value = isApplePlatform(); });
+function shortcut(key: string, shift = false): string {
+    return formatShortcut(key, { shift, apple: appleShortcuts.value });
+}
+
 const formatButtons = computed<DocumentToolbarItem[]>(() => [
     {
         id: 'bold',
         icon: icons.bold,
-        label: 'Bold (⌘B)',
+        label: `Bold (${shortcut('b')})`,
         active: () => editor.value?.isActive('bold') ?? false,
         run: () => {
             editor.value?.chain().focus().toggleBold().run();
@@ -1123,7 +1144,7 @@ const formatButtons = computed<DocumentToolbarItem[]>(() => [
     {
         id: 'italic',
         icon: icons.italic,
-        label: 'Italic (⌘I)',
+        label: `Italic (${shortcut('i')})`,
         active: () => editor.value?.isActive('italic') ?? false,
         run: () => {
             editor.value?.chain().focus().toggleItalic().run();
@@ -1132,7 +1153,7 @@ const formatButtons = computed<DocumentToolbarItem[]>(() => [
     {
         id: 'underline',
         icon: icons.underline,
-        label: 'Underline (⌘U)',
+        label: `Underline (${shortcut('u')})`,
         active: () => editor.value?.isActive('underline') ?? false,
         run: () => {
             editor.value?.chain().focus().toggleUnderline().run();
@@ -1292,13 +1313,13 @@ const toolbarOverflowItems = computed(() => {
               {
                   id: 'undo',
                   icon: icons.undo,
-                  label: 'Undo (⌘Z)',
+                  label: `Undo (${shortcut('z')})`,
                   run: () => editor.value?.chain().focus().undo().run(),
               },
               {
                   id: 'redo',
                   icon: icons.redo,
-                  label: 'Redo (⇧⌘Z)',
+                  label: `Redo (${shortcut('z', true)})`,
                   run: () => editor.value?.chain().focus().redo().run(),
               },
           ]
@@ -1312,11 +1333,21 @@ const toolbarOverflowItems = computed(() => {
         actionItems,
         ...(pluginButtons.value.length
             ? [
-                  pluginButtons.value.map((button) => ({
-                      label: button.tooltip || button.id,
-                      icon: button.icon || icons.plugin,
-                      onSelect: () => handlePluginButton(button),
-                  })),
+                  pluginButtons.value.map((button) => {
+                      const label = button.tooltip || button.id;
+                      const icon = button.icon || icons.plugin;
+                      // Toggles show their on/off state instead of a bare "Toggle …" action.
+                      if (button.isActive && editor.value) {
+                          return {
+                              type: 'checkbox' as const,
+                              label,
+                              icon,
+                              checked: button.isActive(editor.value),
+                              onUpdateChecked: () => handlePluginButton(button),
+                          };
+                      }
+                      return { label, icon, onSelect: () => handlePluginButton(button) };
+                  }),
               ]
             : []),
     ];

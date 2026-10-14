@@ -28,7 +28,7 @@ export default defineNuxtPlugin(() => {
             registerEditorToolbarButton({
                 id: 'editor-autocomplete:toggle',
                 icon: 'pixelarticons:zap',
-                tooltip: 'Toggle Autocomplete',
+                tooltip: 'Autocomplete',
                 order: 300,
                 isActive: (editor: Editor) => AutocompleteState.value.isEnabled,
                 onClick: (editor: Editor) => {

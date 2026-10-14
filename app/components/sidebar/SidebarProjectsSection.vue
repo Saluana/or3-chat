@@ -3,7 +3,8 @@
         <SidebarGroupHeader
             label="Recent projects"
             :collapsed="collapsed"
-            action-label="+ New project"
+            action-label="+ New"
+            action-aria-label="New project"
             @toggle="emit('toggle-collapse')"
             @action="emit('new-project')"
         />

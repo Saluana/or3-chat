@@ -7,7 +7,7 @@
     >
         <h2
             id="theme-section-accessibility"
-            class="font-heading text-base uppercase tracking-wide group-heading"
+            class="dashboard-section-title"
         >
             Accessibility
         </h2>

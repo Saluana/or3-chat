@@ -35,7 +35,7 @@
                 'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // Mobile overlay responsive classes (static for SSR parity)
-                'max-md:absolute max-md:inset-0 max-md:w-full max-md:shadow-xl',
+                'max-md:absolute max-md:inset-0 max-md:w-full',
                 'max-md:transition-transform max-md:duration-200 max-md:ease-out',
                 side === 'right' ? 'max-md:right-0' : 'max-md:left-0',
                 // The uncontrolled SSR/client state starts closed, so keeping the
@@ -44,7 +44,9 @@
                     ? side === 'right'
                         ? 'max-md:translate-x-full'
                         : 'max-md:-translate-x-full'
-                    : '',
+                    : // Only cast a shadow while visible so the closed
+                      // off-canvas drawer doesn't tint the screen edge.
+                      'max-md:shadow-xl',
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
                     : '',

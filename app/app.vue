@@ -1,5 +1,9 @@
 <template>
-    <UApp :toaster="{ position: 'top-right' }">
+    <!-- Tooltips open on hover or keyboard focus, not when a dialog hands focus back to its trigger. -->
+    <UApp
+        :toaster="{ position: 'top-right' }"
+        :tooltip="{ ignoreNonKeyboardFocus: true }"
+    >
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
         <ErrorRecovery />

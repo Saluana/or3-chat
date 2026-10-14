@@ -1528,7 +1528,7 @@ test('project review fixes keep drafts and expose management for every project',
     await openAllProjects(page);
     const first = projects.getByRole('listitem').filter({ hasText: 'Review project 0' });
     await first.getByRole('button', { name: 'Project actions for Review project 0' }).click();
-    await page.getByRole('button', { name: 'Rename Project', exact: true }).click();
+    await page.getByRole('button', { name: 'Rename project', exact: true }).click();
     const rename = page.getByRole('dialog', { name: 'Rename project', exact: true });
     await rename.getByPlaceholder('Project name').fill('Reviewed project');
     await rename.getByRole('button', { name: 'Save', exact: true }).click();
@@ -1544,7 +1544,7 @@ test('project review fixes keep drafts and expose management for every project',
     await projects.getByRole('button', { name: 'Save brief' }).click();
     await expect(projects.getByLabel('Project brief', { exact: true })).toHaveText('Unsaved project plan');
     await projects.getByRole('button', { name: 'Project actions for Reviewed project' }).click();
-    await page.getByRole('button', { name: 'Delete Project', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete project', exact: true }).click();
     const deletion = page.getByRole('dialog', { name: 'Delete project', exact: true });
     await deletion.getByRole('button', { name: /delete/i }).click();
     await expect(deletion).not.toBeVisible();

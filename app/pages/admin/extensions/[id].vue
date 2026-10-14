@@ -5,7 +5,7 @@
                 <h2 class="text-lg font-semibold">{{ pageDef.label }}</h2>
             </template>
             <component :is="resolvedComponent" v-if="resolvedComponent" />
-            <div v-else class="text-sm opacity-70">Loading...</div>
+            <div v-else class="text-sm opacity-70">Loading…</div>
         </UCard>
         <UCard v-else>
             <template #header>

@@ -24,12 +24,13 @@
             />
             <span
                 class="project-child-label truncate text-start flex-1 min-w-0 text-sm font-normal"
-                >{{ child.name || '(untitled)' }}</span
+                >{{ child.name || 'Untitled' }}</span
             >
             <span
-                class="project-child-actions-container ms-auto inline-flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity"
+                class="project-child-actions-container ms-auto inline-flex gap-1 items-center sm:hidden sm:group-hover:inline-flex sm:group-focus-within:inline-flex"
             >
                 <UPopover
+                    v-model:open="menuOpen"
                     :content="{
                         side: 'right',
                         align: 'start',
@@ -40,7 +41,7 @@
                         class="project-child-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop
                         @keydown="handlePopoverTriggerKey"
-                        aria-label="Entry actions"
+                        :aria-label="`Actions for ${child.name || 'Untitled'}`"
                     >
                         <UIcon
                             :name="iconMore"
@@ -74,14 +75,14 @@
                             <UButton
                                 v-bind="renameButtonProps"
                                 class="w-full justify-start"
-                                @click.stop.prevent="emit('rename')"
+                                @click.stop.prevent="menuOpen = false; emit('rename')"
                                 >Rename</UButton
                             >
                             <UButton
                                 v-bind="removeButtonProps"
                                 class="w-full justify-start whitespace-nowrap text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15"
-                                @click.stop.prevent="emit('remove')"
-                                >Remove from Project</UButton
+                                @click.stop.prevent="menuOpen = false; emit('remove')"
+                                >Remove from project</UButton
                             >
                         </div>
                     </template>
@@ -92,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
@@ -101,6 +102,7 @@ import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceReso
 import { isMobile } from '~/state/global';
 
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
+const menuOpen = ref(false);
 
 const iconNote = useIcon('sidebar.note');
 const iconChat = useIcon('sidebar.chat');

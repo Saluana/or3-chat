@@ -252,7 +252,15 @@ defineExpose({ focus, removeReference });
 }
 .prompt-editor :deep(.ProseMirror p + p) { margin-top: 0.25rem; }
 .prompt-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
-    height: 0;
+    /* One line tall with a cancelling margin: it still doesn't push the caret
+       line, but a placeholder too long for narrow panes ends in "…" instead
+       of being cut mid-word. */
+    width: 100%;
+    height: 1.4em;
+    margin-bottom: -1.4em;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     float: left;
     color: color-mix(in oklab, var(--md-on-surface-variant), transparent 16%);
     content: attr(data-placeholder);

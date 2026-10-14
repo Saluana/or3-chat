@@ -16,6 +16,7 @@
                             :error="nameError"
                         >
                             <UInput
+                                autofocus
                                 variant="modal"
                                 :model-value="name"
                                 required

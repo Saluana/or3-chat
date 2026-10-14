@@ -220,6 +220,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue';
 import { useEventListener, useMediaQuery } from '@vueuse/core';
+import { formatShortcut } from '~/utils/keyboard-shortcuts';
 import { useBottomSheetDrag } from '~/composables/ui/useBottomSheetDrag';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
@@ -524,14 +525,8 @@ const placeholder = computed(() =>
         : 'Search or type a command…'
 );
 
-const isApplePlatform = computed(() => {
-    if (!import.meta.client) return true;
-    const ua = `${navigator.platform || ''} ${navigator.userAgent || ''}`;
-    return /Mac|iPhone|iPad|iPod/i.test(ua);
-});
-
 const shortcutLabel = computed(() =>
-    isApplePlatform.value ? '⌘K' : 'Ctrl+K'
+    import.meta.client ? formatShortcut('k') : '⌘K'
 );
 
 const footerHints = computed(() => [

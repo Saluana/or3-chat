@@ -62,7 +62,7 @@ describe('NotificationPanel', () => {
             },
         });
 
-        expect(wrapper.text()).toContain('Loading...');
+        expect(wrapper.text()).toContain('Loading…');
     });
 
     it('renders empty state when no notifications', () => {

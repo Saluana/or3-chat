@@ -82,10 +82,10 @@
                         <!-- PDF thumbnail -->
                         <template v-if="pdfMeta[hash]">
                             <div
-                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-red-400/30"
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/15 dark:bg-red-500/30 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-red-500/25 dark:border-red-400/30"
                             >
                                 <span
-                                    class="text-[11px] font-bold text-red-200 tracking-wide"
+                                    class="text-[11px] font-bold text-red-700 dark:text-red-200 tracking-wide"
                                     >PDF</span
                                 >
                             </div>
@@ -93,7 +93,7 @@
                                 class="attachment-info flex flex-col min-w-0 gap-0.5"
                             >
                                 <span
-                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
                                     {{ getAttachmentName(hash) }}
                                 </span>
@@ -128,9 +128,9 @@
                                 class="attachment-info flex flex-col min-w-0 gap-0.5"
                             >
                                 <span
-                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
-                                    Image {{ idx + 1 }}
+                                    {{ getImageName(hash) || `Image ${idx + 1}` }}
                                 </span>
                                 <span
                                     class="attachment-type text-[11px] opacity-50"
@@ -152,7 +152,7 @@
                             >
                                 <span
                                     class="attachment-name text-[13px] font-medium opacity-40"
-                                    >Loading...</span
+                                    >Loading…</span
                                 >
                             </div>
                         </template>
@@ -356,20 +356,23 @@
                     v-model="draft"
                     :autofocus="true"
                     :focus-delay="120"
+                    @submit="saveEdit"
+                    @cancel="wrappedCancelEdit"
                 />
                 <div
                     class="cm-editor-actions flex w-full justify-end gap-2 mt-2"
                 >
                     <UButton
+                        v-bind="cancelEditButtonProps"
+                        :disabled="saving"
+                        @click="wrappedCancelEdit"
+                        >Cancel</UButton
+                    >
+                    <UButton
                         v-bind="saveEditButtonProps"
                         @click="saveEdit"
                         :loading="saving"
                         >Save</UButton
-                    >
-                    <UButton
-                        v-bind="cancelEditButtonProps"
-                        @click="wrappedCancelEdit"
-                        >Cancel</UButton
                     >
                 </div>
             </div>
@@ -453,6 +456,7 @@
                         <UButton
                             v-bind="editButtonProps"
                             aria-label="Edit message"
+                            :disabled="props.message.pending === true"
                             @click="wrappedBeginEdit"
                         ></UButton>
                     </UTooltip>
@@ -750,7 +754,7 @@ const outerClass = computed(() => ({
 
 const innerClass = computed(() => ({
     // Added Tailwind Typography per-element utilities for tables (no custom CSS)
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[length:var(--md-border-width-subtle,var(--md-border-width))] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[length:var(--md-border-width-subtle,var(--md-border-width))] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:px-5 sm:pb-5 sm:pt-2':
         props.message.role === 'assistant',
 }));
 
@@ -806,6 +810,7 @@ const {
     maxDisplayedThumbs,
     displayedHashes,
     getAttachmentName,
+    getImageName,
     expanded,
     toggleExpanded,
 } = useMessageThumbnails(messageThumbRef);
@@ -889,7 +894,19 @@ function wrappedCancelEdit() {
     if (id) emit('cancel-edit', id);
 }
 async function saveEdit() {
-    const outcome = await internalSaveEdit();
+    let outcome: Awaited<ReturnType<typeof internalSaveEdit>>;
+    try {
+        outcome = await internalSaveEdit();
+    } catch (error) {
+        // Stay in edit mode so the draft isn't lost; tell the user why.
+        toast.add({
+            title: 'Edit not saved',
+            description: presentError(error, { code: 'ERR_DB_WRITE_FAILED' }).message,
+            color: 'error',
+            duration: 3000,
+        });
+        return;
+    }
     const id = props.message.id;
     if (!id || outcome === 'ignored') return;
     // Only a persisted change counts as an edit; empty and unchanged drafts just leave edit mode.
@@ -1198,7 +1215,8 @@ const streamMdClasses = [
 
 /* Attachment bar items */
 .attachment-item {
-    max-width: 200px;
+    /* Fits a 20-character file name (already shortened with "…") beside its icon. */
+    max-width: min(224px, 100%);
     min-height: 44px;
 }
 

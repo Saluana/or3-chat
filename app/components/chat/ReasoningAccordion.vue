@@ -31,12 +31,6 @@
             >
                 <LoadingGenerating style="width: 120px; min-height: 28px" />
             </span>
-            <span
-                v-if="!expanded && content && !streaming"
-                class="reasoning-count count text-xs opacity-70 ml-2"
-            >
-                ({{ charCount }} chars)
-            </span>
             <span v-if="streaming" class="pulse ml-2" aria-hidden="true"></span>
         </button>
         <pre
@@ -45,8 +39,8 @@
                 'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start border-[length:var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
                 'grid transition-[grid-template-rows] duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease-in-out)]',
                 expanded
-                    ? 'grid-rows-[1fr] mt-2 px-3 py-1 opacity-100'
-                    : 'grid-rows-[0fr] mt-0 p-0 opacity-0 pointer-events-none',
+                    ? 'grid-rows-[1fr] mt-2! mb-4! px-3 py-1 opacity-100'
+                    : 'grid-rows-[0fr] my-0! p-0 opacity-0 pointer-events-none',
             ]"
             tabindex="0"
         >
@@ -81,7 +75,6 @@ const expanded = ref(false);
 const id = Math.random().toString(36).substr(2, 9);
 
 const visible = computed(() => !!props.content || props.pending);
-const charCount = computed(() => (props.content || '').length);
 
 // Theme overrides for reasoning toggle button
 const toggleButtonProps = computed(() => {

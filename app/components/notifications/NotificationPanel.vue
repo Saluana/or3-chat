@@ -16,7 +16,7 @@
         <div class="overflow-y-auto max-h-80">
             <div v-if="loading" class="p-4 text-center">
                 <span class="text-xs text-[var(--md-on-surface-variant)] animate-pulse">
-                    Loading...
+                    Loading…
                 </span>
             </div>
 

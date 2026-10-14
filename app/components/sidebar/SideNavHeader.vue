@@ -38,8 +38,8 @@
         <SidebarRenameEntityModal
             :modal-props="renameModalProps"
             :open="showRenameModal"
-            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename chat'"
+            :placeholder="isRenamingDoc ? 'Document title' : 'Chat title'"
             :icon="iconEdit"
             :value="renameTitle"
             @update:open="showRenameModal = $event"
@@ -128,6 +128,7 @@ import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import { formatShortcut } from '~/utils/keyboard-shortcuts';
 import { isMobile } from '~/state/global';
 const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
 const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
@@ -219,20 +220,16 @@ const searchInputProps = computed(() => {
         ...(searchInputOverrides.value as any),
         // Slot provides trailing content; don't also enable empty trailing-icon chrome.
         trailingIcon: undefined,
-        placeholder: 'Filter by title...',
+        placeholder: 'Filter by title…',
         ui: mergedUi,
     };
 });
 
 const { open: openCommandPalette } = useCommandPalette();
 
-const searchShortcutLabel = computed(() => {
-    if (!import.meta.client) return '⌘K';
-    const ua = navigator.userAgent || '';
-    const platform = navigator.platform || '';
-    const isApple = /Mac|iPhone|iPad|iPod/i.test(`${platform} ${ua}`);
-    return isApple ? '⌘K' : 'Ctrl+K';
-});
+const searchShortcutLabel = computed(() =>
+    import.meta.client ? formatShortcut('k') : '⌘K'
+);
 
 const searchClearButtonProps = computed(() => {
     return {

@@ -11,8 +11,7 @@ export default defineNuxtPlugin(() => {
         id: ACTIVITY_DASHBOARD_APP_ID,
         label: 'Activity',
         icon: 'lucide:activity',
-        description:
-            'Review running work, approvals, failures, results, and artifacts.',
+        description: 'Running work, approvals, failures, and results',
         order: 80,
         pages: [
             {

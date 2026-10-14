@@ -36,7 +36,7 @@
                     ref="searchInputRef"
                     v-model="searchTerm"
                     type="text"
-                    placeholder="Search mentions..."
+                    placeholder="Search mentions…"
                     class="search-input"
                     @keydown="handleSearchKeydown"
                 />
