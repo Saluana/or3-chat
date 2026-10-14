@@ -1,3 +1,4 @@
+import { saveProjectDocument } from '~/db/project-workspace';
 import { prepareDocumentCreate } from '~/db/documents';
 import { getWriteTxTableNames } from '~/db/util';
 import { captureWorkspaceOperation } from './workspace-access';
@@ -41,7 +42,8 @@ export async function createWorkspaceDocument(args: Record<string, unknown>, con
     const association = args.project ? await prepareWorkspaceProjectAssociation(scope,
         args.project as { id: string; revision: string }, { kind: 'document', id, title: prepared.row.title }) : undefined;
     scope.assertCurrent('write');
-    const committed = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects', 'threads'] }), async () => {
+    const documentRevision = association ? await workspaceRevision(prepared.row) : undefined;
+    const committed = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects', 'threads', 'messages'], includeTombstones: true }), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
         const existing = await scope.db.posts.get(id);
@@ -66,7 +68,10 @@ export async function createWorkspaceDocument(args: Record<string, unknown>, con
             await scope.db.projects.put({ ...association.prepared.row, clock: nextClock(association.base.clock) });
         }
         scope.assertCurrent('write');
-        await scope.db.posts.put(prepared.row);
+        if (association) {
+            await saveProjectDocument(scope, association.base.id, prepared.row, documentRevision!);
+            await context.assertToolAuthorized?.();
+        } else await scope.db.posts.put(prepared.row);
         scope.assertCurrent('write');
         return true;
     });
