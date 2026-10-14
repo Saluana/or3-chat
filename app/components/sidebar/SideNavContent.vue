@@ -29,7 +29,7 @@
             />
             <template #fallback>
                 <div class="h-14 px-2 py-2" aria-hidden="true">
-                    <div class="h-8 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                    <div class="h-10 w-full rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-variant)] animate-pulse" />
                 </div>
             </template>
         </ClientOnly>

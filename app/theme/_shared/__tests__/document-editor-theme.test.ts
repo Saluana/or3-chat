@@ -246,8 +246,8 @@ describe('document editor theme contract', () => {
         const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
 
         expect(blankCss).toContain('Agent connections modal (teleported) — blank polish');
-        expect(blankCss).toContain('--agent-conn-radius: 12px');
-        expect(blankCss).toContain('--agent-conn-radius-md: 9px');
+        expect(blankCss).toContain('--agent-conn-radius: var(--md-border-radius-large)');
+        expect(blankCss).toContain('--agent-conn-radius-md: var(--md-border-radius)');
         expect(blankCss).toContain('--agent-conn-sidebar: #f2f4f7');
         expect(blankCss).toContain('--agent-conn-selected:');
         expect(blankCss).toContain('--agent-conn-btn: #2a2a2e');
@@ -263,12 +263,12 @@ describe('document editor theme contract', () => {
         expect(blankCss).toContain('--agent-conn-sidebar: #191919');
         expect(blankCss).toContain('--agent-conn-btn: #ececec');
         expect(blankCss).toContain('Agent unlock prompts');
-        expect(blankCss).toContain('--md-surface-container-lowest: #1c1c1c');
-        expect(blankCss).toContain('--md-surface-container-low: #2a2a2a');
+        expect(blankTheme.colors.dark?.surfaceContainerLowest).toBe('#1c1c1c');
+        expect(blankTheme.colors.dark?.surfaceContainerLow).toBe('#2a2a2a');
         expect(blankCss).toContain('.agent-connection-notice');
         expect(blankCss).toContain("[data-testid='external-agent-recovery']");
         expect(retroCss).not.toContain('blank polish');
-        expect(retroCss).not.toContain('--agent-conn-radius: 12px');
+        expect(retroCss).not.toContain('--agent-conn-radius: var(--md-border-radius-large)');
         expect(retroCss).not.toContain('--agent-conn-btn: #2a2a2e');
         expect(retroCss).not.toContain('Agent connections — blank dark mode');
         expect(retroCss).not.toContain('--md-surface-container-lowest: #1c1c1c');

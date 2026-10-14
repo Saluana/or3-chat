@@ -31,7 +31,7 @@ export const sidebarOverrides = {
 
     'input#sidebar.search': {
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)] max-md:min-h-[44px]! max-md:text-[16px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[var(--app-elevation-low)] max-md:min-h-[44px]! max-md:text-[16px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
@@ -177,13 +177,6 @@ export const sidebarCssSelectors = {
             backgroundColor: 'var(--md-surface)',
         },
     },
-    '#nav-header': {
-        style: {
-            paddingLeft: '0.5rem',
-            paddingRight: '0.5rem',
-            paddingBottom: '0.35rem',
-        },
-    },
     '.sidebar-section-heading': {
         style: {
             fontSize: '11px',
@@ -199,7 +192,7 @@ export const sidebarCssSelectors = {
             boxShadow: 'none',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             minHeight: '54px',
-            marginBottom: '0.4rem',
+            marginBottom: '0.5rem',
         },
     },
     '.unified-sb-item': {
