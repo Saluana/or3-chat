@@ -540,7 +540,7 @@ const searchInputProps = computed(() => {
         .trim();
     const { ui: _ignoredUi, ...rest } = merged;
     return {
-        placeholder: 'Search docs...',
+        placeholder: 'Search docs…',
         size: 'md' as const,
         leadingIcon: useIcon('ui.search').value,
         ...rest,

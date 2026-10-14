@@ -38,8 +38,8 @@
         <SidebarRenameEntityModal
             :modal-props="renameModalProps"
             :open="showRenameModal"
-            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename chat'"
+            :placeholder="isRenamingDoc ? 'Document title' : 'Chat title'"
             :icon="iconEdit"
             :value="renameTitle"
             @update:open="showRenameModal = $event"
@@ -219,7 +219,7 @@ const searchInputProps = computed(() => {
         ...(searchInputOverrides.value as any),
         // Slot provides trailing content; don't also enable empty trailing-icon chrome.
         trailingIcon: undefined,
-        placeholder: 'Filter by title...',
+        placeholder: 'Filter by title…',
         ui: mergedUi,
     };
 });

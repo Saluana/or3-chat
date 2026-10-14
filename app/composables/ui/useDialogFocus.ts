@@ -26,6 +26,7 @@ export function useDialogFocus(
     const viewport = useDialogViewport(layout);
     const pointerOpener = useDialogOpener();
     let opener: HTMLElement | null = null;
+    let openedByPointer = false;
     const usable = (element: HTMLElement | null): element is HTMLElement => Boolean(
         element?.isConnected && element !== document.body &&
         !element.closest('[inert], [aria-hidden="true"]') &&
@@ -38,8 +39,9 @@ export function useDialogFocus(
         style: [options()?.style, viewport.value.style],
         onOpenAutoFocus(event: Event) {
             const pointer = pointerOpener.value;
-            opener = pointer?.element.isConnected && Date.now() - pointer.at < 2000
-                ? pointer.element
+            openedByPointer = Boolean(pointer?.element.isConnected && Date.now() - pointer.at < 2000);
+            opener = openedByPointer
+                ? pointer!.element
                 : document.activeElement instanceof HTMLElement ? document.activeElement : null;
             options()?.onOpenAutoFocus?.(event);
         },
@@ -71,7 +73,10 @@ export function useDialogFocus(
             if (event.defaultPrevented) return;
             event.preventDefault();
             const target = opener;
+            // A mouse/touch opener shouldn't light up its focus ring (or tooltip) on return.
+            const restoreOptions = openedByPointer ? { focusVisible: false } as FocusOptions : undefined;
             opener = null;
+            openedByPointer = false;
             // Reka removes the outgoing focus scope and aria-hidden siblings
             // after this event. Restore only once that cleanup has completed.
             requestAnimationFrame(() => {
@@ -81,7 +86,7 @@ export function useDialogFocus(
                 const activeDialog = usable(active) ? active.closest('[role="dialog"][data-state="open"]') : null;
                 if (activeDialog && !activeDialog.contains(target)) return;
                 if (usable(target)) {
-                    target.focus();
+                    target.focus(restoreOptions);
                     return;
                 }
                 // The original control may have vanished or become inert on resize.

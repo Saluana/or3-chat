@@ -63,7 +63,7 @@
                             class="flex-1 flex items-center justify-center"
                         >
                             <div class="text-sm opacity-70">
-                                Loading page...
+                                Loading page…
                             </div>
                         </div>
                     </template>

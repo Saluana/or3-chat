@@ -186,8 +186,8 @@
                 <article v-theme="'document.canvas'" class="document-canvas">
                     <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
                     <p class="document-byline">
-                        <span>{{ stats.words.toLocaleString() }} words</span>
-                        <span>{{ stats.readingMinutes }} min read</span>
+                        <span>{{ stats.words.toLocaleString() }} {{ stats.words === 1 ? 'word' : 'words' }}</span>
+                        <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
                     </p>
 
                     <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" />

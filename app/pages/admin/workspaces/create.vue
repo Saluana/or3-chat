@@ -44,7 +44,7 @@
                                 v-model="ownerSearch"
                                 id="workspace-owner-search"
                                 name="workspace-owner-search"
-                                placeholder="Search by email..."
+                                placeholder="Search by email…"
                                 icon="i-heroicons-magnifying-glass"
                                 class="flex-1"
                                 :disabled="isSubmitting"

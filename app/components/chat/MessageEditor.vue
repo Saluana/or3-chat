@@ -31,6 +31,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'update:modelValue', v: string): void;
     (e: 'ready'): void;
+    (e: 'submit'): void;
+    (e: 'cancel'): void;
 }>();
 
 const containerProps = useThemeOverrides({
@@ -50,20 +52,31 @@ const editorProps = useThemeOverrides({
 const editor = ref<Editor | null>(null);
 let lastEmitted = '';
 let emitTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingValue: string | undefined;
 
 function cancelPendingEmit(): void {
     if (emitTimer === undefined) return;
     clearTimeout(emitTimer);
     emitTimer = undefined;
+    pendingValue = undefined;
 }
 
 function emitModelValue(val: string): void {
     cancelPendingEmit();
-    emitTimer = setTimeout(() => {
-        emitTimer = undefined;
-        lastEmitted = val;
-        emit('update:modelValue', val);
-    }, 200);
+    pendingValue = val;
+    emitTimer = setTimeout(flushPendingEmit, 200);
+}
+
+// Push the debounced value out now so a save started right after typing
+// (button click or shortcut) never misses the last keystrokes.
+function flushPendingEmit(): void {
+    if (emitTimer !== undefined) clearTimeout(emitTimer);
+    emitTimer = undefined;
+    if (pendingValue === undefined) return;
+    const val = pendingValue;
+    pendingValue = undefined;
+    lastEmitted = val;
+    emit('update:modelValue', val);
 }
 
 async function init() {
@@ -79,6 +92,24 @@ async function init() {
     const instance = new Editor({
         extensions,
         content: props.modelValue,
+        editorProps: {
+            // Escape cancels, Ctrl/Cmd+Enter saves (plain Enter stays a newline).
+            handleKeyDown: (_view, event) => {
+                if (event.isComposing) return false;
+                if (event.key === 'Escape') {
+                    cancelPendingEmit();
+                    emit('cancel');
+                    return true;
+                }
+                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    flushPendingEmit();
+                    emit('submit');
+                    return true;
+                }
+                return false;
+            },
+        },
+        onBlur: () => flushPendingEmit(),
         onUpdate: ({ editor: e }) => {
             const storage: unknown = e.storage;
             if (
@@ -142,13 +173,20 @@ watch(
     outline: none;
     font: inherit;
 }
+.message-editor-container {
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+}
 .message-editor-container:focus-within {
     outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--md-primary));
-    outline-offset: var(--app-focus-ring-offset, 2px);
+    /* Sit the ring outside the text (the bubble has room) without shifting layout. */
+    outline-offset: 6px;
 }
 .tiptap-editor :deep(p) {
     margin: 0 0 0.5rem;
+}
+.tiptap-editor :deep(p:last-child) {
+    margin-bottom: 0;
 }
 .tiptap-editor :deep(pre) {
     background: var(--md-surface-container-lowest);

@@ -152,7 +152,7 @@
                             >
                                 <span
                                     class="attachment-name text-[13px] font-medium opacity-40"
-                                    >Loading...</span
+                                    >Loading…</span
                                 >
                             </div>
                         </template>
@@ -356,20 +356,23 @@
                     v-model="draft"
                     :autofocus="true"
                     :focus-delay="120"
+                    @submit="saveEdit"
+                    @cancel="wrappedCancelEdit"
                 />
                 <div
                     class="cm-editor-actions flex w-full justify-end gap-2 mt-2"
                 >
                     <UButton
+                        v-bind="cancelEditButtonProps"
+                        :disabled="saving"
+                        @click="wrappedCancelEdit"
+                        >Cancel</UButton
+                    >
+                    <UButton
                         v-bind="saveEditButtonProps"
                         @click="saveEdit"
                         :loading="saving"
                         >Save</UButton
-                    >
-                    <UButton
-                        v-bind="cancelEditButtonProps"
-                        @click="wrappedCancelEdit"
-                        >Cancel</UButton
                     >
                 </div>
             </div>
@@ -453,6 +456,7 @@
                         <UButton
                             v-bind="editButtonProps"
                             aria-label="Edit message"
+                            :disabled="props.message.pending === true"
                             @click="wrappedBeginEdit"
                         ></UButton>
                     </UTooltip>
@@ -889,7 +893,19 @@ function wrappedCancelEdit() {
     if (id) emit('cancel-edit', id);
 }
 async function saveEdit() {
-    const outcome = await internalSaveEdit();
+    let outcome: Awaited<ReturnType<typeof internalSaveEdit>>;
+    try {
+        outcome = await internalSaveEdit();
+    } catch (error) {
+        // Stay in edit mode so the draft isn't lost; tell the user why.
+        toast.add({
+            title: 'Edit not saved',
+            description: presentError(error, { code: 'ERR_DB_WRITE_FAILED' }).message,
+            color: 'error',
+            duration: 3000,
+        });
+        return;
+    }
     const id = props.message.id;
     if (!id || outcome === 'ignored') return;
     // Only a persisted change counts as an edit; empty and unchanged drafts just leave edit mode.

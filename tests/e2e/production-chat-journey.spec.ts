@@ -2530,7 +2530,7 @@ test.describe('production chat journey', () => {
         const item = page.locator('.unified-sb-item-active').filter({ has: page.getByRole('button', { name: 'Open actions', exact: true }) }).first();
         await item.getByRole('button', { name: 'Open actions', exact: true }).click();
         await page.getByRole('button', { name: 'Delete', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Delete thread', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Delete chat', exact: true });
         await expect(dialog).toBeVisible();
         await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
         await expect(dialog).toBeHidden();

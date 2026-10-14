@@ -20,7 +20,7 @@
                     id="dashboard-grid-loading"
                     class="text-sm opacity-70 px-1"
                 >
-                    Loading dashboard...
+                    Loading dashboard…
                 </div>
                 <div
                     v-else

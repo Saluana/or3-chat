@@ -74,7 +74,7 @@
         <section class="section-card space-y-4">
             <div class="flex items-center justify-between">
                 <h3 class="text-sm font-semibold">Your workspaces</h3>
-                <span v-if="isPending" class="text-xs opacity-60">Loading...</span>
+                <span v-if="isPending" class="text-xs opacity-60">Loading…</span>
             </div>
 
             <div v-if="displayWorkspaces.length === 0" class="text-sm opacity-70">
@@ -412,7 +412,7 @@ async function createWorkspace() {
         cachedWorkspaces.value = nextWorkspaces;
         workspaces.value = nextWorkspaces;
         await saveCache(nextWorkspaces);
-        toast.add({ title: 'Workspace created', description: 'Switching to new workspace...' });
+        toast.add({ title: 'Workspace created', description: 'Switching to new workspace…' });
         // Full reload ensures clean Dexie DB binding and sync engine restart
         reloadNuxtApp({ ttl: 500 });
     } catch (error) {
@@ -451,7 +451,7 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
         }));
         workspaces.value = cachedWorkspaces.value;
         await saveCache(cachedWorkspaces.value);
-        toast.add({ title: 'Workspace updated', description: 'Switching workspace...' });
+        toast.add({ title: 'Workspace updated', description: 'Switching workspace…' });
         // Full reload ensures clean Dexie DB binding and sync engine restart
         reloadNuxtApp({ ttl: 500 });
     } catch (error) {
@@ -523,7 +523,7 @@ async function deleteWorkspace(workspace: WorkspaceSummary) {
             toast.add({
                 title: 'Workspace deleted',
                 description: nextWorkspaceId
-                    ? 'Switching to the next available workspace...'
+                    ? 'Switching to the next available workspace…'
                     : 'Workspace removed.',
             });
             reloadNuxtApp({ ttl: 500 });

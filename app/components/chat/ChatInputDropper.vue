@@ -559,7 +559,7 @@ async function initializeEditor(replaceExisting = false) {
             Placeholder.configure({
                 // Use a placeholder:
                 placeholder: () =>
-                    signInRequired.value ? SIGN_IN_PROMPT : 'Write something …',
+                    signInRequired.value ? SIGN_IN_PROMPT : 'Write something…',
             }),
             StarterKit.configure({
                 // The composer sends plain text. Keep pasted URLs editable

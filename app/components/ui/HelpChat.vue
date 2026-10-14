@@ -82,7 +82,7 @@
                             <span
                                 v-if="msg.pending && !msg.content"
                                 class="text-xs uppercase tracking-wide opacity-70 animate-pulse"
-                                >Thinking...</span
+                                >Thinking…</span
                             >
                             <div
                                 v-else-if="msg.tool_call_info"
@@ -139,7 +139,7 @@
                         <UInput
                             ref="inputRef"
                             v-model="message"
-                            placeholder="Ask about Or3 Chat..."
+                            placeholder="Ask about Or3 Chat…"
                             size="md"
                             class="flex-1"
                             :disabled="isSending"

@@ -2339,7 +2339,7 @@ export function useChat(
                 {
                     id: admissionThreadId,
                     title:
-                        content.split(' ').slice(0, 6).join(' ') ||
+                        content.trim().split(/\s+/).slice(0, 6).join(' ') ||
                         'New Thread',
                     last_message_at: nowSec(),
                     parent_thread_id: null,

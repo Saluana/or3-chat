@@ -21,7 +21,7 @@
             <template #fallback>
                 <div class="p-4 text-center document-search-loading">
                     <div class="text-sm text-[var(--md-on-surface-variant)] document-search-loading-text">
-                        Loading search...
+                        Loading search…
                     </div>
                 </div>
             </template>

@@ -91,6 +91,7 @@
         :document-trash-enabled="documentTrashEnabled"
         :delete-project-modal-props="deleteProjectModalProps"
         :show-delete-project-modal="showDeleteProjectModal"
+        :delete-target-title="deleteTargetTitle"
         @update:show-rename-modal="showRenameModal = $event"
         @update:rename-title="renameTitle = $event"
         @save-rename="saveRename"
@@ -192,6 +193,7 @@ import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { getActiveWorkspaceId } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { presentError } from '~~/shared/errors';
 import {
     db,
     upsert,
@@ -569,6 +571,8 @@ const deleteThreadModalProps = createSidebarModalProps(
 // Document delete state
 const showDeleteDocumentModal = ref(false);
 const deleteDocumentId = ref<string | null>(null);
+// Name shown in the delete confirmations so the user knows what they're removing.
+const deleteTargetTitle = ref('');
 const deleteDocumentModalProps = createSidebarModalProps(
     'sidebar.delete-document',
     {
@@ -632,13 +636,15 @@ async function openRename(target: SidebarRenamePayload) {
 
 async function saveRename() {
     if (!renameId.value) return;
+    const title = renameTitle.value.trim();
+    if (!title) return;
     // Determine if it's a thread or document by checking posts table first
     const maybeDoc = await db.posts.get(renameId.value);
     const now = nowSec();
     if (isDocumentPost(maybeDoc)) {
         // Update doc title via documents API (fires hooks for sidebar refresh)
         try {
-            await updateDocument(renameId.value, { title: renameTitle.value });
+            await updateDocument(renameId.value, { title });
         } catch (error) {
             if (!(error instanceof DocumentConflictError)) throw error;
             // The document changed while the rename was prepared; nothing was
@@ -660,7 +666,7 @@ async function saveRename() {
             await syncProjectEntryTitle(
                 renameId.value,
                 'doc',
-                renameTitle.value
+                title
             );
         } catch (e) {
             console.error('project doc title sync failed', e);
@@ -670,7 +676,7 @@ async function saveRename() {
         if (!t) return;
         await upsert.thread({
             ...t,
-            title: renameTitle.value,
+            title,
             updated_at: now,
         });
         // Sync title inside any project entries containing this thread
@@ -678,7 +684,7 @@ async function saveRename() {
             await syncProjectEntryTitle(
                 renameId.value,
                 'chat',
-                renameTitle.value
+                title
             );
         } catch (e) {
             console.error('project title sync failed', e);
@@ -694,6 +700,7 @@ function confirmDelete(thread: ThreadItem) {
     threadHasDescendants.value = false;
     deleteWorkspaceGeneration = getWorkspaceGeneration();
     deleteId.value = thread.id;
+    deleteTargetTitle.value = thread.title?.trim() || 'Untitled';
     showDeleteModal.value = true;
 }
 
@@ -709,6 +716,10 @@ function confirmDeleteProject(projectOrId: string | Project) {
               : null;
     if (!id) return;
     deleteProjectId.value = id as string;
+    deleteTargetTitle.value =
+        (typeof projectOrId === 'object' ? projectOrId.name : null) ||
+        projects.value.find((project) => project.id === id)?.name ||
+        '';
     showDeleteProjectModal.value = true;
 }
 
@@ -755,6 +766,11 @@ async function deleteProject() {
         await deleteProjectCrud(deleteProjectId.value);
     } catch (e) {
         console.error('delete project failed', e);
+        toast.add({
+            title: 'Could not delete project',
+            description: 'The delete operation could not be completed. Please try again.',
+            color: 'error',
+        });
     } finally {
         showDeleteProjectModal.value = false;
         deleteProjectId.value = null;
@@ -764,22 +780,35 @@ async function deleteProject() {
 // Document delete handling
 function confirmDeleteDocument(doc: DocumentItem) {
     deleteDocumentId.value = doc.id;
+    deleteTargetTitle.value = doc.title?.trim() || 'Untitled';
     showDeleteDocumentModal.value = true;
 }
 async function deleteDocument() {
     if (!deleteDocumentId.value) return;
+    try {
+        await removeDocument(deleteDocumentId.value);
+    } catch (error) {
+        // Keep the dialog open so the user can retry or cancel.
+        toast.add({
+            title: documentTrashEnabled.value ? 'Could not move document to Trash' : 'Could not delete document',
+            description: presentError(error).message,
+            color: 'error',
+        });
+        return;
+    }
+    showDeleteDocumentModal.value = false;
+    deleteDocumentId.value = null;
+}
+async function removeDocument(documentId: string) {
     if (documentTrashEnabled.value) {
         const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
             threadId: 'sidebar-documents', messageId: null, callId: createRuntimeUuid(), requestId: createRuntimeUuid(), abortSignal: new AbortController().signal });
-        const id = deleteDocumentId.value;
         const { updateWorkspaceFile } = await import('~/db/workspace-files');
-        const row = await scope.db.posts.get(id);
+        const row = await scope.db.posts.get(documentId);
         scope.assertCurrent('write');
         if (!row) throw new Error('This document is unavailable.');
         await updateWorkspaceFile(scope, row.id, await workspaceRevision(row), { trashed: true });
-    } else await dbDel.hard.document(deleteDocumentId.value);
-    showDeleteDocumentModal.value = false;
-    deleteDocumentId.value = null;
+    } else await dbDel.hard.document(documentId);
 }
 
 async function onNewChat() {

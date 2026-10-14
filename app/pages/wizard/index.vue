@@ -35,7 +35,7 @@
                 v-if="isLoading"
                 class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-5 py-8 text-sm"
             >
-                Loading wizard session...
+                Loading wizard session…
             </div>
 
             <div
