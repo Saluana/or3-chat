@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "checks": [
+    "isolated SSR build and production plugin boundary passed",
+    "isolated full host type-check passed",
+    "isolated static generation and production plugin boundary passed",
+    "private auth/invite secrets absent from public static assets",
+    "final Marketplace consumer passes isolated full host type-check"
+  ],
+  "source": "isolated source copy with rebuilt provider packages; no local .env or previous output"
+}

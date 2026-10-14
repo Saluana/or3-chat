@@ -26,8 +26,12 @@ conflicting IDs, Stop during execution, pane/workspace navigation, result-write
 failure, and reload without reexecution. Each case checks recovery by submitting
 another message through the native composer, verifies the disappearance of tool
 spinners, and fails on unhandled browser exceptions. Large-result bounds and
-inspector redaction are additional cases. Browser protocol cases also verify
-recovery after malformed event JSON, missing call identity, unfinished arguments
+inspector redaction are additional cases. Browser cases also verify
+recovery from empty and oversized handler exceptions, with bounded error text
+and credential redaction. Focused execution tests cover cancellation before
+handler entry, guarded writes after timeout, invalid server result types,
+throwing availability callbacks, and honest failed-call summaries.
+Browser protocol cases verify recovery after malformed event JSON, missing call identity, unfinished arguments
 and a provider error after a call starts, with no handler side effects.
 The scripted provider rejects unmatched call/result history, including recovery
 requests. Native Retry is tested before and after reload for an uncertain write:

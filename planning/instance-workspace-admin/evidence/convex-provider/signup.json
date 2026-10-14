@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "checks": [
+    "signup rollback, conflict, recipient-only ownership, active-preserving replay, accept/revoke, bounded retention and pagination"
+  ]
+}

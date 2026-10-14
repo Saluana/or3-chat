@@ -148,7 +148,7 @@
                             >
                                 <AppIcon
                                     :image="page.image"
-                                    :icon="page.icon || iconPageDefault"
+                                    :icon="page.id === 'sidebar-files' ? iconPageFiles : page.icon || iconPageDefault"
                                     :class="page.image ? 'h-7 w-7' : 'h-5 w-5'"
                                 />
                             </UButton>
@@ -236,6 +236,7 @@ const iconNewNote = useIcon('sidebar.new_note');
 const iconNewFolder = useIcon('sidebar.new_folder');
 const iconPageHome = useIcon('sidebar.page.home');
 const iconPageDefault = useIcon('sidebar.page.default');
+const iconPageFiles = useIcon('sidebar.page.files');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 

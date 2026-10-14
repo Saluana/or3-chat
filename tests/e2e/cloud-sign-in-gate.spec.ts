@@ -1,5 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 import { createInviteToken } from '../../server/auth/invite-token';
+import { strToU8, zipSync } from 'fflate';
 
 // Needs the invite-only Basic Auth profile with a disposable bootstrap user:
 // run it with `bun run test:e2e:sign-in-gate`.
@@ -14,6 +16,12 @@ const SIGN_IN_PROMPT = 'Sign in to start chatting';
 const sendRequest = /\/api\/openrouter\/stream|\/chat\/completions/i;
 
 test.skip(!harnessReady, 'Requires the sign-in gate E2E harness');
+
+async function saveEvidence(info: TestInfo, name: string, artifact: { body: string | Buffer; contentType: string }) {
+    const path = info.outputPath(`${name}.${artifact.contentType === 'image/png' ? 'png' : 'json'}`);
+    await writeFile(path, artifact.body);
+    await info.attach(name, { path, contentType: artifact.contentType });
+}
 
 async function openComposer(page: Page) {
     await page.goto('/');
@@ -83,7 +91,7 @@ for (const [label, viewport] of [
             await expect(composer).toContainText('hello from a signed-out visitor');
             expect(page.url()).toBe(urlBeforeSend);
             expect(sent).toEqual([]);
-            await info.attach(`signed-out-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+            await saveEvidence(info, `signed-out-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         // Invite links open registration from the account control; on mobile
@@ -99,7 +107,7 @@ for (const [label, viewport] of [
             // invite links has opened registration, or it is still there to read.
             await expect.poll(async () => new URL(page.url()).searchParams.get('invite') === 'e2e-invite-token'
                 || await page.getByRole('dialog', { name: 'Create Account' }).isVisible()).toBe(true);
-            await info.attach(`invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+            await saveEvidence(info, `invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         // Complete the invite journey through the installed provider's UI,
@@ -167,19 +175,24 @@ for (const [label, viewport] of [
                 else {
                     expect(payload.session.workspace.id).not.toBe(workspaceId);
                     expect(payload.session.workspace.name).toBe('My Workspace');
+                    const deniedPull = await page.request.post('/api/sync/pull', { data: { scope: { workspaceId }, cursor: 0, limit: 10 } });
+                    expect(deniedPull.status()).toBe(403);
+                    const deniedFile = await page.request.post('/api/storage/presign-download', { data: { workspace_id: workspaceId, hash: 'a'.repeat(64) } });
+                    expect(deniedFile.status()).toBe(403);
                 }
                 expect(payload.session.workspace).toMatchObject({ id: expect.any(String),
                 });
+                return payload.session;
             };
-            await verifySession();
+            const completed = await verifySession();
             await page.reload();
             await verifySession();
             await expect(page.locator('.ProseMirror p.is-editor-empty')).not.toHaveAttribute('data-placeholder', SIGN_IN_PROMPT);
-            await info.attach(`completed-${kind}-invite-${label}`, {
-                body: JSON.stringify({ email, workspaceId, registrationStatus: registered.status(), sessionAfterReload: true }),
+            await saveEvidence(info, `completed-${kind}-invite-${label}`, {
+                body: JSON.stringify({ inviteKind: kind, email, inviterWorkspaceId: workspaceId, workspaceId: completed.workspace.id, role: completed.role, registrationStatus: registered.status(), sessionAfterReload: true }),
                 contentType: 'application/json',
             });
-            await info.attach(`completed-${kind}-invite-${label}-screen`, { body: await page.screenshot(), contentType: 'image/png' });
+            await saveEvidence(info, `completed-${kind}-invite-${label}-screen`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
         test('signed-in user without a key still gets the OpenRouter connect flow', async ({ page }, info) => {
@@ -197,7 +210,214 @@ for (const [label, viewport] of [
 
             await expect(page.getByText('Connect to OpenRouter', { exact: true }).last()).toBeVisible();
             await expect(page.getByText(SIGN_IN_PROMPT)).toHaveCount(0);
-            await info.attach(`signed-in-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+            await saveEvidence(info, `signed-in-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
     });
 }
+
+test('instance admin controls load without a Chat account or selected workspace', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const login = await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    });
+    expect(login.ok()).toBe(true);
+    const inventory = await page.request.get('/api/admin/plugins-page');
+    expect(inventory.ok()).toBe(true);
+    expect((await inventory.json()).workspaceState).toBeNull();
+    await page.goto('/admin/plugins');
+    await expect(page.getByRole('button', { name: 'Instance', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Select a Workspace' })).not.toBeVisible();
+    await expect(page.getByText('Site catalog approvals', { exact: true })).toBeVisible();
+    const historyLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/list');
+    await page.goto('/admin/signup-invites');
+    await historyLoaded;
+    await expect(page.getByRole('heading', { name: 'Signup invites', exact: true })).toBeVisible();
+    await expect(page.getByText('Each recipient gets their own private workspace.', { exact: true })).toBeVisible();
+    const email = 'admin-ui-'+crypto.randomUUID()+'@example.test';
+    await page.getByLabel('Recipient email', {exact:true}).fill(email);
+    await expect(page.getByLabel('Recipient email', {exact:true})).toHaveValue(email);
+    const created = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/create');
+    await page.getByRole('button',{name:'Create invite',exact:true}).click();
+    expect((await created).ok()).toBe(true);
+    const visibleLink = await page.getByLabel(/Invite link/).inputValue();
+    expect(new URL(visibleLink).origin).toBe(origin);
+    await page.getByRole('listitem').filter({hasText:email}).getByRole('button',{name:'Revoke',exact:true}).click();
+    await expect(page.getByRole('listitem').filter({hasText:email})).toContainText('revoked');
+    // Clear the one-time token before saving the redacted UI evidence.
+    await page.reload();
+    await saveEvidence(info, 'instance-admin-without-workspace', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('ordinary sign-in finishes credential-first signup with a replacement invite', async ({ page, browser }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const admin = await browser.newContext({ baseURL: origin });
+    const email = `interrupted-${crypto.randomUUID()}@example.test`;
+    const password = 'DisposableInterrupted!123';
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    try {
+        expect((await admin.request.post('/api/admin/auth/login', { headers, data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD } })).ok()).toBe(true);
+        const create = async () => {
+            const response = await admin.request.post('/api/admin/signup-invites/create', { headers, data: { email } });
+            expect(response.ok()).toBe(true);
+            return (await response.json()).invite;
+        };
+        const first = await create();
+        // Registration commits provider credentials; no canonical session request has run yet.
+        const registration = await page.request.post('/api/basic-auth/register', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: { email, password, confirmPassword: password, inviteToken: first.token },
+        });
+        expect(registration.ok()).toBe(true);
+        expect((await admin.request.post('/api/admin/signup-invites/revoke', { headers, data: { id: first.id } })).ok()).toBe(true);
+        const refused = await page.request.get('/api/auth/session');
+        if (refused.ok()) expect((await refused.json()).appAccessAllowed).toBe(false);
+        else expect([401, 403, 503]).toContain(refused.status());
+        await page.request.post('/api/basic-auth/sign-out', { headers: { origin, 'x-or3-cloud-intent': 'mutation' } });
+        const replacement = await create();
+        // A stale cookie/link must not override a manually pasted replacement token.
+        await page.goto(first.inviteUrl);
+        const registrationForm = page.getByRole('dialog', { name: 'Create Account', exact: true });
+        await expect(registrationForm).toBeVisible({ timeout: 30_000 });
+        await registrationForm.getByRole('textbox', { name: 'Invite token (from your invite link)', exact: true }).fill(replacement.token);
+        await registrationForm.getByRole('button', { name: 'Already registered? Sign in', exact: true }).click();
+        const signIn = page.getByRole('dialog', { name: 'Sign In', exact: true });
+        await expect(signIn).toBeVisible();
+        await signIn.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+        await signIn.getByLabel('Password', { exact: true }).fill(password);
+        await signIn.getByRole('button', { name: 'Sign In', exact: true }).click();
+        await expect.poll(async () => {
+            const response = await page.request.get('/api/auth/session');
+            return response.ok() ? (await response.json()).session?.role : null;
+        }).toBe('owner');
+        await expect(signIn).not.toBeVisible();
+        await expect(page.getByLabel('Message input', { exact: true })).toBeVisible();
+        await expect(page.locator('.ProseMirror p.is-editor-empty')).not.toHaveAttribute('data-placeholder', SIGN_IN_PROMPT);
+        await page.reload();
+        const session = (await (await page.request.get('/api/auth/session')).json()).session;
+        expect(session.workspace.name).toBe('My Workspace');
+        const history = await admin.request.get('/api/admin/signup-invites/list');
+        const rows = (await history.json()).invites;
+        expect(rows.find((row: { id: string }) => row.id === first.id).status).toBe('revoked');
+        expect(rows.find((row: { id: string }) => row.id === replacement.id).status).toBe('accepted');
+        await saveEvidence(info, 'interrupted-signup-receipt', { body: JSON.stringify({ completed: true, privateWorkspace: session.workspace.id, originalInviteRevoked: true, replacementAccepted: true }), contentType: 'application/json' });
+    } finally { await admin.close(); }
+});
+
+test('signup preflight rejects revoked tokens and native accept/revoke has one winner', async ({ page, browser }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const admin = await browser.newContext({ baseURL: origin });
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    const email = `signup-race-${crypto.randomUUID()}@example.test`;
+    const password = 'DisposableSignupRace!123';
+    try {
+        expect((await admin.request.post('/api/admin/auth/login', { headers, data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD } })).ok()).toBe(true);
+        const create = async () => {
+            const response = await admin.request.post('/api/admin/signup-invites/create', { headers, data: { email } });
+            expect(response.ok()).toBe(true);
+            return (await response.json()).invite;
+        };
+        const revokedInvite = await create();
+        expect((await admin.request.post('/api/admin/signup-invites/revoke', { headers, data: { id: revokedInvite.id } })).ok()).toBe(true);
+        const register = (inviteToken: string) => page.request.post('/api/basic-auth/register', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: { email, password, confirmPassword: password, inviteToken },
+        });
+        expect((await register(revokedInvite.token)).status()).toBe(403);
+        const valid = await create();
+        // Success with the same email proves preflight did not preclaim credentials.
+        expect((await register(valid.token)).ok()).toBe(true);
+        const [sessionResponse, revokeResponse] = await Promise.all([
+            page.request.get('/api/auth/session'),
+            admin.request.post('/api/admin/signup-invites/revoke', { headers, data: { id: valid.id } }),
+        ]);
+        const rows = (await (await admin.request.get('/api/admin/signup-invites/list')).json()).invites;
+        const row = rows.find((candidate: { id: string }) => candidate.id === valid.id);
+        if (row.status === 'accepted') {
+            expect(revokeResponse.status()).toBe(409);
+            expect(sessionResponse.ok()).toBe(true);
+            const session = (await sessionResponse.json()).session;
+            expect(session.role).toBe('owner');
+            const detail = await admin.request.get(`/api/admin/workspaces/${session.workspace.id}`);
+            expect(detail.ok()).toBe(true);
+            expect((await detail.json()).members).toHaveLength(1);
+            const replay = (await (await page.request.get('/api/auth/session')).json()).session;
+            expect(replay.workspace.id).toBe(session.workspace.id);
+        } else {
+            expect(row.status).toBe('revoked');
+            expect(revokeResponse.ok()).toBe(true);
+            if (sessionResponse.ok()) expect((await sessionResponse.json()).appAccessAllowed).toBe(false);
+            else expect([401, 403]).toContain(sessionResponse.status());
+        }
+        await saveEvidence(info, 'native-signup-race', { body: JSON.stringify({ preflightLeftNoCredentials: true, singleWinner: row.status, replayChecked: row.status === 'accepted' }), contentType: 'application/json' });
+    } finally { await admin.close(); }
+});
+
+test('plugin workspace target stays explicit while instance controls have no selector', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    expect((await page.request.post('/api/admin/auth/login', { headers, data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD } })).ok()).toBe(true);
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: { email: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL, password: process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD } })).ok()).toBe(true);
+    const chat = (await (await page.request.get('/api/auth/session')).json()).session;
+    const targets: { id: string; name: string }[] = [];
+    for (const label of ['A', 'B']) {
+        const name = `Admin target ${label} ${crypto.randomUUID()}`;
+        const result = await page.request.post('/api/admin/workspaces', { headers, data: { name, ownerUserId: chat.user.id } });
+        expect(result.ok()).toBe(true);
+        targets.push({ id: (await result.json()).workspaceId, name });
+    }
+    await page.goto(`/admin/plugins?scope=workspace&workspaceId=${targets[0].id}&plugin=retained-link&rollout=retained-rollout`);
+    await expect(page.getByText(targets[0].name, { exact: true })).toBeVisible();
+    await expect(page.getByText('Site catalog approvals', { exact: true })).not.toBeVisible();
+    await page.getByRole('button', { name: 'Choose workspace', exact: true }).click();
+    const selector = page.getByRole('dialog', { name: 'Select a Workspace' });
+    await expect(selector).toBeVisible();
+    await selector.getByRole('button').filter({ hasText: targets[1].name }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('workspaceId')).toBe(targets[1].id);
+    await expect(selector).not.toBeVisible();
+    await expect(page.getByText(targets[1].name, { exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('workspaceId')).toBe(targets[1].id);
+    expect(new URL(page.url()).searchParams.get('plugin')).toBe('retained-link');
+    expect(new URL(page.url()).searchParams.get('rollout')).toBe('retained-rollout');
+    expect((await (await page.request.get('/api/auth/session')).json()).session.workspace.id).toBe(chat.workspace.id);
+    // Exercise the actual upload control and candidate endpoint with an explicit
+    // admin target distinct from Chat. Scope navigation alone missed this flow.
+    await page.getByText('Advanced source plugins and development admission', { exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Add from .zip', exact: true })).toBeVisible();
+    const pluginId = `scope-upload-${crypto.randomUUID()}`;
+    const archive = Buffer.from(zipSync({
+        'or3.manifest.json': strToU8(JSON.stringify({
+            manifestVersion: 2, kind: 'plugin', id: pluginId, name: 'Workspace upload', version: '1.0.0',
+            capabilities: [], engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+            runtime: { client: { entry: 'client.mjs', format: 'esm', isolation: 'host' } },
+            requestedGrants: [], features: { required: [], optional: [] },
+            dependencies: { required: [], optional: [] }, trust: 'trusted-host', settings: { version: 1 },
+            stateCompatibility: { version: 1, reads: { minimum: 1, maximum: 1 }, rollback: 'safe' },
+        })),
+        'client.mjs': strToU8('export default {};\n'),
+    }));
+    await page.locator('input[type=file][accept=".zip"]').setInputFiles({ name: 'workspace-plugin.zip', mimeType: 'application/zip', buffer: archive });
+    const uploaded = page.waitForResponse(response => response.url().endsWith('/api/admin/extensions/install') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Install anyway', exact: true }).click();
+    const uploadResponse = await uploaded;
+    expect(uploadResponse.ok(), await uploadResponse.text()).toBe(true);
+    const candidate = await uploadResponse.json();
+    expect(candidate.kind).toBe('v2-candidate');
+    expect(candidate.workspaceId).toBe(targets[1].id);
+    expect(candidate.ok, JSON.stringify(candidate)).toBe(true);
+    await expect(page.locator('#managed-v2')).toContainText(pluginId);
+    const workspaceInventory = await (await page.request.get(`/api/admin/plugins-page?workspaceId=${targets[1].id}`)).json();
+    expect(workspaceInventory.packagePlugins.find((entry: { pluginId: string }) => entry.pluginId === pluginId).pointer.candidate.packageDigest).toBe(candidate.packageDigest);
+    await saveEvidence(info, 'workspace-upload-receipt', { body: JSON.stringify({ workspaceId: targets[1].id, pluginId, candidate }), contentType: 'application/json' });
+    await page.getByRole('button', { name: 'Instance', exact: true }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('scope')).toBe('instance');
+    await expect(page.getByText('Site catalog approvals', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Choose workspace', exact: true })).not.toBeVisible();
+    expect(new URL(page.url()).searchParams.has('workspaceId')).toBe(false);
+    const inventory = await page.request.get('/api/admin/plugins-page');
+    expect((await inventory.json()).workspaceState).toBeNull();
+    const marketplaceInventory = page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/plugins-page');
+    await page.goto('/chat?dashboard=marketplace&page=installed');
+    const marketplaceResponse = await marketplaceInventory;
+    expect(marketplaceResponse.ok()).toBe(true);
+    expect(new URL(marketplaceResponse.url()).searchParams.get('workspaceId')).toBe(chat.workspace.id);
+    await saveEvidence(info, 'plugin-scope-receipt', { body: JSON.stringify({ explicitTarget: targets[1].id, chatWorkspace: chat.workspace.id, preservedDeepLink: true, instanceNeedsNoWorkspace: true }), contentType: 'application/json' });
+});

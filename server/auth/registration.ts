@@ -9,7 +9,7 @@ export type RegistrationDecision =
     | { allowed: true; mode: RegistrationMode; invite: null }
     | {
           allowed: true;
-          mode: 'invite_only';
+          mode: RegistrationMode;
           invite: {
               token: string;
               tokenHash: string;
@@ -99,10 +99,6 @@ export function evaluateUnknownUserRegistration(input: {
 }): RegistrationDecision {
     const { event, store, mode } = input;
 
-    if (mode === 'open') {
-        return { allowed: true, mode, invite: null };
-    }
-
     if (mode === 'disabled') {
         return { allowed: false, mode, reason: 'disabled' };
     }
@@ -113,11 +109,8 @@ export function evaluateUnknownUserRegistration(input: {
         return { allowed: true, mode, invite: null };
     }
 
-    if (typeof store.acceptInviteAndProvisionUser !== 'function') {
-        return { allowed: false, mode, reason: 'invite_unsupported' };
-    }
-
     const token = (input.inviteToken ?? getInviteTokenFromEvent(event))?.trim();
+    if (mode === 'open' && !token) return { allowed: true, mode, invite: null };
     if (!token) {
         return { allowed: false, mode, reason: 'invite_required' };
     }
@@ -138,6 +131,10 @@ export function evaluateUnknownUserRegistration(input: {
             mode,
             reason: verified.reason === 'expired' ? 'invite_expired' : 'invite_invalid',
         };
+    }
+
+    if ('purpose' in verified.payload ? !supportsSignupInvites(store) : typeof store.acceptInviteAndProvisionUser !== 'function') {
+        return { allowed: false, mode, reason: 'invite_unsupported' };
     }
 
     return {
@@ -169,10 +166,11 @@ export async function validateInviteRegistration(input: {
         return decision;
     }
 
-    if (typeof input.store.validateInvite !== 'function') {
+    const payload = decision.invite.payload;
+    if ('purpose' in payload ? !supportsSignupInvites(input.store) : typeof input.store.validateInvite !== 'function') {
         return {
             allowed: false,
-            mode: 'invite_only',
+            mode: input.mode,
             reason: 'invite_unsupported',
         };
     }
@@ -187,11 +185,9 @@ export async function validateInviteRegistration(input: {
         };
     }
 
-    const persisted = await input.store.validateInvite({
-        workspaceId: decision.invite.payload.workspaceId,
-        email: normalizedEmail,
-        tokenHash: decision.invite.tokenHash,
-    });
+    const persisted = 'purpose' in payload
+        ? await input.store.validateSignupInvite!({ id: payload.invite_id, email: normalizedEmail, token_hash: decision.invite.tokenHash })
+        : await input.store.validateInvite!({ workspaceId: payload.workspaceId, email: normalizedEmail, tokenHash: decision.invite.tokenHash });
     if (!persisted.ok) {
         return {
             allowed: false,
@@ -201,4 +197,11 @@ export async function validateInviteRegistration(input: {
     }
 
     return decision;
+}
+
+/** Capability is the complete optional method set, never a driver flag. */
+export function supportsSignupInvites(store: AuthWorkspaceStore): boolean {
+    return typeof store.createSignupInvite === 'function' && typeof store.listSignupInvites === 'function'
+        && typeof store.revokeSignupInvite === 'function' && typeof store.validateSignupInvite === 'function'
+        && typeof store.acceptSignupInviteAndProvisionUser === 'function';
 }

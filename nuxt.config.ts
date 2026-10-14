@@ -671,8 +671,8 @@ export default defineNuxtConfig({
             alias: [...pluginSdkViteAliases, ...localPackageAliases],
         },
         optimizeDeps: {
-            // These packages are reached through lazy theme/editor/search
-            // components. Without an explicit include Vite discovers them
+            // These packages are reached through lazy theme/editor/search components
+            // and extraction workers. Without an explicit include Vite discovers them
             // after the browser has already requested those chunks, then
             // invalidates the generated URLs while re-optimizing. The 504
             // responses make Vue's async ChatInput component fail fatally on
@@ -707,6 +707,8 @@ export default defineNuxtConfig({
                 'dexie',
                 'gpt-tokenizer',
                 'lru-cache',
+                'mammoth',
+                'pdfjs-dist',
                 'spark-md5',
                 'streamdown-vue',
                 'tiptap-markdown',

@@ -13,12 +13,34 @@ vi.mock('~/composables/useIcon', () => ({
 const global = {
     stubs: {
         UIcon: {
-            template: '<span class="icon" />',
+            props: ['name'],
+            template: '<span class="icon" :data-icon="name" />',
         },
     },
 };
 
 describe('ToolCallIndicator', () => {
+    it.each([
+        ['workspace_create_document', 'Workspace create document'],
+        ['workspace_update_project', 'Workspace update project'],
+        ['workspace_propose_document_edit', 'Workspace propose document edit'],
+    ])(
+        'shows a failed %s without claiming success in the collapsed summary', (name, label) => {
+            const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
+                { id: 'failed-write', name, status: 'error', error: 'Tool execution timed out' },
+                { id: 'read', name: 'workspace_read', status: 'complete', result: 'Found a source' },
+            ] }, global });
+            const summary = wrapper.find('summary').text();
+            expect(summary).toContain(`${label} failed`);
+            expect(summary).toContain('Read workspace sources');
+            expect(summary).not.toMatch(/Created document|Updated project|ready for review/);
+            expect(wrapper.find('summary .icon').attributes('data-icon')).toBe('i-lucide-circle-alert');
+            expect(wrapper.find('.tool-call-detail .icon').attributes('data-icon')).toBe('i-lucide-circle-alert');
+            expect(wrapper.find('.tool-call-expanded-content').text()).toContain(name);
+            expect(wrapper.text()).toContain('Tool execution timed out');
+        }
+    );
+
     it('exposes a host proposal review card without treating model prose or unrelated tools as saved changes', async () => {
         const result = JSON.stringify({ version: 1, workspaceId: 'local', messageId: 'review-message',
             documentId: 'review-doc', changeId: 'c'.repeat(64), status: 'pending_review', saved: false,
@@ -168,8 +190,8 @@ describe('ToolCallIndicator', () => {
             global,
         });
 
-        expect(wrapper.find('summary').text()).toContain('Or3sal tasks create list');
-        expect(wrapper.find('summary').text()).toContain('Or3sal tasks search lists');
+        expect(wrapper.find('summary').text()).toContain('Or3sal tasks create list failed');
+        expect(wrapper.find('summary').text()).toContain('Or3sal tasks search lists failed');
         expect(wrapper.find('.tool-call-expanded-content').text()).toContain('or3sal_tasks_create_list');
         expect(wrapper.find('.tool-call-expanded-content').text()).toContain('or3sal_tasks_search_lists');
         expect(wrapper.find('summary').text()).not.toContain('files');

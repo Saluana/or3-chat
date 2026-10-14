@@ -13,6 +13,7 @@ import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
 import { validateToolArguments, validateToolDefinition, validateToolDefinitions } from '~~/shared/chat/tool-schema';
 import {
     executeWithAbortTimeout,
+    toolExecutionErrorMessage,
     ToolExecutionTimeoutError,
 } from '~~/shared/chat/tool-execution';
 import {
@@ -71,6 +72,10 @@ async function withTimeout(
     try {
         const result = await executeWithAbortTimeout({ signal, timeoutMs, execute: handler });
 
+        if (typeof result !== 'string') {
+            return { result: null, timedOut: false,
+                error: `Handler must return a string, got ${typeof result}.` };
+        }
         return { result, timedOut: false };
     } catch (error) {
         if (error instanceof ToolExecutionTimeoutError) {
@@ -79,7 +84,7 @@ async function withTimeout(
         return {
             result: null,
             timedOut: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: toolExecutionErrorMessage(error),
         };
     }
 }
@@ -228,7 +233,7 @@ export async function executeServerTool(
 
     if (context) {
         try { const { assertServerProjectExecutionSupported } = await import('./project-policy'); await assertServerProjectExecutionSupported(context); }
-        catch (error) { return { result: null, toolName, error: error instanceof Error ? error.message : 'Project policy unavailable.', timedOut: false }; }
+        catch (error) { return { result: null, toolName, error: toolExecutionErrorMessage(error), timedOut: false }; }
     }
     const baseContext = context ?? {
         subject: null,

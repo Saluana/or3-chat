@@ -16,6 +16,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-3">
+                        <UButton :to="`/admin/plugins?scope=workspace&workspaceId=${encodeURIComponent(workspace.id)}`" size="sm" variant="soft">Manage plugins</UButton>
                         <h1 class="min-w-0 break-words text-2xl font-semibold">{{ workspace.name }}</h1>
                         <UBadge v-if="workspace.deleted" color="error" variant="soft">Deleted</UBadge>
                     </div>
@@ -180,7 +181,7 @@
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <div class="flex items-center justify-between mb-4">
                     <div>
-                        <h2 class="text-lg font-medium">Invites</h2>
+                        <h2 class="text-lg font-medium">Team invites</h2>
                         <p class="text-sm opacity-70">Invite people to {{ workspace.name }}.</p>
                     </div>
                     <UButton size="sm" variant="soft" color="neutral" :loading="isLoadingInvites" @click="loadInvites">
@@ -485,7 +486,7 @@ async function removeMember(member: WorkspaceMemberInfo) {
     const label = member.email || member.userId;
     const confirmed = await confirm({
         title: 'Remove member?',
-        message: `Remove ${label} from ${workspace.value?.name || 'this workspace'}? They will lose access immediately.`,
+        message: `Remove ${label} from ${workspace.value?.name || 'this workspace'}? Their workspace membership will be removed immediately. Shared guest access, when enabled, is controlled separately.`,
         confirmText: 'Remove member',
         danger: true,
     });

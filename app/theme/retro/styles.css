@@ -1026,6 +1026,8 @@
 }
 
 .project-group-container {
+		/* Match sidebar cards and leave room for the offset hover shadow. */
+		margin-bottom: 12px;
 		box-shadow: 3px 3px 0px 0px var(--md-surface-variant);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
@@ -3375,3 +3377,220 @@ html[data-theme='retro'].dark
 /* VT323 needs more vertical detail than proportional faces at compact density. */
 [data-theme="retro"] .files-page :is(.files-row, .files-project, .files-muted) { font-size: 17px; }
 [data-theme="retro"] .files-page :is(.files-columns, .files-footer, .files-type-badge, .files-mobile-detail, .files-header p) { font-size: 16px; }
+
+/* Project settings: opaque controls and panels keep the pattern behind the form. */
+[data-theme="retro"] .sidebar-projects-page .project-settings-content > .project-section-heading h1 {
+    font-size: 22px !important;
+    line-height: 1.35;
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-settings-content, .project-settings-footer) {
+    color: var(--md-on-surface);
+    font-size: 17px;
+    line-height: 1.4;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-settings-content :is(p, label, summary, .project-muted, .project-tool-row button),
+[data-theme="retro"] .sidebar-projects-page .project-settings-footer p {
+    font-size: 16px !important;
+    line-height: 1.4;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-settings-content :is(h2, label > span:first-child, .project-tool-summary > span:first-child, .project-chat-settings-trigger > span:first-of-type) {
+    font-family: var(--font-sans);
+    font-size: 18px !important;
+    line-height: 1.4;
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-settings-behaviour, .project-tool-group, .project-chat-settings) {
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface);
+    box-shadow: var(--app-elevation-low);
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-settings-behaviour, .project-chat-settings) {
+    padding: 12px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-tool-summary {
+    min-height: var(--app-control-height-medium, 40px);
+    padding: 10px 12px;
+    border-radius: 0;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-tool-group[open] > .project-tool-summary {
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
+    background: var(--md-surface-container-low);
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-tool-summary, .project-chat-settings-trigger):hover {
+    background: var(--md-surface-hover);
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-tool-summary, .project-chat-settings-trigger):focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-tool-row, .project-unavailable-tool-row) {
+    margin-inline: 12px;
+    padding-block: 12px;
+}
+
+[data-theme="retro"] .sidebar-projects-page :is(.project-tool-row, .project-unavailable-tool-row) + :is(.project-tool-row, .project-unavailable-tool-row) {
+    border-top: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-outline-variant);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-tool-permission {
+    width: 108px;
+    max-width: 108px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-settings-content .iconify {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-chat-settings .project-input {
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface);
+    color: var(--md-on-surface);
+    font-size: 17px;
+    min-height: var(--app-control-height-medium, 40px);
+    box-shadow: var(--app-elevation-low);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-chat-settings .project-input:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-settings-footer {
+    border-top: var(--md-border-width) solid var(--md-border-color);
+    background: var(--md-surface);
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Project Knowledge and Memory keep their default layout in Blank. */
+[data-theme="retro"] .sidebar-projects-page .project-resource-content {
+    padding-inline: 20px;
+    scrollbar-gutter: stable;
+    color: var(--md-on-surface);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content > .project-section-heading h1 {
+    font-size: 22px !important;
+    line-height: 1.35;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content :is(p, label, summary, .project-section-label, .project-muted, .project-memory-text) {
+    font-size: 17px !important;
+    line-height: 1.5;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content :is(h2, h3) {
+    font-family: var(--font-sans);
+    font-size: 18px !important;
+    line-height: 1.4;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content :is(.project-editor, .project-empty, .project-source, .project-source-preview, .project-saved-memory) {
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface);
+    box-shadow: var(--app-elevation-low);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content :is(.project-source, .project-source-preview) {
+    padding: 12px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content .project-editor :is(input, select) {
+    min-height: var(--app-control-height-medium, 40px);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content .project-source-icon {
+    width: 36px;
+    height: 36px;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface-container-low);
+    color: var(--md-primary);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-resource-content .iconify {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-details > summary {
+    padding-block: 8px;
+    border-top: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-outline-variant);
+    cursor: pointer;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-details > summary::marker {
+    color: var(--md-primary);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-details > summary:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-revision {
+    padding: 10px;
+    border: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface-container-low);
+    font-size: 17px;
+    line-height: 1.4;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-revision-error {
+    color: var(--md-error) !important;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-preview :is(img, pre) {
+    max-width: 100%;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-source-preview pre {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-saved-memory {
+    margin-top: 12px;
+    padding: 12px 48px 12px 12px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-saved-memory + .project-saved-memory {
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-saved-memory.is-editing {
+    padding: 12px;
+}
+
+[data-theme="retro"] .sidebar-projects-page .project-memory-actions {
+    top: 8px;
+    right: 8px;
+}
+
+@media (max-width: 767px) {
+    [data-theme="retro"] .sidebar-projects-page .project-resource-content .project-editor :is(input, select) {
+        min-height: 44px;
+    }
+    [data-theme="retro"] .sidebar-projects-page .project-saved-memory:not(.is-editing) {
+        padding-right: 60px;
+        min-height: 60px;
+    }
+}
