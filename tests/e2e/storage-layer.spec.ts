@@ -131,12 +131,10 @@ test.describe('Storage Layer', () => {
         await item.getByRole('button', { name: /^More actions for/ }).click();
         await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
         await expect(item).toHaveCount(0);
-        await files.getByRole('button', { name: 'Files options', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Show Trash', exact: true }).click();
+        await files.getByRole('button', { name: 'Trash', exact: true }).click();
         await expect(item).toBeVisible();
         await item.getByRole('button', { name: 'Restore', exact: true }).click();
-        await files.getByRole('button', { name: 'Files options', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Show active files', exact: true }).click();
+        await files.getByRole('button', { name: 'Back to files', exact: true }).click();
         await expect(item).toBeVisible();
         await page.reload();
         await expect(item).toBeVisible();
