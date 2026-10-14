@@ -620,7 +620,7 @@ async function run(action: () => Promise<unknown>) {
         if (captured === scope) busy.value = false;
     }
 }
-async function openProject(projectId: string) {
+function openProject(projectId: string) {
     id.value = projectId;
     returnTo.value = 'projects';
 }
@@ -1003,13 +1003,13 @@ function toolCannotScope(name: string) {
                             {{ entry.heading }}
                         </p>
                         <div
-                            class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item theme-btn"
+                            class="relative min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item theme-btn"
                         >
+                            <!-- Stretch the native button over the card; keep the pin above its hit area. -->
                             <button
-                                class="min-w-0 flex-1 flex items-center gap-2.5 text-left"
-                                @click="
-                                    run(() => openProject(entry.project.id))
-                                "
+                                type="button"
+                                class="min-w-0 flex-1 flex items-center gap-2.5 text-left cursor-pointer before:absolute before:inset-0 before:rounded-[inherit] focus-visible:outline-none focus-visible:before:outline-2 focus-visible:before:outline-[var(--md-primary)] focus-visible:before:outline-offset-2"
+                                @click="openProject(entry.project.id)"
                             >
                                 <UIcon
                                     :name="projectIcon"
@@ -1028,6 +1028,7 @@ function toolCannotScope(name: string) {
                                 </span>
                             </button>
                             <UButton
+                                class="relative z-10"
                                 color="neutral"
                                 variant="ghost"
                                 size="xs"
