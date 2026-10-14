@@ -91,21 +91,21 @@
                         <UButton
                             v-bind="actionButtonProps('rename')"
                             class="w-full justify-start"
-                            @click="emit('rename', item)"
+                            @click="actionsOpen = false; emit('rename', item)"
                         >
                             {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Rename original conversation' : 'Rename' }}
                         </UButton>
                         <UButton
                             v-bind="actionButtonProps('add-to-project')"
                             class="w-full justify-start"
-                            @click="emit('add-to-project', item)"
+                            @click="actionsOpen = false; emit('add-to-project', item)"
                         >
                             Add to project
                         </UButton>
                         <UButton
                             v-bind="actionButtonProps('delete')"
                             class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
-                            @click="emit('delete', item)"
+                            @click="actionsOpen = false; emit('delete', item)"
                         >
                             {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Delete original conversation' : 'Delete' }}
                         </UButton>

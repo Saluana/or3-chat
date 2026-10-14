@@ -934,7 +934,20 @@ async function loadActiveDocument(id: string) {
     documentLoaded.value = true;
     loadingDocument.value = false;
     registerActiveSession(id);
+    focusIfJustCreated();
     emit('ready', id);
+}
+
+// A document created moments ago with nothing in it: put the caret in the body
+// so the user can start typing, unless they're already typing somewhere else.
+function focusIfJustCreated(): void {
+    const record = state.value.record;
+    const current = editor.value;
+    if (!record || !current || itemReadOnly.value || !current.isEmpty) return;
+    if (Date.now() / 1000 - record.created_at > 10) return;
+    const active = document.activeElement as HTMLElement | null;
+    if (active?.isContentEditable || active?.matches?.('input, textarea, select')) return;
+    current.commands.focus('start');
 }
 
 watch(documentId, async (id, previous) => {

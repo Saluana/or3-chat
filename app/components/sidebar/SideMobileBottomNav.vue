@@ -308,9 +308,9 @@
                                             <span class="more-row-label">{{
                                                 connectLabel
                                             }}</span>
-                                            <span class="more-row-desc"
-                                                >Integrate your tools</span
-                                            >
+                                            <span class="more-row-desc">{{
+                                                connectDescription
+                                            }}</span>
                                         </span>
                                         <UIcon
                                             :name="iconChevron"
@@ -325,7 +325,7 @@
                                       layout prop is required — provide/inject can
                                       miss across provider package Vue copies.
                                     -->
-                                    <div class="mobile-nav-more-auth">
+                                    <div v-if="isSsrAuthEnabled" class="mobile-nav-more-auth">
                                         <component
                                             :is="authUiOnlyComponent"
                                             layout="more-sheet"
@@ -587,8 +587,14 @@ const connectManaged = computed(
     () => usingInstanceKey.value && !allowUserOverride.value
 );
 const connectLabel = computed(() =>
-    isConnected.value ? 'Disconnect' : 'Connect'
+    isConnected.value ? 'Disconnect OpenRouter' : 'Connect OpenRouter'
 );
+const connectDescription = computed(() => {
+    if (connectManaged.value) return 'Managed by this instance';
+    if (isConnected.value) return 'Your key is saved in this browser';
+    if (usingInstanceKey.value) return 'Using this instance’s key';
+    return 'Needed to chat with AI models';
+});
 const connectAriaLabel = computed(() => {
     if (connectManaged.value) return 'OpenRouter managed by instance';
     if (isConnected.value) return 'Disconnect from OpenRouter';

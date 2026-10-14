@@ -85,6 +85,9 @@ export function useDialogFocus(
                 const active = document.activeElement as HTMLElement | null;
                 const activeDialog = usable(active) ? active.closest('[role="dialog"][data-state="open"]') : null;
                 if (activeDialog && !activeDialog.contains(target)) return;
+                // The dialog's action already moved focus into a text field
+                // (e.g. a newly created document); don't pull it back.
+                if (usable(active) && (active.isContentEditable || active.matches('input, textarea'))) return;
                 if (usable(target)) {
                     target.focus(restoreOptions);
                     return;

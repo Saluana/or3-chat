@@ -7,20 +7,24 @@
     >
         <template #default>
             <div class="space-y-4">
-                <div class="flex gap-2 text-xs font-mono">
+                <div class="flex gap-2 text-sm">
                     <button
-                        class="theme-btn px-2 py-1 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)]"
-                        :class="mode === 'select' ? 'bg-primary/30' : 'opacity-70'"
+                        type="button"
+                        class="theme-btn px-3 py-1.5 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)] transition-colors"
+                        :class="mode === 'select' ? 'bg-[var(--md-surface-active)] font-medium' : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]'"
+                        :aria-pressed="mode === 'select'"
                         @click="emit('update:mode', 'select')"
                     >
-                        Select Existing
+                        Existing project
                     </button>
                     <button
-                        class="theme-btn px-2 py-1 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)]"
-                        :class="mode === 'create' ? 'bg-primary/30' : 'opacity-70'"
+                        type="button"
+                        class="theme-btn px-3 py-1.5 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)] transition-colors"
+                        :class="mode === 'create' ? 'bg-[var(--md-surface-active)] font-medium' : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]'"
+                        :aria-pressed="mode === 'create'"
                         @click="emit('update:mode', 'create')"
                     >
-                        Create New
+                        New project
                     </button>
                 </div>
                 <div v-if="mode === 'select'" class="space-y-3">
@@ -48,7 +52,7 @@
                 <div v-else class="space-y-3">
                     <UFormField
                         v-bind="formFieldProps"
-                        label="Project Title"
+                        label="Project title"
                         name="newProjectName"
                     >
                         <UInput

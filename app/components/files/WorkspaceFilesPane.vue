@@ -834,6 +834,11 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 @container (max-width: 600px) {
     .files-content { padding: 20px 16px; }
     .files-header h1 { font-size: 26px; }
+    /* Two tidy rows instead of letting the options menu wrap onto a line of its own:
+       [New document][Upload] / [Trash ......][⋮] */
+    .files-header-actions { width: 100%; flex-wrap: wrap; }
+    .files-header-actions > * { flex: 1 1 calc(50% - 5px); justify-content: center; }
+    .files-header-actions > :last-child { flex: 0 0 auto; }
     .files-toolbar { flex-wrap: wrap; gap: 8px; }
     .files-search { flex-basis: 100%; }
     .files-toolbar > :not(.files-search) { flex: 1; min-width: 0; }
