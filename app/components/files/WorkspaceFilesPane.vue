@@ -665,9 +665,9 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     </UDropdownMenu>
                 </div>
             </header>
-            <input ref="uploadInput" type="file" multiple aria-label="Upload files" class="sr-only" :disabled="busy || readOnly" @change="upload">
+            <input ref="uploadInput" type="file" multiple aria-label="Upload files" hidden tabindex="-1" aria-hidden="true" :disabled="busy || readOnly" @change="upload">
             <div class="files-toolbar">
-                <UInput v-model="query" aria-label="Search Files" placeholder="Search files or their contents…" :icon="icons.search.value" class="files-search" size="workspace" />
+                <UInput v-model="query" :aria-label="trash ? 'Search trash' : 'Search Files'" :placeholder="trash ? 'Search deleted files…' : 'Search files or their contents…'" :icon="icons.search.value" class="files-search" size="workspace" />
                 <USelect v-model="typeFilter" aria-label="File type" size="workspace" :items="[{ label: 'All types', value: 'all' }, { label: 'Documents', value: 'document' }, { label: 'Uploads', value: 'file' }, { label: 'Images', value: 'image' }]" />
                 <USelect v-model="projectFilter" aria-label="Filter by project" size="workspace" :ui="{ content: 'min-w-[240px] max-w-[calc(100vw-2rem)]' }" :items="[{ label: 'All projects', value: 'all' }, ...projects.map(project => ({ label: project.name, value: project.id }))]" />
             </div>
@@ -689,7 +689,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     <p>{{ query ? 'Try a different name or a few words from the file.' : trash ? 'Files you move to trash will appear here.' : 'Upload a file or create a document to get started.' }}</p>
                     <UButton v-if="!query && !trash" size="workspace" label="Upload your first file" :icon="icons.upload.value" :disabled="busy || readOnly" @click="uploadInput?.click()" />
                 </div>
-                <ul v-else aria-label="Files" class="files-rows">
+                <ul v-else :aria-label="trash ? 'Trash' : 'Files'" class="files-rows">
                     <li v-for="row in filtered" :key="row.id" class="files-row" :data-trash="trash" :data-selected="preview && selected?.id === row.id">
                         <div class="files-name-cell">
                             <PaletteImageThumb v-if="row.postType === FILE_CATALOG_POST_TYPE && isSupportedRasterMimeType(detail(row)?.mime_type ?? '')" :key="`${scope?.workspaceId}:${row.id}`" :hash="parseFileHashes(row.file_hashes)[0]!" alt="" :fallback-icon="fileIcon(row)" :size-bytes="detail(row)?.size_bytes" class="size-8! rounded-[var(--md-border-radius-small)]!" />

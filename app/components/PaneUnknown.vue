@@ -8,19 +8,13 @@
                 <UIcon :name="iconUnknown" class="w-16 h-16 mx-auto" />
             </div>
             <h2 class="text-xl font-bold text-[var(--md-on-surface)]">
-                Unknown Pane Type
+                App unavailable
             </h2>
             <p class="text-sm opacity-70 text-[var(--md-on-surface-variant)]">
-                The pane mode
-                <code
-                    class="px-2 py-1 bg-[var(--md-surface-variant)] rounded"
-                    >{{ mode }}</code
-                >
-                is not recognized.
+                This app is still loading or is not enabled in this workspace.
             </p>
             <p class="text-xs opacity-50 text-[var(--md-on-surface-variant)]">
-                This pane app may not be registered or the component failed to
-                load.
+                If it stays unavailable, check Marketplace → Installed, then reload.
             </p>
         </div>
     </div>

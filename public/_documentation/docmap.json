@@ -14,7 +14,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose between using OR3, running Cloud, and source or plugin development; understand workspace-scoped tab restoration and title caches."
+                    "summary": "Find work, restore app tabs, navigate Dashboard, and preserve existing records when importing backups."
                 },
                 {
                     "name": "first-chat.md",
@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter, choose a model, send a message, and understand draft clearing and saved work."
+                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, send a message, and understand draft clearing and saved work."
                 },
                 {
                     "name": "command-palette.md",
@@ -871,7 +871,7 @@
                 {
                     "name": "library.md",
                     "path": "/plugins/library",
-                    "title": "Your Library",
+                    "title": "Marketplace library",
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 1,

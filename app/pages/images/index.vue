@@ -797,7 +797,7 @@ const searchInputProps = computed(() => {
     >
         <input
             ref="uploadInput"
-            class="sr-only"
+            hidden tabindex="-1" aria-hidden="true"
             type="file"
             accept="image/*"
             multiple
@@ -807,7 +807,6 @@ const searchInputProps = computed(() => {
 
         <header class="image-library-header">
             <div>
-                <p class="dashboard-page-eyebrow">Workspace</p>
                 <h1 class="dashboard-page-title">
                     {{ trashMode ? 'Image trash' : 'Image library' }}
                 </h1>
@@ -875,9 +874,6 @@ const searchInputProps = computed(() => {
                 <div class="image-library-summary">
                     <span class="text-xs opacity-65">Stored locally</span>
                     <strong>{{ formatCount(counts.all) }} active images</strong>
-                    <span class="text-xs opacity-65">
-                        Previews load only when visible.
-                    </span>
                 </div>
             </aside>
 

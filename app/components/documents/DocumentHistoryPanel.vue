@@ -1,11 +1,7 @@
 <template>
     <div v-theme="'document.history'" class="history-panel" data-context="document">
         <div class="history-heading">
-            <div>
-                <span>Document timeline</span>
-                <strong>Revision history</strong>
-                <p>Review and restore compressed checkpoints synced with this workspace.</p>
-            </div>
+            <strong>Saved versions</strong>
             <UButton
                 v-if="!readOnly && createCheckpoint"
                 :icon="plusIcon"
@@ -14,7 +10,7 @@
                 size="sm"
                 block
                 class="checkpoint-button"
-                label="Create checkpoint"
+                label="Save version"
                 :loading="busy"
                 @click="checkpoint"
             />
@@ -23,8 +19,8 @@
         <div v-if="loading" class="empty-state">Loading history…</div>
         <div v-else-if="!revisions.length" class="empty-state">
             <UIcon :name="historyIcon" />
-            <strong>No checkpoints yet</strong>
-            <span>History appears after 30 seconds of inactivity or when you create one.</span>
+            <strong>No saved versions yet</strong>
+            <span>Versions are saved after 30 seconds without edits.</span>
         </div>
         <div v-else class="revision-list">
             <UButton
@@ -57,7 +53,7 @@
             <template #default>
                 <div v-if="selected" class="preview-body">
                     <p v-for="(line, index) in selectedPreviewLines" :key="index">{{ line }}</p>
-                    <p v-if="!selectedPreviewLines.length" class="preview-empty">This checkpoint has no readable text preview.</p>
+                    <p v-if="!selectedPreviewLines.length" class="preview-empty">This version has no readable text preview.</p>
                 </div>
             </template>
             <template #footer>
@@ -101,9 +97,9 @@ let generation = 0;
 let scopeGeneration = 0;
 let didUnmount = false;
 
-const previewTitle = computed(() => selected.value?.snapshot.title || 'Checkpoint preview');
+const previewTitle = computed(() => selected.value?.snapshot.title || 'Saved version preview');
 const previewDescription = computed(() => {
-    if (!selected.value) return 'Review this checkpoint before restoring it.';
+    if (!selected.value) return 'Review this version before restoring it.';
     return `${sourceLabel(selected.value.manifest.source)} · ${formatDate(selected.value.manifest.createdAt)} · ${formatSize(selected.value.manifest.encodedBytes)}`;
 });
 const selectedPreviewLines = computed(() =>
@@ -179,8 +175,8 @@ function formatSize(bytes: number) {
 function sourceLabel(source: string) {
     return source === 'ai' ? 'Before AI edit'
         : source === 'restore' ? 'Before restore'
-        : source === 'manual' ? 'Manual checkpoint'
-        : 'Automatic checkpoint';
+        : source === 'manual' ? 'Manually saved'
+        : 'Automatically saved';
 }
 
 function nodeText(node: JSONContent): string {
@@ -219,12 +215,9 @@ onMounted(load);
 <style scoped>
 .history-panel { display: grid; gap: 1.1rem; }
 .history-heading { display: grid; gap: .85rem; }
-.history-heading > div { display: grid; gap: .2rem; }
-.history-heading > div > span { color: var(--md-primary); font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .history-heading strong { font-size: 1.05rem; line-height: 1.25; }
-.history-heading p { margin: 0; color: var(--md-on-surface-variant); font-size: .72rem; line-height: 1.45; }
 .checkpoint-button { justify-content: center; }
-.empty-state { min-height: 12rem; display: grid; place-content: center; justify-items: center; gap: .45rem; text-align: center; color: var(--md-on-surface-variant); font-size: .78rem; }
+.empty-state { min-height: 12rem; display: grid; place-content: center; justify-items: center; gap: .45rem; text-align: center; color: var(--md-on-surface-variant); font-size: .875rem; }
 .empty-state svg { width: 1.5rem; height: 1.5rem; }
 .revision-list { display: grid; gap: .65rem; }
 .revision-item {
@@ -263,9 +256,9 @@ onMounted(load);
 }
 .revision-icon svg { width: 1rem; height: 1rem; }
 .revision-copy { min-width: 0; display: grid; gap: .28rem; }
-.revision-copy strong { overflow: hidden; font-size: .76rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.revision-copy strong { overflow: hidden; font-size: .875rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .revision-meta { display: flex; align-items: center; gap: .4rem; min-width: 0; }
-.revision-copy small { min-width: 0; overflow: hidden; color: var(--md-on-surface-variant); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
+.revision-copy small { min-width: 0; overflow: hidden; color: var(--md-on-surface-variant); font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }
 .revision-chevron { width: .9rem; height: .9rem; color: var(--md-on-surface-variant); }
 .preview-body {
     min-height: 4rem;
@@ -276,8 +269,8 @@ onMounted(load);
     border-radius: var(--md-border-radius);
     background: var(--md-surface-container-low);
 }
-.preview-body p { margin: 0 0 .45rem; font-size: .76rem; line-height: 1.45; }
+.preview-body p { margin: 0 0 .45rem; font-size: .875rem; line-height: 1.45; }
 .preview-empty { color: var(--md-on-surface-variant); }
 .preview-actions { display: flex; justify-content: flex-end; gap: .625rem; width: 100%; }
-.history-error { color: var(--md-error); font-size: .78rem; }
+.history-error { color: var(--md-error); font-size: .875rem; }
 </style>

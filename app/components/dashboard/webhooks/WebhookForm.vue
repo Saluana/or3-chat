@@ -49,16 +49,19 @@
 
                 <!-- Target URL -->
                 <fieldset class="space-y-1.5">
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-[var(--md-on-surface)] opacity-60">
+                    <label :for="`${formId}-url`" class="block text-xs font-semibold uppercase tracking-wider text-[var(--md-on-surface)] opacity-60">
                         Target URL
                     </label>
                     <UInput
                         v-model="url"
+                        :id="`${formId}-url`"
+                        :aria-describedby="urlValidationMessage ? `${formId}-url-error` : undefined"
                         variant="modal"
                         placeholder="https://example.com/webhooks/or3"
                     />
                     <p
                         v-if="urlValidationMessage"
+                        :id="`${formId}-url-error`"
                         class="text-xs text-[var(--md-error)]"
                     >
                         {{ urlValidationMessage }}
@@ -67,11 +70,12 @@
 
                 <!-- Label -->
                 <fieldset class="space-y-1.5">
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-[var(--md-on-surface)] opacity-60">
+                    <label :for="`${formId}-label`" class="block text-xs font-semibold uppercase tracking-wider text-[var(--md-on-surface)] opacity-60">
                         Label
                     </label>
                     <UInput
                         v-model="label"
+                        :id="`${formId}-label`"
                         variant="modal"
                         placeholder="My webhook"
                         :maxlength="100"
@@ -151,6 +155,7 @@
                                 >
                                     <UInput
                                         :model-value="hookName"
+                                        :aria-label="`Custom hook ${index + 1}`"
                                         class="flex-1"
                                         size="sm"
                                         placeholder="db.messages.create:action:after"
@@ -183,6 +188,7 @@
                         </label>
                         <USelectMenu
                             v-model="workspaceFilter"
+                            aria-label="Workspace scope"
                             :items="workspaceOptions"
                             value-key="value"
                             label-key="label"
@@ -239,6 +245,7 @@ const emit = defineEmits<{
 }>();
 
 const isOpen = defineModel<boolean>('open', { default: false });
+const formId = useId();
 const toast = useToast();
 const { getMessage } = useApiError();
 

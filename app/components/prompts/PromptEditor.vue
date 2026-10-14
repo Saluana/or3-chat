@@ -14,6 +14,7 @@
             <UInput
                 v-model="titleDraft"
                 v-bind="promptTitleInputProps"
+                aria-label="Prompt title"
                 class="prompt-editor-title-input flex-1"
                 @update:model-value="onTitleChange"
             />
@@ -289,6 +290,13 @@ async function ensureEditor(content?: any) {
                 }),
             ],
             content: content || defaultContent,
+            editorProps: {
+                attributes: {
+                    role: 'textbox',
+                    'aria-label': 'System prompt instructions',
+                    'aria-multiline': 'true',
+                },
+            },
             autofocus: false,
             onUpdate: () => emitContent(),
         });

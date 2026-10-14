@@ -32,14 +32,14 @@ export default defineNuxtPlugin(() => {
     registerDashboardPlugin({
         id: 'library',
         icon: 'i-lucide-library',
-        label: 'Library',
+        label: 'Marketplace library',
         description: 'Your marketplace account link and acquired releases',
         order: 160,
         access: { authRequired: true },
         pages: [
             {
                 id: 'home',
-                title: 'Library',
+                title: 'Marketplace library',
                 icon: 'i-lucide-book-open',
                 description: 'Connect this server and manage your personal library link',
                 component: lazyPage(HOME, 'Library'),

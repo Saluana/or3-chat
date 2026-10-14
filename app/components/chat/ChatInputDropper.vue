@@ -60,15 +60,6 @@
                         "
                     ></EditorContent>
 
-                    <div
-                        class="chat-input-loading-indicator absolute top-1 right-1 flex items-center gap-2"
-                        v-if="loading"
-                    >
-                        <UIcon
-                            :name="iconLoading"
-                            class="w-4 h-4 animate-spin opacity-70"
-                        />
-                    </div>
                 </div>
             </div>
 
@@ -79,7 +70,6 @@
                 <div
                     class="chat-input-bottom-controls-left relative flex-1 flex items-center gap-2 shrink min-w-0"
                 >
-                    <!-- Attachment Button -->
                     <!-- Attachment Button -->
                     <div class="chat-input-attachment-btn relative shrink-0">
                         <UButton
@@ -92,7 +82,7 @@
                             <UIcon :name="iconAttach" class="w-4 h-4" />
                         </UButton>
                     </div>
-                    <!-- Settings Button (stub) -->
+                    <!-- Settings Button -->
                     <div class="chat-input-settings-btn relative shrink-0">
                         <ClientOnly>
                             <UPopover
@@ -166,14 +156,6 @@
                             </UPopover>
                         </ClientOnly>
                     </div>
-                    <span
-                        v-if="promptBadge"
-                        class="hidden max-w-40 truncate rounded-full border border-[var(--md-border-color)] px-2 py-1 text-xs text-[var(--md-on-surface-variant)] sm:inline-block"
-                        :title="promptBadge"
-                        :aria-label="`System prompt: ${promptBadge}`"
-                    >
-                        {{ promptBadge }}
-                    </span>
                 </div>
 
                 <div
@@ -205,7 +187,7 @@
 
                 <!-- Model Selector extracted -->
                 <div
-                    v-if="!isMobile && containerWidth && containerWidth > 400"
+                    v-if="!isMobile && containerWidth && containerWidth > 400 && selectedModel && previewModels.favoriteModels.value.length"
                     class="chat-input-model-select hidden sm:block sm:flex-1 min-w-0 sm:min-w-[200px] sm:max-w-full"
                 >
                     <component
@@ -231,8 +213,9 @@
                         "
                         type="button"
                         aria-label="Send message"
+                        :aria-busy="loading"
                     >
-                        <UIcon :name="iconSend" class="w-4 h-4" />
+                        <UIcon :name="loading ? iconLoading : iconSend" class="w-4 h-4" :class="{ 'animate-spin': loading }" aria-hidden="true" />
                     </UButton>
                     <UButton
                         class="chat-input-stop-btn"
@@ -369,7 +352,7 @@
                     class="w-12 h-12 mx-auto mb-3 text-blue-500"
                 />
                 <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    Drop images here to upload
+                    Drop files to attach
                 </p>
             </div>
         </div>
@@ -406,13 +389,7 @@ import {
 } from 'vue';
 import { isMentionSourceEnabled, useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
-import { getPrompt } from '~/db/prompts';
-import { getThreadSystemPrompt } from '~/db/threads';
 import { usePanePendingPrompt } from '~/composables/core/usePanePrompt';
-import {
-    DEFAULT_PROMPT_SELECTION,
-    DISABLED_PROMPT_SELECTION,
-} from '~/utils/chat/prompt-utils';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -722,35 +699,9 @@ const settingsPopoverOpen = ref(false);
 const promptOwnerId = computed(() => props.tabId ?? props.paneId);
 const stagedPromptId = usePanePendingPrompt(promptOwnerId);
 const promptSelectionRevision = ref(0);
-const promptBadge = ref('');
 watch(settingsPopoverOpen, (open) => {
     if (open) promptSelectionRevision.value++;
 });
-watch(
-    () => [props.threadId, stagedPromptId.value, promptSelectionRevision.value],
-    async (_value, _oldValue, onCleanup) => {
-        let cancelled = false;
-        onCleanup(() => {
-            cancelled = true;
-        });
-        try {
-            const selection = props.threadId
-                ? await getThreadSystemPrompt(props.threadId)
-                : stagedPromptId.value;
-            let label = '';
-            if (selection === DISABLED_PROMPT_SELECTION)
-                label = 'Prompt disabled';
-            else if (selection && selection !== DEFAULT_PROMPT_SELECTION) {
-                const prompt = await getPrompt(selection);
-                label = prompt?.title ?? 'Unavailable prompt';
-            }
-            if (!cancelled) promptBadge.value = label;
-        } catch {
-            if (!cancelled) promptBadge.value = '';
-        }
-    },
-    { immediate: true }
-);
 const systemPromptsModal = useSystemPromptsModal();
 watch(systemPromptsModal.isOpen, (open) => {
     if (!open) promptSelectionRevision.value++;

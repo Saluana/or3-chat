@@ -268,6 +268,7 @@
                                     <div class="text-xs font-semibold uppercase opacity-60">Configuration (JSON)</div>
                                     <UTextarea
                                         v-model="settingsByPlugin[plugin.id]"
+                                        :aria-label="`Configuration JSON for ${plugin.id}`"
                                         :rows="6"
                                         size="xs"
                                         :disabled="!isOwner"

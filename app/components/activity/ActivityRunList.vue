@@ -1,26 +1,7 @@
 <template>
     <section class="flex h-full min-h-0 flex-col" aria-label="Activity runs">
-        <header class="shrink-0 space-y-2 border-b border-[var(--md-outline-variant)] px-3 py-3">
-            <div class="flex items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-sm font-semibold text-[var(--md-on-surface)]">
-                        Activity
-                    </h2>
-                    <p class="text-xs text-[var(--md-on-surface-variant)]">
-                        Ongoing and recent work
-                    </p>
-                </div>
-                <UButton
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    icon="lucide:refresh-cw"
-                    aria-label="Refresh activity"
-                    :loading="loading"
-                    @click="load"
-                />
-            </div>
-            <div class="flex gap-1 overflow-x-auto pb-1" aria-label="Activity filters">
+        <header class="flex shrink-0 items-center gap-2 border-b border-[var(--md-outline-variant)] px-3 py-3">
+            <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-1" aria-label="Activity filters">
                 <UButton
                     v-for="option in filterOptions"
                     :key="option.id"
@@ -34,6 +15,16 @@
                     {{ option.label }}
                 </UButton>
             </div>
+            <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="lucide:refresh-cw"
+                aria-label="Refresh activity"
+                class="shrink-0"
+                :loading="loading"
+                @click="load"
+            />
         </header>
 
         <div v-if="degradedSources.length" class="shrink-0 px-3 pt-3">
@@ -71,7 +62,7 @@
             <UIcon name="lucide:activity" class="size-8 text-[var(--md-outline)]" />
             <p class="text-sm font-medium">No {{ filterLabel.toLowerCase() }} activity</p>
             <p class="text-xs text-[var(--md-on-surface-variant)]">
-                New work will appear here automatically.
+                {{ filter === 'failed' ? 'Choose another filter to see completed or running work.' : 'New work will appear here automatically.' }}
             </p>
         </div>
 
@@ -105,7 +96,7 @@
                     {{ run.summary }}
                 </p>
                 <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-[var(--md-outline)]">
-                    <span>{{ sourceLabel(run.sourceId) }} · {{ run.kind }}</span>
+                    <span>{{ sourceLabel(run.sourceId) }}</span>
                     <time :datetime="run.updatedAt">
                         {{ relativeTime(run.updatedAt) }}
                         <template v-if="run.status === 'running'">
@@ -119,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { activityStatusLabel } from "~/core/activity/display";
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
     getActivityRegistry,
@@ -224,7 +216,7 @@ function sourceLabel(sourceId: string): string {
 }
 
 function statusLabel(status: ActivityRunStatus): string {
-    return status.replace('_', ' ');
+    return activityStatusLabel(status);
 }
 
 function statusColor(status: ActivityRunStatus) {

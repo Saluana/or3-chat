@@ -140,8 +140,8 @@ describe('Activity Center components', () => {
         await flushPromises();
         expect(wrapper.text()).toContain('Choose an activity');
         expect(wrapper.text()).toContain('Research workflow');
-        expect(wrapper.text()).toContain('running');
-        expect(wrapper.text()).toContain('Workflows · workflow');
+        expect(wrapper.text()).toContain('Running');
+        expect(wrapper.text()).toContain('Workflows');
         await wrapper
             .findAll('button')
             .find((button) => button.text().includes('Research workflow'))
@@ -182,7 +182,7 @@ describe('Activity Center components', () => {
             ?.trigger('click');
         await flushPromises();
         expect(wrapper.text()).toContain('Some activity is unavailable');
-        expect(wrapper.text()).toContain('waiting approval');
+        expect(wrapper.text()).toContain('Needs approval');
     });
 
     it('renders detail errors and only advertised actions in responsive layout', async () => {

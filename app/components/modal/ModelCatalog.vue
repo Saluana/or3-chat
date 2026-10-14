@@ -38,6 +38,7 @@
                             <div class="relative flex-1 min-w-0">
                                 <UInput
                                     ref="searchInputRef"
+                                    aria-label="Search models"
                                     v-model="searchQuery"
                                     v-bind="searchInputProps"
                                     variant="modal"
@@ -93,7 +94,7 @@
 
                         <!-- Capability chips -->
                         <div
-                            class="model-catalog-chips flex items-center gap-1.5 overflow-x-auto pb-0.5 -mb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                            class="model-catalog-chips flex lg:hidden items-center gap-1.5 overflow-x-auto pb-0.5 -mb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                         >
                             <button
                                 v-for="chip in mainChips"
@@ -176,6 +177,7 @@
                                 >
                                 <USelectMenu
                                     v-model="sort"
+                                    aria-label="Sort models"
                                     v-bind="sortSelectProps"
                                     :items="sortItems"
                                     value-key="value"
@@ -321,7 +323,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
-import { useToast } from '#imports';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { useModelSearch } from '~/core/search/useModelSearch';
@@ -705,8 +706,6 @@ function onSelectModel(m: OpenRouterModel) {
     }
 }
 
-const toast = useToast();
-
 const LAST_MODEL_KEY = 'last_selected_model';
 
 function useSelectedModel(m: OpenRouterModel) {
@@ -723,12 +722,6 @@ function useSelectedModel(m: OpenRouterModel) {
         );
     }
     emit('select', m.id);
-    toast.add({
-        title: 'Model selected',
-        description: `${m.name} will be used for your next message.`,
-        color: 'success',
-        duration: 2500,
-    });
     open.value = false;
 }
 

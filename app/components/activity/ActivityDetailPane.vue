@@ -35,10 +35,10 @@
           <div>
             <div class="mb-1 flex flex-wrap items-center gap-2">
               <UBadge :color="statusColor(detail.status)" variant="soft">
-                {{ detail.status.replace("_", " ") }}
+                {{ activityStatusLabel(detail.status) }}
               </UBadge>
               <span class="text-xs text-[var(--md-on-surface-variant)]">
-                {{ sourceLabel }} · {{ detail.kind }}
+                {{ sourceLabel }}
               </span>
             </div>
             <h1 class="text-lg font-semibold text-[var(--md-on-surface)]">
@@ -169,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import { activityStatusLabel } from "~/core/activity/display";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type {
   ActivityEvent,

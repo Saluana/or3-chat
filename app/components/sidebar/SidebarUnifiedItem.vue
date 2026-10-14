@@ -1,8 +1,6 @@
 <template>
     <div
         ref="el"
-        role="button"
-        tabindex="0"
         class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
             'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
@@ -10,10 +8,8 @@
             'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]':
                 !active,
         }"
-        @click="emit('select', item.id)"
-        @keydown.enter="emit('select', item.id)"
-        @keydown.space="emit('select', item.id)"
     >
+        <button type="button" class="flex flex-1 min-w-0 -my-2.5 items-center gap-2.5 py-2.5 pr-7 text-left rounded-[var(--md-border-radius-small)] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`Open ${item.title || 'Untitled'}`" @click="emit('select', item.id)">
         <!-- Icon -->
         <slot name="icon"><UIcon
             :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
@@ -52,9 +48,10 @@
             {{ timeDisplay }}
         </span>
 
+        </button>
         <!-- Action Button (always visible on mobile, hover-reveal on desktop) -->
         <div
-            class="absolute right-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            class="absolute right-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
         >
             <UPopover
                 v-model:open="actionsOpen"
@@ -62,6 +59,7 @@
             >
                 <UButton
                     v-bind="actionTriggerProps"
+                    :aria-label="`Actions for ${item.title || 'Untitled'}`"
                     @click.stop
                     @keydown="handlePopoverTriggerKey"
                 />

@@ -290,17 +290,11 @@ const terminalReason = computed(() => {
 </script>
 
 <template>
-    <section class="mx-auto max-w-3xl p-6" aria-labelledby="library-heading">
-        <header>
-            <h1 id="library-heading" class="text-xl font-semibold text-slate-900">Library</h1>
-            <p class="mt-1 text-sm text-slate-600">
-                Connect this OR3 server to your marketplace account to read your
-                personal Library and download releases you are entitled to. The
-                connection is narrow and expiring: it never includes checkout,
-                billing, publishing or account access, and other local users
-                cannot see or use it.
-            </p>
-        </header>
+    <section class="mx-auto max-w-3xl p-6" aria-label="Marketplace library">
+        <p v-if="library.configured.value" class="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+            Connect your marketplace account to download plugins you own.
+            The link grants temporary download access and is private to you.
+        </p>
 
         <p
             v-if="library.loading.value && !library.status.value"
@@ -314,12 +308,9 @@ const terminalReason = computed(() => {
             v-else-if="!library.configured.value"
             class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"
         >
-            <p class="font-medium">Library linking is not configured on this server.</p>
+            <p class="font-medium">Marketplace library is unavailable on this server.</p>
             <p class="mt-1">
-                An administrator must set the marketplace origin
-                (<code>OR3_MARKETPLACE_REGISTRY_ORIGIN</code>) and the encryption
-                key (<code>OR3_LIBRARY_LINK_SECRET</code>) before a link can be
-                stored safely.
+                Ask your administrator to enable marketplace account linking so you can view your purchased plugins.
             </p>
         </div>
 

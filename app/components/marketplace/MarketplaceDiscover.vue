@@ -1002,16 +1002,15 @@ function blockActionLabel(block: { action: string }): string | null {
             >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <p class="font-medium">Installed on this OR3 site</p>
+                        <p class="font-medium">Installed</p>
                         <p class="text-sm text-(--ui-text-muted)">
                             Version {{ selectedInstalledEntry?.display?.version ?? selectedRelease?.version ?? 'unknown' }} is selected for this plugin.
                         </p>
                     </div>
-                    <UBadge color="success" variant="soft">Installed on site</UBadge>
                 </div>
                 <p class="text-sm text-(--ui-text-muted)">
                     <template v-if="selectedInstalledEntry">
-                        The package is selected for this site. Choose the workspaces that should use it below, then run a browser check from Installed.
+                        Open Installed to manage workspace access and check that this plugin runs in your browser.
                     </template>
                     <template v-else>
                         This plugin is already installed on this OR3 site. An administrator can enable it for this workspace.

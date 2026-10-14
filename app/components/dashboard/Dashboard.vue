@@ -5,7 +5,7 @@
         :size="state.view === 'dashboard' ? 'md' : 'lg'"
         v-model:open="open"
         :modal="true"
-        title="Dashboard"
+        :title="state.view === 'dashboard' ? 'Dashboard' : activePageTitle || headerPluginLabel"
         :dismissible="true"
         description="Browse all apps, plugins, and settings."
     >
@@ -50,10 +50,10 @@
                 >
                     <UButton
                         id="dashboard-back-button"
-                        aria-label="Return to dashboard overview"
+                        :aria-label="state.activePageId && landingPages.length > 1 ? `Back to ${headerPluginLabel}` : 'Back to Dashboard'"
                         v-bind="backButtonProps"
                         class="text-[20px] gap-0.5"
-                        @click="reset()"
+                        @click="goBack()"
                     >
                         <UIcon
                             class="h-6 w-6"
@@ -61,15 +61,13 @@
                         />
                     </UButton>
                     <div
+                        v-if="state.activePageId && landingPages.length > 1"
                         id="dashboard-page-breadcrumb"
                         class="ml-2 font-semibold text-sm truncate"
                     >
-                        {{ headerPluginLabel }}
-                        <span
-                            v-if="activePageTitle && activePageTitle !== headerPluginLabel"
-                            class="text-[var(--md-on-surface)]"
-                            >/ {{ activePageTitle }}</span
-                        >
+                        <button type="button" class="hover:underline focus-visible:underline" @click="reset()">Dashboard</button>
+                        <span aria-hidden="true"> / </span>
+                        <button type="button" class="hover:underline focus-visible:underline" @click="handlePluginClick(state.activePluginId!)">{{ headerPluginLabel }}</button>
                     </div>
                 </div>
                 <div
@@ -201,6 +199,7 @@ const {
     activePageTitle,
     openPlugin,
     openPage,
+    goBack,
     reset,
 } = useDashboardNavigation({ baseItems: coreItems });
 

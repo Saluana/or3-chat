@@ -53,7 +53,7 @@
             <input
                 ref="fileInputRef"
                 type="file"
-                class="sr-only"
+                hidden tabindex="-1" aria-hidden="true"
                 accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
                 @change="onUpload"
             />

@@ -2,13 +2,12 @@
     <div class="dashboard-page-frame">
         <header class="dashboard-page-intro">
             <div>
-                <p class="dashboard-page-eyebrow">Integrations</p>
-                <h1 class="dashboard-page-title">Webhook management</h1>
                 <p class="dashboard-page-description">
-                    Configure outbound deliveries for thread, message, document, and notification events.
+                    Send chat, document and notification events to an external service.
                 </p>
             </div>
             <UButton
+                v-if="webhooks.length"
                 color="error"
                 variant="soft"
                 :loading="bulkDisabling"
@@ -21,6 +20,7 @@
 
         <div class="section-card">
         <WebhooksList
+            :show-heading="false"
             :webhooks="webhooks"
             :loading="pending"
             :error-message="errorMessage"

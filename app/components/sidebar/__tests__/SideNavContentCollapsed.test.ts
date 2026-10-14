@@ -112,8 +112,8 @@ describe('SideNavContentCollapsed', () => {
         const buttons = wrapper.findAll('button');
         expect(buttons.length).toBeGreaterThan(5); // Should have at least the built-in controls
 
-        // Check that new-chat button exists by looking for the tooltip text
-        expect(wrapper.html()).toContain('New chat');
+        // The creation control names the destination of the new chat.
+        expect(wrapper.find('#btn-new-chat').attributes('aria-label')).toBe('New workspace chat');
         expect(wrapper.html()).toContain('Search');
         expect(wrapper.html()).toContain('Create document');
         expect(wrapper.html()).toContain('Create project');

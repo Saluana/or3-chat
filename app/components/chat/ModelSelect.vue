@@ -6,6 +6,7 @@
     >
         <USelectMenu
             id="model-select-menu"
+            :aria-label="`Current model: ${internalModel || 'Choose model'}`"
             v-model="internalModel"
             :items="items"
             :value-key="'value'"
