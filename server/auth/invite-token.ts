@@ -33,6 +33,21 @@ function safeEqual(a: string, b: string): boolean {
     return timingSafeEqual(left, right);
 }
 
+function isInviteTokenPayload(payload: unknown): payload is InviteTokenPayload {
+    if (
+        !payload || typeof payload !== 'object' ||
+        !('email' in payload) || typeof payload.email !== 'string' || !payload.email.trim() ||
+        !('exp' in payload) || typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp)
+    ) {
+        return false;
+    }
+
+    return 'purpose' in payload
+        ? payload.purpose === 'signup' && 'invite_id' in payload &&
+            typeof payload.invite_id === 'string' && payload.invite_id.length > 0
+        : 'workspaceId' in payload && typeof payload.workspaceId === 'string' && payload.workspaceId.length > 0;
+}
+
 export function hashInviteToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
 }
@@ -59,21 +74,14 @@ export function verifyInviteToken(
         return { ok: false, reason: 'invalid_signature' };
     }
 
-    let parsed: InviteTokenPayload;
+    let parsed: unknown;
     try {
-        parsed = JSON.parse(base64UrlDecode(payloadB64)) as InviteTokenPayload;
+        parsed = JSON.parse(base64UrlDecode(payloadB64));
     } catch {
         return { ok: false, reason: 'invalid_payload' };
     }
 
-    if (
-        !parsed || typeof parsed !== 'object' ||
-        typeof parsed.email !== 'string' || !parsed.email.trim() ||
-        !Number.isSafeInteger(parsed.exp) ||
-        ('purpose' in parsed
-            ? parsed.purpose !== 'signup' || typeof parsed.invite_id !== 'string' || !parsed.invite_id
-            : typeof parsed.workspaceId !== 'string' || !parsed.workspaceId)
-    ) {
+    if (!isInviteTokenPayload(parsed)) {
         return { ok: false, reason: 'invalid_payload' };
     }
 

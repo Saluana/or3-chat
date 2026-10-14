@@ -13,7 +13,7 @@ export default defineEventHandler(async event => {
     const { store, context, config } = await requireSignupInviteStore(event, true);
     const body = Body.safeParse(await readBody(event));
     if (!body.success) throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
-    const secret = config.auth.invite?.tokenSecret;
+    const secret = config.auth.invite.tokenSecret;
     if (!secret) throw createError({ statusCode: 503, statusMessage: 'Invite token secret not configured' });
     const id = randomUUID();
     const email = body.data.email.toLowerCase();
