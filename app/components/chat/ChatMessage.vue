@@ -82,10 +82,10 @@
                         <!-- PDF thumbnail -->
                         <template v-if="pdfMeta[hash]">
                             <div
-                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-red-400/30"
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/15 dark:bg-red-500/30 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-red-500/25 dark:border-red-400/30"
                             >
                                 <span
-                                    class="text-[11px] font-bold text-red-200 tracking-wide"
+                                    class="text-[11px] font-bold text-red-700 dark:text-red-200 tracking-wide"
                                     >PDF</span
                                 >
                             </div>
@@ -93,7 +93,7 @@
                                 class="attachment-info flex flex-col min-w-0 gap-0.5"
                             >
                                 <span
-                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
                                     {{ getAttachmentName(hash) }}
                                 </span>
@@ -128,9 +128,9 @@
                                 class="attachment-info flex flex-col min-w-0 gap-0.5"
                             >
                                 <span
-                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
-                                    Image {{ idx + 1 }}
+                                    {{ getImageName(hash) || `Image ${idx + 1}` }}
                                 </span>
                                 <span
                                     class="attachment-type text-[11px] opacity-50"
@@ -810,6 +810,7 @@ const {
     maxDisplayedThumbs,
     displayedHashes,
     getAttachmentName,
+    getImageName,
     expanded,
     toggleExpanded,
 } = useMessageThumbnails(messageThumbRef);
@@ -1214,7 +1215,8 @@ const streamMdClasses = [
 
 /* Attachment bar items */
 .attachment-item {
-    max-width: 200px;
+    /* Fits a 20-character file name (already shortened with "…") beside its icon. */
+    max-width: min(224px, 100%);
     min-height: 44px;
 }
 

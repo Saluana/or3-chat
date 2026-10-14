@@ -20,6 +20,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     const hashList = computed<string[]>(() => parseHashes(message.value.file_hashes));
     const thumbnails = reactive<Record<string, LocalThumbState>>({});
     const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
+    const imageNames = reactive<Record<string, string>>({});
 
     const maxDisplayedThumbs = 4;
     const displayedHashes = computed(() =>
@@ -32,6 +33,12 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
             return truncateAttachmentName(meta.name, 20);
         }
         return 'Document';
+    }
+
+    /** Original file name of an image attachment, if known. */
+    function getImageName(hash: string): string | undefined {
+        const name = imageNames[hash];
+        return name ? truncateAttachmentName(name, 20) : undefined;
     }
 
     const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
@@ -68,6 +75,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
             delete thumbnails[hash];
             return;
         }
+        if (meta.name) imageNames[hash] = meta.name;
         if (thumbnails[hash] && thumbnails[hash].status === 'ready') return;
 
         const cached = thumbUrlCache.get(hash);
@@ -150,6 +158,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
         for (const key of Object.keys(thumbnails)) delete thumbnails[key];
         for (const key of Object.keys(pdfMeta)) delete pdfMeta[key];
+        for (const key of Object.keys(imageNames)) delete imageNames[key];
         currentHashes.clear();
         void syncHashes(hashList.value);
     });
@@ -168,6 +177,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         maxDisplayedThumbs,
         displayedHashes,
         getAttachmentName,
+        getImageName,
         expanded,
         toggleExpanded,
     };
