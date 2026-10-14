@@ -634,7 +634,8 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     await expect(dashboard).toBeVisible({ timeout: 30_000 });
     await dashboard.click();
 
-    const title = page.getByRole('heading', { name: 'Theme studio' });
+    // The dashboard dialog is titled after its current page.
+    const title = page.getByRole('tablist', { name: 'Theme settings sections' });
     if (await title.isVisible()) return;
 
     const dashboardDialog = page.getByRole('dialog', { name: 'Dashboard' });
@@ -645,9 +646,9 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     await expect(settings).toBeVisible({ timeout: 30_000 });
     await settings.click();
 
-    const themeSettings = dashboardDialog.getByRole('button', {
-        name: /Theme Settings/i,
-    });
+    const themeSettings = page
+        .getByRole('dialog', { name: 'Settings' })
+        .getByRole('button', { name: /Theme Settings/i });
     await expect(themeSettings).toBeVisible({ timeout: 30_000 });
     await themeSettings.click();
     await expect(title).toBeVisible({ timeout: 30_000 });
@@ -1114,7 +1115,7 @@ for (const theme of themes) {
                                 })
                                 .click();
                             const search = page.getByRole('textbox', {
-                                name: 'Search chats, documents, and projects',
+                                name: 'Filter sidebar by title',
                             });
                             await search.click();
                             await expect(search).toHaveCSS(
