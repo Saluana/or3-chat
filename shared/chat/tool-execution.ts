@@ -1,3 +1,11 @@
+import { redactErrorText } from '../errors';
+
+/** Handler failures must stay non-empty and safe to persist, display and send to the model. */
+export function toolExecutionErrorMessage(error: unknown): string {
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    return redactErrorText(message).trim() || 'Tool execution failed.';
+}
+
 export class ToolExecutionTimeoutError extends Error {
     constructor(readonly timeoutMs: number) {
         super(`Tool handler exceeded ${timeoutMs}ms`);
@@ -51,7 +59,11 @@ export function executeWithAbortTimeout<T>(params: {
         );
 
         Promise.resolve()
-            .then(() => params.execute(controller.signal))
+            .then(() => {
+                // Stop may arrive after scheduling but before the handler starts.
+                controller.signal.throwIfAborted();
+                return params.execute(controller.signal);
+            })
             .then(
                 (value) => settle(() => resolve(value)),
                 (error: unknown) => settle(() => reject(error))

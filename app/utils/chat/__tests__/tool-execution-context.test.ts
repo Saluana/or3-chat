@@ -15,6 +15,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+    vi.useRealTimers();
     const registry = useToolRegistry();
     names.splice(0).forEach((name) => registry.unregisterTool(name));
     const db = getDb();
@@ -22,6 +23,63 @@ afterEach(async () => {
 });
 
 describe('client tool execution context', () => {
+    it('isolates a failing availability callback from the catalog and execution', async () => {
+        const registry = useToolRegistry();
+        const definition: ToolDefinition = {
+            type: 'function', function: { name: 'availability_failure', description: 'Availability',
+                parameters: { type: 'object', properties: {} } },
+        };
+        const healthy = { ...definition, function: { ...definition.function, name: 'availability_healthy' } };
+        names.push(definition.function.name, healthy.function.name);
+        const handler = vi.fn(() => 'must-not-run');
+        const broken = registry.registerTool(definition, handler, {
+            available: () => { throw new Error('Availability lookup failed'); },
+        });
+        registry.registerTool(healthy, () => 'healthy');
+        const definitions = registry.getEnabledDefinitions();
+        expect(definitions.some(tool => tool.function.name === healthy.function.name)).toBe(true);
+        expect(definitions.some(tool => tool.function.name === definition.function.name)).toBe(false);
+        await expect(registry.executeTool(definition.function.name, '{}'))
+            .resolves.toMatchObject({ result: null, error: expect.any(String) });
+        expect(broken.lastError.value).toContain('Availability lookup failed');
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('refuses guarded writes when a timed-out handler resumes', async () => {
+        const registry = useToolRegistry();
+        const definition: ToolDefinition = {
+            type: 'function', function: { name: 'late_guarded_write', description: 'Delayed write',
+                parameters: { type: 'object', properties: {} } },
+        };
+        names.push(definition.function.name);
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let started!: () => void;
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        let handlerWork!: Promise<string>;
+        registry.registerTool(definition, (_args, context) => {
+            handlerWork = (async () => {
+                started();
+                await gate;
+                await context.assertToolAuthorized?.();
+                await getDb().threads.update('thread-1', { title: 'Late write' });
+                return 'saved';
+            })();
+            return handlerWork;
+        });
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const execution = registry.executeTool(definition.function.name, '{}', {
+            subject: null, workspaceId: workspace, threadId: 'thread-1', messageId: 'message-1',
+            callId: 'call-1', requestId: 'request-1', abortSignal: new AbortController().signal,
+        });
+        await entered;
+        await vi.advanceTimersByTimeAsync(10_000);
+        await expect(execution).resolves.toMatchObject({ result: null, timedOut: true });
+        release();
+        await expect(handlerWork).rejects.toMatchObject({ name: 'ToolExecutionTimeoutError' });
+        expect((await getDb().threads.get('thread-1'))?.title).toBe('Ordinary tool origin');
+    });
+
     // Bridge validation can wait for the network after approval. It must run
     // outside write transactions and must not replace local mutation fencing.
     it('validates a bridge admission outside the handler transaction only once', async () => {

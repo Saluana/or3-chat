@@ -211,7 +211,7 @@ export function buildDocumentAiCandidate(
         return tr.doc.toJSON();
     }
 
-    const roots = (snapshot.content.content ?? []).map((node, index) => ({
+    const roots: Array<{ node: JSONContent; ref: string | undefined }> = (snapshot.content.content ?? []).map((node, index) => ({
         node,
         ref: snapshot.blocks[index]?.ref,
     }));
@@ -239,7 +239,7 @@ export function buildDocumentAiCandidate(
             continue;
         }
         validateInsertedNodes(editor, operation.content);
-        const inserted = operation.content.map((node) => ({ node, ref: undefined as string | undefined }));
+        const inserted = operation.content.map((node) => ({ node, ref: undefined }));
         if (operation.kind === 'replace_block') roots.splice(index, 1, ...inserted);
         else if (operation.kind === 'insert_before') roots.splice(index, 0, ...inserted);
         else roots.splice(index + 1, 0, ...inserted);

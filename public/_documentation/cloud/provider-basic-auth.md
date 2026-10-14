@@ -72,16 +72,24 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 - `OR3_BASIC_AUTH_ROTATION_GRACE_MS` defaults to `30000` and controls the short refresh-token rotation grace period.
 - `OR3_BASIC_AUTH_RATE_LIMIT_BACKEND=memory` is intended only for single-process development; keep the default SQLite backend for clustered deployments.
 - Set `OR3_AUTH_AUTO_PROVISION=false` for closed deployments.
-- In `invite_only` mode, registration verifies the invite signature, expiry, persisted status/token hash, and normalized email before creating the Basic Auth account or session.
+- Whenever a token is present, registration verifies its signature, expiry, persisted status/token hash, and normalized email before creating the Basic Auth account or session, including in open mode.
 - The selected sync provider must implement atomic invite provisioning so internal user creation, auth mapping, workspace membership, and invite consumption either all commit or all roll back.
 - Keep `Cache-Control: no-store` on auth/sync/storage routes (core handlers already enforce this pattern).
+
+## Signup invite retries
+
+The updated provider passes both signup and team tokens through registration. A signup invite gives the recipient a private owner workspace; a team invite retains its target and role. The explicit request-body token takes priority, followed by the host's header, HttpOnly cookie, query, and Referer precedence. This applies in both open and invite-only registration. Valid tokens are retained in the invite cookie for session resolution. Open registration without a token remains available; disabled registration still refuses new users.
+
+If credential creation succeeded before canonical acceptance, use **Already registered? Sign in**. The existing account ID is retained. A manually pasted replacement token is verified against the signed-in email and handed to the canonical store through the existing HttpOnly cookie; a stale cookie cannot override it. Credentials without accepted canonical provisioning cannot access protected sync/storage resources. There is no credential repair worker or account deletion step.
+
+These changes are included in `or3-provider-basic-auth@0.0.13`, the version pinned by this release. The 0.0.11 release’s link handoff alone does not provide signup-invite retries.
 
 ## Verification Checklist
 
 - `GET /api/auth/session` returns an authenticated user after login.
 - `POST /api/basic-auth/register` creates an account when registration mode allows it.
 - Garbage, expired, consumed, revoked, and wrong-email invites are rejected without leaving an account or session behind.
-- An invite link must lead to completed registration on desktop and mobile, with the invited workspace and role still present after reload. The host's invite cookie alone does not prove this: Basic Auth registration requires the token in the request body.
+- An invite link must lead to completed registration on desktop and mobile, with the private owner workspace (signup) or invited workspace and role (team) still present after reload. Test the complete journey, including links carried by the host's invite cookie and manually entered replacement tokens.
 - Access token expiry triggers refresh and does not silently break background/sync routes.
 - Logout invalidates local session state.
 - Workspace-scoped routes still require `can()` authorization.

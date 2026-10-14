@@ -140,6 +140,16 @@ The project-aware canonical reader returns `project_ownership: resolved | confli
   database backup/export tooling for Turso and D1.
 - Monitor push 429 responses and outbox deferrals (`Retry-After` handling).
 
+## Instance signup invitations
+
+The updated provider implements the five optional signup-invite methods on the existing AuthWorkspaceStore. A separate additive signup-invite table keeps email, hashed token, millisecond timestamps, admin actor, and an identity-bound acceptance receipt. Lists omit token material, paginate at most 100 rows, and derive expired status. Pending receipts expire from retention 90 days after invitation expiry; accepted/revoked receipts are retained 90 days after that transition. Create/list cleanup deletes at most 100 eligible records per call.
+
+Acceptance atomically creates the canonical user, provider mapping, private workspace, recipient-only owner membership, active workspace pointer, and consumed receipt. Same-identity retry returns the committed result without changing active selection or recreating data. Existing canonical accounts cannot redeem a signup invite into another private workspace; use team invites for sharing.
+
+Native SQLite uses one immediate transaction. Cloudflare D1 does not advertise signup-invite support because it cannot provide this transaction; legacy workspace capabilities remain available.
+
+This feature is included in `or3-provider-sqlite@0.0.17`, pinned by this release. Managed Cloud backup inspection qualifies this exact provider with filesystem provider `0.0.11` and migration history through `024_signup_invites`. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
+
 ## Related
 
 - [Choose and wire providers](/documentation/cloud/providers)

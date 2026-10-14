@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IncomingMessage, ServerResponse } from 'http';
 import { Socket } from 'net';
+import { createHmac } from 'node:crypto';
 import { createEvent, type H3Event } from 'h3';
 import { createInviteToken, verifyInviteToken } from '../../auth/invite-token';
 import { getInviteTokenFromEvent, INVITE_TOKEN_COOKIE } from '../../auth/registration';
@@ -90,13 +91,43 @@ describe('invite link middleware', () => {
 
 
 describe('invite token purpose and framing', () => {
+    const exp = 2_000_000_000;
+    const email = 'invitee@example.com';
+    const workspacePayload = { workspaceId: 'workspace-1', email, exp };
+    const signupPayload = { purpose: 'signup', invite_id: 'signup-id', email, exp };
+
     it('rejects extra segments and unknown purposes without changing legacy links', () => {
         const legacy = token(3600);
         expect(verifyInviteToken(legacy, SECRET).ok).toBe(true);
         expect(verifyInviteToken(legacy + '.extra', SECRET).ok).toBe(false);
-        const unknown = createInviteToken({ purpose: 'other', workspaceId: 'workspace-1', email: 'invitee@example.com', exp: Date.now()/1000+3600 } as never, SECRET);
-        expect(verifyInviteToken(unknown, SECRET).ok).toBe(false);
+        const unknown = createInviteToken({ ...workspacePayload, purpose: 'other' } as never, SECRET);
+        expect(verifyInviteToken(unknown, SECRET, 1_900_000_000_000)).toEqual({ ok: false, reason: 'invalid_payload' });
     });
+
+    it.each<[string, unknown]>([
+        ['null', null],
+        ['an array', []],
+        ['a primitive', 'invalid'],
+        ['missing email', { workspaceId: 'workspace-1', exp }],
+        ['non-string email', { ...workspacePayload, email: 42 }],
+        ['blank email', { ...workspacePayload, email: ' ' }],
+        ['missing expiry', { workspaceId: 'workspace-1', email }],
+        ['string expiry', { ...workspacePayload, exp: String(exp) }],
+        ['fractional expiry', { ...workspacePayload, exp: exp + 0.5 }],
+        ['unsafe expiry', { ...workspacePayload, exp: Number.MAX_SAFE_INTEGER + 1 }],
+        ['missing workspace ID', { email, exp }],
+        ['non-string workspace ID', { ...workspacePayload, workspaceId: 42 }],
+        ['empty workspace ID', { ...workspacePayload, workspaceId: '' }],
+        ['missing signup invite ID', { purpose: 'signup', email, exp }],
+        ['non-string signup invite ID', { ...signupPayload, invite_id: 42 }],
+        ['empty signup invite ID', { ...signupPayload, invite_id: '' }],
+    ])('rejects a correctly signed payload with %s', (_label, payload) => {
+        const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+        const signature = createHmac('sha256', SECRET).update(encoded).digest('base64url');
+        expect(verifyInviteToken(`${encoded}.${signature}`, SECRET, 1_900_000_000_000))
+            .toEqual({ ok: false, reason: 'invalid_payload' });
+    });
+
     it('verifies a signup invitation without a destination workspace', () => {
         const payload = { purpose: 'signup' as const, invite_id: 'signup-id', email: 'invitee@example.com', exp: Math.floor(Date.now()/1000)+3600 };
         expect(verifyInviteToken(createInviteToken(payload, SECRET), SECRET)).toEqual({ ok: true, payload });

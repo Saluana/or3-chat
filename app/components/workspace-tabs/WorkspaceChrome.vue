@@ -90,11 +90,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
-import {
-    workspaceTabFallbackIcon,
-    workspaceTabTitle,
-} from '~/core/workspace-tabs/display';
+import { workspaceTabTitle } from '~/core/workspace-tabs/display';
 import { useIcon } from '~/composables/useIcon';
+import { useWorkspaceTabIcon } from '~/composables/core/useWorkspaceTabIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import WorkspaceTabBar from './WorkspaceTabBar.vue';
 import WorkspaceTabSwitcher from './WorkspaceTabSwitcher.vue';
@@ -157,6 +155,7 @@ const chromeProps = useThemeOverrides({
 });
 
 const tabsIcon = useIcon('shell.tabs');
+const tabIcon = useWorkspaceTabIcon();
 
 const activeTab = computed(
     () => props.tabs.find((tab) => tab.id === props.activeTabId) ?? props.tabs[0]
@@ -166,10 +165,7 @@ const activeTitle = computed(() =>
 );
 const activeIcon = computed(() => {
     if (!activeTab.value) return tabsIcon.value;
-    return (
-        props.iconByTabId?.get(activeTab.value.id) ||
-        workspaceTabFallbackIcon(activeTab.value)
-    );
+    return tabIcon(activeTab.value, props.iconByTabId?.get(activeTab.value.id));
 });
 const activeImage = computed(() =>
     activeTab.value ? props.imageByTabId?.get(activeTab.value.id) : undefined

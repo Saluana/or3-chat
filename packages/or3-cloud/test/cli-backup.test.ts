@@ -63,14 +63,17 @@ test('offline canonical inspection detects missing pairs by workspace and preser
   expect(() => inspect(header + first + second + legacy)).toThrow('size mismatch');
   insert('first', sha, { size_bytes: 3, storage_id: 'still-live' }, 2);
   expect(() => inspect(header + first + second + legacy)).toThrow('deletion state');
+  db.query('INSERT INTO kysely_migration VALUES(?)').run('999_unqualified_future_migration');
+  expect(() => inspect(header + first + second + legacy)).toThrow('migration history');
+  db.query('DELETE FROM kysely_migration WHERE name=?').run('999_unqualified_future_migration');
   db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
   expect(() => inspect(header + first + second + legacy)).toThrow('migration history');
   db.close();
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.14', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.17', filesystem: '0.0.11' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.17', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.17', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

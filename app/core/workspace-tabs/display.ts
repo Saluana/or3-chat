@@ -1,4 +1,5 @@
 import type { WorkspaceTab, WorkspaceTabStatus } from './types';
+import { DEFAULT_ICONS } from '~/config/icon-tokens';
 
 export function workspaceTabTitle(tab: WorkspaceTab, tabs: readonly WorkspaceTab[] = []): string {
     if (tab.resource.kind === 'chat' && !tab.resource.threadId && (!tab.cachedTitle || tab.cachedTitle === 'New chat')) {
@@ -21,10 +22,13 @@ export function workspaceTabKindLabel(tab: WorkspaceTab): string {
     return 'App';
 }
 
-export function workspaceTabFallbackIcon(tab: WorkspaceTab): string {
-    if (tab.resource.kind === 'chat') return 'i-lucide-message-circle';
-    if (tab.resource.kind === 'document') return 'i-lucide-file-text';
-    return 'i-lucide-panels-top-left';
+export function workspaceTabFallbackIcon(
+    tab: WorkspaceTab,
+    icons?: Partial<Record<WorkspaceTab['resource']['kind'], string>>
+): string {
+    if (tab.resource.kind === 'chat') return icons?.chat ?? DEFAULT_ICONS['shell.tab.chat'];
+    if (tab.resource.kind === 'document') return icons?.document ?? DEFAULT_ICONS['shell.tab.document'];
+    return icons?.app ?? DEFAULT_ICONS['shell.tab.app'];
 }
 
 export function workspaceTabStatusDescription(

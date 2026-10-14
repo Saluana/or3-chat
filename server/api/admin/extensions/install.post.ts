@@ -236,6 +236,7 @@ export default defineEventHandler(async (event) => {
                 mutation: true,
                 superAdminOnly: true,
             });
+            if (adminContext.principal.kind === 'super_admin' && !payload.workspaceId) throw createError({ statusCode: 400, statusMessage: 'Choose a workspace in the Plugins Workspace tab to prepare this candidate.' });
             const workspaceId = resolveAdminWorkspaceTarget(
                 adminContext,
                 payload.workspaceId

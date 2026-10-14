@@ -105,6 +105,12 @@ await $fetch('/api/admin/extensions/uninstall', {
 });
 ```
 
+## Instance and workspace controls
+
+The built-in Plugins page separates Instance controls from Workspace controls without introducing a new plugin API or navigation registry. Instance pages must not infer a target from the current Chat session. Workspace operations retain explicit authorization and a selected target.
+
+Shared package rollback/uninstall hooks may omit `workspaceId`: `admin.plugin:action:rolled-back` and `admin.plugin:action:uninstalled-v2` describe an instance-wide operation. Uninstall also reports `retainedPackageDigests`. Enable/disable hooks continue to require their real workspace.
+
 ## Current lifecycle and security limits
 
 - Admin plugins are trusted host code, not a sandbox.

@@ -76,6 +76,26 @@ links and `button.message#message.workspace-sources-toggle` for Show all/Show fe
 Their defaults use the compact `workspace` size, theme surface hover/active colors,
 and focus tokens, with 44px touch targets and wrapping for long source titles.
 
+Project Settings binds its Nuxt UI controls in the sidebar context. Theme overrides
+can target `textarea#sidebar.project-settings.instructions` and `.repositories`,
+`selectmenu#sidebar.project-settings.model`, `input#sidebar.project-settings.tool-search`,
+`select#sidebar.project-settings.permission`, `switch#sidebar.project-settings.memory`,
+and `button#sidebar.project-settings.save`, `.discard`, `.action`, or `.remove`.
+The retro theme uses its surface, border, radius, control-height and elevation tokens
+for these controls, tool category panels and the save footer.
+
+Knowledge and Memory expose `sidebar.project-content.field` for native input,
+textarea and select overrides, plus `button#sidebar.project-content.action`,
+`.save`, `.source-menu-item` and `.memory-actions`. Their menus use
+`popover#sidebar.project-content.source-menu` and
+`dropdownmenu#sidebar.project-content.memory-menu`. Retro's panels and previews
+use the existing surface, border, radius, elevation and typography tokens;
+Blank retains the original fields, spacing, buttons and icons.
+Knowledge upload/document/file/attachment icons use
+`sidebar.project.knowledge.upload`, `.document`, `.file` and `.saved-file`;
+memory uses `sidebar.project.memory`. Defaults preserve the previous Lucide icons,
+and Retro supplies pixel icons.
+
 ## Generic control recipes
 
 A `ui` field patches Nuxt UI's slots/variants. This fragment gives inputs a
@@ -144,6 +164,10 @@ Declare semantic tokens in your definition:
 `app/config/icon-tokens.ts` is the token catalog. Trusted themes can alternatively
 export an `IconMap` from `icons.config.ts`; keep overrides in one place to avoid
 ambiguous maintenance. Adding a new semantic token requires a host source change.
+The collapsed sidebar Files button and Files tabs use `sidebar.page.files`; the retro theme overrides it with `pixelarticons:files`, while the default is `i-lucide-files`.
+
+The tab bar, tab switcher and mobile tab header resolve built-in content icons through `useWorkspaceTabIcon()` in component setup. Override `shell.tab.chat`, `shell.tab.document` and `shell.tab.app` for their fallback icons, and `shell.tab.close` for tab-bar close buttons. Blank keeps the original Lucide content icons; retro supplies pixel icons. Existing open tabs update when the theme changes. Supplied plugin icons and app images remain supported.
+
 For source Vue code, resolve icons in setup so template unwrapping works:
 
 ```vue

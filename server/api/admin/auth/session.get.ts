@@ -42,5 +42,6 @@ export default defineEventHandler(async (event) => {
     return {
         authenticated: true,
         kind: context.principal.kind,
+        workspace: context.principal.kind === 'workspace_admin' ? context.session?.workspace ?? null : null,
     };
 });

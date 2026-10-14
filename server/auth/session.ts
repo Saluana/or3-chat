@@ -327,6 +327,7 @@ async function resolveSessionContextAttempt(
         const registrationMode = resolveRegistrationMode(config);
 
         let userId: string;
+        let signupWorkspace: { workspaceId: string; workspaceName: string; created: boolean } | undefined;
         const existingUser = store.getUser
             ? await store.getUser({
                   provider: providerSession.provider,
@@ -381,7 +382,9 @@ async function resolveSessionContextAttempt(
             }
 
             if (registrationDecision.invite) {
-                if (typeof store.acceptInviteAndProvisionUser !== 'function') {
+                const invite = registrationDecision.invite;
+                const signup = 'purpose' in invite.payload;
+                if (signup ? typeof store.acceptSignupInviteAndProvisionUser !== 'function' : typeof store.acceptInviteAndProvisionUser !== 'function') {
                     throw createError({
                         statusCode: 503,
                         statusMessage: 'Auth store missing atomic invite provisioning capability.',
@@ -399,27 +402,43 @@ async function resolveSessionContextAttempt(
                     });
                 }
 
-                const provisioned = await store.acceptInviteAndProvisionUser({
-                    provider: providerSession.provider,
-                    providerUserId: providerSession.user.id,
-                    email: providerEmail,
-                    displayName: providerSession.user.displayName,
-                    workspaceId: registrationDecision.invite.payload.workspaceId,
-                    tokenHash: registrationDecision.invite.tokenHash,
-                });
-                if (!provisioned.ok) {
-                    throw createError({
-                        statusCode: 403,
-                        statusMessage: 'Invite token is invalid or expired.',
+                let createdUser = false;
+                if ('purpose' in invite.payload) {
+                    const result = await store.acceptSignupInviteAndProvisionUser!({
+                        provider: providerSession.provider, provider_user_id: providerSession.user.id,
+                        email: providerEmail, display_name: providerSession.user.displayName,
+                        invite_id: invite.payload.invite_id, token_hash: invite.tokenHash,
                     });
+                    if (!result.ok) throw createError({ statusCode: 403, statusMessage: 'Invite token is invalid or expired.' });
+                    userId = result.user_id;
+                    createdUser = result.created;
+                    if (result.created) {
+                        signupWorkspace = { workspaceId: result.workspace_id, workspaceName: result.workspace_name, created: true };
+                    } else {
+                        // Replay is a receipt. Resolve current membership without recreating anything.
+                        const memberships = await store.listUserWorkspaces(userId);
+                        const current = memberships.find(w => w.isActive) ?? memberships[0];
+                        if (!current) throw createError({ statusCode: 403, statusMessage: 'Workspace access is unavailable.' });
+                        signupWorkspace = { workspaceId: current.id, workspaceName: current.name, created: false };
+                    }
+                } else {
+                    const result = await store.acceptInviteAndProvisionUser!({
+                        provider: providerSession.provider, providerUserId: providerSession.user.id,
+                        email: providerEmail, displayName: providerSession.user.displayName,
+                        workspaceId: invite.payload.workspaceId, tokenHash: invite.tokenHash,
+                    });
+                    if (!result.ok) throw createError({ statusCode: 403, statusMessage: 'Invite token is invalid or expired.' });
+                    userId = result.userId;
+                    createdUser = result.createdUser;
                 }
-                userId = provisioned.userId;
-                if (provisioned.createdUser) {
-                    await emitWebhookSystemHook('auth.user:action:created', {
-                        userId,
-                        provider: providerSession.provider,
-                        email: providerSession.user.email ?? null,
-                    });
+                if (createdUser) {
+                    try {
+                        await emitWebhookSystemHook('auth.user:action:created', {
+                            userId, provider: providerSession.provider, email: providerSession.user.email ?? null,
+                        });
+                    } catch (error) {
+                        console.warn('[auth:session] Post-signup hook failed', error);
+                    }
                 }
 
                 deleteCookie(event, INVITE_TOKEN_COOKIE, {
@@ -443,7 +462,7 @@ async function resolveSessionContextAttempt(
 
         // Get or create default workspace
         const { workspaceId, workspaceName, created } =
-            await store.getOrCreateDefaultWorkspace(userId);
+            signupWorkspace ?? await store.getOrCreateDefaultWorkspace(userId);
 
         if (created) {
             try {

@@ -57,6 +57,7 @@ import type { Project, Thread, Post } from '~/db/schema';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
@@ -99,6 +100,130 @@ const chevronIcon = useIcon('ui.chevron.right');
 const plusIcon = useIcon('ui.plus');
 const trashIcon = useIcon('ui.trash');
 const moreIcon = useIcon('ui.more');
+const searchIcon = useIcon('ui.search');
+const toolIcon = useIcon('chat.tool.wrench');
+const closeIcon = useIcon('ui.close');
+const projectMemoryIcon = useIcon('sidebar.project.memory');
+const sourceUploadIcon = useIcon('sidebar.project.knowledge.upload');
+const sourceDocumentIcon = useIcon('sidebar.project.knowledge.document');
+const sourceFileIcon = useIcon('sidebar.project.knowledge.file');
+const sourceAttachmentIcon = useIcon('sidebar.project.knowledge.saved-file');
+
+const resourceInputTheme = useThemeOverrides({
+    component: 'input',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.field',
+    isNuxtUI: false,
+});
+const resourceTextareaTheme = useThemeOverrides({
+    component: 'textarea',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.field',
+    isNuxtUI: false,
+});
+const resourceSelectTheme = useThemeOverrides({
+    component: 'select',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.field',
+    isNuxtUI: false,
+});
+const resourceActionTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.action',
+    isNuxtUI: true,
+});
+const resourceSaveTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.save',
+    isNuxtUI: true,
+});
+const sourceMenuItemTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.source-menu-item',
+    isNuxtUI: true,
+});
+const sourcePopoverTheme = useThemeOverrides({
+    component: 'popover',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.source-menu',
+    isNuxtUI: true,
+});
+const memoryMenuTheme = useThemeOverrides({
+    component: 'dropdownmenu',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.memory-menu',
+    isNuxtUI: true,
+});
+const memoryActionsTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-content.memory-actions',
+    isNuxtUI: true,
+});
+
+const instructionsTheme = useThemeOverrides({
+    component: 'textarea',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.instructions',
+    isNuxtUI: true,
+});
+const repositoriesTheme = useThemeOverrides({
+    component: 'textarea',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.repositories',
+    isNuxtUI: true,
+});
+const modelTheme = useThemeOverrides({
+    component: 'selectmenu',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.model',
+    isNuxtUI: true,
+});
+const toolSearchTheme = useThemeOverrides({
+    component: 'input',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.tool-search',
+    isNuxtUI: true,
+});
+const permissionTheme = useThemeOverrides({
+    component: 'select',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.permission',
+    isNuxtUI: true,
+});
+const saveTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.save',
+    isNuxtUI: true,
+});
+const discardTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.discard',
+    isNuxtUI: true,
+});
+const actionTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.action',
+    isNuxtUI: true,
+});
+const removeTheme = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.remove',
+    isNuxtUI: true,
+});
+const memoryTheme = useThemeOverrides({
+    component: 'switch',
+    context: 'sidebar',
+    identifier: 'sidebar.project-settings.memory',
+    isNuxtUI: true,
+});
 const sourceInput = ref<'' | 'note' | 'document' | 'file'>('');
 const sourceMenuOpen = ref(false);
 const briefEditing = ref(false);
@@ -495,7 +620,7 @@ async function run(action: () => Promise<unknown>) {
         if (captured === scope) busy.value = false;
     }
 }
-async function openProject(projectId: string) {
+function openProject(projectId: string) {
     id.value = projectId;
     returnTo.value = 'projects';
 }
@@ -878,13 +1003,13 @@ function toolCannotScope(name: string) {
                             {{ entry.heading }}
                         </p>
                         <div
-                            class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item theme-btn"
+                            class="relative min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] unified-sb-item theme-btn"
                         >
+                            <!-- Stretch the native button over the card; keep the pin above its hit area. -->
                             <button
-                                class="min-w-0 flex-1 flex items-center gap-2.5 text-left"
-                                @click="
-                                    run(() => openProject(entry.project.id))
-                                "
+                                type="button"
+                                class="min-w-0 flex-1 flex items-center gap-2.5 text-left cursor-pointer before:absolute before:inset-0 before:rounded-[inherit] focus-visible:outline-none focus-visible:before:outline-2 focus-visible:before:outline-[var(--md-primary)] focus-visible:before:outline-offset-2"
+                                @click="openProject(entry.project.id)"
                             >
                                 <UIcon
                                     :name="projectIcon"
@@ -903,6 +1028,7 @@ function toolCannotScope(name: string) {
                                 </span>
                             </button>
                             <UButton
+                                class="relative z-10"
                                 color="neutral"
                                 variant="ghost"
                                 size="xs"
@@ -1094,7 +1220,7 @@ function toolCannotScope(name: string) {
                             <SidebarPageLink
                                 label="Memory"
                                 :description="`${state.memories.length} saved ${state.memories.length === 1 ? 'memory' : 'memories'}`"
-                                icon="i-lucide-bookmark"
+                                :icon="projectMemoryIcon"
                                 accent="projects"
                                 @select="tab = 'Memory'"
                             />
@@ -1110,7 +1236,10 @@ function toolCannotScope(name: string) {
             <div v-else class="flex-1 min-h-0 flex flex-col">
                 <div
                     class="project-content flex-1 min-h-0 min-w-0 overflow-y-auto sidebar-scroll px-3 pt-2 pb-5 space-y-4 text-sm"
-                    :class="{ 'project-settings-content': tab === 'Settings' }"
+                    :class="{
+                        'project-settings-content': tab === 'Settings',
+                        'project-resource-content': tab === 'Knowledge' || tab === 'Memory',
+                    }"
                 >
                     <div
                         v-if="tab !== 'Overview'"
@@ -1121,7 +1250,10 @@ function toolCannotScope(name: string) {
                             {{ sectionDescriptions[tab] }}
                         </p>
                     </div>
-                    <div v-if="tab === 'Knowledge'" class="space-y-4">
+                    <div
+                        v-if="tab === 'Knowledge'"
+                        class="project-knowledge-view space-y-4"
+                    >
                         <input
                             ref="upload"
                             type="file"
@@ -1133,6 +1265,7 @@ function toolCannotScope(name: string) {
                             @change="uploadFiles"
                         />
                         <UPopover
+                            v-bind="sourcePopoverTheme"
                             v-model:open="sourceMenuOpen"
                             :content="{
                                 align: 'start',
@@ -1146,16 +1279,26 @@ function toolCannotScope(name: string) {
                                 class="project-start theme-btn"
                                 color="neutral"
                                 :disabled="busy"
+                                v-bind="resourceSaveTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-content.save',
+                                    context: 'sidebar',
+                                }"
                             />
                             <template #content>
                                 <div class="p-1 w-56 space-y-1">
                                     <UButton
-                                        icon="i-lucide-upload"
+                                        :icon="sourceUploadIcon"
                                         label="Upload files"
                                         :disabled="busy"
                                         color="neutral"
                                         variant="ghost"
                                         class="w-full justify-start"
+                                        v-bind="sourceMenuItemTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.source-menu-item',
+                                            context: 'sidebar',
+                                        }"
                                         @click="
                                             sourceMenuOpen = false;
                                             replace = undefined;
@@ -1168,22 +1311,37 @@ function toolCannotScope(name: string) {
                                         color="neutral"
                                         variant="ghost"
                                         class="w-full justify-start"
+                                        v-bind="sourceMenuItemTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.source-menu-item',
+                                            context: 'sidebar',
+                                        }"
                                         @click="chooseSource('note')"
                                     />
                                     <UButton
-                                        icon="i-lucide-file-text"
+                                        :icon="sourceDocumentIcon"
                                         label="OR3 document"
                                         color="neutral"
                                         variant="ghost"
                                         class="w-full justify-start"
+                                        v-bind="sourceMenuItemTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.source-menu-item',
+                                            context: 'sidebar',
+                                        }"
                                         @click="chooseSource('document')"
                                     />
                                     <UButton
-                                        icon="i-lucide-paperclip"
+                                        :icon="sourceAttachmentIcon"
                                         label="Saved file"
                                         color="neutral"
                                         variant="ghost"
                                         class="w-full justify-start"
+                                        v-bind="sourceMenuItemTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.source-menu-item',
+                                            context: 'sidebar',
+                                        }"
                                         @click="chooseSource('file')"
                                     />
                                 </div>
@@ -1196,6 +1354,11 @@ function toolCannotScope(name: string) {
                         >
                             <h2 class="font-semibold text-xs">Write a note</h2>
                             <input
+                                v-bind="resourceInputTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-content.field',
+                                    context: 'sidebar',
+                                }"
                                 v-model="noteTitle"
                                 aria-label="Note title"
                                 placeholder="Note title"
@@ -1204,6 +1367,11 @@ function toolCannotScope(name: string) {
                                 maxlength="500"
                                 required
                             /><textarea
+                                v-bind="resourceTextareaTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-content.field',
+                                    context: 'sidebar',
+                                }"
                                 v-model="noteText"
                                 aria-label="Note text"
                                 placeholder="Write your note…"
@@ -1217,11 +1385,21 @@ function toolCannotScope(name: string) {
                                     label="Cancel"
                                     color="neutral"
                                     variant="ghost"
+                                    v-bind="resourceActionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.action',
+                                        context: 'sidebar',
+                                    }"
                                     @click="sourceInput = ''"
                                 /><UButton
                                     type="submit"
                                     label="Add note"
                                     :disabled="busy"
+                                    v-bind="resourceSaveTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.save',
+                                        context: 'sidebar',
+                                    }"
                                 />
                             </div>
                         </form>
@@ -1234,6 +1412,11 @@ function toolCannotScope(name: string) {
                                 Add an OR3 document
                             </h2>
                             <select
+                                v-bind="resourceSelectTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-content.field',
+                                    context: 'sidebar',
+                                }"
                                 v-model="documentId"
                                 aria-label="Existing OR3 document"
                                 class="project-input"
@@ -1253,11 +1436,21 @@ function toolCannotScope(name: string) {
                                     label="Cancel"
                                     color="neutral"
                                     variant="ghost"
+                                    v-bind="resourceActionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.action',
+                                        context: 'sidebar',
+                                    }"
                                     @click="sourceInput = ''"
                                 /><UButton
                                     type="submit"
                                     label="Add document"
                                     :disabled="busy"
+                                    v-bind="resourceSaveTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.save',
+                                        context: 'sidebar',
+                                    }"
                                 />
                             </div>
                         </form>
@@ -1270,6 +1463,11 @@ function toolCannotScope(name: string) {
                                 Add a saved file
                             </h2>
                             <select
+                                v-bind="resourceSelectTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-content.field',
+                                    context: 'sidebar',
+                                }"
                                 v-model="fileId"
                                 aria-label="Existing workspace file"
                                 class="project-input"
@@ -1289,11 +1487,21 @@ function toolCannotScope(name: string) {
                                     label="Cancel"
                                     color="neutral"
                                     variant="ghost"
+                                    v-bind="resourceActionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.action',
+                                        context: 'sidebar',
+                                    }"
                                     @click="sourceInput = ''"
                                 /><UButton
                                     type="submit"
                                     label="Add saved file"
                                     :disabled="busy"
+                                    v-bind="resourceSaveTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.save',
+                                        context: 'sidebar',
+                                    }"
                                 />
                             </div>
                         </form>
@@ -1329,7 +1537,7 @@ function toolCannotScope(name: string) {
                                         :name="
                                             source.value.kind === 'document'
                                                 ? knowledgeIcon
-                                                : 'i-lucide-file'
+                                                : sourceFileIcon
                                         "
                                         class="size-4"
                                 /></span>
@@ -1355,6 +1563,11 @@ function toolCannotScope(name: string) {
                                     color="neutral"
                                     variant="ghost"
                                     size="xs"
+                                    v-bind="resourceActionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.action',
+                                        context: 'sidebar',
+                                    }"
                                     @click="
                                         run(() =>
                                             showRevision(
@@ -1388,6 +1601,11 @@ function toolCannotScope(name: string) {
                             <label
                                 class="flex items-center gap-2 text-xs project-muted"
                                 >Context<select
+                                    v-bind="resourceSelectTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.field',
+                                        context: 'sidebar',
+                                    }"
                                     :disabled="busy"
                                     :value="source.value.mode"
                                     class="project-input flex-1!"
@@ -1435,7 +1653,7 @@ function toolCannotScope(name: string) {
                                             ...source.value.revisions,
                                         ].reverse()"
                                         :key="revision.id"
-                                        class="flex flex-wrap gap-2 items-center text-sm"
+                                        class="project-source-revision flex flex-wrap gap-2 items-center text-sm"
                                     >
                                         <span
                                             >{{
@@ -1458,6 +1676,11 @@ function toolCannotScope(name: string) {
                                             color="neutral"
                                             variant="ghost"
                                             label="Preview revision"
+                                            v-bind="resourceActionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-content.action',
+                                                context: 'sidebar',
+                                            }"
                                             @click="
                                                 run(() =>
                                                     showRevision(
@@ -1471,6 +1694,11 @@ function toolCannotScope(name: string) {
                                             color="neutral"
                                             variant="ghost"
                                             label="Download original"
+                                            v-bind="resourceActionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-content.action',
+                                                context: 'sidebar',
+                                            }"
                                             @click="
                                                 run(() =>
                                                     download(
@@ -1489,6 +1717,11 @@ function toolCannotScope(name: string) {
                                             :disabled="busy"
                                             color="neutral"
                                             variant="ghost"
+                                            v-bind="resourceActionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-content.action',
+                                                context: 'sidebar',
+                                            }"
                                             @click="
                                                 run(() =>
                                                     processProjectSource(
@@ -1502,7 +1735,7 @@ function toolCannotScope(name: string) {
                                         />
                                         <p
                                             v-if="revision.error"
-                                            class="w-full text-red-500"
+                                            class="project-revision-error w-full text-red-500"
                                         >
                                             {{ revision.error }}
                                         </p>
@@ -1513,6 +1746,11 @@ function toolCannotScope(name: string) {
                                         :disabled="busy"
                                         color="neutral"
                                         variant="outline"
+                                        v-bind="resourceActionTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.action',
+                                            context: 'sidebar',
+                                        }"
                                         @click="
                                             replace = source;
                                             upload?.click();
@@ -1521,6 +1759,11 @@ function toolCannotScope(name: string) {
                                         label="Remove knowledge"
                                         color="neutral"
                                         variant="ghost"
+                                        v-bind="resourceActionTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.action',
+                                            context: 'sidebar',
+                                        }"
                                         @click="
                                             run(() =>
                                                 deleteProjectRecord(
@@ -1536,7 +1779,7 @@ function toolCannotScope(name: string) {
                         </article>
                         <div
                             v-if="previewText || previewImage"
-                            class="rounded border border-current/15 p-4"
+                            class="project-source-preview rounded border border-current/15 p-4"
                         >
                             <h2>{{ previewTitle }}</h2>
                             <img
@@ -1586,6 +1829,11 @@ function toolCannotScope(name: string) {
                                     variant="ghost"
                                     color="neutral"
                                     :disabled="busy"
+                                    v-bind="resourceActionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.action',
+                                        context: 'sidebar',
+                                    }"
                                     @click="creatingMemory = true"
                                 />
                             </div>
@@ -1598,6 +1846,11 @@ function toolCannotScope(name: string) {
                                     New memory
                                 </h3>
                                 <textarea
+                                    v-bind="resourceTextareaTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-content.field',
+                                        context: 'sidebar',
+                                    }"
                                     v-model="memory"
                                     class="project-input"
                                     rows="4"
@@ -1611,6 +1864,11 @@ function toolCannotScope(name: string) {
                                         label="Cancel"
                                         color="neutral"
                                         variant="ghost"
+                                        v-bind="resourceActionTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.action',
+                                            context: 'sidebar',
+                                        }"
                                         @click="
                                             creatingMemory = false;
                                             memory = '';
@@ -1620,6 +1878,11 @@ function toolCannotScope(name: string) {
                                         type="submit"
                                         label="Save memory"
                                         :disabled="busy || !memory.trim()"
+                                        v-bind="resourceSaveTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.save',
+                                            context: 'sidebar',
+                                        }"
                                     />
                                 </div>
                             </form>
@@ -1628,7 +1891,7 @@ function toolCannotScope(name: string) {
                                 class="project-empty"
                             >
                                 <UIcon
-                                    name="i-lucide-bookmark"
+                                    :name="projectMemoryIcon"
                                     class="size-6 project-muted"
                                 />
                                 <p class="font-medium text-sm mt-2">
@@ -1651,6 +1914,7 @@ function toolCannotScope(name: string) {
                                 }"
                             >
                                 <UDropdownMenu
+                                    v-bind="memoryMenuTheme"
                                     v-if="
                                         editingMemory?.record.row.id !==
                                         record.row.id
@@ -1705,6 +1969,11 @@ function toolCannotScope(name: string) {
                                         size="xs"
                                         color="neutral"
                                         variant="ghost"
+                                        v-bind="memoryActionsTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.memory-actions',
+                                            context: 'sidebar',
+                                        }"
                                     />
                                 </UDropdownMenu>
                                 <form
@@ -1716,6 +1985,11 @@ function toolCannotScope(name: string) {
                                     @submit.prevent="run(saveMemoryEdit)"
                                 >
                                     <textarea
+                                        v-bind="resourceTextareaTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-content.field',
+                                            context: 'sidebar',
+                                        }"
                                         v-model="editingMemory.text"
                                         aria-label="Edit saved memory"
                                         class="project-input"
@@ -1728,12 +2002,22 @@ function toolCannotScope(name: string) {
                                             label="Cancel"
                                             color="neutral"
                                             variant="ghost"
+                                            v-bind="resourceActionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-content.action',
+                                                context: 'sidebar',
+                                            }"
                                             @click="editingMemory = null"
                                         />
                                         <UButton
                                             type="submit"
                                             label="Save changes"
                                             :disabled="busy"
+                                            v-bind="resourceSaveTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-content.save',
+                                                context: 'sidebar',
+                                            }"
                                         />
                                     </div>
                                 </form>
@@ -1750,7 +2034,7 @@ function toolCannotScope(name: string) {
                         @submit.prevent="run(saveSettings)"
                     >
                         <section
-                            class="space-y-3"
+                            class="project-settings-behaviour space-y-3"
                             aria-label="Project behaviour"
                         >
                             <label class="block">
@@ -1760,14 +2044,22 @@ function toolCannotScope(name: string) {
                                 <span class="project-muted block mt-1 text-xs"
                                     >How should OR3 work in this project?</span
                                 >
-                                <textarea
+                                <UTextarea
                                     v-model="settings.instructions"
                                     aria-label="Instructions"
-                                    class="project-input !mt-2"
+                                    class="w-full min-w-0 mt-2"
+                                    :ui="{ base: 'project-input mt-0! ring-0' }"
+                                    size="sm"
+                                    color="neutral"
+                                    v-bind="instructionsTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-settings.instructions',
+                                        context: 'sidebar',
+                                    }"
                                     placeholder="Tone, goals, or guidelines to keep in mind…"
-                                    maxlength="16000"
-                                    rows="4"
-                                    @input="dirty = true"
+                                    :maxlength="16000"
+                                    :rows="4"
+                                    @update:model-value="dirty = true"
                                 />
                             </label>
                             <div class="space-y-2">
@@ -1791,6 +2083,11 @@ function toolCannotScope(name: string) {
                                     class="w-full min-w-0"
                                     size="sm"
                                     color="neutral"
+                                    v-bind="modelTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-settings.model',
+                                        context: 'sidebar',
+                                    }"
                                     @update:model-value="
                                         settings.default_model =
                                             $event === chatDefaultModel
@@ -1806,7 +2103,10 @@ function toolCannotScope(name: string) {
                                 </p>
                             </div>
                         </section>
-                        <section class="space-y-3" aria-label="Project tools">
+                        <section
+                            class="project-settings-tools space-y-3"
+                            aria-label="Project tools"
+                        >
                             <div class="space-y-1">
                                 <h2 class="font-semibold text-sm">Tools</h2>
                                 <p
@@ -1819,7 +2119,7 @@ function toolCannotScope(name: string) {
                             </div>
                             <UInput
                                 v-model="toolQuery"
-                                icon="i-lucide-search"
+                                :icon="searchIcon"
                                 aria-label="Search project tools"
                                 placeholder="Search tools"
                                 size="sm"
@@ -1827,6 +2127,11 @@ function toolCannotScope(name: string) {
                                 class="w-full"
                                 :ui="{
                                     base: 'border-0! bg-[var(--md-surface-container-low)]! focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+                                }"
+                                v-bind="toolSearchTheme"
+                                v-theme="{
+                                    identifier: 'sidebar.project-settings.tool-search',
+                                    context: 'sidebar',
                                 }"
                             />
                             <details
@@ -1849,7 +2154,7 @@ function toolCannotScope(name: string) {
                                             : 'All off'
                                     }}</span>
                                     <UIcon
-                                        name="i-lucide-chevron-right"
+                                        :name="chevronIcon"
                                         class="size-3.5 shrink-0 project-muted project-disclosure-icon"
                                         aria-hidden="true"
                                     />
@@ -1864,7 +2169,7 @@ function toolCannotScope(name: string) {
                                             :name="
                                                 tool.definition.ui?.icon ||
                                                 tool.definition.icon ||
-                                                'i-lucide-wrench'
+                                                toolIcon
                                             "
                                             class="size-4 shrink-0 project-muted"
                                             aria-hidden="true"
@@ -1893,6 +2198,11 @@ function toolCannotScope(name: string) {
                                             class="project-tool-permission shrink-0"
                                             :ui="{
                                                 base: 'border-0! bg-transparent! shadow-none! min-h-8',
+                                            }"
+                                            v-bind="permissionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-settings.permission',
+                                                context: 'sidebar',
                                             }"
                                             @update:model-value="
                                                 toolMode(
@@ -1953,8 +2263,8 @@ function toolCannotScope(name: string) {
                                         </summary>
                                         <label class="block mt-2">
                                             <span>Allowed repositories</span>
-                                            <textarea
-                                                :value="
+                                            <UTextarea
+                                                :model-value="
                                                     settings.tools[
                                                         tool.definition.function
                                                             .name
@@ -1965,16 +2275,22 @@ function toolCannotScope(name: string) {
                                                     'Allowed repositories for ' +
                                                     toolLabel(tool)
                                                 "
-                                                class="project-input"
+                                                class="w-full min-w-0 mt-1.5"
+                                                :ui="{ base: 'project-input mt-0! ring-0' }"
+                                                size="sm"
+                                                color="neutral"
+                                                v-bind="repositoriesTheme"
+                                                v-theme="{
+                                                    identifier: 'sidebar.project-settings.repositories',
+                                                    context: 'sidebar',
+                                                }"
                                                 placeholder="owner/repository"
-                                                rows="2"
-                                                @input="
+                                                :rows="2"
+                                                @update:model-value="
                                                     setToolResources(
                                                         tool.definition.function
                                                             .name,
-                                                        (
-                                                            $event.target as HTMLTextAreaElement
-                                                        ).value,
+                                                        $event ?? '',
                                                     )
                                                 "
                                             />
@@ -2003,6 +2319,11 @@ function toolCannotScope(name: string) {
                                             color="neutral"
                                             variant="ghost"
                                             size="xs"
+                                            v-bind="actionTheme"
+                                            v-theme="{
+                                                identifier: 'sidebar.project-settings.action',
+                                                context: 'sidebar',
+                                            }"
                                             @click="
                                                 setToolResources(
                                                     tool.definition.function
@@ -2036,7 +2357,7 @@ function toolCannotScope(name: string) {
                                         unavailableTools.length
                                     }}</span>
                                     <UIcon
-                                        name="i-lucide-chevron-right"
+                                        :name="chevronIcon"
                                         class="size-3.5 project-disclosure-icon"
                                         aria-hidden="true"
                                     />
@@ -2044,12 +2365,12 @@ function toolCannotScope(name: string) {
                                 <div
                                     v-for="tool in unavailableTools"
                                     :key="tool.definition.function.name"
-                                    class="flex gap-2.5 py-2.5"
+                                    class="project-unavailable-tool-row flex gap-2.5 py-2.5"
                                 >
                                     <UIcon
                                         :name="
                                             tool.definition.ui?.icon ||
-                                            'i-lucide-wrench'
+                                            toolIcon
                                         "
                                         class="size-4 mt-0.5 shrink-0 project-muted"
                                         aria-hidden="true"
@@ -2083,14 +2404,14 @@ function toolCannotScope(name: string) {
                     >
                         <button
                             type="button"
-                            class="flex items-center gap-2 w-full py-2 text-left"
+                            class="project-chat-settings-trigger flex items-center gap-2 w-full py-2 text-left"
                             aria-label="Manage chats"
                             :aria-expanded="manageChatsOpen"
                             :aria-controls="'project-chats-' + id"
                             @click="manageChatsOpen = !manageChatsOpen"
                         >
                             <UIcon
-                                name="i-lucide-messages-square"
+                                :name="chatIcon"
                                 class="size-4 project-muted shrink-0"
                                 aria-hidden="true"
                             />
@@ -2101,7 +2422,7 @@ function toolCannotScope(name: string) {
                                 chats.length
                             }}</span>
                             <UIcon
-                                name="i-lucide-chevron-right"
+                                :name="chevronIcon"
                                 :class="[
                                     'size-4 project-muted',
                                     manageChatsOpen && 'rotate-90',
@@ -2159,6 +2480,11 @@ function toolCannotScope(name: string) {
                                     size="xs"
                                     color="neutral"
                                     variant="outline"
+                                    v-bind="actionTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-settings.action',
+                                        context: 'sidebar',
+                                    }"
                                     :disabled="busy || dirty || !existingChatId"
                                 />
                             </form>
@@ -2207,18 +2533,28 @@ function toolCannotScope(name: string) {
                                     "
                                     :disabled="busy || dirty"
                                     size="xs"
+                                    v-bind="memoryTheme"
+                                    v-theme="{
+                                        identifier: 'sidebar.project-settings.memory',
+                                        context: 'sidebar',
+                                    }"
                                     @update:model-value="
                                         run(() => exclude(chat))
                                     "
                                 />
                                 <UTooltip text="Remove from project">
                                     <UButton
-                                        icon="i-lucide-x"
+                                        :icon="closeIcon"
                                         aria-label="Remove"
                                         color="neutral"
                                         variant="ghost"
                                         size="xs"
                                         square
+                                        v-bind="removeTheme"
+                                        v-theme="{
+                                            identifier: 'sidebar.project-settings.remove',
+                                            context: 'sidebar',
+                                        }"
                                         :disabled="busy || dirty"
                                         @click="
                                             run(() =>
@@ -2252,6 +2588,11 @@ function toolCannotScope(name: string) {
                         color="neutral"
                         variant="ghost"
                         size="xs"
+                        v-bind="discardTheme"
+                        v-theme="{
+                            identifier: 'sidebar.project-settings.discard',
+                            context: 'sidebar',
+                        }"
                         :disabled="busy"
                         @click="discardSettings"
                     />
@@ -2262,6 +2603,11 @@ function toolCannotScope(name: string) {
                         color="neutral"
                         size="xs"
                         class="project-settings-save"
+                        v-bind="saveTheme"
+                        v-theme="{
+                            identifier: 'sidebar.project-settings.save',
+                            context: 'sidebar',
+                        }"
                         :disabled="busy || !dirty"
                         :loading="busy"
                     />
