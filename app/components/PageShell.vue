@@ -158,9 +158,47 @@
                 v-else-if="workspaceTabsLayoutReserved"
                 class="workspace-chrome-placeholder"
                 aria-hidden="true"
-            />
+                inert
+            >
+                <!-- Reuse the real mobile chrome while local tabs restore. CSS
+                     chooses the phone layout before breakpoint hydration. -->
+                <WorkspaceChrome
+                    class="workspace-chrome-preview"
+                    :tabs="[]"
+                    active-tab-id=""
+                    :visible-tab-ids="workspaceTabs.visibleTabIds.value"
+                    :mobile="true"
+                >
+                    <template #sidebar>
+                        <UButton
+                            v-theme="'shell.sidebar-toggle'"
+                            v-bind="sidebarToggleButtonProps"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            :icon="useIcon('ui.menu').value"
+                        />
+                    </template>
+                    <template #actions>
+                        <UButton
+                            v-if="showNotificationBell"
+                            v-bind="notificationButtonProps"
+                            class="workspace-chrome-action"
+                            :square="true"
+                            aria-label="Notifications"
+                            icon="i-lucide-bell"
+                        />
+                        <UButton
+                            v-bind="headerActionButtonProps"
+                            class="workspace-chrome-action"
+                            :square="true"
+                            aria-label="More actions"
+                            icon="i-lucide-ellipsis"
+                        />
+                    </template>
+                </WorkspaceChrome>
+            </div>
             <div
-                v-if="!workspaceTabsChromeVisible"
+                v-if="!workspaceTabsEnabled"
                 id="top-nav"
                 :class="{
                     'border-(--md-inverse-surface) border-b-[var(--md-border-width)] bg-(--md-surface-variant)/20 backdrop-blur-sm':
@@ -545,8 +583,8 @@ const pluginNewTabItems = computed(() =>
             : []
     )
 );
-// Pane and tab IDs are runtime UUIDs. Render the deterministic legacy chrome
-// until hydration finishes, then mount the workspace chrome with client IDs.
+// Pane and tab IDs are runtime UUIDs. Render a deterministic chrome preview
+// until hydration finishes, then mount the workspace chrome with restored IDs.
 // This avoids server/client attribute mismatches without making IDs global.
 const workspaceTabsHydrated = ref(false);
 const workspaceTabsChromeVisible = computed(

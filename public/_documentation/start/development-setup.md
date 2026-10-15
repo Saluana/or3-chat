@@ -183,6 +183,17 @@ component CSS to stay anchored while its client-only controls mount; the search
 header reserves its normal minimum height while allowing taller theme controls.
 The document head declares Tailwind's cascade layer order before theme and icon
 stylesheets, keeping utility spacing stable from the first render through hydration.
+On phones, the initial HTML uses the same themed mobile chrome as the restored
+workspace, with an inert preview while local tabs load. The composer renders its
+placeholder and Settings control before the editor mounts, preserving their final
+geometry. Nuxt's early color-mode script reads the theme runtime's `theme` preference,
+so a saved light or dark choice applies before the application bundles download.
+Desktop tab controls load when needed, and the mobile tab switcher loads on its
+first opening and stays mounted for subsequent opens and closing transitions.
+`PW_SKIP_WEB_SERVER=true bun run performance:browser:check --grep 'mobile startup' --workers=1`
+checks a production preview on port 3110 with JavaScript bundles held back, then
+compares the initial and hydrated geometry in all bundled themes and both color
+modes. Each case saves screenshots and `startup-geometry.json` in its test output.
 
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 
