@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, atomic document knowledge bindings, canonical brief writes, evidence-aware memory retrieval, captured execution boundaries, and installed/development provider qualification."
+                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification."
                 },
                 {
                     "name": "posts.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, invite preflight across request and cookie sources, and sign-in retry with a replacement invitation."
+                    "summary": "Basic Auth credentials, invitation preflight and retries, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync invariants, native atomic private-workspace signup invitations, qualified Cloud backup migration history, and D1 support limits."
+                    "summary": "SQLite auth/sync, independent durable limits, retained metadata, atomic quota reservations and exact commit retries, signup invitations, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Configure filesystem storage, signed transfers, bounded read-only usage accounting, and fail-closed physical cleanup."
+                    "summary": "Filesystem signed transfers, paired upload reservations, retryable commits, bounded read-only usage accounting, and disabled physical cleanup."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -692,7 +692,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 11,
-                    "summary": "Dedicated install and wiring guide for the Clerk auth provider package."
+                    "summary": "Clerk trusted-origin startup, session-scoped tokens, recovery, and provider-isolated client adapters."
                 },
                 {
                     "name": "provider-convex.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, atomic private-workspace signup invitations, and bounded legacy email-index backfill."
+                    "summary": "Convex setup, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery, retained metadata, and atomic signup invitations."
                 },
                 {
                     "name": "provider-s3.md",
@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "Configure S3 0.0.11 with checksum verification, blob preservation, admin diagnostics, compatibility testing, and coordinated deletion requirements."
+                    "summary": "S3 endpoint validation, canonical SHA-256 identity, paired upload reservations, retryable commits, and safe disabled physical cleanup."
                 },
                 {
                     "name": "deployment-operations.md",

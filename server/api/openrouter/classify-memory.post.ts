@@ -12,6 +12,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { checkAndRecordLlmRequest } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import {
     MemoryBatchCooldownError,
     MEMORY_BATCH_COOLDOWN_MS,
@@ -56,7 +57,9 @@ export default defineEventHandler(async (event) => {
             ? { kind: 'workspace', id: session.workspace.id }
             : undefined,
     );
-    const body = BodySchema.safeParse(await readBody(event));
+    // Both inference states share a 240 KiB JSON bound; allow room for the
+    // workspace envelope while bounding the transport before JSON parsing.
+    const body = BodySchema.safeParse(await readLimitedJsonBody(event, 256 * 1024));
     if (!body.success)
         throw createError({
             statusCode: 400,

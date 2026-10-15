@@ -281,6 +281,14 @@ export function createDependencyInstallPlan(
             });
         }
 
+        if (answers.limitsEnabled && answers.limitsStorageProvider) {
+            const limitsProvider = getProviderDescriptor('sync', answers.limitsStorageProvider);
+            limitsProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(reasons, dependency.packageName, `Rate limits: ${dependency.reason}`);
+            });
+        }
+
         const usesSqlite = usesSqliteProvider(answers);
         if (usesSqlite) {
             const sqliteDriver = answers.sqliteDriver;

@@ -144,7 +144,9 @@ export function useProjectsCrud() {
         let related = 0;
         const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads']), async () => {
             scope.assertCurrent('write');
-            if ((await db.projects.get(id))?.clock !== existing.clock)
+            const observed = await db.projects.get(id);
+            if (!observed || observed.deleted || observed.clock !== existing.clock
+                || JSON.stringify(observed.data) !== JSON.stringify(existing.data))
                 throw new Error('Project changed. Reload before editing membership.');
             // Branch families move with the chat they belong to, so relatives keep a readable shared history.
             const ownership = await db.projects.toArray();
@@ -202,7 +204,7 @@ export function useProjectsCrud() {
                 if (project.deleted) continue;
                 const entries = normalizeProjectData(project.data);
                 const needsUpdate = (entry: ProjectEntry) => entry.id === entryId
-                    && (entry.name !== title || entry.kind !== kind);
+                    && entry.kind === kind && entry.name !== title;
                 if (!entries.some(needsUpdate)) continue;
                 updates.push({
                     ...project,

@@ -63,6 +63,11 @@ based upgrades. It remains available through the application repository's
 
 For managed installation use `npx @or3/cloud init --local` or the public-domain route in [Set up Cloud](/documentation/cloud/setup). Contributors start this checkout with `bun run dev` or `bun run dev:ssr`.
 
+Enabled rate limits can select SQLite or Convex independently of the workspace
+backend. The wizard includes that provider's module, configuration, validation,
+and install dependencies; Convex also gets its scaffold/deploy steps. Disabled
+limits do not install an otherwise unused backend.
+
 ## Save your first-run login
 
 The recommended self-hosted preset generates a password for the admin email

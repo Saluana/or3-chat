@@ -167,7 +167,11 @@ export interface SyncGatewayAdapter {
 
     /** Atomically persist an expiring reservation and enforce workspace quota. */
     reserveUploadIntent?(event: H3Event, input: UploadIntentReservationRequest): Promise<void>;
-    /** Consume a matching active intent exactly once. */
+    /** Consume a matching active intent once. Exact consumed-receipt replay must
+     * succeed for the same workspace/hash/MIME/size/storageId within its original
+     * authorization lifetime. Expired receipts require a fresh reservation;
+     * changed receipts and expired active intents fail.
+     */
     consumeUploadIntent?(event: H3Event, input: UploadIntentConsumptionRequest): Promise<void>;
     /** Release an active reservation after a failed/cancelled upload. */
     cancelUploadIntent?(event: H3Event, input: { workspaceId: string; intentId: string }): Promise<void>;

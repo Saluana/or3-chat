@@ -596,6 +596,62 @@ describe('chat document tools', () => {
         await useProjectsCrud().updateProjectEntries('sidebar-project', [{ kind: 'file', id: 'catalog', name: 'New' }]);
         expect((await getDb().projects.get('sidebar-project'))?.data).toEqual([extension, { kind: 'file', id: 'catalog', name: 'New' }]);
     });
+    // Tool-driven moves must share sidebar ownership semantics: adding takes a
+    // whole provenance family; removing releases only branches this project owns.
+    // Atomic membership writes must retain extension fields and notify after commit.
+    it.each([
+        ['add_item', 'explicit'], ['remove_item', 'explicit'],
+        ['add_item', 'legacy'], ['remove_item', 'legacy'],
+    ] as const)('moves a chat family through project tool %s with %s ownership without losing memberships', async (operation, ownership) => {
+        const db = getDb();
+        const extension = { kind: 'plugin-private', id: 'private-record', payload: { retain: true } };
+        const family = [{ id: 'family-root', kind: 'chat', name: 'Root', color: 'blue' },
+            { id: 'family-branch', kind: 'chat', name: 'Branch', color: 'green' }];
+        const previousOwner = operation === 'add_item' ? 'project-b' : 'project-a';
+        const project = { id: 'project-a', name: 'Project A', data: [extension, ...(operation === 'remove_item' ? family : [])],
+            clock: 1, created_at: 1, updated_at: 1, deleted: false };
+        await db.projects.bulkPut([project,
+            { ...project, id: 'project-b', data: operation === 'add_item' ? family : [] },
+            { ...project, id: 'project-c', data: [{ id: 'family-elsewhere', kind: 'chat', name: 'Elsewhere', color: 'gold' }] },
+        ]);
+        for (const [id, title, owner] of [['family-root', 'Root', previousOwner], ['family-branch', 'Branch', previousOwner],
+            ['family-elsewhere', 'Elsewhere', 'project-c']] as const) {
+            await db.threads.put({ id, title, project_id: ownership === 'legacy' && owner === previousOwner ? null : owner, parent_thread_id: id === 'family-root' ? null : 'family-root',
+                status: 'ready', pinned: false, forked: id !== 'family-root', deleted: false,
+                clock: 1, created_at: 1, updated_at: 1 });
+        }
+        const notified: string[] = [];
+        const { useHooks } = await import('~/core/hooks/useHooks');
+        useHooks().addAction('db.threads.upsert:action:after', ({ entity }) => {
+            expect(Dexie.currentTransaction).toBeFalsy();
+            notified.push(entity.id);
+        });
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const result = await registry.executeTool('workspace_update_project', JSON.stringify({ operation,
+            projectId: project.id, revision: await workspaceRevision(project), item: { kind: 'chat', id: 'family-root' },
+        }), { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'family-project-tool', callId: operation, abortSignal: new AbortController().signal },
+        { definition: registry.getTool('workspace_update_project')!.definition });
+        expect(result.error).toBeUndefined();
+        const expectedOwner = operation === 'add_item' ? 'project-a' : null;
+        expect((await db.threads.get('family-root'))?.project_id).toBe(expectedOwner);
+        expect((await db.threads.get('family-branch'))?.project_id).toBe(expectedOwner);
+        expect((await db.threads.get('family-elsewhere'))?.project_id).toBe(operation === 'add_item' ? 'project-a' : 'project-c');
+        expect(notified.sort()).toEqual(operation === 'add_item' ? ['family-branch', 'family-elsewhere', 'family-root']
+            : ownership === 'legacy' ? [] : ['family-branch', 'family-root']);
+        const entries = (await db.projects.get(project.id))!.data as unknown[];
+        expect(entries).toContainEqual(extension);
+        if (operation === 'add_item') {
+            for (const entry of family) expect(entries).toContainEqual(entry);
+            expect(entries).toContainEqual({ id: 'family-elsewhere', kind: 'chat', name: 'Elsewhere', color: 'gold' });
+            expect((await db.projects.get('project-b'))?.data).toEqual([]);
+            expect((await db.projects.get('project-c'))?.data).toEqual([]);
+        } else {
+            expect(entries).toEqual([extension]);
+            expect((await db.projects.get('project-c'))?.data).toContainEqual({ id: 'family-elsewhere', kind: 'chat', name: 'Elsewhere', color: 'gold' });
+        }
+    });
     it('updates a project by read revision and removes association without deleting its document', async () => {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();
