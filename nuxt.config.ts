@@ -171,6 +171,8 @@ const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     : undefined;
 
 export default defineNuxtConfig({
+    // No first-run consent prompt; OR3 does not send usage data.
+    telemetry: false,
     ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
         ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
         : process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true'
@@ -257,7 +259,10 @@ export default defineNuxtConfig({
         },
     },
     devtools: {
-        enabled: process.env.NODE_ENV !== 'production',
+        // The setup wizard is an end-user screen, not a development session.
+        enabled:
+            process.env.NODE_ENV !== 'production' &&
+            process.env.OR3_WIZARD_UI_ENABLED !== 'true',
         // Vite Inspect retains resolution and transform history across HMR.
         // Keep the DevTools UI available without the unbounded inspector state.
         viteInspect: false,

@@ -159,13 +159,6 @@
 
         <div class="flex flex-wrap items-center gap-3 border-t-[length:var(--md-border-width-subtle)] border-[color:var(--md-border-color)] pt-5">
             <UButton
-                label="Validate"
-                variant="outline"
-                :loading="isDeploying"
-                :disabled="isDeploying"
-                @click="$emit('validate')"
-            />
-            <UButton
                 label="Save Settings"
                 variant="outline"
                 :loading="isDeploying"
@@ -221,7 +214,6 @@ const props = withDefaults(
 );
 
 defineEmits<{
-    (event: 'validate'): void;
     (event: 'apply-only'): void;
     (event: 'deploy'): void;
 }>();

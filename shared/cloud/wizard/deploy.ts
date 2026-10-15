@@ -425,7 +425,7 @@ export async function deployAnswers(
             'Open http://localhost:3000 in your browser.',
         ];
         if (answers.ssrAuthEnabled) {
-            nextSteps.push('Sign in with your bootstrap/admin account.');
+            nextSteps.push('Sign in with the admin email and password from setup.');
             nextSteps.push('Open the admin panel and verify providers are healthy.');
         }
         if (answers.connectEnabled) {
@@ -445,7 +445,7 @@ export async function deployAnswers(
 
     const nextSteps = ['Open http://localhost:3000 in your browser.'];
     if (answers.ssrAuthEnabled) {
-        nextSteps.push('Sign in with your bootstrap/admin account.');
+        nextSteps.push('Sign in with the admin email and password from setup.');
         nextSteps.push('Open the admin panel and verify auth/sync/storage status.');
     }
     if (answers.connectEnabled) {

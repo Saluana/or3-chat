@@ -338,10 +338,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         {
             id: 'preset',
             title: 'Starting Template',
-            description:
-                'Pick a setup path.\n' +
-                'Preset templates auto-configure providers and skip manual provider selection.\n' +
-                'Custom keeps full manual provider selection.',
+            description: 'Pick a setup path.',
             fields: [
                 {
                     key: 'wizardMode',

@@ -290,9 +290,7 @@ describe('or3 cloud wizard validation', () => {
         const providerStep = steps.find((step) => step.id === 'providers');
 
         expect(presetStep?.title).toBe('Starting Template');
-        expect(presetStep?.description).toContain(
-            'Preset templates auto-configure providers and skip manual provider selection'
-        );
+        expect(presetStep?.description).toBe('Pick a setup path.');
 
         const presetLabels = (presetStep?.fields[0]?.options ?? []).map(
             (option) => option.label

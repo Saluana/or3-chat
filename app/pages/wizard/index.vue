@@ -115,7 +115,6 @@
                         @update-field="onUpdateField"
                         @generate-secret="onGenerateSecret"
                         @test-connection="onTestConnection"
-                        @validate="onValidate"
                         @apply-only="onApplyOnly"
                         @deploy="onDeploy"
                     />
@@ -203,7 +202,6 @@ const {
     goToNextStep,
     goToPreviousStep,
     testConnectionForCurrentStep,
-    runValidation,
     applyOnly,
     deploy,
 } = useWizardSession();
@@ -279,10 +277,6 @@ function onGoPrevious(): void {
 
 function onTestConnection(): void {
     void testConnectionForCurrentStep();
-}
-
-function onValidate(): void {
-    void runValidation();
 }
 
 function onApplyOnly(): void {
