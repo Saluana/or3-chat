@@ -1,7 +1,11 @@
 <template>
     <section class="flex h-full min-h-0 flex-col" aria-label="Activity runs">
-        <header class="flex shrink-0 items-center gap-2 border-b border-[var(--md-outline-variant)] px-3 py-3">
-            <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-1" aria-label="Activity filters">
+        <header class="flex shrink-0 items-center gap-2 border-b border-[var(--md-outline-variant)] px-3 py-2.5">
+            <div
+                class="scrollbar-hidden flex min-w-0 flex-1 gap-1 overflow-x-auto"
+                role="group"
+                aria-label="Activity filters"
+            >
                 <UButton
                     v-for="option in filterOptions"
                     :key="option.id"
@@ -48,8 +52,8 @@
             v-else-if="!registry.listSources().length"
             class="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
         >
-            <UIcon name="lucide:unplug" class="size-8 text-[var(--md-outline)]" />
-            <p class="text-sm font-medium">Activity sources disconnected</p>
+            <UIcon name="lucide:unplug" class="size-8 text-[var(--md-on-surface-variant)]" />
+            <p class="text-sm font-medium text-[var(--md-on-surface)]">Activity sources disconnected</p>
             <p class="text-xs text-[var(--md-on-surface-variant)]">
                 Enable workflows or background processing to see activity.
             </p>
@@ -59,32 +63,33 @@
             v-else-if="!runs.length"
             class="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
         >
-            <UIcon name="lucide:activity" class="size-8 text-[var(--md-outline)]" />
-            <p class="text-sm font-medium">No {{ filterLabel.toLowerCase() }} activity</p>
+            <UIcon name="lucide:activity" class="size-8 text-[var(--md-on-surface-variant)]" />
+            <p class="text-sm font-medium text-[var(--md-on-surface)]">No {{ filterLabel.toLowerCase() }} activity</p>
             <p class="text-xs text-[var(--md-on-surface-variant)]">
                 {{ filter === 'failed' ? 'Choose another filter to see completed or running work.' : 'New work will appear here automatically.' }}
             </p>
         </div>
 
-        <div v-else class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <div v-else class="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
             <button
                 v-for="run in runs"
                 :key="`${run.sourceId}:${run.id}`"
                 type="button"
                 :class="[
-                    'mb-1 w-full rounded-[var(--md-border-radius)] border px-2 py-2 text-left transition hover:border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-variant)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+                    'block w-full rounded-[var(--md-border-radius)] border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--md-primary)]',
                     selectedRecordId === runRecordId(run)
-                        ? 'border-[var(--md-primary)] bg-[var(--md-surface-variant)]'
-                        : 'border-transparent',
+                        ? 'border-[var(--md-outline-variant)] bg-[var(--md-surface-active,var(--md-surface-container-high))]'
+                        : 'border-transparent hover:bg-[var(--md-surface-hover,var(--md-surface-container))]',
                 ]"
                 :aria-pressed="selectedRecordId === runRecordId(run)"
                 @click="openRun(run.sourceId, run.id)"
             >
                 <div class="flex items-start justify-between gap-2">
-                    <span class="line-clamp-2 text-sm font-medium text-[var(--md-on-surface)]">
+                    <span class="line-clamp-2 min-w-0 break-words text-sm font-medium text-[var(--md-on-surface)]">
                         {{ run.title }}
                     </span>
                     <UBadge
+                        class="shrink-0 whitespace-nowrap"
                         size="xs"
                         :color="statusColor(run.status)"
                         variant="soft"
@@ -95,12 +100,12 @@
                 <p v-if="run.summary" class="mt-1 line-clamp-2 text-xs text-[var(--md-on-surface-variant)]">
                     {{ run.summary }}
                 </p>
-                <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-[var(--md-outline)]">
-                    <span>{{ sourceLabel(run.sourceId) }}</span>
-                    <time :datetime="run.updatedAt">
+                <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-[var(--md-on-surface-variant)]">
+                    <span class="min-w-0 truncate">{{ sourceLabel(run.sourceId) }}</span>
+                    <time class="shrink-0 tabular-nums" :datetime="run.updatedAt">
                         {{ relativeTime(run.updatedAt) }}
                         <template v-if="run.status === 'running'">
-                            · {{ elapsed(run.startedAt) }}
+                            · {{ elapsed(run.startedAt) }} elapsed
                         </template>
                     </time>
                 </div>
@@ -228,10 +233,10 @@ function statusColor(status: ActivityRunStatus) {
 
 function relativeTime(value: string): string {
     const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000));
-    if (seconds < 60) return 'now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-    if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
-    return `${Math.floor(seconds / 86_400)}d`;
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86_400)}d ago`;
 }
 
 function elapsed(value: string): string {

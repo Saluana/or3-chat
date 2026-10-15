@@ -42,7 +42,7 @@
                         class="color-list-item"
                         :class="{ active: color.key === activeColorKey }"
                         :aria-pressed="color.key === activeColorKey"
-                        @click="activeColorKey = color.key"
+                        @click="selectColor(color.key)"
                     >
                         <span
                             class="color-list-swatch"
@@ -63,7 +63,9 @@
             </div>
 
             <section
+                ref="editorEl"
                 class="color-editor"
+                :class="{ pinned: editorPinned }"
                 aria-labelledby="active-color-heading"
             >
                 <header class="color-editor-header">
@@ -208,10 +210,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, watch } from 'vue';
+import { reactive, computed, onMounted, ref, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import { useClipboard } from '@vueuse/core';
+import { useClipboard, useResizeObserver } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import type { ColorKey } from './types';
 import {
@@ -237,6 +239,52 @@ interface PaletteColorGroup {
 
 const showAdvanced = ref(false);
 const activeColorKey = ref<ColorKey>('primary');
+const editorEl = ref<HTMLElement | null>(null);
+const scrollEl = ref<HTMLElement | null>(null);
+const editorPinned = ref(false);
+
+function findScrollParent(element: HTMLElement | null): HTMLElement | null {
+    let parent = element?.parentElement ?? null;
+    while (parent && !/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) {
+        parent = parent.parentElement;
+    }
+    return parent;
+}
+
+// A sticky editor taller than the scroll viewport hides its lower controls
+// and drifts against the list, so only pin it while it fits completely.
+function updateEditorPinning() {
+    const editor = editorEl.value;
+    const scroller = scrollEl.value;
+    editorPinned.value = Boolean(
+        editor && scroller && editor.offsetHeight + 24 <= scroller.clientHeight
+    );
+}
+
+onMounted(() => {
+    scrollEl.value = findScrollParent(editorEl.value);
+    updateEditorPinning();
+});
+useResizeObserver([editorEl, scrollEl], updateEditorPinning);
+
+function selectColor(key: ColorKey) {
+    activeColorKey.value = key;
+    const editor = editorEl.value;
+    const scroller = scrollEl.value;
+    if (!editor || !scroller || editorPinned.value) return;
+    // An unpinned editor can sit far from the clicked row (below the list on
+    // narrow screens), so bring it into view unless its top is already visible.
+    const top =
+        editor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    if (top >= 0 && top < scroller.clientHeight / 2) return;
+    editor.scrollIntoView({
+        block: 'start',
+        behavior:
+            document.documentElement.dataset.motionResolved === 'reduced'
+                ? 'auto'
+                : 'smooth',
+    });
+}
 
 const basicColorGroups: PaletteColorGroup[] = [
     {
@@ -856,6 +904,7 @@ watch(
 .color-editor {
     align-self: start;
     padding: 0.55rem 0;
+    scroll-margin-top: 0.75rem;
 }
 .color-editor-header {
     display: flex;
@@ -1084,10 +1133,12 @@ watch(
         align-items: start;
     }
     .color-editor {
-        position: sticky;
-        top: 0.75rem;
         padding-left: 1.25rem;
         border-left: var(--md-border-width) solid var(--theme-editor-border);
+    }
+    .color-editor.pinned {
+        position: sticky;
+        top: 0.75rem;
     }
 }
 </style>

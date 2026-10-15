@@ -87,7 +87,20 @@ const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
 
-const localBaseFontPx = ref(overrides.value.typography?.baseFontPx || 20);
+// Without an override, show the size the active theme actually renders.
+function themeBaseFontPx(): number {
+    if (!import.meta.client) return 16;
+    const value = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+            '--app-font-size-root'
+        )
+    );
+    return Number.isFinite(value) ? Math.round(value) : 16;
+}
+
+const localBaseFontPx = ref(
+    overrides.value.typography?.baseFontPx || themeBaseFontPx()
+);
 const legacyFontChoice = computed<UserFontChoice>(() =>
     overrides.value.typography?.useSystemFont ? 'system' : 'theme'
 );

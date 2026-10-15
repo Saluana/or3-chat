@@ -148,16 +148,11 @@ async function handleTabKeydown(
 </script>
 
 <style>
-.group-heading {
-    margin-top: -0.25rem;
-    letter-spacing: 0.08em;
-}
-.supporting-text {
-    font-size: 10px;
-    line-height: 1.35;
-    max-width: min(56ch, 100%);
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.7;
+/* Scoped to this page: unscoped rules here leaked into other dashboard pages once loaded. */
+#dashboard-theme-page-container .supporting-text {
+    font-size: 0.75rem;
+    line-height: 1.45;
+    max-width: min(64ch, 100%);
     overflow-wrap: break-word;
 }
 .theme-studio-tabs {
@@ -248,6 +243,13 @@ async function handleTabKeydown(
     }
     .theme-studio-tab {
         min-width: 0;
+        padding-inline: 0.5rem;
+        white-space: nowrap;
+    }
+    .theme-studio-tab > span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 @media (min-width: 760px) {

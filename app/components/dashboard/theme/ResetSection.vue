@@ -11,6 +11,10 @@
         >
             Reset
         </h2>
+        <p class="supporting-text">
+            Remove your customizations and return to the active theme's
+            defaults.
+        </p>
         <div class="flex flex-wrap gap-2">
             <UButton
                 v-bind="resetButtonProps"
@@ -29,7 +33,7 @@
             <UButton
                 v-bind="resetButtonProps"
                 color="error"
-                class="theme-reset-button px-3 py-2 text-xs"
+                class="theme-reset-button theme-reset-button--danger px-3 py-2 text-xs"
                 @click="openResetModal('all')"
             >
                 Reset all
@@ -150,6 +154,13 @@ const confirmReset = () => {
         var(--md-surface-container-high, var(--md-surface))
     ) !important;
     border-color: var(--md-primary) !important;
+}
+.theme-reset-button--danger,
+.theme-reset-button--danger:hover {
+    color: var(--md-error) !important;
+}
+.theme-reset-button--danger:hover {
+    border-color: var(--md-error) !important;
 }
 .theme-reset-button :deep([data-slot='label']) {
     color: inherit !important;

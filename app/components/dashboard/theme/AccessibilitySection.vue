@@ -15,8 +15,8 @@
             Focus thickness and motion preferences apply across light and dark
             modes.
         </p>
-        <div class="grid gap-3 sm:grid-cols-2">
-            <label class="grid gap-1">
+        <div class="grid gap-4">
+            <label class="grid gap-1.5">
                 <span class="text-xs font-medium">Focus ring thickness</span>
                 <span class="flex items-center gap-3">
                     <input
@@ -29,10 +29,10 @@
                         aria-label="Focus ring thickness"
                         @input="setFocusRingWidth"
                     />
-                    <output class="text-xs tabular-nums">{{ preferences.focusRingWidthPx }}px</output>
+                    <output class="w-8 text-right text-xs tabular-nums">{{ preferences.focusRingWidthPx }}px</output>
                 </span>
             </label>
-            <label class="grid gap-1">
+            <label class="grid gap-1.5">
                 <span class="text-xs font-medium">Motion</span>
                 <select
                     :value="preferences.motion"

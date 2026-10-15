@@ -29,52 +29,73 @@
       <header
         class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] p-4"
       >
-        <div
-          class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-        >
-          <div>
-            <div class="mb-1 flex flex-wrap items-center gap-2">
-              <UBadge :color="statusColor(detail.status)" variant="soft">
-                {{ activityStatusLabel(detail.status) }}
-              </UBadge>
-              <span class="text-xs text-[var(--md-on-surface-variant)]">
-                {{ sourceLabel }}
-              </span>
-            </div>
-            <details class="text-xs text-[var(--md-on-surface-variant)]"><summary>Activity details</summary><p>Kind: {{ detail.kind }} · Run: {{ detail.id }}</p></details>
-            <h1 class="text-lg font-semibold text-[var(--md-on-surface)]">
-              {{ detail.title }}
-            </h1>
-            <p
-              v-if="detail.summary"
-              class="mt-1 text-sm text-[var(--md-on-surface-variant)]"
-            >
-              {{ detail.summary }}
-            </p>
-          </div>
-          <div v-if="detail.actions.length" class="flex flex-wrap gap-2">
-            <UButton
-              v-for="action in detail.actions"
-              :key="action"
-              size="sm"
-              :color="
-                action === 'deny' || action === 'cancel' ? 'error' : 'primary'
-              "
-              :variant="action === 'open-source' ? 'ghost' : 'soft'"
-              :loading="pendingAction === action"
-              :disabled="Boolean(pendingAction)"
-              @click="runAction(action)"
-            >
-              {{ actionLabel(action) }}
-            </UButton>
-          </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <UBadge
+            class="whitespace-nowrap"
+            :color="statusColor(detail.status)"
+            variant="soft"
+          >
+            {{ activityStatusLabel(detail.status) }}
+          </UBadge>
+          <span class="text-xs text-[var(--md-on-surface-variant)]">
+            {{ sourceLabel }}
+          </span>
         </div>
-        <p v-if="actionError" class="mt-3 text-sm text-[var(--md-error)]">
+        <h2
+          class="mt-2 break-words text-lg font-semibold leading-snug text-[var(--md-on-surface)]"
+        >
+          {{ detail.title }}
+        </h2>
+        <p
+          v-if="detail.summary"
+          class="mt-1 text-sm text-[var(--md-on-surface-variant)]"
+        >
+          {{ detail.summary }}
+        </p>
+        <div v-if="detail.actions.length" class="mt-4 flex flex-wrap gap-2">
+          <UButton
+            v-for="action in detail.actions"
+            :key="action"
+            class="whitespace-nowrap"
+            size="sm"
+            :color="
+              action === 'deny' || action === 'cancel' ? 'error' : 'primary'
+            "
+            :variant="
+              action === 'approve'
+                ? 'solid'
+                : action === 'open-source'
+                  ? 'ghost'
+                  : 'soft'
+            "
+            :loading="pendingAction === action"
+            :disabled="Boolean(pendingAction)"
+            @click="runAction(action)"
+          >
+            {{ actionLabel(action) }}
+          </UButton>
+        </div>
+        <p
+          v-if="actionError"
+          class="mt-3 text-sm text-[var(--md-error)]"
+          role="alert"
+        >
           {{ actionError }}
         </p>
         <p v-if="streamError" class="mt-3 text-xs text-[var(--md-error)]">
           Live updates disconnected: {{ streamError }}
         </p>
+        <details class="mt-3 text-xs text-[var(--md-on-surface-variant)]">
+          <summary class="w-fit cursor-pointer select-none">
+            Technical details
+          </summary>
+          <dl class="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+            <dt>Kind</dt>
+            <dd class="break-all font-mono">{{ detail.kind }}</dd>
+            <dt>Run ID</dt>
+            <dd class="break-all font-mono">{{ detail.id }}</dd>
+          </dl>
+        </details>
       </header>
 
       <UAlert
@@ -86,17 +107,21 @@
       />
 
       <section v-if="detail.approvals?.length" class="space-y-2">
-        <h2 class="text-sm font-semibold">Approvals</h2>
+        <h3 class="text-sm font-semibold text-[var(--md-on-surface)]">Approvals</h3>
         <article
           v-for="approval in detail.approvals"
           :key="approval.id"
           class="rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/40 p-3"
         >
-          <div class="flex items-center justify-between gap-2">
-            <strong class="text-sm">{{ approval.title }}</strong>
-            <UBadge color="warning" variant="soft">{{
-              approval.status
-            }}</UBadge>
+          <div class="flex items-start justify-between gap-2">
+            <strong class="min-w-0 break-words text-sm">{{ approval.title }}</strong>
+            <UBadge
+              class="shrink-0 whitespace-nowrap"
+              :color="approvalColor(approval.status)"
+              variant="soft"
+            >
+              {{ capitalize(approval.status) }}
+            </UBadge>
           </div>
           <p
             v-if="approval.description"
@@ -108,32 +133,35 @@
       </section>
 
       <section v-if="detail.artifacts?.length" class="space-y-2">
-        <h2 class="text-sm font-semibold">Artifacts</h2>
+        <h3 class="text-sm font-semibold text-[var(--md-on-surface)]">Artifacts</h3>
         <div class="grid gap-2 sm:grid-cols-2">
           <a
             v-for="artifact in detail.artifacts"
             :key="artifact.id"
             :href="artifact.href"
-            class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] p-3 hover:bg-[var(--md-surface-variant)]"
+            class="flex items-center justify-between gap-2 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] p-3 transition-colors hover:bg-[var(--md-surface-hover,var(--md-surface-container))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
           >
-            <span class="text-sm font-medium">{{ artifact.label }}</span>
-            <span class="ml-2 text-xs text-[var(--md-outline)]">{{
-              artifact.kind
+            <span class="min-w-0 truncate text-sm font-medium">{{
+              artifact.label
             }}</span>
+            <span
+              class="shrink-0 text-xs uppercase tracking-wide text-[var(--md-on-surface-variant)]"
+              >{{ artifact.kind }}</span
+            >
           </a>
         </div>
       </section>
 
       <section v-if="detail.output" class="space-y-2">
-        <h2 class="text-sm font-semibold">Output</h2>
+        <h3 class="text-sm font-semibold text-[var(--md-on-surface)]">Output</h3>
         <pre
-          class="max-h-96 overflow-auto whitespace-pre-wrap rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3 text-sm"
+          class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3 text-sm"
           >{{ detail.output }}</pre
         >
       </section>
 
       <section class="space-y-2">
-        <h2 class="text-sm font-semibold">Timeline</h2>
+        <h3 class="text-sm font-semibold text-[var(--md-on-surface)]">Timeline</h3>
         <div
           v-if="!timelineEvents.length"
           class="rounded-[var(--md-border-radius)] border border-dashed border-[var(--md-outline-variant)] p-6 text-center text-sm text-[var(--md-on-surface-variant)]"
@@ -147,14 +175,16 @@
             class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
           >
             <div class="flex items-center justify-between gap-3">
-              <span class="text-xs font-semibold uppercase tracking-wide">
+              <span
+                class="text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface)]"
+              >
                 {{ event.type }}
               </span>
               <time
-                class="text-xs text-[var(--md-outline)]"
+                class="shrink-0 text-xs tabular-nums text-[var(--md-on-surface-variant)]"
                 :datetime="event.occurredAt"
               >
-                {{ new Date(event.occurredAt).toLocaleString() }}
+                {{ formatEventTime(event.occurredAt) }}
               </time>
             </div>
             <p
@@ -291,9 +321,29 @@ function statusColor(status: ActivityRunStatus) {
   return "neutral";
 }
 
+function approvalColor(status: string) {
+  if (status === "approved") return "success";
+  if (status === "denied") return "error";
+  if (status === "cancelled") return "neutral";
+  return "warning";
+}
+
+function capitalize(value: string): string {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function formatEventTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return sameDay
+    ? date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" })
+    : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 function actionLabel(action: ActivityRunAction): string {
   if (action === "open-source") return "Open source";
-  return `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
+  return capitalize(action);
 }
 
 function eventText(event: ActivityEvent): string {
