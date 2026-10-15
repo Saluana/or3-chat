@@ -1,8 +1,8 @@
 <template>
     <section class="flex h-full min-h-0 flex-col" aria-label="Activity runs">
-        <header class="flex shrink-0 items-center gap-2 border-b border-[var(--md-outline-variant)] px-3 py-2.5">
+        <header class="flex shrink-0 items-start gap-2 border-b border-[color:var(--md-border-color)] px-3 py-2.5">
             <div
-                class="scrollbar-hidden flex min-w-0 flex-1 gap-1 overflow-x-auto"
+                class="flex min-w-0 flex-1 flex-wrap gap-1"
                 role="group"
                 aria-label="Activity filters"
             >

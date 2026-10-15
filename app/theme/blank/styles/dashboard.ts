@@ -38,7 +38,8 @@ export const dashboardOverrides = {
 export const dashboardStyles = {
     '#dashboard-page-header': {
         style: {
-            borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color) !important',
+            // Blank zeroes the subtle divider width, which erased this seam. Match the modal title bar above it.
+            borderBottom: 'var(--md-border-width) solid var(--md-border-color) !important',
         },
     },
     '.dashboard-page-scroll': {

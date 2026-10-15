@@ -345,7 +345,7 @@
 }
 
 [data-theme="blank"] #dashboard-page-header {
-  border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color) !important;
+  border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
 [data-theme="blank"] .dashboard-page-scroll {

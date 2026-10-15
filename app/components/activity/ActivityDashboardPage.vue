@@ -5,7 +5,7 @@
     >
         <aside
             :class="[
-                'min-h-0 md:border-r md:border-[var(--md-outline-variant)]',
+                'min-h-0 md:border-r md:border-[color:var(--md-border-color)]',
                 selectedRecordId ? 'hidden md:block' : 'block',
             ]"
         >
@@ -44,7 +44,7 @@
 
             <template v-else>
                 <div
-                    class="shrink-0 border-b border-[var(--md-outline-variant)] px-2 py-2 md:hidden"
+                    class="shrink-0 border-b border-[color:var(--md-border-color)] px-2 py-2 md:hidden"
                 >
                     <UButton
                         size="sm"
