@@ -136,6 +136,16 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             ));
             const initial = await geometry();
             await testInfo.attach('before-javascript', { body: await page.screenshot({ path: testInfo.outputPath('before-javascript.png') }), contentType: 'image/png' });
+            // Endpoint snapshots miss a flash between Nuxt plugin startup and mount.
+            await page.evaluate(() => {
+                const frames: Array<{ dark: boolean; classes: string }> = [];
+                (window as typeof window & { __startupColorFrames?: typeof frames }).__startupColorFrames = frames;
+                const sample = () => {
+                    frames.push({ dark: document.documentElement.classList.contains('dark'), classes: document.documentElement.className });
+                    if (!(window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__) requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
             resumeScripts();
             await page.waitForFunction(() => (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true);
             await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
@@ -150,6 +160,10 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             });
             expect(initial.dark, 'saved color scheme applies before JavaScript bundles').toBe(mode === 'dark');
             expect(ready.dark).toBe(initial.dark);
+            const colorFrames = await page.evaluate(() => (window as typeof window & { __startupColorFrames?: Array<{ dark: boolean; classes: string }> }).__startupColorFrames ?? []);
+            await testInfo.attach('hydration-color-frames', { body: Buffer.from(JSON.stringify(colorFrames, null, 2)), contentType: 'application/json' });
+            expect(colorFrames.length).toBeGreaterThan(0);
+            expect(colorFrames.filter(frame => frame.dark !== initial.dark), 'saved color scheme stays stable throughout hydration').toEqual([]);
             expect(ready.background, 'the surface color must not flash during hydration').toBe(initial.background);
             for (const part of ['composer', 'editor', 'settings', 'navigation'] as const) {
                 expect(initial[part], `${part} is present before JavaScript`).not.toBeNull();

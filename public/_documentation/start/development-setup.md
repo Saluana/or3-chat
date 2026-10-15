@@ -188,6 +188,8 @@ workspace, with an inert preview while local tabs load. The composer renders its
 placeholder and Settings control before the editor mounts, preserving their final
 geometry. Nuxt's early color-mode script reads the theme runtime's `theme` preference,
 so a saved light or dark choice applies before the application bundles download.
+The theme runtime preserves that pre-paint class while Nuxt hydrates its preference;
+startup checks also sample rendered frames to catch a transient color-mode flash.
 Desktop tab controls load when needed, and the mobile tab switcher loads on its
 first opening and stays mounted for subsequent opens and closing transitions.
 `PW_SKIP_WEB_SERVER=true bun run performance:browser:check --grep 'mobile startup' --workers=1`

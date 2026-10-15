@@ -291,7 +291,11 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     const read = () => {
-        const scheme = localStorage.getItem(storageKey);
+        // Nuxt temporarily writes its SSR preference to storage while unknown.
+        // Keep the pre-paint script's resolved class until hydration restores it.
+        const scheme = colorMode.unknown
+            ? THEME_CLASSES.find(name => root.classList.contains(name))
+            : localStorage.getItem(storageKey);
         return scheme && THEME_CLASSES.includes(scheme) ? scheme : null;
     };
     const readActiveTheme = () =>
