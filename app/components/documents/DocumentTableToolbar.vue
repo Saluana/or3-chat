@@ -37,10 +37,12 @@ const props = defineProps<{
 const emit = defineEmits<{ deleted: [] }>();
 
 function run(command: TableCommand): void {
+    if (!props.editor.isEditable) return;
     props.editor.chain().focus()[command]().run();
 }
 
 function deleteTable(): void {
+    if (!props.editor.isEditable) return;
     props.editor.chain().focus().deleteTable().run();
     emit('deleted');
 }

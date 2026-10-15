@@ -36,7 +36,7 @@
                     @update:model-value="setWidth"
                 />
             </label>
-            <UButton color="error" variant="ghost" size="sm" label="Remove" aria-label="Remove image" @click="deleteNode" />
+            <UButton color="error" variant="ghost" size="sm" label="Remove" aria-label="Remove image" @click="removeImage" />
         </div>
     </NodeViewWrapper>
 </template>
@@ -106,12 +106,18 @@ onBeforeUnmount(() => {
 });
 
 function setAlt(event: Event) {
+    if (!props.editor.isEditable) return;
     props.updateAttributes({ alt: (event.target as HTMLInputElement).value });
 }
 
 function setWidth(value: number | number[] | undefined) {
+    if (!props.editor.isEditable) return;
     const width = Array.isArray(value) ? value[0] : value;
     if (typeof width === 'number') props.updateAttributes({ width });
+}
+
+function removeImage() {
+    if (props.editor.isEditable) props.deleteNode();
 }
 </script>
 
@@ -147,11 +153,11 @@ function setWidth(value: number | number[] | undefined) {
 .image-controls {
     position: absolute;
     z-index: 2;
-    inset-inline: 0;
+    left: 50%;
     bottom: 0.75rem;
     width: max-content;
-    max-width: calc(100% - 1.5rem);
-    margin-inline: auto;
+    max-width: min(32rem, calc(100cqw - 2rem));
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -164,9 +170,13 @@ function setWidth(value: number | number[] | undefined) {
 
 .image-controls label:first-child {
     width: min(15rem, 42vw);
+    min-width: 0;
 }
 
 .image-size {
     width: min(9rem, 28vw);
+    min-width: 4rem;
 }
+
+.image-controls :deep(button) { flex-shrink: 0; }
 </style>
