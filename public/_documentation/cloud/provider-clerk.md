@@ -17,6 +17,12 @@ Login as the same full-width row used by Connect and the System actions. The
 signed-in Account row opens the Clerk user profile; rail usage keeps the compact
 avatar trigger.
 
+Client token requests are deduplicated per Clerk session and template. Account
+switches do not reuse an earlier session's pending token; session recovery
+succeeds only when Clerk returns a nonempty token. The token, recovery, status,
+and logout adapters activate only when SSR auth selects Clerk. Merely loading
+its module does not install those adapters for another auth provider.
+
 ## Install
 
 From npm:

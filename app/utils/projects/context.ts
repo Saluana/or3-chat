@@ -287,7 +287,7 @@ export async function buildProjectContext(
         const meta = revision.original_hash
             ? await scope.db.file_meta.get(revision.original_hash)
             : undefined;
-        if (meta && isSupportedRasterMimeType(meta.mime_type)) {
+        if (meta?.kind === 'image' && isSupportedRasterMimeType(meta.mime_type)) {
             if (!supportsImages) {
                 if (required)
                     throw projectInputError(

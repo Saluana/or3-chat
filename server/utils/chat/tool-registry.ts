@@ -253,6 +253,22 @@ export async function executeServerTool(
         tool.timeoutMs
     );
 
+    // Both returned text and thrown errors may contain retrieved content.
+    // Withhold either when authority changed while the handler was running.
+    if (context) {
+        try {
+            const { assertServerProjectExecutionSupported } = await import('./project-policy');
+            await assertServerProjectExecutionSupported(context);
+        } catch (error) {
+            return {
+                result: null,
+                toolName,
+                error: toolExecutionErrorMessage(error),
+                timedOut: execution.timedOut,
+                runtime: tool.runtime,
+            };
+        }
+    }
     if (execution.error) {
         return {
             result: null,

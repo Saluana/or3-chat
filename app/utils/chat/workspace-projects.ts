@@ -1,4 +1,4 @@
-import { readProjectPolicy, saveProjectSettings } from '~/db/project-workspace';
+import { chatOwnerIn, moveChatProjectRows, notifyChatProjectMove, readProjectPolicy, saveProjectSettings } from '~/db/project-workspace';
 import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 import type { Project } from '~/db/schema';
 import { prepareProjectWrite } from '~/db/projects';
@@ -128,6 +128,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     if (prepared.row.id !== proposed.id || prepared.row.deleted) throw new Error('A project hook changed the operation target.');
     scope.assertCurrent('write');
     let saved = prepared.row;
+    let moved: Awaited<ReturnType<typeof moveChatProjectRows>> | undefined;
     await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta', 'messages'], includeTombstones: true }), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
@@ -135,6 +136,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         scope.assertCurrent('write');
         if (base) assertProjectUnchanged(current, base);
         else if (current) throw new Error('This project execution was already committed. Retry to read its receipt.');
+        let moveChat = false;
         if (item) {
             const currentItem = item.kind === 'chat' ? await scope.db.threads.get(item.id) : await scope.db.posts.get(item.id);
             scope.assertCurrent('write');
@@ -146,28 +148,22 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
                 scope.assertCurrent('write');
                 if (!meta || meta.deleted) throw new Error('That file is unavailable.');
             }
-            if (item.kind === 'chat' && operation === 'add_item') {
+            if (item.kind === 'chat') {
                 const chat = await scope.db.threads.get(item.id);
-                if (chat) {
-                    for (const other of await scope.db.projects.toArray()) {
-                        if (other.deleted || other.id === proposed.id) continue;
-                        const entries = preservedProjectEntries(other.data);
-                        const next = entries.filter(entry => projectEntryIdentity(entry) !== `chat:${item!.id}`);
-                        if (next.length !== entries.length) await scope.db.projects.put({ ...other, data: next, updated_at: nowSec(), clock: nextClock(other.clock) });
-                    }
-                    await scope.db.threads.put({ ...chat, project_id: proposed.id, clock: nextClock(chat.clock), updated_at: nowSec() });
-                }
-            }
-            // Remove the supported legacy pointer as well, so filtering doesn't resurrect the association.
-            if (item.kind === 'chat' && operation === 'remove_item') {
-                const chat = await scope.db.threads.get(item.id);
-                scope.assertCurrent('write');
-                if (chat?.project_id === proposed.id) await scope.db.threads.put({ ...chat, project_id: null, clock: nextClock(chat.clock), updated_at: nowSec() });
+                moveChat = operation === 'add_item' || !!chat &&
+                    chatOwnerIn(chat, await scope.db.projects.toArray()) === proposed.id;
             }
         }
         scope.assertCurrent('write');
-        saved = { ...prepared.row, clock: base ? nextClock(base.clock) : prepared.row.clock };
+        // The canonical move owns chat membership. Keep its original snapshot
+        // until it resolves legacy ownership, then retain its whole-family result.
+        saved = { ...prepared.row, ...(moveChat ? { data: current!.data } : {}),
+            clock: base ? nextClock(base.clock) : prepared.row.clock };
         await scope.db.projects.put(saved);
+        if (moveChat && item) {
+            moved = await moveChatProjectRows(scope, item.id, operation === 'add_item' ? proposed.id : null, { family: true });
+            saved = (await scope.db.projects.get(proposed.id))!;
+        }
         if (operation === 'set_description') {
             const policy = await readProjectPolicy(scope.db, saved.id);
             await saveProjectSettings(scope, saved.id, { ...policy.settings, brief: saved.description ?? '' }, policy.settingsRow ?? null);
@@ -175,6 +171,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         }
         scope.assertCurrent('write');
     });
+    if (moved) await notifyChatProjectMove(moved);
     try { await prepared.afterCommit(saved); } catch (error) { console.warn('Project saved; after-write hook failed.', error); }
     const loaded = await readWorkspaceItem(scope, { kind: 'project', id: saved.id });
     return JSON.stringify({ version: 1, workspaceId: scope.workspaceId, source: loaded.source, status: 'saved', operation });

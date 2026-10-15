@@ -17,6 +17,16 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 - A 256 KB serialized payload ceiling per sync operation, shared with the core
   gateway and other providers.
 
+SQLite can also supply durable rate limits independently of the workspace
+backend. With SSR auth enabled, `OR3_LIMITS_ENABLED=true` and
+`OR3_LIMITS_STORAGE_PROVIDER=sqlite` activate and migrate its store even when
+another backend supplies account workspaces. The source wizard includes its
+module, runtime settings, and driver dependency in that configuration.
+
+Bounded retained-metadata pages advertise `retainedStorageMetadata: 'v1'` on
+native SQLite and D1. They read materialized deleted file rows, preserve unknown
+sizes for delete-before-put records, and never infer liveness from sync history.
+
 ## Install
 
 ```bash

@@ -99,6 +99,84 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    // Shared store state must not let a stale split pane replace another pane's
+    // committed content, or acknowledge an independently changed editor buffer.
+    it.each(['clean', 'dirty', 'retained'] as const)('keeps a %s same-document split pane safe after its peer saves', async (mode) => {
+        const { dbA, idA, idB, editor: firstEditor, currentEditor } = await mountedWorkspaces();
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        let peer = shallowMount(DocumentEditorRoot, {
+            props: { documentId, paneId: 'peer-pane', tabId: 'peer-tab' },
+            global: { directives: { theme: () => {} }, stubs: {
+                UTextarea: Title, USelect: true, UDropdownMenu: true, UFormField: true, USwitch: true,
+            } },
+        });
+        try {
+            await vi.waitFor(() => expect(peer.emitted('ready')).toEqual([[documentId]]));
+            let peerEditor = currentEditor();
+            const first = getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!;
+            let second = getDocumentEditorSession({ paneId: 'peer-pane', tabId: 'peer-tab' })!;
+            firstEditor.commands.setContent(content('First pane committed body'), { emitUpdate: true });
+            if (mode !== 'clean') {
+                peerEditor.commands.setTextSelection(peerEditor.state.doc.content.size - 1);
+                peerEditor.commands.insertContent(' with an independent draft');
+            }
+            await first.ensureLocalDurability();
+            if (mode === 'clean') {
+                await vi.waitFor(() => expect(peerEditor.getText()).toBe('First pane committed body'));
+                peerEditor.commands.setTextSelection(peerEditor.state.doc.content.size - 1);
+                peerEditor.commands.insertContent(' plus the second pane');
+                await second.ensureLocalDurability();
+                expect((await dbA.posts.get(documentId))?.content).toContain('First pane committed body plus the second pane');
+                await vi.waitFor(() => expect(firstEditor.getText()).toBe('First pane committed body plus the second pane'));
+            } else {
+                await expect(second.ensureLocalDurability()).rejects.toThrow(/another pane/i);
+                expect(peerEditor.getText()).toBe('A original body with an independent draft');
+                expect((await dbA.posts.get(documentId))?.content).toContain('First pane committed body');
+                expect(peer.get('[role="alert"]').text()).toContain('undo');
+                if (mode === 'retained') {
+                    setActiveWorkspaceDb(idB);
+                    peer.unmount(); wrapper!.unmount(); wrapper = undefined;
+                    await flushPromises();
+                    setActiveWorkspaceDb(idA);
+                    await releaseDocument(documentId, { flush: false });
+                    setActiveWorkspaceDb(idB);
+                    evictWorkspaceDb(idA);
+                    const reopened = setActiveWorkspaceDb(idA);
+                    peer = shallowMount(DocumentEditorRoot, {
+                        props: { documentId, paneId: 'restored-peer-pane', tabId: 'peer-tab' },
+                        global: { directives: { theme: () => {} }, stubs: {
+                            UTextarea: Title, USelect: true, UDropdownMenu: true, UFormField: true, USwitch: true,
+                        } },
+                    });
+                    await vi.waitFor(() => expect(peer.emitted('ready')).toEqual([[documentId]]));
+                    peerEditor = currentEditor();
+                    second = getDocumentEditorSession({ paneId: 'restored-peer-pane', tabId: 'peer-tab' })!;
+                    expect(peerEditor.getText()).toBe('A original body with an independent draft');
+                    expect(peer.get('[role="alert"]').text()).toContain('undo');
+                    expect((await reopened.posts.get(documentId))?.content).toContain('First pane committed body');
+                }
+                peerEditor.commands.undo();
+                await second.ensureLocalDurability();
+                expect(peerEditor.getText()).toBe('First pane committed body');
+                expect(peer.find('[role="alert"]').exists()).toBe(false);
+            }
+        } finally { peer.unmount(); await flushPromises(); }
+    });
+
+    it('saves the first edit in a newly created empty document without a false split conflict', async () => {
+        const { dbA, currentEditor } = await mountedWorkspaces();
+        const created = await createDocumentInDb(dbA);
+        await wrapper!.setProps({ documentId: created.id });
+        await vi.waitFor(() => expect(wrapper!.emitted('ready')).toContainEqual([created.id]));
+        currentEditor().commands.insertContent('First typed text');
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        const session = getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!;
+        await session.ensureLocalDurability();
+        expect((await dbA.posts.get(created.id))?.content).toContain('First typed text');
+        expect(wrapper!.find('[role="alert"]').exists()).toBe(false);
+        await releaseDocument(created.id, { flush: false });
+    });
+
     // Cold unavailable loads must not become blank editors or block tab-close
     // durability; restoring a cold Trash tab must hydrate the actual saved body.
     it.each(['trashed', 'missing'] as const)('keeps a cold %s document closable without pretending it loaded', async (availability) => {

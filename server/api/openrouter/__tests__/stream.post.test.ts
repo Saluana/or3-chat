@@ -790,6 +790,7 @@ describe('project memory classification proxy admission', () => {
     let classify: (event: H3Event) => Promise<unknown>;
     beforeAll(async () => { classify = (await import('../classify-memory.post')).default as typeof classify; });
     beforeEach(() => {
+        bodyReader.useActual = false;
         runtimeConfig = { auth: { enabled: true }, security: { proxy: {}, allowedOrigins: [] },
             openrouterApiKey: 'managed-fixture', openrouterAllowUserOverride: true, openrouterRequireUserKey: false,
             limits: { enabled: false } };
@@ -821,6 +822,19 @@ describe('project memory classification proxy admission', () => {
         requireCanMock.mockImplementation(() => { throw forbidden(403); });
         await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 403 });
         expect(fetch).not.toHaveBeenCalled();
+    });
+    it('rejects an oversized streamed memory envelope before buffering or inference', async () => {
+        bodyReader.useActual = true;
+        try {
+            // A valid state with oversized transport whitespace still has to
+            // obey the route's buffering ceiling, even without Content-Length.
+            const event = makeStreamedEvent([
+                Buffer.from(' '.repeat(300 * 1024)),
+                Buffer.from(JSON.stringify({ workspaceId: 'workspace-1', state: { memory: 'We chose SQLite.', messages: [] } })),
+            ]);
+            await expect(classify(event)).rejects.toMatchObject({ statusCode: 413 });
+            expect(fetch).not.toHaveBeenCalled();
+        } finally { bodyReader.useActual = false; }
     });
     it.each([
         { workspaceId: 'workspace-1', state: { memory: 'text', messages: [] }, model: 'attacker/model' },

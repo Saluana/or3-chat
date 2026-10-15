@@ -17,6 +17,7 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 - Deployment admin checker (verifies `admin_users` grants in Convex)
 - Private workspace host settings with atomic compare-and-set (plugin
   enablement, consent, access policy, setup revisions, AI spend ledger)
+- Private plugin connection credentials and revision-bound test evidence
 
 ## Install
 
@@ -51,9 +52,9 @@ backend-only values such as `CLERK_ISSUER_URL` and the shared
 `OR3_ADMIN_JWT_SECRET` are written with `bunx convex env set`.
 
 The server-only Convex admin credential is required whenever the Convex
-provider backs auth/session resolution, background jobs, notifications,
-webhooks, or rate limiting. Keep it out of public runtime config and browser
-bundles.
+provider backs auth/session resolution, storage, plugin connections, background
+jobs, notifications, webhooks, or rate limiting. Keep it out of public runtime
+config and browser bundles.
 
 For Clerk + Convex, you also need Clerk provider config:
 
@@ -158,6 +159,24 @@ reviews, access policy, migration state, and guest access are never copied and
 require fresh trusted writes/approval. See
 [Plugin access policy](/documentation/cloud/plugin-access-gating) for the consent model.
 
+## Persistent provider services
+
+Plugin connections use private Convex tables for encrypted credential records,
+revision compare-and-set updates, and revision-bound test evidence. Only trusted
+host-server calls can use these internal functions; browser tokens cannot read
+credentials. Workspace removal clears its connection records and evidence.
+Deploy the matching schema and `pluginConnections.ts` with the rebuilt provider.
+
+Rate limits and background jobs can select Convex independently of workspace
+sync or storage. Selecting either activates URL and backend compatibility checks.
+Configured Convex rate limits require the admin credential and backend; failures
+return an error rather than granting requests through process-local counters.
+Background admission recovery uses a user-bound idempotency-key lookup.
+
+Bounded retained-metadata queries advertise `retainedStorageMetadata: 'v1'` and
+read deleted materialized file rows for accounting; unknown sizes stay unknown.
+This contract does not authorize physical cleanup for external storage.
+
 ## Runtime Registration
 
 Main entrypoint:
@@ -214,6 +233,10 @@ Nuxt gateway and invokes the deployment directly:
   ceiling for each operation.
 - Sync GC entry points are internal-only, bounded, and require the verified
   `snapshot-v1` retention contract.
+- Native storage signing, commit, cancellation, deletion, and GC are
+  internal-only. The browser uses the host storage gateway, which enforces
+  file admission, quota configuration, and admin-only GC before dispatch.
+  Update the matching backend functions with the provider package.
 - Gateway object deletion verifies workspace membership, matches any supplied
   storage ID to canonical file metadata, refuses live references, and is a
   successful no-op when retried after deletion.
@@ -252,14 +275,24 @@ edges from `messages.file_hashes` and `posts.file_hashes` with opaque,
 filter-bound cursors and a 500-record hard cap. Workspace quota, filesystem
 garbage collection, and blob lifecycle consume these views directly; retained
 `change_log` entries are never used to infer liveness. Active reservation pages
-are an explicit empty view until upload-intent persistence is enabled. Gateway
-clients advertise the typed file-kind `v1` capability; the host returns HTTP
+read persisted, unexpired upload intents. Gateway clients advertise the typed
+file-kind `v1` capability; the host returns HTTP
 426 with update guidance before a generic file record crosses an older reader
 or writer boundary.
 
 Convex download URLs are issued only for a workspace member whose canonical
 `file_meta` row is live and has a storage ID. Soft-deleted or pending metadata
 returns no URL, including when an older bare SHA-256 hash form is requested.
+Downloads stream through an authenticated host route with user-bound signed
+URLs (five-minute default, fifteen-minute maximum). Each request rechecks the
+session, workspace membership, and canonical file identity, and applies the
+canonical MIME, disposition, sanitized filename, and private/no-store headers.
+Downloads require the server-only admin credential. Deploy the matching
+`storage.ts` backend: `storage:getFileUrl` is now internal-only, and permanent
+native Convex URLs are never returned to the browser.
+Native URLs issued by older provider builds remain usable until the stored file
+is deleted; upgrading the provider does not revoke those historical links. See
+[Convex's file storage security model](https://docs.convex.dev/file-storage/overview).
 
 ## Workspace Files, Trash, and storage deletion
 
@@ -297,8 +330,8 @@ When Convex sync is enabled, `VITE_CONVEX_URL` is required in strict mode.
 
 Internal server persistence cannot be invoked without
 `CONVEX_SELF_HOSTED_ADMIN_KEY`. Background jobs, notifications, and webhook
-storage fail closed; the rate-limit provider uses its existing in-memory
-fallback.
+storage and rate-limit enforcement fail closed. Select the `memory` limits
+provider explicitly when process-local counters are intended.
 
 ### Clerk not installed for Clerk auth + Convex
 

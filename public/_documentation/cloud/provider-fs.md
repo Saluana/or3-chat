@@ -52,6 +52,18 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
 
+## Upload reservations and retries
+
+With a sync backend that supplies both upload-intent reservation and consumption,
+FS reserves before returning an upload URL and consumes the matching receipt
+before publishing its commit sidecar. A backend supplying only half the contract
+fails closed. A configured workspace quota requires that complete contract;
+without it, presigning returns 503 rather than promising atomic quota admission.
+Commit validates the canonical storage identity and actual file size. Exact
+consumption replay lets a retry recover from sidecar-write failure within the
+original reservation lifetime. Expired transfers need a new presign/reservation;
+different hash, MIME, size, workspace, or storage identity is rejected.
+
 ## Operational Notes
 
 - Place `OR3_STORAGE_FS_ROOT` on persistent storage.
@@ -73,7 +85,8 @@ active/deleted blobs, incomplete transfers, sidecars, unclassified files and
 allocated filesystem blocks. Results are bounded, non-atomic observations:
 inspect completion flags, nullable values and warnings before interpreting them.
 No category is a deletion candidate list. Logical Trash can reduce logical quota
-without reclaiming disk bytes.
+without reclaiming disk bytes. Missing or foreign storage identities keep
+filesystem bytes unclassified, including legacy metadata without a storage ID.
 
 Retained metadata accounting requires the sync provider's
 `retainedStorageMetadata: 'v1'` capability. Older providers keep that field

@@ -63,6 +63,7 @@ Project family headers use an original chat's title and actions only when that o
 
 -   Store structured per-project state inside `data`; use hooks to enforce schema or migrate old versions.
 -   Project deletion removes policy/bindings and detaches chats atomically while retaining the underlying work. Hard deletion also purges internal project records.
+-   Notifications run after deletion commits. A failing extension notification is reported without turning a completed deletion into a failed operation.
 
 ## Persistent workspace records
 
@@ -150,6 +151,17 @@ edits prepare hooks before opening the transaction and emit notifications after
 the entire batch commits. Entry-title synchronization reads and writes fresh rows
 in the same transaction and advances their clocks.
 
+Membership edits compare both the captured clock and membership data, so a
+same-clock sync replacement cannot be overwritten. Legacy membership identity
+uses the same trimmed IDs and normalized kinds as project indexing. Title
+synchronization changes only the matching item kind; a document and chat with
+the same ID remain separate. Internal record saves refuse deleted rows even
+when a remote tombstone retained the editor's clock and content.
+
+Workspace project tools use the same atomic family moves as membership editors.
+Adding a chat moves its branch family; removing one releases only family members
+owned by that project and preserves branches owned elsewhere.
+
 Source writes reject a second active binding to the same item within one project,
 including replacement collisions. An existing unavailable source can still be
 switched to **Do not use** without changing its identity or history. Existing
@@ -234,6 +246,11 @@ historical revision repairs its extraction without promoting it over a newer
 current version; successful current or latest replacement processing can still
 advance the current source.
 
+Image intake and model context require the stored signature-validated image
+kind and a supported raster MIME. An upload's declared MIME alone cannot bypass
+text extraction or require a vision model; attachment hooks may change the bytes
+before their final classification.
+
 The registry supplies `ToolExecutionContext.assertToolAuthorized()` for host
 mutations. Native and legacy document creation/duplication, read/proposal receipt
 writes, project updates and send-to-thread invoke it inside their captured write
@@ -259,9 +276,17 @@ The Convex sandbox launcher uses the installed provider template by default too.
 Pass the same development flag to both launchers when using source templates;
 the application refuses a sandbox with a different qualification mode.
 Published SQLite 0.0.14 and Convex 0.0.11 lack the new canonical ownership
-marker. Ordinary browser chat remains usable; server execution refuses until a
-qualified provider release supplies that contract. Source checks alone do not
-close this dependency gap.
+marker. Ordinary browser chat remains usable; these providers cannot resolve
+legacy project folders for server execution. Source checks alone do not close
+this dependency gap.
+
+Server tools recheck canonical chat ownership and workspace access before
+delivering returned text or handler errors. A chat moved into a project, deleted
+chat, or revoked membership withholds the handler output. Older providers
+without the ownership capability retain a warning-only fallback for legacy
+folder memberships; upgrade them before relying on server project isolation.
+Current SQLite and Convex source readers verify explicit owners are live in the
+same workspace and normalize legacy IDs and kinds consistently with the browser.
 
 ## Internal memory classification
 
@@ -289,6 +314,8 @@ UTF-8 JSON, roughly 60K tokens for ordinary English; it is not an exact token li
 Source messages can use the full aggregate budget rather than a 4,000-character cap.
 Saved memory entries and existing references retain their 4,000-character limit. The
 shared schemas validate the aggregate bound before dispatch and again at the SSR boundary.
+The HTTP endpoint rejects an envelope over 256 KiB before parsing JSON; its
+validated inference state remains bounded to 240 KiB.
 The fixed rubric adds a small amount of request overhead outside the state budget. Mixed-media messages contribute
 only text parts; image-only messages supply no visual evidence, even though Decider supports images.
 
@@ -322,6 +349,11 @@ The expected-clock transaction rechecks workspace authority, owning project, cha
 The existing workspace KV table holds `project-memory-cursor:<threadId>` with the processed project/index, committed atomically with memories. Reloads and repeated completion events do not reprocess successful batches. Failures never roll back messages or manual memories and do not schedule retries; a later completed turn can try a new bounded batch.
 
 ### Batch admission and recovery
+
+Capture counts only live records toward the 500-memory limit. It independently
+loads at most twenty dismissed references for semantic deduplication, so retained
+deletions cannot exhaust live capacity. Stable IDs and tombstones still prevent
+exact deleted captures from being recreated.
 
 Every capture request has a stable batch id: the SHA-256 of the workspace, both memory models, the project name and brief, the exact messages sent (id, role, text, fresh flag) and the existing references sent. Identical state gives an identical id in every tab and session, so a batch is admitted once before any model request:
 

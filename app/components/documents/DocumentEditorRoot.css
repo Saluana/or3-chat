@@ -1,7 +1,7 @@
 .document-editor-root { --editor-canvas: 780px; position: relative; container-type: inline-size; height: 100%; width: 100%; display: flex; flex-direction: column; overflow: hidden; color: var(--md-on-surface); background: var(--md-surface); font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); }
 
 .document-status-banner { display: flex; align-items: center; gap: 0.65rem; flex-shrink: 0; padding: 0.75rem 1rem; border-bottom: var(--md-border-width-subtle, 1px) solid var(--md-border-color); background: var(--md-surface-variant); color: var(--md-on-surface-variant); font-size: 0.875rem; line-height: 1.5; }
-.document-status-banner p { margin: 0; }
+.document-status-banner p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .document-status-icon { flex-shrink: 0; width: 1.25rem; height: 1.25rem; }
 .document-unavailable { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem; text-align: center; color: var(--md-on-surface-variant); }
 .document-unavailable h2 { margin: 0; color: var(--md-on-surface); font-size: 1.25rem; font-weight: 600; }
@@ -180,6 +180,7 @@
 
 .editor-layout { position: relative; flex: 1; min-height: 0; display: flex; }
 .editor-scroll { position: relative; flex: 1; min-width: 0; overflow-y: auto; scroll-behavior: smooth; }
+.document-content--readonly :deep(.image-controls) { display: none; }
 .document-canvas { position: relative; width: min(var(--editor-canvas), calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: clamp(2.5rem, 7cqw, 5.5rem) 0 12rem; }
 .document-title-field { width: 100%; }
 .document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-size: clamp(2rem, 5cqw, 3rem); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }

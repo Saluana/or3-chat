@@ -37,13 +37,17 @@ describe('rate-limit provider resolution', () => {
         });
     });
 
-    it('upgrades a temporary memory fallback after the shared provider registers', () => {
-        expect(getRateLimitProvider().name).toBe('memory');
+    it.each(['convex', 'sqlite'])(
+        'rejects an unavailable %s backend until its provider registers',
+        (provider) => {
+            mocks.storageProvider = provider;
+            expect(() => getRateLimitProvider()).toThrow(/not registered/);
 
-        mocks.registeredProvider = sharedProvider;
+            mocks.registeredProvider = sharedProvider;
 
-        expect(getRateLimitProvider()).toBe(sharedProvider);
-    });
+            expect(getRateLimitProvider()).toBe(sharedProvider);
+        }
+    );
 
     it('caches a registered shared provider once resolved', () => {
         mocks.registeredProvider = sharedProvider;

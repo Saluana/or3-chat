@@ -69,7 +69,10 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
     intent already allocated by a signer.
 5.  **Transfer**: The binary is uploaded directly to object storage.
 6.  **Commit**: The server rechecks actual object metadata/checksum and atomically
-    consumes the intent/reservation. Replays and mismatched subjects or metadata fail.
+    consumes the intent/reservation. Exact consumed-receipt replay can recover a
+    failed commit-marker write within the original authorization lifetime. After
+    expiry, transfer retries obtain a fresh presign and reservation; changed
+    subjects, metadata, or storage IDs fail.
 
 ### Download Flow
 1.  **Request**: UI components use `useObjectUrl(hash)` or explicit `queue.download(hash)`.
@@ -101,7 +104,16 @@ Viewers retain read access after a role downgrade. Tokens expire; deleting a
 canonical metadata row prevents new signing, but an already-issued filesystem
 token can still serve retained bytes until it expires or the object is removed.
 
-S3 and Convex downloads use provider URLs directly. An issued URL does not pass
+Convex downloads use user-bound host URLs with a five-minute default and a
+fifteen-minute maximum. Each retrieval rechecks the session, workspace
+membership, and live canonical storage identity before streaming bytes with
+canonical response headers. Native Convex URLs remain server-only. Like
+filesystem downloads, a stream already authorized can finish after access is
+revoked.
+Previously exposed native Convex URLs remain bearer links until the underlying
+file is deleted; the new host route does not revoke historical links.
+
+S3 downloads use provider URLs directly. An issued URL does not pass
 through the application authorization check again, so membership changes alone
 do not revoke it immediately. Treat these URLs as sensitive and account for the
 provider's URL lifetime. Downloaded offline copies and exported files are also
@@ -238,7 +250,11 @@ opaque-cursor pages for these views:
 - deleted materialized metadata when the provider advertises
   `capabilities.retainedStorageMetadata: 'v1'` (read-only accounting).
 
-Quota is the sum of canonical live metadata plus active reservations. If the active
+Quota is the sum of canonical live metadata plus unexpired upload authorization
+charges. SQLite keeps a consumed upload charged until its original expiry or
+canonical metadata admission and rejects consumed-receipt replay after expiry.
+It deduplicates pending charges by hash and admits
+reservations atomically on native SQLite and D1. If the active
 sync provider does not implement this query, quota enforcement fails closed instead
 of undercounting from incomplete history.
 
@@ -259,7 +275,7 @@ completion flags, and `consistency: "non_atomic_observation"`.
 - `canonical.retainedDeletedMetadataBytes` covers deleted materialized rows.
   An older provider or a delete-before-put row with unknown size yields unknown
   accounting (`null`), never an invented zero. Log pruning does not erase it.
-- `canonical.reservedUploadBytes` represents active upload reservations, not
+- `canonical.reservedUploadBytes` represents unexpired pending upload charges, not
   bytes proven present on disk.
 - Filesystem categories distinguish observed active blobs, retained deleted
   blobs, incomplete transfers, sidecars, and unclassified files.

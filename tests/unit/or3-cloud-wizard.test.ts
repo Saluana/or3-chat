@@ -191,6 +191,49 @@ describe('or3 cloud wizard validation', () => {
         ]);
     });
 
+    // An independent limits backend must be installed and configured even
+    // when it stores neither account workspaces nor object bytes.
+    it.each(['sqlite', 'convex'] as const)(
+        'prepares %s when selected only for rate limits',
+        (provider) => {
+            const answers: WizardAnswers = {
+                ...validRecommendedAnswers(),
+                syncProvider: provider === 'sqlite' ? 'convex' : 'sqlite',
+                limitsEnabled: true,
+                limitsStorageProvider: provider,
+                allAdvancedEnabled: true,
+                sqliteDriver: 'turso',
+                sqliteTursoUrl: 'libsql://limits.example.com',
+                sqliteTursoAuthToken: 'limits-database-token',
+                convexUrl: 'https://limits.convex.cloud',
+            };
+            const derived = deriveEnvFromAnswers(answers);
+            expect(derived.providerModules).toContain(`or3-provider-${provider}/nuxt`);
+            expect(derived.env.OR3_LIMITS_STORAGE_PROVIDER).toBe(provider);
+            const plan = createDependencyInstallPlan(answers);
+            expect(plan.packages).toContain(`or3-provider-${provider}`);
+            if (provider === 'sqlite') {
+                expect(derived.env.OR3_SQLITE_DRIVER).toBe('turso');
+                expect(derived.env.OR3_SQLITE_TURSO_URL).toBe(answers.sqliteTursoUrl);
+                expect(plan.packages).toContain('libsql');
+                expect(validateAnswers({ ...answers, sqliteTursoUrl: '' }).errors)
+                    .toContain('OR3_SQLITE_TURSO_URL is required for Turso.');
+            } else {
+                expect(derived.env.VITE_CONVEX_URL).toBe(answers.convexUrl);
+                expect(validateAnswers({ ...answers, convexUrl: '' }).errors)
+                    .toContain('VITE_CONVEX_URL is required when Convex provider is selected.');
+                expect(buildDeployPlan(answers).some((command) =>
+                    command.args.includes('or3-provider-convex')
+                )).toBe(true);
+            }
+            const inactive = { ...answers, limitsEnabled: false };
+            expect(deriveEnvFromAnswers(inactive).providerModules)
+                .not.toContain(`or3-provider-${provider}/nuxt`);
+            expect(createDependencyInstallPlan(inactive).packages)
+                .not.toContain(`or3-provider-${provider}`);
+        }
+    );
+
     it('does not include convex backend-only admin jwt env in wizard-owned updates', () => {
         const answers = {
             ...validRecommendedAnswers(),

@@ -75,7 +75,6 @@ async function openAllProjects(page: Page) {
         .click();
     await navigation
         .getByRole('button', { name: 'Projects', exact: true })
-        .filter({ hasText: 'View your projects' })
         .click();
 }
 async function openNoteComposer(page: Page) {
@@ -1189,8 +1188,7 @@ test('project A keeps its captured context while project B opens during streamin
     ).toBeVisible();
     await openAllProjects(page);
     await page
-        .getByRole('button', { name: /Basil isolation project/ })
-        .last()
+        .getByRole('button', { name: 'Basil isolation project', exact: true })
         .click();
     await expect(
         page.getByRole('heading', {
@@ -1357,8 +1355,7 @@ test('project chat keeps captured context and memory actions without an inline i
     // Saving a response is an explicit, reviewed operation with real message provenance.
     await openAllProjects(page);
     await page
-        .getByRole('button', { name: /Basil isolation project/ })
-        .last()
+        .getByRole('button', { name: 'Basil isolation project', exact: true })
         .click();
     const rememberAction = page
         .getByRole('group', { name: 'Message actions', exact: true })
@@ -1413,8 +1410,7 @@ test('project chat keeps captured context and memory actions without an inline i
     // Ownership changes update actions without reloading or following sidebar state.
     await openAllProjects(page);
     await page
-        .getByRole('button', { name: /Workspace fixture project/ })
-        .last()
+        .getByRole('button', { name: /^Workspace fixture project(?:\s|$)/ })
         .click();
     await openProjectSection(page, 'Settings');
     await page
@@ -1439,8 +1435,7 @@ test('project chat keeps captured context and memory actions without an inline i
     await expect(rememberAction).toBeVisible();
     await openAllProjects(page);
     await page
-        .getByRole('button', { name: /Basil isolation project/ })
-        .last()
+        .getByRole('button', { name: 'Basil isolation project', exact: true })
         .click();
     await expect(rememberAction).toBeVisible();
     await rememberAction.click();
@@ -1487,8 +1482,7 @@ test('project handoff keeps captured project context and supports evidence exclu
     expect(body).not.toContain('data:image/png');
     await openAllProjects(page);
     await page
-        .getByRole('button', { name: /Workspace fixture project/ })
-        .last()
+        .getByRole('button', { name: /^Workspace fixture project(?:\s|$)/ })
         .click();
     await openProjectSection(page, 'Memory');
     await expect(
