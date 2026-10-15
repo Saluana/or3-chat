@@ -1,7 +1,7 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
-        <div v-if="documentLoaded && state.status === 'error' && (state.pendingTitle !== undefined || state.pendingContent !== undefined)" class="document-status-banner" role="alert">
-            <p>Your changes have not been saved locally.</p>
+        <div v-if="documentLoaded && (paneConflict || state.status === 'error' && (state.pendingTitle !== undefined || state.pendingContent !== undefined))" class="document-status-banner" role="alert">
+            <p>{{ paneConflict ? 'This document changed in another pane. Copy your edits, then undo the text changes to load the saved version.' : 'Your changes have not been saved locally.' }}<template v-if="paneConflict && titleDraft !== (state.pendingTitle ?? state.record?.title)"> Reset the title to “{{ state.pendingTitle ?? state.record?.title }}” before retrying.</template></p>
             <UButton color="neutral" variant="soft" label="Retry document save" @click="retryLocalSave" />
         </div>
         <div v-if="documentLoaded && imageIntakeFailed" class="document-status-banner" role="alert">
@@ -166,15 +166,15 @@
             <span>{{ findStatus }}</span>
             <UButton :icon="icons.previous" color="neutral" variant="ghost" size="sm" square aria-label="Previous match" @click="findPrevious" />
             <UButton :icon="icons.next" color="neutral" variant="ghost" size="sm" square aria-label="Next match" @click="findNext" />
-            <UInput v-model="replaceQuery" class="find-input" size="sm" placeholder="Replace" aria-label="Replacement text" />
-            <UButton color="neutral" variant="soft" size="sm" label="Replace" @click="replaceCurrent" />
-            <UButton color="neutral" variant="soft" size="sm" label="All" @click="replaceAll" />
+            <UInput v-model="replaceQuery" :disabled="editorLocked" class="find-input" size="sm" placeholder="Replace" aria-label="Replacement text" />
+            <UButton :disabled="editorLocked || !searchMatches.length" color="neutral" variant="soft" size="sm" label="Replace" @click="replaceCurrent" />
+            <UButton :disabled="editorLocked || !searchMatches.length" color="neutral" variant="soft" size="sm" label="All" @click="replaceAll" />
             <UButton :icon="icons.close" color="neutral" variant="ghost" size="sm" square aria-label="Close find" @click="findOpen = false" />
         </div>
 
         <Transition name="table-toolbar">
             <DocumentTableToolbar
-                v-if="tableActive && editor"
+                v-if="tableActive && editor && !editorLocked"
                 :editor="editor"
                 :table-icon="icons.table"
                 @deleted="editorStateVersion += 1"
@@ -190,9 +190,9 @@
                         <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
                     </p>
 
-                    <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" />
+                    <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" :class="{ 'document-content--readonly': editorLocked }" />
 
-                    <BubbleMenu v-if="editor" v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
+                    <BubbleMenu v-if="editor && !editorLocked" v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
                         <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="editor.chain().focus().toggleBold().run()" />
                         <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="editor.chain().focus().toggleItalic().run()" />
                         <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="editor.chain().focus().toggleUnderline().run()" />
@@ -316,7 +316,7 @@ import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { liveQuery } from 'dexie';
@@ -404,6 +404,9 @@ const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
+let capturedTitle = '';
+const paneConflict = ref(false);
+const conflictKey = () => props.tabId ?? props.paneId ?? 'legacy';
 const externalWrite = ref(false);
 const capturedContent = ref<TipTapDocument>({
     type: 'doc',
@@ -491,19 +494,36 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = undefined;
     const json = current.getJSON();
-    // A buffer that never changed is not a new edit merely because another pane committed.
-    const unchangedBuffer = JSON.stringify(json) === JSON.stringify(capturedContent.value);
-    capturedContent.value = json;
-    setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
-    if (unchangedBuffer) return;
     const currentState = useDocumentState(id, db);
-    if (JSON.stringify(json) === JSON.stringify(currentState.pendingContent !== undefined
-        ? currentState.pendingContent : currentState.record?.content)) return;
-    setDocumentContent(id, json, db);
+    if (!currentState.record) return;
+    const serialized = JSON.stringify(json);
+    const baseline = JSON.stringify(capturedContent.value);
+    const sharedContent = JSON.stringify(current.schema.nodeFromJSON(normalizedContent(currentState.pendingContent !== undefined
+        ? currentState.pendingContent : currentState.record.content)).toJSON());
+    const sharedTitle = currentState.pendingTitle ?? currentState.record.title;
+    // Shared pending state is not permission for an independently edited pane
+    // to rebase its old body/title over another pane's newer draft.
+    paneConflict.value = (serialized !== baseline && sharedContent !== baseline && serialized !== sharedContent)
+        || (titleDraft.value !== capturedTitle && sharedTitle !== capturedTitle && titleDraft.value !== sharedTitle);
+    if (paneConflict.value) {
+        setDocumentEditorConflict(id, conflictKey(), { title: titleDraft.value, content: json,
+            baselineTitle: capturedTitle, baselineContent: capturedContent.value }, db);
+        return;
+    }
+    setDocumentEditorConflict(id, conflictKey(), undefined, db);
+    if (titleDraft.value !== capturedTitle && titleDraft.value !== sharedTitle) {
+        setDocumentTitle(id, titleDraft.value, db);
+    }
+    capturedTitle = titleDraft.value;
+    if (serialized !== baseline && serialized !== sharedContent) setDocumentContent(id, json, db);
+    capturedContent.value = json;
+    setSerializedSize(new TextEncoder().encode(serialized).byteLength);
+    syncCleanBuffers();
 }
 
 async function ensureLocalDurability(id = props.documentId, db = editorDb.value): Promise<void> {
     captureContent(id, db);
+    if (paneConflict.value) throw new Error('This document changed in another pane. Your draft is retained; reconcile it before saving.');
     await flush(id, db);
     const currentState = useDocumentState(id, db);
     // A failed read is not a failed save. Only staged edits can block navigation.
@@ -525,7 +545,7 @@ function onBeforePageUnload(event: BeforeUnloadEvent): void {
     // unload-time IndexedDB write alone is not a durability acknowledgement.
     captureContent();
     const currentState = useDocumentState(props.documentId, editorDb.value);
-    if (currentState.pendingTitle === undefined && currentState.pendingContent === undefined) return;
+    if (!paneConflict.value && currentState.pendingTitle === undefined && currentState.pendingContent === undefined) return;
     event.preventDefault();
     event.returnValue = '';
     retryLocalSave();
@@ -623,9 +643,11 @@ function scheduleAutomaticRevision() {
 function updateSlashMenu() {
     const current = editor.value;
     if (!current) return;
-    const parent = current.state.selection.$from.parent;
+    const { empty, $from } = current.state.selection;
+    const parent = $from.parent;
     const text = parent.isTextblock ? parent.textContent : '';
-    const match = /^\/([^\s]*)$/u.exec(text);
+    const match = empty && $from.parentOffset === parent.content.size
+        ? /^\/([^\s]*)$/u.exec(text) : null;
     if (!match) slashDismissed.value = false;
     slashOpen.value = Boolean(match) && !slashDismissed.value;
     slashQuery.value = match?.[1]?.toLowerCase() ?? '';
@@ -888,8 +910,12 @@ function registerActiveSession(id: string): void {
             acceptCommittedDocument({ id: row.id, title: row.title, content, created_at: row.created_at,
                 updated_at: row.updated_at, deleted: row.deleted, file_hashes: row.file_hashes }, db);
             titleDraft.value = row.title;
+            capturedTitle = row.title;
+            paneConflict.value = false;
             capturedContent.value = content;
             editor.value?.commands.setContent(content, { emitUpdate: false, errorOnInvalidContent: true });
+            capturedContent.value = normalizedContent(editor.value?.getJSON() ?? content);
+            setDocumentEditorConflict(id, conflictKey(), undefined, db);
             contentVersion.value += 1;
             setSerializedSize(new TextEncoder().encode(row.content).byteLength);
             refresh();
@@ -919,6 +945,8 @@ async function loadActiveDocument(id: string) {
         return;
     }
     titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+    capturedTitle = titleDraft.value;
+    paneConflict.value = false;
     capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
         ? state.value.pendingContent : state.value.record?.content);
     contentVersion.value = 0;
@@ -928,9 +956,19 @@ async function loadActiveDocument(id: string) {
     // Lazy extension loading can cross a committed Apply. Use the current origin buffer
     // before registering, then the session lease covers writes still in progress.
     titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+    capturedTitle = titleDraft.value;
     capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
         ? state.value.pendingContent : state.value.record?.content);
-    editor.value?.commands.setContent(capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
+    const conflict = state.value.editorConflicts?.get(conflictKey());
+    editor.value?.commands.setContent(conflict?.content ?? capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
+    if (conflict) {
+        titleDraft.value = conflict.title;
+        capturedTitle = conflict.baselineTitle;
+        capturedContent.value = conflict.baselineContent;
+        paneConflict.value = true;
+    } else {
+        capturedContent.value = normalizedContent(editor.value?.getJSON() ?? capturedContent.value);
+    }
     loadedDocumentId = id;
     documentLoaded.value = true;
     loadingDocument.value = false;
@@ -993,6 +1031,8 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     lastAutomaticRevisionAt = 0;
     editorDb.value = getDb();
     titleDraft.value = '';
+    capturedTitle = '';
+    paneConflict.value = false;
     capturedContent.value = emptyDocument();
     closeSlashMenu(false);
     findOpen.value = false;
@@ -1043,14 +1083,39 @@ watch(isCompactToolbar, (compact) => {
     if (compact) inspectorOpen.value = false;
 });
 
-watch(
-    () => state.value.record?.title,
-    (title) => {
-        if (typeof title === 'string' && state.value.pendingTitle === undefined && title !== titleDraft.value) {
-            titleDraft.value = title;
+function syncCleanBuffers(): void {
+    const current = editor.value;
+    const record = state.value.record;
+    if (!documentLoaded.value || loadedDocumentId !== props.documentId || !current || current.isDestroyed || !record) return;
+    const title = state.value.pendingTitle ?? record.title;
+    if (titleDraft.value === capturedTitle || titleDraft.value === title) {
+        titleDraft.value = title;
+        capturedTitle = title;
+    }
+    const content = current.schema.nodeFromJSON(normalizedContent(state.value.pendingContent !== undefined
+        ? state.value.pendingContent : record.content)).toJSON() as TipTapDocument;
+    const serialized = JSON.stringify(content);
+    const buffer = JSON.stringify(current.getJSON());
+    if (buffer === JSON.stringify(capturedContent.value) || buffer === serialized) {
+        capturedContent.value = content;
+        if (buffer !== serialized) {
+            const view = captureDocumentViewState(props.documentId);
+            current.chain().setContent(content, { emitUpdate: false, errorOnInvalidContent: true })
+                .setMeta('addToHistory', false).run();
+            restoreEditorSelection({ ...view, contentRevision: undefined });
+            contentVersion.value += 1;
+            editorStateVersion.value += 1;
+            setSerializedSize(new TextEncoder().encode(serialized).byteLength);
+            refresh();
         }
-    },
-);
+        if (titleDraft.value === title) {
+            paneConflict.value = false;
+            setDocumentEditorConflict(props.documentId, conflictKey(), undefined, editorDb.value);
+        }
+    }
+}
+
+watch(() => [state.value.record, state.value.pendingTitle, state.value.pendingContent], syncCleanBuffers);
 
 watch(findOpen, async (open) => {
     if (open && !suppressFindAutofocus) {
@@ -1101,7 +1166,7 @@ onBeforeUnmount(() => {
 function onTitleInput(value: string | number | null) {
     if (itemReadOnly.value) return;
     titleDraft.value = String(value ?? '');
-    setDocumentTitle(props.documentId, titleDraft.value, editorDb.value);
+    captureContent();
 }
 
 const activeBlock = computed(() => {
@@ -1491,8 +1556,10 @@ const filteredSlashCommands = computed(() => slashCommands.value.filter((command
 
 function runSlashCommand(command: (typeof slashCommands.value)[number]) {
     const current = editor.value;
-    if (!current) return;
-    const from = current.state.selection.from - slashQuery.value.length - 1;
+    if (!current || editorLocked.value) return;
+    updateSlashMenu();
+    if (!slashOpen.value) return;
+    const from = current.state.selection.$from.start();
     current.chain().focus().deleteRange({ from, to: current.state.selection.from }).run();
     command.run();
     slashOpen.value = false;
@@ -1505,31 +1572,33 @@ function closeSlashMenu(restoreFocus = true) {
     if (restoreFocus) editor.value?.commands.focus();
 }
 
-function matches() {
+const searchMatches = computed(() => {
+    void contentVersion.value;
     const current = editor.value;
-    const needle = findQuery.value.toLocaleLowerCase();
+    const needle = findQuery.value;
     if (!current || !needle) return [] as Array<{ from: number; to: number }>;
+    const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'giu');
     const results: Array<{ from: number; to: number }> = [];
     current.state.doc.descendants((node, position) => {
-        if (!node.isText || !node.text) return;
-        const haystack = node.text.toLocaleLowerCase();
-        let index = haystack.indexOf(needle);
-        while (index >= 0) {
+        if (!node.isTextblock) return;
+        // Inline marks split text nodes; atom placeholders preserve document offsets.
+        const text = node.textBetween(0, node.content.size, '', '\ufffc');
+        for (const match of text.matchAll(pattern)) {
             results.push({
-                from: position + index,
-                to: position + index + needle.length,
+                from: position + 1 + match.index,
+                to: position + 1 + match.index + match[0].length,
             });
-            index = haystack.indexOf(needle, index + Math.max(1, needle.length));
         }
+        return false;
     });
     return results;
-}
+});
 const findStatus = computed(() => {
-    const count = matches().length;
-    return count ? `${Math.max(1, findIndex.value + 1)} / ${count}` : 'No results';
+    const count = searchMatches.value.length;
+    return count ? `${Math.min(count, Math.max(1, findIndex.value + 1))} / ${count}` : 'No results';
 });
 function selectMatch(index: number) {
-    const results = matches();
+    const results = searchMatches.value;
     if (!results.length) return;
     findIndex.value = (index + results.length) % results.length;
     editor.value?.chain().focus().setTextSelection(results[findIndex.value]!).scrollIntoView().run();
@@ -1538,21 +1607,22 @@ function findNext() {
     selectMatch(findIndex.value + 1);
 }
 function findPrevious() {
-    selectMatch(findIndex.value - 1);
+    selectMatch(findIndex.value < 0 ? -1 : findIndex.value - 1);
 }
 function replaceCurrent() {
     const current = editor.value;
-    const match = matches()[findIndex.value];
-    if (!current || !match) return;
-    current.chain().focus().insertContentAt(match, replaceQuery.value).run();
-    findIndex.value -= 1;
+    const index = Math.max(0, findIndex.value);
+    const match = searchMatches.value[index];
+    if (!current || editorLocked.value || !match) return;
+    current.view.dispatch(current.state.tr.insertText(replaceQuery.value, match.from, match.to));
+    findIndex.value = index - 1;
     findNext();
 }
 function replaceAll() {
     const current = editor.value;
-    if (!current) return;
+    if (!current || editorLocked.value || !searchMatches.value.length) return;
     const tr = current.state.tr;
-    for (const match of matches().reverse()) tr.insertText(replaceQuery.value, match.from, match.to);
+    for (const match of [...searchMatches.value].reverse()) tr.insertText(replaceQuery.value, match.from, match.to);
     current.view.dispatch(tr);
     findIndex.value = -1;
 }

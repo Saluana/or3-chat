@@ -354,6 +354,105 @@ test.beforeEach(async ({ page }) => {
     await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
 });
 
+test('document polish: counts words across paragraphs, hard breaks and table cells', async ({ page }, info) => {
+    await page.goto('/__or3-document-journey-test');
+    const body = page.getByRole('textbox', { name: 'Document body' });
+    await expect(body).toBeVisible();
+    await body.fill('hello\nworld');
+    await expect(page.locator('.document-byline')).toContainText('2 words');
+    await body.evaluate(element => {
+        const editor = (element as HTMLElement & { editor: { commands: { setContent: (html: string) => void } } }).editor;
+        editor.commands.setContent('<p>one<br>two</p><table><tbody><tr><td><p>three</p></td><td><p>four</p></td></tr></tbody></table>');
+    });
+    await expect(page.locator('.document-byline')).toContainText('4 words');
+    await page.screenshot({ path: info.outputPath('document-word-count.png') });
+});
+
+test('document polish: slash insertion dismisses stale caret positions and still inserts headings', async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto('/__or3-document-journey-test');
+    const body = page.getByRole('textbox', { name: 'Document body' });
+    await expect(body).toBeVisible();
+    await body.fill('/hea');
+    await expect(body).toBeFocused();
+    await expect(page.getByRole('listbox', { name: 'Insert block' })).toBeVisible();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByRole('listbox', { name: 'Insert block' })).toBeHidden();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('listbox', { name: 'Insert block' })).toBeVisible();
+    await page.getByRole('option', { name: 'Heading 1 Large section heading', exact: true }).click();
+    await expect(body).toBeFocused();
+    await page.keyboard.type('Section title');
+    await expect(body.locator('h1')).toHaveText('Section title');
+    await expect(page.getByRole('listbox', { name: 'Insert block' })).toBeHidden();
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: info.outputPath('document-slash-heading.png') });
+});
+
+for (const width of [1440, 390]) {
+    test(`document polish: find across formatting and replace literal text at ${width}px`, async ({ page }, info) => {
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto('/__or3-document-journey-test');
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await expect(body).toBeVisible();
+        await body.evaluate(element => {
+            const editor = (element as HTMLElement & { editor: { commands: { setContent: (html: string) => void } } }).editor;
+            editor.commands.setContent('<p>Find <strong>formatted</strong> text. Find formatted text.</p>');
+        });
+        if (width < 720) {
+            await page.getByRole('button', { name: 'More editor tools', exact: true }).click();
+            await page.getByRole('menuitem', { name: 'Find in document' }).click();
+        } else {
+            await page.getByRole('button', { name: 'Find in document', exact: true }).click();
+        }
+        await page.getByRole('textbox', { name: 'Find text', exact: true }).fill('Find formatted');
+        await expect(page.locator('.find-bar')).toContainText('1 / 2');
+        await page.getByRole('textbox', { name: 'Replacement text', exact: true }).fill('<em>literal</em>');
+        // Replace acts on the first result even before navigating with Next.
+        await page.getByRole('button', { name: 'Replace', exact: true }).click();
+        await expect(body).toHaveText('<em>literal</em> text. Find formatted text.');
+        await expect(page.locator('.find-bar')).toContainText('1 / 1');
+        await page.getByRole('button', { name: 'All', exact: true }).click();
+        await expect(body).toHaveText('<em>literal</em> text. <em>literal</em> text.');
+        await expect(page.locator('.find-bar')).toContainText('No results');
+        await page.getByRole('button', { name: 'Close find', exact: true }).click();
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('<em>literal</em> text. <em>literal</em> text.');
+        await page.reload();
+        await expect(body).toHaveText('<em>literal</em> text. <em>literal</em> text.');
+        await page.screenshot({ path: info.outputPath(`document-find-${width}.png`) });
+    });
+}
+
+test('document polish: trash disables open replacement and table controls', async ({ page }, info) => {
+    const scripts: string[] = [];
+    page.on('request', request => scripts.push(request.url()));
+    await page.goto('/__or3-document-journey-test');
+    const body = page.getByRole('textbox', { name: 'Document body' });
+    await expect(body).toBeVisible();
+    await body.fill('keep this text');
+    await body.evaluate(element => {
+        (element as HTMLElement & { editor: { commands: { insertTable: (options: { rows: number; cols: number; withHeaderRow: boolean }) => void } } }).editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });
+    });
+    await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeVisible();
+    await expect(page.getByTestId('persisted-document-body')).toHaveText('keep this text');
+    await page.getByRole('button', { name: 'Find in document', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Find text', exact: true }).fill('keep');
+    await page.getByRole('textbox', { name: 'Replacement text', exact: true }).fill('changed');
+    const documentsUrl = scripts.find(url => /\/db\/documents\.ts(?:\?|$)/.test(url));
+    expect(documentsUrl).toBeTruthy();
+    await page.evaluate(async url => {
+        const { softDeleteDocument } = await import(url!);
+        await softDeleteDocument(localStorage.getItem('or3:e2e:production-document-id'));
+    }, documentsUrl);
+    await expect(body).toHaveAttribute('contenteditable', 'false');
+    await expect(page.getByRole('button', { name: 'Replace', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'All', exact: true })).toBeDisabled();
+    await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeHidden();
+    await expect(body).toHaveText('keep this text');
+    await page.screenshot({ path: info.outputPath('document-read-only.png') });
+});
+
 test('document quick action edits persist after leaving the fields and reloading', async ({ page }, info) => {
     await page.goto('/__or3-document-journey-test');
     await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible();

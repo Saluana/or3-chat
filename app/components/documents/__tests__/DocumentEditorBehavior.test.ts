@@ -124,6 +124,7 @@ describe('document editor behavior', () => {
         chain.deleteColumn.mockReturnValue(chain);
         chain.deleteTable.mockReturnValue(chain);
         const editor = {
+            isEditable: true,
             chain: () => chain,
         } as unknown as Editor;
         const wrapper = mount(DocumentTableToolbar, {
