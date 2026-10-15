@@ -117,11 +117,6 @@ export function preservedProjectEntries(data: unknown): unknown[] {
 }
 
 export function projectEntryIdentity(value: unknown): string | null {
-    if (typeof value === 'string') return `chat:${value}`;
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const entry = value as Record<string, unknown>;
-    if (typeof entry.id !== 'string') return null;
-    const kind = entry.kind === 'doc' || entry.kind === 'document' ? 'document'
-        : entry.kind === 'chat' || entry.kind === undefined ? 'chat' : entry.kind === 'file' ? 'file' : null;
-    return kind ? `${kind}:${entry.id}` : null;
+    const entry = normalizeEntry(value);
+    return entry ? `${entry.kind === 'doc' ? 'document' : entry.kind}:${entry.id}` : null;
 }

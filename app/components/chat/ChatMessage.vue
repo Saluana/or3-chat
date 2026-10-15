@@ -730,7 +730,12 @@ const showContinueButton = computed(
 );
 
 const isStreamingReasoning = computed(() => {
-    return Boolean(props.message.reasoning_text) && !hasContent.value;
+    return (
+        Boolean(props.message.reasoning_text) &&
+        props.message.pending === true &&
+        !props.message.error &&
+        !hasContent.value
+    );
 });
 
 // User message collapse/expand

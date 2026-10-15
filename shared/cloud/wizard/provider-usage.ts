@@ -8,6 +8,8 @@ type ProviderUsageAnswers = Pick<
     | 'syncProvider'
     | 'storageEnabled'
     | 'storageProvider'
+    | 'limitsEnabled'
+    | 'limitsStorageProvider'
     | 'connectEnabled'
     | 'connectProvider'
     | 'allAdvancedEnabled'
@@ -23,6 +25,8 @@ export function usesConvexProvider(answers: ProviderUsageAnswers): boolean {
     return (
         ((answers.syncEnabled || answers.ssrAuthEnabled) && answers.syncProvider === 'convex') ||
         (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.ssrAuthEnabled && answers.limitsEnabled &&
+            answers.limitsStorageProvider === 'convex') ||
         (answers.connectEnabled &&
             resolveEffectiveConnectProvider(answers) === 'convex')
     );
@@ -36,6 +40,8 @@ export function usesSqliteProvider(
         ((answers.syncEnabled || answers.ssrAuthEnabled) &&
             answers.syncProvider === 'sqlite' &&
             (!options.requireSsrAuthForSync || answers.ssrAuthEnabled)) ||
+        (answers.ssrAuthEnabled && answers.limitsEnabled &&
+            answers.limitsStorageProvider === 'sqlite') ||
         (answers.connectEnabled &&
             resolveEffectiveConnectProvider(answers) === 'sqlite')
     );

@@ -283,6 +283,33 @@ describe('registered canonical history authorization', () => {
             else { expect(result.error).toMatch(/project|Project/); expect(handler).not.toHaveBeenCalled(); }
         } finally { remove(); }
     });
+    it.each((['project', 'deleted', 'revoked', 'unchanged'] as const).flatMap(change =>
+        (['returned', 'thrown'] as const).map(outcome => ({ change, outcome }))))('rechecks $change scope before delivering an awaited $outcome server tool result', async ({ change, outcome }) => {
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { release = resolve; });
+        const handler = vi.fn(async () => {
+            await pending;
+            if (outcome === 'thrown') throw new Error('PRIVATE_TOOL_RESULT');
+            return 'PRIVATE_TOOL_RESULT';
+        });
+        const remove = registerServerTool({ type: 'function', runtime: 'server', function: {
+            name: 'awaited_scope_fixture', description: 'Scope delivery fixture', parameters: { type: 'object', properties: {} } } }, handler);
+        try {
+            const execution = executeServerTool('awaited_scope_fixture', '{}', context);
+            await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+            if (change === 'project') records.set('current', { ...records.get('current')!, project_id: 'project-a' });
+            if (change === 'deleted') records.set('current', { ...records.get('current')!, deleted: true });
+            if (change === 'revoked') allowed = false;
+            release();
+            const result = await execution;
+            if (change === 'unchanged') {
+                if (outcome === 'returned') { expect(result.error).toBeUndefined(); expect(result.result).toBe('PRIVATE_TOOL_RESULT'); }
+                else { expect(result.error).toBe('PRIVATE_TOOL_RESULT'); expect(result.result).toBeNull(); }
+            } else {
+                expect(result.result).toBeNull(); expect(result.error).toMatch(change === 'project' ? /project/i : change === 'deleted' ? /ownership unavailable/ : /Workspace access/);
+            }
+        } finally { release(); remove(); }
+    });
     async function lookup(messageId = 'original', extra: Partial<ToolExecutionContext> = {}) {
         const result = await executeServerTool('get_message', JSON.stringify({ message_id: messageId, include_after_compaction: true }), { ...context, ...extra });
         expect(result.error).toBeUndefined(); return JSON.parse(result.result!);
@@ -305,8 +332,9 @@ describe('registered canonical history authorization', () => {
     it('rechecks membership before and after materialized original reads', async () => {
         allowed = false; const refused = await executeServerTool('get_message', JSON.stringify({message_id: 'original'}), context);
         expect(refused.error).toContain('Workspace access'); expect(refused.result).toBeNull(); expect(reads).toEqual([]);
-        allowed = true; revokeOnOriginal = true; const result = await lookup();
-        expect(result).toMatchObject({ status: 'scope_incomplete' }); expect(JSON.stringify(result)).not.toContain('EXACT_AUTHORIZED_EVIDENCE');
+        allowed = true; revokeOnOriginal = true;
+        const result = await executeServerTool('get_message', JSON.stringify({ message_id: 'original', include_after_compaction: true }), context);
+        expect(result.error).toContain('Workspace access'); expect(result.result).toBeNull();
         expect(reads.some(read => read.query.kind === 'messages' && read.query.message_ids.includes('original'))).toBe(true);
     });
     it('reports missing canonical capability and missing summary as incomplete', async () => {

@@ -100,6 +100,8 @@ export async function addProjectUpload(
     const imported = await importWorkspaceFile(scope, file, file.name);
     scope.assertCurrent('write');
     const hash = parseFileHashes(imported.post.file_hashes)[0]!;
+    const meta = await scope.db.file_meta.get(hash);
+    scope.assertCurrent('write');
     const findExisting = async () => {
         const workspace = await readProjectWorkspace(scope.db, projectId);
         scope.assertCurrent('write');
@@ -113,7 +115,7 @@ export async function addProjectUpload(
         item_id: imported.post.id,
         original_hash: hash,
         created_at: nowSec(),
-        status: isSupportedRasterMimeType(file.type) ? 'ready' : 'processing',
+        status: meta?.kind === 'image' && isSupportedRasterMimeType(meta.mime_type) ? 'ready' : 'processing',
         coverage: 'none',
         locations: [],
     };

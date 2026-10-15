@@ -6,8 +6,7 @@
  *
  * Responsibilities:
  * - Choose a provider based on runtime config.
- * - Use memory only when it is explicitly configured (or while Convex is
- *   registering during startup).
+ * - Use memory only when it is explicitly configured.
  * - Cache the resolved provider instance.
  *
  * Non-Goals:
@@ -40,20 +39,6 @@ export function getRateLimitProvider(): RateLimitProvider {
     const storageProvider = config.limits.storageProvider;
 
     switch (storageProvider) {
-        case LIMITS_PROVIDER_IDS.convex: {
-            const registered = getRateLimitProviderById(storageProvider);
-            if (registered) {
-                cachedProvider = registered;
-            } else {
-                console.warn('[rate-limit] Provider not registered, using memory:', storageProvider);
-                // Do not cache a startup fallback. Provider plugins register
-                // during server initialization, and a request racing that
-                // registration must not pin this process to local-only limits.
-                return memoryRateLimitProvider;
-            }
-            break;
-        }
-
         case LIMITS_PROVIDER_IDS.redis:
         case LIMITS_PROVIDER_IDS.postgres:
             throw new Error(

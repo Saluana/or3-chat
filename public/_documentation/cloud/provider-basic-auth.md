@@ -101,6 +101,10 @@ traces, screenshots and a signup receipt. Release evidence must use the exact
 published provider version; rebuilt local provider output is pre-release proof.
 Invite-link handoff requires `or3-provider-basic-auth@0.0.11` or later.
 
+The client status and silent-refresh recovery adapters activate only when SSR
+auth selects Basic Auth, so installing multiple auth packages does not replace
+another provider's session behavior.
+
 ## Related
 
 - [Choose and wire providers](/documentation/cloud/providers)

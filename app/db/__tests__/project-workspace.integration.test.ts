@@ -4,7 +4,7 @@ import { zipSync, strToU8 } from 'fflate';
 import Dexie from 'dexie';
 import { createOrRefFile } from '../files';
 import { catalogWorkspaceFile } from '../workspace-files';
-import { processProjectSource } from '~/utils/projects/source-intake';
+import { addProjectUpload, processProjectSource } from '~/utils/projects/source-intake';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../client';
 import {
@@ -104,6 +104,33 @@ beforeEach(async () => {
 });
 
 describe('persistent project workspace', () => {
+    // A declared image MIME must not bypass signature classification, including
+    // when older clients already persisted a Ready revision for these bytes.
+    it('extracts mislabeled images and keeps their text usable without a vision model', async () => {
+        class TextWorker {
+            onmessage?: (event: { data: unknown }) => void;
+            onerror?: () => void;
+            postMessage() {
+                queueMicrotask(() => this.onmessage?.({ data: {
+                    ok: true, text: 'SQLite project evidence.', partial: false, locations: [],
+                } }));
+            }
+            terminate() {}
+        }
+        vi.stubGlobal('Worker', TextWorker);
+        vi.stubGlobal('Blob', NodeBlob);
+        try {
+            const file = Object.assign(new NodeBlob(['SQLite project evidence.'], { type: 'image/png' }), { name: 'evidence.txt' });
+            const source = await addProjectUpload(scope(), 'a', file as unknown as File);
+            expect(source.value.revisions[0]).toMatchObject({ status: 'ready', coverage: 'full', text_hash: expect.any(String) });
+            await saveProjectSource(scope(), 'a', { ...source.value, mode: 'always' }, source.row.id, source.row);
+            await db.threads.put({ id: 'text-image', project_id: 'a', status: 'ready', deleted: false,
+                pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+            const context = await buildProjectContext(scope(), 'text-image', 'SQLite', false);
+            expect(context?.receipt.sources[0]).toMatchObject({ state: 'retrieved', excerpt: 'SQLite project evidence.' });
+        } finally { vi.unstubAllGlobals(); }
+    });
+
     // Many extraction blobs must not all decode on every send. Facts beyond
     // catalog previews still need to be discoverable within the retrieval budget.
     it('bounds extraction decoding per turn while retaining late-file passages', async () => {
@@ -401,6 +428,36 @@ describe('persistent project workspace', () => {
             kind: 'doc',
         });
     });
+
+    // Same-clock LWW sync can change membership while hooks prepare an edit;
+    // only the list the editor actually read may be replaced.
+    it('refuses a membership edit replaced by sync at the same clock', async () => {
+        const synced = [{ id: 'synced-document', kind: 'doc' }];
+        hookActions.mockImplementation(async name => {
+            if (name === 'db.projects.upsert:action:before')
+                await db.projects.update('a', { data: synced, hlc: '2:0:remote' });
+        });
+        await expect(useProjectsCrud().updateProjectEntries('a', [
+            { id: 'local-document', kind: 'doc' },
+        ])).rejects.toThrow(/changed/i);
+        expect((await db.projects.get('a'))?.data).toEqual(synced);
+    });
+
+    // Entity IDs belong to separate tables. Renaming a chat must not turn an
+    // equally named document/file membership into another chat reference.
+    it('synchronizes entry titles only within the requested entity kind', async () => {
+        await db.projects.put(project('a', [
+            { id: 'same-id', kind: 'chat', name: 'Chat' },
+            { id: 'same-id', kind: 'doc', name: 'Document', color: 'blue' },
+            { id: 'same-id', kind: 'file', name: 'File' },
+        ]));
+        expect(await useProjectsCrud().syncProjectEntryTitle('same-id', 'chat', 'Renamed')).toBe(1);
+        expect((await db.projects.get('a'))?.data).toEqual([
+            { id: 'same-id', kind: 'chat', name: 'Renamed' },
+            { id: 'same-id', kind: 'doc', name: 'Document', color: 'blue' },
+            { id: 'same-id', kind: 'file', name: 'File' },
+        ]);
+    });
     // Destructive failure inventory: stale/revoked deletion must roll back;
     // deleting a project must retain chats/catalog originals and release internal owners.
     it('deletes project policy atomically while retaining underlying work', async () => {
@@ -432,6 +489,21 @@ describe('persistent project workspace', () => {
                     .first()
             )?.deleted,
         ).toBe(true);
+    });
+
+    // Notification failures happen after commit and must neither report a failed
+    // deletion nor prevent notification of the other affected entities.
+    it.each(['soft', 'hard'] as const)('retains a successful %s deletion when after-hooks fail', async mode => {
+        await db.threads.put({ id: 'delete-hook-chat', project_id: 'a', status: 'ready',
+            pinned: false, forked: false, deleted: false, clock: 0, created_at: 1, updated_at: 1 });
+        hookActions.mockImplementation(async name => {
+            if (name === 'db.threads.upsert:action:after' || name === `db.projects.delete:action:${mode}:after`)
+                throw new Error('Notification failed');
+        });
+        await expect(deleteProjectWorkspace(scope(), 'a', 0, mode === 'hard')).resolves.toBeUndefined();
+        expect(await db.projects.get('a')).toEqual(mode === 'hard' ? undefined : expect.objectContaining({ deleted: true }));
+        expect((await db.threads.get('delete-hook-chat'))?.project_id).toBeNull();
+        expect(hookActions).toHaveBeenCalledWith(`db.projects.delete:action:${mode}:after`, expect.anything());
     });
 
     it('captures only the owning project context and enforces disabled and out-of-project tool reads', async () => {
@@ -565,15 +637,18 @@ describe('persistent project workspace', () => {
     });
 
     // LWW applies a remote revision with a higher HLC at the same clock. An
-    // editor holding the earlier revision must not silently overwrite it.
-    it('refuses an edit whose revision was replaced by sync at the same clock', async () => {
+    // editor holding the earlier revision must not silently overwrite it or
+    // resurrect a remote tombstone with unchanged content.
+    it.each(['content', 'deletion'] as const)('refuses an edit whose %s was replaced by sync at the same clock', async change => {
         const original = await readProjectWorkspace(db, 'a');
         const opened = await saveProjectSettings(scope(), 'a', { ...original.settings, instructions: 'Local draft base' }, null);
-        await db.posts.put({ ...opened, content: JSON.stringify({ ...original.settings, instructions: 'Remote winner' }) });
+        const synced = { ...opened, ...(change === 'deletion' ? { deleted: true }
+            : { content: JSON.stringify({ ...original.settings, instructions: 'Remote winner' }) }) };
+        await db.posts.put(synced);
         await expect(
             saveProjectSettings(scope(), 'a', { ...original.settings, instructions: 'Stale local edit' }, opened),
         ).rejects.toThrow(/changed/i);
-        expect((await readProjectWorkspace(db, 'a')).settings.instructions).toBe('Remote winner');
+        expect(await db.posts.get(opened.id)).toEqual(synced);
     });
 
     // Approval is an await boundary: changing either owner while the user is
@@ -703,6 +778,19 @@ describe('persistent project workspace', () => {
             name: 'Chat',
             color: 'blue',
         });
+    });
+
+    // Indexed legacy membership already trims IDs and normalizes kind spelling.
+    // Resolution and movement must use that same identity to avoid ghosts.
+    it.each([' chat ', { id: ' chat ', kind: ' CHAT ', color: 'blue' }])('resolves and removes normalized legacy membership %j', async entry => {
+        await db.threads.put({ id: 'chat', title: 'Chat', status: 'ready', pinned: false,
+            forked: false, deleted: false, clock: 0, created_at: 1, updated_at: 1 });
+        await db.projects.put(project('a', [entry]));
+        expect(await resolveChatProject(db, 'chat')).toBe('a');
+        await moveChatToProject(scope(), 'chat', 'b');
+        expect((await db.projects.get('a'))?.data).toEqual([]);
+        expect((await db.projects.get('b'))?.data).toContainEqual(expect.objectContaining({ id: 'chat', kind: 'chat' }));
+        expect(await resolveChatProject(db, 'chat')).toBe('b');
     });
 
     // The composer's banner lists every legacy folder until the user keeps the chat in one.
@@ -1349,6 +1437,25 @@ describe('automatic project memory capture', () => {
             probabilities: { save, skip: (1 - save) / 2, uncertain: (1 - save) / 2 } } },
         usage: { cost: 0.00001 } }), { status: 200 });
     afterEach(() => vi.unstubAllGlobals());
+    // Deleted history must neither consume live capacity nor poison a commit
+    // when another device syncs its tombstones while inference is running.
+    it.each(['before', 'during'] as const)('keeps capturing with over 500 dismissed memories synced %s inference', async timing => {
+        await seed();
+        const saved = await saveProjectMemory(scope(), 'a', { text: 'Dismissed reference.' });
+        await db.posts.delete(saved.row.id);
+        const addDeleted = () => db.posts.bulkPut(Array.from({ length: 501 }, (_, index) => ({
+            ...saved.row, id: 'dismissed-' + index, deleted: true,
+        })));
+        if (timing === 'before') await addDeleted();
+        const fetcher = vi.fn().mockResolvedValueOnce(gate()).mockImplementationOnce(async () => {
+            if (timing === 'during') await addDeleted();
+            return reply();
+        });
+        vi.stubGlobal('fetch', fetcher);
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect((await readProjectWorkspace(db, 'a')).memories.map(memory => memory.value.text)).toEqual([candidate.text]);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
+    });
     it.each([[0.79, false], [0.8, true], [0.85, true]] as const)(
         'extracts automatic memory at save probability %s only when the 0.8 gate passes', async (probability, accepted) => {
         await seed();

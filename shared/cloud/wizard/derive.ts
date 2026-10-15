@@ -103,6 +103,9 @@ export function deriveProviderModules(answers: WizardAnswers): string[] {
     if (answers.ssrAuthEnabled && answers.connectEnabled) {
         providerIds.add(resolveEffectiveConnectProvider(answers));
     }
+    if (answers.ssrAuthEnabled && answers.limitsEnabled && answers.limitsStorageProvider) {
+        providerIds.add(answers.limitsStorageProvider);
+    }
 
     return Array.from(providerIds)
         .map((providerId) => providerId.trim())

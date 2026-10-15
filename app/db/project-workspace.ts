@@ -186,6 +186,7 @@ async function save(
             const previous = await scope.db.posts.get(id);
             const expectedClock = typeof expected === 'number' ? expected : expected?.clock ?? null;
             if (
+                previous?.deleted ||
                 (previous?.clock ?? null) !== expectedClock ||
                 (expected && typeof expected === 'object' && previous?.content !== expected.content) ||
                 (previous &&
@@ -830,15 +831,24 @@ export async function deleteProjectWorkspace(
             console.warn('[projects] Project deleted; reference notification failed', error);
         }
     }
-    for (const entity of detached)
-        await hooks.doAction('db.threads.upsert:action:after', {
-            entity,
-            tableName: 'threads',
-        });
-    await hooks.doAction(
-        hard
-            ? 'db.projects.delete:action:hard:after'
-            : 'db.projects.delete:action:soft:after',
-        { entity: deletedProject, id: projectId, tableName: 'projects' },
-    );
+    for (const entity of detached) {
+        try {
+            await hooks.doAction('db.threads.upsert:action:after', {
+                entity,
+                tableName: 'threads',
+            });
+        } catch (error) {
+            console.warn('[projects] Project deleted; chat notification failed', error);
+        }
+    }
+    try {
+        await hooks.doAction(
+            hard
+                ? 'db.projects.delete:action:hard:after'
+                : 'db.projects.delete:action:soft:after',
+            { entity: deletedProject, id: projectId, tableName: 'projects' },
+        );
+    } catch (error) {
+        console.warn('[projects] Project deleted; delete notification failed', error);
+    }
 }

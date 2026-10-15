@@ -235,9 +235,19 @@ export async function captureAutomaticMemories(
     const memoryRows = await scope.db.posts
         .where('[postType+title]')
         .equals([PROJECT_POST_TYPES.memory, projectId])
+        .filter((row) => !row.deleted)
         .limit(501)
         .toArray();
     if (memoryRows.length > 500) return;
+    // Dismissed references aid semantic deduplication but never consume live
+    // capacity. Bound retained history independently of the live catalog.
+    const dismissedRows = await scope.db.posts
+        .where('[postType+title]')
+        .equals([PROJECT_POST_TYPES.memory, projectId])
+        .filter((row) => !!row.deleted)
+        .limit(20)
+        .toArray();
+    memoryRows.push(...dismissedRows);
     const memories = memoryRows.flatMap((row) => {
         const value = readPersistedProjectRecord(ProjectMemorySchema, row.content);
         return value ? [{ row, value }] : [];
@@ -397,6 +407,7 @@ export async function captureAutomaticMemories(
                 const currentMemories = await scope.db.posts
                     .where('[postType+title]')
                     .equals([PROJECT_POST_TYPES.memory, projectId])
+                    .filter((row) => !row.deleted)
                     .limit(501)
                     .toArray();
                 if (currentMemories.length > 500)
@@ -409,8 +420,10 @@ export async function captureAutomaticMemories(
                     ({ row, value }) => !row.deleted && value?.origin === 'automatic',
                 ).length;
                 const known = new Set(
-                    currentValues.flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
+                    [...currentValues, ...memories.filter(({ row }) => row.deleted)]
+                        .flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
                 );
+                let liveCount = currentMemories.length;
                 for (const item of prepared) {
                     if (!item || known.has(normalized(item.candidate.text)))
                         continue;
@@ -425,12 +438,13 @@ export async function captureAutomaticMemories(
                             continue;
                     } else {
                         if (
-                            automaticCount >= 20 ||
+                            automaticCount >= 20 || liveCount >= 500 ||
                             (await scope.db.posts.get(item.id)) ||
                             (await scope.db.tombstones.get('posts:' + item.id))
                         )
                             continue;
                         automaticCount++;
+                        liveCount++;
                     }
                     await saveProjectMemory(
                         scope,

@@ -69,6 +69,11 @@ OR3_STORAGE_S3_REQUIRE_CHECKSUM=true
 OR3_STORAGE_S3_ALLOW_INSECURE_HTTP=true
 ```
 
+Endpoint URLs must use HTTP(S) and may not include embedded credentials, query
+parameters, or fragments. HTTP still requires the explicit development override.
+Bare and uppercase SHA-256 spellings are accepted and normalized to the same
+lowercase `sha256:<hex>` identity for uploads, commits, and downloads.
+
 ## Bucket CORS (required)
 
 Because uploads/downloads are **direct from browser → S3 host**, your bucket must allow CORS from your OR3 origin.
@@ -106,6 +111,14 @@ images and PDFs may be served inline. Direct S3 responses cannot add
 the signed request itself.
 `POST /api/storage/delete` derives the object key from the authorized workspace
 and hash, rejects a mismatched `storage_id`, and fails with 503 while the object or marker exists because deletion requires provider-owned coordination. An already absent pair succeeds.
+
+When the sync backend supports upload intents, reservation and consumption must
+be supplied together. Verified consumption happens before publishing the commit
+marker. An exact retry within the original reservation lifetime or a verified
+re-upload with a fresh reservation can reuse a matching marker. Expired receipts
+and mismatched workspace, hash, storage ID, size, or MIME fail with 409. A quota
+requires the paired reservation contract. Source and provider
+artifacts must be upgraded together for exact consumed-receipt replay.
 
 ## Garbage Collection Safety
 

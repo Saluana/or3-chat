@@ -588,14 +588,17 @@ These are instance-level usage limits (mostly for SSR / hosted deployments).
 
 #### `limits.storageProvider`
 
-- Type: `'memory' | 'convex'` (custom registered providers are also supported)
+- Type: `'memory' | 'sqlite' | 'convex'` (custom registered providers are also supported)
 - Default:
   - `'convex'` when Convex sync is enabled
   - otherwise `'memory'`
 - Env: `OR3_LIMITS_STORAGE_PROVIDER`
 - Purpose: Where rate limit counters are stored.
 - Notes: Redis and Postgres are reserved for future providers and are rejected;
-  use a registered provider or `memory`.
+  use a registered provider or `memory`. Configured persistent stores must be
+  registered and available; Convex does not fall back to process-local memory
+  during startup or backend failures. Select `memory` explicitly for local
+  counters. Limits can select their backend independently of workspace sync.
 
 #### `limits.operationRateLimits`
 

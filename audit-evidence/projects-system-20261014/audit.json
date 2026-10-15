@@ -1,0 +1,304 @@
+{
+  "audit": "Projects system and provider audit",
+  "date": "2026-10-14",
+  "source": {
+    "repository": "/Users/brendon/Documents/or3/or3-chat",
+    "branch": "or3-cloud",
+    "startingCommit": "58993a345ff6669e26c9a22f48f123ed2a92480a"
+  },
+  "constraints": {
+    "uiChanged": false,
+    "published": false,
+    "deployed": false,
+    "versionsChanged": false,
+    "concurrentEditsPreserved": true
+  },
+  "coverage": [
+    "Project CRUD, atomic membership and branch families",
+    "Workspace scopes, optimistic concurrency and deletion",
+    "Knowledge intake, extraction, file references and context assembly",
+    "Explicit and automatic memory, evidence validation and capacity",
+    "Canonical history, server tools and inference admission",
+    "SQLite and Convex project ownership readers",
+    "Filesystem and S3 uploads, commits, quotas and retry behavior",
+    "Project browser journeys and recovery"
+  ],
+  "fixed": [
+    {
+      "id": "P01",
+      "severity": "high",
+      "issue": "Same-clock sync membership replacements were overwritten by stale editor saves.",
+      "files": [
+        "app/composables/projects/useProjectsCrud.ts:147"
+      ],
+      "repair": "Compare membership data as well as clock inside the captured write transaction."
+    },
+    {
+      "id": "P02",
+      "severity": "medium",
+      "issue": "Title synchronization converted same-ID documents/files into chats or updated the wrong kind.",
+      "files": [
+        "app/composables/projects/useProjectsCrud.ts:206"
+      ],
+      "repair": "Require both matching ID and matching kind."
+    },
+    {
+      "id": "P03",
+      "severity": "high",
+      "issue": "An editor could resurrect an internal record remotely deleted at the same clock/content.",
+      "files": [
+        "app/db/project-workspace.ts:189"
+      ],
+      "repair": "Reject writes to internal tombstones."
+    },
+    {
+      "id": "P04",
+      "severity": "medium",
+      "issue": "Post-commit extension failures made durable project deletion look unsuccessful.",
+      "files": [
+        "app/db/project-workspace.ts:831"
+      ],
+      "repair": "Report individual post-commit notification failures and preserve successful deletion."
+    },
+    {
+      "id": "P05",
+      "severity": "high",
+      "issue": "Legacy membership indexing normalized IDs/kinds but ownership resolution and removal did not.",
+      "files": [
+        "app/utils/projects/normalizeProjectData.ts:119"
+      ],
+      "repair": "Use one entry normalization for canonical identity and preserve unrelated extension fields."
+    },
+    {
+      "id": "P06",
+      "severity": "high",
+      "issue": "Workspace project tools moved only one chat, stranding branches in another project and invalidating shared history.",
+      "files": [
+        "app/utils/chat/workspace-projects.ts:164"
+      ],
+      "repair": "Use the existing atomic family-move writer and after-commit notifications; retain foreign-owned branches on removal."
+    },
+    {
+      "id": "P07",
+      "severity": "medium",
+      "issue": "Over 500 retained deleted memories permanently disabled automatic capture, including when tombstones synced during inference.",
+      "files": [
+        "app/utils/projects/automatic-memory.ts:235",
+        "app/utils/projects/automatic-memory.ts:407"
+      ],
+      "repair": "Count only live records toward capacity; bound dismissed deduplication references independently and retain exact tombstone protection."
+    },
+    {
+      "id": "P08",
+      "severity": "medium",
+      "issue": "A declared raster MIME bypassed extraction even when stored signature classification rejected it, then unnecessarily required vision or sent invalid image bytes.",
+      "files": [
+        "app/utils/projects/source-intake.ts:103",
+        "app/utils/projects/context.ts:290"
+      ],
+      "repair": "Use final imported metadata and require its validated image kind as well as supported MIME."
+    },
+    {
+      "id": "P09",
+      "severity": "high",
+      "issue": "Awaited server tools leaked returned content or thrown error text after project ownership, chat availability or workspace authority changed.",
+      "files": [
+        "server/utils/chat/tool-registry.ts:256"
+      ],
+      "repair": "Reauthorize canonical ownership and workspace access before delivering either handler outcome."
+    },
+    {
+      "id": "P10",
+      "severity": "medium",
+      "issue": "Memory inference buffered an unbounded HTTP body before enforcing its state schema limit.",
+      "files": [
+        "server/api/openrouter/classify-memory.post.ts:62"
+      ],
+      "repair": "Use the existing streaming JSON reader with a 256 KiB envelope cap and retain the 240 KiB state cap."
+    },
+    {
+      "id": "P11",
+      "severity": "medium",
+      "issue": "SQLite canonical history retained missing, deleted or foreign explicit project pointers and stranded released chats.",
+      "repository": "../or3-provider-sqlite",
+      "files": [
+        "src/runtime/server/sync/sqlite-sync-gateway-adapter.ts"
+      ],
+      "repair": "Verify the explicit owner is live in the authorized workspace; release stale ownership without falling back to old folders."
+    },
+    {
+      "id": "P12",
+      "severity": "medium",
+      "issue": "Convex canonical history retained missing, deleted or foreign explicit project pointers and stranded released chats.",
+      "repository": "../or3-provider-convex",
+      "files": [
+        "templates/convex/sync.ts"
+      ],
+      "repair": "Verify the explicit owner inside the authorized query; rebuild the scaffold pack and contract digests."
+    },
+    {
+      "id": "P13",
+      "severity": "high",
+      "issue": "SQLite treated padded IDs and differently cased legacy chat kinds as unowned, bypassing browser project isolation.",
+      "repository": "../or3-provider-sqlite",
+      "files": [
+        "src/runtime/server/sync/sqlite-sync-gateway-adapter.ts"
+      ],
+      "repair": "Normalize legacy IDs/kinds consistently with the browser and continue ignoring document/file/extension entries."
+    },
+    {
+      "id": "P14",
+      "severity": "high",
+      "issue": "Convex treated padded IDs and differently cased legacy chat kinds as unowned, bypassing browser project isolation.",
+      "repository": "../or3-provider-convex",
+      "files": [
+        "templates/convex/sync.ts"
+      ],
+      "repair": "Normalize legacy IDs/kinds consistently with the browser and rebuild scaffold artifacts."
+    }
+  ],
+  "followUps": [
+    {
+      "id": "F01",
+      "severity": "high",
+      "status": "unchanged",
+      "issue": "The workflow plugin omits model origins and supplies null tool authority, so post-admission project moves cannot be fenced by the host.",
+      "files": [
+        "../or3-plugin-workflows/src/server/background-execution.ts:104",
+        "../or3-plugin-workflows/src/server/background-execution.ts:297"
+      ],
+      "requiredWork": "Carry originating user/workspace/thread/message and cancellation through runtime ports and model/tool calls, with lifecycle regression coverage."
+    },
+    {
+      "id": "F02",
+      "severity": "high",
+      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "issue": "Filesystem presign lacked atomic quota reservation and commit provenance; concurrent uploads could exceed a workspace quota.",
+      "files": [
+        "../or3-provider-fs/src/runtime/server/storage/fs-storage-gateway-adapter.ts"
+      ],
+      "note": "Independent edits added reserve/consume binding during this audit. This task made no FS changes and does not claim acceptance of those edits."
+    },
+    {
+      "id": "F03",
+      "severity": "high",
+      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "issue": "S3 wrote a commit marker before fallible intent consumption; transient failure or response loss poisoned retries with permanent 409s.",
+      "files": [
+        "../or3-provider-s3/src/runtime/server/storage/s3-storage-gateway-adapter.ts"
+      ],
+      "note": "Independent edits changed consumption/marker ordering and matching-marker reconciliation during this audit. This task made no S3 changes and does not claim acceptance."
+    },
+    {
+      "id": "F04",
+      "severity": "high",
+      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "issue": "Consumed reservations stopped counting before canonical file metadata arrived, permitting quota overshoot in the commit-to-sync gap.",
+      "files": [
+        "../or3-provider-sqlite/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts",
+        "../or3-provider-convex/templates/convex/storage.ts"
+      ],
+      "note": "Independent upload lifecycle changes were in progress; their suites reported failures separately from project ownership regressions."
+    },
+    {
+      "id": "F05",
+      "severity": "medium",
+      "status": "unchanged",
+      "issue": "Internal-record after-write hooks may run before a caller's outer transaction commits, so observers can react to a save later rolled back.",
+      "files": [
+        "app/db/project-workspace.ts:392",
+        "app/db/project-workspace.ts:398"
+      ],
+      "requiredWork": "Define a caller-owned after-commit notification queue without awaiting outer completion from within that transaction."
+    },
+    {
+      "id": "F06",
+      "severity": "high",
+      "status": "documented_existing_compatibility_policy",
+      "issue": "Older providers without projectOwnership retain warning-only fallback for legacy folder membership.",
+      "files": [
+        "server/utils/chat/project-policy.ts"
+      ],
+      "note": "Documentation now reflects the existing compatibility behavior; changing that policy would affect older provider deployments."
+    },
+    {
+      "id": "F07",
+      "severity": "low",
+      "status": "unmeasured_scale_risk",
+      "issue": "Legacy ownership scans all projects in the workspace; very large workspaces may reach latency or Convex read limits.",
+      "note": "No speculative schema/index migration added."
+    }
+  ],
+  "validation": {
+    "regressionProof": "New regression cases were written and demonstrated failing before their production fixes.",
+    "appFocused": {
+      "status": "passed",
+      "tests": 224,
+      "files": 4,
+      "log": "app-focused.log"
+    },
+    "appRelated": {
+      "status": "passed",
+      "tests": 147,
+      "files": 8,
+      "log": "app-related.log"
+    },
+    "appTypecheck": {
+      "status": "passed",
+      "command": "OR3_AUTH_PROVIDER=basic-auth OR3_SYNC_PROVIDER=sqlite OR3_STORAGE_PROVIDER=fs bun scripts/cli/nuxt-task.ts type-check",
+      "note": "Ran the same Nuxt wrapper with Bun directly after tsx IPC was blocked by the sandbox.",
+      "log": "typecheck.log"
+    },
+    "sqlite": {
+      "ownershipTestsPassed": 8,
+      "build": "passed",
+      "productionTypecheck": "passed",
+      "productionLint": "passed",
+      "latestFullSuite": {
+        "passed": 229,
+        "skipped": 3,
+        "failed": 7,
+        "failureScope": "Concurrent upload-intent lifecycle edits outside these project fixes"
+      },
+      "existingCheckLimitations": [
+        "Host-aware full typecheck had existing BackgroundJobExecution/BackgroundWorkflowScope test errors",
+        "Full lint had an existing inline import-type violation"
+      ]
+    },
+    "convex": {
+      "ownershipTestsPassed": 7,
+      "build": "passed",
+      "typecheck": "passed",
+      "latestFullSuite": {
+        "passed": 246,
+        "failed": 1,
+        "failureScope": "Concurrent consumed-upload-replay behavior versus existing rejection expectation"
+      }
+    },
+    "browser": {
+      "status": "passed",
+      "tests": 8,
+      "duration": "1.6m",
+      "artifactsRoot": "test-results",
+      "command": "bun run test:e2e:projects",
+      "log": "browser.log",
+      "selectorRepairs": [
+        "Removed a stale View your projects text filter from the accessible Projects navigation button.",
+        "Selected project cards by exact or anchored name instead of matching their action-menu buttons."
+      ],
+      "initialFailureEvidence": "browser-selector-before.log"
+    },
+    "finalDiffCheck": "passed",
+    "documentation": [
+      "public/_documentation/database/projects.md",
+      "public/_documentation/docmap.json project entry",
+      "../or3-provider-sqlite/README.md",
+      "../or3-provider-convex/README.md"
+    ],
+    "qualificationLimits": [
+      "No published-package or production deployment qualification",
+      "Existing Convex backends require the updated scaffold to be deployed separately",
+      "Concurrent unrelated changes and their failures were preserved"
+    ]
+  }
+}
