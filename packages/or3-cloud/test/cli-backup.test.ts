@@ -72,8 +72,8 @@ test('offline canonical inspection detects missing pairs by workspace and preser
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.17', filesystem: '0.0.11' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.17', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.17', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.18', filesystem: '0.0.11' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.18', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.18', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

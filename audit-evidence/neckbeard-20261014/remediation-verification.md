@@ -46,28 +46,32 @@ review: an HLC collision excluded from the ranked findings, and independent
 username buckets in the account limiter. The latter is now bounded by a
 separate aggregate IP limiter exercised through the real login HTTP handler.
 
-## Integration prerequisite
+## Published provider integration
 
-Finding 11 requires the coordinated provider changes above. Published provider
-version `0.0.17` does not implement the atomic registration contract. OR3 Chat
-rejects webhook creation with HTTP 503 against an older provider instead of
-silently reverting to a racy count. Release the provider changes and deploy the
-matching Convex backend templates before integrating the host changes. No
-versions, dependency pins, tags, releases, deployments, or remote branches were
-changed here.
+Finding 11 is supplied by published `or3-provider-sqlite@0.0.18` and
+`or3-provider-convex@0.0.18`. Both immutable tag workflows passed. Each npm
+tarball was independently downloaded and its SHA-512 integrity compared with
+the exact CI-qualified archive. Commits, workflow URLs, integrity and shasums
+are recorded in [provider-releases.json](provider-releases.json). SQLite's
+initial registry propagation check timed out; only that verification job was
+retried after the exact endpoint became available. Nothing was republished.
 
-Qualification uses an explicit source alias through
-`vitest.providers.config.ts`; it does not modify shared installed dependencies.
+OR3 Chat pins both published versions, aligns wizard and fixed-profile lock
+metadata, and qualifies offline inspection against SQLite 0.0.18's unchanged
+migration history. Convex deployments must install the matching backend
+templates. Older providers return HTTP 503 on registration. No production
+deployment or application release was performed.
+
+Initial source qualification used a temporary explicit provider alias. That
+configuration was removed after publication; final host qualification uses the
+installed npm packages and independent dependencies in a clean checkout.
 
 ## Repeat the host checks
 
-Run in the OR3 Chat worktree with dependencies installed. Set the source path
-to the coordinated SQLite provider checkout:
+Run in the OR3 Chat worktree with its locked dependencies installed:
 
 ```sh
-export OR3_SQLITE_PROVIDER_SOURCE=/Users/brendon/Documents/or3/.worktrees/neckbeard-sqlite/src/runtime/server/webhooks/sqlite-webhook-store.ts
-
-bunx vitest run --config audit-evidence/neckbeard-20261014/vitest.providers.config.ts \
+bunx vitest run \
   server/api/admin/auth/__tests__/security.test.ts \
   server/admin/auth/__tests__/rate-limit.test.ts \
   tests/unit/admin-auth-jwt.test.ts tests/unit/admin-auth-rate-limit.test.ts \

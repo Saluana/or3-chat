@@ -469,7 +469,7 @@ User webhook mutations require JSON, the `x-or3-cloud-intent: mutation` header, 
 
 User subscriptions are checked against current durable workspace membership before enqueue and delivery. Revocation disables those subscriptions and cancels pending deliveries; admin subscriptions retain their separate scope.
 
-Registration quotas are enforced atomically by the provider's create operation. Providers must advertise `registrationLimit: 'atomic-v1'` and enforce the optional second `createWebhook(input, limit)` argument in the same transaction as insertion. Full scopes fail with `WEBHOOK_LIMIT_EXCEEDED`; providers lacking this capability return HTTP 503 on registration. Update the provider package and, for Convex, deploy its matching backend templates before enabling creation.
+Registration quotas are enforced atomically by the provider's create operation. SQLite and Convex providers provide this contract starting at `0.0.18`. Providers must advertise `registrationLimit: 'atomic-v1'` and enforce the optional second `createWebhook(input, limit)` argument in the same transaction as insertion. Full scopes fail with `WEBHOOK_LIMIT_EXCEEDED`; providers lacking this capability return HTTP 503 on registration. Update the provider package and, for Convex, deploy its matching backend templates before enabling creation.
 
 ### SSRF Protection
 

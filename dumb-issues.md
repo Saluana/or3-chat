@@ -49,7 +49,7 @@ All **26 findings are addressed in code** as of 2026-10-15. The findings below p
 
 **Verification:** OR3 Chat **52 files / 526 tests passed**, full Nuxt typecheck and changed-TypeScript lint passed, and all three audit scripts passed. SQLite provider **8 tests**, build, standalone typecheck and changed-source lint passed. Convex provider quota regression, template pack, build and standalone typecheck passed. Final diffs were inspected.
 
-**Integration prerequisite for 11:** matching SQLite and Convex changes are isolated in sibling worktrees on `codex/neckbeard-webhook-quota`. Published provider `0.0.17` lacks atomic registration limits; host registration fails closed with HTTP 503 against old providers. Provider releases and the matching Convex backend deployment must precede integration. Qualification explicitly aliases the candidate SQLite source. Nothing was released or deployed.
+**Published providers for 11:** `or3-provider-sqlite@0.0.18` and `or3-provider-convex@0.0.18` are published and pinned. Both tag workflows passed, and downloaded npm tarballs match the exact CI-qualified archives. [Release receipts](audit-evidence/neckbeard-20261014/provider-releases.json) record commits and integrity. Convex users must deploy the matching backend templates. Older providers still fail closed with HTTP 503. Final qualification uses published packages without source aliases; no production deployment or application release was performed.
 
 ## Evidence and verification
 
@@ -59,7 +59,7 @@ Run from `or3-chat` with the existing dependencies installed:
 
 ```sh
 bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/reproduce.ts
-OR3_SQLITE_PROVIDER_SOURCE=/absolute/path/to/candidate/sqlite-webhook-store.ts bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/webhooks.ts
+bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/webhooks.ts
 bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/client-and-storage.ts
 ```
 
