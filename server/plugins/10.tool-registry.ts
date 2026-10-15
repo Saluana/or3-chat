@@ -52,30 +52,6 @@ const addNumbersTool: ToolDefinition = {
     runtime: 'hybrid',
 };
 
-const coinGeckoPriceTool: ToolDefinition = {
-    type: 'function',
-    function: {
-        name: 'coingecko_price',
-        description: 'Fetch a coin price from CoinGecko by id and vs currency.',
-        parameters: {
-            type: 'object',
-            properties: {
-                coinId: {
-                    type: 'string',
-                    description:
-                        'CoinGecko coin id (e.g., bitcoin, ethereum)',
-                },
-                vsCurrency: {
-                    type: 'string',
-                    description: 'Quote currency (e.g., usd, eur)',
-                },
-            },
-            required: ['coinId', 'vsCurrency'],
-        },
-    },
-    runtime: 'hybrid',
-};
-
 function asFiniteNumber(value: unknown): number {
     const num = typeof value === 'number' ? value : Number.NaN;
     if (!Number.isFinite(num)) {
@@ -87,42 +63,6 @@ function asFiniteNumber(value: unknown): number {
 function normalizeString(value: unknown): string {
     if (typeof value !== 'string') return '';
     return value.trim().toLowerCase();
-}
-
-async function fetchCoinGeckoPrice(
-    coinId: string,
-    vsCurrency: string
-): Promise<number> {
-    const url = new URL('https://api.coingecko.com/api/v3/simple/price');
-    url.searchParams.set('ids', coinId);
-    url.searchParams.set('vs_currencies', vsCurrency);
-
-    const response = await fetch(url.toString(), {
-        headers: { accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(
-            `CoinGecko request failed: ${response.status} ${text.slice(0, 120)}`
-        );
-    }
-
-    const payload: unknown = await response.json();
-    if (!payload || typeof payload !== 'object') {
-        throw new Error('CoinGecko returned an invalid payload.');
-    }
-    const coinData = (payload as Record<string, unknown>)[coinId];
-    if (!coinData || typeof coinData !== 'object') {
-        throw new Error(`No price found for "${coinId}" in "${vsCurrency}".`);
-    }
-    const price = (coinData as Record<string, unknown>)[vsCurrency];
-    if (typeof price !== 'number') {
-        throw new Error(
-            `No price found for "${coinId}" in "${vsCurrency}".`
-        );
-    }
-    return price;
 }
 
 export default defineNitroPlugin(() => {
@@ -164,21 +104,6 @@ export default defineNitroPlugin(() => {
             const b = asFiniteNumber(args.b);
             const sum = a + b;
             return `Sum: ${a} + ${b} = ${sum}`;
-        },
-        { override: true }
-    );
-
-    registerServerTool(
-        coinGeckoPriceTool,
-        async (args) => {
-            const coinId = normalizeString(args.coinId);
-            const vsCurrency = normalizeString(args.vsCurrency);
-            if (!coinId || !vsCurrency) {
-                throw new Error('coinId and vsCurrency are required.');
-            }
-
-            const price = await fetchCoinGeckoPrice(coinId, vsCurrency);
-            return `CoinGecko price for ${coinId} in ${vsCurrency.toUpperCase()}: ${price}`;
         },
         { override: true }
     );

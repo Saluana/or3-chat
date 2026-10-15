@@ -83,7 +83,9 @@ export function checkRateLimit(
     const entry = rateLimitStore.get(key);
 
     if (!entry) {
-        // First attempt
+        // Reserve admission before any asynchronous password work.
+        makeRoomFor(key);
+        rateLimitStore.set(key, { count: 1, windowStart: now });
         return {
             allowed: true,
             remaining: MAX_ATTEMPTS - 1,
@@ -114,36 +116,12 @@ export function checkRateLimit(
         };
     }
 
+    entry.count++;
     return {
         allowed: true,
-        remaining: MAX_ATTEMPTS - entry.count - 1,
+        remaining: MAX_ATTEMPTS - entry.count,
         resetAt: entry.windowStart + WINDOW_MS,
     };
-}
-
-/**
- * Record a failed login attempt.
- * @param ip - Client IP address
- * @param username - Username being attempted
- */
-export function recordFailedAttempt(ip: string, username: string): void {
-    const key = getRateLimitKey(ip, username);
-    const now = Date.now();
-    pruneExpired(now);
-    const entry = rateLimitStore.get(key);
-
-    makeRoomFor(key);
-
-    if (!entry || now - entry.windowStart > WINDOW_MS) {
-        // Start new window
-        rateLimitStore.set(key, {
-            count: 1,
-            windowStart: now,
-        });
-    } else {
-        // Increment count
-        entry.count++;
-    }
 }
 
 /**

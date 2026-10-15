@@ -14,7 +14,7 @@
  * - Delays response on failure implicitly via bcrypt duration
  * - Explicit rate limit: 5 attempts / 15 mins per IP+User
  */
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import {
     credentialsFileExists,
     readAdminCredentials,
@@ -24,11 +24,14 @@ import { verifyPassword } from '../../../admin/auth/hash';
 import { setAdminCookie } from '../../../admin/auth/jwt';
 import {
     checkRateLimit,
-    recordFailedAttempt,
+    enforceGenericAdminRateLimit,
     clearRateLimit,
     getClientIp,
 } from '../../../admin/auth/rate-limit';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
+
+import { useRuntimeConfig } from '#imports';
+import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 
 interface LoginBody {
     username?: string;
@@ -62,11 +65,12 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const body = await readBody<LoginBody>(event);
-    const { username, password } = body;
+    enforceGenericAdminRateLimit(event, 'admin-login-ip');
+    const body = await readLimitedJsonBody<LoginBody | null>(event);
+    const { username, password } = body ?? {};
 
     // Validate input
-    if (!username || !password) {
+    if (typeof username !== 'string' || !username || username.length > 256 || typeof password !== 'string' || !password) {
         throw createError({
             statusCode: 400,
             statusMessage: 'Username and password are required',
@@ -122,7 +126,6 @@ export default defineEventHandler(async (event) => {
 
     // Check if credentials are correct
     if (credentials.username !== username || !passwordValid) {
-        recordFailedAttempt(clientIp, username);
         throw createError({
             statusCode: 401,
             statusMessage: 'Invalid credentials',
@@ -131,7 +134,7 @@ export default defineEventHandler(async (event) => {
 
     // Success! Clear rate limit and set cookie
     clearRateLimit(clientIp, username);
-    await setAdminCookie(event, username);
+    await setAdminCookie(event, username, credentials.password_hash_bcrypt);
 
     return {
         success: true,

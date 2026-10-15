@@ -1,3 +1,4 @@
+import { isLocalOnlyKvChange } from '../../../shared/sync/local-only-kv';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { hasWorkspaceItemSemantics } from '~~/shared/posts/workspace-item-capability';
 import { requireWorkspaceItemCapability } from '../../utils/sync/workspace-item-capability';
@@ -100,6 +101,7 @@ function validateOneOp(
     }
 
     const op = { ...parsed.data };
+    if (isLocalOnlyKvChange(op.tableName, op.pk, op.payload)) return { result: validationFailure(op.stamp.opId, 'Device-only KV names cannot be synced') };
     if (
         op.payload !== undefined &&
         serializedPayloadBytes(op.payload) > MAX_SYNC_PAYLOAD_BYTES

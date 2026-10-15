@@ -3,7 +3,7 @@
  * Server-side only.
  */
 import bcrypt from 'bcryptjs';
-import { getAdminPasswordPolicyFailures } from '../../../shared/cloud/wizard/admin-dashboard';
+import { ADMIN_PASSWORD_MAX_BYTES, getAdminPasswordPolicyFailures } from '../../../shared/cloud/wizard/admin-dashboard';
 
 /**
  * Hash a password using bcrypt with cost factor 12.
@@ -11,6 +11,7 @@ import { getAdminPasswordPolicyFailures } from '../../../shared/cloud/wizard/adm
  * @returns Bcrypt hash
  */
 export async function hashPassword(password: string): Promise<string> {
+    if (new TextEncoder().encode(password).byteLength > ADMIN_PASSWORD_MAX_BYTES) throw new Error('Password must be at most 72 UTF-8 bytes');
     const saltRounds = 12;
     return bcrypt.hash(password, saltRounds);
 }
@@ -41,6 +42,7 @@ export function validatePasswordStrength(password: string): {
     errors: string[];
 } {
     const errors = getAdminPasswordPolicyFailures(password).map((failure) => {
+        if (failure === 'maxBytes') return 'Password must be at most 72 UTF-8 bytes';
         if (failure === 'minLength') {
             return 'Password must be at least 12 characters long';
         }

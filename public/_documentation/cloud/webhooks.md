@@ -465,6 +465,12 @@ A delivery is considered **successful** on any HTTP 2xx response. Any non-2xx, n
 
 ## Security
 
+User webhook mutations require JSON, the `x-or3-cloud-intent: mutation` header, and an exact same-origin or configured allowed origin. Body-bearing mutations accept at most 8 KiB. Separately authenticated bearer clients may omit origin when no cookies are sent. The dashboard supplies these headers.
+
+User subscriptions are checked against current durable workspace membership before enqueue and delivery. Revocation disables those subscriptions and cancels pending deliveries; admin subscriptions retain their separate scope.
+
+Registration quotas are enforced atomically by the provider's create operation. Providers must advertise `registrationLimit: 'atomic-v1'` and enforce the optional second `createWebhook(input, limit)` argument in the same transaction as insertion. Full scopes fail with `WEBHOOK_LIMIT_EXCEEDED`; providers lacking this capability return HTTP 503 on registration. Update the provider package and, for Convex, deploy its matching backend templates before enabling creation.
+
 ### SSRF Protection
 
 OR3 validates webhook targets when they are created or updated and again before
@@ -516,7 +522,7 @@ Both the user dashboard and admin panel show delivery logs for each webhook, inc
 - Event type and delivery status (`success`, `failed`, `pending`, `in_flight`, `cancelled`)
 - HTTP status code from the receiver
 - Request payload (full JSON)
-- Response body (truncated to 4 KB)
+- Response body (a prefix of at most 4 KiB of UTF-8 bytes; the remaining stream is cancelled)
 - Error message (for failures)
 - Duration in milliseconds
 - Attempt count
@@ -527,6 +533,7 @@ Logs are retained for the configured `OR3_WEBHOOKS_LOG_RETENTION_HOURS` (default
 
 ## Operational Notes
 
+- Rate-limited deliveries remain pending for the next admission window; dispatch rechecks the limit.
 - Pending deliveries **survive server restarts** — they are stored in the webhook store and reprocessed on startup.
 - Stale `in_flight` rows (from worker crashes) are automatically eligible for reaping after 2 minutes (the reaper runs every 60 seconds).
 - The dispatcher polls for claimable work every 5 seconds and processes in batches of 25.

@@ -179,10 +179,10 @@ describe('Health check endpoint', () => {
         const response = await handler(event);
 
         expect(response.status).toBe('degraded');
-        expect(response.providers?.sync?.checks?.errors).toContain('convex unreachable');
+        expect(response.providers?.sync?.checks?.errors).toContain('PROVIDER_UNAVAILABLE');
     });
 
-    it('passes provider details through and keeps status ok on maintenance failure', async () => {
+    it('redacts provider details and warnings while keeping liveness on maintenance failure', async () => {
         getProviderAdminAdapterMock.mockImplementation(
             (kind: 'auth' | 'sync' | 'storage', provider: string) => {
                 if (kind === 'sync' && provider === 'convex') {
@@ -227,18 +227,10 @@ describe('Health check endpoint', () => {
         const response = await handler(event);
 
         expect(response.status).toBe('ok');
-        expect(response.providers?.sync?.details).toMatchObject({
-            maintenance: {
-                enabled: true,
-                lastRun: '2025-01-01T00:00:00.000Z',
-                backlog: 3,
-                lastError: 'boom',
-                state: 'failed',
-            },
-        });
+        expect(response.providers?.sync?.details).toEqual({});
         expect(response.providers?.sync?.available).toBe(true);
         expect(response.providers?.sync?.checks?.warnings).toContain(
-            'Sync history maintenance failed: boom'
+            'PROVIDER_WARNING'
         );
     });
 });

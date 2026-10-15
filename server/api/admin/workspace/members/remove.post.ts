@@ -10,6 +10,7 @@ import { requireAdminApiContext } from '../../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
 import { invalidateSharedSessionCacheForIdentity } from '../../../../auth/session';
 import { useRuntimeConfig } from '#imports';
+import { resolveConfiguredWebhookStore } from '../../../../utils/webhooks/store/resolve-store';
 import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
 
 const BodySchema = z.object({
@@ -69,6 +70,13 @@ export default defineEventHandler(async (event) => {
             (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
             'convex',
     });
+
+    const webhookStore = resolveConfiguredWebhookStore(useRuntimeConfig(event));
+    if (webhookStore) {
+        await webhookStore.disableAllWebhooks(body.data.userId, workspaceId);
+        const hooks = await webhookStore.listWebhooks(body.data.userId, workspaceId);
+        await Promise.all(hooks.map(hook => webhookStore.cancelDeliveriesByWebhook(hook.id)));
+    }
 
     return { ok: true };
 });

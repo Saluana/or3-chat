@@ -16,7 +16,7 @@
  * Constraints:
  * - All changes in a batch are applied in a single Dexie transaction for atomicity
  * - Payloads are normalized via `sync-payload-normalizer` before storage
- * - Invalid payloads (failing Zod validation) are skipped, not thrown
+ * - Invalid payloads abort the batch so its cursor cannot be acknowledged
  *
  * @see core/sync/hlc for HLC comparison
  * @see core/sync/sync-payload-normalizer for payload normalization
@@ -26,9 +26,10 @@ import type { Or3DB } from '~/db/client';
 import type { ChangeStamp, SyncChange, Tombstone } from '~~/shared/sync/types';
 import type { Transaction } from 'dexie';
 import { compareSyncRevision } from '~~/shared/sync/revision';
-import { getHookBridge } from './hook-bridge';
+import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
+import { isLocalOnlyKvChange } from '~~/shared/sync/local-only-kv';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
 
 /** Local record with clock and optional HLC */
@@ -70,7 +71,7 @@ function tombstoneBlocks(stamp: ChangeStamp, tombstone: Tombstone): boolean {
  * - Emits conflict hooks after the transaction completes
  *
  * Constraints:
- * - Invalid payloads (schema failures) are skipped, not thrown
+ * - Invalid payloads abort the batch
  * - Callers should ensure HookBridge suppression is active for the tx
  */
 export class ConflictResolver {
@@ -132,10 +133,12 @@ export class ConflictResolver {
                 if (rec) tombstonesMap.set(tombstoneIds[idx]!, rec as Tombstone);
             });
 
+            const localOnlyKv = getLocalOnlyKvNames();
             for (const change of changes) {
                 const tableState = existingByTable.get(change.tableName)!;
                 const tombstoneId = `${change.tableName}:${change.pk}`;
                 const local = tableState.get(change.pk);
+                if (isLocalOnlyKvChange(change.tableName, change.pk, change.payload, localOnlyKv) || isLocalOnlyKvChange(change.tableName, change.pk, local, localOnlyKv)) { result.skipped++; continue; }
                 const tombstone = tombstonesMap.get(tombstoneId);
 
                 const changeResult = change.op === 'delete'
@@ -286,8 +289,7 @@ export class ConflictResolver {
         // Use shared normalizer for consistent snake_case/camelCase mapping and validation
         const normalized = normalizeSyncPayload(tableName, pk, payload, stamp);
         if (!normalized.isValid) {
-            console.error('[ConflictResolver] Invalid payload for', tableName, normalized.errors);
-            return { applied: false, skipped: true, isConflict: false };
+            throw new Error(`Invalid sync payload for ${tableName}:${pk}: ${normalized.errors?.join('; ')}`);
         }
 
         // ref_count is a local derived cache. It is deliberately omitted from

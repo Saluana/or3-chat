@@ -151,7 +151,7 @@ Preset management:
 - `presets load <name>`
 - `presets delete <name>`
 
-Secrets are excluded from preset storage by default.
+Secrets are excluded from preset storage by default. Wizard directories use owner-only permissions and persisted files use mode `0600`. Session and preset replacements use a private temporary file and atomic rename; preset mutations hold a cross-process filesystem lock. Local development redirects occur only after the wizard server receives a successful OR3 health response. The readiness deadline aborts pending HTTP requests.
 
 ### `or3-cloud deploy`
 

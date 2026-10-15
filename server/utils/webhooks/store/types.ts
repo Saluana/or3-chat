@@ -43,11 +43,14 @@ export interface WebhookDeliveryLog {
 }
 
 export interface WebhookStore {
+    /** Required for quota-bearing registration; old providers must fail closed. */
+    readonly registrationLimit?: 'atomic-v1';
     createWebhook(
         webhook: Omit<
             WebhookRegistration,
             'id' | 'health' | 'created_at' | 'updated_at'
-        >
+        >,
+        registrationLimit?: number
     ): Promise<WebhookRegistration>;
     updateWebhook(
         webhookId: string,

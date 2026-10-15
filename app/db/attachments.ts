@@ -42,6 +42,7 @@ import {
 export async function createAttachment(
     input: AttachmentCreate
 ): Promise<Attachment> {
+    const db = getDb();
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.attachments.create:filter:input',
@@ -53,7 +54,7 @@ export async function createAttachment(
     });
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
     await dbTry(
-        () => getDb().attachments.put(value),
+        () => db.attachments.put(value),
         { op: 'write', entity: 'attachments', action: 'create' },
         { rethrow: true }
     );
@@ -78,6 +79,7 @@ export async function createAttachment(
  * - Does not merge partial updates.
  */
 export async function upsertAttachment(value: Attachment): Promise<void> {
+    const db = getDb();
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.attachments.upsert:filter:input',
@@ -89,7 +91,7 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
     });
     const validated = parseOrThrow(AttachmentSchema, filtered);
     await dbTry(
-        () => getDb().attachments.put(validated),
+        () => db.attachments.put(validated),
         { op: 'write', entity: 'attachments', action: 'upsert' },
         { rethrow: true }
     );
@@ -113,9 +115,10 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
  * - Does not remove the row permanently.
  */
 export async function softDeleteAttachment(id: string): Promise<void> {
+    const db = getDb();
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().attachments, async () => {
-        const a = await dbTry(() => getDb().attachments.get(id), {
+    await db.transaction('rw', db.attachments, async () => {
+        const a = await dbTry(() => db.attachments.get(id), {
             op: 'read',
             entity: 'attachments',
             action: 'get',
@@ -126,7 +129,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
             id: a.id,
             tableName: 'attachments',
         });
-        await getDb().attachments.put({
+        await db.attachments.put({
             ...a,
             deleted: true,
             updated_at: nowSec(),
@@ -153,8 +156,8 @@ export async function softDeleteAttachment(id: string): Promise<void> {
  * - Does not cascade deletes to related tables.
  */
 export async function hardDeleteAttachment(id: string): Promise<void> {
-    const hooks = useHooks();
     const db = getDb();
+    const hooks = useHooks();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'attachments', { includePendingOps: false }),
@@ -194,8 +197,9 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
  * - Does not return related entity data.
  */
 export async function getAttachment(id: string) {
+    const db = getDb();
     const hooks = useHooks();
-    const res = await dbTry(() => getDb().attachments.get(id), {
+    const res = await dbTry(() => db.attachments.get(id), {
         op: 'read',
         entity: 'attachments',
         action: 'get',

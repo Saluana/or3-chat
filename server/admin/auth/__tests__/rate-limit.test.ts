@@ -35,7 +35,6 @@ import {
     checkRateLimit,
     checkGenericRateLimit,
     getClientIp,
-    recordFailedAttempt,
 } from '../rate-limit';
 
 describe('admin auth rate limiter', () => {
@@ -81,7 +80,7 @@ describe('admin auth rate limiter', () => {
         const username = `admin-${Date.now()}`;
 
         for (let i = 0; i < 5; i++) {
-            recordFailedAttempt(ip, username);
+            checkRateLimit(ip, username);
         }
 
         const result = checkRateLimit(ip, username);

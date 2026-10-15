@@ -8,6 +8,7 @@
 
 export const ADMIN_USERNAME_MIN_LENGTH = 3;
 export const ADMIN_PASSWORD_MIN_LENGTH = 12;
+export const ADMIN_PASSWORD_MAX_BYTES = 72;
 
 const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz';
@@ -15,6 +16,7 @@ const DIGITS = '0123456789';
 const ALL_PASSWORD_CHARS = `${UPPERCASE}${LOWERCASE}${DIGITS}-_`;
 
 export type AdminPasswordPolicyFailure =
+    | 'maxBytes'
     | 'minLength'
     | 'uppercase'
     | 'lowercase'
@@ -61,6 +63,7 @@ export function getAdminPasswordPolicyFailures(
     if (!/[0-9]/.test(password)) {
         failures.push('number');
     }
+    if (new TextEncoder().encode(password).byteLength > ADMIN_PASSWORD_MAX_BYTES) failures.push('maxBytes');
     return failures;
 }
 
@@ -72,6 +75,7 @@ export function formatAdminPasswordPolicyFailure(
     }
 ): string {
     const { label, verb } = input;
+    if (failure === 'maxBytes') return `${label} ${verb} be at most ${ADMIN_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
     if (failure === 'minLength') {
         return `${label} ${verb} be at least ${ADMIN_PASSWORD_MIN_LENGTH} characters.`;
     }
@@ -87,7 +91,7 @@ export function formatAdminPasswordPolicyFailure(
 export function generateAdminPassword(length = 24): string {
     const safeLength = Math.max(
         ADMIN_PASSWORD_MIN_LENGTH,
-        Math.trunc(length)
+        Math.min(ADMIN_PASSWORD_MAX_BYTES, Number.isFinite(length) ? Math.trunc(length) : 24)
     );
     const chars: string[] = [
         pickRandomChar(UPPERCASE),

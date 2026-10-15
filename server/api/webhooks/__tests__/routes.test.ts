@@ -39,7 +39,8 @@ const {
     createWebhookDispatcherMock: vi.fn(),
 }));
 
-vi.mock('h3', () => ({
+vi.mock('h3', async () => ({
+    ...await vi.importActual<typeof import('h3')>('h3'),
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
     getRouterParam: getRouterParamMock,
@@ -125,13 +126,14 @@ function makeEvent(input: {
 } = {}): H3Event {
     return {
         context: {
-            body: input.body,
+            body: input.body ?? {},
             params: input.params ?? {},
             query: input.query ?? {},
         },
         node: {
             req: {
-                headers: {},
+                url: '/api/webhooks',
+                headers: { host: 'app.example.test', origin: 'http://app.example.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
             },
             res: {},
         },

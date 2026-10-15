@@ -1,4 +1,6 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
+import { createLimitedWebhook } from '../../utils/webhooks/registration';
 import { z } from 'zod';
 import { WEBHOOK_EVENT_TYPES } from '../../../shared/webhooks/event-types';
 import { encryptSecret, generateSigningSecret } from '../../utils/webhooks/crypto';
@@ -17,7 +19,8 @@ const BodySchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-    const body = BodySchema.safeParse(await readBody(event));
+    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
+    const body = BodySchema.safeParse(await readLimitedJsonBody(event));
     if (!body.success) {
         throw createError({
             statusCode: 400,
@@ -25,21 +28,12 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
     const settings = getWebhookRuntimeSettings();
-
-    const existing = await store.listWebhooks(userId, workspaceId);
-    if (existing.length >= settings.maxPerUser) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Webhook limit exceeded',
-        });
-    }
 
     await validateWebhookTargetUrl(body.data.url);
 
     const signingSecret = generateSigningSecret();
-    const created = await store.createWebhook({
+    const created = await createLimitedWebhook(store, {
         scope: 'user',
         user_id: userId,
         workspace_id: workspaceId,
@@ -52,7 +46,7 @@ export default defineEventHandler(async (event) => {
             requireWebhookEncryptionKey()
         ),
         enabled: true,
-    });
+    }, settings.maxPerUser);
 
     return {
         webhook: serializeWebhook(created),

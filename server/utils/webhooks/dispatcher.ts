@@ -1,3 +1,4 @@
+import { webhookHasCurrentAccess } from './membership';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret } from './crypto';
 import { buildWebhookPayload } from './payload';
@@ -27,8 +28,27 @@ const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_REAPER_INTERVAL_MS = 60_000;
 const STALE_IN_FLIGHT_MS = 2 * 60 * 1000;
-const MAX_RESPONSE_BODY_CHARS = 4 * 1024;
+const MAX_RESPONSE_BODY_BYTES = 4 * 1024;
 const MAX_REDIRECTS = 5;
+
+async function readResponsePrefix(response: Response): Promise<string | null> {
+    if (!response.body) return null;
+    const reader = response.body.getReader();
+    const prefix = new Uint8Array(MAX_RESPONSE_BODY_BYTES);
+    let length = 0;
+    try {
+        while (length < prefix.length) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const bytes = value.subarray(0, prefix.length - length);
+            prefix.set(bytes, length);
+            length += bytes.length;
+        }
+        if (length === prefix.length) await reader.cancel();
+    } finally { reader.releaseLock(); }
+    // Streaming decode drops an incomplete trailing UTF-8 sequence at the cap.
+    return length ? new TextDecoder().decode(prefix.subarray(0, length), { stream: true }) : null;
+}
 
 export interface WebhookDeliveryJob {
     webhookId: string;
@@ -275,7 +295,7 @@ export function createWebhookDispatcher(
                 dispatcher: agent as never,
             });
 
-            const responseBody = truncateResponseBody(await response.text());
+            const responseBody = await readResponsePrefix(response);
             return {
                 success: response.status >= 200 && response.status < 300,
                 statusCode: response.status,
@@ -303,11 +323,17 @@ export function createWebhookDispatcher(
         log: Awaited<ReturnType<WebhookStore['claimPendingDeliveries']>>[number]
     ): Promise<void> {
         const webhook = await store.getWebhook(log.webhook_id);
-        if (!webhook || !webhook.enabled) {
+        if (!webhook || !webhook.enabled || !await webhookHasCurrentAccess(store, webhook)) {
             await store.updateDeliveryLog(log.id, {
                 status: 'cancelled',
                 next_retry_at: null,
             });
+            return;
+        }
+
+        const admission = checkWebhookRateLimit(webhook.id, config.rateLimitPerMinute);
+        if (!admission.allowed) {
+            await store.updateDeliveryLog(log.id, { status: 'pending', next_retry_at: admission.resetAt, error_message: 'Rate limit exceeded; delivery deferred' });
             return;
         }
 
@@ -395,41 +421,10 @@ export function createWebhookDispatcher(
         );
     }
 
-    function truncateResponseBody(value: string): string | null {
-        if (!value) return null;
-        if (value.length <= MAX_RESPONSE_BODY_CHARS) return value;
-        return value.slice(0, MAX_RESPONSE_BODY_CHARS);
-    }
-
     return {
         async enqueue(job) {
-            const rateLimit = checkWebhookRateLimit(
-                job.webhookId,
-                config.rateLimitPerMinute
-            );
-            if (!rateLimit.allowed) {
-                await store.createDeliveryLog({
-                    webhook_id: job.webhookId,
-                    event_id: job.eventId,
-                    event_type: job.eventType,
-                    attempt: 1,
-                    status: 'cancelled',
-                    claimed_by: null,
-                    claimed_at: null,
-                    http_status: null,
-                    error_message: `Rate limit exceeded. Retry after ${new Date(rateLimit.resetAt).toISOString()}`,
-                    request_payload: JSON.stringify(job.payload),
-                    response_body: null,
-                    duration_ms: null,
-                    next_retry_at: rateLimit.resetAt,
-                    created_at: Date.now(),
-                });
-                console.warn(
-                    `[webhooks] Rate-limited event ${job.eventType} for webhook ${job.webhookId}`
-                );
-                return;
-            }
-
+            const webhook = await store.getWebhook(job.webhookId);
+            if (!webhook || !webhook.enabled || !await webhookHasCurrentAccess(store, webhook)) return;
             await store.createDeliveryLog({
                 webhook_id: job.webhookId,
                 event_id: job.eventId,
@@ -464,7 +459,9 @@ export function createWebhookDispatcher(
                         }
                     }
                 );
-                await Promise.all(workers);
+                const results = await Promise.allSettled(workers);
+                const failed = results.find(result => result.status === 'rejected');
+                if (failed?.status === 'rejected') throw failed.reason;
             } finally {
                 processing = false;
             }
@@ -488,13 +485,13 @@ export function createWebhookDispatcher(
         start() {
             if (!processInterval) {
                 processInterval = setInterval(() => {
-                    void this.claimAndProcess();
+                    void this.claimAndProcess().catch(error => console.warn('[webhooks] Delivery poll failed', error));
                 }, pollIntervalMs);
             }
 
             if (!reaperInterval) {
                 reaperInterval = setInterval(() => {
-                    void store.resetStaleInFlightDeliveries(STALE_IN_FLIGHT_MS);
+                    void store.resetStaleInFlightDeliveries(STALE_IN_FLIGHT_MS).catch(error => console.warn('[webhooks] Reaper failed', error));
                 }, reaperIntervalMs);
             }
         },
@@ -508,7 +505,7 @@ export function createWebhookDispatcher(
                 clearInterval(reaperInterval);
                 reaperInterval = null;
             }
-            void (agent as unknown as { close?: () => Promise<void> }).close?.();
+            void (agent as unknown as { close?: () => Promise<void> }).close?.().catch(error => console.warn('[webhooks] Agent close failed', error));
         },
     };
 }

@@ -116,7 +116,8 @@ export default defineEventHandler(async (event) => {
     const isDefaultPath = isAdminPath(event.path, defaultPath);
     
     // Skip non-admin paths entirely
-    if (!isBasePath && !isDefaultPath) return;
+    const isApiPath = isAdminPath(event.path, '/api/admin');
+    if (!isBasePath && !isDefaultPath && !isApiPath) return;
 
     // Block default /admin/* when a custom basePath is configured (security through obscurity)
     // Exception: Allow /api/admin/* as these are internal API routes
@@ -143,6 +144,9 @@ export default defineEventHandler(async (event) => {
 
     // Check allowed hosts
     requireAllowedAdminHost(event, adminConfig?.allowedHosts, config.security.proxy);
+
+    // API handlers enforce their own session and authorization requirements.
+    if (isApiPath) return;
 
     // Allow unauthenticated access to login paths (checked after rewrite)
     if (isLoginPath(event.path)) {

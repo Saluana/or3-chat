@@ -6,6 +6,51 @@ Reviewed on 2026-10-14 against the working tree on `or3-cloud`, starting at comm
 
 This is a review of the existing implementation, not only the uncommitted diff. Existing edits were present at the start, and more appeared during review; none were changed. Reviewed paths include authentication/admin access, sync and IndexedDB, webhook routing/delivery, storage and workspace boundaries, wizard persistence, catalog/search, health reporting, and selected plugin and Cloud CLI lifecycle code. This does **not** claim every repository file, deployment combination, or provider was exhaustively exercised. Source locations refer to the working tree inspected during review.
 
+## Remediation progress
+
+Worktree: `/Users/brendon/Documents/or3/.worktrees/neckbeard-findings`
+Branch: `codex/neckbeard-findings`; base: `68bed3fb55703375fd1e28fc436ea7fbb92b013d`.
+
+- [x] **01** [P1] Webhook creation accepts a hostile origin's plain HTML form
+- [x] **02** [P1] Removing a workspace member leaves their webhook subscription alive
+- [x] **03** [P1] Incremental sync can overwrite the supposedly device-only API key
+- [x] **04** [P1] Logout leaves API keys in inactive workspace databases
+- [x] **05** [P1] Changing the admin password does not revoke existing admin tokens
+- [x] **06** [P2] The admin host allowlist skips the authentication APIs
+- [x] **07** [P2] Concurrent login attempts are admitted before any attempt is counted
+- [x] **08** [P2] Changing the username bypasses all aggregate login throttling
+- [x] **09** [P2] Login buffers an unlimited request body before applying its rate limit
+- [x] **10** [P2] The password policy accepts characters bcrypt silently ignores
+- [x] **11** [P2] The webhook registration quota is a check-then-insert race
+- [x] **12** [P2] The 4 KB webhook response cap runs after the whole body is allocated
+- [x] **13** [P2] Rate-limited webhook events are cancelled forever, despite a retry timestamp
+- [x] **14** [P2] Webhook background loops discard promise rejections
+- [x] **15** [P2] Sync completion can overwrite a newer cursor with an older one
+- [x] **16** [P2] Invalid pulled records are treated as successfully skipped, then acknowledged
+- [x] **17** [P2] Explicitly persisted wizard secrets get world-readable file permissions
+- [x] **18** [P2] Wizard persistence truncates the only copy before the replacement is durable
+- [x] **19** [P2] Saving two different wizard presets concurrently loses one
+- [x] **20** [P2] Wizard readiness accepts HTTP failures as a healthy application
+- [x] **21** [P2] The wizard's 45-second readiness timeout does not time out a pending fetch
+- [x] **22** [P2] The price endpoint fabricates successful market data when throttled
+- [x] **23** [P2] Model catalog requests read credentials from an abandoned storage location
+- [x] **24** [P2] A same-size model catalog refresh leaves the search index stale
+- [x] **25** [P2] Attachment writes can land in a different workspace after a hook awaits
+- [x] **26** [P3] Public deep health returns administrative diagnostic details
+
+All **26 findings are addressed in code** as of 2026-10-15. The findings below preserve the original review baseline and its source locations. Current validation and repeatable commands are in [the remediation receipt](audit-evidence/neckbeard-20261014/remediation-verification.md); fixed-behavior observations are in [remediation-results.jsonl](audit-evidence/neckbeard-20261014/remediation-results.jsonl).
+
+- **01, 02, 11–14:** guarded bounded webhook mutations, durable membership checks and revocation cleanup, atomic provider quotas, bounded response streaming, deferred rate limits, and caught background errors with batch settlement.
+- **03, 15, 16:** shared device-only KV policy at admission and incremental application, atomic monotonic cursors, and invalid payloads aborting the batch.
+- **04, 23–25:** account-owned keys, credential cleanup across retained workspace databases, canonical catalog authentication, catalog identity changes rebuilding search, and attachment operations retaining their starting database.
+- **05–10:** credential-bound admin JWTs, API host restrictions, reserved account and aggregate IP admission before password work, bounded validated JSON, and a shared 72-byte UTF-8 password policy.
+- **17–21:** private atomic wizard persistence, serialized preset mutations, and bounded readiness checks requiring a valid OR3 health response.
+- **22, 26:** CoinGecko endpoint and client/server tools removed; public health responses redact provider details and raw messages.
+
+**Verification:** OR3 Chat **52 files / 526 tests passed**, full Nuxt typecheck and changed-TypeScript lint passed, and all three audit scripts passed. SQLite provider **8 tests**, build, standalone typecheck and changed-source lint passed. Convex provider quota regression, template pack, build and standalone typecheck passed. Final diffs were inspected.
+
+**Integration prerequisite for 11:** matching SQLite and Convex changes are isolated in sibling worktrees on `codex/neckbeard-webhook-quota`. Published provider `0.0.17` lacks atomic registration limits; host registration fails closed with HTTP 503 against old providers. Provider releases and the matching Convex backend deployment must precede integration. Qualification explicitly aliases the candidate SQLite source. Nothing was released or deployed.
+
 ## Evidence and verification
 
 The three scripts in [audit-evidence/neckbeard-20261014](audit-evidence/neckbeard-20261014/) import production modules and use disposable IndexedDB, SQLite, temporary files, in-process H3 requests, and injected responses. They do not access a live deployment or use real credentials. Observations are recorded in [results.jsonl](audit-evidence/neckbeard-20261014/results.jsonl). They support 19 findings; the remaining seven are source-traced. Some probes demonstrate a failing primitive rather than a complete browser/deployment exploit; those limits are stated below.
@@ -14,11 +59,11 @@ Run from `or3-chat` with the existing dependencies installed:
 
 ```sh
 bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/reproduce.ts
-bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/webhooks.ts
+OR3_SQLITE_PROVIDER_SOURCE=/absolute/path/to/candidate/sqlite-webhook-store.ts bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/webhooks.ts
 bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/client-and-storage.ts
 ```
 
-Existing tests: **7 files, 61 tests passed**, covering conflict resolution, cursors, HLC, admin throttling, webhook routes, dispatcher, and event bridge. The exact command and output are in [verification.txt](audit-evidence/neckbeard-20261014/verification.txt). Passing these tests does not cover the failure cases below. No full build, browser E2E, production load test, or deployment lifecycle test was run for this review-only change.
+Original review-only validation: **7 files, 61 tests passed**, covering conflict resolution, cursors, HLC, admin throttling, webhook routes, dispatcher, and event bridge. The exact command and output are in [verification.txt](audit-evidence/neckbeard-20261014/verification.txt). Passing these tests does not cover the failure cases below. No full build, browser E2E, production load test, or deployment lifecycle test was run for this review-only change.
 
 ## 01 — [P1] Webhook creation accepts a hostile origin's plain HTML form
 
@@ -273,6 +318,8 @@ The deadline is checked only between loop iterations. The awaited fetch has no a
 **Fix:** Bound each probe with an abort signal tied to the remaining total budget, and stop polling on component disposal/cancellation. Preserve the overall deadline rather than restarting a full timeout on each attempt.
 
 ## 22 — [P2] The price endpoint fabricates successful market data when throttled
+
+**Resolved 2026-10-15:** Removed the demo's client tool, built-in server tool, price API route, and route tests. The historical observation remains in `results.jsonl`; the executable audit script no longer imports the removed route.
 
 **Location:** `server/api/coingecko/price.get.ts:84–100,154–159,184–204`.
 

@@ -398,7 +398,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Register trusted client and server tools with CSP-compatible draft-07 validation, runtime admission, cancellation guards, bounded failures, and request authorization."
+                    "summary": "Register trusted client and server tools alongside the bundled arithmetic tools, with runtime admission, cancellation guards, bounded failures, and request authorization."
                 },
                 {
                     "name": "manual-context-compaction.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Account identities, private signup invitations, team membership, and independent instance administration."
+                    "summary": "Account identities, invitations, team membership, account-owned local credentials and retained-database cleanup, bounded login admission, host restrictions, password policy, and admin session revocation."
                 },
                 {
                     "name": "background-execution.md",
@@ -647,7 +647,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "OR3 webhooks deliver real-time server-side events to external HTTP endpoints. Every delivery is a signed JSON payload with automatic retries, delivery logging, and SSRF protection."
+                    "summary": "Signed webhook delivery with guarded JSON mutations, current membership checks, atomic provider registration quotas, deferred rate limits, bounded response streams, retries, and SSRF protection."
                 },
                 {
                     "name": "providers.md",
@@ -728,7 +728,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 15,
-                    "summary": "This guide helps you diagnose and fix common issues with OR3 Cloud features including authentication, sync, storage, and notifications."
+                    "summary": "Diagnose Cloud authentication, sync, storage, and notifications, including redacted public health codes and administrative provider diagnostics."
                 },
                 {
                     "name": "config-reference.md",
@@ -764,7 +764,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Offline-first workspace synchronization, consistent snapshots, conflict resolution, and request admission against operator-configured rate limits."
+                    "summary": "Offline-first synchronization, consistent snapshots, device-only KV admission, transactional cursor advancement, invalid-payload recovery, conflict resolution, and configured rate limits."
                 },
                 {
                     "name": "storage-layer.md",
@@ -791,7 +791,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "Advanced source CLI and browser setup: provider selection, private first-run credentials, validation, and deployment. Use Set up Cloud for supported beginner routes."
+                    "summary": "Advanced source CLI and browser setup with private atomic persistence, concurrent preset safety, bounded OR3 health verification, provider selection, and deployment."
                 },
                 {
                     "name": "or3-connect.md",

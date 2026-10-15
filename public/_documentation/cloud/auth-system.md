@@ -65,9 +65,9 @@ Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. 
 
 ## OpenRouter is separate
 
-Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal.
+Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal. Authenticated keys retain their account owner; another account cannot hydrate them. Existing unowned keys must be entered again when accounts are enabled. Model catalog requests use the same canonical key.
 
-Logout clears the browser key from memory before waiting for local cleanup and invalidates pending reads. Reads and saves are scoped to the workspace database generation; delayed cleanup cannot erase a newly saved key. A direct account change also clears the previous account key, while a same-user workspace switch retains an already loaded personal key. Storage cleanup is best-effort if IndexedDB is unavailable.
+Logout clears the browser key from memory before waiting for local cleanup and invalidates pending reads. Cleanup scrubs credentials from all enumerated retained workspace databases, independently of conversation retention settings. Reads and saves are scoped to the workspace database generation; delayed cleanup cannot erase a newly saved key. A direct account change also clears the previous account key, while a same-user workspace switch retains an already loaded personal key. Storage cleanup is best-effort if IndexedDB is unavailable.
 
 Local mode can use the browser key directly. SSR mode forwards the key per request to the server stream route, unless the host supplies an instance key under its override policy. Plaintext user keys are not persisted as ordinary server configuration; durable background jobs can keep an encrypted credential envelope so work continues after detachment. Keep its encryption secret server-only. See [background execution](/documentation/cloud/background-execution) and [configuration](/documentation/cloud/config-reference#servicesllmopenrouter).
 
@@ -82,6 +82,8 @@ Instance settings, Administrators, signup invites, and the Plugins **Instance** 
 Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
 
 For Clerk + Convex, signing into the super-admin panel while also signed into Clerk can persist a deployment-admin grant through the signed bridge. `OR3_ADMIN_JWT_SECRET` must match between Nuxt and Convex. Inspect and revoke persistent grants at `/admin/admin-users`.
+
+Admin host restrictions cover both the panel and `/api/admin/*`, including login. Login reads at most 8 KiB of JSON, reserves one of five attempts per IP and username before password verification, and applies an additional twenty-request per-minute IP budget. New admin passwords must fit within 72 UTF-8 bytes. Changing the password revokes previously issued admin tokens and renews the requesting session.
 
 Admin logout clears the super-admin cookie. It does not sign out the application auth provider or revoke persisted deployment-admin grants. Account logout is a separate operation; local workspace data remains in Dexie.
 

@@ -1,4 +1,5 @@
-import { createError, defineEventHandler, getQuery, readBody, type H3Event } from 'h3';
+import { createError, defineEventHandler, getQuery, type H3Event } from 'h3';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { z } from 'zod';
 import {
     buildWebhookTestPingPayload,
@@ -63,7 +64,8 @@ export function createWebhookToggleHandler<TContext extends RouteContext>(
     options: WebhookMutationOptions<TContext>
 ) {
     return defineEventHandler(async (event) => {
-        const body = ToggleBodySchema.safeParse((await readBody(event)) ?? {});
+        const context = await options.resolveContext(event);
+        const body = ToggleBodySchema.safeParse((await readLimitedJsonBody(event)) ?? {});
         if (!body.success) {
             throw createError({
                 statusCode: 400,
@@ -71,7 +73,6 @@ export function createWebhookToggleHandler<TContext extends RouteContext>(
             });
         }
 
-        const context = await options.resolveContext(event);
         const webhookId = options.getWebhookId(event);
         const existing = await options.resolveWebhook(context, webhookId);
 
