@@ -807,7 +807,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
         const nav = page.getByRole('navigation', { name: 'Sidebar navigation' });
         await expect(nav).toBeVisible();
-        const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+        const search = page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true });
         await search.fill('Sidebar typing remains visible');
         await expect.poll(() => page.locator('#page-container').evaluate(element => element.getBoundingClientRect().height)).toBe(524);
         await expect(nav).toBeHidden();
@@ -1209,7 +1209,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByRole('button', { name: 'Chats', exact: true }).click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
     await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await expect(members).toHaveCount(0);
-    const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+    const search = page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true });
     await search.fill('alternative');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(toggle).toBeDisabled(); await expect(members).toHaveCount(1);
     await expect(members).toContainText('Branch'); await expect(members).toContainText('Launch checklist · alternative');
@@ -1223,6 +1223,8 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const screenshot = info.outputPath('family-keyboard-reload.png'); await page.screenshot({ path: screenshot, animations: 'disabled' });
     await info.attach('family-keyboard-reload', { path: screenshot, contentType: 'image/png' });
     const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Preserve this unsent native compaction draft.');
+    const compact = page.getByRole('region', { name: 'Context & compaction', exact: true })
+        .getByRole('button', { name: 'Compact', exact: true });
     const summaryRow = page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') });
     const originalSummaryId = await summaryRow.getAttribute('data-msg-id');
     const selectVariant = async (name: string) => {
@@ -1235,7 +1237,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await selectVariant('Nitro');
     await page.getByTestId('fixture-hold-summary').check();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
+    await compact.click();
     await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -1245,7 +1247,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await selectVariant('Floor');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
+    await compact.click();
     await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0);
@@ -1254,11 +1256,12 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await page.getByTestId('fixture-hold-summary').uncheck();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
+    await compact.click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
-    await page.locator('.unified-sb-item-active').getByRole('button', { name: 'Open actions', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await page.locator('.unified-sb-item-active').getByRole('button', { name: /^Actions for / }).last().click();
     const historyCompact = page.getByRole('button', { name: 'Continue in new chat', exact: true }).filter({ hasText: 'Continue in new chat' });
     await expect(historyCompact).toBeDisabled();
     await expect(historyCompact).toHaveAttribute('title', /at least two settled/);
@@ -1274,7 +1277,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.screenshot({ path: activeScreenshot, animations: 'disabled' });
     await info.attach('family-active-original', { path: activeScreenshot, contentType: 'image/png' });
     const originalRootDraft = await input.innerText();
-    await originalMember.getByRole('button', { name: 'Open actions', exact: true }).click();
+    await originalMember.getByRole('button', { name: /^Actions for / }).click();
     await expect(historyCompact).toBeEnabled(); await historyCompact.click();
     await expect(summaryRow).toHaveCount(1);
     await expect(page.locator('[data-compaction-card]')).toBeVisible();
@@ -1310,11 +1313,11 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     for (const reload of [false, true]) {
         if (reload) await page.reload();
         await expect(header).toBeVisible(); await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
-        await header.getByRole('button', { name: 'Open actions', exact: true }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
+        await header.getByRole('button', { name: /^Actions for / }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
         await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary);
         await search.fill('Launch checklist'); await expect(header).toBeVisible();
         await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
-        await header.getByRole('button', { name: 'Open actions', exact: true }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
+        await header.getByRole('button', { name: /^Actions for / }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
         await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary); await search.fill('');
     }
     await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
@@ -2034,7 +2037,7 @@ test.describe('production chat journey', () => {
         await send(page, 'journey:palette handoff');
         await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
         // The reply text is not in the title, so the sidebar list cannot match it.
-        await page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true }).fill('deterministic');
+        await page.getByRole('textbox', { name: 'Filter sidebar by title', exact: true }).fill('deterministic');
         await expect(page.getByText('No matches found', { exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Search inside messages', exact: true }).click();
         await expect(page.locator('[data-test="command-palette"]')).toBeVisible();

@@ -225,13 +225,32 @@ async function runPaletteCommand(page: Page, label: string): Promise<void> {
     const palette = page.getByRole('dialog', { name: 'Command palette', exact: true });
     await palette.getByRole('combobox').fill(label);
     await palette.getByRole('option', { name: new RegExp(`^${label} `) }).first().click();
-    await palette.getByRole('group', { name: 'Result actions', exact: true })
-        .getByRole('button', { name: label, exact: true }).click();
+    // Mobile command rows run on the first tap. Desktop's first click only
+    // locks the preview, so its primary action still needs activation.
+    if (page.viewportSize()!.width >= 640) {
+        await palette.getByRole('group', { name: 'Result actions', exact: true })
+            .getByRole('button', { name: label, exact: true }).click();
+    }
     await expect(palette).toBeHidden();
+}
+
+async function expectDashboardGuttersAligned(page: Page): Promise<void> {
+    const dialog = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    await expect.poll(() => dialog.evaluate(element => {
+        const title = element.querySelector<HTMLElement>('[data-slot="title"]')!;
+        const titleLeft = title.getBoundingClientRect().left;
+        return ['#dashboard-page-header', '.dashboard-page-frame'].every(selector => {
+            const target = element.querySelector<HTMLElement>(selector)!;
+            const contentLeft = target.getBoundingClientRect().left +
+                Number.parseFloat(getComputedStyle(target).paddingLeft);
+            return Math.abs(contentLeft - titleLeft) <= 1;
+        });
+    })).toBe(true);
 }
 
 test.describe('responsive modal layouts', () => {
     for (const theme of themes) test(`${theme} dialogs follow Safari keyboard height and panning`, async ({ page }, info) => {
+        test.setTimeout(90_000);
         await page.setViewportSize({ width: 390, height: 844 });
         await page.addInitScript(() => {
             const viewport = Object.assign(new EventTarget(), {
@@ -276,7 +295,7 @@ test.describe('responsive modal layouts', () => {
         });
         await page.getByRole('button', { name: 'Dismiss welcome' }).click();
         await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-        await page.getByRole('button', { name: 'Create your first project', exact: true }).click();
+        await page.getByRole('button', { name: 'Create a project', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: 'New Project', exact: true });
         await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Keyboard-safe project');
         const setFrame = async (height: number, offsetTop: number, scale = 1) => {
@@ -324,6 +343,16 @@ test.describe('responsive modal layouts', () => {
         await captureChat(page, info, `modal-${theme}-light-844x390-keyboard-landscape-search`);
         await closeSearch.click();
         await expect(palette).toBeHidden();
+
+        // The keyboard can compact the modal without a layout media query
+        // changing. Its dashboard content must follow the same gutter.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await openThemeStudio(page, false);
+        await setFrame(320, 74);
+        await expect(page.getByRole('dialog', { name: 'Theme Settings', exact: true }))
+            .toHaveAttribute('data-compact-viewport', 'short');
+        await expectDashboardGuttersAligned(page);
+        await captureChat(page, info, `modal-${theme}-light-keyboard-dashboard-gutters`);
     });
 
     for (const theme of themes) for (const mode of modes) {
@@ -332,12 +361,12 @@ test.describe('responsive modal layouts', () => {
             await page.setViewportSize({ width: 390, height: 844 });
             await openResponsiveChat(page, theme, mode);
             await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-            const projectTrigger = page.getByRole('button', { name: 'Create your first project', exact: true });
+            const projectTrigger = page.getByRole('button', { name: 'Create a project', exact: true });
             await projectTrigger.focus();
             await projectTrigger.click();
             const project = page.getByRole('dialog', { name: 'New Project', exact: true });
             await project.getByRole('textbox', { name: 'Title', exact: true }).fill('Responsive project');
-            await project.getByRole('textbox', { name: 'Description', exact: true }).fill('Long project description '.repeat(50));
+            await project.getByRole('textbox', { name: 'Brief', exact: true }).fill('Long project brief '.repeat(50));
             for (const size of chatViewports) {
                 await page.setViewportSize(size);
                 await captureChat(page, info, `modal-${theme}-${mode}-${size.width}x${size.height}-project`);
@@ -367,7 +396,7 @@ test.describe('responsive modal layouts', () => {
                 await expectDialogFits(page, 'System Prompts');
             }
             const prompts = page.getByRole('dialog', { name: 'System Prompts', exact: true });
-            await prompts.getByRole('textbox', { name: 'Untitled Prompt', exact: true }).fill('Responsive library prompt');
+            await prompts.getByRole('textbox', { name: 'Prompt title', exact: true }).fill('Responsive library prompt');
             await prompts.getByRole('button', { name: 'Back to list', exact: true }).click();
             await prompts.getByRole('button', { name: 'Back to prompts', exact: true }).click();
             for (const size of chatViewports) {
@@ -403,12 +432,20 @@ test.describe('responsive modal layouts', () => {
                 await page.keyboard.press('ArrowDown');
             }
             await expect(promptResult).toHaveAttribute('aria-selected', 'true');
-            const secondary = palette.getByRole('button', { name: 'Open prompt library', exact: true });
-            await expect(secondary).toBeHidden();
-            await palette.getByRole('button', { name: 'Show more actions', exact: true }).click();
+            // Mobile record actions now live in the result-preview sheet,
+            // rather than the desktop's inline More action tray.
+            await promptResult.click();
+            const preview = page.getByRole('dialog', { name: 'Result preview', exact: true });
+            await expect(preview).toBeVisible();
+            await expectDialogFits(page, 'Result preview');
+            const secondary = preview.getByRole('button', { name: 'Open prompt library', exact: true });
+            await secondary.focus();
             await expect(secondary).toBeFocused();
             await expect(secondary).toBeInViewport({ ratio: 1 });
             await captureChat(page, info, `modal-${theme}-${mode}-390x320-search-expanded-actions`);
+            await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+            await expect(preview).toBeHidden();
+            await expect(palette).toBeVisible();
             await palette.getByRole('combobox').focus();
             await expect(secondary).toBeHidden();
             await page.keyboard.press('Escape');
@@ -571,7 +608,7 @@ test.describe('responsive modal layouts', () => {
             await openResponsiveChat(page, theme, 'light');
             await runPaletteCommand(page, 'New system prompt');
             const parent = page.getByRole('dialog', { name: 'System Prompts', exact: true });
-            await parent.getByRole('textbox', { name: 'Untitled Prompt', exact: true }).fill('Responsive prompt ' + 'X'.repeat(160));
+            await parent.getByRole('textbox', { name: 'Prompt title', exact: true }).fill('Responsive prompt ' + 'X'.repeat(160));
             await parent.getByRole('button', { name: 'Back to list', exact: true }).click();
             await parent.getByRole('button', { name: 'Back to prompts', exact: true }).click();
             await parent.getByRole('button', { name: 'Prompt actions', exact: true }).click();
@@ -674,6 +711,39 @@ async function selectThemeAndMode(
     await expect.poll(async () =>
         root.evaluate((element) => element.classList.contains('dark'))
     ).toBe(mode === 'dark');
+}
+
+for (const theme of themes) {
+    test(`${theme} dashboard page gutters follow the modal on short screens`, async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await openResponsiveChat(page, theme, 'light');
+        await openThemeStudio(page, false);
+        for (const mode of modes) {
+            await page.setViewportSize({ width: 1280, height: 900 });
+            await selectThemeAndMode(page, theme, mode);
+            for (const size of [
+                { width: 1280, height: 900 },
+                { width: 844, height: 390 },
+                { width: 640, height: 480 },
+                { width: 390, height: 320 },
+            ]) {
+                await page.setViewportSize(size);
+                await expectDialogFits(page, 'Theme Settings');
+                await expectDashboardGuttersAligned(page);
+            }
+            // Typography changes must not move content away from the modal's
+            // fixed title gutter, including Cyberpunk's different root size.
+            await page.setViewportSize({ width: 1280, height: 900 });
+            await page.getByRole('tab', { name: 'Typography', exact: true }).click();
+            await page.getByRole('slider', { name: /Base font size/ }).press('End');
+            await expect.poll(() => cssVariable(page, '--app-font-size-root')).toBe('24px');
+            await expectDashboardGuttersAligned(page);
+            await page.setViewportSize({ width: 844, height: 390 });
+            await expectDashboardGuttersAligned(page);
+            await captureChat(page, info, `dashboard-${theme}-${mode}-compact-gutters`);
+        }
+    });
 }
 
 async function cssVariable(page: Page, name: string): Promise<string> {
