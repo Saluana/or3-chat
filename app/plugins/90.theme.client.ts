@@ -3,6 +3,7 @@ import {
     defineNuxtPlugin,
     onNuxtReady,
     useAppConfig,
+    useColorMode,
     useRuntimeConfig,
 } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
@@ -50,6 +51,7 @@ import {
 export type { ThemePlugin } from '~/theme/_shared/types';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
+    const colorMode = useColorMode();
     // Restore SSR icons before loading themes. Hydrating later would discard
     // maps registered by client theme loading and workspace-profile preloading.
     if (nuxtApp.payload.iconRegistry) {
@@ -288,7 +290,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         root.classList.add(name);
     };
 
-    const read = () => localStorage.getItem(storageKey);
+    const read = () => {
+        // Nuxt temporarily writes its SSR preference to storage while unknown.
+        // Keep the pre-paint script's resolved class until hydration restores it.
+        const scheme = colorMode.unknown
+            ? THEME_CLASSES.find(name => root.classList.contains(name))
+            : localStorage.getItem(storageKey);
+        return scheme && THEME_CLASSES.includes(scheme) ? scheme : null;
+    };
     const readActiveTheme = () =>
         localStorage.getItem(activeThemeStorageKey);
     const readActiveThemeCookie = () => {
@@ -307,6 +316,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const set = (name: string) => {
         current.value = name;
         localStorage.setItem(storageKey, name);
+        colorMode.preference = name;
         apply(name);
     };
 

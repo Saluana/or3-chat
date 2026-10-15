@@ -75,9 +75,7 @@ describe('WorkspaceChrome', () => {
         ).toBe(false);
 
         await wrapper.get('.workspace-chrome-active-title').trigger('click');
-        expect(wrapper.find('[data-testid="workspace-tab-switcher"]').exists()).toBe(
-            true
-        );
+        await vi.waitFor(() => expect(wrapper.find('[data-testid="workspace-tab-switcher"]').exists()).toBe(true));
         expect(wrapper.findAll('[data-test="action"]')).toHaveLength(1);
 
         await wrapper.setProps({ mobile: true });
@@ -88,7 +86,7 @@ describe('WorkspaceChrome', () => {
         );
     });
 
-    it('renders desktop actions beside, not inside, the scrollable tab strip', () => {
+    it('renders desktop actions beside, not inside, the scrollable tab strip', async () => {
         const wrapper = mount(WorkspaceChrome, {
             props: { ...props, mobile: false },
             global: {
@@ -111,6 +109,6 @@ describe('WorkspaceChrome', () => {
         expect(
             wrapper.find('.workspace-chrome-actions [data-test="action"]').exists()
         ).toBe(true);
-        expect(wrapper.find('[role="tablist"]').exists()).toBe(true);
+        await vi.waitFor(() => expect(wrapper.find('[role="tablist"]').exists()).toBe(true));
     });
 });

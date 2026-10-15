@@ -36,7 +36,6 @@ const statusBarStyle = computed(() =>
 
 useHead({
     htmlAttrs: {
-        class: 'light',
         lang: 'en',
     },
     title: appName,
