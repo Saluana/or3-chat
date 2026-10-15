@@ -59,7 +59,12 @@
                             editorProps?.['data-theme-matches']
                         "
                     ></EditorContent>
-
+                    <!-- Keep the same themed line box while TipTap initializes. -->
+                    <div v-else class="chat-input-editor prosemirror-host" aria-hidden="true">
+                        <div class="tiptap ProseMirror">
+                            <p class="is-editor-empty" :data-placeholder="signInRequired ? SIGN_IN_PROMPT : 'Write something…'"><br /></p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -154,6 +159,17 @@
                                     />
                                 </template>
                             </UPopover>
+                            <template #fallback>
+                                <UButton
+                                    v-bind="settingsButtonProps"
+                                    label="Open"
+                                    type="button"
+                                    aria-label="Settings"
+                                    disabled
+                                >
+                                    <UIcon :name="iconModelSettings" class="w-4 h-4" />
+                                </UButton>
+                            </template>
                         </ClientOnly>
                     </div>
                 </div>

@@ -189,7 +189,9 @@ async function expectDialogFits(page: Page, name: string): Promise<void> {
     for (const button of await dialog.locator('[data-slot="header"] button:visible, [data-slot="footer"] button:visible').all()) {
         await expect(button).toBeInViewport({ ratio: 1 });
         if (page.viewportSize()!.width < 768) {
-            expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+            // The dialog's entrance transform briefly scales its 44px controls.
+            await expect.poll(async () => (await button.boundingBox())?.height ?? 0)
+                .toBeGreaterThanOrEqual(44);
         }
     }
 }

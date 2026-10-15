@@ -21,7 +21,11 @@ function countWords(text: string): number {
     if (!normalized) return 0;
     if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
         const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
-        return [...segmenter.segment(normalized)].filter((part) => part.isWordLike).length;
+        let words = 0;
+        for (const part of segmenter.segment(normalized)) {
+            if (part.isWordLike) words += 1;
+        }
+        return words;
     }
     return normalized.split(/\s+/u).length;
 }
@@ -35,34 +39,41 @@ export function useDocumentInsights(editor: Ref<Editor | null>) {
     const serializedBytes = ref(0);
     let frame = 0;
     let attachedEditor: Editor | null = null;
+    let analyzedDocument: Editor['state']['doc'] | null = null;
 
     function recompute() {
         frame = 0;
         const current = editor.value;
         if (!current) return;
-        const nextOutline: DocumentOutlineItem[] = [];
-        let topLevelBlocks = 0;
-        current.state.doc.forEach(() => { topLevelBlocks += 1; });
-        current.state.doc.descendants((node, position) => {
-            if (node.type.name !== 'heading') return;
-            const level = Number(node.attrs.level);
-            if (level < 1 || level > 3) return;
-            nextOutline.push({
-                id: `heading-${position}`,
-                level: level as 1 | 2 | 3,
-                text: node.textContent.trim() || 'Untitled section',
-                position,
+        const doc = current.state.doc;
+        if (doc !== analyzedDocument) {
+            const nextOutline: DocumentOutlineItem[] = [];
+            let topLevelBlocks = 0;
+            doc.forEach(() => { topLevelBlocks += 1; });
+            doc.descendants((node, position) => {
+                if (node.type.name !== 'heading') return;
+                const level = Number(node.attrs.level);
+                if (level < 1 || level > 3) return;
+                nextOutline.push({
+                    id: `heading-${position}`,
+                    level: level as 1 | 2 | 3,
+                    text: node.textContent.trim() || 'Untitled section',
+                    position,
+                });
             });
-        });
+            outline.value = nextOutline;
+            words.value = countWords(doc.textBetween(0, doc.content.size, '\n', '\n'));
+            characters.value = doc.textContent.length;
+            blocks.value = topLevelBlocks;
+            analyzedDocument = doc;
+        }
         const selectionPosition = current.state.selection.from;
-        activeOutlineId.value = [...nextOutline]
-            .reverse()
-            .find((item) => item.position <= selectionPosition)?.id;
-        outline.value = nextOutline;
-        const text = current.state.doc.textContent;
-        words.value = countWords(text);
-        characters.value = text.length;
-        blocks.value = topLevelBlocks;
+        let nextActiveId: string | undefined;
+        for (const item of outline.value) {
+            if (item.position > selectionPosition) break;
+            nextActiveId = item.id;
+        }
+        activeOutlineId.value = nextActiveId;
     }
 
     function schedule() {

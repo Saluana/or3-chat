@@ -44,6 +44,7 @@
                 </div>
             </div>
             <WorkspaceTabSwitcher
+                v-if="switcherActivated"
                 v-model:open="switcherOpen"
                 :tabs="tabs"
                 :active-tab-id="activeTabId"
@@ -88,19 +89,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
 import { workspaceTabTitle } from '~/core/workspace-tabs/display';
 import { useIcon } from '~/composables/useIcon';
 import { useWorkspaceTabIcon } from '~/composables/core/useWorkspaceTabIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import WorkspaceTabBar from './WorkspaceTabBar.vue';
-import WorkspaceTabSwitcher from './WorkspaceTabSwitcher.vue';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
     type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
 import AppIcon from '~/components/ui/AppIcon.vue';
+
+// Mobile first paint needs neither the desktop tab strip nor a closed dialog.
+const WorkspaceTabBar = defineAsyncComponent(() => import('./WorkspaceTabBar.vue'));
+const WorkspaceTabSwitcher = defineAsyncComponent(() => import('./WorkspaceTabSwitcher.vue'));
 
 const props = withDefaults(
     defineProps<{
@@ -143,6 +146,10 @@ const emit = defineEmits<{
 }>();
 
 const switcherOpen = ref(false);
+const switcherActivated = ref(false);
+watch(switcherOpen, (open) => {
+    if (open) switcherActivated.value = true;
+});
 watch(() => props.mobile, (mobile) => {
     if (!mobile) switcherOpen.value = false;
 });

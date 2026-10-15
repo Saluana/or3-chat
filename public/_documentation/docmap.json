@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
+                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, saved color schemes, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, recoverable Files Trash, unavailable-document states, failed-save retry, unsaved-change guards, and scoped image-read delivery and visible image-intake recovery."
+                    "summary": "Native editing and custom schemas, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, accurate statistics, captured workspace history, review/Undo, recoverable Files Trash, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
                 },
                 {
                     "name": "prompts.md",

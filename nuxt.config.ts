@@ -286,6 +286,10 @@ export default defineNuxtConfig({
         },
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
+    // Use the same preference as the theme runtime in Nuxt's pre-paint script.
+    colorMode: {
+        storageKey: 'theme',
+    },
     icon: {
         serverBundle: {
             // Only bundle the iconify collections we actually use

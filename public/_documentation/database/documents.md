@@ -100,6 +100,24 @@ Releasing a cached document drops heavy content and timers only when no staged o
 
 The mounted editor shows a persistent save-failure banner with **Retry document save** while edits remain unsaved. Hiding the page captures and flushes the current editor buffer. Refreshing or leaving the page with staged edits requests the browser's unsaved-change confirmation and starts a save; dismissing the confirmation keeps the buffer open. An unload-time write is not a durability receipt. Browsers may suppress confirmations without prior user interaction, and forcibly closing the browser or accepting the confirmation can still discard an uncommitted edit.
 
+Clean split panes showing the same document follow the latest title and body.
+If both panes have independent edits, saving refuses to overwrite the other
+draft. The existing save banner asks you to copy your edits and undo text changes
+to load the shared version before applying them again. If the title also
+conflicts, the banner shows the saved title to restore before retrying. Conflicting drafts remain
+in the origin workspace's in-memory document state while switching workspaces;
+they are restored when that tab returns. They are not a committed save, so the
+same unsaved-change confirmation applies before refreshing or leaving.
+
+Find matches span inline formatting such as bold and links. Replace and All
+insert literal text, including angle brackets, and refresh the result count as
+the document changes. Replacement, table editing and image controls respect
+the editor's read-only state. Image controls remain usable at reduced widths.
+Word counts separate paragraphs, hard breaks and table cells; moving the caret
+updates the active outline heading without recounting the document.
+The slash insert menu closes when the caret moves away from the end of its
+query, preventing a stale command from deleting the wrong range.
+
 ## Document AI proposals
 
 The document AI composer accepts a request, attachments, saved/plugin slash actions, and document/chat references. Slash actions insert a prompt without immediately sending it. References are deduplicated and resolved again before submission; a missing/deleted reference or a reference to the current document is refused.

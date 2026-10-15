@@ -13,6 +13,13 @@ import { getDb, type Or3DB } from '~/db/client';
 
 import type { TipTapDocument } from '~/types/database';
 
+interface EditorConflictDraft {
+    title: string;
+    content: TipTapDocument;
+    baselineTitle: string;
+    baselineContent: TipTapDocument;
+}
+
 interface DocState {
     record: Document | null;
     status: 'idle' | 'saving' | 'saved' | 'error' | 'loading' | 'unavailable';
@@ -21,6 +28,7 @@ interface DocState {
     pendingContent?: TipTapDocument | null; // TipTap JSON
     pendingTitleGeneration?: number;
     pendingContentGeneration?: number;
+    editorConflicts?: Map<string, EditorConflictDraft>;
     nextGeneration: number;
     flushPromise?: Promise<void>; // Track active flush operation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,6 +54,7 @@ function retainDocument(db: Or3DB, id: string, st: DocState) {
 }
 
 function forgetRetainedDocument(db: Or3DB, id: string, st: DocState) {
+    if (st.editorConflicts?.size) return;
     const pending = retainedDocuments.get(db.name);
     if (pending?.get(id) !== st) return;
     pending.delete(id);
@@ -367,6 +376,20 @@ export function setDocumentContent(id: string, content: TipTapDocument | null, d
     }
 }
 
+/** Retain a competing pane's draft without replacing the shared pending save. */
+export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void {
+    const st = ensure(id, db);
+    if (draft) {
+        (st.editorConflicts ??= new Map()).set(key, draft);
+        retainDocument(db, id, st);
+    } else {
+        st.editorConflicts?.delete(key);
+        if (!st.flushPromise && st.pendingTitle === undefined && st.pendingContent === undefined) {
+            forgetRetainedDocument(db, id, st);
+        }
+    }
+}
+
 /**
  * Purpose:
  * Access the reactive state container for a document.
@@ -503,7 +526,7 @@ export async function releaseDocument(
     }
     // Release is cache eviction, not a user-authorized discard. A failed save
     // or an edit staged while release awaited storage must remain retryable.
-    if (st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined) {
+    if (st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined || st.editorConflicts?.size) {
         return;
     }
     // Null record to drop heavy content reference; then optionally drop entry entirely.

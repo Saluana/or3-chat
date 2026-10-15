@@ -89,6 +89,101 @@ for (const [name, viewport] of [
     });
 }
 
+for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light', 'dark'] as const) {
+    test(`${theme} ${mode} mobile startup keeps the composer and navigation stable while JavaScript loads`, async ({ page, context }, testInfo) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        // The saved choice must win over the device setting before first paint.
+        await page.emulateMedia({ colorScheme: mode === 'dark' ? 'light' : 'dark' });
+        await page.addInitScript(mode => localStorage.setItem('theme', mode), mode);
+        await context.addCookies([
+            { name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' },
+        ]);
+        await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, route =>
+            route.request().method() === 'POST'
+                ? route.abort('blockedbyclient')
+                : route.fulfill({ json: { data: [] } })
+        );
+        let resumeScripts!: () => void;
+        const scriptsReady = new Promise<void>(resolve => { resumeScripts = resolve; });
+        await page.route(/\/_nuxt\/.*\.js(?:\?|$)/, async route => {
+            await scriptsReady;
+            await route.continue();
+        });
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        page.on('console', message => {
+            if (/hydration/i.test(message.text())) errors.push(message.text());
+        });
+        const geometry = () => page.locator('.chat-input-main').first().evaluate(element => {
+            const rect = (target: Element | null) => target?.getBoundingClientRect().toJSON() ?? null;
+            return {
+                dark: document.documentElement.classList.contains('dark'),
+                background: getComputedStyle(document.body).backgroundColor,
+                composer: rect(element),
+                editor: rect(element.querySelector('.chat-input-editor')),
+                settings: rect(element.querySelector('[aria-label="Settings"]')),
+                navigation: rect(document.querySelector('#main-content [aria-label="Open sidebar"]')),
+            };
+        });
+        try {
+            await page.goto('/chat', { waitUntil: 'commit' });
+            await expect(page.locator('.chat-input-main').first()).toBeVisible();
+            // WebKit's fonts.ready also waits for the held module scripts.
+            // Load the visible text faces independently of document completion.
+            await page.evaluate(() => Promise.all(
+                Array.from(document.querySelectorAll('.chat-input-main, .workspace-chrome-active-label'))
+                    .map(element => document.fonts.load(getComputedStyle(element).font))
+            ));
+            const initial = await geometry();
+            await testInfo.attach('before-javascript', { body: await page.screenshot({ path: testInfo.outputPath('before-javascript.png') }), contentType: 'image/png' });
+            // Endpoint snapshots miss a flash between Nuxt plugin startup and mount.
+            await page.evaluate(() => {
+                const frames: Array<{ dark: boolean; classes: string }> = [];
+                (window as typeof window & { __startupColorFrames?: typeof frames }).__startupColorFrames = frames;
+                const sample = () => {
+                    frames.push({ dark: document.documentElement.classList.contains('dark'), classes: document.documentElement.className });
+                    if (!(window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__) requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
+            resumeScripts();
+            await page.waitForFunction(() => (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true);
+            await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+            const dismiss = page.getByRole('button', { name: 'Dismiss welcome' });
+            if (await dismiss.isVisible()) await dismiss.click();
+            const ready = await geometry();
+            await testInfo.attach('after-hydration', { body: await page.screenshot({ path: testInfo.outputPath('after-hydration.png') }), contentType: 'image/png' });
+            writeFileSync(testInfo.outputPath('startup-geometry.json'), JSON.stringify({ theme, initial, ready, errors }, null, 2));
+            await testInfo.attach('startup-geometry', {
+                body: Buffer.from(JSON.stringify({ theme, initial, ready, errors }, null, 2)),
+                contentType: 'application/json',
+            });
+            expect(initial.dark, 'saved color scheme applies before JavaScript bundles').toBe(mode === 'dark');
+            expect(ready.dark).toBe(initial.dark);
+            const colorFrames = await page.evaluate(() => (window as typeof window & { __startupColorFrames?: Array<{ dark: boolean; classes: string }> }).__startupColorFrames ?? []);
+            await testInfo.attach('hydration-color-frames', { body: Buffer.from(JSON.stringify(colorFrames, null, 2)), contentType: 'application/json' });
+            expect(colorFrames.length).toBeGreaterThan(0);
+            expect(colorFrames.filter(frame => frame.dark !== initial.dark), 'saved color scheme stays stable throughout hydration').toEqual([]);
+            expect(ready.background, 'the surface color must not flash during hydration').toBe(initial.background);
+            for (const part of ['composer', 'editor', 'settings', 'navigation'] as const) {
+                expect(initial[part], `${part} is present before JavaScript`).not.toBeNull();
+                expect(initial[part]!.width, `${part} is visible before JavaScript`).toBeGreaterThan(0);
+                for (const dimension of ['x', 'y', 'width', 'height']) {
+                    expect(Math.abs(initial[part]![dimension] - ready[part]![dimension]), `${part}.${dimension} stays stable`).toBeLessThanOrEqual(1);
+                }
+            }
+            expect(errors).toEqual([]);
+            const input = page.getByRole('textbox', { name: 'Message input' });
+            await input.fill('Mobile startup draft');
+            await expect(input).toHaveText('Mobile startup draft');
+            await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'Navigation', exact: true })).toBeVisible();
+        } finally {
+            resumeScripts();
+        }
+    });
+}
+
 async function waitForFunctionalChat(page: Page): Promise<void> {
     // Dev imports can still be optimizing after load; interact with the mounted
     // editor only after its visible DOM and dependency graph are ready.
