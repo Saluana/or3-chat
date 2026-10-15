@@ -17,7 +17,7 @@ Primary dirty checkouts were preserved. Eight clean, redundant worktrees were
 removed and nine missing-checkout registrations were pruned. Dirty, unmerged,
 or data-bearing worktrees were retained. No branches were deleted.
 
-## Results
+## Initial repair qualification
 
 | Check | Result |
 |---|---|
@@ -93,7 +93,39 @@ bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/clien
 The sync HTTP harness binds disposable loopback ports; the sandbox required
 elevated execution for that check. Tests use synthetic credentials, temporary
 files and databases, scripted external transports, and in-process requests.
-No live market lookup, external delivery, browser E2E, production load test,
-full host production build, or deployment lifecycle test was run. Both provider
-packages were built. The Convex quota test exercises the actual mutation with
-a scripted database boundary, not a deployed Convex instance.
+
+## Final qualification against published packages
+
+The isolated `verify-neckbeard-pr` checkout uses commit
+`e7b3f2502` (including the merged `or3-cloud` base `93a693739`) and a frozen
+Bun 1.3.14 install with its own `node_modules`, no `.env`, and no provider
+source aliases. The fixed profile follows `.github/workflows/tests.yml`:
+Basic Auth, invite-only registration without auto-provisioning, SQLite sync,
+and filesystem storage, using disposable fixture secrets and paths. Production
+build qualification also supplies the Dockerfile's required refresh secret
+and creates the disposable database/storage directory before prerendering.
+
+| Check | Result |
+|---|---|
+| Full core suites (`bun run test`) | 675 files passed; 6,524 tests passed, 1 skipped |
+| Full Nuxt typecheck (`bun run type-check`) | Passed; existing duplicate auto-import warnings remain |
+| Fixed-profile production build (`bun run build`) | Passed, including prerendering; no error or unhandled-rejection logs |
+| Changed-source ESLint | 58 files passed, no errors |
+| Cloud backup CLI suite | 37 passed, 4 skipped |
+| Three asserting audit scripts | Passed; 21 observations reproduced with installed SQLite 0.0.18 |
+| Documentation and typechecked examples | 112 files, 100 routes, 20 examples passed |
+| Provider-version and fixed-profile lock drift | Passed |
+| Installed provider export and stack contracts | 14 tests passed |
+| Plugin runtime compatibility ledger and snapshots | Passed |
+
+SQLite release qualification passed 233 tests (11 skipped), standalone
+typecheck, build, and archive inspection. Convex passed its release tests,
+standalone typecheck, template build/archive checks, and all 14 lifecycle
+checks against a real local Convex backend. Both the macOS upgrade from
+published 0.0.17 and the hosted Linux lifecycle passed, including 12 concurrent
+webhook registrations at a quota of five. The hosted backend retained its
+existing record across upgrade and restart. Exact release receipts are linked
+above.
+
+No live market lookup, external webhook delivery, host browser E2E, production
+load test, application release, or production deployment was performed.
