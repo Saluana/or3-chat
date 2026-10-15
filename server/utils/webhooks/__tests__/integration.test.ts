@@ -2,6 +2,9 @@
 import Database from 'better-sqlite3';
 import { createHooks } from 'hookable';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
+import type { AuthWorkspaceStore } from '../../../auth/store/types';
+import { testRuntimeConfig } from '../../../../tests/setup';
 import { encryptSecret } from '../crypto';
 import { createWebhookDispatcher } from '../dispatcher';
 import { createWebhookEventBridge } from '../event-bridge';
@@ -12,6 +15,8 @@ import type { WebhookRegistration, WebhookStore } from '../store/types';
 const openDatabases = new Set<InstanceType<typeof Database>>();
 
 function createStore(): WebhookStore {
+    testRuntimeConfig.value.sync.provider = 'webhook-integration';
+    registerAuthWorkspaceStore({ id: 'webhook-integration', create: () => ({ getWorkspaceRole: async () => 'member' }) as unknown as AuthWorkspaceStore });
     const db = new Database(':memory:');
     openDatabases.add(db);
     return createSqliteWebhookStore({ database: db });

@@ -44,7 +44,7 @@ export async function isPortAvailable(
     return true;
 }
 
-/** Waits for a TCP-reachable HTTP endpoint; redirects are considered ready. */
+/** Waits for a successful OR3 health response within one bounded deadline. */
 export async function waitForHttpReady(
     url: string,
     timeoutMs = 45_000,
@@ -53,14 +53,23 @@ export async function waitForHttpReady(
     let lastError = '';
     while (Date.now() < deadline) {
         try {
-            const response = await fetch(url, { redirect: 'manual' });
-            await response.body?.cancel();
-            if (response.status === 0 || response.status < 600) return;
-            lastError = `HTTP ${response.status}`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), Math.min(5_000, Math.max(1, deadline - Date.now())));
+            try {
+                const response = await fetch(url, { redirect: 'manual', signal: controller.signal });
+                if (response.status === 200) {
+                    const health: unknown = await response.json();
+                    if (health && typeof health === 'object' && 'status' in health && health.status === 'ok' && 'timestamp' in health && typeof health.timestamp === 'string' && Number.isFinite(Date.parse(health.timestamp)) && 'uptime' in health && typeof health.uptime === 'number' && Number.isFinite(health.uptime) && health.uptime >= 0) return;
+                    lastError = 'Invalid OR3 health response';
+                } else {
+                    await response.body?.cancel();
+                    lastError = `HTTP ${response.status}`;
+                }
+            } finally { clearTimeout(timeout); }
         } catch (error) {
             lastError = normalizeErrorMessage(error);
         }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, Math.min(300, Math.max(0, deadline - Date.now()))));
     }
     throw new Error(
         `Timed out waiting for ${url}${lastError ? ` (${lastError})` : ''}.`,

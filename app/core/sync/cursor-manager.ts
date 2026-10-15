@@ -67,15 +67,7 @@ export class CursorManager {
      * Set the cursor after successful pull
      */
     async setCursor(version: number): Promise<void> {
-        const existing = await this.getState();
-        const state: SyncState = {
-            id: this.syncStateId,
-            cursor: version,
-            lastSyncAt: existing?.lastSyncAt ?? Date.now(),
-            deviceId: this.deviceId,
-        };
-
-        await this.db.table('sync_state').put(state);
+        await this.writeState(version);
     }
 
     /**
@@ -98,15 +90,7 @@ export class CursorManager {
      * Mark sync cycle complete - updates lastSyncAt
      */
     async markSyncComplete(): Promise<void> {
-        const existing = await this.getState();
-        const state: SyncState = {
-            id: this.syncStateId,
-            cursor: existing?.cursor ?? 0,
-            lastSyncAt: Date.now(),
-            deviceId: this.deviceId,
-        };
-
-        await this.db.table('sync_state').put(state);
+        await this.writeState();
     }
 
     /**
@@ -145,6 +129,19 @@ export class CursorManager {
     /**
      * Get current sync state from DB
      */
+    private async writeState(version?: number): Promise<void> {
+        await this.db.transaction('rw', this.db.table('sync_state'), async () => {
+            const existing = await this.getState();
+            const state: SyncState = {
+                id: this.syncStateId,
+                cursor: Math.max(existing?.cursor ?? 0, version ?? 0),
+                lastSyncAt: version === undefined ? Date.now() : existing?.lastSyncAt ?? Date.now(),
+                deviceId: this.deviceId,
+            };
+            await this.db.table('sync_state').put(state);
+        });
+    }
+
     private async getState(): Promise<SyncState | undefined> {
         return this.db.table('sync_state').get(this.syncStateId) as Promise<SyncState | undefined>;
     }

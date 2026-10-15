@@ -1,3 +1,4 @@
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import type { H3Event } from 'h3';
 import { createError, getRouterParam } from 'h3';
 import { useRuntimeConfig } from '#imports';
@@ -64,6 +65,7 @@ export async function requireWebhookApiContext(
         });
     }
 
+    if (event.method !== 'GET' && event.method !== 'HEAD') requireCloudMutation(event);
     const session = await resolveSessionContext(event);
     requireSession(session);
 

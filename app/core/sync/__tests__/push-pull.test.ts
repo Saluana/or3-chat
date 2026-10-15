@@ -34,6 +34,7 @@ vi.mock('~/core/hooks/useHooks', () => ({
 }));
 
 vi.mock('~/core/sync/hook-bridge', () => ({
+    getLocalOnlyKvNames: () => new Set(['MODELS_CATALOG', 'openrouter_api_key', 'workspace.manager.cache']),
     getHookBridge: () => ({
         markSyncTransaction: hookBridgeState.markSyncTransaction,
     }),

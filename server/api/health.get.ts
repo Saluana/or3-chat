@@ -65,10 +65,10 @@ async function resolveDeepProviderStatus(
         const status = await adapter.getStatus(event, { enabled, provider });
         const warnings = status.warnings
             .filter((warning) => warning.level === 'warning')
-            .map((warning) => warning.message);
+            .map(() => 'PROVIDER_WARNING');
         const errors = status.warnings
             .filter((warning) => warning.level === 'error')
-            .map((warning) => warning.message);
+            .map(() => 'PROVIDER_UNAVAILABLE');
 
         return {
             available: errors.length === 0,
@@ -77,16 +77,16 @@ async function resolveDeepProviderStatus(
                 warnings,
                 errors,
             },
-            details: status.details ?? {},
+            details: {},
         };
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[health] ${kind} provider status failed`, error);
         return {
             available: false,
             provider,
             checks: {
                 warnings: [],
-                errors: [message],
+                errors: ['PROVIDER_STATUS_FAILED'],
             },
             details: {},
         };

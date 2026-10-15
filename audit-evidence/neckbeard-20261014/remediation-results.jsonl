@@ -1,0 +1,21 @@
+{"name":"incremental-sync-overwrites-device-only-key","observed":{"excludedByPolicy":true,"stored":"local-fixture-key"}}
+{"name":"invalid-remote-row-rejected","observed":true}
+{"name":"concurrent-sync-complete-regresses-cursor","observed":11}
+{"name":"two-tab-generators-produce-identical-hlc","observed":true}
+{"name":"concurrent-login-admissions-before-first-failure","observed":5}
+{"name":"username-rotation-bypasses-exhausted-ip","observed":{"blocked":true,"freshUsernameAllowed":true}}
+{"name":"old-admin-jwt-valid-after-password-rotation","observed":false}
+{"name":"login-through-disallowed-admin-host","observed":{"status":404,"body":{"statusCode":404,"statusMessage":"Not Found","stack":[]}}}
+{"name":"bcrypt-overlength-password-rejected","observed":true}
+{"name":"wizard-secret-session-mode-with-normal-umask","observed":"600"}
+{"name":"inactive-workspace-key-survives-logout-cleanup","observed":false}
+{"name":"guest-key-round-trip","observed":true}
+{"name":"account-b-cannot-hydrate-account-a-key","observed":true}
+{"name":"same-count-refresh-searches-old-descriptions","observed":{"before":["alpha"],"after":["beta"],"expectedAfter":["beta"]}}
+{"name":"attachment-write-follows-workspace-switch","observed":{"inA":true,"inB":false}}
+{"name":"concurrent-preset-saves-lose-an-entry","observed":["one","two"]}
+{"name":"hostile-form-rejected","observed":403}
+{"name":"concurrent-registration-quota","observed":[200,200,400,400]}
+{"name":"bounded-response-stream","observed":{"consumedBytes":131072,"storedBytes":4096,"cancelled":true}}
+{"name":"rate-limit-defers-without-cancelling","observed":["pending","success"]}
+{"name":"membership-revocation-blocks-new-events-and-cancels-pending","observed":true}

@@ -23,6 +23,7 @@
  * @see core/search/useModelSearch for search indexing on top of this catalog
  */
 
+import { hydrateUserApiKeyFromKv, useUserApiKey } from './useUserApiKey';
 import { fetchOpenRouterCatalog } from '~~/shared/openrouter/sdk-v1-compat';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
 import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
@@ -48,15 +49,6 @@ export interface ModelCatalogResult {
 }
 
 const CACHE_KEY = 'openrouter_model_catalog_v1';
-
-function readApiKey(): string | null {
-    try {
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem('openrouter_api_key');
-    } catch {
-        return null;
-    }
-}
 
 function saveCache(data: OpenRouterModel[], fetchedAt: number): void {
     try {
@@ -134,10 +126,12 @@ export async function fetchModelCatalog(opts?: {
         }
     }
 
-    const key = readApiKey();
+    const { apiKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig() as {
         public?: { openRouter?: { baseUrl?: string } };
     };
+    await hydrateUserApiKeyFromKv();
+    const key = apiKey.value;
     try {
         const { Models } = await import('@openrouter/sdk/sdk/models.js');
         const client = {

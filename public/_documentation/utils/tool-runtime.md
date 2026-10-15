@@ -104,6 +104,9 @@ Register server handlers with `registerServerTool()` from
 Background workflows use the server registry with their separate
 `workflowPolicy`; workflow placement is not inferred from chat placement.
 
+The bundled server bootstrap registers the arithmetic tools `calculate` and
+`add_numbers`. Provider and plugin packages register additional server tools.
+
 ## Admission, authority, and cleanup
 
 Provider-visible calls carry an admission snapshot. The client checks that the

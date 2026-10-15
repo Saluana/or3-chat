@@ -1,4 +1,5 @@
-import { createError, defineEventHandler, readBody } from 'h3';
+import { createError, defineEventHandler } from 'h3';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { z } from 'zod';
 import { WEBHOOK_EVENT_TYPES } from '../../../shared/webhooks/event-types';
 import {
@@ -20,7 +21,8 @@ const BodySchema = z
     });
 
 export default defineEventHandler(async (event) => {
-    const body = BodySchema.safeParse(await readBody(event));
+    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
+    const body = BodySchema.safeParse(await readLimitedJsonBody(event));
     if (!body.success) {
         throw createError({
             statusCode: 400,
@@ -28,7 +30,6 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
     const webhookId = requireWebhookId(event);
     const existing = await requireOwnedWebhook(store, webhookId, userId, workspaceId);
 

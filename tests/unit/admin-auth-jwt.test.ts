@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { signAdminJwt, verifyAdminJwt } from '../../server/admin/auth/jwt';
 import type { H3Event } from 'h3';
+import { writeAdminCredentials } from '../../server/admin/auth/credentials';
 
 // Mock the runtime config and h3 utilities
 vi.mock('h3', async () => {
@@ -61,7 +62,11 @@ describe('Admin Auth - JWT', () => {
     const temporaryDirs: string[] = [];
     let mockEvent: H3Event;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-jwt-fixture-'));
+        temporaryDirs.push(dir);
+        process.env.OR3_ADMIN_DATA_DIR = dir;
+        await writeAdminCredentials({ username: 'testadmin', password_hash_bcrypt: 'fixture-hash', created_at: '', updated_at: '' });
         mockEvent = createMockEvent();
     });
 
@@ -118,6 +123,7 @@ describe('Admin Auth - JWT', () => {
                 },
             });
 
+            await writeAdminCredentials({ username: 'isolated-admin', password_hash_bcrypt: 'fixture-hash', created_at: '', updated_at: '' });
             const token = await signAdminJwt(event, 'isolated-admin');
 
             expect(await readFile(resolve(dataDir, 'admin-jwt-secret'), 'utf8'))

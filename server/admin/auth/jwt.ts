@@ -3,13 +3,26 @@
  * Server-side only.
  */
 import type { H3Event } from 'h3';
-import { getCookie, setCookie, deleteCookie } from 'h3';
+import { getCookie, setCookie, deleteCookie, createError } from 'h3';
 import jwt from 'jsonwebtoken';
+import { createHash } from 'node:crypto';
+import { readAdminCredentials } from './credentials';
 import { useRuntimeConfig } from '#imports';
 import {
     resolveAdminDataDir,
     resolveAdminJwtSecretPath,
 } from './data-paths';
+
+async function credentialVersion(verifiedPasswordHash?: string): Promise<string | null> {
+    const credentials = await readAdminCredentials();
+    if (!credentials) return null;
+    if (verifiedPasswordHash !== undefined && credentials.password_hash_bcrypt !== verifiedPasswordHash) {
+        throw createError({ statusCode: 401, statusMessage: 'Admin credentials changed; sign in again' });
+    }
+    return createHash('sha256')
+        .update(JSON.stringify([credentials.username, credentials.password_hash_bcrypt]))
+        .digest('hex');
+}
 
 const COOKIE_NAME = process.env.OR3_PLUGIN_DEV_COOKIE_SCOPE
     ? `or3_admin_${process.env.OR3_PLUGIN_DEV_COOKIE_SCOPE}`
@@ -42,6 +55,7 @@ function parseExpiryToSeconds(expiry: string): number {
 export type AdminJwtClaims = {
     kind: 'super_admin';
     username: string;
+    credentialVersion: string;
     iat: number;
     exp: number;
 };
@@ -99,15 +113,19 @@ async function getJwtSecret(event: H3Event): Promise<string> {
  */
 export async function signAdminJwt(
     event: H3Event,
-    username: string
+    username: string,
+    verifiedPasswordHash?: string
 ): Promise<string> {
     const config = useRuntimeConfig(event);
     const secret = await getJwtSecret(event);
     const expiry = config.admin.auth.jwtExpiry || '24h';
 
+    const version = await credentialVersion(verifiedPasswordHash);
+    if (!version) throw new Error('Admin credentials not initialized');
     const claims: Omit<AdminJwtClaims, 'iat' | 'exp'> = {
         kind: 'super_admin',
         username,
+        credentialVersion: version,
     };
 
     return jwt.sign(claims, secret, {
@@ -138,7 +156,10 @@ export async function verifyAdminJwt(
             decoded.kind !== 'super_admin' ||
             !('username' in decoded) ||
             typeof decoded.username !== 'string' ||
-            !decoded.username
+            !decoded.username ||
+            !('credentialVersion' in decoded) ||
+            typeof decoded.credentialVersion !== 'string' ||
+            decoded.credentialVersion !== await credentialVersion()
         ) {
             return null;
         }
@@ -154,9 +175,10 @@ export async function verifyAdminJwt(
  */
 export async function setAdminCookie(
     event: H3Event,
-    username: string
+    username: string,
+    verifiedPasswordHash?: string
 ): Promise<void> {
-    const token = await signAdminJwt(event, username);
+    const token = await signAdminJwt(event, username, verifiedPasswordHash);
     const config = useRuntimeConfig(event);
     const expiry = config.admin.auth.jwtExpiry || '24h';
     const maxAgeSeconds = parseExpiryToSeconds(expiry);

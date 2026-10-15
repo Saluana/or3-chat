@@ -302,7 +302,7 @@ export function createWebhookEventBridge(
             };
             registerMappedHooks(USER_HOOK_TO_EVENT_MAP, 'user');
             registerMappedHooks(ADMIN_HOOK_TO_EVENT_MAP, 'admin');
-            void this.refreshCustomHookListeners();
+            void this.refreshCustomHookListeners().catch(error => logWebhookBridgeError('Failed to load custom hooks', { error }));
         },
 
         stop() {

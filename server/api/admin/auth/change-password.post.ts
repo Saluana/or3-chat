@@ -9,7 +9,7 @@
  * - Verifies current password before change
  * - Updates the local credentials file atomically
  */
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import {
     readAdminCredentials,
     updateAdminCredentials,
@@ -19,8 +19,10 @@ import {
     hashPassword,
     validatePasswordStrength,
 } from '../../../admin/auth/hash';
-import { getAdminFromCookie } from '../../../admin/auth/jwt';
+import { getAdminFromCookie, setAdminCookie } from '../../../admin/auth/jwt';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
+
+import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 
 interface ChangePasswordBody {
     currentPassword?: string;
@@ -60,11 +62,11 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const body = await readBody<ChangePasswordBody>(event);
-    const { currentPassword, newPassword } = body;
+    const body = await readLimitedJsonBody<ChangePasswordBody | null>(event);
+    const { currentPassword, newPassword } = body ?? {};
 
     // Validate input
-    if (!currentPassword || !newPassword) {
+    if (typeof currentPassword !== 'string' || !currentPassword || typeof newPassword !== 'string' || !newPassword) {
         throw createError({
             statusCode: 400,
             statusMessage: 'Current password and new password are required',
@@ -103,6 +105,8 @@ export default defineEventHandler(async (event) => {
     await updateAdminCredentials({
         password_hash_bcrypt: newHash,
     });
+
+    await setAdminCookie(event, credentials.username, newHash);
 
     return {
         success: true,

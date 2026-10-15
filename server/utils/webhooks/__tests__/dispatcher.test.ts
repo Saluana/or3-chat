@@ -2,6 +2,9 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
+import type { AuthWorkspaceStore } from '../../../auth/store/types';
+import { testRuntimeConfig } from '../../../../tests/setup';
 import { encryptSecret } from '../crypto';
 import { createWebhookDispatcher } from '../dispatcher';
 import { resetNotificationEmitters, registerNotificationEmitter } from '../../notifications/registry';
@@ -55,9 +58,51 @@ afterEach(() => {
 
 beforeEach(() => {
     resetNotificationEmitters();
+    testRuntimeConfig.value.sync.provider = 'webhook-test';
+    registerAuthWorkspaceStore({ id: 'webhook-test', create: () => ({ getWorkspaceRole: async () => 'member' }) as unknown as AuthWorkspaceStore });
 });
 
 describe('webhook dispatcher', () => {
+    it('keeps the batch lock until surviving workers finish after a store error', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        let release!: (response: Response) => void;
+        const fetchImpl = vi.fn(() => new Promise<Response>(resolve => { release = resolve; }));
+        const dispatcher = createWebhookDispatcher(store, { rateLimitPerMinute: 10, deliveryTimeoutMs: 1000, blockPrivateIps: false, encryptionKey: 'test-encryption-key', maxRetryHours: 1, fetchImpl });
+        for (let i = 0; i < 2; i++) await dispatcher.enqueue({ webhookId: webhook.id, eventType: 'thread.created', eventId: randomUUID(), payload: {} });
+        vi.spyOn(store, 'getWebhook').mockRejectedValueOnce(new Error('store unavailable'));
+        const claim = vi.spyOn(store, 'claimPendingDeliveries');
+        const batch = dispatcher.claimAndProcess().catch(() => {});
+        await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledOnce());
+        try { await dispatcher.claimAndProcess(); expect(claim).toHaveBeenCalledTimes(1); }
+        finally { release(new Response('ok')); await batch; }
+    });
+
+    it('cancels queued work after membership revocation', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const fetchImpl = vi.fn(async () => new Response('ok'));
+        const dispatcher = createWebhookDispatcher(store, { rateLimitPerMinute: 10, deliveryTimeoutMs: 1000, blockPrivateIps: false, encryptionKey: 'test-encryption-key', maxRetryHours: 1, fetchImpl });
+        await dispatcher.enqueue({ webhookId: webhook.id, eventType: 'thread.created', eventId: randomUUID(), payload: { private: true } });
+        registerAuthWorkspaceStore({ id: 'webhook-test', create: () => ({ getWorkspaceRole: async () => null }) as unknown as AuthWorkspaceStore });
+        await dispatcher.claimAndProcess();
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect((await store.getDeliveryLogs(webhook.id, 0))[0]?.status).toBe('cancelled');
+        expect((await store.getWebhook(webhook.id))?.enabled).toBe(false);
+    });
+
+    it('reads only a 4 KiB response prefix and cancels the stream', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        let cancelled = false;
+        let chunks = 0;
+        const dispatcher = createWebhookDispatcher(store, { rateLimitPerMinute: 10, deliveryTimeoutMs: 1000, blockPrivateIps: false, encryptionKey: 'test-encryption-key', maxRetryHours: 1, fetchImpl: async () => new Response(new ReadableStream({ pull(c) { chunks++; c.enqueue(new Uint8Array(4096).fill(97)); if (chunks === 200) c.close(); }, cancel() { cancelled = true; } })) });
+        const result = await dispatcher.sendTestPing(webhook, 'secret');
+        expect(result.responseBody).toHaveLength(4096);
+        expect(cancelled).toBe(true);
+        expect(chunks).toBeLessThan(5);
+    });
+
     it('delivers to a public target after an immediate DNS safety check', async () => {
         const { store } = createTestContext();
         const webhook = await createStoredWebhook(store, {
@@ -386,7 +431,7 @@ describe('webhook dispatcher', () => {
         });
     });
 
-    it('records rate-limited events as cancelled logs', async () => {
+    it('defers rate-limited events and delivers them in the next window', async () => {
         const { store } = createTestContext();
         const webhook = await createStoredWebhook(store);
         const dispatcher = createWebhookDispatcher(
@@ -415,15 +460,18 @@ describe('webhook dispatcher', () => {
             payload: { ok: true },
         });
 
+        vi.useFakeTimers();
+        await dispatcher.claimAndProcess();
         const logs = await store.getDeliveryLogs(webhook.id, 0);
         expect(logs).toHaveLength(2);
         expect(logs[0]).toMatchObject({
-            status: 'cancelled',
-        });
-        expect(logs[0]?.error_message).toContain('Rate limit exceeded');
-        expect(logs[1]).toMatchObject({
             status: 'pending',
         });
+        expect(logs[0]?.error_message).toContain('Rate limit exceeded');
+        expect(logs[1]).toMatchObject({ status: 'success' });
+        vi.setSystemTime(Date.now() + 60_001);
+        await dispatcher.claimAndProcess();
+        expect((await store.getDeliveryLogs(webhook.id, 0)).every(log => log.status === 'success')).toBe(true);
     });
 
     it('blocks private IPs at dispatch time when SSRF protection is enabled', async () => {

@@ -571,3 +571,7 @@ If you're still stuck:
 ### "QuotaExceededError"
 **Cause:** Browser storage full
 **Solution:** Export and verify a backup first. Inspect browser storage capacity; changing the local warning threshold does not grant more space. Do not clear unsynced workspace data.
+
+## Public health diagnostics
+
+`GET /api/health?deep=true` exposes availability and stable provider status codes (`PROVIDER_WARNING`, `PROVIDER_UNAVAILABLE`, `PROVIDER_STATUS_FAILED`). It omits provider configuration paths, raw exceptions, and administrative details. Use the authenticated admin provider diagnostics for those details. Liveness remains HTTP 200; inspect the response's `status` and provider availability to detect degradation.

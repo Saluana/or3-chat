@@ -1,4 +1,6 @@
-import { createError, defineEventHandler, readBody } from 'h3';
+import { createError, defineEventHandler } from 'h3';
+import { createLimitedWebhook } from '../../../utils/webhooks/registration';
+import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 import { z } from 'zod';
 import {
     ADMIN_WEBHOOK_EVENT_TYPES,
@@ -33,7 +35,8 @@ const BodySchema = z
     );
 
 export default defineEventHandler(async (event) => {
-    const body = BodySchema.safeParse(await readBody(event));
+    const { store } = await requireAdminWebhookApiContext(event, { mutation: true });
+    const body = BodySchema.safeParse(await readLimitedJsonBody(event));
     if (!body.success) {
         throw createError({
             statusCode: 400,
@@ -41,24 +44,13 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const { store } = await requireAdminWebhookApiContext(event, {
-        mutation: true,
-    });
     const settings = getAdminWebhookRuntimeSettings();
-    const existing = await store.listAdminWebhooks();
-
-    if (existing.length >= settings.adminMax) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Admin webhook limit exceeded',
-        });
-    }
 
     await validateWebhookTargetUrl(body.data.url);
     const customHooks = normalizeCustomHookNames(body.data.custom_hooks);
     const signingSecret = generateSigningSecret();
 
-    const created = await store.createWebhook({
+    const created = await createLimitedWebhook(store, {
         scope: 'admin',
         user_id: null,
         workspace_id: body.data.workspace_id ?? null,
@@ -71,7 +63,7 @@ export default defineEventHandler(async (event) => {
             requireWebhookEncryptionKey()
         ),
         enabled: true,
-    });
+    }, settings.adminMax);
 
     await refreshAdminWebhookListeners();
 

@@ -18,6 +18,7 @@ vi.mock('~/core/hooks/useHooks', () => ({
 }));
 
 vi.mock('~/core/sync/hook-bridge', () => ({
+    getLocalOnlyKvNames: () => new Set(['openrouter_api_key', 'MODELS_CATALOG', 'workspace.manager.cache']),
     getHookBridge: () => ({
         markSyncTransaction: hookBridgeState.markSyncTransaction,
     }),
@@ -91,6 +92,19 @@ function buildChange({
 }
 
 describe('ConflictResolver', () => {
+    it('rejects malformed pulled records instead of allowing their cursor to be acknowledged', async () => {
+        const db = createMockDb({ messages: createMemoryTable('id'), tombstones: createMemoryTable('id') });
+        await expect(new ConflictResolver(db as never).applyChanges([buildChange({ pk: 'bad', op: 'put', clock: 1, hlc: '0000000000001:0000:node', payload: { role: 'invalid' } })])).rejects.toThrow(/payload/i);
+    });
+    it('preserves device-only KV values against remote puts and deletes', async () => {
+        const kv = createMemoryTable('id', [{ id: 'kv:openrouter_api_key', name: 'openrouter_api_key', value: 'local', clock: 0 }]);
+        const tombstones = createMemoryTable('id');
+        const db = createMockDb({ kv, tombstones });
+        const resolver = new ConflictResolver(db as never);
+        for (const op of ['put', 'delete'] as const) await resolver.applyChanges([{ ...buildChange({ pk: 'kv:openrouter_api_key', op, clock: 50, hlc: '0000000000050:0000:node', payload: { name: 'openrouter_api_key', value: 'remote', created_at: 1, updated_at: 1, deleted: false } }), tableName: 'kv' }]);
+        expect((await kv.get('kv:openrouter_api_key'))?.value).toBe('local');
+        expect(tombstones.__rows.size).toBe(0);
+    });
     beforeEach(() => {
         hookState.doAction.mockClear();
         hookBridgeState.markSyncTransaction.mockClear();

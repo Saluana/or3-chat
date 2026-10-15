@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Dexie from 'dexie';
 import {
     CursorManager,
     _resetCursorManagers,
@@ -10,32 +11,23 @@ vi.mock('../hlc', () => ({
     getDeviceId: () => 'device-fixed',
 }));
 
-class SyncStateTableStub {
-    private rows = new Map<string, { id: string; cursor: number; lastSyncAt: number; deviceId: string }>();
-
-    async get(id: string) {
-        return this.rows.get(id);
-    }
-
-    async put(row: { id: string; cursor: number; lastSyncAt: number; deviceId: string }) {
-        this.rows.set(row.id, { ...row });
-    }
-
-    async delete(id: string) {
-        this.rows.delete(id);
-    }
-}
-
+const databases = new Set<Dexie>();
+afterEach(async () => { for (const db of databases) await db.delete(); databases.clear(); });
 function makeDb(name = 'or3-db-ws-1') {
-    const syncState = new SyncStateTableStub();
-    return {
-        name,
-        table: (_name: string) => syncState,
-        _syncState: syncState,
-    };
+    const db = new Dexie(name);
+    db.version(1).stores({ sync_state: 'id' });
+    databases.add(db);
+    return db;
 }
 
 describe('CursorManager', () => {
+    it('never regresses across concurrent completion and cursor writes', async () => {
+        const db = makeDb();
+        const manager = new CursorManager(db as never, { workspaceId: 'ws-1' });
+        await manager.setCursor(5);
+        await Promise.all([manager.markSyncComplete(), manager.setCursor(30), manager.setCursor(10)]);
+        expect(await manager.getCursor()).toBe(30);
+    });
     beforeEach(() => {
         _resetCursorManagers();
     });

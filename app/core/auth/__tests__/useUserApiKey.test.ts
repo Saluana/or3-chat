@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref, type Ref } from 'vue';
 import Dexie from 'dexie';
+import { testRuntimeConfig } from '../../../../tests/setup';
 import { flushPromises } from '@vue/test-utils';
 
 describe('useUserApiKey', () => {
     beforeEach(() => {
         vi.resetModules();
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
     });
 
     it('skips kv hydration when kv table is unavailable', async () => {

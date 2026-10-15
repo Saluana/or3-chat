@@ -231,32 +231,12 @@ function wizardFetchHeaders(): Record<string, string> {
     return {};
 }
 
-async function waitForAccessUrlReady(accessUrl: string, timeoutMs = 45000): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/health`;
-
-    while (Date.now() < deadline) {
-        try {
-            await fetch(healthUrl, {
-                method: 'GET',
-                mode: 'no-cors',
-                cache: 'no-store',
-            });
-            return true;
-        } catch {
-            // Keep polling until timeout.
-        }
-        await new Promise((resolve) => globalThis.setTimeout(resolve, 300));
-    }
-
-    return false;
-}
-
 async function shutdownWizardUiBestEffort(): Promise<void> {
     try {
         await $fetch('/api/wizard/shutdown', {
             method: 'POST',
             headers: wizardFetchHeaders(),
+            signal: AbortSignal.timeout(3000),
         });
     } catch {
         // Best effort only.
@@ -266,8 +246,7 @@ async function shutdownWizardUiBestEffort(): Promise<void> {
 async function redirectToAccessUrl(accessUrl?: string): Promise<void> {
     if (!import.meta.client) return;
     if (!accessUrl) return;
-    const ready = await waitForAccessUrlReady(accessUrl, 45000);
-    if (!ready) return;
+    // runWizardDeploy has already verified OR3 health from the wizard server.
     await shutdownWizardUiBestEffort();
     globalThis.location.assign(accessUrl);
 }

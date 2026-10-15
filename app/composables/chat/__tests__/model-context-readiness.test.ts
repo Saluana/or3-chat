@@ -6,9 +6,11 @@ import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
-const { list } = vi.hoisted(() => ({ list: vi.fn() }));
+import { persistUserApiKey } from '~/core/auth/useUserApiKey';
+import { testRuntimeConfig } from '../../../../tests/setup';
+const { list, configure } = vi.hoisted(() => ({ list: vi.fn(), configure: vi.fn() }));
 vi.mock('@openrouter/sdk/sdk/models.js', () => ({
-    Models: class { list = list; },
+    Models: class { constructor(input: unknown) { configure(input); } list = list; },
 }));
 import { sdkModelToLocal } from '~~/shared/openrouter';
 import * as service from '~/core/auth/models-service';
@@ -243,4 +245,15 @@ describe('existing catalog context readiness', () => {
             expect(list).toHaveBeenCalledOnce();
         } finally { release(); }
     });
+});
+
+// The SDK must receive the canonical saved key, even when legacy storage disagrees.
+it('uses the Dexie key for catalog authentication', async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
+    const key = 'sk-or-v1-synthetic-catalog-key';
+    await persistUserApiKey(key);
+    localStorage.setItem('openrouter_api_key', 'obsolete-key');
+    list.mockReturnValue(pages());
+    await service.fetchModelCatalog({ force: true });
+    expect(configure).toHaveBeenLastCalledWith(expect.objectContaining({ apiKey: key }));
 });

@@ -11,6 +11,7 @@
  */
 import { type Transaction } from 'dexie';
 import { generateHLC, getDeviceId, hlcToOrderKey } from './hlc';
+import { LOCAL_ONLY_KV_NAMES } from '~~/shared/sync/local-only-kv';
 import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
 import type { Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -38,11 +39,7 @@ export const SYNCED_TABLES = [
  * - Security-sensitive data (API keys)
  * - Device-local state
  */
-const KV_SYNC_BLOCKLIST = [
-    'MODELS_CATALOG',           // Large cache (~500KB), refetchable from OpenRouter
-    'openrouter_api_key',       // Security: API keys should not sync to server
-    'workspace.manager.cache',  // Device-local UI cache
-] as const;
+const KV_SYNC_BLOCKLIST = LOCAL_ONLY_KV_NAMES;
 
 /** Shared capture/replacement policy; plugins can extend device-local keys. */
 export function getLocalOnlyKvNames(): Set<string> {

@@ -24,6 +24,9 @@ import { err } from '~/utils/errors';
  * @see core/auth/useOpenrouter for login/logout flow
  * @see state/global for the reactive state singleton
  */
+import Dexie from 'dexie';
+import { useRuntimeConfig, useState } from '#imports';
+import type { SessionPayload } from '~/composables/auth/useSessionContext';
 import { computed } from 'vue';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { kv } from '~/db';
@@ -44,6 +47,21 @@ export function getUserApiKeyGeneration(): number {
 }
 
 const OPENROUTER_KEY_PREFIX = 'sk-or-';
+
+function currentKeyOwner(): string {
+    const config = useRuntimeConfig();
+    if (!config.public.ssrAuthEnabled) return 'local';
+    const session = useState<SessionPayload | null>('auth-session', () => null).value?.session;
+    return session?.authenticated && session.user?.id ? JSON.stringify([session.provider, session.user.id]) : 'guest';
+}
+
+function storedKey(value: string, owner: string): string | null {
+    if (owner === 'local') return value;
+    try {
+        const parsed = JSON.parse(value) as { owner?: unknown; key?: unknown };
+        return parsed.owner === owner && typeof parsed.key === 'string' ? parsed.key : null;
+    } catch { return null; } // Old unowned credentials cannot be inherited by an account.
+}
 
 /**
  * Validates the format of an OpenRouter API key.
@@ -82,7 +100,9 @@ export async function persistUserApiKey(key: string): Promise<void> {
     const isCurrent = () =>
         generation === kvHydrationGeneration &&
         workspaceGeneration === getWorkspaceGeneration();
-    await kv.set('openrouter_api_key', trimmed, db, { isValid: isCurrent });
+    const owner = currentKeyOwner();
+    const value = owner === 'local' ? trimmed : JSON.stringify({ owner, key: trimmed });
+    await kv.set('openrouter_api_key', value, db, { isValid: isCurrent });
     if (!isCurrent()) return;
     state.value.openrouterKey = trimmed;
     try {
@@ -103,6 +123,7 @@ function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
 }
 
 export function hydrateUserApiKeyFromKv(): Promise<void> {
+    const owner = currentKeyOwner();
     const hydrationGeneration = kvHydrationGeneration;
     const workspaceGeneration = getWorkspaceGeneration();
     let db: ReturnType<typeof getDb>;
@@ -132,7 +153,7 @@ export function hydrateUserApiKeyFromKv(): Promise<void> {
                 return;
             }
             if (rec && typeof rec.value === 'string') {
-                state.value.openrouterKey = rec.value;
+                state.value.openrouterKey = storedKey(rec.value, owner);
             } else if (rec && rec.value == null) {
                 state.value.openrouterKey = null;
             }
@@ -158,13 +179,23 @@ export function hydrateUserApiKeyFromKv(): Promise<void> {
 export async function clearPersistedUserApiKey(): Promise<void> {
     const generation = ++kvHydrationGeneration;
     state.value.openrouterKey = null;
-    const workspaceGeneration = getWorkspaceGeneration();
     const db = getDb();
     await kv.delete('openrouter_api_key', db, {
-        isValid: () =>
-            generation === kvHydrationGeneration &&
-            workspaceGeneration === getWorkspaceGeneration(),
+        isValid: () => generation === kvHydrationGeneration,
     });
+    // Enumerate retained databases independently of conversation retention policy.
+    const names = await Dexie.getDatabaseNames();
+    await Promise.allSettled(names.filter(name => name === 'or3-db' || name.startsWith('or3-db-')).filter(name => name !== db.name).map(async name => {
+        const retained = new Dexie(name);
+        try {
+            await retained.open();
+            if (!retained.tables.some(table => table.name === 'kv')) return;
+            await retained.transaction('rw', retained.table('kv'), async () => {
+                if (generation !== kvHydrationGeneration) return;
+                await retained.table('kv').where('name').equals('openrouter_api_key').delete();
+            });
+        } finally { retained.close(); }
+    }));
 }
 
 /**

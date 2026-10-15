@@ -42,38 +42,6 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    const coingeckoPriceTool = defineTool({
-        type: 'function' as const,
-        function: {
-            name: 'coingecko_price',
-            description:
-                'Fetch a coin price from CoinGecko by id and vs currency.',
-            parameters: {
-                type: 'object' as const,
-                properties: {
-                    coinId: {
-                        type: 'string' as const,
-                        description:
-                            'Coin id from CoinGecko (e.g., bitcoin, ethereum)',
-                    },
-                    vsCurrency: {
-                        type: 'string' as const,
-                        description:
-                            'Fiat or crypto currency (e.g., usd, eur, btc)',
-                    },
-                },
-                required: ['coinId', 'vsCurrency'],
-            },
-        },
-        ui: {
-            label: 'CoinGecko Price',
-            icon: 'tabler:currency-bitcoin',
-            descriptionHint: 'Fetch live prices from CoinGecko',
-            defaultEnabled: false,
-            category: 'Demo Tools',
-        },
-    });
-
     registerTool(
         addNumbersTool,
         async (args) => {
@@ -87,53 +55,9 @@ export default defineNuxtPlugin(() => {
         { enabled: false }
     );
 
-    registerTool(
-        coingeckoPriceTool,
-        async (args) => {
-            const { coinId, vsCurrency } = args as {
-                coinId: string;
-                vsCurrency: string;
-            };
-            const safeCoinId = String(coinId || '').trim().toLowerCase();
-            const safeCurrency = String(vsCurrency || '').trim().toLowerCase();
-
-            if (!safeCoinId || !safeCurrency) {
-                throw new Error('coinId and vsCurrency are required.');
-            }
-
-            const url = new URL('/api/coingecko/price', window.location.origin);
-            url.searchParams.set('ids', safeCoinId);
-            url.searchParams.set('vs_currencies', safeCurrency);
-
-            const response = await fetch(url.toString(), {
-                headers: { accept: 'application/json' },
-            });
-            if (!response.ok) {
-                throw new Error(
-                    `CoinGecko request failed: ${response.status} ${response.statusText}`
-                );
-            }
-
-            const data = (await response.json()) as Record<
-                string,
-                Record<string, number>
-            >;
-            const price = data?.[safeCoinId]?.[safeCurrency];
-            if (typeof price !== 'number') {
-                throw new Error(
-                    `No price found for "${safeCoinId}" in "${safeCurrency}".`
-                );
-            }
-
-            return `CoinGecko price for ${safeCoinId} in ${safeCurrency.toUpperCase()}: ${price}`;
-        },
-        { enabled: false }
-    );
-
     const scope = getCurrentScope();
     const cleanup = () => {
         unregisterTool('add_numbers');
-        unregisterTool('coingecko_price');
     };
     if (scope) {
         onScopeDispose(cleanup);

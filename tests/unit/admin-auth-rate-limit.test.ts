@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { 
     checkRateLimit, 
-    recordFailedAttempt, 
     clearRateLimit 
 } from '../../server/admin/auth/rate-limit';
 
@@ -11,7 +10,7 @@ describe('Admin Auth - Rate Limiting', () => {
 
     // Clear rate limits before each test
     beforeEach(() => {
-        clearRateLimit(testIp, testUsername);
+        for (const ip of [testIp, '192.168.1.2']) for (const name of [testUsername, 'admin1', 'admin2']) clearRateLimit(ip, name);
         // Rate limiter bypasses checks in non-production; mock to production for tests
         vi.stubEnv('NODE_ENV', 'production');
     });
@@ -28,7 +27,7 @@ describe('Admin Auth - Rate Limiting', () => {
         it('should allow up to max attempts', () => {
             // Record 4 failed attempts
             for (let i = 0; i < 4; i++) {
-                recordFailedAttempt(testIp, testUsername);
+                checkRateLimit(testIp, testUsername);
             }
 
             // 5th attempt should still be allowed
@@ -43,7 +42,7 @@ describe('Admin Auth - Rate Limiting', () => {
 
             // Max out ip1
             for (let i = 0; i < 5; i++) {
-                recordFailedAttempt(ip1, testUsername);
+                checkRateLimit(ip1, testUsername);
             }
 
             // ip2 should still be allowed
@@ -60,7 +59,7 @@ describe('Admin Auth - Rate Limiting', () => {
 
             // Max out username1
             for (let i = 0; i < 5; i++) {
-                recordFailedAttempt(testIp, username1);
+                checkRateLimit(testIp, username1);
             }
 
             // username2 should still be allowed
@@ -72,15 +71,15 @@ describe('Admin Auth - Rate Limiting', () => {
         });
     });
 
-    describe('recordFailedAttempt', () => {
-        it('should increment count on failed attempts', () => {
-            recordFailedAttempt(testIp, testUsername);
+    describe('admission', () => {
+        it('should reserve each admitted attempt immediately', () => {
+            checkRateLimit(testIp, testUsername);
             const result1 = checkRateLimit(testIp, testUsername);
             expect(result1.remaining).toBe(3); // Started with 4, now 3
 
-            recordFailedAttempt(testIp, testUsername);
+            checkRateLimit(testIp, testUsername);
             const result2 = checkRateLimit(testIp, testUsername);
-            expect(result2.remaining).toBe(2); // Now 2
+            expect(result2.remaining).toBe(1);
         });
 
     });
@@ -89,7 +88,7 @@ describe('Admin Auth - Rate Limiting', () => {
         it('should clear rate limit on successful login', () => {
             // Record some failed attempts
             for (let i = 0; i < 3; i++) {
-                recordFailedAttempt(testIp, testUsername);
+                checkRateLimit(testIp, testUsername);
             }
 
             // Clear the rate limit
@@ -105,8 +104,8 @@ describe('Admin Auth - Rate Limiting', () => {
             const username2 = 'admin2';
 
             // Record attempts for both usernames
-            recordFailedAttempt(testIp, testUsername);
-            recordFailedAttempt(testIp, username2);
+            checkRateLimit(testIp, testUsername);
+            checkRateLimit(testIp, username2);
 
             // Clear only testUsername
             clearRateLimit(testIp, testUsername);

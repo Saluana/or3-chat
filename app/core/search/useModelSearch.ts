@@ -17,7 +17,7 @@
  * - Client-only (`process.client` guard on index build)
  * - Orama is dynamically imported to keep it off the critical path
  * - Each catalog owns its index and pending searches
- * - Index is rebuilt only when `models.value.length` changes
+ * - Index is rebuilt when the catalog array or its length changes; rebuild() forces a refresh
  *
  * Non-goals:
  * - Does not handle model fetching (see core/auth/models-service)
@@ -82,7 +82,7 @@ async function buildIndex(
  * Provide a reactive, client-side search experience over the OpenRouter model list.
  *
  * Behavior:
- * - Builds (or rebuilds) an Orama index when model count changes
+ * - Builds (or rebuilds) an Orama index when the catalog changes
  * - Debounces queries and maps hits back to `OpenRouterModel` objects
  * - Falls back to substring search when Orama fails or returns empty results
  *
@@ -97,6 +97,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     const busy = ref(false);
     let currentDb: OramaInstance | null = null;
     let lastIndexedCount = -1;
+    let lastIndexedCatalog: OpenRouterModel[] | null = null;
     let lastQueryToken = 0;
     let disposed = false;
     // Unmount may run while an index/search promise is pending.
@@ -107,19 +108,21 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     async function ensureIndex() {
         if (!process.client || isDisposed()) return;
         if (indexBuild) return await indexBuild;
-        if (models.value.length === lastIndexedCount) return;
+        if (models.value === lastIndexedCatalog && models.value.length === lastIndexedCount) return;
         indexBuild = (async () => {
             busy.value = true;
             try {
-                while (!isDisposed() && models.value.length !== lastIndexedCount) {
-                    const snapshot = models.value.slice();
+                while (!isDisposed() && (models.value !== lastIndexedCatalog || models.value.length !== lastIndexedCount)) {
+                    const catalog = models.value;
+                    const snapshot = catalog.slice();
                     let db: OramaInstance | null = null;
                     try { db = await buildIndex(snapshot); }
                     catch (error) { console.warn('[useModelSearch] Using substring search; index unavailable:', error); }
                     if (isDisposed()) return;
-                    if (snapshot.length !== models.value.length) continue;
+                    if (catalog !== models.value || snapshot.length !== models.value.length) continue;
                     currentDb = db;
                     lastIndexedCount = snapshot.length;
+                    lastIndexedCatalog = catalog;
                 }
             } finally { busy.value = false; }
         })();
@@ -213,7 +216,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     }, { flush: 'sync' });
     onScopeDispose(() => { disposed = true; lastQueryToken++; clearTimeout(searchTimeout); });
 
-    return { query, results, ready, busy, rebuild: ensureIndex };
+    return { query, results, ready, busy, rebuild: async () => { lastIndexedCatalog = null; await ensureIndex(); } };
 }
 
 export default useModelSearch;

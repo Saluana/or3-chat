@@ -21,7 +21,7 @@
  *   in the transient in-memory store managed by `api.ts`.
  * - Preset file corruption (invalid JSON) is handled gracefully by
  *   returning an empty array.
- * - No file locking; concurrent access is not safe.
+ * - Preset mutations share a cross-process filesystem lease.
  *
  * Non-responsibilities:
  * - Secret management (see api.ts transient store)
@@ -29,10 +29,12 @@
  *
  * @see Or3CloudWizardApi for session lifecycle that wraps these primitives
  */
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, open, rename, chmod } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { AdvisoryPluginOperationLock } from '../../../server/admin/plugins/package-operation-lock';
+import { dirname, resolve } from 'node:path';
 import type { WizardPreset, WizardSession } from './types';
 
 function wizardBaseDir(): string {
@@ -56,18 +58,41 @@ function sessionPath(sessionId: string): string {
 }
 
 async function ensureWizardDir(): Promise<void> {
-    await mkdir(wizardBaseDir(), { recursive: true });
+    await mkdir(wizardBaseDir(), { recursive: true, mode: 0o700 });
+    await chmod(wizardBaseDir(), 0o700);
 }
 
 async function ensureSessionsDir(): Promise<void> {
-    await mkdir(sessionsDir(), { recursive: true });
+    await ensureWizardDir();
+    await mkdir(sessionsDir(), { recursive: true, mode: 0o700 });
+    await chmod(sessionsDir(), 0o700);
+}
+
+async function atomicPrivateWrite(path: string, content: string): Promise<void> {
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+        const file = await open(temporary, 'wx', 0o600);
+        try { await file.writeFile(content, 'utf8'); await file.sync(); }
+        finally { await file.close(); }
+        await rename(temporary, path);
+        if (process.platform !== 'win32') {
+            const directory = await open(dirname(path), 'r');
+            try { await directory.sync(); } finally { await directory.close(); }
+        }
+    } finally { await rm(temporary, { force: true }); }
+}
+
+async function withPresetLock(action: () => Promise<void>): Promise<void> {
+    await ensureWizardDir();
+    const lease = await new AdvisoryPluginOperationLock(wizardBaseDir()).acquire('presets', { requireDeadOwner: true });
+    try { await action(); } finally { await lease.release(); }
 }
 
 /** Writes a session to disk and updates the last-session pointer. */
 export async function saveSession(session: WizardSession): Promise<void> {
     await ensureSessionsDir();
-    await writeFile(sessionPath(session.id), JSON.stringify(session, null, 2), 'utf8');
-    await writeFile(lastSessionPath(), session.id, 'utf8');
+    await atomicPrivateWrite(sessionPath(session.id), JSON.stringify(session, null, 2));
+    await atomicPrivateWrite(lastSessionPath(), session.id);
 }
 
 /**
@@ -118,7 +143,7 @@ async function readPresetsFile(): Promise<WizardPreset[]> {
 
 async function writePresetsFile(presets: WizardPreset[]): Promise<void> {
     await ensureWizardDir();
-    await writeFile(presetsFilePath(), JSON.stringify(presets, null, 2), 'utf8');
+    await atomicPrivateWrite(presetsFilePath(), JSON.stringify(presets, null, 2));
 }
 
 /** Returns all user-defined presets from disk (excludes built-in presets). */
@@ -131,11 +156,13 @@ export async function listStoredPresets(): Promise<WizardPreset[]> {
  * it is replaced. The presets file is kept sorted by name.
  */
 export async function saveStoredPreset(preset: WizardPreset): Promise<void> {
-    const presets = await readPresetsFile();
-    const filtered = presets.filter((entry) => entry.name !== preset.name);
-    filtered.push(preset);
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-    await writePresetsFile(filtered);
+    await withPresetLock(async () => {
+        const presets = await readPresetsFile();
+        const filtered = presets.filter((entry) => entry.name !== preset.name);
+        filtered.push(preset);
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        await writePresetsFile(filtered);
+    });
 }
 
 /** Loads a single user preset by name, or returns `null` if not found. */
@@ -146,7 +173,9 @@ export async function loadStoredPreset(name: string): Promise<WizardPreset | nul
 
 /** Removes a preset from disk by name. No-op if the preset does not exist. */
 export async function deleteStoredPreset(name: string): Promise<void> {
-    const presets = await readPresetsFile();
-    const filtered = presets.filter((preset) => preset.name !== name);
-    await writePresetsFile(filtered);
+    await withPresetLock(async () => {
+        const presets = await readPresetsFile();
+        const filtered = presets.filter((preset) => preset.name !== name);
+        await writePresetsFile(filtered);
+    });
 }
