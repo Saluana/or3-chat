@@ -100,10 +100,11 @@ export const chatCssSelectors = {
         style: {
             backgroundColor: 'var(--md-surface)',
             border: 'var(--md-border-width) solid var(--md-border-color)',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+            boxShadow: 'var(--app-elevation-low)',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             opacity: '0',
-            transition: 'opacity 0.15s ease',
+            transition:
+                'opacity var(--app-motion-duration-fast, 150ms) var(--app-motion-easing-standard, ease)',
         },
     },
     '.group:hover .cm-action-group': {
@@ -166,7 +167,7 @@ export const chatCssSelectors = {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
         },
     },
     '.tool-call-indicator-summary:hover': {
@@ -185,7 +186,7 @@ export const chatCssSelectors = {
             backgroundColor: 'var(--md-surface-hover) !important',
             border: 'none !important',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
-            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important',
+            fontFamily: 'var(--font-mono) !important',
             fontSize: '12px !important',
             padding: '12px !important',
             margin: '8px 0 !important',

@@ -129,7 +129,8 @@ body,
 	max-width: 100%;
 	min-width: 0;
 	margin-inline: auto;
-	padding: 1.25rem;
+	/* Matches the AppModal header gutter so page content aligns with its title. */
+	padding: 1.5rem;
 	display: flex;
 	flex-direction: column;
 	gap: var(--app-space-section, 1rem);
@@ -204,15 +205,9 @@ input:placeholder-shown {
 	text-transform: uppercase;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 639px) {
 	.dashboard-page-frame {
-		padding: 1rem 0.875rem;
-	}
-}
-
-@media (min-width: 760px) {
-	.dashboard-page-frame {
-		padding: 1.75rem;
+		padding: 1rem;
 	}
 }
 

@@ -220,11 +220,11 @@ function forwardResize(payload: ResizePayload) {
 :deep(.blank2-chat-dropper .ProseMirror) {
     width: 100%;
     padding: 0;
-    font-size: 0.975rem;
+    font-size: 1rem;
     line-height: 1.5;
     color: var(--md-on-surface);
     font-weight: 400;
-    letter-spacing: 0.005em;
+    letter-spacing: -0.003em;
 }
 
 :deep(.blank2-chat-dropper .ProseMirror p) {
@@ -260,16 +260,18 @@ function forwardResize(payload: ResizePayload) {
     border-radius: 50%;
     background: transparent !important;
     box-shadow: none !important;
-    color: color-mix(in srgb, var(--md-on-surface) 55%, transparent) !important;
-    transition:
-        background-color 0.2s ease,
-        color 0.2s ease,
-        transform 0.15s ease;
+    color: var(--md-on-surface-variant) !important;
+    /* Owns its press transform; skip the shared button scale. */
+    scale: none;
+    transition-property: background-color, color, transform;
+    transition-duration: var(--app-motion-duration-fast, 150ms);
+    transition-timing-function: var(--app-motion-easing-standard, ease);
 }
 
 :deep(.blank2-chat-dropper .chat-input-attachment-btn button:hover),
 :deep(.blank2-chat-dropper .chat-input-settings-btn button:hover) {
-    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+    /* Translucent, so it reads on the pill in both modes (dark pill ≠ surface). */
+    background: color-mix(in srgb, var(--md-on-surface) 10%, transparent) !important;
     color: var(--md-primary) !important;
 }
 
@@ -301,23 +303,24 @@ function forwardResize(payload: ResizePayload) {
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
         0 2px 8px -2px color-mix(in srgb, var(--md-primary) 30%, transparent);
-    transition:
-        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.25s ease,
-        opacity 0.2s ease;
+    scale: none;
+    transition-property: background-color, box-shadow, opacity, transform;
+    transition-duration: var(--app-motion-duration-fast, 150ms);
+    transition-timing-function: var(--app-motion-easing-standard, ease);
 }
 
-:deep(.blank2-chat-dropper .chat-input-send-btn:hover),
+/* Hover softens the fill instead of growing the button. */
+:deep(.blank2-chat-dropper .chat-input-send-btn:hover:not(:disabled)) {
+    background: color-mix(in srgb, var(--md-primary) 80%, var(--md-surface)) !important;
+}
+
 :deep(.blank2-chat-dropper .chat-input-stop-btn:hover) {
-    transform: scale(1.08);
-    box-shadow:
-        0 2px 6px rgba(0, 0, 0, 0.15),
-        0 4px 14px -3px color-mix(in srgb, var(--md-primary) 40%, transparent);
+    background: var(--md-error-hover, var(--md-error)) !important;
 }
 
-:deep(.blank2-chat-dropper .chat-input-send-btn:active),
+:deep(.blank2-chat-dropper .chat-input-send-btn:active:not(:disabled)),
 :deep(.blank2-chat-dropper .chat-input-stop-btn:active) {
-    transform: scale(0.92);
+    transform: scale(0.94);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
@@ -539,39 +542,6 @@ function forwardResize(payload: ResizePayload) {
     50%,
     100% {
         opacity: 0;
-    }
-}
-
-/* ── Dark mode refinements ── */
-@media (prefers-color-scheme: dark) {
-    :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
-        color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
-    }
-
-    :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
-    :deep(.blank2-chat-dropper .chat-input-settings-btn button) {
-        color: color-mix(in srgb, var(--md-on-surface) 70%, transparent) !important;
-    }
-
-    :deep(.blank2-chat-dropper .chat-input-attachment-btn button:hover),
-    :deep(.blank2-chat-dropper .chat-input-settings-btn button:hover) {
-        background: color-mix(in srgb, var(--md-primary) 15%, transparent) !important;
-    }
-}
-
-[data-theme="blank"].dark {
-    :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
-        color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
-    }
-
-    :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
-    :deep(.blank2-chat-dropper .chat-input-settings-btn button) {
-        color: color-mix(in srgb, var(--md-on-surface) 70%, transparent) !important;
-    }
-
-    :deep(.blank2-chat-dropper .chat-input-attachment-btn button:hover),
-    :deep(.blank2-chat-dropper .chat-input-settings-btn button:hover) {
-        background: color-mix(in srgb, var(--md-primary) 15%, transparent) !important;
     }
 }
 </style>

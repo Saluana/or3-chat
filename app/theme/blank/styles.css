@@ -6,6 +6,10 @@
     }
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
+    --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
+    --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
+    --md-surface-dim: #ececec;
+    --md-surface-bright: #ffffff;
 
     /* The sidebar draws its own soft edge inside the layout. */
     #sidebar {
@@ -41,7 +45,7 @@
             var(--md-surface) 78%,
             transparent
         );
-        --or3-tab-radius: 10px;
+        --or3-tab-radius: var(--md-border-radius);
         --or3-tab-close-radius: 6px;
         --or3-tab-shadow: none;
         --or3-tab-shadow-active: none;
@@ -141,12 +145,12 @@
     }
 
     .workspace-tab-switcher-card {
-        border-radius: 1.15rem;
+        border-radius: var(--md-border-radius-large);
     }
 
     .workspace-tab-switcher-icon-wrap {
         border: 0;
-        border-radius: 0.85rem;
+        border-radius: var(--md-border-radius);
     }
 
     /* ── Base reset: borderless, shadowless ── */
@@ -162,8 +166,18 @@
         @apply pr-1.5 pt-1;
     }
 
+    /*
+     * Search shares the list's column: the list sits 8px inside the panel and
+     * pads 6px more on the right, and the reserved scrollbar gutter matches
+     * the list's, so both edges line up whatever the OS scrollbar style.
+     */
     #nav-header {
-        @apply mb-0 ml-1 mr-1 pb-2 pl-0 border-none;
+        margin: 0;
+        padding: 0.5rem 0.875rem 0.5rem 0.5rem;
+        border: none;
+        overflow: hidden;
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
     }
 
     .page-link-btn {
@@ -232,8 +246,8 @@
     }
 
     .sb-item-time {
-        @apply text-[10px] tracking-wide;
-        opacity: 0.55 !important;
+        @apply text-[11px] tracking-normal tabular-nums;
+        opacity: 0.6 !important;
     }
 
     .project-empty-state {
@@ -290,7 +304,7 @@
         border-radius: 18px !important;
         border: none !important;
         box-shadow: none !important;
-        padding: 12px 18px !important;
+        padding: 12px 16px !important;
     }
 
     /* ── Assistant messages: no background ── */
@@ -306,8 +320,8 @@
     .cm-action-group {
         background: var(--md-surface) !important;
         border: var(--md-border-width) solid var(--md-border-color) !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
-        border-radius: 8px !important;
+        box-shadow: var(--app-elevation-low) !important;
+        border-radius: var(--md-border-radius-small) !important;
     }
 
     /* ── Markdown prose: match ChatGPT text rendering ── */
@@ -329,11 +343,11 @@
     --sd-surface-container-lowest: var(--md-surface-container-lowest);
     --sd-surface-container-high: var(--md-surface-container-high);
     --sd-border-color: color-mix(in srgb, var(--md-outline) 20%, transparent);
-    --sd-border-radius: 12px;
+    --sd-border-radius: var(--md-border-radius-large);
     --sd-font-family-base: inherit;
     --sd-font-family-heading: inherit;
     --sd-font-family-code-header: inherit;
-    --sd-font-family-code: 'Courier New', ui-monospace, monospace;
+    --sd-font-family-code: var(--font-mono);
 
     .or3-prose {
         --or3-prose-code-inline-bg: color-mix(
@@ -360,12 +374,12 @@
     }
 
     .or3-prose [data-streamdown='code-block'] {
-        border-radius: 14px;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        border-radius: var(--md-border-radius-large);
+        box-shadow: var(--app-elevation-low);
     }
 
     .or3-prose [data-streamdown='code-block-header'] {
-        padding: 0.55rem 0.75rem;
+        padding: 8px 12px 8px 16px;
         font-size: 0.75rem;
     }
 
@@ -375,7 +389,7 @@
     }
 
     .or3-prose [data-streamdown='code-body'] {
-        padding: 0.9rem 1rem 1rem;
+        padding: 16px;
     }
 
     .or3-prose [data-streamdown='code'] {
@@ -385,8 +399,8 @@
 
     .or3-prose [data-streamdown='copy-button'],
     .or3-prose [data-streamdown='download-button'] {
-        padding: 0.3rem;
-        border-radius: 8px;
+        padding: 4px;
+        border-radius: var(--md-border-radius-small);
     }
 
     /* ── Modal: clean and round ── */
@@ -396,9 +410,9 @@
 
     /* ── Cards and sections: subtle depth ── */
     .section-card {
-        border: 1px solid var(--md-border-color) !important;
-        border-radius: 12px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+        border: var(--md-border-width) solid var(--md-border-color) !important;
+        border-radius: var(--md-border-radius-large) !important;
+        box-shadow: var(--app-elevation-low) !important;
     }
 
     /*
@@ -407,16 +421,37 @@
      */
     .basic-auth-account-menu {
         border: 1px solid rgba(0, 0, 0, 0.1) !important;
-        border-radius: 14px !important;
+        border-radius: var(--md-border-radius-large) !important;
         box-shadow:
             0 8px 24px rgba(0, 0, 0, 0.1),
             0 0 1px rgba(0, 0, 0, 0.08) !important;
     }
 
-    /* ── Scroll styling ── */
+    /* ── Scroll styling: soft neutral thumbs, never the near-black primary ── */
     * {
         scrollbar-width: thin;
-        scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+        scrollbar-color: var(--blank-scrollbar-thumb) transparent;
+    }
+
+    /* padding-box keeps the shared 2px transparent inset (a thin thumb). */
+    *::-webkit-scrollbar-thumb {
+        background: var(--blank-scrollbar-thumb) padding-box;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+        background: var(--blank-scrollbar-thumb-hover) padding-box;
+    }
+
+    .sidebar-scroll.or3-scroll:hover {
+        scrollbar-color: var(--blank-scrollbar-thumb) transparent;
+    }
+
+    .sidebar-scroll.or3-scroll:hover::-webkit-scrollbar-thumb {
+        background: var(--blank-scrollbar-thumb) padding-box;
+    }
+
+    .sidebar-scroll.or3-scroll:hover::-webkit-scrollbar-thumb:hover {
+        background: var(--blank-scrollbar-thumb-hover) padding-box;
     }
 
     /* ── HR dividers like ChatGPT between messages ── */
@@ -436,25 +471,89 @@ html[data-theme='blank'] .basic-auth-modal-content button[type='submit'] {
     white-space: nowrap;
 }
 
+/*
+ * Prose speaks the same typeface as the rest of the interface (and follows the
+ * Theme Studio font choice) instead of the shared IBM Plex default. The extra
+ * `html` keeps these ahead of the component-scoped !important rules.
+ */
+html[data-theme='blank'] .or3-prose {
+    font-family: var(--app-font-sans-current, var(--font-sans)) !important;
+}
+
+html[data-theme='blank'] .or3-prose :is(h1, h2, h3, h4) {
+    font-family: var(--app-font-heading-current, var(--font-heading)) !important;
+    letter-spacing: -0.01em;
+}
+
+html[data-theme='blank'] .or3-prose :is(code, pre, [data-streamdown='code']) {
+    font-family: var(--font-mono) !important;
+}
+
+/* Pending reply: three quiet dots in the text column, not a scanline banner. */
+html[data-theme='blank'] .theme-loader {
+    min-height: 28px;
+    margin: 4px 0 8px;
+    background: none;
+    justify-content: flex-start;
+}
+
+html[data-theme='blank'] .theme-loader::before,
+html[data-theme='blank'] .theme-loader::after,
+html[data-theme='blank'] .theme-loader :is(.rl-glow, .rl-scan, .rl-stripes, .rl-bar) {
+    display: none;
+}
+
+html[data-theme='blank'] .theme-loader .rl-text {
+    font-size: 0;
+    letter-spacing: 0;
+    text-shadow: none;
+}
+
+html[data-theme='blank'] .theme-loader .rl-dots {
+    gap: 4px;
+    margin-left: 0;
+}
+
+html[data-theme='blank'] .theme-loader .rl-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--md-on-surface-variant);
+}
+
+/* The in-app Reduced motion preference also removes the button press scale. */
+html[data-theme='blank'][data-motion-resolved='reduced'] :is(button, a):active {
+    scale: none !important;
+}
+
 /* ── Dark mode overrides ── */
 html[data-theme='blank'].dark,
 [data-theme='blank'].dark,
 .dark html[data-theme='blank'] {
-    /*
-     * Replace global Material dark container ladder (cool navy-black from
-     * dark.css) with blank's neutral charcoal stack so raised prompts/cards
-     * match the sidebar and content surfaces.
-     */
-    --md-surface-container-lowest: #1c1c1c;
-    --md-surface-container-low: #2a2a2a;
-    --md-surface-container: #2f2f2f;
-    --md-surface-container-high: #333333;
-    --md-surface-container-highest: #383838;
+    /* The container ladder lives in theme.ts; these two are not registered tokens. */
     --md-surface-dim: #171717;
     --md-surface-bright: #2f2f2f;
 
-    * {
-        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    /*
+     * Shadows at light-mode opacity vanish on charcoal, so floating menus and
+     * dialogs lost their edge. Deeper values restore the same separation.
+     * User elevation presets are inline on <html> and still take precedence.
+     */
+    --app-elevation-low: 0 1px 2px rgb(0 0 0 / 0.3);
+    --app-elevation-medium: 0 4px 16px rgb(0 0 0 / 0.36);
+    --app-elevation-high: 0 20px 64px rgb(0 0 0 / 0.5);
+
+    /*
+     * Floating menus, popovers and toasts carry Tailwind's stock large shadows
+     * (10% black). Retarget only the --tw-shadow layer, the same tiers the
+     * elevation presets use, so rings and borders compose unchanged.
+     */
+    :where([class~='shadow-lg']) {
+        --tw-shadow: var(--app-elevation-medium);
+    }
+
+    :where([class~='shadow-xl'], [class~='shadow-2xl']) {
+        --tw-shadow: var(--app-elevation-high);
     }
 
     .basic-auth-account-menu {
@@ -481,7 +580,7 @@ html[data-theme='blank'] .agent-connection-notice {
 		var(--md-surface-hover) 88%,
 		var(--md-surface)
 	) !important;
-	border-radius: 8px !important;
+	border-radius: var(--md-border-radius-small) !important;
 }
 
 html[data-theme='blank'].dark .agent-connection-notice,
@@ -510,7 +609,7 @@ html[data-theme='blank']
 	[aria-label='Unlock agent conversation'] {
 	border: 1px solid
 		color-mix(in srgb, var(--md-border-color) 90%, transparent) !important;
-	border-radius: 10px !important;
+	border-radius: var(--md-border-radius) !important;
 	background: var(--md-surface-hover) !important;
 	box-shadow: none !important;
 }
@@ -531,7 +630,7 @@ html[data-theme='blank'] [data-testid='external-agent-recovery'] > span,
 html[data-theme='blank']
 	[aria-label='Unlock agent conversation']
 	> span:first-child {
-	border-radius: 8px !important;
+	border-radius: var(--md-border-radius-small) !important;
 	background: color-mix(
 		in srgb,
 		var(--md-on-surface) 8%,
@@ -553,13 +652,13 @@ html[data-theme='blank'].dark
 	color: #c8c8c8 !important;
 }
 
-/* Blank buttons are rounded-full globally — square these unlock CTAs a bit */
+/* Unlock CTAs use the shared control radius rather than a full pill */
 html[data-theme='blank'] [data-testid='external-agent-recovery'] .btn,
 html[data-theme='blank'] [data-testid='external-agent-recovery'] button,
 html[data-theme='blank']
 	[aria-label='Unlock agent conversation']
 	button {
-	border-radius: 9px !important;
+	border-radius: var(--md-border-radius-small) !important;
 }
 
 /*
@@ -1141,9 +1240,9 @@ html[data-theme='blank']
  * Soft radii, denser layout, cooler neutrals. Do not mirror retro hard-edge.
  */
 html[data-theme='blank'] .agent-connections-dialog {
-	--agent-conn-radius: 12px;
-	--agent-conn-radius-md: 9px;
-	--agent-conn-radius-sm: 8px;
+	--agent-conn-radius: var(--md-border-radius-large);
+	--agent-conn-radius-md: var(--md-border-radius);
+	--agent-conn-radius-sm: var(--md-border-radius-small);
 	--agent-conn-radius-xs: 6px;
 	--agent-conn-border: #e2e5ea;
 	--agent-conn-border-soft: #e8ebf0;

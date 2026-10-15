@@ -46,7 +46,7 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-14 shrink-0 items-center border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] px-3 sm:px-5"
+                    class="flex h-14 shrink-0 items-center border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] px-4 sm:px-6"
                 >
                     <UButton
                         id="dashboard-back-button"
@@ -88,7 +88,7 @@
                 <div
                     v-if="!state.activePageId && landingPages.length > 1"
                     id="dashboard-landing-grid"
-                    class="min-h-0 overflow-y-auto p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                    class="min-h-0 overflow-y-auto p-4 sm:p-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                 >
                     <button
                         v-for="p in landingPages"

@@ -221,6 +221,12 @@
 
 
 
+/* Rendered cells carry a bare `border` utility (currentColor); every table
+   line follows the theme's border token instead of the text color. */
+.or3-prose :deep(:is(thead, tr, th, td)) {
+    border-color: var(--md-border-color);
+}
+
 .or3-prose :deep(th) {
     border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;

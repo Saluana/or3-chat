@@ -21,7 +21,10 @@ export default defineTheme({
     borderWidthSubtle: '0px',
     borderWidth: '1px',
     borderWidthStrong: '0px',
+    // Concentric tiers: controls (8) sit inside surfaces (14) with a 6px inset.
+    borderRadiusSmall: '8px',
     borderRadius: '10px',
+    borderRadiusLarge: '14px',
     density: {
         controlHeightSmall: '32px',
         controlHeightMedium: '36px',
@@ -37,7 +40,8 @@ export default defineTheme({
         durationFast: '120ms',
         durationMedium: '200ms',
         durationSlow: '300ms',
-        easingStandard: 'ease',
+        // Fast start, soft landing: feedback reads as immediate, never abrupt.
+        easingStandard: 'cubic-bezier(0.2, 0, 0, 1)',
     },
     elevation: {
         low: '0 1px 3px rgb(0 0 0 / 0.05)',
@@ -83,8 +87,17 @@ export default defineTheme({
         inverseSurface: '#0d0d0d',
         inverseOnSurface: '#ffffff',
 
+        // Neutral container ladder (replaces the blue-tinted global Material
+        // ladder at the same lightness, so cards and table headers stay gray).
+        surfaceContainerLowest: '#ffffff',
+        surfaceContainerLow: '#f3f3f3',
+        surfaceContainer: '#ededed',
+        surfaceContainerHigh: '#e8e8e8',
+        surfaceContainerHighest: '#e2e2e2',
+
         // Outline & borders
         outline: '#d9d9d9',
+        outlineVariant: '#c6c6c6',
         borderColor: '#e5e5e5',
 
         // Semantic
@@ -128,7 +141,16 @@ export default defineTheme({
             inverseSurface: '#ececec',
             inverseOnSurface: '#212121',
 
+            // Neutral charcoal ladder so raised prompts/cards match the
+            // sidebar and content surfaces (not the global navy-black).
+            surfaceContainerLowest: '#1c1c1c',
+            surfaceContainerLow: '#2a2a2a',
+            surfaceContainer: '#2f2f2f',
+            surfaceContainerHigh: '#333333',
+            surfaceContainerHighest: '#383838',
+
             outline: '#555555',
+            outlineVariant: '#474747',
             borderColor: '#424242',
 
             info: '#2f2f2f',
@@ -152,6 +174,7 @@ export default defineTheme({
         sans: 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif',
         heading:
             'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif',
+        mono: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
         baseSize: '16px',
         baseWeight: '400',
     },
@@ -228,7 +251,7 @@ export default defineTheme({
         tooltip: {
             slots: {
                 content:
-                    'border-0 ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] h-[var(--app-control-height-medium,36px)] px-3 text-sm',
+                    'border-0 ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] h-auto min-h-[28px] px-2.5 py-1 text-[13px] leading-5 font-medium',
             },
         },
         tree: {
@@ -254,8 +277,10 @@ export default defineTheme({
         button: {
             slots: {
                 base: [
-                    'transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
+                    'transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                     'cursor-pointer text-start rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
+                    // Press feedback; `scale` composes with any positioning transform.
+                    'motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98]',
                 ],
                 label: 'truncate',
                 leadingIcon: 'shrink-0',
@@ -383,7 +408,7 @@ export default defineTheme({
         popover: {
             slots: {
                 content:
-                    'bg-[var(--md-surface)] ring-0 rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.06)] dark:border-[rgba(255,255,255,0.08)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] p-1.5',
+                    'bg-[var(--md-surface)] ring-0 rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] p-1.5',
             },
         },
         switch: {

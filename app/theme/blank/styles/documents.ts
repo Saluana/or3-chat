@@ -23,7 +23,7 @@ export const documentsStyles = {
         style: {
             borderBottom:
                 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
-            boxShadow: '0 1px 2px color-mix(in srgb, var(--md-on-surface) 4%, transparent)',
+            boxShadow: 'var(--app-elevation-low)',
         },
     },
     '.document-editor-root .document-inspector': {
@@ -37,65 +37,65 @@ export const documentsStyles = {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--chat-composer-border-radius, 28px)',
-            boxShadow: '0 12px 36px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            boxShadow: 'var(--app-elevation-medium)',
         },
     },
     '.document-editor-root .toolbar-overflow': {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius-large, var(--md-border-radius))',
-            boxShadow: '0 12px 36px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            boxShadow: 'var(--app-elevation-high)',
         },
     },
     '.document-editor-root .selection-menu': {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius-large, var(--md-border-radius))',
-            boxShadow: '0 12px 30px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            boxShadow: 'var(--app-elevation-high)',
         },
     },
     '.document-editor-root .slash-menu': {
         style: {
-            border: '1px solid var(--md-border-color)',
-            borderRadius: '12px',
-            boxShadow: '0 18px 48px color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius-large)',
+            boxShadow: 'var(--app-elevation-high)',
         },
     },
     '.document-editor-root .setting-card': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-large)',
             boxShadow: 'none',
         },
     },
     '.document-editor-root .quick-action-row': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-large)',
             boxShadow: 'none',
         },
     },
     '.document-editor-root .quick-action-fields': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 8%, transparent)',
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius)',
         },
     },
     '.document-editor-root .quick-action-empty': {
         style: {
             border: '1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent)',
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-large)',
         },
     },
     '.document-editor-root .attachment-chip': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius)',
         },
     },
     '.document-editor-root .selection-context': {
         style: {
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius)',
         },
     },
     '.document-editor-root .scope-control [role="tablist"]': {
@@ -107,31 +107,31 @@ export const documentsStyles = {
     '.document-editor-root .revision-item': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '14px',
-            boxShadow: '0 1px 1px color-mix(in srgb, var(--md-on-surface) 4%, transparent)',
+            borderRadius: 'var(--md-border-radius-large)',
+            boxShadow: 'var(--app-elevation-low)',
         },
     },
     '.document-editor-root .outline-item': {
         style: {
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-small)',
         },
     },
     '.document-editor-root .preview-body': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius)',
         },
     },
     '.document-editor-root .info-grid > div': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-large)',
         },
     },
     '.document-editor-root .outline-empty': {
         style: {
             border: '1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent)',
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-large)',
         },
     },
     '.document-editor-root .send-button': {
@@ -168,7 +168,7 @@ export const documentsStyles = {
             borderRadius: '999px',
             background: 'var(--md-surface)',
             color: 'var(--md-on-surface-variant)',
-            boxShadow: '0 1px 2px color-mix(in srgb, var(--md-on-surface) 8%, transparent)',
+            boxShadow: 'var(--app-elevation-low)',
             fontFamily: 'var(--font-sans)',
             fontSize: '0.7rem',
             fontWeight: '700',

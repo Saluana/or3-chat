@@ -634,7 +634,8 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     await expect(dashboard).toBeVisible({ timeout: 30_000 });
     await dashboard.click();
 
-    const title = page.getByRole('heading', { name: 'Theme studio' });
+    // The dashboard dialog is titled after its current page.
+    const title = page.getByRole('tablist', { name: 'Theme settings sections' });
     if (await title.isVisible()) return;
 
     const dashboardDialog = page.getByRole('dialog', { name: 'Dashboard' });
@@ -645,9 +646,9 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     await expect(settings).toBeVisible({ timeout: 30_000 });
     await settings.click();
 
-    const themeSettings = dashboardDialog.getByRole('button', {
-        name: /Theme Settings/i,
-    });
+    const themeSettings = page
+        .getByRole('dialog', { name: 'Settings' })
+        .getByRole('button', { name: /Theme Settings/i });
     await expect(themeSettings).toBeVisible({ timeout: 30_000 });
     await themeSettings.click();
     await expect(title).toBeVisible({ timeout: 30_000 });
@@ -1114,7 +1115,7 @@ for (const theme of themes) {
                                 })
                                 .click();
                             const search = page.getByRole('textbox', {
-                                name: 'Search chats, documents, and projects',
+                                name: 'Filter sidebar by title',
                             });
                             await search.click();
                             await expect(search).toHaveCSS(
@@ -1147,14 +1148,16 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
         };
         await expectIcons(initialTheme);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        // The dashboard dialog is titled after its current page.
         const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
         await dashboard.getByRole('button', { name: 'Settings', exact: true }).click();
-        await dashboard.getByRole('button', { name: /Theme Settings/i }).click();
+        await page.getByRole('dialog', { name: 'Settings' })
+            .getByRole('button', { name: /Theme Settings/i }).click();
+        const themeDialog = page.getByRole('dialog', { name: 'Theme Settings' });
         for (const theme of ['retro', 'cyberpunk', 'blank'] as const) {
             await selectThemeAndMode(page, theme, 'light');
-            await page.getByRole('dialog', { name: 'Dashboard' })
-                .getByRole('button', { name: 'Close', exact: true }).click();
-            await expect(page.getByRole('dialog', { name: 'Dashboard' })).toBeHidden();
+            await themeDialog.getByRole('button', { name: 'Close', exact: true }).click();
+            await expect(themeDialog).toBeHidden();
             await expectIcons(theme);
             await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
         }
