@@ -12,9 +12,62 @@
             </p>
         </header>
 
-        <div class="space-y-5">
+        <fieldset
+            v-if="wizardModeField"
+            class="grid gap-4 md:grid-cols-2"
+        >
+            <legend class="sr-only">
+                {{ wizardModeField.label || step.title }}
+            </legend>
+            <label
+                v-for="option in wizardModeField.options ?? []"
+                :key="String(option.value)"
+                class="group relative cursor-pointer rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] px-4 py-4 text-left transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--md-primary)]"
+                :class="cardClass(option.value)"
+            >
+                <input
+                    class="sr-only"
+                    type="radio"
+                    name="or3-cloud-wizard-mode"
+                    :value="String(option.value)"
+                    :checked="answers.wizardMode === option.value"
+                    @change="emit('update-field', wizardModeField.key, option.value)"
+                />
+                <span
+                    v-if="option.value === 'preset-local'"
+                    class="absolute -top-2.5 right-3 rounded-full bg-[var(--md-primary)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--md-on-primary,#fff)]"
+                >
+                    Recommended
+                </span>
+                <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5">
+                    <UIcon
+                        :name="presetIcon(option.value)"
+                        class="h-4 w-4 text-[var(--md-primary)]"
+                    />
+                </div>
+                <div class="text-sm font-semibold">{{ option.label }}</div>
+                <span
+                    v-if="answers.wizardMode === option.value"
+                    class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--md-primary)]"
+                >
+                    <UIcon name="i-heroicons-check-circle" class="size-4" />
+                    Selected
+                </span>
+                <p
+                    v-if="option.description"
+                    class="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[var(--md-secondary)]"
+                >
+                    {{ option.description }}
+                </p>
+            </label>
+        </fieldset>
+
+        <div
+            v-if="!advancedExpanded && settingFields.length > 0"
+            class="space-y-5"
+        >
             <WizardFieldRenderer
-                v-for="field in visibleFields"
+                v-for="field in settingFields"
                 :key="String(field.key)"
                 :field="field"
                 :model-value="answers[field.key]"
@@ -23,11 +76,67 @@
                 @generate-secret="(key) => emit('generate-secret', key)"
             />
         </div>
+
+        <section
+            v-if="advancedField"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+        >
+            <button
+                type="button"
+                class="flex w-full items-start gap-3 px-4 py-3 text-left"
+                :aria-expanded="advancedExpanded"
+                aria-controls="wizard-advanced-setup"
+                @click="emit('update-field', advancedField.key, !advancedExpanded)"
+            >
+                <span class="flex-1 space-y-1">
+                    <span class="block text-sm font-medium text-[var(--md-on-surface)]">
+                        {{ advancedField.label }}
+                    </span>
+                    <span
+                        v-if="advancedField.help"
+                        class="block text-xs text-[var(--md-on-surface)]/50"
+                    >
+                        {{ advancedField.help }}
+                    </span>
+                    <span
+                        v-if="hasCollapsedError"
+                        class="block text-xs text-[var(--md-error)]"
+                    >
+                        A setting in this section needs attention.
+                    </span>
+                </span>
+                <UIcon
+                    name="i-heroicons-chevron-down"
+                    class="mt-0.5 size-4 shrink-0 transition-transform"
+                    :class="advancedExpanded ? 'rotate-180' : ''"
+                />
+            </button>
+            <div
+                v-if="advancedExpanded"
+                id="wizard-advanced-setup"
+                class="space-y-5 border-t-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-4 py-4"
+            >
+                <WizardFieldRenderer
+                    v-for="field in settingFields"
+                    :key="String(field.key)"
+                    :field="field"
+                    :model-value="answers[field.key]"
+                    :error="fieldErrors[field.key]"
+                    @update:model-value="(value) => emit('update-field', field.key, value)"
+                    @generate-secret="(key) => emit('generate-secret', key)"
+                />
+            </div>
+        </section>
     </div>
 </template>
 
 <script setup lang="ts">
-import type { WizardAnswers, WizardField, WizardStep } from '~~/shared/cloud/wizard/types';
+import type {
+    WizardAnswers,
+    WizardField,
+    WizardFieldOption,
+    WizardStep,
+} from '~~/shared/cloud/wizard/types';
 import WizardFieldRenderer from './WizardFieldRenderer.vue';
 
 const props = defineProps<{
@@ -48,4 +157,52 @@ const visibleFields = computed<WizardField[]>(() =>
             : true
     )
 );
+
+const wizardModeField = computed(() =>
+    visibleFields.value.find((field) => field.key === 'wizardMode')
+);
+
+// `targetAdvancedEnabled` is shown as the Advanced setup disclosure. Fields
+// it reveals render inside the section; anything visible without it (Docker
+// access from `--docker`) stays above it while the section is collapsed.
+const advancedField = computed(() =>
+    visibleFields.value.find((field) => field.key === 'targetAdvancedEnabled')
+);
+
+const advancedExpanded = computed(() =>
+    Boolean(props.answers.targetAdvancedEnabled)
+);
+
+// Keep errors on collapsed fields discoverable.
+const hasCollapsedError = computed(
+    () =>
+        !advancedExpanded.value &&
+        props.step.fields.some(
+            (field) =>
+                Boolean(props.fieldErrors[field.key]) &&
+                !visibleFields.value.includes(field)
+        )
+);
+
+const settingFields = computed(() =>
+    visibleFields.value.filter(
+        (field) =>
+            field.key !== 'wizardMode' && field.key !== 'targetAdvancedEnabled'
+    )
+);
+
+function cardClass(value: WizardFieldOption['value']): string {
+    const selected = props.answers.wizardMode === value;
+    if (selected) {
+        return 'border-[length:var(--md-border-width-strong)] border-[var(--md-primary)] bg-[var(--md-primary)]/8 shadow-sm';
+    }
+    return 'border-[color:var(--md-border-color)] bg-[var(--md-surface)] hover:bg-[var(--md-inverse-surface)]/6';
+}
+
+function presetIcon(value: WizardFieldOption['value']): string {
+    if (value === 'personal-local') return 'i-heroicons-computer-desktop';
+    if (value === 'preset-local') return 'i-heroicons-server-stack';
+    if (value === 'preset-clerk-convex') return 'i-heroicons-cloud';
+    return 'i-heroicons-wrench-screwdriver';
+}
 </script>

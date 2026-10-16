@@ -79,10 +79,10 @@ To develop Cloud features from source, configure the provider stack through
 that wizard, then run:
 
 ```bash
-bun run dev:ssr
+bun run dev
 ```
 
-This enables SSR with your existing configuration. It does not create Cloud
+This reads the `.env` the wizard wrote, so SSR auth follows your configuration. It does not create Cloud
 credentials or select providers. The launcher uses Node for the default SQLite
 driver and Bun when the configured SQLite provider selects Bun's driver. Use
 the Bun version pinned in `package.json`; startup checks required SQLite drivers

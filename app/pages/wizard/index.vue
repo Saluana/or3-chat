@@ -124,14 +124,16 @@
                         class="flex items-center justify-between gap-3 border-t border-[color:var(--md-border-color)] pt-5"
                     >
                         <UButton
+                            v-if="hasPreviousStep"
                             icon="i-heroicons-chevron-left"
                             label="Back"
                             variant="outline"
-                            :disabled="!hasPreviousStep || isSaving"
+                            :disabled="isSaving"
                             :loading="isSaving"
                             @click="onGoPrevious"
                         />
                         <UButton
+                            class="ml-auto"
                             label="Continue"
                             trailing-icon="i-heroicons-chevron-right"
                             :disabled="!hasNextStep || isSaving"
@@ -164,7 +166,6 @@ import type { WizardAnswers } from '~~/shared/cloud/wizard/types';
 import { useWizardSession } from '~/wizard/composables/useWizardSession';
 import WizardStepBranding from '~/wizard/components/WizardStepBranding.vue';
 import WizardStepGeneric from '~/wizard/components/WizardStepGeneric.vue';
-import WizardStepPreset from '~/wizard/components/WizardStepPreset.vue';
 import WizardStepProviders from '~/wizard/components/WizardStepProviders.vue';
 import WizardStepReview from '~/wizard/components/WizardStepReview.vue';
 import WizardStepTarget from '~/wizard/components/WizardStepTarget.vue';
@@ -247,7 +248,6 @@ function stepIndicatorClass(stepId: string, index: number): string {
 const activeComponent = computed(() => {
     const stepId = currentStep.value?.id;
     if (stepId === 'target') return WizardStepTarget;
-    if (stepId === 'preset') return WizardStepPreset;
     if (stepId === 'branding') return WizardStepBranding;
     if (stepId === 'themes') return WizardStepThemes;
     if (stepId === 'providers') return WizardStepProviders;

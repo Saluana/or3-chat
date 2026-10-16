@@ -46,6 +46,7 @@
         "test:e2e:storage": "PW_PORT=3109 bunx playwright test tests/e2e/storage-layer.spec.ts --workers=1 --reporter=line",
         "test:e2e:admin-auth": "bun run scripts/test/run-admin-auth-e2e.ts",
         "test:e2e:sign-in-gate": "bun run scripts/test/run-sign-in-gate-e2e.ts",
+        "test:e2e:setup-wizard": "bun run scripts/test/run-setup-wizard-e2e.ts",
         "test:e2e:workspace-cloud": "bun run scripts/test/run-workspace-cloud-e2e.ts",
         "test:e2e:plugin-development": "bun run scripts/test/run-plugin-development-e2e.ts",
         "test:e2e:projects": "OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3141 bunx playwright test tests/e2e/persistent-projects.spec.ts --workers=1 --reporter=line",

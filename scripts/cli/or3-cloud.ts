@@ -968,7 +968,8 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     process.once('SIGTERM', onSignal);
 
     try {
-        await waitForHttpReady(healthUrl);
+        // A first Nuxt dev start (dependency optimizing) can take minutes.
+        await waitForHttpReady(healthUrl, 180_000);
 
         console.log('');
         console.log('┌──────────────────────────────────────────────────────┐');

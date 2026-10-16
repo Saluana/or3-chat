@@ -35,6 +35,7 @@ import {
 } from '../../shared/cloud/wizard/deploy-rollback';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import { waitForHttpReady } from '../../shared/cloud/wizard/dev-server';
+import { formatStartCommand, startCommand } from '../../shared/cloud/wizard/next-steps';
 import type {
     WizardAnswers,
     WizardApplyResult,
@@ -211,12 +212,14 @@ function startLocalDevDetached(
     instanceDir: string,
     packageManager: PackageManager
 ): void {
-    const command = runScriptCommand(packageManager, 'dev:ssr');
+    // The same command the user is told to run; `.env` decides SSR auth.
+    // Host and port match the readiness probe below.
+    const command = startCommand(packageManager);
     const child = crossSpawn(command.command, command.args, {
         cwd: instanceDir,
         stdio: 'ignore',
         detached: true,
-        env: createCleanWizardDeployEnv(),
+        env: { ...createCleanWizardDeployEnv(), HOST: '127.0.0.1', PORT: '3000' },
     });
     child.once('error', () => {});
     child.unref();
@@ -528,7 +531,7 @@ export async function runWizardDeploy(
             startLocalDevDetached(answers.instanceDir, packageManager);
             started = true;
             try {
-                await waitForHttpReady(`${localDevUrl}/api/health`, 45000);
+                await waitForHttpReady(`${localDevUrl}/api/health`, 180_000);
                 accessUrl = localDevUrl;
                 instructions =
                     'Local dev started with the updated environment values.';
@@ -545,22 +548,24 @@ export async function runWizardDeploy(
             applyResult,
             deployResult: {
                 started,
-                commands: [`${packageManager} run dev:ssr`],
+                commands: [formatStartCommand(packageManager)],
                 instructions,
                 accessUrl,
-                nextSteps: accessUrl
-                    ? [
-                        'Open http://127.0.0.1:3000 in your browser.',
-                        'Sign in with your bootstrap/admin account.',
-                        'Open the admin dashboard at /admin to manage your instance.',
-                    ]
-                    : [
-                        'Ensure port 3000 is free before starting local dev.',
-                        `Start the app manually with: ${packageManager} run dev:ssr`,
-                        'Open http://127.0.0.1:3000 in your browser after startup.',
-                        'Sign in with your bootstrap/admin account.',
-                        'Open the admin dashboard at /admin to manage your instance.',
-                    ],
+                nextSteps: [
+                    ...(accessUrl
+                        ? ['Open http://127.0.0.1:3000 in your browser.']
+                        : [
+                            'Ensure port 3000 is free before starting local dev.',
+                            `Start the app manually with: ${formatStartCommand(packageManager)}`,
+                            'Open http://127.0.0.1:3000 in your browser after startup.',
+                        ]),
+                    ...(answers.ssrAuthEnabled
+                        ? [
+                            'Sign in with the admin email and password from setup.',
+                            'Open the admin dashboard at /admin to manage your instance.',
+                        ]
+                        : []),
+                ],
             },
         };
     }
