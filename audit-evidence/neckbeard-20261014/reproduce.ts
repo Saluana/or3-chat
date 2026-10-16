@@ -15,7 +15,7 @@ import type { SessionPayload } from '../../app/composables/auth/useSessionContex
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, toWebHandler } from 'h3';
+import { createApp, toWebHandler, type H3Event } from 'h3';
 import { Or3DB, setActiveWorkspaceDb } from '../../app/db/client';
 import { persistUserApiKey, clearPersistedUserApiKey, hydrateUserApiKeyFromKv, useUserApiKey } from '../../app/core/auth/useUserApiKey';
 import { ConflictResolver } from '../../app/core/sync/conflict-resolver';
@@ -45,7 +45,7 @@ const config = {
     } },
     security: { forceHttps: false, proxy: { trust: false }, allowedOrigins: [] },
 };
-(globalThis as any).useRuntimeConfig = () => config;
+(globalThis as typeof globalThis & { useRuntimeConfig: () => typeof config }).useRuntimeConfig = () => config;
 setHookEngine(createTypedHookEngine(createHookEngine()));
 const report = (name: string, observed: unknown) => console.log(JSON.stringify({ name, observed }));
 try {
@@ -75,12 +75,13 @@ try {
     assert.equal(await a.getCursor(), 11);
     report('concurrent-sync-complete-regresses-cursor', await a.getCursor());
     const oldNow = Date.now;
-    const oldStorage = globalThis.localStorage;
+    const storageGlobals = globalThis as unknown as { localStorage: Pick<Storage, 'getItem' | 'setItem'> | undefined };
+    const oldStorage = storageGlobals.localStorage;
     try {
-        (globalThis as any).localStorage = { getItem: () => 'same-device', setItem() {} };
+        storageGlobals.localStorage = { getItem: () => 'same-device', setItem() {} };
         Date.now = () => 1_800_000_000_000;
         report('two-tab-generators-produce-identical-hlc', new HLCGenerator().generate() === new HLCGenerator().generate());
-    } finally { Date.now = oldNow; (globalThis as any).localStorage = oldStorage; }
+    } finally { Date.now = oldNow; storageGlobals.localStorage = oldStorage; }
     clearRateLimit('audit-ip', 'audit-user');
     report('concurrent-login-admissions-before-first-failure', Array.from({ length: 20 }, () => checkRateLimit('audit-ip', 'audit-user')).filter(x => x.allowed).length);
     for (let i = 0; i < 5; i++) checkRateLimit('audit-ip', 'audit-user');
@@ -88,10 +89,11 @@ try {
     process.env.OR3_ADMIN_DATA_DIR = join(root, 'admin');
     const originalPassword = 'AuditOriginal123!';
     await writeAdminCredentials({ username: 'audit-admin', password_hash_bcrypt: await hashPassword(originalPassword), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-    const token = await signAdminJwt({} as any, 'audit-admin');
+    const event = {} as H3Event;
+    const token = await signAdminJwt(event, 'audit-admin');
     await updateAdminCredentials({ password_hash_bcrypt: await hashPassword('AuditReplacement456!') });
-    assert.equal(await verifyAdminJwt({} as any, token), null);
-    report('old-admin-jwt-valid-after-password-rotation', Boolean(await verifyAdminJwt({} as any, token)));
+    assert.equal(await verifyAdminJwt(event, token), null);
+    report('old-admin-jwt-valid-after-password-rotation', Boolean(await verifyAdminJwt(event, token)));
     const app = createApp().use(adminGate).use('/api/admin/auth/login', login);
     const response = await toWebHandler(app)(new Request('http://public.example.test/api/admin/auth/login', {
         method: 'POST', headers: { 'content-type': 'application/json', host: 'public.example.test' },
@@ -104,7 +106,8 @@ try {
     assert.equal(validatePasswordStrength(prefix + 'original').valid, false);
     report('bcrypt-overlength-password-rejected', true);
     process.env.OR3_CLOUD_WIZARD_HOME = join(root, 'wizard');
-    await saveSession({ id: 'audit-session', answers: { adminPassword: 'fixture-only' }, metadata: { includeSecrets: true } } as any);
+    const timestamp = new Date().toISOString();
+    await saveSession({ id: 'audit-session', createdAt: timestamp, updatedAt: timestamp, currentStepId: 'admin', answers: { adminPassword: 'fixture-only' }, metadata: { includeSecrets: true } });
     report('wizard-secret-session-mode-with-normal-umask', ((await stat(join(root, 'wizard/.or3-cloud/sessions/audit-session.json'))).mode & 0o777).toString(8));
     const workspaceA = `audit-a-${crypto.randomUUID()}`;
     const workspaceB = `audit-b-${crypto.randomUUID()}`;
