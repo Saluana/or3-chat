@@ -737,7 +737,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 16,
-                    "summary": "Typed base and cloud settings, including lock-page session checks, responsive illustrated layout, custom adapters, defaults, validation, and environment-variable references."
+                    "summary": "Typed base and cloud settings, including lock-page session checks, safe redirects, denied-access recovery, responsive cloud artwork and sign-in layout, custom adapters, defaults, validation, and environment-variable references."
                 },
                 {
                     "name": "environment-reference.md",

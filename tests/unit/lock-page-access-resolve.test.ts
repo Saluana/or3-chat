@@ -170,6 +170,29 @@ describe('resolveLockPageAccess', () => {
         });
     });
 
+    // Errors are local to a composable caller. A failure must not validate the
+    // shared stale cache for the next caller, including SSR's nonthrowing errors.
+    it.each(['rejection', 'error-ref'])('revalidates after a %s instead of admitting stale cache in another caller', async (failure) => {
+        const data = { value: { session: createSession() as SessionContext | null, appAccessAllowed: true } };
+        const firstError = { value: null as Error | null };
+        const firstRefresh = async () => {
+            if (failure === 'rejection') throw new Error('Session unavailable');
+            firstError.value = new Error('Session unavailable');
+        };
+        useSessionContextMock.mockReturnValueOnce({
+            data, pending: { value: false }, error: firstError, refresh: firstRefresh,
+        }).mockReturnValueOnce({
+            data, pending: { value: false }, error: { value: null },
+            refresh: async () => {
+                data.value = { session: null, appAccessAllowed: false };
+            },
+        });
+        const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
+
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false, reason: 'session-error' });
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false, reason: 'unauthenticated' });
+    });
+
     it('denies authenticated sessions when app access is denied after refresh', async () => {
         const refresh = vi.fn().mockResolvedValue(undefined);
         useSessionContextMock.mockReturnValue({

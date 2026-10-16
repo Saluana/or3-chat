@@ -31,9 +31,12 @@ export default defineNuxtPlugin(async () => {
     ]);
 
     const { logoutCleanup } = await import('~/utils/logout-cleanup');
-    await refresh();
+    // A failed session request must leave startup available for the lock page's
+    // error/retry flow. It also isn't evidence that local user data needs cleanup.
+    const sessionChecked = await refresh().then(() => true, () => false);
     const initialSession = data.value?.session;
     if (
+        sessionChecked &&
         (await shouldRunLogoutCleanup(initialSession?.authenticated)) &&
         data.value?.session === initialSession
     ) {

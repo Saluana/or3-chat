@@ -8,12 +8,20 @@
             :description="errorDescription"
         />
 
+        <UAlert
+            v-if="accessReason === 'forbidden'"
+            color="warning"
+            variant="soft"
+            title="Workspace access unavailable"
+            description="You're signed in, but this account doesn't have permission to open a workspace. Switch accounts below or ask your administrator for access."
+        />
+
         <!-- Auth surface -->
         <ClientOnly>
             <div v-if="authUiComponent" class="space-y-3">
                 <component :is="authUiComponent" />
                 <UButton
-                    v-if="accessReason === 'session-error'"
+                    v-if="showRetry"
                     size="lg"
                     color="neutral"
                     variant="outline"
@@ -32,7 +40,7 @@
                     description="No lock page adapter is registered for this deployment."
                 />
                 <UButton
-                    v-if="accessReason === 'session-error'"
+                    v-if="showRetry"
                     block
                     size="lg"
                     color="neutral"
@@ -51,7 +59,7 @@
 
         <!-- Redirect hint -->
         <p
-            v-if="requestedPath"
+            v-if="requestedPath && accessReason !== 'forbidden'"
             class="text-xs text-(--md-on-surface-variant)/60 break-all"
         >
             Redirecting to <span class="font-mono">{{ requestedPath }}</span> after sign-in
@@ -108,6 +116,9 @@ const privacyUrl = computed(() => runtimeConfig.public?.legal?.privacyUrl || nul
 const errorDescription = computed(() => {
     return props.errorMessage || 'The server could not verify your session right now. Try again in a moment.';
 });
+const showRetry = computed(
+    () => props.accessReason === 'session-error' || props.accessReason === 'forbidden'
+);
 
 function retrySessionCheck(): void {
     if (typeof window !== 'undefined') {

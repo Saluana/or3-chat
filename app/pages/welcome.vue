@@ -42,23 +42,30 @@ import {
 const route = useRoute();
 const lockPageConfig = useLockPageRuntimeConfig();
 const access = await resolveLockPageAccess();
+const showAccessNotice = access.reason === 'session-error' || access.reason === 'forbidden';
 
 if (access.allowed) {
+    const next = Array.isArray(route.query.next) ? route.query.next[0] : route.query.next;
+    // Browsers retain the original fragment across the server's redirect, but
+    // fragments never reach SSR and therefore aren't included in its `next`.
+    const destination = typeof next === 'string' && !next.includes('#')
+        ? `${next}${route.hash}`
+        : next;
     await navigateTo(
-        resolvePostAuthRedirectTarget(route.query.next, lockPageConfig.route),
+        resolvePostAuthRedirectTarget(destination, lockPageConfig.route),
         { replace: true }
     );
 }
 
 const customAdapterOwnsPage = computed(
     () =>
-        access.reason !== 'session-error' &&
+        !showAccessNotice &&
         lockPageConfig.adapter.toLowerCase() !== 'default' &&
         resolveLockPageAdapter(lockPageConfig.adapter) !== null
 );
 
 const lockPageComponent = computed(() =>
-    access.reason === 'session-error'
+    showAccessNotice
         ? DefaultLockPage
         : resolveRuntimeLockPageComponent({
               adapterId: lockPageConfig.adapter,
