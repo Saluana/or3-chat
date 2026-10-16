@@ -308,9 +308,7 @@ function toolLabel(tool: RegisteredTool) {
     );
 }
 function toolReady(tool: RegisteredTool) {
-    return (
-        tool.runtime !== 'server' && tool.enabled.value && !toolCannotScope(tool.definition.function.name)
-    );
+    return tool.runtime !== 'server' && tool.enabled.value;
 }
 const matchingTools = computed(() => {
     const query = toolQuery.value.trim().toLowerCase();
@@ -950,15 +948,6 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
         resources: settings.value.tools[name]?.resources ?? [],
     };
     dirty.value = true;
-}
-function toolCannotScope(name: string) {
-    return !projectToolEnabled(
-        {
-            ...settings.value,
-            tools: { [name]: { mode: 'enabled', resources: [] } },
-        },
-        name,
-    );
 }
 </script>
 
@@ -2452,11 +2441,6 @@ function toolCannotScope(name: string) {
                                             {{
                                                 tool.runtime === 'server'
                                                     ? 'Server-owned tools cannot run in browser project chats.'
-                                                    : toolCannotScope(
-                                                    tool.definition.function
-                                                        .name,
-                                                )
-                                                    ? 'Cannot limit access to this project.'
                                                     : 'Turn this tool on in chat settings to use it here.'
                                             }}
                                         </p>

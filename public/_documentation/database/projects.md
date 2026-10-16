@@ -119,6 +119,9 @@ operations inside their atomic write. File-reference notifications run after
 the outer commit, so asynchronous extension hooks cannot split ownership from
 its source record. Rollbacks emit no reference notifications; notification
 failure after a successful commit is reported without failing the save.
+Internal-record saves joined to a caller's transaction queue both post and
+reference notifications on the outermost commit. They return to that caller
+without waiting for the commit; rolling back the outer transaction emits neither.
 
 Model requests and workspace chat reads share the canonical thread projection.
 Every reference ancestor and compacted-summary provenance thread must retain the
@@ -282,9 +285,10 @@ this dependency gap.
 
 Server tools recheck canonical chat ownership and workspace access before
 delivering returned text or handler errors. A chat moved into a project, deleted
-chat, or revoked membership withholds the handler output. Older providers
-without the ownership capability retain a warning-only fallback for legacy
-folder memberships; upgrade them before relying on server project isolation.
+chat, or revoked membership withholds the handler output. Providers that cannot
+return resolved canonical ownership refuse server tools and workflows, including
+ordinary-looking chats that may belong to legacy project folders. Upgrade the
+provider and, for Convex, deploy its ownership-aware scaffold before retrying.
 Current SQLite and Convex source readers verify explicit owners are live in the
 same workspace and normalize legacy IDs and kinds consistently with the browser.
 
@@ -374,6 +378,6 @@ Auxiliary inference never interrupts chat. Real failures (a non-2xx response wit
 
 Automatic memory selection validates the source chat’s current ownership and exclusion state and checks referenced messages still exist. Manual memories are independent saved references. Invalid automatic records remain editable in Memory but are not included in turns or handoffs.
 
-`projectToolRequiresApproval` supplies the same mandatory-approval rule to execution and the permission picker. Sidebar editor drafts are kept only in the kept-alive page, isolated by project and cleared on workspace change.
+`projectToolEnabled` leaves every tool on unless project settings turn it off, so project chats advertise the same tools as the chat settings panel. `projectToolRequiresApproval` supplies the same mandatory-approval rule (send/publish/destructive names) to execution and the permission picker. Sidebar editor drafts are kept only in the kept-alive page, isolated by project and cleared on workspace change.
 
 Run `bun run test:e2e:projects` for the deterministic project browser journeys. The review regression writes a screenshot and JSON receipt through Playwright attachments. No live inference is required.

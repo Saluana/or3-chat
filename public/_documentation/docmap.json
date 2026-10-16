@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification."
+                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification. Internal notifications wait for the outer transaction; server execution requires resolved canonical ownership."
                 },
                 {
                     "name": "posts.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers current originating-workspace read and write authorization, membership changes before model dispatch, scoped admission recovery, confirmed cancellation, bound browser-tool approvals and retention."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers required workflow origins, current job/message/workspace authorization, project moves, scoped admission recovery, cancellation, bound browser-tool approvals and retention."
                 },
                 {
                     "name": "notifications.md",

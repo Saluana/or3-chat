@@ -265,7 +265,8 @@ describe('registered canonical history authorization', () => {
     });
     afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); _resetSharedSessionCache(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
     it.each(['project', 'conflict', 'unresolved', 'legacy-provider'] as const)('applies %s ownership before executing a server tool', async ownership => {
-        // Providers declaring the contract must resolve ownership; older ones still run ordinary chats.
+        // Missing ownership proof must refuse, including older providers that
+        // cannot distinguish ordinary chats from legacy project memberships.
         if (ownership !== 'legacy-provider') adapter.capabilities = { ...adapter.capabilities, projectOwnership: 'v1' };
         const originalRead = adapter.readChatHistory!;
         adapter.readChatHistory = async (actor, query, signal) => {
@@ -279,8 +280,8 @@ describe('registered canonical history authorization', () => {
             name: 'project_boundary_fixture', description: 'Boundary fixture', parameters: { type: 'object', properties: {} } } }, handler);
         try {
             const result = await executeServerTool('project_boundary_fixture', '{}', context);
-            if (ownership === 'legacy-provider') { expect(result.error).toBeUndefined(); expect(handler).toHaveBeenCalledOnce(); }
-            else { expect(result.error).toMatch(/project|Project/); expect(handler).not.toHaveBeenCalled(); }
+            expect(result.error).toMatch(/project|Project/);
+            expect(handler).not.toHaveBeenCalled();
         } finally { remove(); }
     });
     it.each((['project', 'deleted', 'revoked', 'unchanged'] as const).flatMap(change =>

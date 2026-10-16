@@ -675,12 +675,17 @@ html[data-theme='blank']
         --blank-mobile-control-text: 16px;
         --blank-mobile-input-text: 16px;
         --blank-mobile-label-text: 14px;
-        --blank-mobile-icon-size: 20px;
         --blank-mobile-supporting-text: 12px;
     }
 
+    /*
+     * Controls size themselves: Nuxt UI variants and the chat/sidebar overrides
+     * carry their own `max-md:min-h-[44px]!`. A blanket min-size on every
+     * button/tab clipped fixed-height desktop strips (e.g. workspace tabs) on
+     * touch emulation and tablets, so only the tap behaviour is global.
+     */
     html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        button,
         [role="button"],
         [role="menuitem"],
         [role="option"],
@@ -688,23 +693,12 @@ html[data-theme='blank']
         [role="treeitem"],
         summary
     ) {
-        min-height: var(--blank-mobile-control-min) !important;
-        font-size: var(--blank-mobile-control-text) !important;
-        line-height: 1.35;
         touch-action: manipulation;
     }
 
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"]
-    ) {
-        min-width: var(--blank-mobile-control-min) !important;
-    }
-
     /*
-     * A switch's painted track is intentionally smaller than its hit region.
-     * Nuxt UI renders that track as a button[role="switch"], so sizing the
-     * button itself to 44px distorts the track and thumb geometry.
+     * A switch's painted track is intentionally smaller than its hit region,
+     * so its surrounding row (not the track button) carries the touch size.
      */
     html[data-theme="blank"] :where(
         .chat-settings-switch,
@@ -725,30 +719,6 @@ html[data-theme='blank']
         touch-action: manipulation;
     }
 
-    html[data-theme="blank"] :where(
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) {
-        padding-block: 0.625rem !important;
-    }
-
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"],
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) :where(
-        [data-slot="label"],
-        [data-slot="value"],
-        [data-slot="placeholder"]
-    ) {
-        font-size: inherit !important;
-    }
-
     /* Keep tiny utility text legible without flattening the whole hierarchy. */
     html[data-theme="blank"] :where(
         .text-xs,
@@ -760,20 +730,6 @@ html[data-theme='blank']
     ) {
         font-size: var(--blank-mobile-supporting-text) !important;
         line-height: 1.35;
-    }
-
-    /* Icons may stay visually smaller than their 44px hit target. */
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"],
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) > .iconify {
-        min-width: var(--blank-mobile-icon-size);
-        min-height: var(--blank-mobile-icon-size);
-        font-size: var(--blank-mobile-icon-size) !important;
     }
 
     html[data-theme="blank"] :is(
