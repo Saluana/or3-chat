@@ -80,10 +80,14 @@ Dry runs create no credentials file.
 The browser review shows the login after **Save Settings** and **Apply + Deploy**.
 After local deployment, it keeps this screen open so you can save the password,
 then use **Open OR3 in a new tab** to sign in. Keep the setup terminal open until
-you have saved the login; press Ctrl+C there to close the wizard server.
-The browser wizard runs in a temporary workspace, so writing target settings
-and installing providers do not interrupt its deployment request. Its temporary
-workspace is removed when the wizard server exits.
+you have saved the login; press Ctrl+C there to close the wizard.
+The browser wizard is a small server inside the `setup` process: a prebuilt page
+plus the setup API, listening on `127.0.0.1` behind a per-launch token in the
+printed link. The page is built on first use (a few seconds) into
+`node_modules/.cache/or3-wizard-ui/` and rebuilt only when its sources change.
+The wizard does not watch files, so writing the target's settings or installing
+providers cannot restart it, and it creates no temporary copies. After a
+browser-only deployment opens the app, the wizard stops by itself.
 
 ## Commands
 

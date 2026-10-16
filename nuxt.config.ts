@@ -21,14 +21,13 @@ const env = { ...process.env };
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
-const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
 const isProductionJourneyTestHarnessEnabled =
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
 const isStaticGenerateBuild = process.argv.includes('generate');
 const shouldLoadCloudProviderModules =
-    !isWizardUiProcess && isSsrAuthEnabled && !isStaticGenerateBuild;
+    isSsrAuthEnabled && !isStaticGenerateBuild;
 
 const sqliteRuntime = process.env.OR3_SQLITE_DRIVER?.trim().toLowerCase() ||
     'better-sqlite3';
@@ -259,10 +258,7 @@ export default defineNuxtConfig({
         },
     },
     devtools: {
-        // The setup wizard is an end-user screen, not a development session.
-        enabled:
-            process.env.NODE_ENV !== 'production' &&
-            process.env.OR3_WIZARD_UI_ENABLED !== 'true',
+        enabled: process.env.NODE_ENV !== 'production',
         // Vite Inspect retains resolution and transform history across HMR.
         // Keep the DevTools UI available without the unbounded inspector state.
         viteInspect: false,
@@ -736,15 +732,6 @@ export default defineNuxtConfig({
                     '**/.or3-plugin-dev/**',
                 ],
             },
-            watch: {
-                ignored: isWizardUiProcess
-                    ? [
-                          '**/.env',
-                          '**/.env.local',
-                          '**/or3.providers.generated.json',
-                      ]
-                    : [],
-            },
         },
         plugins: [
             stripBrokenOpenRouterSourcemapsPlugin(),
@@ -908,7 +895,6 @@ export default defineNuxtConfig({
             }
         },
         async listen(server, listener) {
-            if (isWizardUiProcess) return;
             await attachDevHttpsListener(server);
             const url =
                 listener &&

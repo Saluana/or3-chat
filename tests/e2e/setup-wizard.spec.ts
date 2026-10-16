@@ -1,15 +1,15 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { execFileSync, spawn } from 'node:child_process';
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
+import { networkInterfaces, tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { stopAppServer } from './fixtures/setup-wizard-app';
 
 // Journeys W1–W6 in planning/setup-ux/journeys.md. They write credentials and
 // start OR3, so run them with `bun run test:e2e:setup-wizard`.
 const wizardUrl = process.env.OR3_SETUP_WIZARD_URL ?? '';
 const instanceDir = process.env.OR3_SETUP_WIZARD_INSTANCE ?? '';
-const launchedAt = Number(process.env.OR3_SETUP_WIZARD_LAUNCHED_AT ?? 0);
 const timingsFile = process.env.OR3_SETUP_WIZARD_TIMINGS ?? '';
 
 test.skip(!wizardUrl, 'Requires the setup wizard harness: bun run test:e2e:setup-wizard');
@@ -94,13 +94,81 @@ async function stopApp() {
     }, { timeout: 30_000 }).toBe('down');
 }
 
+/** Launches `bun run setup` and resolves with its URL once printed. */
+function launchSetup() {
+    const child = spawn('bun', ['run', 'setup', '--ui', '--no-open', '--instance-dir', instanceDir, '--pm', 'bun'], {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const url = new Promise<string>((resolveUrl, rejectUrl) => {
+        let output = '';
+        child.stdout.on('data', (chunk: Buffer) => {
+            output += chunk.toString();
+            const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/wizard\?\S+/);
+            if (match) resolveUrl(match[0]);
+        });
+        child.once('exit', () => rejectUrl(new Error(`setup exited before printing its URL:\n${output}`)));
+    });
+    return { child, url, stop: () => { try { process.kill(-child.pid!, 'SIGTERM'); } catch { /* already gone */ } } };
+}
+
+const wizardTempDirs = async () => (await readdir(tmpdir())).filter((name) => name.startsWith('or3-wizard-ui-')).sort();
+
+test('R1 opens to an interactive first screen within 10 seconds, three cold runs', async ({ page }) => {
+    const runs: number[] = [];
+    for (let run = 0; run < 3; run += 1) {
+        // Cold: no prebuilt page either, so each launch also builds it.
+        await rm(resolve(process.cwd(), 'node_modules/.cache/or3-wizard-ui'), { recursive: true, force: true });
+        const launchedAt = Date.now();
+        const setup = launchSetup();
+        try {
+            const sessionLoaded = page.waitForResponse((r) => r.url().includes('/api/wizard/session') && r.request().method() === 'GET');
+            await page.goto(await setup.url);
+            await sessionLoaded;
+            await page.getByText(SELF_HOSTED, { exact: true }).click();
+            await expect(page.getByText('Selected')).toBeVisible();
+            runs.push(Date.now() - launchedAt);
+        } finally {
+            setup.stop();
+        }
+    }
+    if (timingsFile) {
+        const previous = JSON.parse(await readFile(timingsFile, 'utf8').catch(() => '{}'));
+        await writeFile(timingsFile, JSON.stringify({ ...previous, coldLaunchToInteractiveMs: runs }));
+    }
+    for (const ms of runs) expect(ms).toBeLessThan(10_000);
+});
+
+test('R2 serves only loopback, needs the token, and leaves no temporary files', async () => {
+    const before = await wizardTempDirs();
+    const setup = launchSetup();
+    try {
+        const url = new URL(await setup.url);
+        const api = new URL('/api/wizard/session', url);
+        expect((await fetch(api)).status).toBe(403);
+        expect((await fetch(api, { headers: { 'x-wizard-token': 'wrong' } })).status).toBe(403);
+        expect((await fetch(new URL('/wizard', url), { redirect: 'manual' })).status).toBe(403);
+        const external = Object.values(networkInterfaces()).flat()
+            .find((address) => address && address.family === 'IPv4' && !address.internal);
+        if (external) {
+            await expect(fetch(`http://${external.address}:${url.port}/api/health`)).rejects.toThrow();
+        }
+    } finally {
+        setup.stop();
+    }
+    await new Promise((resolveExit) => setup.child.once('exit', resolveExit));
+    expect(await wizardTempDirs()).toEqual(before);
+});
+
 test('W1 saves the recommended setup from a template-first screen', async ({ page }, info) => {
     const openedAt = Date.now();
     await openWizard(page);
     const interactiveAt = Date.now();
     if (timingsFile) {
+        const previous = JSON.parse(await readFile(timingsFile, 'utf8').catch(() => '{}'));
         await writeFile(timingsFile, JSON.stringify({
-            launchToFirstInteractiveMs: launchedAt ? interactiveAt - launchedAt : null,
+            ...previous,
             firstPageToInteractiveMs: interactiveAt - openedAt,
         }));
     }

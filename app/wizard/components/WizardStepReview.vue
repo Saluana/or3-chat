@@ -95,7 +95,7 @@
                     :class="resultBanner.failed ? 'bg-[var(--md-error)]' : 'bg-[var(--md-primary)]'"
                 >
                     <UIcon
-                        :name="resultBanner.failed ? 'i-heroicons-exclamation-triangle' : 'i-heroicons-check'"
+                        :name="resultBanner.failed ? 'i-lucide-triangle-alert' : 'i-lucide-check'"
                         class="size-4"
                     />
                 </div>
@@ -176,7 +176,7 @@
             />
             <UButton
                 label="Apply + Deploy"
-                icon="i-heroicons-rocket-launch"
+                icon="i-lucide-rocket"
                 :loading="isDeploying"
                 :disabled="isDeploying"
                 @click="$emit('deploy')"
@@ -186,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type {
     WizardAnswers,
     WizardApplyResult,

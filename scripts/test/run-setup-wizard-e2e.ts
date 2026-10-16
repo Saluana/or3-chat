@@ -6,8 +6,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { connect } from 'node:net';
-import { createWizardUiHost } from '../../shared/cloud/wizard/ui-host';
-import { stopAppServer } from '../../tests/e2e/fixtures/setup-wizard-app';
+import { createDisposableInstance, stopAppServer } from '../../tests/e2e/fixtures/setup-wizard-app';
 
 const root = resolve(import.meta.dir, '../..');
 const outputDir = join(root, 'test-results/setup-wizard');
@@ -41,7 +40,7 @@ if (stale.length > 0) {
     process.exit(1);
 }
 
-const instanceDir = await createWizardUiHost(root);
+const instanceDir = await createDisposableInstance(root);
 const timingsFile = `${instanceDir}-timings.json`;
 const launchedAt = Date.now();
 const wizard = Bun.spawn(
@@ -84,7 +83,6 @@ try {
                 ...process.env,
                 OR3_SETUP_WIZARD_URL: wizardUrl,
                 OR3_SETUP_WIZARD_INSTANCE: instanceDir,
-                OR3_SETUP_WIZARD_LAUNCHED_AT: String(launchedAt),
                 OR3_SETUP_WIZARD_TIMINGS: timingsFile,
                 PW_PORT: String(APP_PORT),
                 PW_SKIP_WEB_SERVER: 'true',

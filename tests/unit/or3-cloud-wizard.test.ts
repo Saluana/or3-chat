@@ -978,8 +978,6 @@ describe('or3 cloud wizard apply', () => {
     it('strips wizard-only env vars before starting local dev', () => {
         const env = createCleanWizardDeployEnv({
             SSR_AUTH_ENABLED: 'false',
-            OR3_WIZARD_UI_ENABLED: 'true',
-            OR3_WIZARD_UI_TOKEN: 'wizard-token',
             OR3_WIZARD_ENABLE_INSTALL: '1',
             AUTH_PROVIDER: 'clerk',
             OR3_SITE_NAME: 'OR3',
@@ -988,8 +986,6 @@ describe('or3 cloud wizard apply', () => {
 
         expect(env.SSR_AUTH_ENABLED).toBeUndefined();
         expect(env.AUTH_PROVIDER).toBeUndefined();
-        expect(env.OR3_WIZARD_UI_ENABLED).toBeUndefined();
-        expect(env.OR3_WIZARD_UI_TOKEN).toBeUndefined();
         expect(env.OR3_WIZARD_ENABLE_INSTALL).toBeUndefined();
         expect(env.OR3_SITE_NAME).toBeUndefined();
         expect(env.PATH).toBe(process.env.PATH);

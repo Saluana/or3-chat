@@ -73,7 +73,6 @@ describe('static generation provider import boundary', () => {
         vi.stubEnv('OR3_STORAGE_ENABLED', 'false');
         vi.stubEnv('OR3_CLOUD_STORAGE_ENABLED', 'false');
         vi.stubEnv('OR3_BACKGROUND_STREAMING_ENABLED', 'false');
-        vi.stubEnv('OR3_WIZARD_UI_ENABLED', 'false');
         process.argv = [...originalArgv, 'generate'];
         fsObservations.generatedProviderReads = 0;
         fsObservations.providerPackageChecks.length = 0;
@@ -277,7 +276,6 @@ describe('normalized application plan', () => {
             OPENROUTER_API_KEY: 'private-sentinel-openrouter',
             OR3_ADMIN_PASSWORD: 'private-sentinel-admin',
             OR3_CONNECT_ENCRYPTION_KEY: 'private-sentinel-connect',
-            OR3_WIZARD_UI_TOKEN: 'private-sentinel-wizard',
         });
         input.isStaticGenerateBuild = true;
         const result = buildApplicationPlan(input);

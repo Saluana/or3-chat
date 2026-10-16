@@ -15,7 +15,6 @@ export async function prepareConvexBackend(
     const fileEnv: Record<string, string> = {};
     configDotenv({ path: resolve(projectRoot, '.env'), processEnv: fileEnv, quiet: true });
     const startupEnv = { ...fileEnv, ...env };
-    if (startupEnv.OR3_WIZARD_UI_ENABLED === 'true') return startupEnv;
     // Auth workspace provisioning still needs its store when sync transfer is
     // disabled. Use the same selections and alias precedence as Nuxt startup.
     const authenticatedConvex = requiredProviderModules(

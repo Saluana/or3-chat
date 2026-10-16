@@ -101,6 +101,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import type { WizardAnswers, WizardField, WizardStep } from '~~/shared/cloud/wizard/types';
 import WizardFieldRenderer from './WizardFieldRenderer.vue';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
