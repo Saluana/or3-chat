@@ -1,9 +1,23 @@
 <template>
-    <component
-        :is="lockPageComponent"
-        :access-reason="access.reason"
-        :error-message="access.errorMessage"
-    />
+    <!-- Adapter registration is client-only, including custom full-page adapters. -->
+    <ClientOnly>
+        <component
+            :is="lockPageComponent"
+            v-if="customAdapterOwnsPage"
+            :access-reason="access.reason"
+            :error-message="access.errorMessage"
+        />
+        <LockPageShell v-else>
+            <component
+                :is="lockPageComponent"
+                :access-reason="access.reason"
+                :error-message="access.errorMessage"
+            />
+        </LockPageShell>
+        <template #fallback>
+            <LockPageShell />
+        </template>
+    </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -14,8 +28,12 @@ definePageMeta({
 import { computed } from 'vue';
 import { navigateTo, useRoute } from '#imports';
 import DefaultLockPage from '~/components/lock-page/DefaultLockPage.vue';
+import LockPageShell from '~/components/lock-page/LockPageShell.vue';
 import { resolveLockPageAccess } from '~/core/lock-page/access';
-import { resolveRuntimeLockPageComponent } from '~/core/lock-page/registry';
+import {
+    resolveLockPageAdapter,
+    resolveRuntimeLockPageComponent,
+} from '~/core/lock-page/registry';
 import {
     resolvePostAuthRedirectTarget,
     useLockPageRuntimeConfig,
@@ -31,6 +49,13 @@ if (access.allowed) {
         { replace: true }
     );
 }
+
+const customAdapterOwnsPage = computed(
+    () =>
+        access.reason !== 'session-error' &&
+        lockPageConfig.adapter.toLowerCase() !== 'default' &&
+        resolveLockPageAdapter(lockPageConfig.adapter) !== null
+);
 
 const lockPageComponent = computed(() =>
     access.reason === 'session-error'

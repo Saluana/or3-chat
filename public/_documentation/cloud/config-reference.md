@@ -56,8 +56,10 @@ Exceptions:
   - Admin routes remain reachable.
   - Guest access bypasses the lock page when `auth.guestAccessEnabled=true`.
   - The lock page route is fixed at `/welcome`.
-  - `adapter: "default"` prefers the active auth provider's registered lock page component and falls back to the built-in generic lock page.
-  - Unknown custom adapter ids fall back to the built-in lock page.
+  - Session checks finish before redirecting, so refreshing an authenticated page does not briefly display the lock page. Failed session checks show the retry state instead of admitting a stale session.
+  - `adapter: "default"` displays the branded welcome layout with the active auth provider's registered lock page component, falling back to the generic auth controls. The layout uses the configured logo and theme colors, with an app preview and bird illustration on desktop. Smaller screens place the logo and bird illustration in a rounded green header, with lightweight WebP background clouds and the nest cloud overlapping below. The illustration and spacing adjust to screen height, with a side-by-side layout on short landscape screens. The app preview downloads only at desktop sizes, and the background clouds only at smaller sizes.
+  - A registered explicit adapter owns the full page. Unknown custom adapter ids fall back to the branded layout with the generic auth controls.
+  - Auth adapters mount on the client; the server renders the branded layout with a loading placeholder to avoid hydration mismatches.
   - Successful sign-in redirects back to the original safe in-app destination via `?next=`.
 
 Example:

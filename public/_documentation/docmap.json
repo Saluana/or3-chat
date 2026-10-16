@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, invitation preflight and retries, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, email-first lock page, invitation preflight and retries, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -737,7 +737,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 16,
-                    "summary": "This page is the typed reference for the base and cloud configuration objects, including defaults, validation, and how settings affect behavior. The complete deployment environment-variable matrix is maintained separately below."
+                    "summary": "Typed base and cloud settings, including lock-page session checks, responsive illustrated layout, custom adapters, defaults, validation, and environment-variable references."
                 },
                 {
                     "name": "environment-reference.md",
