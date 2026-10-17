@@ -59,6 +59,7 @@ export const DEFAULT_ICONS = {
     'sidebar.delete': 'pixelarticons:trash',
     'sidebar.folder': 'pixelarticons:folder',
     'sidebar.chat': 'pixelarticons:chat',
+    'sidebar.chat.branched': 'pixelarticons:git-branch',
     'sidebar.note': 'pixelarticons:note',
     'sidebar.settings': 'pixelarticons:sliders',
     'sidebar.user': 'pixelarticons:user',

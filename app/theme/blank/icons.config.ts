@@ -62,6 +62,7 @@ export default {
     'sidebar.delete': 'blank-solar:trash-bin-trash-linear',
     'sidebar.folder': 'blank-solar:folder-linear',
     'sidebar.chat': 'blank-solar:chat-square-line-linear',
+    'sidebar.chat.branched': 'blank-solar:git-branch-linear',
     'sidebar.note': 'blank-solar:document-text-linear',
     'sidebar.settings': 'blank-solar:tuning-linear',
     'sidebar.user': 'blank-solar:user-rounded-linear',

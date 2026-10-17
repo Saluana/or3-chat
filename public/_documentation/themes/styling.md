@@ -169,10 +169,14 @@ it also works in static builds. Solar is by
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Blank modifies
 the Linear stroke widths. Main rail icons render at 24px.
 
-Blank's sidebar chat, document and project list icons render at 20px with the
-full `onSurfaceVariant` color rather than additional transparency. Hover and
-keyboard focus increase contrast to `onSurface`; active items retain their
-primary color. These rules belong to Blank's stylesheet.
+Blank's sidebar chat and document row icons render at 16px in a muted
+`onSurfaceVariant` (45%) so titles carry the list; hover and keyboard focus
+restore full `onSurfaceVariant`, and active rows retain their primary color.
+Project tree icons stay at 20px. Branched chat groups show
+`sidebar.chat.branched` in the icon column, and their `ui.chevron.right` /
+`ui.chevron.down` disclosure replaces it on hover or focus. These rules belong
+to Blank's stylesheet. Map only canonical Solar names: the subset builder
+rejects Solar aliases such as `chat-line-linear`.
 
 Declare semantic tokens in your definition:
 

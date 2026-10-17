@@ -49,6 +49,7 @@ export default <IconMap>{
     'sidebar.delete': 'carbon:trash-can',
     'sidebar.folder': 'carbon:folder',
     'sidebar.chat': 'carbon:chat',
+    'sidebar.chat.branched': 'carbon:branch',
     'sidebar.note': 'carbon:document',
     'sidebar.settings': 'carbon:settings-adjust',
     'sidebar.user': 'carbon:user',

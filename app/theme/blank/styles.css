@@ -278,8 +278,19 @@
         position: relative;
     }
 
-    .sidebar-family-header .sb-btn-icon {
-        visibility: hidden;
+    /* Branched chats keep a branch icon; the arrow replaces it on hover or focus. */
+    .sidebar-family-header .sb-btn-icon,
+    .sidebar-family-toggle :is(svg, .iconify) {
+        transition: opacity 150ms ease;
+    }
+
+    .sidebar-family-toggle :is(svg, .iconify),
+    .sidebar-family-header:is(:hover, :focus-within) .sb-btn-icon {
+        opacity: 0;
+    }
+
+    .sidebar-family-header:is(:hover, :focus-within) .sidebar-family-toggle :is(svg, .iconify) {
+        opacity: 1;
     }
 
     .sidebar-family-member .family-timeline-marker {
