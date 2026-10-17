@@ -25,3 +25,12 @@
     font-display: swap;
     src: url('../fonts/vt323-latin.woff2') format('woff2');
 }
+
+/* Keep the welcome captions' face registered across responsive layout changes. */
+@font-face {
+    font-family: 'OR3 Lock Hand';
+    font-style: normal;
+    font-weight: 600;
+    font-display: block;
+    src: url('/lock-page/caveat-latin.woff2') format('woff2');
+}

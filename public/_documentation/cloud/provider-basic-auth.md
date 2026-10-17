@@ -32,6 +32,8 @@ access explanation and account controls; session failures offer a retry.
 On mobile, the email field keeps its accessible label while showing an envelope
 icon and placeholder, followed by the primary button and an OR divider. The host
 provides the responsive cloud artwork, curved card, and handwritten captions.
+Its footer includes handwritten **Learn more** and **GitHub** links to
+`https://or3.net` and `https://github.com/Saluana/or3-chat`, opening in new tabs.
 
 The Create Account dialog carries the same cloud-and-bird artwork, with the
 configured site logo, theme-aware colors, labeled fields with icons, and an
