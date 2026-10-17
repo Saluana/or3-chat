@@ -1103,7 +1103,7 @@
     },
     {
       "source": "app/composables/dashboard/useDashboardPlugins.ts",
-      "apiSha256": "52b089b574228f1fbf1af8c77e3a2e948adcb4af4e1843f8df211c20bee9ba59",
+      "apiSha256": "4e9ebe532d87dc9d5eb065f8f673b556d1a09d479bf199ea7d9ece1ed5c5f45c",
       "runtime": "client",
       "publicPaths": [
         "~/composables/dashboard/useDashboardPlugins"
@@ -1181,9 +1181,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional theme token; resolves at render time instead of registration. */\n    iconToken?: IconToken;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -1195,9 +1195,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 81,
+              "line": 84,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional theme token for the page's navigation icon. */\n    iconToken?: IconToken;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -1212,7 +1212,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 713,
+                "line": 718,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -1221,7 +1221,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 713,
+              "line": 718,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -1264,7 +1264,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 311,
+                "line": 316,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -1273,7 +1273,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 311,
+              "line": 316,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -1368,7 +1368,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 682,
+                "line": 687,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -1377,7 +1377,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 682,
+              "line": 687,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -1394,7 +1394,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 513,
+                "line": 518,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -1403,7 +1403,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 513,
+              "line": 518,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -1420,7 +1420,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 373,
+                "line": 378,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -1429,7 +1429,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 373,
+              "line": 378,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -1446,7 +1446,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 544,
+                "line": 549,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -1455,7 +1455,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 544,
+              "line": 549,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -1472,7 +1472,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 759,
+                "line": 764,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -1481,7 +1481,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 759,
+              "line": 764,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -1498,7 +1498,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 157,
+                "line": 162,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -1507,7 +1507,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 157,
+              "line": 162,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -1524,7 +1524,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 452,
+                "line": 457,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -1533,7 +1533,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 452,
+              "line": 457,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -1550,7 +1550,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 584,
+                "line": 589,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -1559,7 +1559,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 584,
+              "line": 589,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -1576,7 +1576,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 815,
+                "line": 820,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -1585,7 +1585,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 815,
+              "line": 820,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -1616,7 +1616,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 649,
+                "line": 654,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -1625,7 +1625,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 649,
+              "line": 654,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -1642,7 +1642,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 482,
+                "line": 487,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -1651,7 +1651,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 482,
+              "line": 487,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "7175400987bc3add1e69c0aa42fa4946b97a32a40f8833b4ffeffb0c6db69919",
+      "apiSha256": "f252e7f6c61fc20e4b3b0e89dfc571386a1c5339442aee64cf9d0a2d3e6abb1f",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3249,9 +3249,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional theme token; resolves at render time instead of registration. */\n    iconToken?: IconToken;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -3263,9 +3263,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 81,
+              "line": 84,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional theme token for the page's navigation icon. */\n    iconToken?: IconToken;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -3750,7 +3750,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 713,
+                "line": 718,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -3759,7 +3759,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 713,
+              "line": 718,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -3854,7 +3854,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 311,
+                "line": 316,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -3863,7 +3863,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 311,
+              "line": 316,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -4132,7 +4132,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 682,
+                "line": 687,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -4141,7 +4141,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 682,
+              "line": 687,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -4262,7 +4262,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 513,
+                "line": 518,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -4271,7 +4271,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 513,
+              "line": 518,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -5034,7 +5034,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 373,
+                "line": 378,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -5043,7 +5043,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 373,
+              "line": 378,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -5060,7 +5060,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 544,
+                "line": 549,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -5069,7 +5069,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 544,
+              "line": 549,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -5565,7 +5565,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 759,
+                "line": 764,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -5574,7 +5574,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 759,
+              "line": 764,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -6005,7 +6005,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 157,
+                "line": 162,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -6014,7 +6014,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 157,
+              "line": 162,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -6111,7 +6111,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 452,
+                "line": 457,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -6120,7 +6120,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 452,
+              "line": 457,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -6137,7 +6137,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 584,
+                "line": 589,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -6146,7 +6146,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 584,
+              "line": 589,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -6657,7 +6657,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 815,
+                "line": 820,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -6666,7 +6666,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 815,
+              "line": 820,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -6697,7 +6697,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 649,
+                "line": 654,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -6706,7 +6706,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 649,
+              "line": 654,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -6723,7 +6723,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 482,
+                "line": 487,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -6732,7 +6732,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 482,
+              "line": 487,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
