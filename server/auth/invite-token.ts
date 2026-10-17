@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export interface WorkspaceInviteTokenPayload {
     workspaceId: string;
@@ -46,6 +46,23 @@ function isInviteTokenPayload(payload: unknown): payload is InviteTokenPayload {
         ? payload.purpose === 'signup' && 'invite_id' in payload &&
             typeof payload.invite_id === 'string' && payload.invite_id.length > 0
         : 'workspaceId' in payload && typeof payload.workspaceId === 'string' && payload.workspaceId.length > 0;
+}
+
+const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/** Eight uniformly random base-32 characters (40 bits), without I/O/0/1. */
+export function createSignupInviteCode(): string {
+    return Array.from(randomBytes(8), byte => INVITE_CODE_ALPHABET[byte & 31]).join('');
+}
+
+export function normalizeSignupInviteCode(value: string): string | null {
+    const code = value.replace(/[\s-]/g, '').toUpperCase();
+    return /^[A-HJ-NP-Z2-9]{8}$/.test(code) ? code : null;
+}
+
+/** Keyed hashing protects low-entropy codes if invitation records are exposed. */
+export function hashSignupInviteCode(code: string, secret: string): string {
+    return createHmac('sha256', secret).update('or3:signup-code:').update(code).digest('hex');
 }
 
 export function hashInviteToken(token: string): string {

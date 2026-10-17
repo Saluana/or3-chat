@@ -4,7 +4,15 @@ Cloud login verifies who you are; workspace membership and permissions decide wh
 
 ## Sign in, invitations, and workspaces
 
-Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account. In **Admin → Signup invites**, invite someone to use the instance: acceptance creates their own private workspace with them as its sole owner. To share an existing workspace, use its **Team invites** controls and choose a membership role. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
+Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account. In **Admin → Registration → Invitations**, invite someone to use the instance: acceptance creates their own private workspace with them as its sole owner. To share an existing workspace, use its **Team invites** controls and choose a membership role. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
+
+**Admin → Registration → Settings** offers **Open registration** (anyone can create an account), **Invite only** (new users need a valid invitation), and **Registration closed** (no new accounts, even with an invitation). Existing users can sign in in every mode. Saving updates `OR3_AUTH_REGISTRATION_MODE` in the server's `.env`; restart OR3 to apply it. The page shows the current mode separately from the saved mode, and the restart notice survives a page reload. A deployment environment override must also be updated if it continues to take precedence after a restart.
+
+The restart notice includes **Restart now**, using the same owner-only confirmation as Operations. Dashboard restarts require `OR3_ADMIN_ALLOW_RESTART=true` and a production server managed by a process manager that restarts it after exit. The button is disabled when permission or configuration does not allow it. Source development servers must be restarted manually. Reload the page after OR3 returns to see the active mode.
+
+Invitation setup status appears in Settings. Invite only cannot be saved until the invitation signing secret is configured in the running server; [complete setup](/documentation/cloud/environment-reference#invite-signing-setup) and restart first. The secret itself is never returned to the browser. Invitations remain available in every mode; when registration is closed, the tab explains that invitation recipients cannot create accounts yet. The former `/admin/signup-invites` URL redirects to the Invitations tab.
+
+The super-admin-only `GET /api/admin/registration` returns `currentMode`, `savedMode`, `restartRequired`, and `inviteSigningConfigured`. `POST /api/admin/registration` accepts only `{ "mode": "open" | "invite_only" | "disabled" }` with the normal admin mutation intent and same-origin checks, persists the mode, and returns those same fields. It does not change the active registration policy before restart.
 
 When SSR auth is on and guest access is off, the chat composer shows "Sign in to start chatting" to a signed-out visitor, and sending shows the same prompt instead of asking for an OpenRouter key. Nothing is sent. Static and local builds, and deployments with guest access on, keep the OpenRouter connect flow. The prompt points to Login (sidebar, or the menu's More sheet on mobile) because auth providers do not yet expose a way for the app to open their sign-in UI directly.
 
@@ -17,6 +25,16 @@ The store honors `users.active_workspace_id`. Workspace switches are coordinated
 Background jobs remain tied to their original workspace when you switch. Reading their status or stream requires current membership there; stopping them requires an editor or owner role there. Open streams recheck membership through their existing reconciliation loop and close when access is revoked. Jobs without a recorded workspace cannot be accessed safely and are denied.
 
 A signup invite never joins the inviter’s workspace or copies its data. If Basic Auth credentials were created but signup was interrupted, choose **Already registered? Sign in** with the same email and password. Keep the valid invite, or paste a replacement from an administrator. Revoking an invite does not delete credentials. Provider credentials alone do not grant access to protected OR3 data.
+
+New signup invitations use eight random letters and numbers, displayed as `K7MP-4X9Q`. **Registration → Invitations** shows **Copy code** and **Copy link**; both admit the same recipient. Codes accept lowercase letters, spaces, and the optional dash. Links fill in the code automatically. Previously issued signed links remain valid until they expire or are revoked.
+
+The server stores only a keyed hash of each code, using `OR3_AUTH_INVITE_TOKEN_SECRET`; neither the code nor the link can be retrieved from history. Short-code lookup shares a limit of 20 requests per minute per IP across links, registration preflight, sign-in handoff, and session provisioning. Existing registration/sign-in/session limits also apply. Email binding, expiry, revocation, and atomic single-use acceptance still apply. Rotating the secret invalidates existing codes and signed links.
+
+The Basic Auth registration form calls the invitation field **Invite code** and prompts **Paste invite code**. Opening an invite link fills in the code for you.
+
+If a valid, unexpired invitation is for a different email, registration asks you to check for typos or use the email that received the invite. It does not reveal the intended address. Invalid or expired codes instead prompt you to check the link or ask for a new invitation; a missing required code prompts you to enter one. Rejected attempts preserve the form and do not create credentials or accept the invitation, so you can correct the email or code and try again. Email matching ignores capitalization.
+
+Basic Auth registration and password changes show **Use at least 8 characters**. If a password is too long, the form asks you to shorten it. Password limits still apply, including when using emoji or other characters that take more storage space.
 
 ## Two user identifiers
 
@@ -77,7 +95,7 @@ Managed-key streaming and background admission require `Content-Type: applicatio
 
 The `/admin/*` panel requires the super-admin `or3_admin` cookie obtained from the admin login credentials. A workspace owner is not automatically a deployment admin. A persisted `deploymentAdmin` grant permits deployment-level `admin.access` checks but does not, on its own, unlock super-admin panel routes.
 
-Instance settings, Administrators, signup invites, and the Plugins **Instance** tab require no Chat account or selected workspace. The Plugins **Workspace** tab targets its URL-selected workspace; switching Chat workspaces does not retarget it. Removing a workspace member removes that membership, not their account or membership elsewhere.
+Instance settings, Administrators, Registration, and the Plugins **Instance** tab require no Chat account or selected workspace. The Plugins **Workspace** tab targets its URL-selected workspace; switching Chat workspaces does not retarget it. Removing a workspace member removes that membership, not their account or membership elsewhere.
 
 Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
 

@@ -85,6 +85,8 @@ export type SignupProvisionResult =
 export interface AuthWorkspaceStore {
     // Advertise these together only when acceptance is a single backend transaction.
     createSignupInvite?(input: { id: string; email: string; token_hash: string; expires_at: number; created_by_admin: string }): Promise<{ id: string }>;
+    /** Server-only proof lookup. Return pending records only; never expose this through invitation history. */
+    findSignupInviteByTokenHash?(input: { token_hash: string }): Promise<Pick<SignupInviteSummary, 'id' | 'email' | 'expires_at'> | null>;
     listSignupInvites?(input: { limit: number; cursor?: string }): Promise<{ invites: SignupInviteSummary[]; next_cursor: string | null }>;
     revokeSignupInvite?(input: { id: string }): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'already_used' }>;
     validateSignupInvite?(input: { id: string; email: string; token_hash: string }): Promise<SignupValidationResult>;

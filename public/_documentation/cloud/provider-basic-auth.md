@@ -33,6 +33,23 @@ On mobile, the email field keeps its accessible label while showing an envelope
 icon and placeholder, followed by the primary button and an OR divider. The host
 provides the responsive cloud artwork, curved card, and handwritten captions.
 
+The Create Account dialog carries the same cloud-and-bird artwork, with the
+configured site logo, theme-aware colors, labeled fields with icons, and an
+inline **Already registered? Sign in** link. It scrolls on short screens and
+stacks its actions on mobile. Decorative artwork is bundled with the provider;
+registration, password validation, and invite-code handling are unchanged.
+Source development needs a rebuilt provider, and published installations need
+an updated provider release to receive the redesigned dialog.
+
+The **Welcome back** sign-in dialog uses the same branding, with a blue bird
+seated in clouds, a matching light/dark illustration, larger labeled email and
+password fields, and an inline **Don’t have an account? Create account** action.
+Its desktop layout follows the welcome artwork; phones and short screens keep
+the controls reachable by scrolling when needed. Keyboard focus, dismissal,
+email prefilling, invite handoff and credential submission retain their existing
+behavior, and sign-in errors are announced to assistive technology. The images
+are bundled with the provider, and only the active theme's artwork loads.
+
 The email entry requires the updated Basic Auth provider build. Source development
 rebuilds the sibling provider through `bun run dev`; deployments using the currently
 pinned provider retain its Sign in button inside the new layout until the provider
@@ -102,7 +119,7 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 
 The updated provider passes both signup and team tokens through registration. A signup invite gives the recipient a private owner workspace; a team invite retains its target and role. The explicit request-body token takes priority, followed by the host's header, HttpOnly cookie, query, and Referer precedence. This applies in both open and invite-only registration. Valid tokens are retained in the invite cookie for session resolution. Open registration without a token remains available; disabled registration still refuses new users.
 
-If credential creation succeeded before canonical acceptance, use **Already registered? Sign in**. The existing account ID is retained. A manually pasted replacement token is verified against the signed-in email and handed to the canonical store through the existing HttpOnly cookie; a stale cookie cannot override it. Credentials without accepted canonical provisioning cannot access protected sync/storage resources. There is no credential repair worker or account deletion step.
+If credential creation succeeded before canonical acceptance, use **Already registered? Sign in**. The existing account ID is retained. A manually pasted replacement code or signed link token is verified against the signed-in email and handed to the canonical store through the existing HttpOnly cookie; a stale cookie cannot override it. Credentials without accepted canonical provisioning cannot access protected sync/storage resources. There is no credential repair worker or account deletion step.
 
 These changes are included in `or3-provider-basic-auth@0.0.13`, the version pinned by this release. The 0.0.11 release’s link handoff alone does not provide signup-invite retries.
 
@@ -133,3 +150,5 @@ another provider's session behavior.
 - [SQLite](/documentation/cloud/provider-sqlite)
 - [Filesystem](/documentation/cloud/provider-fs)
 - [Accounts and access](/documentation/cloud/auth-system)
+
+New signup invitations use eight-character codes, displayed as `K7MP-4X9Q`, with clickable links still available. Lowercase, spaces, and the dash are accepted. The host checks the keyed code hash, intended email, expiry, and pending status before credentials are created, and repeats validation during atomic acceptance. Older signed links still work. A replacement code passed through **Already registered? Sign in** uses the same checks before handing off to the canonical session.

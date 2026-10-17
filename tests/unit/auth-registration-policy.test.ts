@@ -70,8 +70,8 @@ describe('auth registration policy', () => {
         ).toBe('disabled');
     });
 
-    it('allows open mode', () => {
-        const decision = evaluateUnknownUserRegistration({
+    it('allows open mode', async () => {
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'open',
@@ -79,8 +79,8 @@ describe('auth registration policy', () => {
         expect(decision.allowed).toBe(true);
     });
 
-    it('denies disabled mode', () => {
-        const decision = evaluateUnknownUserRegistration({
+    it('denies disabled mode', async () => {
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'disabled',
@@ -88,8 +88,8 @@ describe('auth registration policy', () => {
         expect(decision).toMatchObject({ allowed: false, reason: 'disabled' });
     });
 
-    it('requires invite for invite_only mode', () => {
-        const decision = evaluateUnknownUserRegistration({
+    it('requires invite for invite_only mode', async () => {
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'invite_only',
@@ -97,7 +97,7 @@ describe('auth registration policy', () => {
         expect(decision).toMatchObject({ allowed: false, reason: 'invite_required' });
     });
 
-    it('accepts valid invite token in invite_only mode', () => {
+    it('accepts valid invite token in invite_only mode', async () => {
         const token = createInviteToken(
             {
                 workspaceId: 'ws_1',
@@ -107,7 +107,7 @@ describe('auth registration policy', () => {
             'invite-secret'
         );
 
-        const decision = evaluateUnknownUserRegistration({
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'invite_only',
@@ -120,8 +120,8 @@ describe('auth registration policy', () => {
         }
     });
 
-    it('provisions the configured bootstrap owner without an invite in invite_only mode', () => {
-        const decision = evaluateUnknownUserRegistration({
+    it('provisions the configured bootstrap owner without an invite in invite_only mode', async () => {
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'invite_only',
@@ -132,8 +132,8 @@ describe('auth registration policy', () => {
         expect(decision).toMatchObject({ allowed: true, mode: 'invite_only', invite: null });
     });
 
-    it('does not exempt non-owner emails in invite_only mode', () => {
-        const decision = evaluateUnknownUserRegistration({
+    it('does not exempt non-owner emails in invite_only mode', async () => {
+        const decision = await evaluateUnknownUserRegistration({
             event: makeEvent(),
             store: mockStore as any,
             mode: 'invite_only',

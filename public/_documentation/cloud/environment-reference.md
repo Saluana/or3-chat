@@ -136,15 +136,28 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 | `OR3_AUTH_LOCK_PAGE_ENABLED` | `false` | Redirect signed-out shell visitors to `/welcome`. |
 | `OR3_AUTH_LOCK_PAGE_ADAPTER` | `default` | Registered lock-page adapter ID. |
 
-**Admin → Signup invites** remains available when registration is open, including
-invitation history. The page shows **Invites are optional** when the running
+**Admin → Registration → Settings** saves **Open registration**, **Invite only**,
+or **Registration closed** to `OR3_AUTH_REGISTRATION_MODE` in the server's `.env`.
+Restart OR3 to apply a saved mode; the page distinguishes it from the current
+mode and retains the restart notice after reload. **Restart now** asks for confirmation
+and is available to the owner when `OR3_ADMIN_ALLOW_RESTART=true`; development
+servers require a manual restart. Reload after OR3 returns to check the active
+mode. Settings also shows invitation setup status. Invite only requires the
+signing secret to be configured in the
+running server before it can be saved. Deployment environment overrides can
+take precedence over `.env` and must be updated by the operator if necessary.
+
+**Admin → Registration → Invitations** remains available when registration is open, including
+invitation history. The tab shows **Invites are optional** when the running
 registration policy is `open`: new users can sign up without an invitation.
 This notice does not appear for `invite_only` or `disabled` registration.
 
 ### Invite signing setup
 
-If **Admin → Signup invites** shows **Invitations need one-time setup**, no
-invitation was created. Set `OR3_AUTH_INVITE_TOKEN_SECRET` before trying again:
+If **Admin → Registration → Settings** shows **Invitations need one-time setup**,
+set `OR3_AUTH_INVITE_TOKEN_SECRET` before choosing Invite only. The same guidance
+appears in Invitations if creating an invite fails because setup is missing;
+in that case, no invitation was created.
 
 1. Generate a long, random secret locally. For an editable source checkout, run:
 
@@ -156,7 +169,7 @@ invitation was created. Set `OR3_AUTH_INVITE_TOKEN_SECRET` before trying again:
    environment. For source development, add or update that setting in the
    project's `.env` file. Keep it server-only; do not use a `NUXT_PUBLIC_*`
    variable or commit the value.
-3. Restart OR3 so it loads the setting, then return to **Signup invites** and
+3. Restart OR3 so it loads the setting, then return to **Registration → Invitations** and
    select **Create invite** again.
 
 Keep the same value across restarts and all instances of the deployment.

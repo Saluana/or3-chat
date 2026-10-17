@@ -268,6 +268,12 @@ remain filtered to their authenticated owner. History retention runs only
 through admin-authenticated internal mutations after the snapshot-plus-replay
 gate.
 
+When available, **Operations → Maintenance** names these tools **Clear old sync
+history** and **Clear old deletion history**. Their descriptions explain the
+retention period and device requirements; neither empties Trash or removes stored
+files. **Remove unused files** describes the separate permanent file cleanup
+action. Card descriptions wrap fully on narrow screens.
+
 ## Canonical Storage Pages
 
 The Convex sync gateway pages live materialized `file_meta` rows and reference
@@ -339,7 +345,7 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 
 ## Instance signup invitations
 
-The updated provider implements the five optional signup-invite methods on the existing AuthWorkspaceStore. A separate additive signup-invite table keeps email, hashed token, millisecond timestamps, admin actor, and an identity-bound acceptance receipt. Lists omit token material, paginate at most 100 rows, and derive expired status. Pending receipts expire from retention 90 days after invitation expiry; accepted/revoked receipts are retained 90 days after that transition. Create/list cleanup deletes at most 100 eligible records per call.
+The updated provider implements the five atomic signup-invite methods and the optional server-only `findSignupInviteByTokenHash` lookup on the existing AuthWorkspaceStore. Short codes use the existing indexed `token_hash` field with an HMAC hash; lookup returns only a pending invitation’s ID, email, and expiry to the trusted host. No raw code is stored or returned in history. A separate additive signup-invite table keeps email, hashed proof, millisecond timestamps, admin actor, and an identity-bound acceptance receipt. Lists omit token material, paginate at most 100 rows, and derive expired status. Pending receipts expire from retention 90 days after invitation expiry; accepted/revoked receipts are retained 90 days after that transition. Create/list cleanup deletes at most 100 eligible records per call.
 
 An invalid history cursor returns HTTP 400 (`Invalid invite cursor`). Restart pagination without a cursor to fetch the first page. Other backend failures remain server/service errors.
 

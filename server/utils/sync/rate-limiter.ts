@@ -61,6 +61,8 @@ export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
  * Rate limits for auth session discovery.
  */
 export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    // Shared across short-code links, signup preflight, and session provisioning.
+    'auth:invite': { windowMs: 60_000, maxRequests: 20 },
     // Auth session: 60 per minute per IP
     'auth:session': { windowMs: 60_000, maxRequests: 60 },
 };
