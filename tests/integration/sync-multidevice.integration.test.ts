@@ -23,7 +23,8 @@ vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({ doAction: hookState.doAction }),
 }));
 
-vi.mock('~/core/sync/hook-bridge', () => ({
+vi.mock('~/core/sync/hook-bridge', async (importOriginal) => ({
+    ...await importOriginal<typeof import('~/core/sync/hook-bridge')>(),
     getHookBridge: () => ({ markSyncTransaction: vi.fn() }),
 }));
 
