@@ -61,9 +61,10 @@ local-deploy command all print the same `<package manager> run dev`.
 ## Wizard runtime startup
 
 **R1. Launch to first interactive screen.** From `bun run setup --ui --no-open`
-to the template cards being clickable (not just `/api/health`). Three cold runs
-on one machine after `bun install`; target under 10 seconds each. Recorded in
-`timings.json`.
+to the template cards being clickable (the browser's session request answered,
+not just `/api/health`). Three cold runs on one machine after `bun install`,
+each a fresh process with the prebuilt page removed first; target under 10
+seconds each. Recorded in `timings.json`.
 
 **R2. Protection.** The wizard binds to 127.0.0.1 only; API calls without the
 token are refused; the temporary host directory is removed after exit.

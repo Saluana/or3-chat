@@ -108,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import type { WizardAnswers, WizardField } from '~~/shared/cloud/wizard/types';
 
 const props = withDefaults(

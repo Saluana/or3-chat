@@ -50,7 +50,7 @@
                     v-if="answers.wizardMode === option.value"
                     class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--md-primary)]"
                 >
-                    <UIcon name="i-heroicons-check-circle" class="size-4" />
+                    <UIcon name="i-lucide-circle-check" class="size-4" />
                     Selected
                 </span>
                 <p
@@ -106,7 +106,7 @@
                     </span>
                 </span>
                 <UIcon
-                    name="i-heroicons-chevron-down"
+                    name="i-lucide-chevron-down"
                     class="mt-0.5 size-4 shrink-0 transition-transform"
                     :class="advancedExpanded ? 'rotate-180' : ''"
                 />
@@ -131,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type {
     WizardAnswers,
     WizardField,
@@ -200,9 +201,9 @@ function cardClass(value: WizardFieldOption['value']): string {
 }
 
 function presetIcon(value: WizardFieldOption['value']): string {
-    if (value === 'personal-local') return 'i-heroicons-computer-desktop';
-    if (value === 'preset-local') return 'i-heroicons-server-stack';
-    if (value === 'preset-clerk-convex') return 'i-heroicons-cloud';
-    return 'i-heroicons-wrench-screwdriver';
+    if (value === 'personal-local') return 'i-lucide-monitor';
+    if (value === 'preset-local') return 'i-lucide-server';
+    if (value === 'preset-clerk-convex') return 'i-lucide-cloud';
+    return 'i-lucide-wrench';
 }
 </script>

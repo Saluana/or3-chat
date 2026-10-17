@@ -385,7 +385,7 @@ Don’t:
 
 43. **Startup banner: `shared/dev/startup-banner.ts`** (wired from `nuxt.config.ts` listen hook)
     - Prints mode (LOCAL / CLOUD, with provider stack), URL, admin URL, next-step commands.
-    - Skipped when `OR3_WIZARD_UI_ENABLED` is set or in production builds.
+    - Skipped in production builds.
     - Next-step commands come from `shared/cloud/wizard/next-steps.ts` (shared with CLI cheat sheet).
 
 44. **Wizard steps collapsed behind advanced toggles**

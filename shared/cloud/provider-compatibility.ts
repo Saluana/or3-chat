@@ -93,7 +93,7 @@ export function requiredProviderModules(
     config: import('../../types/or3-cloud-config').Or3CloudConfig,
     env: Readonly<Record<string, string | undefined>>,
 ): { moduleId: string; setting: string }[] {
-    if (!config.auth.enabled || env.OR3_WIZARD_UI_ENABLED === 'true') return [];
+    if (!config.auth.enabled) return [];
     const selections: [string, string | undefined][] = [
         ['auth.provider', config.auth.provider],
         // Auth session provisioning uses this store even with sync transfer disabled.
