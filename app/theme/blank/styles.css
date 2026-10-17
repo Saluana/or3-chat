@@ -7,6 +7,7 @@
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
     --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
+    --blank-sb-row-icon: 16px;
     --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
     --md-surface-dim: #ececec;
     --md-surface-bright: #ffffff;
@@ -104,6 +105,19 @@
             var(--md-surface)
         );
         color: var(--md-on-surface-variant);
+    }
+
+    /* Size SVG and CSS-mask icons alike, including the bell's custom slot. */
+    :where(
+        #top-nav .theme-btn,
+        #top-nav .notification-bell-btn,
+        .workspace-chrome-actions .workspace-chrome-action
+    ) .iconify {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px !important;
     }
 
     .workspace-tab-new:hover {
@@ -204,32 +218,104 @@
         @apply mx-1;
     }
 
+    /* Row icons stay small and muted so titles carry the list. */
+    .unified-sb-item,
+    .unified-sb-item > button {
+        column-gap: 0.5rem;
+    }
+
+    .unified-sb-item .sb-btn-icon,
+    .sidebar-family-toggle :is(svg, .iconify) {
+        width: var(--blank-sb-row-icon) !important;
+        height: var(--blank-sb-row-icon) !important;
+        min-width: var(--blank-sb-row-icon);
+        min-height: var(--blank-sb-row-icon);
+        font-size: var(--blank-sb-row-icon) !important;
+    }
+
+    .unified-sb-item .sb-btn-icon:not(.sb-btn-icon-active),
+    .sidebar-family-toggle {
+        color: color-mix(in srgb, var(--md-on-surface-variant) 45%, transparent) !important;
+    }
+
+    .unified-sb-item:is(:hover, :focus-within) .sb-btn-icon:not(.sb-btn-icon-active),
+    .sidebar-family-header:hover .sidebar-family-toggle,
+    .sidebar-family-toggle:focus-visible {
+        color: var(--md-on-surface-variant) !important;
+    }
+
+    /* Give fine stroke icons enough size and contrast in project lists. */
+    .project-root-toggle .project-icon,
+    .project-child-toggle .project-child-icon {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px;
+        opacity: 1;
+    }
+
+    .sb-btn-icon:not(.sb-btn-icon-active),
+    .project-root-toggle .project-icon {
+        color: var(--md-on-surface-variant);
+    }
+
+    .project-root-toggle:is(:hover, :focus-within) .project-icon {
+        color: var(--md-on-surface);
+    }
+
+    .project-child-toggle .project-child-icon {
+        color: inherit;
+    }
+
+    .project-root-toggle > button:has(> .project-icon) {
+        width: 20px;
+        height: 20px;
+    }
+
     /* Center family disclosures in the same column as chat/document icons. */
     .sidebar-family-header {
         position: relative;
     }
 
-    .sidebar-family-header .sb-btn-icon {
-        visibility: hidden;
+    /* Branched chats keep a branch icon; the arrow replaces it on hover or focus. */
+    .sidebar-family-header .sb-btn-icon,
+    .sidebar-family-toggle :is(svg, .iconify) {
+        transition: opacity 150ms ease;
+    }
+
+    .sidebar-family-toggle :is(svg, .iconify),
+    .sidebar-family-header:is(:hover, :focus-within) .sb-btn-icon {
+        opacity: 0;
+    }
+
+    .sidebar-family-header:is(:hover, :focus-within) .sidebar-family-toggle :is(svg, .iconify) {
+        opacity: 1;
+    }
+
+    .sidebar-family-member .family-timeline-marker {
+        width: var(--blank-sb-row-icon);
+    }
+
+    .sidebar-family-member .family-timeline-line {
+        left: calc(var(--blank-sb-row-icon) / 2 - 0.5px);
+    }
+
+    .sidebar-family-member .family-timeline-dot {
+        left: calc(var(--blank-sb-row-icon) / 2 - 4.5px);
     }
 
     .sidebar-family-toggle {
         position: absolute;
-        inset-inline-start: calc(0.25rem + 0.625rem + 9px);
+        inset-inline-start: calc(0.25rem + 0.625rem + var(--blank-sb-row-icon) / 2);
         z-index: 1;
         transform: translateX(-50%);
-        color: color-mix(in oklab, var(--md-on-surface-variant) 70%, transparent);
         background: transparent !important;
     }
 
     .sidebar-family-toggle:hover,
     .sidebar-family-toggle:focus-visible {
         background: var(--md-surface-hover) !important;
-    }
-
-    .sidebar-family-header:hover .sidebar-family-toggle,
-    .sidebar-family-toggle:focus-visible {
-        color: color-mix(in oklab, var(--md-on-surface) 80%, transparent);
     }
 
     .unified-sb-item-active {
@@ -258,10 +344,18 @@
         ) !important;
     }
 
-    /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
+    /* Soft circles leave room for the category badges' duotone fills. */
     .page-link-accent-chats .page-link-icon-container {
-        background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface)) !important;
+        background: color-mix(in srgb, var(--blank-brand-accent) 10%, var(--md-surface)) !important;
         color: var(--blank-brand-accent) !important;
+    }
+
+    .page-link-accent-docs .page-link-icon-container {
+        background: color-mix(in srgb, var(--md-success) 9%, var(--md-surface)) !important;
+    }
+
+    .page-link-accent-projects .page-link-icon-container {
+        background: color-mix(in srgb, var(--md-secondary) 10%, var(--md-surface)) !important;
     }
 
     /* Expanded: soft outer edge against main content */
@@ -675,12 +769,17 @@ html[data-theme='blank']
         --blank-mobile-control-text: 16px;
         --blank-mobile-input-text: 16px;
         --blank-mobile-label-text: 14px;
-        --blank-mobile-icon-size: 20px;
         --blank-mobile-supporting-text: 12px;
     }
 
+    /*
+     * Controls size themselves: Nuxt UI variants and the chat/sidebar overrides
+     * carry their own `max-md:min-h-[44px]!`. A blanket min-size on every
+     * button/tab clipped fixed-height desktop strips (e.g. workspace tabs) on
+     * touch emulation and tablets, so only the tap behaviour is global.
+     */
     html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        button,
         [role="button"],
         [role="menuitem"],
         [role="option"],
@@ -688,23 +787,12 @@ html[data-theme='blank']
         [role="treeitem"],
         summary
     ) {
-        min-height: var(--blank-mobile-control-min) !important;
-        font-size: var(--blank-mobile-control-text) !important;
-        line-height: 1.35;
         touch-action: manipulation;
     }
 
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"]
-    ) {
-        min-width: var(--blank-mobile-control-min) !important;
-    }
-
     /*
-     * A switch's painted track is intentionally smaller than its hit region.
-     * Nuxt UI renders that track as a button[role="switch"], so sizing the
-     * button itself to 44px distorts the track and thumb geometry.
+     * A switch's painted track is intentionally smaller than its hit region,
+     * so its surrounding row (not the track button) carries the touch size.
      */
     html[data-theme="blank"] :where(
         .chat-settings-switch,
@@ -725,30 +813,6 @@ html[data-theme='blank']
         touch-action: manipulation;
     }
 
-    html[data-theme="blank"] :where(
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) {
-        padding-block: 0.625rem !important;
-    }
-
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"],
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) :where(
-        [data-slot="label"],
-        [data-slot="value"],
-        [data-slot="placeholder"]
-    ) {
-        font-size: inherit !important;
-    }
-
     /* Keep tiny utility text legible without flattening the whole hierarchy. */
     html[data-theme="blank"] :where(
         .text-xs,
@@ -760,20 +824,6 @@ html[data-theme='blank']
     ) {
         font-size: var(--blank-mobile-supporting-text) !important;
         line-height: 1.35;
-    }
-
-    /* Icons may stay visually smaller than their 44px hit target. */
-    html[data-theme="blank"] :where(
-        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
-        [role="button"],
-        [role="menuitem"],
-        [role="option"],
-        [role="tab"],
-        [role="treeitem"]
-    ) > .iconify {
-        min-width: var(--blank-mobile-icon-size);
-        min-height: var(--blank-mobile-icon-size);
-        font-size: var(--blank-mobile-icon-size) !important;
     }
 
     html[data-theme="blank"] :is(
@@ -933,8 +983,7 @@ html[data-theme='blank']
 
     html[data-theme="blank"] :where(
         .page-link-icon-container > .iconify,
-        .page-link-icon,
-        .sb-btn-icon
+        .page-link-icon
     ) {
         width: 20px !important;
         height: 20px !important;

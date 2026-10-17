@@ -308,9 +308,7 @@ function toolLabel(tool: RegisteredTool) {
     );
 }
 function toolReady(tool: RegisteredTool) {
-    return (
-        tool.runtime !== 'server' && tool.enabled.value && !toolCannotScope(tool.definition.function.name)
-    );
+    return tool.runtime !== 'server' && tool.enabled.value;
 }
 const matchingTools = computed(() => {
     const query = toolQuery.value.trim().toLowerCase();
@@ -951,15 +949,6 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
     };
     dirty.value = true;
 }
-function toolCannotScope(name: string) {
-    return !projectToolEnabled(
-        {
-            ...settings.value,
-            tools: { [name]: { mode: 'enabled', resources: [] } },
-        },
-        name,
-    );
-}
 </script>
 
 <template>
@@ -1003,26 +992,28 @@ function toolCannotScope(name: string) {
                 @click="emit('new-project')"
                 >New project</UButton
             >
-            <UButton
-                v-else-if="tab !== 'Settings'"
-                variant="ghost"
-                color="neutral"
-                size="sm"
-                :icon="settingsIcon"
-                aria-label="Settings"
-                title="Project settings"
-                square
-                class="hover:bg-[var(--md-surface-hover)] theme-btn"
-                :disabled="!state"
-                @click="tab = 'Settings'"
-            />
-            <SidebarProjectActions
-                v-if="id && state"
-                :name="state.project.name"
-                :disabled="busy"
-                @rename="emit('rename-project', id)"
-                @delete="emit('delete-project', id)"
-            />
+            <div v-else class="flex shrink-0 items-center gap-1">
+                <UButton
+                    v-if="tab !== 'Settings'"
+                    variant="ghost"
+                    color="neutral"
+                    size="sm"
+                    :icon="settingsIcon"
+                    aria-label="Settings"
+                    title="Project settings"
+                    square
+                    class="hover:bg-[var(--md-surface-hover)] theme-btn"
+                    :disabled="!state"
+                    @click="tab = 'Settings'"
+                />
+                <SidebarProjectActions
+                    v-if="state"
+                    :name="state.project.name"
+                    :disabled="busy"
+                    @rename="emit('rename-project', id)"
+                    @delete="emit('delete-project', id)"
+                />
+            </div>
         </header>
         <p
             v-if="error"
@@ -2452,11 +2443,6 @@ function toolCannotScope(name: string) {
                                             {{
                                                 tool.runtime === 'server'
                                                     ? 'Server-owned tools cannot run in browser project chats.'
-                                                    : toolCannotScope(
-                                                    tool.definition.function
-                                                        .name,
-                                                )
-                                                    ? 'Cannot limit access to this project.'
                                                     : 'Turn this tool on in chat settings to use it here.'
                                             }}
                                         </p>

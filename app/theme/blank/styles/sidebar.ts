@@ -11,7 +11,7 @@ const SidebarCollapsedTopButtonConfig = {
     variant: 'ghost',
     square: true,
     class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! bg-transparent! border-0! rounded-full text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    ui: { leadingIcon: 'size-[22px]' },
+    ui: { leadingIcon: 'size-6' },
 };
 
 const SidebarRailUtilityButtonConfig = {
@@ -121,7 +121,7 @@ export const sidebarOverrides = {
         ...SidebarCollapsedTopButtonConfig,
         ui: {
             base: 'ring-0! shadow-none!',
-            leadingIcon: 'size-[22px]',
+            leadingIcon: 'size-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
@@ -236,7 +236,7 @@ export const sidebarCssSelectors = {
     '.page-link-accent-chats .page-link-icon-container': {
         style: {
             background:
-                'color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface))',
+                'color-mix(in srgb, var(--blank-brand-accent) 10%, var(--md-surface))',
             color: 'var(--blank-brand-accent)',
         },
     },

@@ -49,6 +49,7 @@ export default <IconMap>{
     'sidebar.delete': 'carbon:trash-can',
     'sidebar.folder': 'carbon:folder',
     'sidebar.chat': 'carbon:chat',
+    'sidebar.chat.branched': 'carbon:branch',
     'sidebar.note': 'carbon:document',
     'sidebar.settings': 'carbon:settings-adjust',
     'sidebar.user': 'carbon:user',
@@ -58,6 +59,9 @@ export default <IconMap>{
     'sidebar.page.home': 'carbon:home',
     'sidebar.page.messages': 'carbon:chat',
     'sidebar.page.default': 'carbon:grid',
+    'sidebar.category.chats': 'carbon:chat',
+    'sidebar.category.documents': 'carbon:document',
+    'sidebar.category.projects': 'carbon:folder',
 
     // Common UI
     'ui.check': 'carbon:checkmark',

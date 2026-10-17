@@ -222,7 +222,7 @@ describe.each(['bar', 'switcher', 'mobile'] as const)('workspace tab icons in th
             await nextTick();
             const expected = theme === 'retro'
                 ? ['pixelarticons:chat', 'pixelarticons:note', 'pixelarticons:files', 'custom:planet', 'pixelarticons:grid']
-                : ['i-lucide-message-circle', 'i-lucide-file-text', 'i-lucide-files', 'custom:planet', 'i-lucide-panels-top-left'];
+                : ['blank-solar:chat-round-linear', 'blank-solar:document-text-linear', 'blank-solar:documents-linear', 'custom:planet', 'blank-solar:panels-top-left-linear'];
             for (const [index, tab] of iconTabs.entries()) {
                 if (view === 'mobile') await wrapper.setProps({ activeTabId: tab.id });
                 const row = view === 'bar'
@@ -234,7 +234,7 @@ describe.each(['bar', 'switcher', 'mobile'] as const)('workspace tab icons in th
             }
             if (view === 'bar') {
                 expect(wrapper.get('.workspace-tab-close [data-icon]').attributes('data-icon')).toBe(
-                    theme === 'retro' ? 'pixelarticons:close' : 'i-lucide-x'
+                    theme === 'retro' ? 'pixelarticons:close' : 'blank-solar:close-linear'
                 );
             }
         }

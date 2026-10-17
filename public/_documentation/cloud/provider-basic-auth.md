@@ -17,6 +17,28 @@ the compact Account/Login tile; the mobile More sheet requests
 `layout="more-sheet"` and receives a full-width row matching Connect and the
 System actions. The signed-in Account row still opens the provider menu.
 
+## Lock page
+
+With `OR3_AUTH_LOCK_PAGE_ENABLED=true`, `/welcome` shows the branded lock page.
+The updated Basic Auth component accepts an email address and opens the existing
+Create Account dialog with that address filled in. **Existing account? Sign in**
+opens the password sign-in dialog with the same address. When registration is
+disabled, **Continue with email** opens sign-in instead. Invite-only registration
+still requires a valid invite; invite links continue to open registration with
+their token filled in. Safe `next` redirects preserve the destination's query and
+fragment. Accounts that authenticate but lack workspace access see the host's
+access explanation and account controls; session failures offer a retry.
+
+On mobile, the email field keeps its accessible label while showing an envelope
+icon and placeholder, followed by the primary button and an OR divider. The host
+provides the responsive cloud artwork, curved card, and handwritten captions.
+
+The email entry requires the updated Basic Auth provider build. Source development
+rebuilds the sibling provider through `bun run dev`; deployments using the currently
+pinned provider retain its Sign in button inside the new layout until the provider
+update is published and pinned. See [Configuration reference](/documentation/cloud/config-reference)
+for lock-page enablement and custom adapters.
+
 ## Install
 
 ```bash

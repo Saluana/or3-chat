@@ -676,37 +676,17 @@ export function finalizeProjectReceipt(
     return receipt;
 }
 
-const SCOPED_TOOLS = new Set([
-    'workspace_search',
-    'workspace_read',
-    'workspace_create_document',
-    'workspace_propose_document_edit',
-    'workspace_update_project',
-    'read_thread',
-    'get_message',
-    'search_parent',
-]);
-const UNSCOPED_TOOLS = new Set([
-    'search_threads',
-    'search_documents',
-    'get_open_pane_context',
-]);
+/** Project chats use the chat-settings tool toggles; a project can only switch a tool off. */
 export function projectToolEnabled(
     settings: ProjectSettings,
     name: string,
 ): boolean {
-    return (
-        !UNSCOPED_TOOLS.has(name) &&
-        (settings.tools[name]
-            ? settings.tools[name].mode !== 'disabled'
-            : SCOPED_TOOLS.has(name))
-    );
+    return settings.tools[name]?.mode !== 'disabled';
 }
 
-/** Tools without a host-owned effect classification always need approval. */
+/** Tool names that read as send/publish/delete actions always need approval. */
 export function projectToolRequiresApproval(name: string): boolean {
-    return !SCOPED_TOOLS.has(name) ||
-        /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(name);
+    return /(?:send|publish|delete|remove|payment|push|commit|comment|create_issue|submit|email)/i.test(name);
 }
 
 /** Execution gate re-resolves trusted local ownership/policy; model arguments never grant approval. */

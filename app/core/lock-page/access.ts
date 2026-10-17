@@ -121,21 +121,28 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
 
     const now = Date.now();
     const shouldRefresh =
+        sessionState.pending.value ||
         !sessionState.data.value ||
         now - validatedAt.value > LOCK_PAGE_SESSION_TTL_MS;
 
-    let hadSessionError = false;
+    let hadSessionError = Boolean(sessionState.error.value);
     let errorMessage = extractErrorMessage(sessionState.error.value);
 
     try {
-        if (shouldRefresh && !sessionState.pending.value) {
+        if (shouldRefresh) {
+            // SSR refresh joins the pending useFetch request (dedupe: 'defer').
+            // Wait for it before treating an empty startup payload as signed out.
             await sessionState.refresh();
-            validatedAt.value = Date.now();
-            errorMessage = undefined;
+            // Nuxt reports SSR failures through the error ref without rejecting.
+            hadSessionError = Boolean(sessionState.error.value);
+            errorMessage = extractErrorMessage(sessionState.error.value);
+            validatedAt.value = hadSessionError ? 0 : Date.now();
         }
     } catch (error) {
         hadSessionError = true;
-        validatedAt.value = Date.now();
+        // A new composable caller has its own error ref; it must retry rather
+        // than trusting stale shared data after this failed validation.
+        validatedAt.value = 0;
         errorMessage = extractErrorMessage(error) ?? errorMessage;
     }
 

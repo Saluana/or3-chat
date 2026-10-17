@@ -19,11 +19,12 @@ const sessionState = {
         },
     },
 };
+const refreshSession = vi.fn(async () => sessionState.value);
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({
         data: sessionState,
-        refresh: vi.fn(async () => sessionState.value),
+        refresh: refreshSession,
     }),
 }));
 
@@ -63,6 +64,7 @@ describe('workspace logout cleanup plugin', () => {
         logoutCleanup.mockClear();
         confirmClientSignedOut.mockReset().mockResolvedValue(false);
         sessionState.value.session = null;
+        refreshSession.mockReset().mockResolvedValue(sessionState.value);
         (
             globalThis as typeof globalThis & {
                 defineNuxtPlugin?: (plugin: () => unknown) => unknown;
@@ -101,6 +103,17 @@ describe('workspace logout cleanup plugin', () => {
             expect(confirmClientSignedOut).toHaveBeenCalled();
         });
         expect(logoutCleanup).toHaveBeenCalledTimes(0);
+    });
+
+    it('keeps startup recoverable without logout cleanup when the session check fails', async () => {
+        refreshSession.mockRejectedValue(new Error('Session API unavailable'));
+        confirmClientSignedOut.mockResolvedValue(true);
+
+        const { default: initialization } = await import('~/plugins/00-workspace-db.client');
+
+        await expect(initialization).resolves.toBeUndefined();
+        expect(confirmClientSignedOut).not.toHaveBeenCalled();
+        expect(logoutCleanup).not.toHaveBeenCalled();
     });
 
     it('clears workspace DBs when session is unauthenticated and sign-out is confirmed', async () => {

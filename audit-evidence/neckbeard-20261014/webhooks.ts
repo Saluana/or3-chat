@@ -20,7 +20,7 @@ const config = {
     webhooks: { enabled: true, encryptionKey: 'audit-encryption-key-32-bytes-long', maxPerUser: 2,
         rateLimitPerMinute: 1, deliveryTimeoutMs: 10_000, blockPrivateIps: true, maxRetryHours: 24, logRetentionHours: 72 },
 };
-(globalThis as any).useRuntimeConfig = () => config;
+(globalThis as typeof globalThis & { useRuntimeConfig: () => typeof config }).useRuntimeConfig = () => config;
 registerWebhookStore({ id: 'audit', create: () => store });
 registerAuthWorkspaceStore({ id: 'audit', create: () => ({ getWorkspaceRole: async ({ userId, workspaceId }: { userId: string; workspaceId: string }) => database.prepare('SELECT 1 FROM workspace_members WHERE user_id = ? AND workspace_id = ?').get(userId, workspaceId) ? 'editor' : null }) as never });
 const handle = toWebHandler(createApp().use(defineEventHandler(event => {
@@ -47,7 +47,7 @@ try {
     assert.equal(ping.responseBody?.length, 4096);
     assert.equal(cancelled, true);
     assert.ok(consumedBytes < 1_048_576);
-    report('bounded-response-stream', { consumedBytes, storedBytes: ping.responseBody?.length, cancelled });
+    report('bounded-response-stream', { consumedBytes, storedBytes: ping.responseBody.length, cancelled });
     for (const eventId of ['first', 'second']) await dispatcher.enqueue({ webhookId: webhook.id, eventType: 'message.created', eventId, payload: {} });
     await dispatcher.claimAndProcess();
     const logs = await store.getDeliveryLogs(webhook.id, 0);
@@ -55,7 +55,7 @@ try {
     assert.ok(logs.find(log => log.status === 'pending')?.next_retry_at);
     report('rate-limit-defers-without-cancelling', logs.map(log => log.status));
     database.exec('DELETE FROM workspace_members');
-    const nitro = { hooks: createHooks<Record<string, (...args: any[]) => unknown>>() };
+    const nitro = { hooks: createHooks<Record<string, (...args: unknown[]) => unknown>>() };
     bridge = createWebhookEventBridge(store, dispatcher, nitro as never);
     bridge.start();
     await nitro.hooks.callHook('db.messages.create:action:after', { id: 'after-revocation', workspace_id: 'workspace' });

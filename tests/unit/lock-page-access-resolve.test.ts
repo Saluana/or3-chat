@@ -118,6 +118,81 @@ describe('resolveLockPageAccess', () => {
         expect(refresh).not.toHaveBeenCalled();
     });
 
+    // Startup can resolve to an authenticated, signed-out, or forbidden session.
+    // None should be decided before the pending request completes. A failed SSR
+    // refresh reports through its error ref and must not admit stale credentials.
+    it.each([
+        { session: createSession(), appAccessAllowed: true, allowed: true, reason: 'authenticated' },
+        { session: null, appAccessAllowed: false, allowed: false, reason: 'unauthenticated' },
+        { session: createSession(), appAccessAllowed: false, allowed: false, reason: 'forbidden' },
+    ])('waits for the pending startup session before returning $reason', async ({
+        session, appAccessAllowed, allowed, reason,
+    }) => {
+        const data = { value: null as { session: SessionContext | null; appAccessAllowed: boolean } | null };
+        let finishRequest!: () => void;
+        const request = new Promise<void>((resolve) => { finishRequest = resolve; });
+        useSessionContextMock.mockReturnValue({
+            data,
+            pending: { value: true },
+            error: { value: null },
+            refresh: () => request,
+        });
+        const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
+        let settled = false;
+        const access = resolveLockPageAccess().then((result) => {
+            settled = true;
+            return result;
+        });
+
+        await Promise.resolve();
+        const settledWhilePending = settled;
+        data.value = { session, appAccessAllowed };
+        finishRequest();
+
+        await expect(access).resolves.toMatchObject({ allowed, reason });
+        expect(settledWhilePending).toBe(false);
+    });
+
+    it('denies stale authenticated cache when SSR refresh resolves with an error ref', async () => {
+        const error = { value: null as Error | null };
+        useSessionContextMock.mockReturnValue({
+            data: { value: { session: createSession(), appAccessAllowed: true } },
+            pending: { value: true },
+            error,
+            refresh: async () => { error.value = new Error('Session unavailable'); },
+        });
+        const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
+
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({
+            allowed: false,
+            reason: 'session-error',
+            errorMessage: 'Session unavailable',
+        });
+    });
+
+    // Errors are local to a composable caller. A failure must not validate the
+    // shared stale cache for the next caller, including SSR's nonthrowing errors.
+    it.each(['rejection', 'error-ref'])('revalidates after a %s instead of admitting stale cache in another caller', async (failure) => {
+        const data = { value: { session: createSession() as SessionContext | null, appAccessAllowed: true } };
+        const firstError = { value: null as Error | null };
+        const firstRefresh = async () => {
+            if (failure === 'rejection') throw new Error('Session unavailable');
+            firstError.value = new Error('Session unavailable');
+        };
+        useSessionContextMock.mockReturnValueOnce({
+            data, pending: { value: false }, error: firstError, refresh: firstRefresh,
+        }).mockReturnValueOnce({
+            data, pending: { value: false }, error: { value: null },
+            refresh: async () => {
+                data.value = { session: null, appAccessAllowed: false };
+            },
+        });
+        const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
+
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false, reason: 'session-error' });
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false, reason: 'unauthenticated' });
+    });
+
     it('denies authenticated sessions when app access is denied after refresh', async () => {
         const refresh = vi.fn().mockResolvedValue(undefined);
         useSessionContextMock.mockReturnValue({

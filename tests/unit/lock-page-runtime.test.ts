@@ -47,8 +47,19 @@ describe('lock page runtime helpers', () => {
         expect(sanitizeLockPageRedirectTarget('chat/123')).toBe('/');
     });
 
-    it('avoids redirect loops back to the lock page route', () => {
-        expect(resolvePostAuthRedirectTarget('/welcome', '/welcome')).toBe('/');
+    it.each([
+        '/welcome',
+        '/welcome/',
+        '/welcome?next=%2Fchat',
+        '/welcome#sign-in',
+        '/welcome/?next=%2Fdocs#sign-in',
+        '/WELCOME?next=%2Fchat',
+    ])('avoids redirecting back to the lock page at %s', (target) => {
+        expect(resolvePostAuthRedirectTarget(target, '/welcome')).toBe('/');
+    });
+
+    it('preserves a safe destination including query and hash', () => {
         expect(resolvePostAuthRedirectTarget('/chat/123', '/welcome')).toBe('/chat/123');
+        expect(resolvePostAuthRedirectTarget('/docs/123?tab=files#notes', '/welcome')).toBe('/docs/123?tab=files#notes');
     });
 });

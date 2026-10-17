@@ -28,26 +28,16 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('--blank-mobile-control-min: 44px');
         expect(blankStyles).toContain('--blank-mobile-control-text: 16px');
         expect(blankStyles).toContain('--blank-mobile-label-text: 14px');
-        expect(blankStyles).toContain('--blank-mobile-icon-size: 20px');
         expect(blankStyles).toContain('--blank-mobile-supporting-text: 12px');
-        expect(blankStyles).toContain(
-            'button:not([role="switch"]):not([role="checkbox"]):not([role="radio"])',
+    });
+
+    it('does not impose a blanket 44px minimum on every button, tab or menu item', () => {
+        expect(blankStyles).not.toMatch(
+            /\[role="tab"\][\s\S]{0,80}\)\s*\{[^}]*min-(height|width): var\(--blank-mobile-control-min\) !important/,
         );
-        expect(blankStyles).toContain('[role="menuitem"]');
-        expect(blankStyles).toContain('[role="option"]');
-        expect(blankStyles).toContain('[role="tab"]');
-        expect(blankStyles).toContain('min-height: var(--blank-mobile-control-min) !important');
-        expect(blankStyles).toContain('min-width: var(--blank-mobile-control-min) !important');
     });
 
     it('keeps switch tracks compact while their surrounding rows remain touch sized', () => {
-        const primaryTouchSelector = blankStyles.match(
-            /html\[data-theme="blank"\] :where\(([\s\S]*?)\)\s*\{\s*min-height: var\(--blank-mobile-control-min\)/,
-        );
-        expect(primaryTouchSelector?.[1]).toBeDefined();
-        expect(primaryTouchSelector?.[1]).not.toContain(
-            '\n        [role="switch"],',
-        );
         expect(blankStyles).toContain('.chat-settings-switch');
         expect(blankStyles).toContain(
             '[data-slot="root"]:has([role="switch"])',

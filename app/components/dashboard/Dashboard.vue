@@ -32,6 +32,7 @@
                         :key="item.id"
                         class="dashboard-plugin-icon-item"
                         :icon="item.icon"
+                        :icon-token="item.iconToken"
                         :image="item.image"
                         :label="item.label"
                         :description="item.description"
@@ -102,9 +103,10 @@
                     >
                         <div class="flex items-center gap-2">
                             <AppIcon
-                                v-if="p.image || p.icon"
+                                v-if="p.image || p.icon || p.iconToken"
                                 :image="p.image"
                                 :icon="p.icon"
+                                :icon-token="p.iconToken"
                                 class="w-5 h-5 opacity-80 group-hover:opacity-100"
                             />
                             <span class="font-medium text-sm">{{

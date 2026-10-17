@@ -1,5 +1,5 @@
 import { chmod, mkdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { boolFlag, type Flags, requireStringFlag, stringFlag } from '../cli/args';
 import { readPassword, resolveAdminEmail } from '../credentials/inputs';
 import { copyAssets } from '../deployment/assets';
@@ -108,11 +108,12 @@ export async function initCommand(positionals: string[], flags: Flags) {
     await stopProject(directory, mode);
     await startProject(directory, mode, runtimeEnv);
     await clearPending(directory, state);
-    console.log(`\nOR3 Cloud ${version} is running at ${mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${port}`}`);
-    console.log(`Credentials were written to ${join(directory, '.or3-initial-credentials')} (mode 0600). Move them to protected storage (a password manager), then remove that file.`);
-    console.log('The bootstrap owner signs in to the app; the admin account manages the deployment. Rotate either later with "npx @or3/cloud credentials reset --yes".');
-    console.log(`\nCheck: cd ${quote(directory)} && npx @or3/cloud doctor`);
-    if (operator) console.log('Dashboard updates are enabled for super admins in Operations.');
+    const url = mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${port}`;
+    const folder = relative(process.cwd(), directory) || '.';
+    console.log(`\nOR3 Cloud ${version} is running at ${url}`);
+    console.log(`Sign in as ${email} with the password in ${join(folder, '.or3-initial-credentials')}; the same login opens ${url}/admin.`);
+    console.log('Save it in a password manager, then delete that file.');
+    console.log(`\nRun later commands from the deployment folder: cd ${quote(folder)} && npx @or3/cloud doctor`);
   } catch (error) {
     state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(env));
     await writeState(directory, state);
