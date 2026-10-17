@@ -110,7 +110,7 @@ export async function run(command: string, args: string[], cwd?: string, environ
 
 export async function requireCommand(command: string, args: string[], label: string, cwd?: string) {
   const result = await run(command, args, cwd);
-  if (!result.ok) throw new Error(`${label} is unavailable. Run: ${result.command}\n${result.stderr}`);
+  if (!result.ok) throw new Error(`${label} is not available. Install or start it, then try again.\n${result.stderr}`);
   return result.stdout.trim();
 }
 

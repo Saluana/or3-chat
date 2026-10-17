@@ -47,17 +47,17 @@ This keeps OR3 private on the local machine and does not install Caddy:
 npx @or3/cloud init --local
 ```
 
-The command asks once for the administrator email, generates a bootstrap
-password, and writes it to a mode-`0600`
-`.or3-initial-credentials` file. Save it in a password manager, then remove
-that file. The same credentials enable the OR3 admin panel at `/admin`. Open
-`http://127.0.0.1:3000`; use `--port 3100` if needed.
+The command asks once for the administrator email, creates an `or3-cloud`
+folder, generates a bootstrap password, and writes it to the mode-`0600`
+`or3-cloud/.or3-initial-credentials` file. Save it in a password manager, then
+remove that file. The same credentials enable the OR3 admin panel at `/admin`.
+Open `http://127.0.0.1:3000`; use `--port 3100` if needed.
 
 For automation, pass `--admin-password-file /path/to/password` (preferred) or
 `--admin-password 'A-valid-password'`. The file option avoids putting a secret
 in shell history and the CLI never prints either value.
 
-Useful commands run from the deployment directory:
+Run these from inside the `or3-cloud` folder:
 
 ```bash
 npx @or3/cloud doctor
