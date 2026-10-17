@@ -7,7 +7,7 @@
  * provider-specific configuration pages only appear when relevant.
  *
  * Responsibilities:
- * - Static steps: target, preset, branding, themes, features, providers
+ * - Static steps: target (template + advanced setup), branding, themes, features, providers
  * - Dynamic provider-scoped steps: auth details, sync details, storage details
  * - Cloud options step: OpenRouter, limits, security, Convex env
  * - Terminal review step
@@ -201,8 +201,8 @@ function providerFieldsStep(
  * Generates the ordered step array for the wizard flow.
  *
  * Behavior:
- * - Always includes static steps: target, preset, branding, themes,
- *   features, providers.
+ * - Always includes static steps: target (template + advanced setup),
+ *   branding, themes, features, providers.
  * - Appends provider-scoped detail steps only when the selected provider
  *   has fields defined in the catalog.
  * - Appends cloud options (OpenRouter, limits, security) and Convex env.
@@ -224,21 +224,57 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
     const steps: WizardStep[] = [
         {
             id: 'target',
-            title: 'Getting Started',
-            description: 'Let\'s get you set up. Defaults work for almost everyone — you can change them later.',
+            title: 'Choose a setup',
+            description: 'Defaults work for almost everyone. You can change them later.',
             fields: [
+                {
+                    key: 'wizardMode',
+                    type: 'select',
+                    label: 'Which setup do you want?',
+                    help: 'Self-hosted is the quickest path to accounts and sync. Custom lets you pick each provider.',
+                    options: [
+                        ...(answers.cloudSetupEntry
+                            ? []
+                            : [
+                                  {
+                                      label: 'This device only — private, offline, and no account',
+                                      value: 'personal-local',
+                                      description:
+                                          'Everything stays in this browser. No remote access or server account is configured.',
+                                  },
+                              ]),
+                        {
+                            label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
+                            value: 'preset-local',
+                            description:
+                                'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
+                        },
+                        {
+                            label: 'Clerk + Convex — managed authentication and data',
+                            value: 'preset-clerk-convex',
+                            description:
+                                'For deployments already using Clerk and Convex.',
+                        },
+                        {
+                            label: 'Custom — manually choose auth/sync/storage providers',
+                            value: 'custom',
+                            description:
+                                'Choose each backend and advanced deployment setting yourself.',
+                        },
+                    ],
+                },
                 {
                     key: 'targetAdvancedEnabled',
                     type: 'boolean',
-                    label: 'Customize this setup?',
-                    help: 'Show branding, themes, features, provider choices, install location, and advanced security options.',
+                    label: 'Advanced setup',
+                    help: 'Choose the project folder, settings file, and how OR3 runs, and add branding, theme, feature, and provider steps.',
                     defaultValue: false,
                 },
                 {
                     key: 'instanceDir',
                     type: 'text',
                     label: 'Project folder',
-                    help: 'The folder where your OR3 Chat project is. Press Enter to use the current folder.',
+                    help: 'The folder where your OR3 Chat project is. Defaults to the folder you started setup from.',
                     required: true,
                     visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
@@ -334,55 +370,6 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
             ],
-        },
-        {
-            id: 'preset',
-            title: 'Starting Template',
-            description:
-                'Pick a setup path.\n' +
-                'Preset templates auto-configure providers and skip manual provider selection.\n' +
-                'Custom keeps full manual provider selection.',
-            fields: [
-                {
-                    key: 'wizardMode',
-                    type: 'select',
-                    label: 'Which starting point do you want?',
-                    help: 'Choose a preset for a fast path, or custom to manually pick providers.',
-                    options: [
-                        ...(answers.cloudSetupEntry
-                            ? []
-                            : [
-                                  {
-                                      label: 'This device only — private, offline, and no account',
-                                      value: 'personal-local',
-                                      description:
-                                          'Everything stays in this browser. No remote access or server account is configured.',
-                                  },
-                              ]),
-                        {
-                            label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
-                            value: 'preset-local',
-                            description:
-                                'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
-                        },
-                        {
-                            label: 'Clerk + Convex — managed authentication and data',
-                            value: 'preset-clerk-convex',
-                            description:
-                                'For deployments already using Clerk and Convex.',
-                        },
-                        {
-                            label: 'Custom — manually choose auth/sync/storage providers',
-                            value: 'custom',
-                            description:
-                                'Choose each backend and advanced deployment setting yourself.',
-                        },
-                    ],
-                },
-            ],
-            // Keep template selection visible so users can pick fast/Clerk/custom.
-            // Docker no longer auto-skips this — the short path still only needs email.
-            canSkip: () => false,
         },
         {
             id: 'branding',

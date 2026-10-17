@@ -89,7 +89,7 @@ This creates `convex/_generated/` used by the Convex backend path. Keep the scaf
 After updating the source and its installed dependencies, start OR3 normally:
 
 ```bash
-bun run dev:ssr
+bun run dev
 # Or, after an offline production build:
 bun run preview
 ```

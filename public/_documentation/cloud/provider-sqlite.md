@@ -72,7 +72,7 @@ OR3_SQLITE_DRIVER=bun
 OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
 ```
 
-For editable source development with the Bun driver, `bun run dev:ssr` selects
+For editable source development with the Bun driver, `bun run dev` selects
 Bun and checks `bun:sqlite` before Nuxt starts. `bun run build` also selects Bun
 for this driver; static generation and type-checking use Node. Use the Bun
 version pinned in the host's `package.json`. The wrappers load `.env` before

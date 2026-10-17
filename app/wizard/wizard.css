@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@source "./";
+
+/* Material token fallbacks and their Nuxt UI mapping, as in the app. */
+@import "../assets/css/theme.css";
+@import "../assets/css/nuxt-ui-map.css";
+
+body {
+    margin: 0;
+    font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+    color: var(--md-on-surface);
+    background: var(--md-background);
+}
+
+.font-heading {
+    font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif));
+}

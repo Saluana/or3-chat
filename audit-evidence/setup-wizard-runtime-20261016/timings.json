@@ -1,0 +1,21 @@
+{
+  "launchToUrlMs": 4206,
+  "coldLaunchToInteractiveMs": [
+    4527,
+    3996,
+    4362
+  ],
+  "firstPageToInteractiveMs": 272,
+  "warmLaunchToInteractiveMs": [
+    1040,
+    1023,
+    1025
+  ],
+  "before": {
+    "source": "audit-evidence/setup-wizard-20261016/timings.json (Nuxt dev host)",
+    "launchToFirstInteractiveMs": [
+      55010,
+      59980
+    ]
+  }
+}

@@ -22,14 +22,13 @@ const env = { ...process.env };
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
-const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
 const isProductionJourneyTestHarnessEnabled =
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
 const isStaticGenerateBuild = process.argv.includes('generate');
 const shouldLoadCloudProviderModules =
-    !isWizardUiProcess && isSsrAuthEnabled && !isStaticGenerateBuild;
+    isSsrAuthEnabled && !isStaticGenerateBuild;
 
 const sqliteRuntime = process.env.OR3_SQLITE_DRIVER?.trim().toLowerCase() ||
     'better-sqlite3';
@@ -172,6 +171,8 @@ const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     : undefined;
 
 export default defineNuxtConfig({
+    // No first-run consent prompt; OR3 does not send usage data.
+    telemetry: false,
     ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
         ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
         : process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true'
@@ -738,15 +739,6 @@ export default defineNuxtConfig({
                     '**/.or3-plugin-dev/**',
                 ],
             },
-            watch: {
-                ignored: isWizardUiProcess
-                    ? [
-                          '**/.env',
-                          '**/.env.local',
-                          '**/or3.providers.generated.json',
-                      ]
-                    : [],
-            },
         },
         plugins: [
             stripBrokenOpenRouterSourcemapsPlugin(),
@@ -910,7 +902,6 @@ export default defineNuxtConfig({
             }
         },
         async listen(server, listener) {
-            if (isWizardUiProcess) return;
             await attachDevHttpsListener(server);
             const url =
                 listener &&

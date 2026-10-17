@@ -1,31 +1,7 @@
 <template>
     <div class="space-y-2">
-        <div class="flex items-center justify-between gap-3">
-            <label
-                :for="fieldId"
-                class="text-sm font-medium text-[var(--md-on-surface)]"
-            >
-                {{ field.label }}
-            </label>
-            <UButton
-                v-if="showSecretGenerateButton"
-                label="Generate Secure Key"
-                size="sm"
-                variant="basic"
-                :disabled="disabled"
-                @click="emitGenerateSecret"
-            />
-        </div>
-
-        <p
-            v-if="field.help"
-            :id="helpId"
-            class="text-xs text-[var(--md-on-surface)]/50"
-        >
-            {{ field.help }}
-        </p>
-
         <template v-if="field.type === 'boolean'">
+            <!-- The checkbox carries the field label so it describes the choice. -->
             <div
                 class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-3 py-2.5"
                 :class="errorClass"
@@ -33,15 +9,49 @@
                 <UCheckbox
                     :id="fieldId"
                     :model-value="booleanValue"
-                    :label="booleanLabel"
+                    :label="field.label"
                     :disabled="disabled"
                     :aria-describedby="ariaDescribedBy"
                     @update:model-value="onCheckboxChange"
                 />
+                <p
+                    v-if="field.help"
+                    :id="helpId"
+                    class="mt-1 pl-6 text-xs text-[var(--md-on-surface)]/50"
+                >
+                    {{ field.help }}
+                </p>
             </div>
         </template>
 
-        <template v-else-if="field.type === 'select'">
+        <template v-else>
+            <div class="flex items-center justify-between gap-3">
+                <label
+                    :for="fieldId"
+                    class="text-sm font-medium text-[var(--md-on-surface)]"
+                >
+                    {{ field.label }}
+                </label>
+                <UButton
+                    v-if="showSecretGenerateButton"
+                    label="Generate Secure Key"
+                    size="sm"
+                    variant="basic"
+                    :disabled="disabled"
+                    @click="emitGenerateSecret"
+                />
+            </div>
+
+            <p
+                v-if="field.help"
+                :id="helpId"
+                class="text-xs text-[var(--md-on-surface)]/50"
+            >
+                {{ field.help }}
+            </p>
+        </template>
+
+        <template v-if="field.type === 'select'">
             <USelect
                 :id="fieldId"
                 :model-value="selectValue"
@@ -66,7 +76,7 @@
             />
         </template>
 
-        <template v-else>
+        <template v-else-if="field.type !== 'boolean'">
             <UInput
                 :id="fieldId"
                 :type="inputType"
@@ -98,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import type { WizardAnswers, WizardField } from '~~/shared/cloud/wizard/types';
 
 const props = withDefaults(
@@ -179,8 +190,6 @@ const selectItems = computed(() =>
 );
 
 const booleanValue = computed(() => Boolean(props.modelValue));
-
-const booleanLabel = computed(() => (booleanValue.value ? 'Enabled' : 'Disabled'));
 
 const showEmptyFieldHint = computed(
     () =>
