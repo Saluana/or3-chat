@@ -49,6 +49,7 @@
                     <AdminSystemProviderActions
                         :actions="providerActions"
                         :is-owner="isOwner"
+                        :running-action-id="runningActionId"
                         :result="providerActionResult"
                         @run="runProviderAction"
                     />
@@ -121,6 +122,7 @@ const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 const providerActionResult = ref<{ label: string; value: unknown } | null>(null);
+const runningActionId = ref<string | null>(null);
 
 const providerActions = computed(() => {
     if (!status.value) return [];
@@ -182,7 +184,8 @@ async function runProviderAction(action: {
     provider: string;
     danger?: boolean;
     description?: string;
-}) {
+}, workspace?: { id: string; name: string }) {
+    if (runningActionId.value) return;
     if (action.danger) {
         const confirmed = await confirm({
             title: 'Run Provider Action',
@@ -200,13 +203,17 @@ async function runProviderAction(action: {
     }
 
     try {
+        runningActionId.value = action.kind + ':' + action.id;
         providerActionResult.value = null;
         const response = await $fetch<{ ok: boolean; result: unknown }>('/api/admin/system/provider-action', {
             method: 'POST',
             headers: ADMIN_HEADERS,
-            body: { kind: action.kind, actionId: action.id },
+            body: { kind: action.kind, actionId: action.id, workspaceId: workspace?.id },
         });
-        providerActionResult.value = { label: action.label, value: response.result };
+        providerActionResult.value = {
+            label: workspace ? `Storage usage for ${workspace.name}` : action.label,
+            value: response.result,
+        };
         const disabled = response.result !== null && typeof response.result === 'object'
             && 'status' in response.result && response.result.status === 'disabled';
         toast.add({
@@ -220,6 +227,8 @@ async function runProviderAction(action: {
             description: parseErrorMessage(error, 'Action failed'),
             color: 'error',
         });
+    } finally {
+        runningActionId.value = null;
     }
 }
 </script>

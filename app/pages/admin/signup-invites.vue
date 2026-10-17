@@ -4,6 +4,14 @@
             <h1 class="text-2xl font-semibold">Signup invites</h1>
             <p class="text-sm opacity-70">Each recipient gets their own private workspace.</p>
         </div>
+        <UAlert
+            v-if="registrationMode === 'open'"
+            color="neutral"
+            variant="soft"
+            role="status"
+            title="Invites are optional"
+            description="Registration is open. New users can sign up without an invitation."
+        />
         <UCard>
             <UForm :state="form" class="space-y-4" @submit="createInvite">
                 <div>
@@ -16,7 +24,17 @@
                 </div>
                 <UButton type="submit" :loading="creating" :disabled="creating">Create invite</UButton>
             </UForm>
-            <p v-if="message" role="alert" class="mt-3 text-sm">{{ message }}</p>
+            <UAlert v-if="inviteSetupRequired" role="alert" color="warning" variant="soft" title="Invitations need one-time setup" class="mt-3">
+                <template #description>
+                    <p>No invitation was created. Complete these steps on the server:</p>
+                    <ol class="mt-2 list-decimal space-y-1 pl-5">
+                        <li>Set <code class="break-all">OR3_AUTH_INVITE_TOKEN_SECRET</code> to a long, random secret in the server environment. For local development, add it to <code>.env</code>.</li>
+                        <li>Restart OR3, then select <strong>Create invite</strong> again.</li>
+                    </ol>
+                    <NuxtLink to="/documentation/cloud/environment-reference#invite-signing-setup" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block underline">View invite setup instructions</NuxtLink>
+                </template>
+            </UAlert>
+            <p v-else-if="message" role="alert" class="mt-3 text-sm">{{ message }}</p>
             <div v-if="created" class="mt-4 space-y-3">
                 <p class="text-sm">Copy this invitation now. It cannot be retrieved again.</p>
                 <label for="signup-link" class="block text-sm">Invite link ({{ linkOrigin }})</label>
@@ -56,14 +74,17 @@
 
 <script setup lang="ts">
 import type { SignupInviteSummary } from '~~/server/auth/store/types';
+import type { RegistrationMode } from '~~/server/auth/registration';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { errorContains, parseErrorMessage } from '~/utils/admin/parse-error';
 
 definePageMeta({ layout: 'admin', middleware: ['admin-auth'] });
 const form = reactive({ email: '', hours: 72 });
 const creating = ref(false);
 const created = ref<{ id: string; link: string; token: string } | null>(null);
 const message = ref('');
+const inviteSetupRequired = ref(false);
+const registrationMode = ref<RegistrationMode | null>(null);
 const invites = ref<SignupInviteSummary[]>([]);
 const loading = ref(false);
 const listError = ref('');
@@ -75,8 +96,10 @@ const linkOrigin = computed(() => created.value ? new URL(created.value.link).or
 async function load(target?: string) {
     loading.value = true;
     listError.value = '';
+    registrationMode.value = null;
     try {
-        const result = await $fetch<{ invites: SignupInviteSummary[]; next_cursor: string | null }>('/api/admin/signup-invites/list', { query: { limit: 50, cursor: target } });
+        const result = await $fetch<{ invites: SignupInviteSummary[]; next_cursor: string | null; registrationMode: RegistrationMode }>('/api/admin/signup-invites/list', { query: { limit: 50, cursor: target } });
+        registrationMode.value = result.registrationMode;
         invites.value = result.invites;
         nextCursor.value = result.next_cursor;
         cursor.value = target;
@@ -88,6 +111,7 @@ async function createInvite() {
     if (creating.value) return;
     creating.value = true;
     message.value = '';
+    inviteSetupRequired.value = false;
     created.value = null;
     try {
         const result = await $fetch<{ invite: { id: string; token: string; inviteUrl: string } }>('/api/admin/signup-invites/create', {
@@ -96,12 +120,17 @@ async function createInvite() {
         created.value = { id: result.invite.id, link: new URL(result.invite.inviteUrl, window.location.origin).href, token: result.invite.token };
         await load();
     } catch (error) {
-        message.value = parseErrorMessage(error, 'Unable to create invitation.') + ' If the response was lost, refresh history and revoke the pending invitation before creating a replacement.';
+        if (errorContains(error, 'Invite token secret not configured')) {
+            inviteSetupRequired.value = true;
+        } else {
+            message.value = parseErrorMessage(error, 'Unable to create invitation.') + ' If the response was lost, refresh history and revoke the pending invitation before creating a replacement.';
+        }
     } finally { creating.value = false; }
 }
 async function revoke(id: string) {
     revoking.value = id;
     message.value = '';
+    inviteSetupRequired.value = false;
     try {
         await $fetch('/api/admin/signup-invites/revoke', { method: 'POST', headers: ADMIN_HEADERS, body: { id } });
         if (created.value?.id === id) created.value = null;

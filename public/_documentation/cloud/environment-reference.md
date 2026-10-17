@@ -130,11 +130,43 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 | `OR3_GUEST_ACCESS_ENABLED` | `false` | Allow unauthenticated guest access where supported. |
 | `OR3_AUTH_AUTO_PROVISION` | `true` | Legacy registration switch. Prefer `OR3_AUTH_REGISTRATION_MODE` for new deployments. |
 | `OR3_AUTH_REGISTRATION_MODE` | derived | `open`, `invite_only`, or `disabled`; when unset, `OR3_AUTH_AUTO_PROVISION=false` maps to `disabled`, otherwise `open`. |
-| `OR3_AUTH_INVITE_TOKEN_SECRET` | unset | HMAC secret required for `invite_only` registration. |
+| `OR3_AUTH_INVITE_TOKEN_SECRET` | unset | HMAC secret required to create invitations and for `invite_only` registration. |
 | `OR3_AUTH_INVITE_TOKEN_TTL_SECONDS` | `604800` | Default invite-token lifetime. |
 | `OR3_SESSION_PROVISIONING_FAILURE` | `throw` | Session provisioning failure mode: `throw`, `unauthenticated`, or `service-unavailable`. |
 | `OR3_AUTH_LOCK_PAGE_ENABLED` | `false` | Redirect signed-out shell visitors to `/welcome`. |
 | `OR3_AUTH_LOCK_PAGE_ADAPTER` | `default` | Registered lock-page adapter ID. |
+
+**Admin → Signup invites** remains available when registration is open, including
+invitation history. The page shows **Invites are optional** when the running
+registration policy is `open`: new users can sign up without an invitation.
+This notice does not appear for `invite_only` or `disabled` registration.
+
+### Invite signing setup
+
+If **Admin → Signup invites** shows **Invitations need one-time setup**, no
+invitation was created. Set `OR3_AUTH_INVITE_TOKEN_SECRET` before trying again:
+
+1. Generate a long, random secret locally. For an editable source checkout, run:
+
+   ```bash
+   bun -e 'import { randomBytes } from "node:crypto"; console.log(randomBytes(32).toString("hex"));'
+   ```
+
+2. Save the generated value as `OR3_AUTH_INVITE_TOKEN_SECRET` in the server
+   environment. For source development, add or update that setting in the
+   project's `.env` file. Keep it server-only; do not use a `NUXT_PUBLIC_*`
+   variable or commit the value.
+3. Restart OR3 so it loads the setting, then return to **Signup invites** and
+   select **Create invite** again.
+
+Keep the same value across restarts and all instances of the deployment.
+Changing it invalidates outstanding invitation links. The admin page displays
+setup instructions, never the secret value.
+
+Managed `@or3/cloud` installations normally generate this secret during setup.
+If it is missing, run `doctor` from the deployment directory and follow
+[Installation and operations](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/installation.md)
+to repair the deployment configuration.
 
 ### Clerk (`or3-provider-clerk`)
 
