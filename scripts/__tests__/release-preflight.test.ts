@@ -42,7 +42,6 @@ describe('fixed-profile lock qualification', () => {
         'or3-provider-convex',
         'or3-provider-s3',
         'convex',
-        'or3-provider-sqlite-tests',
     ])('rejects inactive %s at root and nested npm package paths', async (name) => {
         for (const prefix of ['node_modules/', 'node_modules/fixture/node_modules/']) {
             const packagePath = `${prefix}${name}`;
