@@ -32,25 +32,16 @@
             </div>
         </div>
 
-        <div v-if="warnings.length > 0" class="mt-6 p-3 rounded-[var(--md-border-radius-small)] bg-[var(--md-sys-color-warning-container,#fef3c7)] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)]/20">
-            <div class="text-xs font-bold text-[var(--md-sys-color-on-warning-container,#92400e)] uppercase mb-2">Warnings</div>
-            <div class="space-y-1">
-                <div v-for="(w, idx) in warnings" :key="idx" class="text-sm text-[var(--md-sys-color-on-warning-container,#92400e)]">
-                    • {{ w.message }}
-                </div>
-            </div>
-        </div>
+        <AdminSystemWarnings :warnings="warnings" :storage="status.storage" class="mt-6" />
     </div>
 </template>
 
 <script setup lang="ts">
+import type { StatusResponse, SystemStatus } from '~/composables/admin/useAdminTypes';
+import AdminSystemWarnings from './AdminSystemWarnings.vue';
+
 defineProps<{
-    status: {
-        auth: { provider: string; enabled: boolean };
-        sync: { provider: string; enabled: boolean };
-        storage: { provider: string; enabled: boolean };
-        backgroundStreaming: { enabled: boolean };
-    };
-    warnings: Array<{ message: string }>;
+    status: SystemStatus;
+    warnings: StatusResponse['warnings'];
 }>();
 </script>

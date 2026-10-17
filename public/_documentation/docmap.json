@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Filesystem signed transfers, paired upload reservations, retryable commits, bounded read-only usage accounting, and disabled physical cleanup."
+                    "summary": "Filesystem signed transfers, paired upload reservations, retryable commits, retained Trash guidance, workspace selection for read-only storage usage, and disabled physical cleanup."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -755,7 +755,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 17,
-                    "summary": "This is the deployment-oriented reference for environment variables consumed by or3-chat and its first-party provider packages. It complements the typed configuration reference:"
+                    "summary": "Environment variables for OR3 and its providers, including optional invitations during open registration, invite-signing setup, secret persistence, and recovery from missing invitation configuration."
                 },
                 {
                     "name": "capability-matrix.md",

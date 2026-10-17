@@ -2,7 +2,7 @@
     <AppModal
         v-model:open="isOpen"
         title="Select a Workspace"
-        description="Choose the workspace whose plugins you want to manage"
+        :description="description"
     >
         <template #default>
             <div class="space-y-3">
@@ -85,6 +85,11 @@
 
 <script setup lang="ts">
 import AppModal from '~/components/ui/AppModal.vue';
+
+withDefaults(defineProps<{ description?: string }>(), {
+    description: 'Choose the workspace whose plugins you want to manage',
+});
+
 interface Workspace {
     id: string;
     name: string;

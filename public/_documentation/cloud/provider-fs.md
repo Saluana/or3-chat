@@ -79,7 +79,18 @@ different hash, MIME, size, workspace, or storage identity is rejected.
 
 ## Usage accounting
 
-The matching provider adds **Observe Storage Usage** to the System provider
+The admin Overview and Operations pages explain **Deleted files still use
+storage** as an informational notice. Permanent server cleanup is not yet
+available; no configuration change enables it. The provider diagnostic remains
+available under **Technical details**, and other provider warnings stay visible.
+
+When the provider exposes usage reporting, **View storage usage** opens its
+action in **Admin → Operations**. Select **View storage usage** on the
+**Observe Storage Usage** card, then choose a workspace. Canceling the chooser
+does not run an observation. Each result names the selected workspace; the
+observation does not delete files or empty Trash.
+
+The matching provider adds **Observe Storage Usage** to the Operations provider
 actions. It reports logical active/deleted metadata separately from observed
 active/deleted blobs, incomplete transfers, sidecars, unclassified files and
 allocated filesystem blocks. Results are bounded, non-atomic observations:

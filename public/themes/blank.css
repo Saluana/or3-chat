@@ -63,13 +63,14 @@
 }
 
 [data-theme="blank"] .sb-group-header-label {
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 [data-theme="blank"] .time-group-header .sb-group-header-label {
   color: color-mix(in srgb, var(--md-on-surface-variant) 85%, transparent);
-  font-weight: 600;
 }
 
 [data-theme="blank"] .time-group-header {
