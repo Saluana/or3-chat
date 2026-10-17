@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import AppIcon from '~/components/ui/AppIcon.vue';
+import type { IconToken } from '~/config/icon-tokens';
 
 defineProps<{
     icon?: string;
+    iconToken?: IconToken;
     image?: string;
     label: string;
     description?: string;
@@ -27,6 +29,7 @@ const iconButtonProps = useThemeOverrides({
         <AppIcon
             :image="image"
             :icon="icon"
+            :icon-token="iconToken"
             class="dashboard-button-icon size-9 shrink-0"
         />
         <span class="flex min-w-0 flex-col gap-1">

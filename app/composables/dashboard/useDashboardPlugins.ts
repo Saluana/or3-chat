@@ -20,6 +20,7 @@ import {
     type RegistrationHandle,
 } from '~~/shared/plugins/registration-handle';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { IconToken } from '~/config/icon-tokens';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 import type {
@@ -48,6 +49,8 @@ export interface DashboardPlugin {
     id: string;
     /** Icon name (Iconify) shown in the grid */
     icon: string;
+    /** Optional theme token; resolves at render time instead of registration. */
+    iconToken?: IconToken;
     /** Optional validated app image URL. The Iconify icon remains the fallback. */
     image?: string;
     /** Short label shown under the icon */
@@ -85,6 +88,8 @@ export interface DashboardPluginPage {
     title: string;
     /** Optional icon for page navigation lists. */
     icon?: string;
+    /** Optional theme token for the page's navigation icon. */
+    iconToken?: IconToken;
     /** Optional validated app image URL. */
     image?: string;
     /** Ordering (lower first). Defaults to 200. */

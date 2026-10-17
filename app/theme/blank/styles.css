@@ -7,6 +7,7 @@
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
     --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
+    --blank-sb-row-icon: 16px;
     --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
     --md-surface-dim: #ececec;
     --md-surface-bright: #ffffff;
@@ -104,6 +105,19 @@
             var(--md-surface)
         );
         color: var(--md-on-surface-variant);
+    }
+
+    /* Size SVG and CSS-mask icons alike, including the bell's custom slot. */
+    :where(
+        #top-nav .theme-btn,
+        #top-nav .notification-bell-btn,
+        .workspace-chrome-actions .workspace-chrome-action
+    ) .iconify {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px !important;
     }
 
     .workspace-tab-new:hover {
@@ -204,6 +218,61 @@
         @apply mx-1;
     }
 
+    /* Row icons stay small and muted so titles carry the list. */
+    .unified-sb-item,
+    .unified-sb-item > button {
+        column-gap: 0.5rem;
+    }
+
+    .unified-sb-item .sb-btn-icon,
+    .sidebar-family-toggle :is(svg, .iconify) {
+        width: var(--blank-sb-row-icon) !important;
+        height: var(--blank-sb-row-icon) !important;
+        min-width: var(--blank-sb-row-icon);
+        min-height: var(--blank-sb-row-icon);
+        font-size: var(--blank-sb-row-icon) !important;
+    }
+
+    .unified-sb-item .sb-btn-icon:not(.sb-btn-icon-active),
+    .sidebar-family-toggle {
+        color: color-mix(in srgb, var(--md-on-surface-variant) 45%, transparent) !important;
+    }
+
+    .unified-sb-item:is(:hover, :focus-within) .sb-btn-icon:not(.sb-btn-icon-active),
+    .sidebar-family-header:hover .sidebar-family-toggle,
+    .sidebar-family-toggle:focus-visible {
+        color: var(--md-on-surface-variant) !important;
+    }
+
+    /* Give fine stroke icons enough size and contrast in project lists. */
+    .project-root-toggle .project-icon,
+    .project-child-toggle .project-child-icon {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px;
+        opacity: 1;
+    }
+
+    .sb-btn-icon:not(.sb-btn-icon-active),
+    .project-root-toggle .project-icon {
+        color: var(--md-on-surface-variant);
+    }
+
+    .project-root-toggle:is(:hover, :focus-within) .project-icon {
+        color: var(--md-on-surface);
+    }
+
+    .project-child-toggle .project-child-icon {
+        color: inherit;
+    }
+
+    .project-root-toggle > button:has(> .project-icon) {
+        width: 20px;
+        height: 20px;
+    }
+
     /* Center family disclosures in the same column as chat/document icons. */
     .sidebar-family-header {
         position: relative;
@@ -213,23 +282,29 @@
         visibility: hidden;
     }
 
+    .sidebar-family-member .family-timeline-marker {
+        width: var(--blank-sb-row-icon);
+    }
+
+    .sidebar-family-member .family-timeline-line {
+        left: calc(var(--blank-sb-row-icon) / 2 - 0.5px);
+    }
+
+    .sidebar-family-member .family-timeline-dot {
+        left: calc(var(--blank-sb-row-icon) / 2 - 4.5px);
+    }
+
     .sidebar-family-toggle {
         position: absolute;
-        inset-inline-start: calc(0.25rem + 0.625rem + 9px);
+        inset-inline-start: calc(0.25rem + 0.625rem + var(--blank-sb-row-icon) / 2);
         z-index: 1;
         transform: translateX(-50%);
-        color: color-mix(in oklab, var(--md-on-surface-variant) 70%, transparent);
         background: transparent !important;
     }
 
     .sidebar-family-toggle:hover,
     .sidebar-family-toggle:focus-visible {
         background: var(--md-surface-hover) !important;
-    }
-
-    .sidebar-family-header:hover .sidebar-family-toggle,
-    .sidebar-family-toggle:focus-visible {
-        color: color-mix(in oklab, var(--md-on-surface) 80%, transparent);
     }
 
     .unified-sb-item-active {
@@ -258,10 +333,18 @@
         ) !important;
     }
 
-    /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
+    /* Soft circles leave room for the category badges' duotone fills. */
     .page-link-accent-chats .page-link-icon-container {
-        background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface)) !important;
+        background: color-mix(in srgb, var(--blank-brand-accent) 10%, var(--md-surface)) !important;
         color: var(--blank-brand-accent) !important;
+    }
+
+    .page-link-accent-docs .page-link-icon-container {
+        background: color-mix(in srgb, var(--md-success) 9%, var(--md-surface)) !important;
+    }
+
+    .page-link-accent-projects .page-link-icon-container {
+        background: color-mix(in srgb, var(--md-secondary) 10%, var(--md-surface)) !important;
     }
 
     /* Expanded: soft outer edge against main content */
@@ -889,8 +972,7 @@ html[data-theme='blank']
 
     html[data-theme="blank"] :where(
         .page-link-icon-container > .iconify,
-        .page-link-icon,
-        .sb-btn-icon
+        .page-link-icon
     ) {
         width: 20px !important;
         height: 20px !important;

@@ -69,6 +69,9 @@ export const DEFAULT_ICONS = {
     'sidebar.page.messages': 'pixelarticons:comment',
     'sidebar.page.default': 'pixelarticons:view-grid',
     'sidebar.page.files': 'i-lucide-files',
+    'sidebar.category.chats': 'pixelarticons:comment',
+    'sidebar.category.documents': 'pixelarticons:note',
+    'sidebar.category.projects': 'pixelarticons:folder',
     'sidebar.project.memory': 'i-lucide-bookmark',
     'sidebar.project.knowledge.upload': 'i-lucide-upload',
     'sidebar.project.knowledge.document': 'i-lucide-file-text',
@@ -144,6 +147,9 @@ export const DEFAULT_ICONS = {
     'dashboard.images': 'pixelarticons:image',
     'dashboard.backup': 'pixelarticons:briefcase-download',
     'dashboard.restore': 'pixelarticons:briefcase-upload',
+    'dashboard.workspaces': 'pixelarticons:users',
+    'dashboard.workspaces.manage': 'pixelarticons:edit',
+    'dashboard.workspaces.backup': 'pixelarticons:upload',
 
     // Command palette
     'palette.search': 'pixelarticons:search',

@@ -410,9 +410,9 @@ async function goToLatestCompaction(rootId: string) {
     else familyToast.add({ title: 'No available compaction', description: 'This family has no available compacted conversation in this view.', color: 'neutral' });
 }
 
-const iconChats = useIcon('sidebar.page.messages');
-const iconDocs = useIcon('sidebar.note');
-const iconProjects = useIcon('sidebar.folder');
+const iconChats = useIcon('sidebar.category.chats');
+const iconDocs = useIcon('sidebar.category.documents');
+const iconProjects = useIcon('sidebar.category.projects');
 const { openProjectsSidebar } = useProjectSidebar();
 const { listSidebarPages } = useSidebarPages();
 

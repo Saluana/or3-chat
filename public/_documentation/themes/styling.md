@@ -90,11 +90,11 @@ textarea and select overrides, plus `button#sidebar.project-content.action`,
 `popover#sidebar.project-content.source-menu` and
 `dropdownmenu#sidebar.project-content.memory-menu`. Retro's panels and previews
 use the existing surface, border, radius, elevation and typography tokens;
-Blank retains the original fields, spacing, buttons and icons.
+Blank retains the original fields, spacing and buttons, with Solar overrides.
 Knowledge upload/document/file/attachment icons use
 `sidebar.project.knowledge.upload`, `.document`, `.file` and `.saved-file`;
 memory uses `sidebar.project.memory`. Defaults preserve the previous Lucide icons,
-and Retro supplies pixel icons.
+Retro supplies pixel icons, and Blank supplies Solar Linear icons with heavier strokes.
 
 ## Generic control recipes
 
@@ -150,6 +150,30 @@ background helper rather than introducing parallel token or URL ownership.
 
 ## Icons
 
+The Blank theme maps semantic tokens to Solar icons through
+`app/theme/blank/icons.config.ts`. Its build-time `icon-collection.ts` selects
+only the used Solar glyphs and increases Linear stroke widths from 1.5 to 2.
+The `blank-solar` prefix keeps this change isolated from other themes. Bold
+variants supply filled favorites, checked boxes, and stop/pause controls.
+The sidebar's Chats, Documents, and Projects category badges use Bold Duotone
+through `sidebar.category.chats`, `.documents`, and `.projects`, with softer
+blue, green, and neutral circle backgrounds. Dedicated category tokens keep
+list icons and navigation chevrons Linear; Retro retains its pixel badges.
+Numbered H1/H2/H3 headings, explicit PDF marks, and offline servers retain Tabler
+fallbacks because Solar lacks equivalent glyphs.
+
+The host installs `@iconify-json/solar` and registers the subset with Nuxt Icon's
+`customCollections`, including it in both the local server and client bundles so
+it also works in static builds. Solar is by
+[480 Design](https://www.figma.com/community/file/1166831539721848736), licensed
+under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Blank modifies
+the Linear stroke widths. Main rail icons render at 24px.
+
+Blank's sidebar chat, document and project list icons render at 20px with the
+full `onSurfaceVariant` color rather than additional transparency. Hover and
+keyboard focus increase contrast to `onSurface`; active items retain their
+primary color. These rules belong to Blank's stylesheet.
+
 Declare semantic tokens in your definition:
 
 ```json
@@ -164,9 +188,21 @@ Declare semantic tokens in your definition:
 `app/config/icon-tokens.ts` is the token catalog. Trusted themes can alternatively
 export an `IconMap` from `icons.config.ts`; keep overrides in one place to avoid
 ambiguous maintenance. Adding a new semantic token requires a host source change.
-The collapsed sidebar Files button and Files tabs use `sidebar.page.files`; the retro theme overrides it with `pixelarticons:files`, while the default is `i-lucide-files`.
+The collapsed sidebar Files button and Files tabs use `sidebar.page.files`; the retro theme overrides it with `pixelarticons:files`, Blank uses `blank-solar:documents-linear`, and the default is `i-lucide-files`.
 
-The tab bar, tab switcher and mobile tab header resolve built-in content icons through `useWorkspaceTabIcon()` in component setup. Override `shell.tab.chat`, `shell.tab.document` and `shell.tab.app` for their fallback icons, and `shell.tab.close` for tab-bar close buttons. Blank keeps the original Lucide content icons; retro supplies pixel icons. Existing open tabs update when the theme changes. Supplied plugin icons and app images remain supported.
+The notification bell and its loading placeholder resolve `notification.bell`
+through `useIcon()`, so Blank's Solar mapping also applies to workspace chrome.
+Blank sizes desktop header icons, including the bell, uniformly at 20px for both
+SVG and CSS-mask rendering.
+
+Dashboard registrations and pages can supply an `iconToken` alongside their
+fallback `icon`. The dashboard resolves that token through `AppIcon` at render
+time, so switching themes updates existing cards. Workspaces uses
+`dashboard.workspaces`, `.manage`, and `.backup`: their defaults preserve Retro's
+pixel icons while Blank supplies Solar icons. Supplied app images still take
+precedence. `useIcon()` accepts a token, ref, or getter for reactive token props.
+
+The tab bar, tab switcher and mobile tab header resolve built-in content icons through `useWorkspaceTabIcon()` in component setup. Override `shell.tab.chat`, `shell.tab.document` and `shell.tab.app` for their fallback icons, and `shell.tab.close` for tab-bar close buttons. Blank supplies Solar icons; retro supplies pixel icons. Existing open tabs update when the theme changes. Supplied plugin icons and app images remain supported.
 
 For source Vue code, resolve icons in setup so template unwrapping works:
 

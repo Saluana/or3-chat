@@ -992,26 +992,28 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 @click="emit('new-project')"
                 >New project</UButton
             >
-            <UButton
-                v-else-if="tab !== 'Settings'"
-                variant="ghost"
-                color="neutral"
-                size="sm"
-                :icon="settingsIcon"
-                aria-label="Settings"
-                title="Project settings"
-                square
-                class="hover:bg-[var(--md-surface-hover)] theme-btn"
-                :disabled="!state"
-                @click="tab = 'Settings'"
-            />
-            <SidebarProjectActions
-                v-if="id && state"
-                :name="state.project.name"
-                :disabled="busy"
-                @rename="emit('rename-project', id)"
-                @delete="emit('delete-project', id)"
-            />
+            <div v-else class="flex shrink-0 items-center gap-1">
+                <UButton
+                    v-if="tab !== 'Settings'"
+                    variant="ghost"
+                    color="neutral"
+                    size="sm"
+                    :icon="settingsIcon"
+                    aria-label="Settings"
+                    title="Project settings"
+                    square
+                    class="hover:bg-[var(--md-surface-hover)] theme-btn"
+                    :disabled="!state"
+                    @click="tab = 'Settings'"
+                />
+                <SidebarProjectActions
+                    v-if="state"
+                    :name="state.project.name"
+                    :disabled="busy"
+                    @rename="emit('rename-project', id)"
+                    @delete="emit('delete-project', id)"
+                />
+            </div>
         </header>
         <p
             v-if="error"

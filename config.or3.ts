@@ -47,6 +47,13 @@ export const APP_VERSION = '0.1.0';
  * For cloud features (auth, sync, storage), see config.or3cloud.ts
  */
 export const or3Config = defineOr3Config({
+    // Optional hosted Cloud extension. Ordinary self-hosted installs load no waitlist code.
+    extensions: {
+        plugins: {
+            modules: process.env.OR3_CLOUD_WAITLIST_ENABLED === 'true'
+                ? ['./packages/cloud-waitlist/module.ts'] : [],
+        },
+    },
     site: {
         name: process.env.OR3_SITE_NAME || 'OR3',
         description: process.env.OR3_SITE_DESCRIPTION || '',

@@ -1,4 +1,4 @@
-import { useOr3Config, isFeatureEnabled } from '~/composables/useOr3Config';
+import { isFeatureEnabled } from '~/composables/useOr3Config';
 
 export default defineNuxtPlugin(() => {
     const runtimeConfig = useRuntimeConfig();
@@ -6,7 +6,6 @@ export default defineNuxtPlugin(() => {
         return;
     }
 
-    const or3Config = useOr3Config();
     const backupEnabled = isFeatureEnabled('backup');
 
     // Build pages array, conditionally including backup
@@ -15,6 +14,7 @@ export default defineNuxtPlugin(() => {
             id: 'manage',
             title: 'Manage Workspaces',
             icon: 'pixelarticons:edit',
+            iconToken: 'dashboard.workspaces.manage' as const,
             description: 'Create, switch, and configure workspace settings.',
             component: async () =>
                 await import('./workspaces/WorkspaceManager.vue'),
@@ -26,6 +26,7 @@ export default defineNuxtPlugin(() => {
                       id: 'backup',
                       title: 'Backup & Restore',
                       icon: 'pixelarticons:upload',
+                      iconToken: 'dashboard.workspaces.backup' as const,
                       description: 'Export and import full workspace backups.',
                       component: async () =>
                           await import('~/components/dashboard/workspace/WorkspaceBackupApp.vue'),
@@ -37,6 +38,7 @@ export default defineNuxtPlugin(() => {
     registerDashboardPlugin({
         id: 'workspaces',
         icon: 'pixelarticons:users',
+        iconToken: 'dashboard.workspaces',
         label: 'Workspaces',
         description: 'Manage and back up your workspaces',
         order: 140,

@@ -185,7 +185,7 @@
                             class="workspace-chrome-action"
                             :square="true"
                             aria-label="Notifications"
-                            icon="i-lucide-bell"
+                            :icon="notificationBellIcon"
                         />
                         <UButton
                             v-bind="headerActionButtonProps"
@@ -557,6 +557,7 @@ const router = useRouter();
 const toast = useToast();
 const route = useRoute();
 const runtimeConfig = useRuntimeConfig();
+const notificationBellIcon = useIcon('notification.bell');
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);

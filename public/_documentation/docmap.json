@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab icons, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers, CSS and scoped theme rules."
+                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers, CSS and scoped theme rules."
                 },
                 {
                     "name": "package-install.md",
@@ -729,6 +729,15 @@
                     "categoryOrder": 3,
                     "order": 15,
                     "summary": "Diagnose Cloud authentication, sync, storage, and notifications, including redacted public health codes and administrative provider diagnostics."
+                },
+                {
+                    "name": "waitlist.md",
+                    "path": "/cloud/waitlist",
+                    "title": "Optional Cloud waitlist",
+                    "category": "Reference",
+                    "categoryOrder": 4,
+                    "order": 16,
+                    "summary": "Opt-in hosted waitlist, persistent admin toggle and email list, sign-in and invite handoffs, storage, privacy, and unchanged self-hosted defaults."
                 },
                 {
                     "name": "config-reference.md",

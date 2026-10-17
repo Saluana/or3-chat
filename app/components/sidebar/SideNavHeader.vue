@@ -220,7 +220,7 @@ const searchInputProps = computed(() => {
         ...(searchInputOverrides.value as any),
         // Slot provides trailing content; don't also enable empty trailing-icon chrome.
         trailingIcon: undefined,
-        placeholder: 'Filter by title…',
+        placeholder: 'Search by title...',
         ui: mergedUi,
     };
 });

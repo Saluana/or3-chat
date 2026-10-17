@@ -1,5 +1,9 @@
 # Configuration Reference
 
+Hosted Basic Auth deployments can opt into the [Cloud waitlist extension](/documentation/cloud/waitlist)
+with `OR3_CLOUD_WAITLIST_ENABLED=true`. The extension adds its own database-backed
+admin toggle and email list; ordinary installs retain the default email flow.
+
 This page is the typed reference for the base and cloud configuration objects,
 including defaults, validation, and how settings affect behavior. The complete
 deployment environment-variable matrix is maintained separately below.
