@@ -35,6 +35,7 @@ import {
     hasSelfHostedConvexInputs,
     normalizeSelfHostedConvexInputs,
 } from './convex-self-hosted';
+import { formatStartCommand, startCommand } from './next-steps';
 import { usesConvexProvider } from './provider-usage';
 import {
     execPackageCommand,
@@ -221,7 +222,7 @@ export async function applyConvexEnv(
 /**
  * Generates the ordered list of shell commands for the deploy step.
  *
- * - `local-dev`: install, optional Convex preparation, then start dev:ssr
+ * - `local-dev`: install, optional Convex preparation, then the shared start command
  * - `docker`: Docker Compose build/start
  * - `configure-only`: no commands
  * - `prod-build`: install then build (legacy sessions)
@@ -275,13 +276,9 @@ export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
                 optional: true,
             });
         }
-        const startCommand = runScriptCommand(
-            answers.packageManager,
-            'dev:ssr'
-        );
         commands.push({
-            step: 'Start Nuxt SSR',
-            ...startCommand,
+            step: 'Start OR3',
+            ...startCommand(answers.packageManager),
         });
     } else {
         const buildCommand = runScriptCommand(answers.packageManager, 'build');
@@ -348,7 +345,7 @@ export async function deployAnswers(
             commands: [],
             instructions: 'Configuration complete. No services were started.',
             nextSteps: [
-                `Start locally with: ${formatCommand(runScriptCommand(answers.packageManager, 'dev'))}`,
+                `Start locally with: ${formatStartCommand(answers.packageManager)}`,
                 'Re-run setup at any time to choose a deployment target.',
             ],
         };
@@ -425,7 +422,7 @@ export async function deployAnswers(
             'Open http://localhost:3000 in your browser.',
         ];
         if (answers.ssrAuthEnabled) {
-            nextSteps.push('Sign in with your bootstrap/admin account.');
+            nextSteps.push('Sign in with the admin email and password from setup.');
             nextSteps.push('Open the admin panel and verify providers are healthy.');
         }
         if (answers.connectEnabled) {
@@ -445,7 +442,7 @@ export async function deployAnswers(
 
     const nextSteps = ['Open http://localhost:3000 in your browser.'];
     if (answers.ssrAuthEnabled) {
-        nextSteps.push('Sign in with your bootstrap/admin account.');
+        nextSteps.push('Sign in with the admin email and password from setup.');
         nextSteps.push('Open the admin panel and verify auth/sync/storage status.');
     }
     if (answers.connectEnabled) {

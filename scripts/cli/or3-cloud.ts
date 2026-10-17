@@ -440,11 +440,6 @@ function printBanner(): void {
   Press Enter to accept defaults shown in [brackets].
   Type your answer to change a value.
   During setup questions, type /back or /next to navigate.
-
-  Fast options (for the impatient):
-    --fast    Zero questions — everything is configured automatically
-    --ui      Open the setup wizard in your browser (nicer UI)
-    --cli     Force terminal wizard (default when no browser available)
 `);
 }
 
@@ -507,7 +502,7 @@ function printFocusedFieldScreen(
 ): void {
     console.clear();
     printStepHeader(stepIndex, totalSteps, stepTitle, stepDescription);
-    console.log(`  Question ${fieldIndex + 1} of ${totalFields}`);
+    if (totalFields > 1) console.log(`  Question ${fieldIndex + 1} of ${totalFields}`);
     console.log('  Commands: /back = previous question, /next = skip this question');
     console.log('');
 }
@@ -918,9 +913,9 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     if (dockerExposure) wizardParams.set('dockerExposure', dockerExposure);
     if (publicDomain) wizardParams.set('publicDomain', publicDomain);
     const wizardUrl = `${baseUrl}/wizard?${wizardParams.toString()}`;
-    // Use a static asset prefix to health-check: this path is served by Vite/Nitro
-    // without going through SSR auth middleware and cannot redirect-loop.
-    const healthUrl = `${baseUrl}/_nuxt/`;
+    // The setup server runs with SSR auth disabled, so the OR3 liveness route
+    // answers directly with the health shape waitForHttpReady requires.
+    const healthUrl = `${baseUrl}/api/health`;
 
     const uiHostDir = await createWizardUiHost(uiSourceDir);
     console.log('\nHosting setup in a temporary workspace.');
@@ -973,7 +968,8 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     process.once('SIGTERM', onSignal);
 
     try {
-        await waitForHttpReady(healthUrl);
+        // A first Nuxt dev start (dependency optimizing) can take minutes.
+        await waitForHttpReady(healthUrl, 180_000);
 
         console.log('');
         console.log('┌──────────────────────────────────────────────────────┐');
@@ -1582,8 +1578,9 @@ async function runInit(flags: CliFlags): Promise<void> {
                     console.log(`  ${artifact}`)
                 );
             }
-            console.log(`- Bun command: ${installPlan.commands.bun}`);
-            console.log(`- npm command: ${installPlan.commands.npm}`);
+            console.log(
+                `  Command: ${packageManager === 'bun' ? installPlan.commands.bun : installPlan.commands.npm}`
+            );
             if (autoInstallDependencies) {
                 await executeDependencyInstallPlan(answers, installPlan, {
                     enabled: true,
@@ -1679,16 +1676,6 @@ async function runInit(flags: CliFlags): Promise<void> {
                     );
                 }
             }
-        }
-
-        const presetName = await promptTextNoNav(
-            prompt,
-            'Save this setup as a reusable template? Enter a name or press Enter to skip',
-            ''
-        );
-        if (presetName.trim()) {
-            await api.savePreset(session.id, presetName.trim());
-            console.log(`Preset "${presetName.trim()}" saved.`);
         }
 
         const deployNow = await promptBooleanNoNav(

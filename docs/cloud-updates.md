@@ -623,7 +623,7 @@ nothing important changed.
 
 An editable source checkout connected to Convex uses the automatic backend
 update described in [Convex provider](../public/_documentation/cloud/provider-convex.md#automatic-source-updates).
-After updating source and dependencies, `bun run dev:ssr` or `bun run preview`
+After updating source and dependencies, `bun run dev` or `bun run preview`
 updates and verifies the matching backend before starting OR3. Configure the
 exact deployment credential once. Normal restarts skip deployment when the
 backend already matches; builds remain network independent.

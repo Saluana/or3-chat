@@ -726,13 +726,6 @@ export function useWizardSession() {
         }
     }
 
-    async function runValidation(): Promise<DeployResponse | null> {
-        return submitDeploy({
-            dryRun: true,
-            skipDeploy: true,
-        });
-    }
-
     async function applyOnly(): Promise<DeployResponse | null> {
         return submitDeploy({
             dryRun: answers.value.dryRun,
@@ -870,7 +863,6 @@ export function useWizardSession() {
         goToPreviousStep,
         saveStep,
         testConnectionForCurrentStep,
-        runValidation,
         applyOnly,
         deploy,
         clearStatus,

@@ -365,7 +365,7 @@ Don’t:
 
 39. **Use the supported entry point for the job**
     - Managed local/VPS deployments use `npx @or3/cloud init --local|--public`; they do not use the source developer launcher.
-    - Source contributors use `bun run dev` or `bun run dev:ssr` from this authoritative tree. `bun start` delegates to `scripts/cli/start.mjs` for legacy source convenience only and is not a release or beginner setup path.
+    - Source contributors use `bun run dev` from this authoritative tree; it loads `.env`, so it starts browser-only and SSR setups alike (`dev:ssr` only forces SSR on). `bun start` delegates to `scripts/cli/start.mjs` for legacy source convenience only and is not a release or beginner setup path.
     - Do not document `scripts/cli/start.ts`, hand-written `.env`, or manual `OR3_*` values as normal setup; those are advanced source/operator paths.
 
 40. **`scripts/cli/dev.ts` wraps `nuxt dev` with port preflight**
