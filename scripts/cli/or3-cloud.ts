@@ -2,8 +2,7 @@
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import crossSpawn from 'cross-spawn';
 import { fileURLToPath } from 'node:url';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
@@ -21,7 +20,6 @@ import {
     WIZARD_OWNED_ENV_KEYS,
 } from '../../shared/cloud/wizard/catalog';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
-import { createWizardUiHost } from '../../shared/cloud/wizard/ui-host';
 import { buildCheatSheetLines } from '../../shared/cloud/wizard/next-steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
 import {
@@ -29,10 +27,7 @@ import {
 } from '../../server/admin/config/resolve-config';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import { generateAdminPassword } from '../../shared/cloud/wizard/admin-dashboard';
-import {
-    isPortAvailable,
-    waitForHttpReady,
-} from '../../shared/cloud/wizard/dev-server';
+import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 import {
     createDependencyInstallPlan,
     executeDependencyInstallPlan,
@@ -43,7 +38,6 @@ import { runDoctorChecks } from './or3-cloud-doctor';
 import {
     detectPackageManager,
     parsePackageManager,
-    runScriptCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import type {
     WizardAnswers,
@@ -192,13 +186,6 @@ export function isHeadlessSession(
         return !env.DISPLAY && !env.WAYLAND_DISPLAY;
     }
     return false;
-}
-
-function waitForChildExit(child: ReturnType<typeof crossSpawn>): Promise<number> {
-    return new Promise((resolvePromise) => {
-        child.once('error', () => resolvePromise(1));
-        child.once('exit', (code) => resolvePromise(code ?? 1));
-    });
 }
 
 function normalizeAnswers(sessionAnswers: Partial<WizardAnswers>): WizardAnswers {
@@ -440,11 +427,6 @@ function printBanner(): void {
   Press Enter to accept defaults shown in [brackets].
   Type your answer to change a value.
   During setup questions, type /back or /next to navigate.
-
-  Fast options (for the impatient):
-    --fast    Zero questions — everything is configured automatically
-    --ui      Open the setup wizard in your browser (nicer UI)
-    --cli     Force terminal wizard (default when no browser available)
 `);
 }
 
@@ -507,7 +489,7 @@ function printFocusedFieldScreen(
 ): void {
     console.clear();
     printStepHeader(stepIndex, totalSteps, stepTitle, stepDescription);
-    console.log(`  Question ${fieldIndex + 1} of ${totalFields}`);
+    if (totalFields > 1) console.log(`  Question ${fieldIndex + 1} of ${totalFields}`);
     console.log('  Commands: /back = previous question, /next = skip this question');
     console.log('');
 }
@@ -837,35 +819,9 @@ function printCheatSheet(answers: WizardAnswers): void {
     console.log(lines.join('\n'));
 }
 
-function isWizardUiHostDir(pathValue: string): boolean {
-    return (
-        existsSync(resolve(pathValue, 'package.json')) &&
-        existsSync(resolve(pathValue, 'scripts/cli/or3-cloud.ts')) &&
-        existsSync(resolve(pathValue, 'app/pages/wizard/index.vue'))
-    );
-}
-
-function resolveUiHostDir(instanceDir: string): string {
-    const currentRepoRoot = resolve(
-        fileURLToPath(new URL('.', import.meta.url)),
-        '../..'
-    );
-    if (currentRepoRoot !== instanceDir && isWizardUiHostDir(currentRepoRoot)) {
-        return currentRepoRoot;
-    }
-
-    const siblingOr3Chat = resolve(instanceDir, '..', 'or3-chat');
-    if (siblingOr3Chat !== instanceDir && isWizardUiHostDir(siblingOr3Chat)) {
-        return siblingOr3Chat;
-    }
-
-    return instanceDir;
-}
-
 async function runUiInit(flags: CliFlags): Promise<void> {
     const instanceDir = resolve(toStringFlag(flags, 'instance-dir') ?? process.cwd());
     const packageManager = resolvePackageManagerFlag(flags);
-    const uiSourceDir = resolveUiHostDir(instanceDir);
     const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
 
     let port: number;
@@ -918,68 +874,27 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     if (dockerExposure) wizardParams.set('dockerExposure', dockerExposure);
     if (publicDomain) wizardParams.set('publicDomain', publicDomain);
     const wizardUrl = `${baseUrl}/wizard?${wizardParams.toString()}`;
-    // The unauthenticated health endpoint supplies the OR3 JSON readiness check.
-    const healthUrl = `${baseUrl}/api/health`;
 
-    const uiHostDir = await createWizardUiHost(uiSourceDir);
-    console.log('\nHosting setup in a temporary workspace.');
-    console.log(`Target instance: ${instanceDir}`);
-
-    console.log('\nStarting wizard server...');
-
-    const uiCommand = runScriptCommand(packageManager, 'dev', [
-        '--host',
-        '127.0.0.1',
-        '--port',
-        String(port),
+    // The wizard is its own small server: a prebuilt page (rebuilt only when
+    // its sources change) plus the setup API, running in this process.
+    const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
+    const [{ buildWizardUi }, { startWizardHost }] = await Promise.all([
+        import('../../shared/cloud/wizard/ui-build'),
+        import('../../server/wizard/host'),
     ]);
-    const uiServer = crossSpawn(uiCommand.command, uiCommand.args, {
-        cwd: uiHostDir,
-        env: {
-            ...process.env,
-            // Keep the setup UI isolated from the target instance's SSR auth
-            // provider config until the wizard has written a real .env.
-            SSR_AUTH_ENABLED: 'false',
-            HOST: '127.0.0.1',
-            OR3_WIZARD_UI_ENABLED: 'true',
-            OR3_WIZARD_UI_TOKEN: wizardToken,
-            OR3_LOCAL_PROVIDERS: 'false',
-            OR3_USE_LOCAL_PACKAGES: 'false',
-        },
-        stdio: 'inherit',
-        detached: process.platform !== 'win32',
-    });
-    const uiServerExit = waitForChildExit(uiServer);
-    let interrupted = false;
-
-    const shutdown = () => {
-        try {
-            if (process.platform !== 'win32' && uiServer.pid) {
-                process.kill(-uiServer.pid, 'SIGTERM');
-            } else {
-                uiServer.kill();
-            }
-        } catch {
-            // Best-effort shutdown.
-        }
-    };
-
-    const onSignal = () => {
-        interrupted = true;
-        shutdown();
-    };
-    process.once('SIGINT', onSignal);
-    process.once('SIGTERM', onSignal);
+    const uiDir = await buildWizardUi(repoRoot);
+    const host = await startWizardHost({ port, token: wizardToken, uiDir });
+    process.once('SIGINT', host.close);
+    process.once('SIGTERM', host.close);
 
     try {
-        await waitForHttpReady(healthUrl);
-
         console.log('');
         console.log('┌──────────────────────────────────────────────────────┐');
         console.log('│  OR3 Cloud Wizard                                    │');
         console.log(`│  ${wizardUrl.padEnd(52)} │`);
         console.log('│  Keep this terminal open while using setup           │');
         console.log('└──────────────────────────────────────────────────────┘');
+        console.log(`Target instance: ${instanceDir}`);
         console.log('');
 
         if (isHeadlessSession()) {
@@ -993,16 +908,11 @@ async function runUiInit(flags: CliFlags): Promise<void> {
             openDefaultBrowser(wizardUrl);
         }
 
-        const exitCode = await uiServerExit;
-        if (exitCode !== 0 && !interrupted) {
-            throw new Error(`Wizard UI server exited with code ${exitCode}.`);
-        }
+        await host.closed;
     } finally {
-        shutdown();
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
-        await uiServerExit;
-        await rm(uiHostDir, { recursive: true, force: true });
+        host.close();
+        process.off('SIGINT', host.close);
+        process.off('SIGTERM', host.close);
     }
 }
 
@@ -1581,8 +1491,9 @@ async function runInit(flags: CliFlags): Promise<void> {
                     console.log(`  ${artifact}`)
                 );
             }
-            console.log(`- Bun command: ${installPlan.commands.bun}`);
-            console.log(`- npm command: ${installPlan.commands.npm}`);
+            console.log(
+                `  Command: ${packageManager === 'bun' ? installPlan.commands.bun : installPlan.commands.npm}`
+            );
             if (autoInstallDependencies) {
                 await executeDependencyInstallPlan(answers, installPlan, {
                     enabled: true,
@@ -1678,16 +1589,6 @@ async function runInit(flags: CliFlags): Promise<void> {
                     );
                 }
             }
-        }
-
-        const presetName = await promptTextNoNav(
-            prompt,
-            'Save this setup as a reusable template? Enter a name or press Enter to skip',
-            ''
-        );
-        if (presetName.trim()) {
-            await api.savePreset(session.id, presetName.trim());
-            console.log(`Preset "${presetName.trim()}" saved.`);
         }
 
         const deployNow = await promptBooleanNoNav(

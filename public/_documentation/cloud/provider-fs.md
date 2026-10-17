@@ -79,8 +79,30 @@ different hash, MIME, size, workspace, or storage identity is rejected.
 
 ## Usage accounting
 
-The matching provider adds **Observe Storage Usage** to the System provider
-actions. It reports logical active/deleted metadata separately from observed
+The admin Overview and Operations pages explain **Deleted files still use
+storage** as an informational notice. Permanent server cleanup is not yet
+available; no configuration change enables it. The provider diagnostic remains
+available under **Technical details**, and other provider warnings stay visible.
+
+When the provider exposes usage reporting, **View storage usage** in either
+notice opens the workspace chooser in **Admin → Operations** immediately.
+Choose a workspace to run the check; its result is brought into view and receives
+keyboard focus. Canceling the chooser does not run an observation, and the notice
+can be used again after canceling. The **Storage usage** card opens the
+same chooser. Each result names the selected workspace; the observation does not
+delete files or empty Trash. If a direct usage link can no longer run because
+the provider is unavailable, Operations explains why.
+
+Results show readable sizes for known active files, Trash, and workspace files on
+disk. The disk figure includes Trash and supporting files; active and Trash sizes
+come from file metadata. Available server space describes the shared filesystem,
+not a workspace allowance. Unknown totals are omitted with a plain-language
+message, and partial disk scans explain that the total may be higher. **Show JSON**
+starts collapsed and exposes the complete provider response when needed.
+
+Under **Operations → Maintenance**, **File cleanup status** explains that
+permanent file cleanup is unavailable and the check does not delete files.
+**Storage usage** reports logical active/deleted metadata separately from observed
 active/deleted blobs, incomplete transfers, sidecars, unclassified files and
 allocated filesystem blocks. Results are bounded, non-atomic observations:
 inspect completion flags, nullable values and warnings before interpreting them.

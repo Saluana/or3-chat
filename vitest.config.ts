@@ -122,9 +122,10 @@ export default defineConfig({
                     // Keep installed S3 scope checks on host Nuxt aliases;
                     // the canonical fixture supplies a mocked I/O client.
                     /\/or3-provider-s3\/dist\/runtime\/server\/storage\/s3-storage-gateway-adapter\.js$/,
-                    // Exercise the published job provider against the host's
-                    // real store/config alias, including workflow scope fences.
-                    /\/or3-provider-sqlite\/dist\/runtime\/server\/background-jobs\/sqlite-provider\.js$/,
+                    // Exercise the published SQLite provider (the exact pinned
+                    // runtime version) against the host's real store/config
+                    // aliases: background jobs, sync, auth and admin stores.
+                    /\/or3-provider-sqlite\/dist\/runtime\/server\//,
                 ],
             },
         },

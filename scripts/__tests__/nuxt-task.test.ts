@@ -150,10 +150,6 @@ describe('Nuxt task launcher', () => {
         expect(receipts(launch('preview'))[0]?.args).toEqual(['preview']);
     });
 
-    it('starts the setup wizard before a Convex deployment is configured', () => {
-        expect(receipts(launch('preview', { OR3_WIZARD_UI_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }))[0]?.args).toEqual(['preview']);
-    });
-
     it('defaults the build heap to 4 GiB while preserving other Node options', () => {
         const result = receipts(launch('build', { NODE_OPTIONS: '--trace-warnings' }));
         expect(result[0]?.nodeOptions).toBe('--trace-warnings --max-old-space-size=4096');

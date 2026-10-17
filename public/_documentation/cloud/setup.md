@@ -6,7 +6,7 @@ Use the managed `@or3/cloud` distribution for normal local or single-VPS deploym
 
 Install Docker Engine and Docker Compose v2. The operator CLI requires Node.js 20 or later to run through `npx`; the container owns the application dependencies. Supported container architectures are Linux amd64 and arm64, including those architectures through Docker on a local machine.
 
-Use a directory dedicated to this deployment and run subsequent operator commands there. Do not install application dependencies or build OR3 source in that directory.
+`init` creates an `or3-cloud` folder for the deployment; run later operator commands from inside it. Do not install application dependencies or build OR3 source in that folder.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ Use a directory dedicated to this deployment and run subsequent operator command
 npx @or3/cloud init --local
 ```
 
-The installer asks for your administrator email, generates the bootstrap password, and writes it to the owner-only `.or3-initial-credentials` file. Save it in a password manager, then remove that file. Open [the local app](http://127.0.0.1:3000) and sign in. If the port is occupied, use `--port 3100` at initialization.
+The installer asks for your administrator email, generates the bootstrap password, and writes it to the owner-only `or3-cloud/.or3-initial-credentials` file. Save it in a password manager, then remove that file. Open [the local app](http://127.0.0.1:3000) and sign in. If the port is occupied, use `--port 3100` at initialization.
 
 Local mode binds to loopback and does not install Caddy. Keep it local unless you deliberately configure a supported exposure path.
 
@@ -69,11 +69,11 @@ Use [Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud
 
 ## Editable source
 
-Contributors use `bun run dev` for local-first development or `bun run dev:ssr` for the configured SSR application. For a custom Cloud stack, use the [source wizard](/documentation/cloud/or3-cloud-wizard), then read [Choose and wire providers](/documentation/cloud/providers) and [configuration](/documentation/cloud/configure). The source wizard and the managed operator have different responsibilities.
+Contributors start the checkout with `bun run dev`. It reads `.env`, so it runs the local-first app until the source wizard turns on SSR auth, and the configured SSR application after that. For a custom Cloud stack, use the [source wizard](/documentation/cloud/or3-cloud-wizard), then read [Choose and wire providers](/documentation/cloud/providers) and [configuration](/documentation/cloud/configure). The source wizard and the managed operator have different responsibilities.
 
-`dev:ssr` enables SSR using the existing provider configuration; configure it
-through the source wizard first. It does not generate credentials or select a
-provider stack. `dev:offline` disables Cloud features for browser-only development.
+`bun run dev` uses the existing provider configuration; configure it through the
+source wizard first. It does not generate credentials or select a provider
+stack. `dev:offline` disables Cloud features for browser-only development.
 
 The source launcher uses Node by default and selects Bun when an active SQLite
 provider uses `OR3_SQLITE_DRIVER=bun` (or `bun:sqlite`). This includes the auth

@@ -172,7 +172,13 @@ the Linear stroke widths. Main rail icons render at 24px.
 Blank's sidebar chat and document row icons render at 16px in a muted
 `onSurfaceVariant` (45%) so titles carry the list; hover and keyboard focus
 restore full `onSurfaceVariant`, and active rows retain their primary color.
-Project tree icons stay at 20px. Branched chat groups show
+Row dates share that muted tone through `--blank-sb-row-muted`. Section
+headers use 12px sentence case, and an open section shows its arrow only on
+hover or focus. On wide hover-capable screens rows are about 36px tall with
+8px above each time section; touch layouts keep 48px rows.
+Project rows use the same 16px muted icons, row "more" menus sit in
+`onSurfaceVariant` until hovered or open, and section actions such as
+"+ New" stay `onSurfaceVariant` until hovered. Branched chat groups show
 `sidebar.chat.branched` in the icon column, and their `ui.chevron.right` /
 `ui.chevron.down` disclosure replaces it on hover or focus. These rules belong
 to Blank's stylesheet. Map only canonical Solar names: the subset builder

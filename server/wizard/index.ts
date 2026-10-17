@@ -14,7 +14,6 @@ import {
 import crossSpawn from 'cross-spawn';
 import { lookup } from 'node:dns/promises';
 import { Socket } from 'node:net';
-import { useRuntimeConfig } from '#imports';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
 import {
@@ -35,6 +34,7 @@ import {
 } from '../../shared/cloud/wizard/deploy-rollback';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import { waitForHttpReady } from '../../shared/cloud/wizard/dev-server';
+import { formatStartCommand, startCommand } from '../../shared/cloud/wizard/next-steps';
 import type {
     WizardAnswers,
     WizardApplyResult,
@@ -211,12 +211,14 @@ function startLocalDevDetached(
     instanceDir: string,
     packageManager: PackageManager
 ): void {
-    const command = runScriptCommand(packageManager, 'dev:ssr');
+    // The same command the user is told to run; `.env` decides SSR auth.
+    // Host and port match the readiness probe below.
+    const command = startCommand(packageManager);
     const child = crossSpawn(command.command, command.args, {
         cwd: instanceDir,
         stdio: 'ignore',
         detached: true,
-        env: createCleanWizardDeployEnv(),
+        env: { ...createCleanWizardDeployEnv(), HOST: '127.0.0.1', PORT: '3000' },
     });
     child.once('error', () => {});
     child.unref();
@@ -274,26 +276,43 @@ async function isPortListening(port: number, host = '127.0.0.1'): Promise<boolea
     });
 }
 
-let _hasLoggedNonDevWarning = false;
+type WizardHostConfig = {
+    /** Per-launch token; the host refuses requests without it. */
+    token: string;
+    /** Stops the host after a finished setup hands off to the app. */
+    onShutdown?: () => void;
+};
+
+let wizardHost: WizardHostConfig | null = null;
+
+/**
+ * Set by the setup wizard's own server (server/wizard/host.ts). The Nuxt app
+ * never serves the wizard, so without a host every wizard request is refused.
+ */
+export function configureWizardHost(config: WizardHostConfig | null): void {
+    wizardHost = config;
+}
+
+function hasWizardToken(event: H3Event, expectedToken: string): boolean {
+    const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
+    const queryToken = toStringOrUndefined(getQuery(event).token);
+    const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
+    return (
+        headerToken === expectedToken ||
+        queryToken === expectedToken ||
+        cookieToken === expectedToken
+    );
+}
 
 export function assertWebWizardEnabled(event: H3Event): void {
-    const config = useRuntimeConfig(event);
-    if (config.wizardUi.enabled !== true) {
+    if (!wizardHost) {
         throw createError({
             statusCode: 404,
             statusMessage: 'Not Found',
         });
     }
 
-    if (!_hasLoggedNonDevWarning && !import.meta.dev) {
-        _hasLoggedNonDevWarning = true;
-        console.warn(
-            '[wizard] ⚠️  Wizard UI is enabled in a non-dev build. ' +
-            'Disable OR3_WIZARD_UI_ENABLED for production.'
-        );
-    }
-
-    const expectedToken = toStringOrUndefined(config.wizardUi.token);
+    const expectedToken = toStringOrUndefined(wizardHost.token);
     if (!expectedToken) {
         throw createError({
             statusCode: 503,
@@ -301,15 +320,7 @@ export function assertWebWizardEnabled(event: H3Event): void {
         });
     }
 
-    const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
-    const queryToken = toStringOrUndefined(getQuery(event).token);
-    const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
-    const isAuthorized =
-        headerToken === expectedToken ||
-        queryToken === expectedToken ||
-        cookieToken === expectedToken;
-
-    if (!isAuthorized) {
+    if (!hasWizardToken(event, expectedToken)) {
         throw createError({
             statusCode: 403,
             statusMessage: 'Invalid wizard token.',
@@ -318,20 +329,11 @@ export function assertWebWizardEnabled(event: H3Event): void {
 }
 
 export function getWizardClientToken(event: H3Event): string | undefined {
-    const expectedToken = toStringOrUndefined(useRuntimeConfig(event).wizardUi.token);
+    const expectedToken = toStringOrUndefined(wizardHost?.token);
     if (!expectedToken) {
         return undefined;
     }
-
-    const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
-    const queryToken = toStringOrUndefined(getQuery(event).token);
-    const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
-    const isAuthorizedToken =
-        headerToken === expectedToken ||
-        queryToken === expectedToken ||
-        cookieToken === expectedToken;
-
-    return isAuthorizedToken ? expectedToken : undefined;
+    return hasWizardToken(event, expectedToken) ? expectedToken : undefined;
 }
 
 export function setWizardNoStore(event: H3Event): void {
@@ -339,9 +341,8 @@ export function setWizardNoStore(event: H3Event): void {
 }
 
 export function scheduleWizardShutdown(delayMs = 250): void {
-    const timeout = setTimeout(() => {
-        process.exit(0);
-    }, Math.max(0, delayMs));
+    const shutdown = wizardHost?.onShutdown ?? (() => process.exit(0));
+    const timeout = setTimeout(shutdown, Math.max(0, delayMs));
     timeout.unref();
 }
 
@@ -528,7 +529,7 @@ export async function runWizardDeploy(
             startLocalDevDetached(answers.instanceDir, packageManager);
             started = true;
             try {
-                await waitForHttpReady(`${localDevUrl}/api/health`, 45000);
+                await waitForHttpReady(`${localDevUrl}/api/health`, 180_000);
                 accessUrl = localDevUrl;
                 instructions =
                     'Local dev started with the updated environment values.';
@@ -545,22 +546,24 @@ export async function runWizardDeploy(
             applyResult,
             deployResult: {
                 started,
-                commands: [`${packageManager} run dev:ssr`],
+                commands: [formatStartCommand(packageManager)],
                 instructions,
                 accessUrl,
-                nextSteps: accessUrl
-                    ? [
-                        'Open http://127.0.0.1:3000 in your browser.',
-                        'Sign in with your bootstrap/admin account.',
-                        'Open the admin dashboard at /admin to manage your instance.',
-                    ]
-                    : [
-                        'Ensure port 3000 is free before starting local dev.',
-                        `Start the app manually with: ${packageManager} run dev:ssr`,
-                        'Open http://127.0.0.1:3000 in your browser after startup.',
-                        'Sign in with your bootstrap/admin account.',
-                        'Open the admin dashboard at /admin to manage your instance.',
-                    ],
+                nextSteps: [
+                    ...(accessUrl
+                        ? ['Open http://127.0.0.1:3000 in your browser.']
+                        : [
+                            'Ensure port 3000 is free before starting local dev.',
+                            `Start the app manually with: ${formatStartCommand(packageManager)}`,
+                            'Open http://127.0.0.1:3000 in your browser after startup.',
+                        ]),
+                    ...(answers.ssrAuthEnabled
+                        ? [
+                            'Sign in with the admin email and password from setup.',
+                            'Open the admin dashboard at /admin to manage your instance.',
+                        ]
+                        : []),
+                ],
             },
         };
     }

@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Account identities, invitations, team membership, account-owned local credentials and retained-database cleanup, bounded login admission, host restrictions, password policy, and admin session revocation."
+                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions."
                 },
                 {
                     "name": "background-execution.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, email-first lock page, invitation preflight and retries, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, email-first lock page, branded light/dark sign-in and registration dialogs, short invitation codes, preflight and retries, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, independent durable limits, retained metadata, atomic quota reservations and exact commit retries, signup invitations, and D1 support limits."
+                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained metadata, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Filesystem signed transfers, paired upload reservations, retryable commits, bounded read-only usage accounting, and disabled physical cleanup."
+                    "summary": "Filesystem signed transfers, upload reservations, retryable commits, plain-language maintenance tools, retained Trash guidance, readable storage summaries with expandable JSON, and disabled physical cleanup."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery, retained metadata, and atomic signup invitations."
+                    "summary": "Convex setup, plain-language maintenance controls, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery, retained metadata, and atomic signup invitations with short codes."
                 },
                 {
                     "name": "provider-s3.md",
@@ -755,7 +755,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 17,
-                    "summary": "This is the deployment-oriented reference for environment variables consumed by or3-chat and its first-party provider packages. It complements the typed configuration reference:"
+                    "summary": "Environment variables for OR3 and its providers, dashboard registration mode changes and Restart now requirements, optional invitations, signing setup, and deployment overrides."
                 },
                 {
                     "name": "capability-matrix.md",

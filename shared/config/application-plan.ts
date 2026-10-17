@@ -49,8 +49,7 @@ export function buildApplicationPlan(input: {
                 `[or3-module] Ignoring optional module "${id}": ${result.message}`,
             );
     }
-    const effectiveSsrAuthEnabled =
-        or3CloudConfig.auth.enabled && env.OR3_WIZARD_UI_ENABLED !== 'true';
+    const effectiveSsrAuthEnabled = or3CloudConfig.auth.enabled;
     const effectiveSyncEnabled =
         effectiveSsrAuthEnabled && or3CloudConfig.sync.enabled;
     const effectiveStorageEnabled =
@@ -345,10 +344,6 @@ export function buildApplicationPlan(input: {
         },
         admin: adminConfig,
         webhooks: webhooksConfig,
-        wizardUi: {
-            enabled: env.OR3_WIZARD_UI_ENABLED === 'true',
-            token: env.OR3_WIZARD_UI_TOKEN ?? '',
-        },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: effectiveBackgroundEnabled,
@@ -466,9 +461,6 @@ export function buildApplicationPlan(input: {
             },
             webhooks: {
                 enabled: webhooksConfig.enabled,
-            },
-            wizardUi: {
-                enabled: env.OR3_WIZARD_UI_ENABLED === 'true',
             },
             pluginSettingDefaults: buildPluginSettingDefaults(or3Config.features.workflows),
             // Feature toggles from OR3 config - exposed for client-side gating

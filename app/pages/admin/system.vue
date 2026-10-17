@@ -43,12 +43,13 @@
                     <div>
                         <h3 class="text-lg font-semibold">Maintenance</h3>
                         <p class="mt-1 text-sm opacity-60">
-                            Provider-specific cleanup and recovery tools.
+                            Tools to check storage and clear old records.
                         </p>
                     </div>
                     <AdminSystemProviderActions
                         :actions="providerActions"
                         :is-owner="isOwner"
+                        :running-action-id="runningActionId"
                         :result="providerActionResult"
                         @run="runProviderAction"
                     />
@@ -83,6 +84,12 @@
                         </UButton>
                     </div>
                 </section>
+                <WorkspaceSelector
+                    v-if="showStorageWorkspaceSelector"
+                    v-model="showStorageWorkspaceSelector"
+                    description="Choose the workspace whose storage usage you want to view."
+                    @select="viewStorageUsage"
+                />
             </template>
 
             <template #fallback>
@@ -106,6 +113,7 @@ import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCa
 import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
 import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
 import AdminSystemUpdateCard from '~/components/admin/system/AdminSystemUpdateCard.vue';
+import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
     layout: 'admin',
@@ -115,12 +123,16 @@ definePageMeta({
 const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();
 const { confirm } = useConfirmDialog();
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
 
 const pending = computed(() => statusFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
-const providerActionResult = ref<{ label: string; value: unknown } | null>(null);
+const providerActionResult = ref<{ label: string; value: unknown; storageUsage: boolean } | null>(null);
+const runningActionId = ref<string | null>(null);
+const showStorageWorkspaceSelector = ref(false);
 
 const providerActions = computed(() => {
     if (!status.value) return [];
@@ -136,6 +148,40 @@ const providerActions = computed(() => {
     }
     return actions;
 });
+const storageUsageAction = computed(() => providerActions.value.find(action =>
+    action.kind === 'storage' && action.id === 'storage.usage'));
+
+// Consume the notice link after status loads so it opens the chooser on both
+// entry points, including repeated clicks after cancellation.
+watch([() => route.hash, statusFetchStatus], ([hash, fetchStatus]) => {
+    if (hash !== '#storage-usage' || fetchStatus === 'pending' || fetchStatus === 'idle') return;
+    openStorageUsage();
+    void router.replace({ query: route.query, hash: '' });
+}, { immediate: true });
+
+function openStorageUsage() {
+    if (!isOwner.value || !storageUsageAction.value) {
+        toast.add({
+            title: 'Storage usage unavailable',
+            description: statusFetchStatus.value === 'error'
+                ? 'Could not load server status. Refresh this page and try again.'
+                : !isOwner.value
+                    ? 'Only the server owner can view storage usage.'
+                    : 'The active storage provider does not offer storage usage checks.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (runningActionId.value) {
+        toast.add({ title: 'Action in progress', description: 'Wait for the current check to finish, then try again.', color: 'info' });
+        return;
+    }
+    showStorageWorkspaceSelector.value = true;
+}
+
+function viewStorageUsage(workspace: { id: string; name: string }) {
+    if (storageUsageAction.value) void runProviderAction(storageUsageAction.value, workspace);
+}
 
 const serverRestart = useServerRestart(
     isOwner,
@@ -182,10 +228,16 @@ async function runProviderAction(action: {
     provider: string;
     danger?: boolean;
     description?: string;
-}) {
+}, workspace?: { id: string; name: string }) {
+    const storageUsage = action.kind === 'storage' && action.id === 'storage.usage';
+    if (storageUsage && !workspace) {
+        openStorageUsage();
+        return;
+    }
+    if (runningActionId.value) return;
     if (action.danger) {
         const confirmed = await confirm({
-            title: 'Run Provider Action',
+            title: 'Confirm maintenance',
             message: [
                 `Are you sure you want to run "${action.label}"?`,
                 action.description || null,
@@ -200,26 +252,39 @@ async function runProviderAction(action: {
     }
 
     try {
+        runningActionId.value = action.kind + ':' + action.id;
         providerActionResult.value = null;
         const response = await $fetch<{ ok: boolean; result: unknown }>('/api/admin/system/provider-action', {
             method: 'POST',
             headers: ADMIN_HEADERS,
-            body: { kind: action.kind, actionId: action.id },
+            body: { kind: action.kind, actionId: action.id, workspaceId: workspace?.id },
         });
-        providerActionResult.value = { label: action.label, value: response.result };
+        providerActionResult.value = {
+            label: workspace ? `Storage usage for ${workspace.name}` : action.label,
+            value: response.result,
+            storageUsage,
+        };
         const disabled = response.result !== null && typeof response.result === 'object'
             && 'status' in response.result && response.result.status === 'disabled';
-        toast.add({
-            title: disabled ? 'Action disabled' : 'Action completed',
-            description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
-            color: disabled ? 'warning' : 'success',
-        });
+        if (disabled || !storageUsage) {
+            toast.add({
+                title: disabled ? 'Action disabled' : 'Action completed',
+                description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
+                color: disabled ? 'warning' : 'success',
+            });
+        }
+        await nextTick();
+        const resultElement = document.getElementById('provider-action-result');
+        resultElement?.focus({ preventScroll: true });
+        resultElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error: unknown) {
         toast.add({
             title: 'Action failed',
             description: parseErrorMessage(error, 'Action failed'),
             color: 'error',
         });
+    } finally {
+        runningActionId.value = null;
     }
 }
 </script>

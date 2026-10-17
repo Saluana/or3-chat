@@ -29,9 +29,9 @@ based upgrades. It remains available through the application repository's
 ## What the Wizard Does
 
 1. Creates a wizard session with defaults (recommended stack: `basic-auth + sqlite + fs`).
-2. Uses template mode to decide provider flow depth:
+2. Starts with template selection. The project folder, settings file, package manager, deployment target and preview-only option sit in a collapsed **Advanced setup** section on the same step; opening it also adds the branding, theme, feature and provider steps. The template decides provider flow depth:
    - `personal-local`: browser-only use with no account, remote access, sync, or server storage.
-   - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem (email-only when Customize is off).
+   - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem (email-only when Advanced setup is closed).
    - legacy `preset-local-fast` sessions remain readable, but now collect the same real administrator identity as the recommended stack.
    - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
    - `custom`: keeps manual provider selection.
@@ -59,9 +59,9 @@ based upgrades. It remains available through the application repository's
    - generating `or3.providers.generated.json` from selected providers only
    - saving first-run login credentials to a private `.or3-initial-credentials` file (mode `0600`)
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
-11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
+11. Optionally runs deploy commands (`bun install`, then `bun run dev` or `bun run build`).
 
-For managed installation use `npx @or3/cloud init --local` or the public-domain route in [Set up Cloud](/documentation/cloud/setup). Contributors start this checkout with `bun run dev` or `bun run dev:ssr`.
+For managed installation use `npx @or3/cloud init --local` or the public-domain route in [Set up Cloud](/documentation/cloud/setup). Contributors start this checkout with `bun run dev` (or `npm run dev`). It reads `.env`, so the same command starts browser-only and authenticated setups.
 
 Enabled rate limits can select SQLite or Convex independently of the workspace
 backend. The wizard includes that provider's module, configuration, validation,
@@ -80,10 +80,14 @@ Dry runs create no credentials file.
 The browser review shows the login after **Save Settings** and **Apply + Deploy**.
 After local deployment, it keeps this screen open so you can save the password,
 then use **Open OR3 in a new tab** to sign in. Keep the setup terminal open until
-you have saved the login; press Ctrl+C there to close the wizard server.
-The browser wizard runs in a temporary workspace, so writing target settings
-and installing providers do not interrupt its deployment request. Its temporary
-workspace is removed when the wizard server exits.
+you have saved the login; press Ctrl+C there to close the wizard.
+The browser wizard is a small server inside the `setup` process: a prebuilt page
+plus the setup API, listening on `127.0.0.1` behind a per-launch token in the
+printed link. The page is built on first use (a few seconds) into
+`node_modules/.cache/or3-wizard-ui/` and rebuilt only when its sources change.
+The wizard does not watch files, so writing the target's settings or installing
+providers cannot restart it, and it creates no temporary copies. After a
+browser-only deployment opens the app, the wizard stops by itself.
 
 ## Commands
 
@@ -157,7 +161,7 @@ Secrets are excluded from preset storage by default. Wizard directories use owne
 
 Runs deploy for the last session (or specific `--session <id>`):
 
-- local-dev: `bun install`, optional Convex scaffold init and `bunx convex dev`, `bun run dev:ssr`
+- local-dev: `bun install`, optional Convex scaffold init and `bunx convex dev`, `bun run dev`
 - docker: `docker compose -f compose.yaml up --build -d --wait` (adds `-f compose.public.yaml` for public exposure) and probes the `/api/health?deep=true` endpoint
 - configure-only: writes configuration and starts nothing
 - prod-build: `bun install`, `bun run build` (then run `bun run preview`)

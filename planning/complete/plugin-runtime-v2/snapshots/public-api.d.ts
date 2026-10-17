@@ -339,6 +339,7 @@ export declare function usePaneApps(): {
 import { type Component, type ComputedRef, type DeepReadonly, type ShallowRef } from 'vue';
 import { type PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { type RegistrationHandle } from '~~/shared/plugins/registration-handle';
+import type { IconToken } from '~/config/icon-tokens';
 import type { DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions } from '~/core/dashboard/dashboard-navigation-types';
 export type { DashboardNavigationError, DashboardNavigationErrorCode, DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions, } from '~/core/dashboard/dashboard-navigation-types';
 export { getPluginCapabilities, hasAllCapabilities, hasAnyCapability, hasCapability, } from '~/core/dashboard/plugin-capabilities';
@@ -347,6 +348,8 @@ export interface DashboardPlugin {
     id: string;
     /** Icon name (Iconify) shown in the grid */
     icon: string;
+    /** Optional theme token; resolves at render time instead of registration. */
+    iconToken?: IconToken;
     /** Optional validated app image URL. The Iconify icon remains the fallback. */
     image?: string;
     /** Short label shown under the icon */
@@ -385,6 +388,8 @@ export interface DashboardPluginPage {
     title: string;
     /** Optional icon for page navigation lists. */
     icon?: string;
+    /** Optional theme token for the page's navigation icon. */
+    iconToken?: IconToken;
     /** Optional validated app image URL. */
     image?: string;
     /** Ordering (lower first). Defaults to 200. */

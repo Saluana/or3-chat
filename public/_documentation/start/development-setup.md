@@ -101,9 +101,9 @@ unprotected server that accepts forwarding headers directly from clients.
 
 | Command | Purpose |
 | --- | --- |
-| `bun run dev` | Normal source development. |
+| `bun run dev` | Source development. Reads `.env`, so it starts both the local-first app and a configured SSR (accounts, sync, storage) setup. |
 | `bun run dev:offline` | Local-first development with Cloud features disabled. |
-| `bun run dev:ssr` | Develop SSR auth and Cloud integrations; requires a working provider configuration for authenticated features. |
+| `bun run dev:ssr` | Force SSR auth on for one run, whatever `.env` says; requires a working provider configuration. |
 | `bun run build` | Build application output. |
 | `bun run generate:static` | Build the explicitly static, Cloud-disabled output. |
 | `bun run preview` | Preview built application output. |

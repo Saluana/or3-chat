@@ -169,6 +169,43 @@ function getScopedSessionStorageKey(key: string): string {
     return key;
 }
 
+/** JSON fetch for the wizard API; a failure carries the server's `data`. */
+async function wizardFetch<T>(
+    path: string,
+    options: {
+        method?: string;
+        headers?: Record<string, string>;
+        body?: unknown;
+        query?: Record<string, string>;
+        signal?: AbortSignal;
+    } = {}
+): Promise<T> {
+    const url = new URL(path, globalThis.location.origin);
+    for (const [key, value] of Object.entries(options.query ?? {})) {
+        url.searchParams.set(key, value);
+    }
+    const hasBody = options.body !== undefined;
+    const response = await fetch(url, {
+        method: options.method ?? 'GET',
+        headers: {
+            ...options.headers,
+            ...(hasBody ? { 'content-type': 'application/json' } : {}),
+        },
+        body: hasBody ? JSON.stringify(options.body) : undefined,
+        signal: options.signal,
+    });
+    const payload = (await response.json().catch(() => undefined)) as
+        | { message?: string; statusMessage?: string; data?: unknown }
+        | undefined;
+    if (!response.ok) {
+        throw Object.assign(
+            new Error(payload?.message || payload?.statusMessage || `HTTP ${response.status}`),
+            { data: payload?.data, statusCode: response.status }
+        );
+    }
+    return payload as T;
+}
+
 function normalizeErrorMessage(error: unknown): string {
     if (typeof error === 'string') return error;
     if (error instanceof Error) return error.message;
@@ -233,7 +270,7 @@ function wizardFetchHeaders(): Record<string, string> {
 
 async function shutdownWizardUiBestEffort(): Promise<void> {
     try {
-        await $fetch('/api/wizard/shutdown', {
+        await wizardFetch('/api/wizard/shutdown', {
             method: 'POST',
             headers: wizardFetchHeaders(),
             signal: AbortSignal.timeout(3000),
@@ -424,7 +461,7 @@ export function useWizardSession() {
 
         isSaving.value = true;
         try {
-            const response = await $fetch<SessionResponse>('/api/wizard/session', {
+            const response = await wizardFetch<SessionResponse>('/api/wizard/session', {
                 method: 'PATCH',
                 headers: wizardFetchHeaders(),
                 body: {
@@ -612,7 +649,7 @@ export function useWizardSession() {
         isTestingConnection.value = true;
         connectionResult.value = null;
         try {
-            const response = await $fetch<TestConnectionResponse>(
+            const response = await wizardFetch<TestConnectionResponse>(
                 '/api/wizard/test-connection',
                 {
                     method: 'POST',
@@ -676,7 +713,7 @@ export function useWizardSession() {
         isDeploying.value = true;
         clearStatus();
         try {
-            const response = await $fetch<DeployResponse>('/api/wizard/deploy', {
+            const response = await wizardFetch<DeployResponse>('/api/wizard/deploy', {
                 method: 'POST',
                 headers: wizardFetchHeaders(),
                 body: {
@@ -726,13 +763,6 @@ export function useWizardSession() {
         }
     }
 
-    async function runValidation(): Promise<DeployResponse | null> {
-        return submitDeploy({
-            dryRun: true,
-            skipDeploy: true,
-        });
-    }
-
     async function applyOnly(): Promise<DeployResponse | null> {
         return submitDeploy({
             dryRun: answers.value.dryRun,
@@ -764,12 +794,12 @@ export function useWizardSession() {
 
         const loadSession = async (sessionId?: string): Promise<SessionResponse> => {
             if (!sessionId) {
-                return $fetch<SessionResponse>('/api/wizard/session', {
+                return wizardFetch<SessionResponse>('/api/wizard/session', {
                     headers: wizardFetchHeaders(),
                     query: bootstrapQuery,
                 });
             }
-            return $fetch<SessionResponse>('/api/wizard/session', {
+            return wizardFetch<SessionResponse>('/api/wizard/session', {
                 headers: wizardFetchHeaders(),
                 query: { sessionId },
             });
@@ -870,7 +900,6 @@ export function useWizardSession() {
         goToPreviousStep,
         saveStep,
         testConnectionForCurrentStep,
-        runValidation,
         applyOnly,
         deploy,
         clearStatus,

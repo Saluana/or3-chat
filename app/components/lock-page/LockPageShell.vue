@@ -223,8 +223,14 @@ const logoUrl = computed(
         opacity: 0.35;
     }
 
+    /* Each capture's own background fills the card below it; only the active theme's image loads. */
     .lock-app-preview {
-        background: white url('/lock-page/app-preview.webp') left top / contain no-repeat;
+        background: white url('/lock-page/app-preview-light.webp') left top / contain no-repeat;
+    }
+
+    .dark .lock-app-preview {
+        background-color: #212121;
+        background-image: url('/lock-page/app-preview-dark.webp');
     }
 
     .lock-desktop-note {

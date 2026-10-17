@@ -2,6 +2,14 @@
  * Shared type definitions for admin API responses.
  * Consolidates common types from index.vue and system.vue.
  */
+import type { RegistrationMode } from '~~/server/auth/registration';
+
+export type RegistrationSettings = {
+    currentMode: RegistrationMode;
+    savedMode: RegistrationMode;
+    restartRequired: boolean;
+    inviteSigningConfigured: boolean;
+};
 
 export type ProviderStatus = {
     enabled: boolean;

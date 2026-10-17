@@ -262,7 +262,7 @@ describe('resolveSessionContext provisioning and caching', () => {
             )
         ).rejects.toMatchObject({
             statusCode: 403,
-            statusMessage: 'Invite token is invalid or expired.',
+            statusMessage: 'This invitation is for a different email address. Check for typos or use the email that received the invite.',
         });
         expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
         expect(authWorkspaceStoreMock.acceptInviteAndProvisionUser).not.toHaveBeenCalled();

@@ -1,8 +1,8 @@
 import { defineEventHandler, getQuery, setCookie, setHeader } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
-import { INVITE_TOKEN_COOKIE, resolveRegistrationMode } from '../auth/registration';
-import { verifyInviteToken } from '../auth/invite-token';
+import { INVITE_TOKEN_COOKIE, resolveRegistrationMode, resolveInviteToken } from '../auth/registration';
+import { getAuthWorkspaceStore } from '../auth/store/registry';
 import {
     getProxyRequestProtocol,
     normalizeProxyTrustConfig,
@@ -24,13 +24,13 @@ import {
  *   navigation between opening the link and signing up.
  *
  * Constraints:
- * - Only tokens with a valid signature that have not expired are stored, so a
+ * - Only valid signed links or stored signup codes that have not expired are stored, so a
  *   stray or forged value never replaces a usable invite. Tokens are bound to
  *   the invitee's email; the cookie grants nothing the link does not.
  * - HttpOnly, SameSite=Lax; Secure when the request is HTTPS (a forwarded
  *   protocol counts only behind a trusted proxy).
  */
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
     if (event.method !== 'GET' && event.method !== 'HEAD') return;
     const invite = getQuery(event).invite;
     if (typeof invite !== 'string' || !invite.trim() || invite.length > 4096) return;
@@ -43,7 +43,8 @@ export default defineEventHandler((event) => {
     if (!secret) return;
 
     const token = invite.trim();
-    const verified = verifyInviteToken(token, secret);
+    setHeader(event, 'Cache-Control', 'no-store');
+    const verified = await resolveInviteToken(event, token, secret, getAuthWorkspaceStore(config.public?.sync?.provider));
     if (!verified.ok || (mode === 'open' && !('purpose' in verified.payload))) return;
     const maxAge = Math.floor(verified.payload.exp - Date.now() / 1000);
     if (maxAge <= 0) return;
