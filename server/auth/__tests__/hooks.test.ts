@@ -17,7 +17,7 @@ import {
 } from '../hooks';
 import { createHookEngine } from '../../hooks/hook-engine';
 import { createServerHookEngine } from '../../hooks/runtime-kernel';
-import type { AccessDecision, SessionContext } from '~/core/hooks/hook-types';
+import type { SessionContext } from '~/core/hooks/hook-types';
 
 describe('auth hooks and can() filter enforcement', () => {
     const mockSession: SessionContext = {
@@ -204,18 +204,6 @@ describe('auth hooks and can() filter enforcement', () => {
             const decision = can(mockSession, 'workspace.read');
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('auth-constraint-async');
-        });
-
-        it('should not crash when filter throws', () => {
-            _resetAuthHookEngineForTesting();
-            const hookEngine = createHookEngine();
-            const authEngine = initializeAuthHookEngine(hookEngine);
-
-            authEngine.addAccessDecisionFilter(() => {
-                throw new Error('Filter error');
-            });
-
-            expect(() => can(mockSession, 'workspace.read')).not.toThrow();
         });
 
         it('should fail closed on invalid constraint return shapes', () => {

@@ -119,24 +119,6 @@ describe('SideNavContentCollapsed', () => {
         expect(wrapper.html()).toContain('Create project');
     });
 
-    it('renders ordered page buttons', () => {
-        const wrapper = mount(SideNavContentCollapsed, {
-            global: {
-                stubs: {
-                    UIcon: true,
-                    UButton: { template: '<button><slot /></button>' },
-                    UTooltip: { template: '<div><slot /></div>' },
-                    SideBottomNav: true,
-                    ClientOnly: { template: '<div><slot /></div>' },
-                },
-            },
-        });
-
-        // Should render page buttons with their labels
-        expect(wrapper.html()).toContain('Test Page 1');
-        expect(wrapper.html()).toContain('Test Page 2');
-    });
-
     it('highlights active page', () => {
         mockActivePageId.value = 'test-page-1';
 

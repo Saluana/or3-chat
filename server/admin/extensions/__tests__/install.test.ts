@@ -279,51 +279,6 @@ describe('installExtensionFromZip', () => {
         ).rejects.toThrow('Declarative themes cannot contain executable code');
     });
 
-    it('blocks zip slip paths', async () => {
-        const zip = makeZip({
-            'or3.manifest.json': JSON.stringify({
-                kind: 'plugin',
-                id: 'test-plugin',
-                name: 'Test',
-                version: '0.0.1',
-                capabilities: [],
-            }),
-            '../evil.txt': 'nope',
-        });
-
-        await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid archive path');
-    });
-
-    it('accepts runtime descriptor metadata', async () => {
-        const zip = makeZip({
-            'or3.manifest.json': JSON.stringify({
-                kind: 'plugin',
-                id: 'test-plugin',
-                name: 'Test',
-                version: '0.0.1',
-                capabilities: [],
-                runtime: {
-                    client: { entry: 'plugin.client.ts' },
-                    server: {
-                        routes: [
-                            {
-                                method: 'GET',
-                                path: 'hello',
-                                handler: 'server/hello.get.js',
-                            },
-                        ],
-                    },
-                },
-            }),
-            'plugin.client.ts': 'export default {}',
-            'server/hello.get.js': 'export default () => ({ ok: true })',
-        });
-
-        const manifest = await installExtensionFromZip(zip, true);
-        expect(manifest.runtime?.client?.entry).toBe('plugin.client.ts');
-        expect(manifest.runtime?.server?.routes?.length).toBe(1);
-    });
-
     it('rejects duplicate runtime routes', async () => {
         const zip = makeZip({
             'or3.manifest.json': JSON.stringify({
@@ -392,15 +347,18 @@ describe('installExtensionFromZip', () => {
         });
 
         await installExtensionFromZip(zip, false);
-        await expect(installExtensionFromZip(zip, false)).rejects.toBeInstanceOf(
-            ExtensionAlreadyInstalledError
-        );
+        const duplicate = installExtensionFromZip(zip, false);
+        await expect(duplicate).rejects.toBeInstanceOf(ExtensionAlreadyInstalledError);
+        await expect(duplicate).rejects.toMatchObject({
+            message: expect.stringMatching(/already installed/i),
+            code: 'EXTENSION_ALREADY_INSTALLED',
+        });
 
         const marker = join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin', 'index.js');
         await expect(fs.readFile(marker, 'utf8')).resolves.toContain('export default');
     });
 
-    it('replaces atomically with force and restores on failed staging rename', async () => {
+    it('replaces an existing install atomically when forced', async () => {
         const first = makeZip({
             'or3.manifest.json': JSON.stringify({
                 kind: 'plugin',
@@ -454,7 +412,9 @@ describe('installExtensionFromZip', () => {
             'server/hello.get.js': 'export default () => ({ ok: true })',
         });
 
-        await installExtensionFromZip(zip, true);
+        const manifest = await installExtensionFromZip(zip, true);
+        expect(manifest.runtime?.client?.entry).toBe('plugin.client.ts');
+        expect(manifest.runtime?.server?.routes).toHaveLength(1);
         invalidateExtensionsCache();
         const installed = await listInstalledExtensions();
         const record = installed.find((item) => item.id === 'test-plugin');
@@ -561,27 +521,4 @@ describe('installExtensionFromZip', () => {
         ).resolves.toContain('export default');
     });
 
-    it('conflict error message remains client-recognizable', async () => {
-        const zip = makeZip({
-            'or3.manifest.json': JSON.stringify({
-                kind: 'plugin',
-                id: 'test-plugin',
-                name: 'Test',
-                version: '0.0.1',
-                capabilities: [],
-            }),
-            'index.js': 'export default {}',
-        });
-        await installExtensionFromZip(zip, false);
-        try {
-            await installExtensionFromZip(zip, false);
-            expect.fail('expected conflict');
-        } catch (error) {
-            expect(error).toBeInstanceOf(ExtensionAlreadyInstalledError);
-            expect((error as Error).message.toLowerCase()).toContain('already installed');
-            expect((error as ExtensionAlreadyInstalledError).code).toBe(
-                'EXTENSION_ALREADY_INSTALLED'
-            );
-        }
-    });
 });

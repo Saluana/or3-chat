@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-    BUILD_ENTRIES,
     SUBPATH_ENTRIES,
 } from '../../packages/plugin-sdk/scripts/publish-entries.mjs';
 import { readPackageZip } from '../../packages/plugin-sdk/src/cli/archive';
@@ -70,19 +69,6 @@ describe('plugin SDK published surface', () => {
             rmSync(external, { recursive: true, force: true });
         }
     }, 120_000);
-
-    it('builds every module it exports a subpath for', () => {
-        for (const [subpath, entry] of Object.entries(SUBPATH_ENTRIES)) {
-            expect(
-                BUILD_ENTRIES,
-                `subpath "${subpath}" needs src/${entry}.ts in the build entries`
-            ).toContain(`src/${entry}.ts`);
-        }
-    });
-
-    it('lists each build entry exactly once', () => {
-        expect(new Set(BUILD_ENTRIES).size).toBe(BUILD_ENTRIES.length);
-    });
 
     it('exports the subpaths the repository package declares', () => {
         const manifest = JSON.parse(

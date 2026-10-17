@@ -335,11 +335,3 @@ export function resolvePluginV2DependencyGraph(
         resolutions: freeze(resolutions),
     });
 }
-
-/** A manager must consult this result before invoking a loader for a graph member. */
-export function canLoadPluginV2GraphNode(
-    result: PluginV2DependencyGraphResult,
-    pluginId: string
-): boolean {
-    return result.startOrder.includes(pluginId) && result.blocked[pluginId] === undefined;
-}

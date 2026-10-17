@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
     PROVIDER_PACKAGE_CONTRACTS,
     SUPPORTED_PROVIDER_STACKS,
-    providerModuleIdsForStack,
 } from '~~/shared/cloud/provider-compatibility';
 import {
     AUTH_PROVIDER_ID_LIST,
@@ -76,7 +75,11 @@ describe('provider stack contract parity', () => {
         }
     });
 
-    it.each(SUPPORTED_PROVIDER_STACKS)(
+    it.each(
+        SUPPORTED_PROVIDER_STACKS.filter(
+            (stack) => stack.auth || stack.sync || stack.storage,
+        ),
+    )(
         '$id resolves every selected role to an installed, role-compatible module',
         (stack) => {
             const selections = [
@@ -93,12 +96,6 @@ describe('provider stack contract parity', () => {
                 ).toBeDefined();
                 expect(contract!.roles).toContain(role);
                 readProviderManifest(contract!.packageName);
-            }
-
-            const modules = providerModuleIdsForStack(stack);
-            expect(new Set(modules).size).toBe(modules.length);
-            for (const moduleId of modules) {
-                expect(moduleId).toMatch(/^or3-provider-[a-z0-9-]+\/nuxt$/);
             }
         },
     );

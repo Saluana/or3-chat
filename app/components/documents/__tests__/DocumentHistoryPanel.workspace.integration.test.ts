@@ -12,6 +12,10 @@ const Button = defineComponent({
     props: ['label'], emits: ['click'],
     template: '<button @click="$emit(\'click\')">{{ label }}<slot /></button>',
 });
+const Modal = defineComponent({
+    props: ['open'],
+    template: '<section v-if="open"><slot /><slot name="footer" /></section>',
+});
 let wrapper: VueWrapper | undefined;
 const workspaces: Array<{ id: string; name: string }> = [];
 
@@ -34,13 +38,15 @@ describe('mounted checkpoint history workspace isolation', () => {
         await createDocumentRevision({ documentId: 'history-document', title: 'Preserved', source: 'manual',
             content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Earlier content' }] }] } });
         wrapper = shallowMount(DocumentHistoryPanel, {
-            props: { documentId: 'history-document', readOnly: true },
-            global: { directives: { theme: () => {} }, stubs: { UButton: Button, UBadge: true }, renderStubDefaultSlot: true },
+            props: { documentId: 'history-document', readOnly: true, createCheckpoint: vi.fn(async () => {}) },
+            global: { directives: { theme: () => {} }, stubs: { UButton: Button, UBadge: true, AppModal: Modal }, renderStubDefaultSlot: true },
         });
         await vi.waitFor(() => expect(wrapper!.findAll('.revision-item')).toHaveLength(1));
-        expect(wrapper.text()).not.toContain('Create checkpoint');
+        expect(wrapper.text()).not.toContain('Save version');
         await wrapper.get('.revision-item').trigger('click');
         expect(wrapper.get('.preview-body').text()).toContain('Earlier content');
+        expect(wrapper.get('.preview-actions').text()).toContain('Cancel');
+        expect(wrapper.get('.preview-actions').text()).not.toContain('Restore this version');
         expect(wrapper.emitted('restore')).toBeUndefined();
     });
     it('clears an A preview and reloads B history in a retained same-ID panel', async () => {

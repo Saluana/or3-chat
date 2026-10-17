@@ -7,11 +7,6 @@
 
 import type { ContentPart } from './types';
 import { isWorkflowMessageData } from './workflow-types';
-import {
-    DEFAULT_MAX_INPUT_TOKENS,
-    MAX_CHAT_OUTPUT_RESERVE_TOKENS,
-    MIN_CHAT_INPUT_TOKENS,
-} from './constants';
 
 /**
  * `buildParts`
@@ -277,56 +272,6 @@ export function getChatModalities(modelId: string): string[] {
     const isImageGenerationModel =
         /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
     return isImageGenerationModel ? ['image', 'text'] : ['text'];
-}
-
-type ModelContextMetadata = {
-    context_length?: unknown;
-    top_provider?: {
-        context_length?: unknown;
-        max_completion_tokens?: unknown;
-    } | null;
-} | null | undefined;
-
-function positiveInteger(value: unknown): number | null {
-    return typeof value === 'number' &&
-        Number.isFinite(value) &&
-        value > 0
-        ? Math.floor(value)
-        : null;
-}
-
-/**
- * Resolves a safe input budget from model catalog metadata.
- *
- * Keeps response headroom inside the provider context window and falls back to
- * a conservative fixed budget when catalog metadata is missing or stale.
- */
-export function resolveChatInputTokenBudget(
-    model: ModelContextMetadata
-): number {
-    const contextLength =
-        positiveInteger(model?.top_provider?.context_length) ??
-        positiveInteger(model?.context_length);
-    if (!contextLength) return DEFAULT_MAX_INPUT_TOKENS;
-
-    const advertisedCompletion = positiveInteger(
-        model?.top_provider?.max_completion_tokens
-    );
-    const proportionalReserve = Math.max(
-        MIN_CHAT_INPUT_TOKENS,
-        Math.floor(contextLength * 0.2)
-    );
-    const outputReserve = Math.min(
-        advertisedCompletion ?? proportionalReserve,
-        proportionalReserve,
-        MAX_CHAT_OUTPUT_RESERVE_TOKENS
-    );
-    const minimumBudget = Math.min(
-        MIN_CHAT_INPUT_TOKENS,
-        Math.max(1, contextLength - 1)
-    );
-
-    return Math.max(minimumBudget, contextLength - outputReserve);
 }
 
 /**

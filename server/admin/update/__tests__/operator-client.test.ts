@@ -16,10 +16,6 @@ const validStatus = {
 } as const;
 
 describe('dashboard operator response validation', () => {
-    it('accepts the exact managed status contract', () => {
-        expect(validateDashboardUpdateStatus(validStatus)).toEqual(validStatus);
-    });
-
     it.each([
         { ...validStatus, injected: true },
         { ...validStatus, currentVersion: '../latest' },

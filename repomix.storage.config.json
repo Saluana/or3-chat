@@ -14,7 +14,6 @@
     "server/utils/storage/**",
     "server/storage/**",
     "shared/storage/**",
-    "shared/testing/contracts/storage.ts",
     "app/plugins/storage-transfer.client.ts",
     "app/db/files.ts",
     "app/db/files-util.ts",

@@ -3,13 +3,11 @@ import type { PluginGrantReviewSnapshot } from '../../grant-review';
 import {
     createRpcEvent,
     createRpcRequest,
-    createRpcResponse,
     parseRpcEnvelope,
     serializeRpcEnvelope,
     type RpcEnvelope,
 } from '../rpc-envelope';
 import {
-    WORKER_FORBIDDEN_CAPABILITIES,
     WorkerIsolationRuntime,
     type IsolatedWorkerMessagePort,
 } from '../worker-runtime';
@@ -206,57 +204,6 @@ describe('worker-runtime (8.4-8.6)', () => {
         expect(fake.terminated()).toBe(true);
     });
 
-    it('completes a host→plugin call when the worker responds', async () => {
-        const listeners = new Map<string, Set<(event: { data?: unknown }) => void>>();
-        let lastRequestId: string | null = null;
-        const port: IsolatedWorkerMessagePort = {
-            postMessage(message: unknown) {
-                const parsed = parseRpcEnvelope(message);
-                if (parsed.ok && parsed.envelope.kind === 'request') {
-                    lastRequestId = parsed.envelope.id;
-                    queueMicrotask(() => {
-                        for (const listener of listeners.get('message') ?? []) {
-                            listener({
-                                data: serializeRpcEnvelope(
-                                    createRpcResponse({
-                                        id: parsed.envelope.id,
-                                        result: { pong: true },
-                                    })
-                                ),
-                            });
-                        }
-                    });
-                }
-            },
-            addEventListener(type, listener) {
-                const set = listeners.get(type) ?? new Set();
-                set.add(listener);
-                listeners.set(type, set);
-            },
-            removeEventListener(type, listener) {
-                listeners.get(type)?.delete(listener);
-            },
-            terminate() {},
-        };
-
-        const runtime = new WorkerIsolationRuntime({
-            pluginId: 'iso.worker',
-            workspaceId: 'ws-1',
-            generation: 1,
-            moduleUrl: 'https://plugins.local/worker.mjs',
-            grants: grants(),
-            createWorker: () => port,
-            services: {},
-        });
-        await runtime.start();
-        await expect(runtime.callPlugin('plugin.ping', {})).resolves.toEqual({
-            ok: true,
-            result: { pong: true },
-        });
-        expect(lastRequestId).toEqual(expect.any(String));
-        runtime.dispose();
-    });
-
     it('charges the activation ledger and stops on a terminal breach (finding 2)', async () => {
         const inbox: RpcEnvelope[] = [];
         const fake = createFakeWorkerFactory(inbox);
@@ -423,17 +370,7 @@ describe('worker-runtime (8.4-8.6)', () => {
         runtime.dispose();
     });
 
-    it('adversarial: forbids host globals/DOM/network, revoked grants, and enforces deadlines', async () => {
-        expect(WORKER_FORBIDDEN_CAPABILITIES).toEqual(
-            expect.arrayContaining([
-                'window',
-                'document',
-                'fetch',
-                'XMLHttpRequest',
-                'WebSocket',
-            ])
-        );
-
+    it('rejects revoked grants and enforces deadlines', async () => {
         const inbox: RpcEnvelope[] = [];
         const fake = createFakeWorkerFactory(inbox);
         const handler = vi.fn(() => ({ value: 1 }));

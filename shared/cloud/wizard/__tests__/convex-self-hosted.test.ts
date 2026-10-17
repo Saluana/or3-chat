@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultAnswers } from '../catalog';
 import { deriveEnvFromAnswers, deriveLocalDevConvexEnvLocalUpdates } from '../derive';
-import {
-    hasSelfHostedConvexInputs,
-    normalizeSelfHostedConvexInputs,
-} from '../convex-self-hosted';
 
 function answers() {
     return {
@@ -19,25 +15,6 @@ function answers() {
 }
 
 describe('wizard: self-hosted Convex inputs', () => {
-    it('normalizes the shared inputs only when URL and admin key are present', () => {
-        const normalized = normalizeSelfHostedConvexInputs(answers());
-
-        expect(normalized).toEqual({
-            url: 'https://convex.example',
-            adminKey: 'admin-key',
-            siteUrl: 'https://site.example',
-        });
-        expect(hasSelfHostedConvexInputs(normalized)).toBe(true);
-        expect(
-            hasSelfHostedConvexInputs(
-                normalizeSelfHostedConvexInputs({
-                    ...answers(),
-                    convexSelfHostedAdminKey: ' ',
-                })
-            )
-        ).toBe(false);
-    });
-
     it('derives normalized app and local Convex CLI values from the same inputs', () => {
         const configured = answers();
         const { env } = deriveEnvFromAnswers(configured);
@@ -52,5 +29,11 @@ describe('wizard: self-hosted Convex inputs', () => {
             VITE_CONVEX_SITE_URL: 'https://site.example',
             CONVEX_DEPLOYMENT: null,
         });
+        expect(
+            deriveLocalDevConvexEnvLocalUpdates({
+                ...configured,
+                convexSelfHostedAdminKey: ' ',
+            })
+        ).toEqual({});
     });
 });

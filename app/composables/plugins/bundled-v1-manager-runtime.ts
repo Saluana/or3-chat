@@ -138,10 +138,3 @@ export function createWorkspaceManagerCanarySelector(flags: {
     return (workspaceId) =>
         isWorkspaceManagerCanary({ enabled, workspaceIds, workspaceId });
 }
-
-export function createStartupSelectedWorkspaceManager<T>(
-    enabled: boolean,
-    createManager: () => T
-): T | null {
-    return enabled ? createManager() : null;
-}

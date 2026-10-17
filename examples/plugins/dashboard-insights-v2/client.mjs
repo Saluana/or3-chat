@@ -55,7 +55,6 @@ export function createDashboardInsightsPlugin(options = {}) {
             });
             context.onActivate(async () => {
                 observe('activate');
-                if (options.failOnActivate) throw new Error('sample activation failure');
                 const stored = await context.storage.set('lastActivation', {
                     generation: context.generation,
                 });

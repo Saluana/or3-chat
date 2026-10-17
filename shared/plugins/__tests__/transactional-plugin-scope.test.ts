@@ -191,9 +191,10 @@ describe('TransactionalPluginScope', () => {
         ).toEqual(['managed-hidden', 'managed-current']);
     });
 
-    it('restores old hooks and removes hidden new hooks after publication failure', async () => {
+    it('restores old hooks and contributions and removes staged records after publication failure', async () => {
         const table = new ActivationTable();
         const hooks = new HookRecordStore({ activationTable: table });
+        const contributions = registry(table);
         const oldOwner = Symbol('old');
         const oldHook = vi.fn();
         const nextHook = vi.fn();
@@ -202,6 +203,12 @@ describe('TransactionalPluginScope', () => {
             pluginId: 'alpha',
             generation: 1,
             values: [{ kind: 'action', name: 'alpha.action', fn: oldHook }],
+        });
+        contributions.stage({
+            owner: oldOwner,
+            pluginId: 'alpha',
+            generation: 1,
+            values: [{ value: { id: 'same', label: 'old' } }],
         });
         table.publish({
             pluginId: 'alpha',
@@ -212,10 +219,13 @@ describe('TransactionalPluginScope', () => {
             pluginId: 'alpha',
             generation: 2,
             activationTable: table,
-            afterPublish() {
-                throw new Error('forced hook publication fault');
-            },
         });
+        table.subscribe((change) => {
+            if (change.next === scope.owner) throw new Error('publication listener failed');
+        });
+        scope.stageContributions(contributions, [
+            { value: { id: 'same', label: 'new' } },
+        ]);
         scope.stageHooks(hooks, [
             { kind: 'action', name: 'alpha.action', fn: nextHook },
         ]);
@@ -227,6 +237,8 @@ describe('TransactionalPluginScope', () => {
         });
 
         expect(table.current('alpha')).toBe(oldOwner);
+        expect(contributions.get('same', undefined)?.label).toBe('old');
+        expect(contributions.inspect().map(({ owner }) => owner)).toEqual([oldOwner]);
         expect(
             hooks.matching('action', 'alpha.action').map(({ fn }) => fn),
         ).toEqual([oldHook]);
@@ -254,49 +266,6 @@ describe('TransactionalPluginScope', () => {
         });
         expect(table.current('alpha')).toBe(winner);
         expect(contributions.inspect()).toEqual([]);
-    });
-
-    it('restores the previous pointer before removing records after a synchronous publish fault', async () => {
-        const table = new ActivationTable();
-        const contributions = registry(table);
-        const oldOwner = Symbol('old');
-        contributions.stage({
-            owner: oldOwner,
-            pluginId: 'alpha',
-            generation: 1,
-            values: [{ value: { id: 'same', label: 'old' } }],
-        });
-        table.publish({
-            pluginId: 'alpha',
-            expected: undefined,
-            next: oldOwner,
-        });
-        let newOwner!: symbol;
-        const scope = new TransactionalPluginScope({
-            pluginId: 'alpha',
-            generation: 2,
-            activationTable: table,
-            afterPublish() {
-                expect(table.current('alpha')).toBe(newOwner);
-                throw new Error('forced finalization fault');
-            },
-        });
-        newOwner = scope.owner;
-        scope.stageContributions(contributions, [
-            { value: { id: 'same', label: 'new' } },
-        ]);
-        await prepare(scope);
-
-        expect(scope.publish(oldOwner)).toMatchObject({
-            ok: false,
-            error: { code: 'publication-failed' },
-        });
-
-        expect(table.current('alpha')).toBe(oldOwner);
-        expect(contributions.get('same', undefined)?.label).toBe('old');
-        expect(contributions.inspect().map((record) => record.owner)).toEqual([
-            oldOwner,
-        ]);
     });
 
     it('disposes sequentially in LIFO order and stale disposal cannot clear a newer owner', async () => {

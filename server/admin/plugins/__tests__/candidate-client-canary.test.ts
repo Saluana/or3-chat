@@ -41,6 +41,7 @@ describe('client canary tickets', () => {
         const store = new PluginClientCanaryStore(mkdtempSync(resolve(tmpdir(), 'or3-canary-')));
         const ticket = await store.issueTicket(ticketRequest(), 1_000);
         expect(ticket.expiresAt).toBeGreaterThan(1_000);
+        expect(statSync(store.ticketPath(ticket.ticketId)).mode & 0o777).toBe(0o600);
 
         const report = {
             ticketId: ticket.ticketId,
@@ -120,12 +121,6 @@ describe('client canary tickets', () => {
                 1_002
             ))?.ticketId
         ).toBe(ticket.ticketId);
-    });
-
-    it('records tickets with owner-only permissions', async () => {
-        const store = new PluginClientCanaryStore(mkdtempSync(resolve(tmpdir(), 'or3-canary-')));
-        const ticket = await store.issueTicket(ticketRequest(), 1_000);
-        expect(statSync(store.ticketPath(ticket.ticketId)).mode & 0o777).toBe(0o600);
     });
 
     it('refuses a wrong nonce or an expired ticket', async () => {

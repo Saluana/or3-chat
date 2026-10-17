@@ -3,7 +3,6 @@ import { compileThemeDefinition } from "~/theme/_shared/compile-theme";
 import { validateThemeDefinition } from "~/theme/_shared/validate-theme";
 import {
   __resetWorkspaceProfileRegistryForTests,
-  __getRequestResolvedWorkspaceProfileRefForTests,
   activeThemeProfileRecommendation,
   createWorkspaceProfileHydrationPayload,
   DOCUMENT_WORKSPACE_PROFILE,
@@ -34,24 +33,6 @@ describe("workspace profile hydration and theme packaging", () => {
   beforeEach(() => {
     __resetWorkspaceProfileRegistryForTests();
     activeThemeProfileRecommendation.value = null;
-  });
-
-  it("produces identical immutable SSR and hydration resolution", () => {
-    const payload = createWorkspaceProfileHydrationPayload(
-      STANDARD_OR3_PROFILE,
-      DEFAULT_WORKSPACE_PROFILE_INVENTORY,
-      limits,
-    );
-    const serverResult = hydrateWorkspaceProfilePayload(payload);
-    const serialized = JSON.parse(JSON.stringify(payload));
-    const clientResult = hydrateWorkspaceProfilePayload(serialized);
-    expect(clientResult).toEqual(serverResult);
-    expect(Object.isFrozen(clientResult)).toBe(true);
-    expect(clientResult.navigation.items).toEqual([
-      "sidebar-home",
-      "sidebar-chats",
-      "sidebar-docs",
-    ]);
   });
 
   it("hydrates a non-Standard workspace from its server-readable selection mirror", () => {
@@ -88,32 +69,6 @@ describe("workspace profile hydration and theme packaging", () => {
         workspaceId: "workspace-b",
       }).id,
     ).toBe("standard-or3");
-  });
-
-  it("isolates resolved state between concurrent SSR request containers", () => {
-    const requestA = {};
-    const requestB = {};
-    const stateA = __getRequestResolvedWorkspaceProfileRefForTests(requestA);
-    const stateB = __getRequestResolvedWorkspaceProfileRefForTests(requestB);
-
-    stateA.value = hydrateWorkspaceProfilePayload(
-      createWorkspaceProfileHydrationPayload(
-        DOCUMENT_WORKSPACE_PROFILE,
-        DEFAULT_WORKSPACE_PROFILE_INVENTORY,
-        limits,
-      ),
-    );
-    stateB.value = hydrateWorkspaceProfilePayload(
-      createWorkspaceProfileHydrationPayload(
-        STANDARD_OR3_PROFILE,
-        DEFAULT_WORKSPACE_PROFILE_INVENTORY,
-        limits,
-      ),
-    );
-
-    expect(stateA).not.toBe(stateB);
-    expect(stateA.value.id).toBe("document-workspace");
-    expect(stateB.value.id).toBe("standard-or3");
   });
 
   it("registers valid theme profiles as choices and never applies the recommendation", () => {

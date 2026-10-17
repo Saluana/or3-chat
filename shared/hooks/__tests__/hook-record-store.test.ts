@@ -11,41 +11,6 @@ function createStore() {
 }
 
 describe('HookRecordStore', () => {
-    it('merges sorted exact and wildcard legacy records by priority and global sequence', () => {
-        const { store } = createStore();
-        const wildcardFirst = vi.fn();
-        const exactSecond = vi.fn();
-        const exactLow = vi.fn();
-        const wildcardHigh = vi.fn();
-
-        store.registerLegacy({
-            kind: 'action',
-            name: 'demo.*',
-            fn: wildcardFirst,
-        });
-        store.registerLegacy({
-            kind: 'action',
-            name: 'demo.action.order',
-            fn: exactSecond,
-        });
-        store.registerLegacy({
-            kind: 'action',
-            name: 'demo.action.order',
-            fn: exactLow,
-            priority: 5,
-        });
-        store.registerLegacy({
-            kind: 'action',
-            name: '*.action.order',
-            fn: wildcardHigh,
-            priority: 20,
-        });
-
-        expect(
-            store.matching('action', 'demo.action.order').map(({ fn }) => fn),
-        ).toEqual([exactLow, wildcardFirst, exactSecond, wildcardHigh]);
-    });
-
     it('keeps managed records hidden until their exact owner is current', () => {
         const { activationTable, store } = createStore();
         const oldOwner = Symbol('old');

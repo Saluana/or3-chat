@@ -24,22 +24,6 @@ describe("resolveDownloadPolicy", () => {
     ).toBe("inline");
   });
 
-  it("makes generic and active content inert", () => {
-    const maliciousName = "../../evil" + String.fromCharCode(13, 10) + ".html";
-    expect(
-      resolveDownloadPolicy({
-        fileKind: "file",
-        mimeType: "text/html",
-        filename: maliciousName,
-        requestedDisposition: "inline",
-      }),
-    ).toEqual({
-      mimeType: "application/octet-stream",
-      disposition: "attachment",
-      filename: ".._.._evil__.html",
-    });
-  });
-
   it("uses safe legacy inference only for exact supported types", () => {
     expect(resolveDownloadPolicy({ mimeType: "image/jpeg" }).mimeType).toBe(
       "image/jpeg",

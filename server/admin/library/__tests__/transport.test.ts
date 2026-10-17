@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-    clearLibraryReceiptKeyCache,
     createHttpLibraryLinkTransport,
 } from '../transport';
 import { canonicalJson } from '~~/shared/plugins/descriptor-key';
@@ -119,7 +118,6 @@ function startedResponse(): Record<string, unknown> {
 describe('library link transport', () => {
     beforeEach(() => {
         fetchMock.mockReset();
-        clearLibraryReceiptKeyCache();
     });
 
     it('parses a real start response and never puts the secret in the URL', async () => {
@@ -360,7 +358,6 @@ describe('library link transport', () => {
 describe('library acquisition transport', () => {
     beforeEach(() => {
         fetchMock.mockReset();
-        clearLibraryReceiptKeyCache();
     });
 
     it('records the acquisition idempotently and returns the artifact path', async () => {
@@ -480,7 +477,6 @@ describe('library acquisition transport', () => {
 describe('library entitlements transport', () => {
     beforeEach(() => {
         fetchMock.mockReset();
-        clearLibraryReceiptKeyCache();
     });
 
     const LISTING = {

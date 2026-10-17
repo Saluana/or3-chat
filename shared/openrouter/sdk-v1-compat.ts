@@ -5,44 +5,18 @@
  * `{ data }`. v1 nests chat under `chatRequest`, oauth under `requestBody`,
  * and returns a PageIterator of `{ result: { data } }`.
  *
- * These helpers remain in use by non-workflow paths (caption, OAuth exchange,
+ * These helpers remain in use by non-workflow paths (OAuth exchange and
  * model listing). Workflow execution now flows through the provider-neutral
  * `OpenRouterModelGateway`, so the former `chat.send` monkey patch is gone.
  */
 
 import type { Model as SDKModel } from '@openrouter/sdk/models';
 import type { ExchangeAuthCodeForAPIKeyRequest } from '@openrouter/sdk/models/operations';
-import type { SendChatCompletionRequestRequest } from '@openrouter/sdk/models/operations';
 import type { OpenRouter } from '@openrouter/sdk';
 import { getRequestOptions } from './request-options';
 import { sdkModelToLocal, type OpenRouterModel } from './types';
 
 type UnknownRecord = Record<string, unknown>;
-
-/** Convert flat chat.send args to the v1 `{ chatRequest }` shape when needed. */
-export function wrapLegacyChatSendArgs(
-    request: UnknownRecord
-): SendChatCompletionRequestRequest {
-    if ('chatRequest' in request) {
-        return request as SendChatCompletionRequestRequest;
-    }
-
-    const {
-        httpReferer,
-        appTitle,
-        appCategories,
-        xOpenRouterMetadata,
-        ...chatRequest
-    } = request;
-
-    return {
-        ...(httpReferer !== undefined ? { httpReferer } : {}),
-        ...(appTitle !== undefined ? { appTitle } : {}),
-        ...(appCategories !== undefined ? { appCategories } : {}),
-        ...(xOpenRouterMetadata !== undefined ? { xOpenRouterMetadata } : {}),
-        chatRequest,
-    } as SendChatCompletionRequestRequest;
-}
 
 /** Convert flat oauth exchange args to the v1 `{ requestBody }` shape. */
 export function wrapLegacyOAuthExchangeArgs(

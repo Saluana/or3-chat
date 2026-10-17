@@ -110,13 +110,6 @@ export type PluginDescriptorIdentity = PluginDescriptor extends infer Descriptor
         : never
     : never;
 
-/** Narrows the only artifact kind whose bytes can change without rebuilding the host. */
-export function isPostBuildReloadableArtifact(
-    artifact: PluginArtifactIdentity
-): artifact is PackageV2ArtifactIdentity {
-    return artifact.kind === 'package-v2';
-}
-
 export interface PackageV2ToolCardDescriptor extends PluginToolCardManifestEntry {
     readonly entrySha256: Sha256;
     readonly stylesheet?: { readonly path: string; readonly sha256: Sha256 };

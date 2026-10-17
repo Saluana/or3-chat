@@ -47,23 +47,6 @@ async function harness(count: number) {
 }
 
 describe('request-driven rollout', () => {
-    it('accounts for 1,000 workspaces in batches of at most 25 after a service restart', async () => {
-        const h = await harness(1000);
-        let service = new PluginRolloutCoordinator(h.deps);
-        const preview = await service.createPreview({ pluginId: 'acme.test', actorId: 'admin', selection: { kind: 'all-existing' }, enabled: true, includeFutureWorkspaces: false, approvedGrants: [], candidate: h.candidate });
-        expect(preview.targets).toHaveLength(1000);
-        await service.start(preview.id, h.candidate);
-        for (let i = 0; i < 10; i++) await service.continue(preview.id, h.candidate);
-        service = new PluginRolloutCoordinator(h.deps);
-        for (let i = 0; i < 30; i++) await service.continue(preview.id, h.candidate);
-        const final = await h.records.page(preview.id);
-        expect(final?.status).toBe('completed');
-        expect(final).not.toBeNull();
-        expect(final!.counts.applied + final!.counts['already-applied']).toBe(1000);
-        expect(final?.counts.pending).toBe(0);
-        expect(h.values.get('ws-999:plugins.enabled')).toContain('acme.test');
-    });
-
     it('leaves setup-blocked workspaces disabled and retries only unresolved targets', async () => {
         const h = await harness(3);
         h.setSetupBlocked(['ws-1']);

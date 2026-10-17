@@ -582,11 +582,6 @@ export class WorkerIsolationRuntime {
         this.terminate('host dispose');
     }
 
-    /** Test/helper: simulate a message arriving from the worker. */
-    ingestFromWorker(raw: unknown): void {
-        void this.#handleWorkerMessage(raw);
-    }
-
     #registerMethods(
         options: WorkerRuntimeOptions
     ): readonly HostRpcMethodSpec[] {
@@ -884,20 +879,3 @@ export class WorkerIsolationRuntime {
         }
     }
 }
-
-/**
- * Capabilities intentionally unavailable inside an isolated worker.
- * Used by adversarial tests and documentation.
- */
-export const WORKER_FORBIDDEN_CAPABILITIES = [
-    'window',
-    'document',
-    'parent',
-    'frames',
-    'localStorage',
-    'indexedDB',
-    'fetch',
-    'XMLHttpRequest',
-    'WebSocket',
-    'navigator.serviceWorker',
-] as const;

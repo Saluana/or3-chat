@@ -14,16 +14,6 @@ describe('IconRegistry', () => {
         expect(icon).toBe(DEFAULT_ICONS['ui.trash']);
     });
 
-    it('resolves theme overrides correctly', () => {
-        registry.registerTheme('custom-theme', {
-            'ui.trash': 'custom:trash-icon',
-        });
-        registry.setActiveTheme('custom-theme');
-
-        const icon = registry.resolve('ui.trash');
-        expect(icon).toBe('custom:trash-icon');
-    });
-
     it('falls back to default if theme override is missing', () => {
         registry.registerTheme('custom-theme', {
             'ui.edit': 'custom:edit-icon',

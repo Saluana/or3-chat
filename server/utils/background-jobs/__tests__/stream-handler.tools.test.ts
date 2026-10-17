@@ -598,7 +598,6 @@ describe('consumeBackgroundStreamWithTools', () => {
                     choices: [{ delta: { content: 'partial' } }],
                 }]),
                 provider,
-                flushOnEveryChunk: true,
                 context: {
                     body: {}, apiKey: 'key', userId: 'user-1',
                     workspaceId: 'ws-1', threadId: 'thread-1',
@@ -988,7 +987,6 @@ describe('background usage through terminal history', () => {
         expect(snapshot.toolCalls).toEqual([expect.objectContaining({ id: 'call-1', status: 'complete', text_offset: 10 })]);
     });
 
-
     it.each([false, true])('refuses resumed inference after ownership changes (tools: %s)', async withTools => {
         const { jobId, context } = await admitted(withTools);
         registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
@@ -1024,26 +1022,6 @@ describe('background usage through terminal history', () => {
         }) as unknown as AuthWorkspaceStore });
         vi.stubGlobal('fetch', vi.fn(async () => response(100)));
         await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow();
-        expect(fetch).not.toHaveBeenCalled();
-    });
-
-    it('rechecks write membership after an awaited canonical ownership read', async () => {
-        const { jobId, context } = await admitted(false);
-        let role: 'owner' | 'viewer' = 'owner';
-        registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({
-            listUserWorkspaces: async () => [{ id: 'workspace', name: 'Fixture', role }],
-        }) as unknown as AuthWorkspaceStore });
-        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
-            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
-            readChatHistory: async () => {
-                role = 'viewer';
-                return { status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: null } };
-            },
-            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
-            finalizeChatGeneration: finalize,
-        }) as unknown as SyncGatewayAdapter });
-        vi.stubGlobal('fetch', vi.fn(async () => response(100)));
-        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow('Forbidden');
         expect(fetch).not.toHaveBeenCalled();
     });
 

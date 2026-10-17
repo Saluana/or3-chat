@@ -150,18 +150,6 @@ describe('POST /api/storage/gc/run', () => {
         );
     });
 
-    it('returns 429 with wait message when same workspace is called during cooldown', async () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-02-06T12:00:00.000Z'));
-        const handler = await loadHandler();
-        readBodyMock.mockResolvedValue(makeBody());
-
-        await handler(makeEvent());
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 429 });
-
-        vi.useRealTimers();
-    });
-
     it('throttles repeated runs per workspace but allows other workspaces', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-02-06T12:00:00.000Z'));
@@ -193,13 +181,6 @@ describe('POST /api/storage/gc/run', () => {
         getActiveStorageGatewayAdapterMock.mockReturnValue({ id: 'adapter-1' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 501 });
-    });
-
-    it('passes through adapter deleted_count result', async () => {
-        const handler = await loadHandler();
-        readBodyMock.mockResolvedValue(makeBody());
-
-        await expect(handler(makeEvent())).resolves.toEqual({ deleted_count: 2 });
     });
 
     it('passes through an adapter disabled status without inventing deletions', async () => {

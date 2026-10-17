@@ -146,7 +146,6 @@ export class PluginAiGovernor {
     readonly #limits: PluginAiLimits;
     readonly #allowedModels: readonly string[] | undefined;
     readonly #prices: ModelPriceTable;
-    readonly #now: () => number;
     readonly #initialSpendUsd: number;
     readonly #usage: PluginAiUsageRecord[] = [];
     #reservedUsd = 0;
@@ -159,7 +158,6 @@ export class PluginAiGovernor {
         this.#limits = resolvePluginAiLimits(options.budgets, options.limits ?? {});
         this.#allowedModels = options.allowedModels;
         this.#prices = options.prices;
-        this.#now = options.now ?? (() => Date.now());
         const initialSpendUsd = options.initialSpendUsd ?? 0;
         this.#initialSpendUsd =
             Number.isFinite(initialSpendUsd) && initialSpendUsd > 0 ? initialSpendUsd : 0;
@@ -170,10 +168,6 @@ export class PluginAiGovernor {
             });
             if (!charged.ok) this.#exhausted = true;
         }
-    }
-
-    get limits(): PluginAiLimits {
-        return this.#limits;
     }
 
     get spendUsd(): number {
@@ -190,10 +184,6 @@ export class PluginAiGovernor {
 
     get exhausted(): boolean {
         return this.#exhausted || this.#ledger.exhausted !== null;
-    }
-
-    get usage(): readonly PluginAiUsageRecord[] {
-        return [...this.#usage];
     }
 
     priceFor(model: string): ModelPrice | null {
@@ -304,20 +294,5 @@ export class PluginAiGovernor {
     /** Record an attributed usage record after a successful call. */
     record(input: PluginAiUsageRecord): void {
         this.#usage.push(Object.freeze({ ...input }));
-    }
-
-    /** Provider cost disclosure text shown next to the plugin action. */
-    disclosure(pluginLabel: string): string {
-        return `${pluginLabel} uses your configured model provider. Provider charges for this use are billed to that account, separately from OR3. OR3 reserves the worst-case cost of each call before dispatch and refuses further calls once $${this.#limits.spendLimitUsd.toFixed(2)} per activation is committed.`;
-    }
-
-    snapshot() {
-        return Object.freeze({
-            spendUsd: this.spendUsd,
-            committedUsd: this.committedUsd,
-            calls: this.#usage.length,
-            budget: this.#ledger.snapshot(),
-            limits: this.#limits,
-        });
     }
 }

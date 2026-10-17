@@ -889,13 +889,6 @@ describe('library link service', () => {
 });
 
 describe('library entitlements view', () => {
-    it('answers an unlinked user without a marketplace request', async () => {
-        const h = createHarness();
-        const view = await h.service.entitlements(USER);
-        expect(view).toEqual({ configured: true, linked: false });
-        expect(h.calls.entitlements).toHaveLength(0);
-    });
-
     it('lists the linked account’s purchases with its identity', async () => {
         const h = createHarness();
         await toLinked(h);

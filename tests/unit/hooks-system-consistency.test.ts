@@ -29,49 +29,15 @@ describe('Hooks - System consistency', () => {
         vi.clearAllMocks();
     });
 
-    describe('useHooks() with available engine', () => {
-        it('should return the provided hook engine', async () => {
-            // Create a mock typed hook engine
-            const mockEngine = {
-                addAction: vi.fn(),
-                doAction: vi.fn(),
-                addFilter: vi.fn(),
-                applyFilter: vi.fn(),
-                removeAction: vi.fn(),
-                removeFilter: vi.fn(),
-            };
-
-            mockNuxtApp.$hooks = mockEngine;
-
-            const { useHooks } = await import('../../app/core/hooks/useHooks');
-            const hooks = useHooks();
-
-            expect(hooks).toBe(mockEngine);
-        });
-    });
-
     describe('useHooks() without available engine', () => {
         it('should throw error when hook engine not initialized', async () => {
             mockNuxtApp.$hooks = null;
 
             const { useHooks } = await import('../../app/core/hooks/useHooks');
 
-            expect(() => useHooks()).toThrow('Hook engine not initialized');
+            expect(() => useHooks()).toThrow(/Hook engine not initialized.*00-hooks plugin/);
         });
 
-        it('should include helpful error message', async () => {
-            mockNuxtApp.$hooks = undefined;
-
-            const { useHooks } = await import('../../app/core/hooks/useHooks');
-
-            try {
-                useHooks();
-                expect.fail('Should have thrown an error');
-            } catch (error) {
-                expect(error instanceof Error).toBe(true);
-                expect((error as Error).message).toContain('00-hooks plugin');
-            }
-        });
     });
 
     describe('Hook engine singleton behavior', () => {

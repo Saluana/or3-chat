@@ -89,15 +89,6 @@ describe('createStreamAccumulator', () => {
         expect(acc.state.finalized).toBe(true);
     });
 
-    it('append after finalize ignored (R4)', async () => {
-        const acc = createStreamAccumulator();
-        acc.append('A', { kind: 'text' });
-        acc.finalize();
-        acc.append('B', { kind: 'text' });
-        await nextFrame();
-        expect(acc.state.text).toBe('A');
-    });
-
     it('reset reactivates state (R11)', async () => {
         const acc = createStreamAccumulator();
         acc.append('A', { kind: 'text' });

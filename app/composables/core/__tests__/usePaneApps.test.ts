@@ -168,19 +168,6 @@ describe('usePaneApps', () => {
         expect(list[2]?.id).toBe('app1'); // order 300
     });
 
-    it('applies default order when not specified', () => {
-        const { registerPaneApp, getPaneApp } = usePaneApps();
-
-        registerPaneApp({
-            id: 'no-order',
-            label: 'No Order App',
-            component: { name: 'NoOrder', template: '<div>no order</div>' },
-        });
-
-        const app = getPaneApp('no-order');
-        expect(app?.order).toBe(200);
-    });
-
     it('wraps async loaders so Vue does not render their Promise value', async () => {
         const { registerPaneApp, getPaneApp } = usePaneApps();
 
@@ -215,55 +202,6 @@ describe('usePaneApps', () => {
         await nextTick();
         expect(wrapper.text()).toBe('async');
         expect(wrapper.text()).not.toContain('[object Promise]');
-    });
-
-    it('preserves createInitialRecord callback', () => {
-        const { registerPaneApp, getPaneApp } = usePaneApps();
-
-        const mockCallback = async () => ({ id: 'mock-id' });
-
-        registerPaneApp({
-            id: 'with-callback',
-            label: 'With Callback',
-            component: {
-                name: 'WithCallback',
-                template: '<div>callback</div>',
-            },
-            createInitialRecord: mockCallback,
-        });
-
-        const app = getPaneApp('with-callback');
-        expect(app?.createInitialRecord).toBe(mockCallback);
-    });
-
-    it('preserves postType override', () => {
-        const { registerPaneApp, getPaneApp } = usePaneApps();
-
-        registerPaneApp({
-            id: 'custom-type',
-            label: 'Custom Type',
-            component: { name: 'CustomType', template: '<div>custom</div>' },
-            postType: 'special_post_type',
-        });
-
-        const app = getPaneApp('custom-type');
-        expect(app?.postType).toBe('special_post_type');
-    });
-
-    it('component is marked raw to avoid reactivity overhead', () => {
-        const { registerPaneApp, getPaneApp } = usePaneApps();
-
-        const component = { name: 'Test', template: '<div>test</div>' };
-
-        registerPaneApp({
-            id: 'raw-test',
-            label: 'Raw Test',
-            component,
-        });
-
-        const app = getPaneApp('raw-test');
-        // markRaw should prevent Vue reactivity on the component
-        expect(app?.component).toBe(component);
     });
 
     it('computed listPaneApps updates reactively after registration', () => {

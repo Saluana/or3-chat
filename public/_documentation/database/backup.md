@@ -37,7 +37,7 @@ After completion, reopen representative chats and documents and check attachment
 
 Use `useWorkspaceBackup` from `~/composables/core/useWorkspaceBackup` during client component setup. Its existing dashboard caller is `app/components/dashboard/workspace/WorkspaceBackupApp.vue`.
 
-The workflow is export, or peek metadata → user chooses mode/overwrite → import. Its state contains progress, currentStep, error, and format/metadata. The default import mode is **replace**, so never immediately import after a file is selected without presenting that choice.
+The workflow is export, or peek metadata → user chooses mode/overwrite → import. Its state contains progress, currentStep, error, and format/metadata. Import defaults to **append** with overwrite disabled. Present the mode and overwrite choices before importing.
 
 Methods can report failure through `state.error`/`currentStep` rather than rejecting. A resolved promise alone does not prove success. Preserve the existing before/after/error/cancelled hooks and `workspace:reloaded` event after successful restore. The stream codec lives in `app/utils/workspace-backup-stream.ts`.
 

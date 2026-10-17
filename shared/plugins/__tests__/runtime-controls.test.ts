@@ -71,51 +71,6 @@ describe('runtime controls', () => {
         expect(manager.schedule).toHaveBeenCalledWith('runtime-control:quarantine-clear');
     });
 
-    it('disables via package lifecycle and keeps retention messaging', async () => {
-        const disable = vi.fn(async () => ['other']);
-        const result = await executeRuntimeControl('disable', {
-            managerV2Enabled: true,
-            safeModeEnabled: false,
-            workspaceId: 'ws-1',
-            pluginId: 'alpha',
-            packageLifecycle: { disable },
-        });
-        expect(result.status).toBe('ok');
-        expect(disable).toHaveBeenCalledWith('ws-1', 'alpha');
-        expect(result.message).toMatch(/retained/i);
-    });
-
-    it('rolls back through promotion or reports blocked status', async () => {
-        const rolled = await executeRuntimeControl('rollback', {
-            managerV2Enabled: true,
-            safeModeEnabled: false,
-            pluginId: 'alpha',
-            storedStateVersion: 1,
-            snapshotState: () => ({ v: 1 }),
-            restoreState: () => undefined,
-            packagePromotion: {
-                rollback: async () => ({ status: 'rolled-back' }),
-            },
-        });
-        expect(rolled.status).toBe('ok');
-
-        const blocked = await executeRuntimeControl('rollback', {
-            managerV2Enabled: true,
-            safeModeEnabled: false,
-            pluginId: 'alpha',
-            snapshotState: () => ({}),
-            restoreState: () => undefined,
-            packagePromotion: {
-                rollback: async () => ({
-                    status: 'blocked',
-                    code: 'rollback-unsupported',
-                }),
-            },
-        });
-        expect(blocked.status).toBe('failed');
-        expect(blocked.message).toMatch(/rollback-unsupported/);
-    });
-
     it('inspects local records without claiming fleet visibility', async () => {
         const result = await executeRuntimeControl('inspect', {
             managerV2Enabled: true,

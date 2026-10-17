@@ -1,11 +1,5 @@
-/**
- * Integration tests for editor extensibility
- *
- * NOTE: These tests require a DOM environment (TipTap dependency) and will not run in
- * standard unit test mode. They are designed for E2E test runners or browser environments.
- */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+/** TipTap command integration and editor creation performance in jsdom. */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Editor } from '@tiptap/vue-3';
 import { Node, Mark } from '@tiptap/core';
 import {
@@ -16,11 +10,6 @@ import {
     listRegisteredEditorNodeIds,
     listRegisteredEditorMarkIds,
 } from '../editor/useEditorNodes';
-import {
-    registerEditorToolbarButton,
-    unregisterEditorToolbarButton,
-    listRegisteredEditorToolbarButtonIds,
-} from '../editor/useEditorToolbar';
 import StarterKit from '@tiptap/starter-kit';
 
 describe('Editor Integration Tests', () => {
@@ -28,9 +17,6 @@ describe('Editor Integration Tests', () => {
         // Clear all registries
         listRegisteredEditorNodeIds().forEach((id) => unregisterEditorNode(id));
         listRegisteredEditorMarkIds().forEach((id) => unregisterEditorMark(id));
-        listRegisteredEditorToolbarButtonIds().forEach((id) =>
-            unregisterEditorToolbarButton(id)
-        );
     });
 
     it('7.4: Editor creates with plugin nodes and marks, commands operate', async () => {
@@ -127,60 +113,6 @@ describe('Editor Integration Tests', () => {
         editor.commands.selectAll();
         (editor.commands as any).toggleHighlight();
         expect(editor.isActive('highlight')).toBe(true);
-
-        editor.destroy();
-    });
-
-    it('7.5: Toolbar renders and triggers onClick', async () => {
-        let clickCount = 0;
-        let lastEditor: Editor | null = null;
-
-        registerEditorToolbarButton({
-            id: 'test:click-counter',
-            icon: 'i-carbon-add',
-            tooltip: 'Click Counter',
-            order: 300,
-            isActive: (editor) => clickCount > 0,
-            onClick: (editor) => {
-                clickCount++;
-                lastEditor = editor;
-            },
-        });
-
-        const { useEditorToolbarButtons } = await import(
-            '../editor/useEditorToolbar'
-        );
-
-        const editor = new Editor({
-            extensions: [StarterKit],
-            content: '<p>Test</p>',
-        });
-
-        const editorRef = { value: editor };
-        const buttons = useEditorToolbarButtons(editorRef as any);
-
-        // Verify button is in the list
-        expect(buttons.value.length).toBeGreaterThan(0);
-        const testButton = buttons.value.find(
-            (b) => b.id === 'test:click-counter'
-        );
-        expect(testButton).toBeDefined();
-
-        // Verify initial state
-        expect(clickCount).toBe(0);
-        expect(testButton?.isActive?.(editor)).toBe(false);
-
-        // Trigger onClick
-        testButton?.onClick(editor);
-
-        // Verify state changed
-        expect(clickCount).toBe(1);
-        expect(lastEditor).toBe(editor);
-        expect(testButton?.isActive?.(editor)).toBe(true);
-
-        // Trigger again
-        testButton?.onClick(editor);
-        expect(clickCount).toBe(2);
 
         editor.destroy();
     });

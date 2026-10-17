@@ -28,7 +28,6 @@
  */
 
 import { satisfies } from 'semver';
-import { sha256Hex } from '../../runtime-crypto';
 import type { Sha256 } from '../runtime-descriptor';
 import type { EffectiveAuthority } from '../authority/effective-authority';
 
@@ -144,10 +143,6 @@ export function canonicalizeReleaseMetadata(value: unknown): unknown {
 
 export function encodeReleaseMetadata(document: unknown): Uint8Array {
     return new TextEncoder().encode(JSON.stringify(canonicalizeReleaseMetadata(document)));
-}
-
-export async function releaseMetadataSha256(document: unknown): Promise<Sha256> {
-    return `sha256-${await sha256Hex(encodeReleaseMetadata(document))}`;
 }
 
 export interface ParseReleaseMetadataResult {
@@ -266,21 +261,6 @@ export interface ReleaseMetadataExpectation {
     readonly version?: string;
     /** Release id the caller resolved, when it already knows one. */
     readonly releaseId?: string;
-}
-
-/** Simple major.minor.patch comparison sufficient for the pinned engine ranges. */
-export function compareVersions(left: string, right: string): number {
-    const parse = (value: string): number[] => {
-        const core = value.replace(/^[^\d]*/, '').split('-')[0] ?? '';
-        return core.split('.').map((part) => Number.parseInt(part, 10) || 0);
-    };
-    const a = parse(left);
-    const b = parse(right);
-    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-        const difference = (a[index] ?? 0) - (b[index] ?? 0);
-        if (difference !== 0) return difference < 0 ? -1 : 1;
-    }
-    return 0;
 }
 
 /**

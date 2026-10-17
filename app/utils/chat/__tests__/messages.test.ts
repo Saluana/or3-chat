@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-    resolveChatInputTokenBudget,
     trimOrMessagesByTokenBudget,
 } from '../messages';
 
@@ -94,35 +93,5 @@ describe('trimOrMessagesByTokenBudget', () => {
             'system',
             'last-user',
         ]);
-    });
-});
-
-describe('resolveChatInputTokenBudget', () => {
-    it('uses a conservative fallback when model metadata is unavailable', () => {
-        expect(resolveChatInputTokenBudget(undefined)).toBe(8000);
-    });
-
-    it('reserves output space and prefers top-provider context metadata', () => {
-        expect(
-            resolveChatInputTokenBudget({
-                context_length: 16_000,
-                top_provider: {
-                    context_length: 32_000,
-                    max_completion_tokens: 4_000,
-                },
-            })
-        ).toBe(28_000);
-    });
-
-    it('uses the available context for large-window models after response headroom', () => {
-        expect(
-            resolveChatInputTokenBudget({ context_length: 1_048_576 })
-        ).toBe(1_040_384);
-    });
-
-    it('never returns a budget larger than a tiny advertised context', () => {
-        expect(
-            resolveChatInputTokenBudget({ context_length: 512 })
-        ).toBe(511);
     });
 });

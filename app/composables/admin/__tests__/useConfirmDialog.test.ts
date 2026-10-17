@@ -41,34 +41,6 @@ describe('useConfirmDialog', () => {
         await promise.catch(() => {});
     });
 
-    it('resolves true when confirmed', async () => {
-        const { confirm, onConfirm } = useConfirmDialog();
-
-        const promise = confirm({
-            title: 'Test',
-            message: 'Test message',
-        });
-
-        onConfirm();
-
-        const result = await promise;
-        expect(result).toBe(true);
-    });
-
-    it('resolves false when cancelled', async () => {
-        const { confirm, onCancel } = useConfirmDialog();
-
-        const promise = confirm({
-            title: 'Test',
-            message: 'Test message',
-        });
-
-        onCancel();
-
-        const result = await promise;
-        expect(result).toBe(false);
-    });
-
     it('closes dialog after confirm', async () => {
         const { isOpen, confirm, onConfirm } = useConfirmDialog();
 

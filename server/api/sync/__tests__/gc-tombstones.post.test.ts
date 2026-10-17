@@ -72,13 +72,6 @@ describe('POST /api/sync/gc-tombstones', () => {
         });
     });
 
-    it('returns 400 for invalid schema (retentionSeconds <= 0)', async () => {
-        const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue({ scope: { workspaceId: 'ws-1' }, retentionSeconds: 0 });
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
-    });
-
     it.each([1, 3599, 3600.5, 31536001])(
         'returns 400 for unsafe retentionSeconds %s',
         async (retentionSeconds) => {

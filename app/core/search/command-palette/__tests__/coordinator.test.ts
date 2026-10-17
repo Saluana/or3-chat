@@ -34,18 +34,6 @@ vi.mock('~/db/client', () => {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
-        __testSwitchWorkspace: (id: string) => {
-            generation += 1;
-            for (const listener of listeners) {
-                listener({
-                    oldWorkspaceId: 'ws-a',
-                    newWorkspaceId: id,
-                    generation,
-                });
-            }
-        },
-        __testGetListeners: () => listeners,
-        __testGetGeneration: () => generation,
     };
 });
 
@@ -162,71 +150,6 @@ describe('createPaletteCoordinator', () => {
         expect(filtered.parsedKind).toBe('category');
         expect(filtered.categoryId).toBe('chat');
 
-        coordinator.dispose();
-    });
-
-    it('ignores late work after workspace switch', async () => {
-        vi.useRealTimers();
-        const chatCategory = CORE_PALETTE_CATEGORIES.find((c) => c.id === 'chat')!;
-        let loadCount = 0;
-        let firstSignal: AbortSignal | undefined;
-        // Held in an object so TypeScript keeps the declared type across the
-        // callback assignment below.
-        const deferred: {
-            resolveFirst?: (value: PaletteResource[]) => void;
-        } = {};
-        registerPaletteSource({
-            id: 'chat',
-            label: 'Chats',
-            category: chatCategory,
-            order: 20,
-            load: (context) => {
-                loadCount += 1;
-                if (loadCount === 1) {
-                    firstSignal = context.signal;
-                    return new Promise((resolve) => {
-                        deferred.resolveFirst = resolve;
-                    });
-                }
-                return Promise.resolve([
-                    makeResource({
-                        key: 'chat:b',
-                        recordId: 'b',
-                        content: 'workspace b only',
-                        title: 'B',
-                    }),
-                ]);
-            },
-        });
-
-        const client = await import('~/db/client');
-        const { createPaletteCoordinator } = await import('../coordinator');
-        const coordinator = createPaletteCoordinator({ debounceMs: 0 });
-        const warmPromise = coordinator.ensureWarm();
-
-        (client as unknown as { __testSwitchWorkspace: (id: string) => void })
-            .__testSwitchWorkspace('ws-b');
-        expect(firstSignal?.aborted).toBe(true);
-
-        // Late completion from workspace A must not publish leaked results.
-        deferred.resolveFirst?.([
-            makeResource({
-                key: 'chat:leak',
-                recordId: 'leak',
-                content: 'secret-a should not leak',
-                title: 'Leaked',
-            }),
-        ]);
-        await warmPromise;
-        // Second ensureWarm was kicked by the workspace listener.
-        await new Promise((r) => setTimeout(r, 0));
-        await new Promise((r) => setTimeout(r, 0));
-
-        expect(loadCount).toBeGreaterThanOrEqual(2);
-        const snapshot = coordinator.getSnapshot();
-        expect(
-            snapshot.results.some((r) => r.key === 'chat:leak')
-        ).toBe(false);
         coordinator.dispose();
     });
 

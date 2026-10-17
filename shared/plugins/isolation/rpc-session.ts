@@ -4,7 +4,6 @@
  */
 
 import {
-    createRpcCancel,
     createRpcError,
     createRpcRequest,
     createRpcResponse,
@@ -172,18 +171,6 @@ export class RpcSession {
         });
     }
 
-    cancel(id: string, reason = 'cancelled'): boolean {
-        const pending = this.#pending.get(id);
-        if (!pending) return false;
-        this.#send(createRpcCancel({ id, reason }));
-        this.#finish(id, {
-            ok: false,
-            code: 'cancelled',
-            message: reason,
-        });
-        return true;
-    }
-
     /** Ingest a transport message (already JSON-decoded or string). */
     receive(raw: unknown): void {
         if (this.#disposed) return;
@@ -232,14 +219,6 @@ export class RpcSession {
                 void _exhaustive;
             }
         }
-    }
-
-    /**
-     * Server-side helper: reject a late/duplicate response after the call settled.
-     */
-    isReplay(id: string): boolean {
-        this.#pruneSeen();
-        return this.#seenIds.has(id) && !this.#pending.has(id);
     }
 
     /** Mark an inbound request id as seen for replay protection. */

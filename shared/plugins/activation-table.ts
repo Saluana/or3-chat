@@ -5,11 +5,6 @@ export interface ActivationChange {
     readonly revision: number;
 }
 
-export interface ActivationSnapshotEntry {
-    readonly pluginId: string;
-    readonly owner: symbol;
-}
-
 export type ActivationListener = (change: ActivationChange) => void;
 
 /**
@@ -74,11 +69,4 @@ export class ActivationTable {
         };
     }
 
-    snapshot(): readonly ActivationSnapshotEntry[] {
-        return Object.freeze(
-            Array.from(this.#current, ([pluginId, owner]) =>
-                Object.freeze({ pluginId, owner })
-            ).sort((left, right) => left.pluginId.localeCompare(right.pluginId))
-        );
-    }
 }

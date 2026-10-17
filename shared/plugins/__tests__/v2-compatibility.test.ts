@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-    loadCompatiblePluginV2,
     verifyPluginV2Compatibility,
     type PluginV2CompatibilityManifest,
     type VerifyPluginV2CompatibilityInput,
@@ -209,25 +208,4 @@ describe('Plugin V2 compatibility verification', () => {
         ]);
     });
 
-    it('does not invoke the importer when verification blocks', async () => {
-        const importer = vi.fn(async () => ({ setup: true }));
-
-        const result = await loadCompatiblePluginV2(
-            input({ manifest: manifest({ trust: 'isolated-server' }) }),
-            importer
-        );
-
-        expect(result.status).toBe('blocked');
-        expect(importer).not.toHaveBeenCalled();
-    });
-
-    it('invokes the importer once after successful verification', async () => {
-        const module = { setup: true };
-        const importer = vi.fn(async () => module);
-
-        const result = await loadCompatiblePluginV2(input(), importer);
-
-        expect(result).toMatchObject({ status: 'loaded', value: module });
-        expect(importer).toHaveBeenCalledTimes(1);
-    });
 });

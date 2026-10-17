@@ -66,46 +66,6 @@ export function createLocalStorageSecretStore(
     };
 }
 
-export function createMemoryFileStore(): FileStore {
-    const files = new Map<string, StoredFile>();
-    let seq = 0;
-    return {
-        async put(input) {
-            const id = `staged-${++seq}`;
-            files.set(id, input);
-            return { id };
-        },
-        async get(id) {
-            return files.get(id) ?? null;
-        },
-        async list() {
-            return [...files.entries()].map(([id, file]) => ({
-                id,
-                name: file.name,
-                mimeType: file.mimeType,
-                size: file.bytes.byteLength,
-            }));
-        },
-    };
-}
-
-export function createMemoryPostStore(): PostStore {
-    const posts = new Map<string, { id: string; postType: string; title: string }>();
-    let seq = 0;
-    return {
-        async read(postType) {
-            return [...posts.values()]
-                .filter((post) => post.postType === postType)
-                .map((post) => ({ id: post.id, title: post.title }));
-        },
-        async write(input) {
-            const id = `post-${++seq}`;
-            posts.set(id, { id, ...input });
-            return { id };
-        },
-    };
-}
-
 /** Writes staged bytes through the workspace file table. */
 export function createWorkspaceFileStore(assertCurrent: () => void = () => {}): FileStore {
     return {

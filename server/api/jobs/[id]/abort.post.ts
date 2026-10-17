@@ -32,7 +32,7 @@ export type AbortOutcomeState =
     /** Provider threw while stopping; remote state is unknown. */
     | 'abort_error';
 
-export function resolveAbortOutcome(
+function resolveAbortOutcome(
     job: Pick<BackgroundJob, 'status'> | null,
     providerResult: 'aborted' | 'rejected' | 'threw'
 ): { state: AbortOutcomeState; httpStatus: number } {

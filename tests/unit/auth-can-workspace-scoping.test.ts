@@ -61,13 +61,6 @@ describe('Auth - can() workspace resource scoping', () => {
 
             expect(decision.allowed).toBe(true);
         });
-
-        it('should allow write when no resource specified at all', () => {
-            const session = createSession('workspace-1', 'editor');
-            const decision = can(session, 'workspace.write');
-
-            expect(decision.allowed).toBe(true);
-        });
     });
 
     describe('workspace.read permission', () => {

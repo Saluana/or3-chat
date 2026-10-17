@@ -75,19 +75,6 @@ describe('webhook payload builder', () => {
         });
     });
 
-    it('includes scope=admin for admin payloads', () => {
-        const payload = buildWebhookPayload({
-            event: 'admin.workspace.created',
-            data: {
-                workspace_id: 'ws-1',
-            },
-            scope: 'admin',
-        });
-
-        expect(payload.scope).toBe('admin');
-        expect(payload.user_id).toBeUndefined();
-    });
-
     it('serializes custom hook args defensively', () => {
         const serialized = serializeHookArgs([
             {

@@ -14,16 +14,11 @@ const revisions: SyncRevision[] = [
 
 describe('sync revision comparator', () => {
     it('orders by clock, then HLC, then operation ID', () => {
-        expect([...revisions].sort(compareSyncRevision)).toEqual(revisions);
+        expect([...revisions].reverse().sort(compareSyncRevision)).toEqual(revisions);
         expect(compareSyncRevision(revisions[0]!, revisions[0]!)).toBe(0);
     });
 
-    it.each([
-        ['put', 'put'],
-        ['put', 'delete'],
-        ['delete', 'put'],
-        ['delete', 'delete'],
-    ] as const)('uses the same winner for %s versus %s', (_incomingKind, _currentKind) => {
+    it('selects strictly newer revisions', () => {
         expect(incomingRevisionWins(revisions[3]!, revisions[2]!)).toBe(true);
         expect(incomingRevisionWins(revisions[1]!, revisions[2]!)).toBe(false);
         expect(incomingRevisionWins(revisions[1]!, revisions[0]!)).toBe(true);

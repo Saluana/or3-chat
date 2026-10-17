@@ -370,7 +370,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         } : undefined));
         expect(response.status).toBe(endpoint === 'abort' ? 200 : 404);
         if (endpoint === 'abort') {
-            expect(await response.json()).toMatchObject({ aborted: false });
+            expect(await response.json()).toMatchObject({ aborted: false, state: 'not_found' });
             expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.status).toBe('streaming');
         }
     });
@@ -468,13 +468,15 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         expect((await send(new Request(`http://chat.example.test/api/jobs/admission/${admissionId}?workspaceId=revoked-workspace`))).status).toBe(500);
     });
 
-    it.each(['rejected', 'threw', 'terminal', 'completed-during-stop', 'aborted'] as const)('reports %s job stops without prematurely stopping the workflow', async (outcome) => {
+    it.each(['rejected', 'threw', 'terminal-complete', 'terminal-error', 'terminal-aborted', 'completed-during-stop', 'aborted'] as const)('reports %s job stops without prematurely stopping the workflow', async (outcome) => {
         membership.role = 'editor';
         const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'workflow', kind: 'workflow',
             execution: { version: 1, kind: 'workflow', workspaceId: 'revoked-workspace' },
             workflow_state: { type: 'workflow-execution', workflowId: 'workflow', workflowName: 'Test', prompt: 'Run',
                 executionState: 'running', nodeStates: {}, executionOrder: [], currentNodeId: null, finalOutput: '', version: 1 } });
-        if (outcome === 'terminal') await memoryJobProvider.completeJob(jobId, 'done');
+        if (outcome === 'terminal-complete') await memoryJobProvider.completeJob(jobId, 'done');
+        if (outcome === 'terminal-error') await memoryJobProvider.failJob(jobId, 'failed');
+        if (outcome === 'terminal-aborted') await memoryJobProvider.abortJob(jobId, 'former-member');
         const abort = vi.spyOn(memoryJobProvider, 'abortJob');
         if (outcome === 'rejected') abort.mockResolvedValue(false);
         if (outcome === 'threw') abort.mockRejectedValue(new Error('Provider offline'));
@@ -490,10 +492,10 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         expect(response.status).toBe(outcome === 'rejected' ? 502 : outcome === 'threw' ? 500 : 200);
         expect(await response.json()).toMatchObject({ aborted: outcome === 'aborted',
             state: outcome === 'rejected' ? 'abort_rejected' : outcome === 'threw' ? 'abort_error'
-                : outcome === 'terminal' || outcome === 'completed-during-stop' ? 'already_terminal' : 'aborted',
+                : outcome.startsWith('terminal-') || outcome === 'completed-during-stop' ? 'already_terminal' : 'aborted',
             ...(outcome === 'aborted' ? { workflow_state: { executionState: 'stopped' } } : {}) });
         if (outcome !== 'aborted') expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.workflow_state?.executionState).toBe('running');
-        if (outcome === 'terminal') expect(abort).not.toHaveBeenCalled();
+        if (outcome.startsWith('terminal-')) expect(abort).not.toHaveBeenCalled();
     });
 
     it.each([true, false])('reports durable and legacy admission stop failures explicitly (durable=%s)', async (durable) => {

@@ -2,10 +2,8 @@
  * The published surface of @or3/plugin-sdk, in one place.
  *
  * `SUBPATH_ENTRIES` is what `prepack` rewrites into `exports` (dist JS +
- * declarations), and `BUILD_ENTRIES` is what the JavaScript build compiles. A
- * subpath that is not built would resolve to a file that does not exist, so the
- * two lists must agree; `tests/unit/plugin-sdk-publish-surface.test.ts` enforces
- * that.
+ * declarations). The JavaScript build entries derive from those same subpaths,
+ * plus the CLI entry, so every exported module is compiled.
  */
 
 export const SUBPATH_ENTRIES = {
@@ -28,21 +26,6 @@ export const SUBPATH_ENTRIES = {
 };
 
 export const BUILD_ENTRIES = [
-    'src/index.ts',
-    'src/manifest.ts',
-    'src/host.ts',
-    'src/testing.ts',
-    'src/cards.ts',
-    'src/cards-vue.ts',
-    'src/cards-react.ts',
-    'src/ui.ts',
-    'src/portable.ts',
-    'src/portable-runtime.ts',
-    'src/profile.ts',
-    'src/package-tree.ts',
-    'src/plugin-icon.ts',
-    'src/state-compatibility.ts',
-    'src/candidate.ts',
+    ...Object.values(SUBPATH_ENTRIES).map((entry) => `src/${entry}.ts`),
     'src/cli/index.ts',
-    'src/cli/archive.ts',
 ];

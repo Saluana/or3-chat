@@ -172,9 +172,6 @@ vi.mock('../../../utils/plugins/connections/broker-binding', () => ({
 const handler = (await import('../isolation/capability.post')).default as (
     event: H3Event
 ) => Promise<unknown>;
-const { clearCapabilityGovernorsForTests } = (await import('../isolation/capability.post')) as {
-    clearCapabilityGovernorsForTests: () => void;
-};
 
 const DIGEST = `sha256-${'a'.repeat(64)}`;
 
@@ -249,7 +246,6 @@ describe('POST /api/plugins/isolation/capability', () => {
         requireSessionMock.mockReset();
         requireCanMock.mockReset();
         clearHostActivationsForTests();
-        clearCapabilityGovernorsForTests();
         settingsValues.clear();
         settingsStore.get.mockClear();
         settingsStore.set.mockClear();
@@ -744,7 +740,10 @@ describe('POST /api/plugins/isolation/capability', () => {
         });
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 400,
-            data: { rpcCode: 'replay' },
+            data: {
+                rpcCode: 'replay',
+                details: { fingerprintMismatch: true, originalMethod: 'ai.models' },
+            },
         });
     });
 
@@ -1047,42 +1046,6 @@ describe('POST /api/plugins/isolation/capability', () => {
         expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
     });
 
-    it('applies the call deadline to preparation as well as dispatch', async () => {
-        configMock.mockReturnValue({
-            auth: { enabled: true },
-            openrouterApiKey: 'sk-or-host',
-            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
-            admin: {
-                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
-                pluginAllowedModels: ['m'],
-            },
-        });
-        settingsStore.get.mockImplementationOnce(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            return null;
-        });
-        const governed = vi.fn(async () => ({ text: 'ok' }));
-        aiFactoryMock.mockReturnValue({
-            method: 'ai.complete',
-            grant: 'network.http',
-            handler: governed,
-        });
-        readBodyMock.mockResolvedValue({
-            activationId: record.activationId,
-            method: 'ai.complete',
-            params: { model: 'm', prompt: 'p' },
-            requestId: 'rpc-prep-deadline',
-            deadlineMs: 10,
-        });
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({
-            statusCode: 504,
-            data: { rpcCode: 'deadline-exceeded' },
-        });
-        expect(governed).not.toHaveBeenCalled();
-        expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
-    });
-
     it('releases the admission slot at the deadline without waiting for a stalled preparation', async () => {
         configMock.mockReturnValue({
             auth: { enabled: true },
@@ -1098,6 +1061,8 @@ describe('POST /api/plugins/isolation/capability', () => {
             releaseRead = resolve;
         });
         settingsStore.get.mockImplementationOnce(() => readGate);
+        const governed = vi.fn(async () => ({ text: 'ok' }));
+        aiFactoryMock.mockReturnValue({ method: 'ai.complete', grant: 'network.http', handler: governed });
         readBodyMock.mockResolvedValue({
             activationId: record.activationId,
             method: 'ai.complete',
@@ -1113,7 +1078,9 @@ describe('POST /api/plugins/isolation/capability', () => {
         // Preparation is still suspended, but the slot was released at the
         // deadline instead of waiting for the stalled budget read.
         expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
+        expect(governed).not.toHaveBeenCalled();
         releaseRead(null);
         await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(governed).not.toHaveBeenCalled();
     });
 });

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import {
     clearHostActivationsForTests,
-    registerHostActivation,
     resolveHostActivation,
 } from '../../../utils/plugins/isolation/activation-registry';
 import { getRetainedSelectionAuthority } from '../../../utils/plugins/setup/selection-authority-registry';
@@ -183,11 +182,6 @@ describe('POST /api/plugins/isolation/activation', () => {
         await expectStatus(handler(makeEvent()), 403);
     });
 
-    it('refuses when no selected package is recorded', async () => {
-        resolvePluginPackageMock.mockResolvedValue(null);
-        await expectStatus(handler(makeEvent()), 404);
-    });
-
     it('refuses a package whose approved review is not current', async () => {
         getPluginGrantReviewMock.mockResolvedValue({
             requestedGrants: ['network.http'],
@@ -240,35 +234,4 @@ describe('POST /api/plugins/isolation/activation', () => {
         ).not.toBeNull();
     });
 
-    it('releases selection authority when an activation expires', () => {
-        let now = 1_000;
-        const expired = registerHostActivation({
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            userId: 'user_1',
-            packageDigest: DIGEST,
-            grants: {
-                requestedGrants: ['network.http'],
-                approvedGrants: ['network.http'],
-                revision: 'g1',
-                status: 'current',
-                authoritySha256: null,
-                packageDigest: DIGEST,
-            },
-            ttlMs: 10,
-            now: () => now,
-        });
-        expect(
-            getRetainedSelectionAuthority('example.plugin', 'ws_1', expired.generation)
-        ).not.toBeNull();
-
-        now = 1_011;
-        expect(resolveHostActivation(expired.activationId, { now: () => now })).toMatchObject({
-            ok: false,
-            code: 'activation-expired',
-        });
-        expect(
-            getRetainedSelectionAuthority('example.plugin', 'ws_1', expired.generation)
-        ).toBeNull();
-    });
 });

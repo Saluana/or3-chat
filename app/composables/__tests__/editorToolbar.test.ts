@@ -5,7 +5,8 @@ import {
     listRegisteredEditorToolbarButtonIds,
     useEditorToolbarButtons,
 } from '../editor/useEditorToolbar';
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
+import type { Editor } from '@tiptap/vue-3';
 
 describe('useEditorToolbar', () => {
     beforeEach(() => {
@@ -15,17 +16,27 @@ describe('useEditorToolbar', () => {
     });
 
     it('registers a toolbar button', () => {
+        const onClick = vi.fn();
+        const isActive = vi.fn(() => true);
         registerEditorToolbarButton({
             id: 'test:bold',
             icon: 'i-carbon-text-bold',
             tooltip: 'Bold',
-            onClick: (editor) => {
-                editor.chain().focus().toggleBold().run();
-            },
+            onClick,
+            isActive,
         });
 
         const ids = listRegisteredEditorToolbarButtonIds();
         expect(ids).toContain('test:bold');
+
+        const editor = {} as Editor;
+        const buttons = useEditorToolbarButtons(shallowRef(editor));
+        const button = buttons.value.find((item) => item.id === 'test:bold');
+        expect(button).toBeDefined();
+        button!.onClick(editor);
+        expect(onClick).toHaveBeenCalledExactlyOnceWith(editor);
+        expect(button!.isActive?.(editor)).toBe(true);
+        expect(isActive).toHaveBeenCalledExactlyOnceWith(editor);
     });
 
     it('unregisters a toolbar button', () => {
@@ -64,44 +75,6 @@ describe('useEditorToolbar', () => {
 
         const ids = listRegisteredEditorToolbarButtonIds();
         expect(ids.filter((id) => id === 'test:action')).toHaveLength(1);
-    });
-
-    it('sorts buttons by order, tie-breaking by id', () => {
-        registerEditorToolbarButton({
-            id: 'test:c',
-            icon: 'i-carbon-add',
-            tooltip: 'C',
-            order: 200,
-            onClick: () => {},
-        });
-
-        registerEditorToolbarButton({
-            id: 'test:a',
-            icon: 'i-carbon-add',
-            tooltip: 'A',
-            order: 100,
-            onClick: () => {},
-        });
-
-        registerEditorToolbarButton({
-            id: 'test:b',
-            icon: 'i-carbon-add',
-            tooltip: 'B',
-            order: 200,
-            onClick: () => {},
-        });
-
-        const mockEditor = { isActive: () => false } as any;
-        const editorRef = ref(mockEditor);
-        const buttons = useEditorToolbarButtons(editorRef);
-
-        // Order: test:a (100), test:b (200), test:c (200)
-        // Among 200s, tie-break alphabetically: test:b < test:c
-        expect(buttons.value.map((b) => b.id)).toEqual([
-            'test:a',
-            'test:b',
-            'test:c',
-        ]);
     });
 
     it('handles visible() exceptions gracefully', () => {

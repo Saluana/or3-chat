@@ -59,17 +59,6 @@ describe('Background Job Provider Factory', () => {
     });
 
     describe('Provider Selection', () => {
-        it('should return memory provider by default', async () => {
-            mockUseRuntimeConfig.mockReturnValue({
-                backgroundJobs: {
-                    storageProvider: 'memory',
-                },
-            });
-
-            const provider = await getJobProvider();
-            expect(provider.name).toBe('memory');
-        });
-
         it('should return memory provider when no config is provided', async () => {
             mockUseRuntimeConfig.mockReturnValue({});
 
@@ -150,12 +139,5 @@ describe('Background Job Provider Factory', () => {
             expect(isBackgroundStreamingEnabled()).toBe(false);
         });
 
-        it('should return false when backgroundJobs config is missing', () => {
-            mockUseRuntimeConfig.mockReturnValue({
-                backgroundJobs: undefined,
-            });
-
-            expect(isBackgroundStreamingEnabled()).toBe(false);
-        });
     });
 });

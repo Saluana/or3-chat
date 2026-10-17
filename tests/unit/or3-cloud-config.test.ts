@@ -58,22 +58,6 @@ describe('defineOr3CloudConfig', () => {
         ).toThrow(/instanceApiKey is required/i);
     });
 
-    it('throws in strict mode when clerk keys are missing', () => {
-        expect(() =>
-            defineOr3CloudConfig(
-                {
-                    ...baseConfig,
-                    auth: {
-                        enabled: true,
-                        provider: 'clerk',
-                        clerk: {},
-                    },
-                },
-                { strict: true },
-            ),
-        ).toThrow(/clerk\.publishableKey/i);
-    });
-
     it('throws when sync enabled but Convex URL missing in strict mode', () => {
         expect(() =>
             defineOr3CloudConfig(

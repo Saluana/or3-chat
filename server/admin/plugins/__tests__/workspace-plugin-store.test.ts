@@ -134,14 +134,6 @@ describe('workspace plugin store', () => {
             .rejects.toMatchObject({ code: 'rollout-conflict' });
     });
 
-    it('stores and loads plugin settings', async () => {
-        const { store } = createStore();
-        await setPluginSettings(store, 'ws-1', 'plugin.a', { enabled: true, count: 2 });
-
-        const settings = await getPluginSettings(store, 'ws-1', 'plugin.a');
-        expect(settings).toEqual({ enabled: true, count: 2 });
-    });
-
     it('merges settings updates without dropping unknown keys', async () => {
         const { store } = createStore();
         await setPluginSettings(store, 'ws-1', 'plugin.a', {
@@ -356,6 +348,11 @@ describe('workspace plugin store', () => {
                 ],
             }),
         });
+        const originalSet = store.set;
+        store.set = async (workspaceId, key, value) => {
+            if (key.includes('.by-digest.')) throw new Error('backup write unavailable');
+            return originalSet(workspaceId, key, value);
+        };
         await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
             candidate: staged,
             approvedGrants: [...staged.requestedGrants],
@@ -366,25 +363,6 @@ describe('workspace plugin store', () => {
             .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_B });
         await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', selected))
             .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_A });
-    });
-
-    it('preserves the selected release review when a separate backup write is unavailable', async () => {
-        const { store } = createStore();
-        const selected = candidate();
-        const staged = candidate({ releaseId: 'rel_2', packageDigest: DIGEST_B, authoritySha256: DIGEST_B });
-        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-            candidate: selected, approvedGrants: [...selected.requestedGrants], reviewedAt: 1,
-        });
-        const originalSet = store.set;
-        store.set = async (workspaceId, key, value) => {
-            if (key.includes('.by-digest.')) throw new Error('backup write unavailable');
-            return originalSet(workspaceId, key, value);
-        };
-        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-            candidate: staged, approvedGrants: [...staged.requestedGrants], reviewedAt: 2,
-        });
-        expect(await getPluginGrantReview(store, 'ws-1', 'plugin.a', staged)).toMatchObject({ status: 'current' });
-        expect(await getPluginGrantReview(store, 'ws-1', 'plugin.a', selected)).toMatchObject({ status: 'current' });
     });
 
     it('carries access approval across a signed engine-only update', async () => {

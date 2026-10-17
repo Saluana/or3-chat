@@ -53,11 +53,11 @@ The existing model store retains the fetch timestamp when saving its `MODELS_CAT
 
 `useModelStore().resolveContextModel(selectedModelId, { signal? })` returns a captured metadata result or `{ ok: false, code: 'model_metadata_unavailable' }`. It validates capacity through the shared policy, keeps the original selected ID, prefers exact IDs across catalog/favorites before canonical-slug fallback after removing recognized routing/thinking suffixes for lookup, and freezes copied capacity facts. Valid catalog/favorite metadata can be used without transport. A missing or invalid record tries the normal cache path and one coalesced forced refresh; a later explicit call can recover. Favorite or legacy-cache records have cache provenance and an unknown fetch time.
 
-Cancellation rejects the waiting caller promptly and leaves a shared refresh available to other callers. Unvalidated `per_request_limits` are not treated as selected-route authority. This is metadata preparation only: ordinary native send/loop admission, draft preservation on budget rejection and independent server capacity resolution remain pending. The host's existing native fallback/reserve/trimming behavior has not been replaced by this foundation.
+Cancellation rejects the waiting caller promptly and leaves a shared refresh available to other callers. Unvalidated `per_request_limits` are not treated as selected-route authority. Native sends, retries, continuations, and tool loops use captured capacity facts with the workspace's optional context maximum to admit the complete provider payload. Ordinary requests preserve selected history; oversized requests stop with `context_full`. See [manual context compaction](/documentation/utils/manual-context-compaction) for draft preservation and recovery.
 
 Fetching uses the shared SDK client and collects its paginated model results, then converts them to OR3's snake_case model shape. The configured API URL is `runtimeConfig.public.openRouter.baseUrl`.
 
-The current catalog implementation reads the **legacy** localStorage `openrouter_api_key` entry when constructing the catalog client. That is a compatibility read, not the canonical persistence path for user keys. Do not copy it into new code or store credentials there; use [the key APIs](/documentation/auth/reference). A successful catalog fetch is not proof that a saved personal key was used or validated.
+Before constructing the catalog SDK client, the service awaits `hydrateUserApiKeyFromKv()` and reads the current `useUserApiKey()` value. Persist user keys through [the key APIs](/documentation/auth/reference). A successful catalog fetch is not proof that a saved personal key was validated.
 
 ## Prices and capability checks
 

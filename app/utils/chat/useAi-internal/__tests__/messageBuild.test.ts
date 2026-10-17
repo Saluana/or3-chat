@@ -29,49 +29,6 @@ vi.mock('~/utils/chat/prompt-utils', () => ({
         [master, thread || ''].filter(Boolean).join('\n'),
 }));
 
-const countTokensApproxSpy = vi.fn();
-
-vi.mock('~/utils/chat/messages', async (importOriginal) => ({
-    ...await importOriginal<typeof import('~/utils/chat/messages')>(),
-    trimOrMessagesByTokenBudget: async (
-        messages: unknown[],
-        maxTokens: number,
-        countTokens: (text: string) => Promise<number>
-    ) => {
-        for (const m of messages as Array<{ content?: unknown }>) {
-            const text =
-                typeof m.content === 'string'
-                    ? m.content
-                    : Array.isArray(m.content)
-                    ? m.content
-                          .filter(
-                              (p: { type?: string; text?: string }) =>
-                                  p.type === 'text'
-                          )
-                          .map((p: { text?: string }) => p.text)
-                          .join('\n')
-                    : '';
-            await countTokens(text);
-        }
-        return messages.slice(-2);
-    },
-}));
-
-vi.mock('~/utils/chat/tokens', () => ({
-    countTokensApprox: (text: string) => countTokensApproxSpy(text),
-    messageToCountableText: (m: { content?: unknown }) =>
-        typeof m.content === 'string'
-            ? m.content
-            : Array.isArray(m.content)
-            ? m.content
-                  .filter(
-                      (p: { type?: string; text?: string }) => p.type === 'text'
-                  )
-                  .map((p: { text?: string }) => p.text)
-                  .join('\n')
-            : '',
-}));
-
 vi.mock('../files', () => ({
     hashToContentPart: (...args: unknown[]) => hashToContentPartSpy(...args),
 }));
@@ -89,7 +46,6 @@ describe('buildOpenRouterMessagesForSend', () => {
         getMaxMessageFileHashesSpy.mockReset();
         hashToContentPartSpy.mockReset();
         buildOpenRouterMessagesSpy.mockReset();
-        countTokensApproxSpy.mockReset();
 
         getMaxMessageFileHashesSpy.mockReturnValue(8);
         buildOpenRouterMessagesSpy.mockImplementation(async (messages) =>
@@ -290,30 +246,6 @@ describe('buildOpenRouterMessagesForSend', () => {
         const [passedMessages, options] = buildOpenRouterMessagesSpy.mock.calls[0] as [Array<{ content: unknown }>, Record<string, unknown>];
         expect(passedMessages[0]?.content).toBe('last');
         expect(options).toMatchObject({ acceptsImageInput: false });
-    });
-
-    it('trims messages to maxInputTokens budget while keeping system and last user', async () => {
-        const effectiveMessages: ChatMessage[] = [
-            { id: 's-1', role: 'system', content: 'system' },
-            { id: 'u-1', role: 'user', content: 'first' },
-            { id: 'a-1', role: 'assistant', content: 'middle' },
-            { id: 'u-2', role: 'user', content: 'last' },
-        ];
-
-        await buildOpenRouterMessagesForSend({
-            effectiveMessages,
-            assistantHashes: [],
-            prevAssistantId: null,
-            contextHashes: [],
-            fileHashes: [],
-            maxInputTokens: 10,
-        });
-
-        const [passedMessages] = buildOpenRouterMessagesSpy.mock.calls[0] as [
-            Array<{ role: string; content: unknown }>,
-        ];
-        expect(passedMessages).toHaveLength(4);
-        expect(countTokensApproxSpy).toHaveBeenCalled();
     });
 
     it('skips context hash hydration when there is no user message target', async () => {

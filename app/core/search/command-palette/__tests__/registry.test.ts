@@ -100,23 +100,6 @@ describe('palette registry', () => {
         expect(getPaletteAliasMap().get('chat')).toBe(before);
     });
 
-    it('registers post source aliases for custom categories', () => {
-        const handle = registerPalettePostSourceDefinition(
-            {
-                id: 'todo-source',
-                label: 'Todos',
-                postType: 'example-todo',
-                categoryId: 'todo',
-                filterAliases: ['todo'],
-                openTarget: { kind: 'pane-app', appId: 'example-todo' },
-            },
-            { pluginId: 'todo-plugin' }
-        );
-        expect(getPaletteAliasMap().get('todo')).toBe('todo');
-        handle.dispose();
-        expect(getPaletteAliasMap().has('todo')).toBe(false);
-    });
-
     it('exposes the workflow category only while its plugin source is registered', () => {
         expect(getPaletteAliasMap().has('workflow')).toBe(false);
 

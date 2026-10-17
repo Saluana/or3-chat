@@ -6,9 +6,7 @@ import {
     openRouterStream,
     openRouterStreamWithRetry,
     startBackgroundStream,
-    BackgroundAdmissionUncertainError,
     isBackgroundStreamingEnabled,
-    waitForJobCompletion,
     pollJobStatus,
     BackgroundJobPollError,
     abortBackgroundAdmission,
@@ -508,12 +506,6 @@ describe('openrouterStream', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('exposes background streaming availability cache', () => {
-        localStorage.setItem('or3:background-streaming-available', 'true');
-        const enabled = isBackgroundStreamingEnabled();
-        expect(enabled).toBe(true);
-    });
-
     it('prefers explicit enabled config over stale false cache', () => {
         runtimeConfigMock.public.backgroundStreaming.enabled = true;
         localStorage.setItem('or3:background-streaming-available', 'false');
@@ -738,28 +730,6 @@ describe('background streaming helpers', () => {
         );
     });
 
-
-    it.each(['streaming', 'complete', 'error', 'aborted'] as const)(
-        'recovers a committed %s job after all start responses are lost', async (status) => {
-            vi.useRealTimers();
-            const fetchMock = vi.fn().mockImplementation(async (url: string) => {
-                if (url.startsWith('/api/jobs/admission/')) return createJsonResponse({
-                    jobId: 'recovered-job', status, historyVersion: 1,
-                    threadId: 't1', messageId: 'm1',
-                });
-                throw new TypeError('response lost');
-            });
-            vi.stubGlobal('fetch', fetchMock);
-            const result = await startBackgroundStream({
-                apiKey: 'key', model: 'model-1', threadId: 't1', messageId: 'm1',
-                admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'],
-            });
-            expect(result).toEqual({ jobId: 'recovered-job', status: 'streaming', historyVersion: 1 });
-            expect(fetchMock).toHaveBeenCalledTimes(4);
-            expect(fetchMock.mock.calls[3]![0]).toBe('/api/jobs/admission/admission-1?workspaceId=workspace-1');
-        }
-    );
-
     it('does not recover an admission into another thread or message', async () => {
         vi.useRealTimers();
         const fetchMock = vi.fn().mockImplementation(async (url: string) => {
@@ -775,7 +745,6 @@ describe('background streaming helpers', () => {
             admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'],
         })).rejects.toMatchObject({ name: 'BackgroundAdmissionUncertainError', admissionId: 'admission-1' });
     });
-
 
     it.each(['transport', 'json', 'non-json', 'shape'] as const)(
         'keeps the original admission identity uncertain after %s failure and lookup outage', async (kind) => {
@@ -1037,41 +1006,4 @@ describe('background streaming helpers', () => {
         expect(failure).toMatchObject({ kind: 'protocol', retryable: false });
     });
 
-    it('waitForJobCompletion resolves when job completes', async () => {
-        const statuses = [
-            {
-                id: 'job-1',
-                status: 'streaming',
-                threadId: 't1',
-                messageId: 'm1',
-                history: testHistory(),
-                model: 'm',
-                chunksReceived: 1,
-                startedAt: 1,
-            },
-            {
-                id: 'job-1',
-                status: 'complete',
-                threadId: 't1',
-                messageId: 'm1',
-                history: testHistory(),
-                model: 'm',
-                chunksReceived: 2,
-                startedAt: 1,
-                completedAt: 2,
-            },
-        ];
-        const fetchMock = vi.fn(() =>
-            Promise.resolve(createJsonResponse(statuses.shift()))
-        );
-        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
-
-        vi.useFakeTimers();
-        const promise = waitForJobCompletion('job-1', undefined, 10, 100);
-        await vi.runAllTimersAsync();
-        const result = await promise;
-
-        expect(result.status).toBe('complete');
-        expect(fetchMock).toHaveBeenCalled();
-    });
 });

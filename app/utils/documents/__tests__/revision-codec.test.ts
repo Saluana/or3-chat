@@ -37,10 +37,11 @@ describe.each(['native', 'http'] as const)('document revision codec in %s contex
         await expect(decodeDocumentRevision(encoded)).rejects.toThrow(/checksum|invalid/iu);
     });
 
-    it('preflights sync payloads below the provider limit', () => {
-        expect(() => assertRevisionSyncPayloadSize({ content: 'x'.repeat(48 * 1024) })).not.toThrow();
-        expect(() => assertRevisionSyncPayloadSize({
-            content: 'x'.repeat(REVISION_SYNC_PAYLOAD_MAX_BYTES),
-        })).toThrow(/maximum/iu);
-    });
+});
+
+it('preflights sync payloads below the provider limit', () => {
+    expect(() => assertRevisionSyncPayloadSize({ content: 'x'.repeat(48 * 1024) })).not.toThrow();
+    expect(() => assertRevisionSyncPayloadSize({
+        content: 'x'.repeat(REVISION_SYNC_PAYLOAD_MAX_BYTES),
+    })).toThrow(/maximum/iu);
 });

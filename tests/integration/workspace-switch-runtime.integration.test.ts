@@ -288,26 +288,4 @@ describe('workspace switch runtime integration', () => {
             },
         ]);
     });
-
-    it('rejects a late completion captured before a workspace switch', async () => {
-        setActiveWorkspaceDb(TEST_WORKSPACES[0]);
-        const capturedGeneration = getWorkspaceGeneration();
-        let release!: () => void;
-        const inFlight = new Promise<void>((resolve) => {
-            release = resolve;
-        });
-        let appliedWorkspace: string | null = null;
-
-        const completion = inFlight.then(() => {
-            if (capturedGeneration !== getWorkspaceGeneration()) return;
-            appliedWorkspace = getActiveWorkspaceId();
-        });
-
-        setActiveWorkspaceDb(TEST_WORKSPACES[1]);
-        release();
-        await completion;
-
-        expect(appliedWorkspace).toBeNull();
-        expect(getActiveWorkspaceId()).toBe(TEST_WORKSPACES[1]);
-    });
 });

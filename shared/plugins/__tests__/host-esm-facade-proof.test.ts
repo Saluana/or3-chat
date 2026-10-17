@@ -226,6 +226,5 @@ describe('trusted-host Vue ABI proof', () => {
             blockCodes: ['vue-component-rendering-unproven'],
         });
         expect(importModule).not.toHaveBeenCalled();
-        expect(loader.resolveHostExternal('vue')).toBe(hostVue);
     });
 });

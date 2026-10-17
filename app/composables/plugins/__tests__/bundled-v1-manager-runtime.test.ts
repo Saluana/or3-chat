@@ -159,27 +159,6 @@ describe('bundled V1 workspace manager runtime', () => {
         expect(manager.listRecords()[0]?.descriptor.workspaceId).toBe('workspace-2');
     });
 
-    it('preserves V1 extension-over-builtin registration precedence', async () => {
-        runtimeMocks.registerInstance.mockReturnValue({
-            accepted: true,
-            replacedSource: 'builtin',
-        });
-        const manager = createBundledV1WorkspaceManager({
-            loader: new BundledV1Loader(catalog(), {
-                'alpha-module': async () => ({ id: 'alpha', register: vi.fn() }),
-            }),
-        });
-
-        await manager.reconcile(desiredStateFromManifest(manifest({ revision: '1' }), 'workspace-1'), 'boot');
-
-        expect(runtimeMocks.registerInstance).toHaveBeenCalledWith(
-            'alpha',
-            'extension',
-            expect.any(Function)
-        );
-        expect(manager.listActivePluginIds()).toEqual(['alpha']);
-    });
-
     it('snapshots workspace canary flags so live mutation cannot switch kernels', () => {
         const flags = { enabled: true, workspaceIds: ['workspace-1'] };
         const select = createWorkspaceManagerCanarySelector(flags);

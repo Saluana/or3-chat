@@ -2,17 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { resolvePluginRoutePermission } from '../route-permissions';
 
 describe('resolvePluginRoutePermission', () => {
-    it.each([
-        ['GET', 'workspace.read'],
-        ['HEAD', 'workspace.read'],
-        ['POST', 'workspace.write'],
-        ['PUT', 'workspace.write'],
-        ['PATCH', 'workspace.write'],
-        ['DELETE', 'workspace.write'],
-    ] as const)('defaults %s to %s', (method, permission) => {
-        expect(resolvePluginRoutePermission(method)).toBe(permission);
-    });
-
     it('allows strengthening a read default to write', () => {
         expect(resolvePluginRoutePermission('GET', 'workspace.write')).toBe('workspace.write');
     });

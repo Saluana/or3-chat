@@ -75,14 +75,12 @@ interface InFlightCall {
     readonly method: string;
     readonly fingerprint: string;
     readonly sideEffecting: boolean;
-    readonly startedAt: number;
 }
 
 interface SeenCall {
     readonly method: string;
     readonly fingerprint: string;
     readonly completedAt: number;
-    readonly outcome: string;
 }
 
 interface AdmissionState {
@@ -91,19 +89,17 @@ interface AdmissionState {
     readonly seen: Map<string, SeenCall>;
     /** Side effects: retained for the life of the activation, never evicted. */
     readonly sideEffected: Map<string, SeenCall>;
-    lastTouched: number;
 }
 
 const admissions = new Map<string, AdmissionState>();
 
-function stateFor(activationId: string, now: number): AdmissionState {
+function stateFor(activationId: string): AdmissionState {
     let state = admissions.get(activationId);
     if (!state) {
         state = {
             inFlight: new Map(),
             seen: new Map(),
             sideEffected: new Map(),
-            lastTouched: now,
         };
         admissions.set(activationId, state);
         while (admissions.size > MAX_ADMISSION_ACTIVATIONS) {
@@ -113,7 +109,6 @@ function stateFor(activationId: string, now: number): AdmissionState {
             abortActivationCalls(oldest, 'admission-evicted');
         }
     }
-    state.lastTouched = now;
     return state;
 }
 
@@ -181,7 +176,7 @@ export type ActivationAdmission =
     | {
           readonly ok: true;
           readonly controller: AbortController;
-          readonly release: (outcome?: string) => void;
+          readonly release: () => void;
       }
     | {
           readonly ok: false;
@@ -206,7 +201,7 @@ export function tryAdmitActivationCall(
     }
 ): ActivationAdmission {
     const now = (input.now ?? Date.now)();
-    const state = stateFor(activationId, now);
+    const state = stateFor(activationId);
     pruneSeen(state, now);
     const fingerprint = fingerprintCapabilityCall(input.method, input.params);
     const sideEffecting = isSideEffectingCapabilityMethod(input.method);
@@ -278,10 +273,9 @@ export function tryAdmitActivationCall(
         method: input.method,
         fingerprint,
         sideEffecting,
-        startedAt: now,
     });
     let released = false;
-    const release = (outcome = 'completed'): void => {
+    const release = (): void => {
         if (released) return;
         released = true;
         const current = admissions.get(activationId);
@@ -292,7 +286,6 @@ export function tryAdmitActivationCall(
             method: input.method,
             fingerprint,
             completedAt: (input.now ?? Date.now)(),
-            outcome,
         };
         if (sideEffecting) {
             // Retained for the life of the activation; never evicted early.

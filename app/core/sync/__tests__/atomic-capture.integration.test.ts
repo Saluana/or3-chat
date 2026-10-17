@@ -233,12 +233,12 @@ describe('atomic sync capture integration', () => {
             tableName: 'messages',
             operation: 'delete',
             pk: 'm-soft-delete',
-            payload: { deleted: true, deleted_at: expect.any(Number) },
+            payload: { id: 'm-soft-delete', deleted: true, deleted_at: expect.any(Number) },
             stamp: { clock: 4 },
         });
         expect(row).toMatchObject({
             deleted: true,
-            deleted_at: expect.any(Number),
+            deleted_at: (op!.payload as { deleted_at: number }).deleted_at,
             clock: op!.stamp.clock,
             hlc: op!.stamp.hlc,
             op_id: op!.stamp.opId,

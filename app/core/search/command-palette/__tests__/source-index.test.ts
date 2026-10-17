@@ -48,55 +48,6 @@ describe('PaletteSourceIndex', () => {
         vi.resetModules();
     });
 
-    it('returns grouped candidates through Orama path', async () => {
-        vi.doMock('~/core/search/orama', () => ({
-            createDb: vi.fn(async () => ({ id: 'db' })),
-            insertDocumentsBatched: vi.fn(async () => undefined),
-            removeDoc: vi.fn(async () => undefined),
-            searchWithIndex: vi.fn(async () => ({
-                hits: [
-                    {
-                        score: 10,
-                        document: {
-                            id: 'c1',
-                            resourceKey: 'chat:1',
-                            recordId: '1',
-                            title: 'Unrelated title',
-                            subtitle: '',
-                            keywords: '',
-                            body: 'unique body phrase alpha',
-                            updatedAt: 2,
-                            chunkIndex: 0,
-                        },
-                    },
-                    {
-                        score: 4,
-                        document: {
-                            id: 'c2',
-                            resourceKey: 'chat:1',
-                            recordId: '1',
-                            title: 'Unrelated title',
-                            subtitle: '',
-                            keywords: '',
-                            body: 'another alpha chunk',
-                            updatedAt: 2,
-                            chunkIndex: 1,
-                        },
-                    },
-                ],
-            })),
-        }));
-
-        const { PaletteSourceIndex } = await import('../source-index');
-        const index = new PaletteSourceIndex('chat');
-        await index.replaceAll(resources);
-        const result = await index.search({ term: 'alpha' });
-        expect(result.usingFallback).toBe(false);
-        expect(result.results).toHaveLength(1);
-        expect(result.results[0]?.key).toBe('chat:1');
-        expect(result.results[0]?.snippet?.toLowerCase()).toContain('alpha');
-    });
-
     it('falls back to substring matching when forced', async () => {
         vi.doMock('~/core/search/orama', () => ({
             createDb: vi.fn(async () => {
@@ -169,6 +120,8 @@ describe('PaletteSourceIndex', () => {
         const result = await index.search({ term: 'alpha', limit: 8 });
 
         expect(result.results).toHaveLength(8);
+        expect(result.usingFallback).toBe(false);
+        expect(result.results[0]?.snippet?.toLowerCase()).toContain('alpha');
         expect(new Set(result.results.map((item) => item.key)).size).toBe(8);
         expect(searchWithIndex).toHaveBeenCalledTimes(2);
     });

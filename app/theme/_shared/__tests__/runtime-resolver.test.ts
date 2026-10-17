@@ -3,14 +3,14 @@
  * Tests override resolution, matching, and merging logic
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { RuntimeResolver } from '../runtime-resolver';
 import { compileOverridesRuntime } from '../runtime-compile';
 import {
     createCompiledTheme,
     createCompiledOverride,
 } from '../../../../tests/utils/theme-test-utils';
-import type { CompiledTheme, CompiledOverride } from '../types';
+import type { CompiledOverride } from '../types';
 
 describe('RuntimeResolver', () => {
     it('lets the later declaration win at equal specificity', () => {
@@ -31,38 +31,6 @@ describe('RuntimeResolver', () => {
             'second'
         );
     });
-    describe('constructor', () => {
-        it('should initialize with a compiled theme', () => {
-            const theme = createCompiledTheme();
-            const resolver = new RuntimeResolver(theme);
-
-            expect(resolver).toBeInstanceOf(RuntimeResolver);
-        });
-
-        it('should sort overrides by specificity (descending)', () => {
-            const overrides: CompiledOverride[] = [
-                createCompiledOverride('button', { variant: 'solid' }, 1),
-                createCompiledOverride('button.chat', { variant: 'ghost' }, 11),
-                createCompiledOverride(
-                    'button#chat.send',
-                    { variant: 'solid' },
-                    21
-                ),
-            ];
-
-            const theme = createCompiledTheme({ overrides });
-            const resolver = new RuntimeResolver(theme);
-
-            // Access private property for testing
-            const sortedOverrides = (resolver as any).overrides;
-
-            // Should be sorted highest to lowest
-            expect(sortedOverrides[0].specificity).toBe(21);
-            expect(sortedOverrides[1].specificity).toBe(11);
-            expect(sortedOverrides[2].specificity).toBe(1);
-        });
-    });
-
     describe('resolve()', () => {
         it('should return empty props when no overrides match', () => {
             const theme = createCompiledTheme({ overrides: [] });
@@ -74,22 +42,6 @@ describe('RuntimeResolver', () => {
             });
 
             expect(result.props).toEqual({});
-        });
-
-        it('should resolve global component override', () => {
-            const overrides: CompiledOverride[] = [
-                createCompiledOverride('button', { variant: 'solid' }),
-            ];
-
-            const theme = createCompiledTheme({ overrides });
-            const resolver = new RuntimeResolver(theme);
-
-            const result = resolver.resolve({
-                component: 'button',
-                isNuxtUI: true, // Treat as Nuxt UI to get props directly
-            });
-
-            expect(result.props.variant).toBe('solid');
         });
 
         it('should resolve context-specific override', () => {

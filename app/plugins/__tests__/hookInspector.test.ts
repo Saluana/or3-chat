@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createHookEngine } from '../../core/hooks/hooks';
@@ -31,7 +31,21 @@ const mountOptions = {
     },
 };
 
+const mounted: ReturnType<typeof mount>[] = [];
+function mountInspector() {
+    const wrapper = mount(HookInspector, mountOptions);
+    mounted.push(wrapper);
+    return wrapper;
+}
+function row(wrapper: ReturnType<typeof mount>, name: string) {
+    return wrapper.findAll('tbody tr').find((entry) => entry.text().includes(name));
+}
+
 describe('HookInspector', () => {
+    afterEach(() => {
+        for (const wrapper of mounted.splice(0)) wrapper.unmount();
+        vi.useRealTimers();
+    });
     beforeEach(() => {
         // Clear diagnostics
         mockHooks._diagnostics.timings = {};
@@ -42,7 +56,7 @@ describe('HookInspector', () => {
     });
 
     it('renders empty state when no hooks have been executed', async () => {
-        const wrapper = mount(HookInspector, mountOptions);
+        const wrapper = mountInspector();
         await flush();
 
         const stats = wrapper.findAll('.text-2xl');
@@ -53,124 +67,82 @@ describe('HookInspector', () => {
         expect(wrapper.text()).toContain('No hooks have been executed yet');
     });
 
-    it('displays hook statistics after hooks are executed', async () => {
-        // Register some hooks
-        mockHooks.addAction('test.action', () => {});
-        mockHooks.addFilter('test.filter', () => undefined);
-
-        const wrapper = mount(HookInspector, mountOptions);
-        await flush();
-
-        // Execute hooks to generate diagnostics
-        await mockHooks.doAction('test.action');
-        await mockHooks.applyFilters('test.filter', 'value');
-
-        // Manually trigger update (simulate what would happen in real usage)
-        await wrapper.vm.updateSnapshot();
-        await flush();
-
-        const stats = wrapper.findAll('.text-2xl');
-        expect(stats[0]?.text()).toContain('1'); // Total Actions (1 registered)
-        expect(stats[1]?.text()).toContain('1'); // Total Filters (1 registered)
-    });
-
     it('shows hook execution details in table', async () => {
         mockHooks.addAction('test.hook.one', () => {});
-        mockHooks.addAction('test.hook.two', () => {});
+        mockHooks.addAction('test.hook.two', () => { throw new Error('Test error'); });
+        mockHooks.addFilter('test.filter', () => undefined);
 
-        const wrapper = mount(HookInspector, mountOptions);
+        const wrapper = mountInspector();
         await flush();
 
         // Execute hooks multiple times
         await mockHooks.doAction('test.hook.one');
         await mockHooks.doAction('test.hook.one');
         await mockHooks.doAction('test.hook.two');
+        await mockHooks.applyFilters('test.filter', 'value');
 
-        await wrapper.vm.updateSnapshot();
+        await wrapper.findAll('button').find((button) => button.text() === 'Refresh')!.trigger('click');
         await flush();
 
         // Check that hooks appear in table
         const tableText = wrapper.find('table').text();
         expect(tableText).toContain('test.hook.one');
         expect(tableText).toContain('test.hook.two');
+        expect(wrapper.findAll('.text-2xl').map((value) => value.text())).toEqual(['2', '1', '1']);
+        expect(row(wrapper, 'test.hook.one')!.findAll('td')[1]!.text()).toBe('2');
+        expect(row(wrapper, 'test.hook.two')!.findAll('td')[5]!.text()).toBe('1');
     });
 
     it('calculates timing statistics correctly', async () => {
         // Manually add timing data
         mockHooks._diagnostics.timings['manual.hook'] = [1.5, 2.3, 3.1, 4.8];
 
-        const wrapper = mount(HookInspector, mountOptions);
-        await wrapper.vm.updateSnapshot();
+        const wrapper = mountInspector();
+        await wrapper.findAll('button').find((button) => button.text() === 'Refresh')!.trigger('click');
         await flush();
 
-        const details = wrapper.vm.hookDetails;
-        const hook = details.find((h: any) => h.name === 'manual.hook');
-
-        expect(hook).toBeTruthy();
-        expect(hook!.count).toBe(4);
-        expect(parseFloat(hook!.avg)).toBeCloseTo(2.925, 2);
-        expect(parseFloat(hook!.max)).toBeCloseTo(4.8, 1);
-    });
-
-    it('tracks errors correctly', async () => {
-        mockHooks.addAction('error.hook', () => {
-            throw new Error('Test error');
-        });
-
-        const wrapper = mount(HookInspector, mountOptions);
-        await flush();
-
-        // Execute hook that throws error (engine catches it)
-        await mockHooks.doAction('error.hook');
-
-        await wrapper.vm.updateSnapshot();
-        await flush();
-
-        const stats = wrapper.vm.stats;
-        expect(stats.totalErrors).toBe(1);
+        const cells = row(wrapper, 'manual.hook')!.findAll('td');
+        expect(cells[1]!.text()).toBe('4');
+        expect(parseFloat(cells[2]!.text())).toBeCloseTo(2.925, 2);
+        expect(cells[3]!.text()).toBe('4.80');
+        expect(parseFloat(cells[4]!.text())).toBeCloseTo(4.8, 1);
     });
 
     it('manual refresh updates the snapshot', async () => {
-        const wrapper = mount(HookInspector, mountOptions);
+        const wrapper = mountInspector();
         await flush();
 
         // Initial state should show 0
-        expect(wrapper.vm.stats.totalActions).toBe(0);
+        expect(wrapper.findAll('.text-2xl')[0]!.text()).toBe('0');
 
         // Add and execute a hook
         mockHooks.addAction('refresh.test', () => {});
         await mockHooks.doAction('refresh.test');
 
-        // Stats shouldn't update automatically (passive polling is every 2s)
-        expect(
-            wrapper.vm.diagnosticsSnapshot.timings['refresh.test'],
-        ).toBeUndefined();
+        // Passive polling has not run yet.
+        expect(row(wrapper, 'refresh.test')).toBeUndefined();
 
         // Click refresh button
         await wrapper.find('button').trigger('click'); // First button is refresh
         await flush();
 
         // Now it should be updated
-        expect(
-            wrapper.vm.diagnosticsSnapshot.timings['refresh.test'],
-        ).toBeTruthy();
+        expect(row(wrapper, 'refresh.test')).toBeTruthy();
     });
 
     it('clear button resets diagnostics', async () => {
         mockHooks._diagnostics.timings['clear.test'] = [1, 2, 3];
         mockHooks._diagnostics.errors['clear.test'] = 5;
 
-        const wrapper = mount(HookInspector, mountOptions);
-        await wrapper.vm.updateSnapshot();
+        const wrapper = mountInspector();
+        await wrapper.findAll('button').find((button) => button.text() === 'Refresh')!.trigger('click');
         await flush();
 
-        expect(
-            Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length,
-        ).toBeGreaterThan(0);
+        expect(row(wrapper, 'clear.test')).toBeTruthy();
 
         // Find and click the Clear button (has trash icon)
         const buttons = wrapper.findAll('button');
-        const clearButton = buttons.find((b) => b.html().includes('trash'));
+        const clearButton = buttons.find((b) => b.text() === 'Clear');
         expect(clearButton).toBeTruthy();
 
         await clearButton?.trigger('click');
@@ -178,23 +150,24 @@ describe('HookInspector', () => {
 
         expect(Object.keys(mockHooks._diagnostics.timings).length).toBe(0);
         expect(Object.keys(mockHooks._diagnostics.errors).length).toBe(0);
+        expect(row(wrapper, 'clear.test')).toBeUndefined();
     });
 
     it('auto-refresh toggles correctly', async () => {
-        const wrapper = mount(HookInspector, mountOptions);
+        const wrapper = mountInspector();
         await flush();
 
-        expect(wrapper.vm.autoRefresh).toBe(false);
+        expect(wrapper.findAll('button')[0]!.attributes('disabled')).toBeUndefined();
 
         // Find Auto button (has checkbox icon)
         const buttons = wrapper.findAll('button');
-        const autoButton = buttons.find((b) => b.html().includes('checkbox'));
+        const autoButton = buttons.find((b) => b.text() === 'Auto');
         expect(autoButton).toBeTruthy();
 
         await autoButton?.trigger('click');
         await flush();
 
-        expect(wrapper.vm.autoRefresh).toBe(true);
+        expect(wrapper.findAll('button')[0]!.attributes('disabled')).toBeDefined();
         expect(mockToast.add).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Auto-refresh enabled',
@@ -205,12 +178,10 @@ describe('HookInspector', () => {
     it('passive polling detects new hooks and invocations', async () => {
         vi.useFakeTimers();
 
-        const wrapper = mount(HookInspector, mountOptions);
+        const wrapper = mountInspector();
         await flush();
 
-        expect(Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length).toBe(
-            0,
-        );
+        expect(row(wrapper, 'passive.test')).toBeUndefined();
 
         // Add and execute a hook
         mockHooks.addAction('passive.test', () => {});
@@ -221,12 +192,8 @@ describe('HookInspector', () => {
         await flush();
 
         // Should have detected the new hook
-        expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test'],
-        ).toBeTruthy();
-        expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length,
-        ).toBe(1);
+        expect(row(wrapper, 'passive.test')).toBeTruthy();
+        expect(row(wrapper, 'passive.test')!.findAll('td')[1]!.text()).toBe('1');
 
         // Execute the hook again
         await mockHooks.doAction('passive.test');
@@ -236,29 +203,9 @@ describe('HookInspector', () => {
         await flush();
 
         // Should have detected the new invocation
-        expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length,
-        ).toBe(2);
+        expect(row(wrapper, 'passive.test')!.findAll('td')[1]!.text()).toBe('2');
 
         vi.useRealTimers();
     });
 
-    it('reactivity works - computed values update when snapshot changes', async () => {
-        const wrapper = mount(HookInspector, mountOptions);
-        await flush();
-
-        // Initial state
-        expect(wrapper.vm.hookDetails.length).toBe(0);
-        expect(wrapper.vm.stats.totalActions).toBe(0);
-
-        // Manually mutate the reactive snapshot
-        wrapper.vm.diagnosticsSnapshot.timings['new.hook'] = [1.5, 2.5];
-        wrapper.vm.diagnosticsSnapshot.totalActions = 5;
-        await flush();
-
-        // Computed values should update
-        expect(wrapper.vm.hookDetails.length).toBe(1);
-        expect(wrapper.vm.stats.totalActions).toBe(5);
-        expect(wrapper.vm.hookDetails[0]!.name).toBe('new.hook');
-    });
 });

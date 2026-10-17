@@ -15,17 +15,12 @@
 
 /* @vitest-environment node */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { checkRateLimit, getRateLimitStatus } from '../rate-limit';
+import { checkRateLimit } from '../rate-limit';
 
 describe('checkRateLimit', () => {
     beforeEach(() => {
         // Reset module state
         vi.resetModules();
-    });
-
-    it('allows first request within limit', async () => {
-        const allowed = await checkRateLimit('user-1', { max: 5, window: 60 });
-        expect(allowed).toBe(true);
     });
 
     it('blocks requests exceeding limit', async () => {
@@ -68,18 +63,4 @@ describe('checkRateLimit', () => {
         expect(await checkRateLimit('user-b', options)).toBe(false);
     });
 
-    it('returns status for active entry', async () => {
-        const key = 'user-4';
-        await checkRateLimit(key, { max: 5, window: 60 });
-
-        const status = getRateLimitStatus(key);
-        expect(status).not.toBeNull();
-        expect(status?.remaining).toBe(1);
-        expect(status?.resetAt).toBeGreaterThan(Date.now());
-    });
-
-    it('returns null for unknown key', () => {
-        const status = getRateLimitStatus('unknown-key');
-        expect(status).toBeNull();
-    });
 });

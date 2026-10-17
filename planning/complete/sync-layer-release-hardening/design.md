@@ -189,7 +189,7 @@ Convex `change_log.op_id` stays a string; writers persist UUIDs. Unique index on
 - **Unit (or3-chat):** outbox `applied: false` with/without payload; packer byte ceiling; circuit breaker begin/record; HookBridge unsubscribe; pull schema new fields; push route per-op validation + admission record; workflow catalog snapshot-first.
 - **Unit (sqlite):** two-user notification pull/push/snapshot; fingerprint mismatch; LWW opId tie; orphan tombstone blocks put; native `applied` flag. D1 tests: unique conflict does not increment leftover versions (simulate sequential retry if true concurrency is hard).
 - **Unit (convex):** `notifications.create` op_id UUID parses with `ChangeStampSchema`; markRead/storage/admin KV insert change_log; `resolveSnapshotWinner` drops unversioned rows; workspace delete removes notifications; gateway webhook skip on replay; subscribe cursor rollover; `validateSyncOperation` UUID; gc pagination loop.
-- **Contract:** `verifySyncContract` already expects opId tie-break; wire SQLite production LWW into that adapter so it cannot pass via a test-only comparator.
+- **Contract:** Verify opId tie-breaks against SQLite production LWW in the provider's native/D1 tests. The former host `verifySyncContract` self-test used the same comparator for its fixture and expected result and was removed during test audit; it supplied no independent LWW qualification.
 - **No e2e Playwright** unless a named `test:e2e:*` harness already covers sync; prefer vitest.
 
 ## Design Decisions

@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
     HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
     HOOK_DIAGNOSTIC_SERIES_CAPACITY,
-    HookDiagnostics,
 } from '../hook-diagnostics';
+import { createV1HookDiagnosticsAdapter } from '../hook-diagnostics-compat';
 import { createHookEngineV2 } from '../hook-engine-v2';
 
 describe('HookDiagnostics', () => {
     it('keeps counters and only the 128 most recent samples per series', () => {
-        const diagnostics = new HookDiagnostics();
+        const adapter = createV1HookDiagnosticsAdapter({ callbacks: () => 0 });
+        const { diagnostics } = adapter;
         for (let value = 0; value < 200; value++) {
-            diagnostics.recordTiming('demo.action', value);
+            adapter.recordTiming('demo.action', value);
         }
 
         const [series] = diagnostics.snapshot().series;
@@ -25,18 +26,31 @@ describe('HookDiagnostics', () => {
         expect(series?.recent).toHaveLength(HOOK_DIAGNOSTIC_SAMPLE_CAPACITY);
         expect(series?.recent[0]).toBe(72);
         expect(series?.recent.at(-1)).toBe(199);
+        adapter.recordError('demo.action');
+        const snapshot = diagnostics.snapshot();
+        for (const value of [snapshot, snapshot.series, ...snapshot.series,
+            ...snapshot.series.map((entry) => entry.recent), snapshot.overflow]) {
+            expect(Object.isFrozen(value)).toBe(true);
+        }
+        adapter.facade.timings = {};
+        adapter.facade.errors = {};
+        expect(diagnostics.snapshot()).toMatchObject({
+            seriesCount: 0, series: [],
+            overflow: { eventCount: 0, timingCount: 0, errorCount: 0, timingTotal: 0 },
+        });
     });
 
     it('caps total series at 2,048 and aggregates overflow without retaining names', () => {
-        const diagnostics = new HookDiagnostics();
+        const adapter = createV1HookDiagnosticsAdapter({ callbacks: () => 0 });
+        const { diagnostics } = adapter;
         for (let index = 0; index < HOOK_DIAGNOSTIC_SERIES_CAPACITY; index++) {
-            diagnostics.recordTiming(`known.${index}`, index);
+            adapter.recordTiming(`known.${index}`, index);
         }
-        diagnostics.recordTiming('overflow.timing', 7);
+        adapter.recordTiming('overflow.timing', 7);
         for (let index = 0; index < 1_000; index++) {
-            diagnostics.recordError(`overflow.${index}`);
+            adapter.recordError(`overflow.${index}`);
         }
-        diagnostics.recordTiming('known.0', 10);
+        adapter.recordTiming('known.0', 10);
 
         const snapshot = diagnostics.snapshot();
         expect(snapshot.seriesCount).toBe(HOOK_DIAGNOSTIC_SERIES_CAPACITY);
@@ -53,32 +67,6 @@ describe('HookDiagnostics', () => {
         expect(
             snapshot.series.find(({ name }) => name === 'known.0')?.count,
         ).toBe(2);
-    });
-
-    it('returns deeply immutable snapshots and resets all bounded state', () => {
-        const diagnostics = new HookDiagnostics();
-        diagnostics.recordTiming('demo.action', 3);
-        diagnostics.recordError('demo.action');
-
-        const snapshot = diagnostics.snapshot();
-        expect(Object.isFrozen(snapshot)).toBe(true);
-        expect(Object.isFrozen(snapshot.series)).toBe(true);
-        expect(Object.isFrozen(snapshot.series[0])).toBe(true);
-        expect(Object.isFrozen(snapshot.series[0]?.recent)).toBe(true);
-        expect(Object.isFrozen(snapshot.overflow)).toBe(true);
-
-        diagnostics.reset();
-
-        expect(diagnostics.snapshot()).toMatchObject({
-            seriesCount: 0,
-            series: [],
-            overflow: {
-                eventCount: 0,
-                timingCount: 0,
-                errorCount: 0,
-                timingTotal: 0,
-            },
-        });
     });
 
     it('records executor timings and errors in the bounded runtime diagnostics', async () => {

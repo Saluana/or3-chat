@@ -24,8 +24,6 @@
  * - Grant evaluation (see `host-rpc-broker` and `grant-review`).
  */
 
-import type { RpcRequestEnvelope } from './rpc-envelope';
-
 export interface HostMessageSession {
     readonly sessionId: string;
     readonly pluginId: string;
@@ -252,34 +250,4 @@ export class HostSessionAuthority {
 
 function deny(code: InboundAuthorityCode, message: string): InboundAuthorityCheck {
     return { status: 'denied', code, message };
-}
-
-/**
- * Strip every plugin-supplied identity field from inbound request parameters so
- * a caller cannot select another plugin/workspace/user by argument.
- *
- * An opaque connection reference is intentionally left in place: the plugin may
- * name a handle it was given, but the host resolves and authorizes it against
- * its own records (`connections/resolve`), so the value never selects authority
- * on its own.
- */
-export function stripCallerSuppliedIdentity(
-    request: RpcRequestEnvelope
-): RpcRequestEnvelope {
-    const forbidden = [
-        'pluginId',
-        'workspaceId',
-        'userId',
-        'accountId',
-        'sessionId',
-        'sourceId',
-        'generation',
-        'role',
-        'grants',
-    ];
-    const params = { ...(request.params as Record<string, unknown>) };
-    for (const key of forbidden) {
-        delete params[key];
-    }
-    return { ...request, params, pluginId: undefined };
 }

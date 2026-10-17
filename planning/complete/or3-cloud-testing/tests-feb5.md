@@ -346,10 +346,11 @@ Status: unchecked task list, prioritized for implementation.
   - Validate monotonic cursor advancement over multi-batch pulls.
   - Validate rate-limit recovery and retry behavior.
 
-- [x] `tests/integration/sync-multidevice.integration.test.ts`
-  - Simulate two devices writing same record with HLC tie-breaks.
-  - Validate stable message ordering (`index` + `order_key`).
-  - Validate remote apply does not re-enqueue outbox writes.
+- [x] Sync owner coverage (consolidated from the test-local multi-device fixture).
+  - `app/core/sync/__tests__/conflict-resolver.test.ts` validates HLC winners and duplicate delivery.
+  - `app/core/sync/__tests__/outbox-manager.test.ts` validates durable receipts, retries and auth/429 deferrals.
+  - `app/core/sync/__tests__/atomic-capture.integration.test.ts` validates remote-apply suppression in real Dexie transactions.
+  - `app/db/__tests__/messages-transactions.test.ts` validates stable message ordering (`index` + `order_key`).
 
 - [x] `tests/integration/sync-rescan-recovery.integration.test.ts`
   - Validate cursor reset/rescan flow with pending local ops overlay.

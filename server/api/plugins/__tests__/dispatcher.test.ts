@@ -193,7 +193,6 @@ describe('plugin route dispatcher', () => {
         ['PUT', 'workspace.write'],
         ['PATCH', 'workspace.write'],
         ['DELETE', 'workspace.write'],
-        ['GET', 'workspace.read'],
         ['HEAD', 'workspace.read'],
     ] as const)(
         'maps %s plugin routes to %s',

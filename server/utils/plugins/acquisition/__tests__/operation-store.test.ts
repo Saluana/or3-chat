@@ -68,19 +68,26 @@ describe('acquisition operation records (5.1)', () => {
         expect(created.release.releaseId).toBe('rel_1');
         expect(created.operationId).toMatch(/^acq_[a-z0-9]{8,}$/);
 
-        // The record survives a fresh store instance over the same root.
-        const reopened = new PluginAcquisitionOperationStore(root);
-        expect((await reopened.read(created.operationId))?.release.releaseId).toBe('rel_1');
-    });
-
-    it('allows only one active operation per plugin', async () => {
-        const { store } = await makeStore();
-        await store.create(createInput());
-        await expect(store.create(createInput())).rejects.toMatchObject({
-            code: 'operation-conflict',
+        await store.update(created.operationId, created.revision, {
+            stage: 'downloaded',
+            status: 'running',
+            downloadedBytes: 4096,
+            stagingObject: 'staging/acme.sample/1.0.0.partial',
+            downloadUrlExpiresAt: 9_999_999_999_999,
         });
-        // Another plugin is unaffected.
-        await expect(store.create(createInput({ pluginId: 'acme.other' }))).resolves.toBeTruthy();
+        const reopened = new PluginAcquisitionOperationStore(root);
+        expect(await reopened.requireRecord(created.operationId)).toMatchObject({
+            operationId: created.operationId,
+            release,
+            requesterUserId: 'user_admin',
+            workspaceId: 'ws_1',
+            instanceId: 'host-a',
+            stage: 'downloaded',
+            status: 'running',
+            downloadedBytes: 4096,
+            stagingObject: 'staging/acme.sample/1.0.0.partial',
+            downloadUrlExpiresAt: 9_999_999_999_999,
+        });
     });
 
     it('advances by compare-and-swap and refuses a stale revision', async () => {
@@ -98,21 +105,6 @@ describe('acquisition operation records (5.1)', () => {
             store.update(created.operationId, created.revision, { stage: 'downloaded' })
         ).rejects.toMatchObject({ code: 'operation-conflict' });
         expect((await store.read(created.operationId))?.stage).toBe('resolved');
-    });
-
-    it('resumes a recorded stage instead of restarting after a restart', async () => {
-        const { store, root } = await makeStore();
-        const created = await store.create(createInput());
-        await store.update(created.operationId, created.revision, {
-            stage: 'downloaded',
-            status: 'running',
-            downloadedBytes: 4096,
-            stagingObject: 'staging/acme.sample/1.0.0.partial',
-            downloadUrlExpiresAt: 9_999_999_999_999,
-        });
-        const reopened = new PluginAcquisitionOperationStore(root);
-        const resumed = await reopened.requireRecord(created.operationId);
-        expect(resumed).toMatchObject({ stage: 'downloaded', downloadedBytes: 4096 });
     });
 
     it('retries a failed operation without losing its identity', async () => {
@@ -226,20 +218,24 @@ describe('store concurrency and retention (5.1)', () => {
         const fulfilled = results.filter((entry) => entry.status === 'fulfilled');
         expect(fulfilled).toHaveLength(1);
         expect((await store.list()).length).toBe(1);
-    });
-
-    it('refuses a retry for the same plugin while another run is active', async () => {
-        const { store } = await makeStore();
-        const first = await store.create(createInput());
-        const running = await store.update(first.operationId, first.revision, {
+        expect(results.find((entry) => entry.status === 'rejected')).toMatchObject({
+            reason: { code: 'operation-conflict' },
+        });
+        const winner = fulfilled[0];
+        if (!winner || winner.status !== 'fulfilled') throw new Error('expected one winner');
+        expect(await store.findActiveForPlugin('acme.sample')).toMatchObject({
+            operationId: winner.value.operationId, status: 'pending',
+        });
+        const running = await store.update(winner.value.operationId, winner.value.revision, {
             status: 'running',
         });
         expect(await store.findActiveForPlugin('acme.sample')).toMatchObject({
-            operationId: running.operationId,
+            operationId: running.operationId, status: 'running',
         });
         await expect(store.create(createInput())).rejects.toMatchObject({
             code: 'operation-conflict',
         });
+        await expect(store.create(createInput({ pluginId: 'acme.other' }))).resolves.toBeTruthy();
     });
 
     it('refuses a second runner for the same plugin and lets it run again afterwards', async () => {

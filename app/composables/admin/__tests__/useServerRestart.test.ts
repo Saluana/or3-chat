@@ -120,18 +120,6 @@ describe('useServerRestart', () => {
         });
     });
 
-    it('restarts when allowRestart is undefined (no restriction)', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner, undefined);
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockResolvedValue({ ok: true });
-
-        await restart();
-
-        expect(mockFetch).toHaveBeenCalled();
-    });
-
     it('exposes restartRequired ref', () => {
         const isOwner = ref(true);
         const { restartRequired } = useServerRestart(isOwner);

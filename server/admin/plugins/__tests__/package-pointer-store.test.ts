@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -122,14 +122,6 @@ describe('atomic plugin package pointers', () => {
         await expect(pointers.writePointer('alpha', pointer(1, invalid))).rejects.toMatchObject({
             code: 'package-unavailable',
         });
-    });
-
-    it('writes strict single-line pointer JSON', async () => {
-        const { root, pointers, first } = await setup();
-        await pointers.writePointer('alpha', pointer(1, first));
-        const text = readFileSync(resolve(root, '.active', 'alpha.json'), 'utf8');
-        expect(text.endsWith('\n')).toBe(true);
-        expect(JSON.parse(text)).toEqual(pointer(1, first));
     });
 
     it('lists only regular valid pointer identities for runtime discovery', async () => {

@@ -185,7 +185,7 @@ describe('plugin AI invocation (4.11)', () => {
         ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
     });
 
-    it('records attributed usage and reserves spend before dispatch', () => {
+    it('reserves spend before dispatch and releases the reservation after settlement', () => {
         const governor = new PluginAiGovernor({
             budgets: DEFAULT_CONTAINMENT_BUDGETS,
             prices: { m: { promptPerMillion: 100, completionPerMillion: 100 } },
@@ -198,18 +198,6 @@ describe('plugin AI invocation (4.11)', () => {
         const settled = admission.settle({ spendUsd: 0.01, completionTokens: 5 });
         expect(settled.ok).toBe(true);
         expect(governor.committedUsd).toBeCloseTo(0, 6);
-        governor.record({
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            generation: 1,
-            model: 'm',
-            promptTokens: 5,
-            completionTokens: 5,
-            spendUsd: 0.01,
-            at: 1,
-        });
-        expect(governor.usage[0]).toMatchObject({ pluginId: 'example.plugin', spendUsd: 0.01 });
-        expect(governor.disclosure('Example plugin')).toContain('billed to that account');
     });
 
     it('refuses a model with no trusted price and releases slots on failure', () => {

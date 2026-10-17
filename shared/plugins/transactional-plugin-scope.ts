@@ -75,7 +75,6 @@ export class TransactionalPluginScope {
     readonly #validationCallbacks: Callback[] = [];
     readonly #preActivationCallbacks: Callback[] = [];
     readonly #disposalCallbacks: Callback[] = [];
-    readonly #afterPublish?: () => void;
     #state: TransactionalPluginScopeState = 'open';
     #validated = false;
     #publishedPreviousOwner?: symbol;
@@ -86,8 +85,6 @@ export class TransactionalPluginScope {
         generation: number;
         activationTable: ActivationTable;
         owner?: symbol;
-        /** Synchronous fault-injection/host-finalization seam. */
-        afterPublish?: () => void;
     }) {
         this.#pluginId = options.pluginId;
         this.#generation = options.generation;
@@ -96,7 +93,6 @@ export class TransactionalPluginScope {
             options.owner ??
             Symbol(`${options.pluginId}:${options.generation}`);
         this.signal = this.#controller.signal;
-        this.#afterPublish = options.afterPublish;
     }
 
     get state(): TransactionalPluginScopeState {
@@ -248,7 +244,6 @@ export class TransactionalPluginScope {
                         'A newer plugin generation already owns publication',
                 });
             }
-            this.#afterPublish?.();
             this.#publishedPreviousOwner = expectedOwner;
             this.#state = 'published';
             return { ok: true };

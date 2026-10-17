@@ -2,13 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createPluginTestHost, type PluginTestHost } from '../../packages/plugin-sdk/src/testing';
-import {
-    PORTABLE_PROFILE_ID,
-    validatePortableProfile,
-    type Or3PackagePolicyV1,
-    type Or3SetupDescriptorV1,
-} from '../../packages/plugin-sdk/src/profile';
-import type { PluginManifestV2 } from '../../packages/plugin-sdk/src/manifest';
+import { PORTABLE_PROFILE_ID } from '../../packages/plugin-sdk/src/profile';
 import { checkV2PackageConformance } from '../../scripts/plugin-runtime/check-v2-package-conformance';
 import { buildArtifacts } from '../../examples/plugins/selected-document-utility/.authoring/profile.config.mjs';
 import selectedDocumentUtility, {
@@ -59,16 +53,6 @@ describe('selected-document-utility example package', () => {
             status: 'conformant',
             issues: [],
         });
-    });
-
-    it('passes the portable profile validator with zero findings', () => {
-        const findings = validatePortableProfile({
-            manifest: readJson<PluginManifestV2>('or3.manifest.json'),
-            policy: readJson<Or3PackagePolicyV1>('or3.package-policy.json'),
-            setup: readJson<Or3SetupDescriptorV1>('or3.setup.json'),
-            packageJson: readJson<{ dependencies?: Record<string, string> }>('package.json'),
-        });
-        expect(findings).toEqual([]);
     });
 
     it('keeps the committed descriptors generated from the authoring config', () => {

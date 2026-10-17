@@ -3,7 +3,7 @@ import { buildWebhookPayload } from './payload';
 import type { WebhookDispatcher } from './dispatcher';
 import type { WebhookStore } from './store/types';
 
-export const USER_HOOK_TO_EVENT_MAP: Record<string, string> = {
+const USER_HOOK_TO_EVENT_MAP: Record<string, string> = {
     'db.threads.create:action:after': 'thread.created',
     'db.threads.update:action:after': 'thread.updated',
     'db.threads.upsert:action:after': 'thread.updated',
@@ -19,7 +19,7 @@ export const USER_HOOK_TO_EVENT_MAP: Record<string, string> = {
     'notify:action:push': 'notification.created',
 };
 
-export const ADMIN_HOOK_TO_EVENT_MAP: Record<string, string> = {
+const ADMIN_HOOK_TO_EVENT_MAP: Record<string, string> = {
     'auth.user:action:created': 'admin.user.created',
     'admin.workspace:action:created': 'admin.workspace.created',
     'admin.workspace:action:deleted': 'admin.workspace.deleted',

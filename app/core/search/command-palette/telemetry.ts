@@ -34,7 +34,7 @@ export function emitPaletteTelemetry(event: PaletteTelemetryEvent): void {
     }
 }
 
-export function assertSafeTelemetry(event: PaletteTelemetryEvent): void {
+function assertSafeTelemetry(event: PaletteTelemetryEvent): void {
     const json = JSON.stringify(event);
     for (const key of FORBIDDEN_KEYS) {
         // Only flag explicit property names, not values that happen to match.
@@ -44,9 +44,4 @@ export function assertSafeTelemetry(event: PaletteTelemetryEvent): void {
             );
         }
     }
-}
-
-/** Test helper */
-export function __resetPaletteTelemetryForTests(): void {
-    listeners.clear();
 }

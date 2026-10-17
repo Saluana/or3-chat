@@ -251,34 +251,6 @@ export function resetLazyBoundariesForHMR(): void {
     });
 }
 
-/**
- * `createLoadTimer`
- *
- * Purpose:
- * Provides a simple duration timer for lazy boundary telemetry.
- *
- * Behavior:
- * Captures `performance.now()` and returns a `stop` callback.
- *
- * Constraints:
- * - Requires `performance` to be available
- *
- * Non-Goals:
- * - Does not provide pauses or laps
- *
- * @example
- * ```ts
- * const timer = createLoadTimer();
- * const ms = timer.stop();
- * ```
- */
-export function createLoadTimer() {
-    const start = performance.now();
-    return {
-        stop: () => Math.round(performance.now() - start),
-    };
-}
-
 // HMR cleanup
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {

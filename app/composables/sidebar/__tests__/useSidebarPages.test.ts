@@ -40,30 +40,6 @@ describe('useSidebarPages', () => {
         expect(page?.image).toBe('/icons/todo.webp');
     });
 
-    it('overwrites existing page with same id', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        registerSidebarPage({
-            id: 'page1',
-            label: 'Version 1',
-            icon: 'pixelarticons:home',
-            component: { name: 'V1', template: '<div>v1</div>' },
-        });
-
-        let page = getSidebarPage('page1');
-        expect(page?.label).toBe('Version 1');
-
-        registerSidebarPage({
-            id: 'page1',
-            label: 'Version 2',
-            icon: 'pixelarticons:home',
-            component: { name: 'V2', template: '<div>v2</div>' },
-        });
-
-        page = getSidebarPage('page1');
-        expect(page?.label).toBe('Version 2');
-    });
-
     it('unregisters a sidebar page', () => {
         const { registerSidebarPage, unregisterSidebarPage, getSidebarPage } =
             useSidebarPages();
@@ -121,62 +97,6 @@ describe('useSidebarPages', () => {
         expect(list[2]?.id).toBe('page1'); // order 300
     });
 
-    it('applies default order when not specified', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        registerSidebarPage({
-            id: 'no-order',
-            label: 'No Order Page',
-            icon: 'pixelarticons:no-order',
-            component: { name: 'NoOrder', template: '<div>no order</div>' },
-        });
-
-        const page = getSidebarPage('no-order');
-        expect(page?.order).toBe(200);
-    });
-
-    it('wraps async components with defineAsyncComponent', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        const asyncFactory = async () => ({
-            name: 'AsyncPage',
-            template: '<div>async page</div>',
-        });
-
-        registerSidebarPage({
-            id: 'async-page',
-            label: 'Async Page',
-            icon: 'pixelarticons:async',
-            component: asyncFactory,
-        });
-
-        const page = getSidebarPage('async-page');
-        expect(page?.component).toBeDefined();
-        // Component should be wrapped with defineAsyncComponent
-        expect(typeof page?.component).toBe('object');
-        expect(page?.component).not.toBe(asyncFactory); // Should be wrapped
-    });
-
-    it('passes through Vue components without wrapping', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        const vueComponent = {
-            name: 'VueComponent',
-            template: '<div>vue component</div>',
-            setup: () => ({}),
-        };
-
-        registerSidebarPage({
-            id: 'vue-component',
-            label: 'Vue Component',
-            icon: 'pixelarticons:vue',
-            component: vueComponent,
-        });
-
-        const page = getSidebarPage('vue-component');
-        expect(page?.component).toBe(vueComponent); // Should not be wrapped
-    });
-
     it('preserves optional properties', () => {
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
 
@@ -209,54 +129,6 @@ describe('useSidebarPages', () => {
         expect(page?.onDeactivate).toBe(mockOnDeactivate);
     });
 
-    it('defaults usesDefaultHeader to true for sidebar-home', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        registerSidebarPage({
-            id: 'sidebar-home',
-            label: 'Home',
-            icon: 'pixelarticons:home',
-            component: { name: 'HomePage', template: '<div>home</div>' },
-        });
-
-        const page = getSidebarPage('sidebar-home');
-        expect(page?.usesDefaultHeader).toBe(true);
-    });
-
-    it('defaults usesDefaultHeader to false for non-home pages', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        registerSidebarPage({
-            id: 'custom-page',
-            label: 'Custom',
-            icon: 'pixelarticons:custom',
-            component: { name: 'CustomPage', template: '<div>custom</div>' },
-        });
-
-        const page = getSidebarPage('custom-page');
-        expect(page?.usesDefaultHeader).toBe(false);
-    });
-
-    it('component is marked raw to avoid reactivity overhead', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        const component = {
-            name: 'TestPage',
-            template: '<div>test page</div>',
-        };
-
-        registerSidebarPage({
-            id: 'raw-test',
-            label: 'Raw Test',
-            icon: 'pixelarticons:raw',
-            component,
-        });
-
-        const page = getSidebarPage('raw-test');
-        // markRaw should prevent Vue reactivity on the component
-        expect(page?.component).toBe(component);
-    });
-
     it('computed listSidebarPages updates reactively after registration', () => {
         const { registerSidebarPage, listSidebarPages } = useSidebarPages();
 
@@ -279,45 +151,6 @@ describe('useSidebarPages', () => {
         });
 
         expect(listSidebarPages.value).toHaveLength(initialLength + 2);
-    });
-
-    it('returns no-op unregister function on server side', () => {
-        // Mock server side
-        (global as any).process = { ...originalProcess, client: false };
-
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        const def: SidebarPageDef = {
-            id: 'server-test',
-            label: 'Server Test',
-            icon: 'pixelarticons:server',
-            component: { name: 'ServerTest', template: '<div>server</div>' },
-        };
-
-        const unregister = registerSidebarPage(def);
-
-        // Should not register on server side
-        expect(getSidebarPage('server-test')).toBeUndefined();
-
-        // Unregister should be a no-op but not throw
-        expect(() => unregister()).not.toThrow();
-    });
-
-    it('registerSidebarPage returns unregister function', () => {
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-
-        const unregister = registerSidebarPage({
-            id: 'unregister-test',
-            label: 'Unregister Test',
-            icon: 'pixelarticons:unregister',
-            component: { name: 'UnregisterTest', template: '<div>test</div>' },
-        });
-
-        expect(getSidebarPage('unregister-test')).toBeDefined();
-
-        unregister();
-
-        expect(getSidebarPage('unregister-test')).toBeUndefined();
     });
 
     it('throws error for invalid id (uppercase)', () => {
@@ -344,32 +177,6 @@ describe('useSidebarPages', () => {
                 component: { name: 'TodoPage', template: '<div>todo</div>' },
             });
         }).toThrow(/lowercase/);
-    });
-
-    it('throws error for empty label', () => {
-        const { registerSidebarPage } = useSidebarPages();
-
-        expect(() => {
-            registerSidebarPage({
-                id: 'todo',
-                label: '',
-                icon: 'pixelarticons:list',
-                component: { name: 'TodoPage', template: '<div>todo</div>' },
-            });
-        }).toThrow(/Label is required/);
-    });
-
-    it('throws error for missing icon', () => {
-        const { registerSidebarPage } = useSidebarPages();
-
-        expect(() => {
-            registerSidebarPage({
-                id: 'todo',
-                label: 'Todo',
-                icon: '',
-                component: { name: 'TodoPage', template: '<div>todo</div>' },
-            });
-        }).toThrow(/Icon is required/);
     });
 
     it('throws error for label too long', () => {

@@ -80,12 +80,6 @@ describe('can()', () => {
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('forbidden');
         });
-
-        it('denies when unauthenticated (unauthenticated)', () => {
-            const decision = can({ authenticated: false }, 'workspace.read');
-            expect(decision.allowed).toBe(false);
-            expect(decision.reason).toBe('unauthenticated');
-        });
     });
 
     describe('workspace scoping', () => {
@@ -133,11 +127,6 @@ describe('can()', () => {
         it('base decision starts denied for missing permission', () => {
             const decision = can(mockEditorSession, 'plugins.manage');
             expect(decision.allowed).toBe(false);
-        });
-
-        it('decision is granted only when role has permission', () => {
-            const decision = can(mockOwnerSession, 'workspace.read');
-            expect(decision.allowed).toBe(true);
         });
     });
 

@@ -142,7 +142,7 @@ interface PluginRuntimeRecord {
 }
 ```
 
-Legal transitions are implemented as pure functions and tested exhaustively. `blocked` means verification/access prevented import. `failed` means this activation attempt failed. `quarantined` is keyed to the descriptor key, so installing a different verified digest is not permanently poisoned by the prior artifact.
+The manager owns lifecycle status changes; its activation, stop, stale-generation, and cleanup tests verify the live transitions. The original pure transition-table prototype was never wired into the manager and was retired during the test audit. Failure classification remains shared. `blocked` means verification/access prevented import. `failed` means this activation attempt failed. `quarantined` is keyed to the descriptor key, so installing a different verified digest is not permanently poisoned by the prior artifact.
 
 The manager serializes reconciles. A new desired-state revision aborts the previous generation, but only the current reconcile may publish status or visibility. Stop is idempotent. There is no mid-session kernel switch: a flag change is applied on reload before discovery.
 

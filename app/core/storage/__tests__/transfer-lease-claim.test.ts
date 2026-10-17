@@ -4,7 +4,6 @@ import type { FileTransfer } from '~~/shared/storage/types';
 import type { ObjectStorageProvider } from '../types';
 import { FileTransferQueue } from '../transfer-queue';
 import { installFaultClock, raceWorkers } from './fixtures/transfer-faults';
-import { verifyTransferLeaseContract } from '~~/shared/testing/contracts/storage';
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
@@ -32,41 +31,6 @@ function provider(): ObjectStorageProvider {
 }
 
 describe('transfer lease claims', () => {
-    it('executes the shared lease race and expired-owner recovery contract', async () => {
-        const clock = installFaultClock(100);
-        const db = new Or3DB(`transfer-contract-${crypto.randomUUID()}`);
-        databases.push(db);
-        await db.open();
-        const workers = new Map([
-            ['worker-a', new FileTransferQueue(db, provider(), { leaseDurationMs: 50 })],
-            ['worker-b', new FileTransferQueue(db, provider(), { leaseDurationMs: 50 })],
-            ['worker-c', new FileTransferQueue(db, provider(), { leaseDurationMs: 50 })],
-        ]);
-        for (const [workerId, queue] of workers) (queue as any).workerId = workerId;
-        const context = { workspaceId: 'ws-1', dbName: db.name, db };
-
-        await verifyTransferLeaseContract({
-            name: 'dexie-transfer-queue',
-            async enqueue(id) {
-                await db.file_transfers.put({
-                    id, hash: 'hash', workspace_id: 'ws-1', direction: 'download',
-                    bytes_total: 0, bytes_done: 0, state: 'queued', attempts: 0,
-                    retry_at: 0, created_at: 1, updated_at: 1,
-                });
-            },
-            async claim(workerId, now) {
-                clock.set(now);
-                const claimed = await (workers.get(workerId) as any)
-                    .claimQueuedTransfers(context, 1) as FileTransfer[];
-                return claimed[0]?.id ?? null;
-            },
-            async expire(id, now) {
-                clock.set(now);
-                await db.file_transfers.update(id, { lease_expires_at: now });
-            },
-        });
-    });
-
     it('allows only one worker to claim a queued transfer and renews only for its owner', async () => {
         const clock = installFaultClock(10_000);
         const db = new Or3DB(`transfer-claim-${crypto.randomUUID()}`);

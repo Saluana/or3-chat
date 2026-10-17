@@ -174,7 +174,9 @@ describe('sortModels', () => {
     });
 
     it('name sorts alphabetically', () => {
-        expect(sortModels([a, b], 'name').map((m) => m.name)).toEqual(['Alpha', 'Beta']);
+        const input = [b, a];
+        expect(sortModels(input, 'name').map((m) => m.name)).toEqual(['Alpha', 'Beta']);
+        expect(input).toEqual([b, a]);
     });
 
     it('price ascending', () => {
@@ -195,11 +197,6 @@ describe('sortModels', () => {
         expect(sortModels([a, b], 'newest').map((m) => m.name)).toEqual(['Beta', 'Alpha']);
     });
 
-    it('does not mutate the input array', () => {
-        const input = [a, b];
-        sortModels(input, 'name');
-        expect(input[0]).toBe(a);
-    });
 });
 
 describe('countByProvider', () => {

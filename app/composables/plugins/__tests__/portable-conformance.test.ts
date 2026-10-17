@@ -254,6 +254,15 @@ describe('portable storage conformance (fake vs production dispatch)', () => {
         for (const step of pairs) {
             expect(summarize(await step.prod())).toEqual(summarize(await step.fake()));
         }
+        expect(await prodStorage.get('k')).toEqual({ ok: true, value: { n: 1 } });
+        expect(await fakeStorage.get('k')).toEqual({ ok: true, value: { n: 1 } });
+        expect(await prodStorage.get('')).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
+        const services = createPortableSettingsServices('sample.plugin');
+        for (const ifRevision of [Number.NaN, -1, true, {}]) {
+            await expect(services.storage.set({ key: 'guarded', value: 'x', ifRevision }))
+                .rejects.toMatchObject({ rpcCode: 'invalid-input' });
+        }
+        expect(await prodStorage.get('guarded')).toEqual({ ok: true, value: null });
         // Spot-check the exact codes the table agreed on.
         expect(summarize(await prodStorage.set('', 'bad'))).toEqual({ ok: false, code: 'invalid-input' });
         expect(summarize(await prodStorage.set('fresh', 'again', { ifRevision: null }))).toEqual({
@@ -302,6 +311,15 @@ describe('portable storage conformance (fake vs production dispatch)', () => {
         const fakeStorage = fake.context()?.storage;
         if (!prodStorage || !fakeStorage) return;
 
+        const foreign = {
+            id: 'kv:plugin-storage:other.plugin:foreign',
+            name: 'plugin-storage:other.plugin:foreign',
+            value: JSON.stringify({ private: true }),
+            deleted: false,
+            created_at: 1, updated_at: 1, clock: 1,
+        };
+        await kvState.db!.kv.put(foreign);
+        expect(await prodStorage.get('foreign')).toEqual({ ok: true, value: null });
         for (let index = 0; index < 5; index += 1) {
             await prodStorage.set(`k${index}`, index);
             await fakeStorage.set(`k${index}`, index);
@@ -324,6 +342,8 @@ describe('portable storage conformance (fake vs production dispatch)', () => {
         }
         expect(await walk(prodStorage)).toEqual(await walk(fakeStorage));
         expect(await walk(prodStorage)).toEqual({ keys: ['k0', 'k1', 'k2', 'k3', 'k4'], cursors: 2 });
+        await prodStorage.delete('foreign');
+        expect(await kvState.db!.kv.get(foreign.id)).toEqual(foreign);
     });
 
     it('agrees on ungranted storage writes', async () => {
@@ -440,7 +460,6 @@ it('enforces the production retained-name cap in both hosts', async () => {
     expect(await fake.client.call('storage.set', { key: names[0], value: 1 })).toMatchObject({ ok: true });
 }, 30_000);
 
-
 describe('portable production transport conformance', () => {
     it('enforces raw grant refusal and event direction in both hosts', async () => {
         const prod = await productionSide([], []);
@@ -461,19 +480,25 @@ describe('portable production transport conformance', () => {
         prod.broker.dispose();
     });
 
-    it('keeps a revoked write charged and returns cancellation through the SDK', async () => {
-        let release!: () => void;
-        const gate = new Promise<void>((resolve) => { release = resolve; });
-        const prod = await productionSide(['storage.read', 'storage.write'], ['storage.read', 'storage.write'], {
-            beforeService: async () => gate, maxInFlight: 1,
-        });
-        const write = prod.context()!.storage.set('pending', 'must-not-commit');
-        prod.broker.setGrants(grantsSnapshot(['storage.read']));
-        expect(await prod.client.call('storage.get', { key: 'pending' })).toMatchObject({ ok: false, code: 'backpressure' });
-        release();
-        expect(await write).toMatchObject({ ok: false, error: { code: 'aborted' } });
-        expect(await prod.context()!.storage.get('pending')).toEqual({ ok: true, value: null });
-        prod.broker.dispose();
+    it('keeps revoked mutations charged and returns cancellation through the SDK', async () => {
+        for (const method of ['set', 'delete'] as const) {
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const prod = await productionSide(['storage.read', 'storage.write'], ['storage.read', 'storage.write'], {
+                beforeService: async (name) => { if (name === 'storage.' + method) await gate; },
+                maxInFlight: 1,
+            });
+            if (method === 'delete') await prod.context()!.storage.set('pending', 'must-remain');
+            const mutation = method === 'set'
+                ? prod.context()!.storage.set('pending', 'must-not-commit')
+                : prod.context()!.storage.delete('pending');
+            prod.broker.setGrants(grantsSnapshot(['storage.read']));
+            expect(await prod.client.call('storage.get', { key: 'pending' })).toMatchObject({ ok: false, code: 'backpressure' });
+            release();
+            expect(await mutation).toMatchObject({ ok: false, error: { code: 'aborted' } });
+            expect(await prod.context()!.storage.get('pending')).toEqual({ ok: true, value: method === 'delete' ? 'must-remain' : null });
+            prod.broker.dispose();
+        }
     });
 
     it('returns deadline errors through the actual client transport', async () => {

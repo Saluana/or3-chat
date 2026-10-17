@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
     HOST_ACTIONS,
-    HOST_ACTION_LABELS,
     MAX_HOST_ACTION_CONTENT_CHARS,
     chatTitleFrom,
-    isHostAction,
-    isKnownHostAction,
     planHostAction,
     readHostActionRpcPayload,
     tipTapToText,
@@ -16,13 +13,6 @@ import {
  * the host from validated plugin output and the host's own selection context.
  */
 describe('portable host actions', () => {
-    it('classifies reserved host action ids', () => {
-        expect(isHostAction('host.document.create')).toBe(true)
-        expect(isHostAction('documents.create')).toBe(false)
-        expect(isKnownHostAction('host.document.replace')).toBe(true)
-        expect(isKnownHostAction('host.something.else')).toBe(false)
-    })
-
     it('plans a new document from a validated result', () => {
         const result = planHostAction({
             action: HOST_ACTIONS.createDocument,
@@ -192,9 +182,4 @@ describe('portable host actions', () => {
         expect(readHostActionRpcPayload(undefined)).toMatchObject({ ok: false, code: 'payload-required' })
     })
 
-    it('renders host-owned canonical wording for reserved actions', () => {
-        expect(HOST_ACTION_LABELS[HOST_ACTIONS.createDocument]).toBe('Create document')
-        expect(HOST_ACTION_LABELS[HOST_ACTIONS.replaceDocument]).toBe('Replace selected document')
-        expect(HOST_ACTION_LABELS[HOST_ACTIONS.continueInChat]).toBe('Continue in chat')
-    })
 })

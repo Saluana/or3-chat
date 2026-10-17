@@ -20,7 +20,8 @@ membership, or capability.
 | `ai.background` | No | Yes | Yes | Only with editor/owner membership |
 | `tool.execute` | No | Yes | Yes | Only with editor/owner membership |
 
-Capabilities map to base permissions through `server/auth/capability-gate.ts`.
+SSR routes enforce base permissions through `can()` and `requireCan()` in
+`server/auth/can.ts`.
 `sync.gc` requires `workspace.settings.manage` (owner only); `storage.gc` requires
 `admin.access` (deployment admin only); `storage.write`, `ai.paid`,
 `ai.background`, and `tool.execute` all resolve to `workspace.write`.
@@ -153,8 +154,8 @@ behind the authenticated SSR routes and provider adapters described above.
   equivalent are never trusted as actor identity or granted authority.
 - Internal functions authenticate trusted server/scheduler context and are not
   made safe merely by an undocumented caller convention.
-- `server/auth/capability-gate.ts` is the typed SSR result contract. Convex uses
-  the same capability meanings at its direct boundary.
+- SSR routes use `can()` and `requireCan()` for authorization decisions. Convex
+  enforces the same capability meanings at its direct boundary.
 
 ## Related
 

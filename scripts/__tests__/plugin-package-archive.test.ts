@@ -86,14 +86,6 @@ function buildRawZip(entries: ReadonlyArray<{ name: string; data?: Uint8Array }>
 const manifestBytes = readFileSync(resolve(validFixture, 'or3.manifest.json'));
 
 describe('deterministic package archive', () => {
-    it('produces byte-identical output for repeated exports of a nested fixture', async () => {
-        const first = await writeDeterministicPackageZip(validFixture);
-        const second = await writeDeterministicPackageZip(validFixture);
-        expect(first[0]).toBe(0x50);
-        expect(first[1]).toBe(0x4b);
-        expect(Buffer.from(first).equals(Buffer.from(second))).toBe(true);
-    });
-
     it('round-trips nested, non-ASCII, and empty directories to the same digest', async () => {
         const tree = copyFixture('or3-archive-roundtrip-');
         mkdirSync(resolve(tree, 'empty-dir'), { recursive: true });
@@ -111,22 +103,6 @@ describe('deterministic package archive', () => {
         expect(readFileSync(resolve(extracted, 'unicode/空/数据.txt'), 'utf8')).toBe(
             'こんにちは'
         );
-    });
-
-    it('treats .or3pkg and .zip as byte-identical filename aliases', async () => {
-        const tree = copyFixture('or3-archive-alias-');
-        const output = tempDir('or3-archive-alias-out-');
-        const or3pkg = resolve(output, 'package.or3pkg');
-        const zip = resolve(output, 'package.zip');
-        await packV2Package(tree, {
-            archivePath: or3pkg,
-            outputDirectory: resolve(tree, 'pack-a'),
-        });
-        await packV2Package(tree, {
-            archivePath: zip,
-            outputDirectory: resolve(tree, 'pack-b'),
-        });
-        expect(readFileSync(or3pkg).equals(readFileSync(zip))).toBe(true);
     });
 
     it('refuses to export a tree that fails canonical verification', async () => {
@@ -185,26 +161,6 @@ describe('deterministic package archive', () => {
                 ),
             'length-invalid'
         );
-    });
-
-    it('inspects an archive with the same digest as its source root', async () => {
-        const tree = copyFixture('or3-archive-inspect-');
-        const output = tempDir('or3-archive-inspect-out-');
-        const archive = resolve(output, 'package.or3pkg');
-        const packed = await packV2Package(tree, { archivePath: archive });
-        expect(existsSync(archive)).toBe(true);
-        expect(packed.archivePath).toBe(archive);
-
-        const fromRoot = await inspectV2Package(tree, { repoRoot });
-        const fromArchive = await inspectV2Package(archive, { repoRoot });
-        expect(fromArchive.digest).toBe(fromRoot.digest);
-        expect(fromArchive.manifestDigest).toBe(fromRoot.manifestDigest);
-        expect(fromArchive.conformanceStatus).toBe(fromRoot.conformanceStatus);
-        expect(fromArchive.importedPluginCode).toBe(false);
-        expect(fromArchive.statePreflight).toMatchObject({
-            status: 'eligible',
-            code: 'state-initialization',
-        });
     });
 
     it('inspects an archive by the digest of the artifact it verified', async () => {

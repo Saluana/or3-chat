@@ -158,7 +158,7 @@ const stubs = {
 const global = { stubs };
 
 describe('PortableClientView', () => {
-    it('renders registered dashboard contributions', () => {
+    it('renders registered dashboard contributions and hides them when withdrawn', async () => {
         activations.set(
             'sample.plugin',
             activation({
@@ -180,18 +180,11 @@ describe('PortableClientView', () => {
         const section = wrapper.get('[data-testid="portable-plugin-contributions"]');
         expect(section.text()).toContain('Workspace insights');
         expect(section.text()).toContain('Twelve open threads');
-    });
-
-    it('hides a contribution the plugin withdrew', () => {
         activations.set('sample.plugin', activation({ contributions: [] }));
-
-        const wrapper = mount(PortableClientView, {
-            props: { pluginId: 'sample.plugin' },
-            global,
-        });
-
+        await flushPromises();
         expect(wrapper.find('[data-testid="portable-plugin-contributions"]').exists()).toBe(false);
     });
+
 });
 
 describe('PortableClientView host actions', () => {
@@ -212,6 +205,7 @@ describe('PortableClientView host actions', () => {
         );
         expect(executeMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'host.document.create' }));
         expect(invokeMock).not.toHaveBeenCalled();
+        expect(navigateToMock).toHaveBeenCalledWith('/docs/doc_new');
     })
 
     it('requires confirmation before replacing the selected document', async () => {
@@ -406,24 +400,13 @@ describe('PortableClientView host actions', () => {
     it('renders canonical host wording for reserved action buttons', () => {
         const wrapper = shell([
             { type: 'button', id: 'save', label: 'Totally not a write', action: 'host.document.create' },
+            { type: 'button', id: 'replace', label: 'Publisher replace label', action: 'host.document.replace' },
+            { type: 'button', id: 'chat', label: 'Publisher chat label', action: 'host.chat.continue' },
         ]);
-        const button = wrapper.get('button[data-action="host.document.create"]');
-        expect(button.text()).toBe('Create document');
-    })
-
-    it('opens the document a host action wrote', async () => {
-        executeMock.mockResolvedValue({
-            ok: true,
-            outcome: { status: 'created-document', documentId: 'doc_new' },
-        });
-        const wrapper = shell([
-            { type: 'button', id: 'save', label: 'Create document', action: 'host.document.create' },
-        ]);
-        await wrapper.get('button[data-action="host.document.create"]').trigger('click');
-        await Promise.resolve();
-        await Promise.resolve();
-        expect(navigateToMock).toHaveBeenCalledWith('/docs/doc_new');
-    })
+        expect(wrapper.get('button[data-action="host.document.create"]').text()).toBe('Create document');
+        expect(wrapper.get('button[data-action="host.document.replace"]').text()).toBe('Replace selected document');
+        expect(wrapper.get('button[data-action="host.chat.continue"]').text()).toBe('Continue in chat');
+    });
 
     it('opens a document through host navigation in the activation workspace', async () => {
         const wrapper = shell([
@@ -596,7 +579,6 @@ describe('PortableClientView host actions', () => {
         );
     })
 });
-
 
 describe('portable surface recovery', () => {
     it('shows the main view in the sidebar when the plugin has no navigation tree', () => {

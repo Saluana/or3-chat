@@ -79,33 +79,32 @@ describe('storage signing membership continuation with real session caching', ()
         expect((await request(input())).status).toBe(200);
         expect(fixture.sign).toHaveBeenCalledOnce();
     });
-    for (const stage of ['before signing', 'after signing'] as const) {
-        for (const operation of ['download', 'upload'] as const) {
-            it.each(['removed', 'viewer', 'editor'] as const)(`uses current membership %s for ${operation} when its ${stage} lookup returns a stale snapshot`, async role => {
-                let resume!: () => void;
-                let entered!: () => void;
-                const held = new Promise<void>(resolve => { resume = resolve; });
-                const started = new Promise<void>(resolve => { entered = resolve; });
-                if (stage === 'after signing') fixture.list.mockImplementationOnce(async () => [{ id: 'synthetic-workspace', name: 'Synthetic', role: 'owner' }]);
-                fixture.list.mockImplementationOnce(async () => {
-                    const snapshot = [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }];
-                    entered(); await held; return snapshot;
-                });
-                const request = toWebHandler(createApp().use(operation === 'upload' ? uploadHandler : downloadHandler));
-                const response = request(new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash, ...(operation === 'upload' ? { mime_type: 'image/png', size_bytes: 3 } : {}) }),
-                }));
-                await Promise.race([started, response.then(() => { throw new Error('Fixture did not reach held membership read'); })]);
-                fixture.role = role === 'removed' ? null : role;
-                invalidateSharedSessionCacheForIdentity({ provider: 'synthetic-storage', providerUserId: 'synthetic-subject', storeId: 'synthetic-store' });
-                resume();
-                const result = await response;
-                const permitted = role !== 'removed' && (operation === 'download' || role === 'editor');
-                expect(result.status).toBe(permitted ? 200 : 403);
-                if (!permitted) expect(await result.text()).not.toContain('/synthetic-download');
-                expect(fixture.sign).toHaveBeenCalledTimes(!permitted && stage === 'before signing' ? 0 : 1);
+    for (const operation of ['download', 'upload'] as const) {
+        it.each(['removed', 'viewer', 'editor'] as const)(`uses current membership %s for ${operation} when its before signing lookup returns a stale snapshot`, async role => {
+            let resume!: () => void;
+            let entered!: () => void;
+            const held = new Promise<void>(resolve => { resume = resolve; });
+            const started = new Promise<void>(resolve => { entered = resolve; });
+            fixture.list.mockImplementationOnce(async () => {
+                const snapshot = [{ id: 'synthetic-workspace', name: 'Synthetic', role: fixture.role }];
+                entered(); await held; return snapshot;
             });
-        }
+            const request = toWebHandler(createApp().use(operation === 'upload' ? uploadHandler : downloadHandler));
+            const response = request(new Request('http://synthetic.test/presign', { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ workspace_id: 'synthetic-workspace', hash, ...(operation === 'upload' ? { mime_type: 'image/png', size_bytes: 3 } : {}) }),
+            }));
+            await Promise.race([started, response.then(() => { throw new Error('Fixture did not reach held membership read'); })]);
+            fixture.role = role === 'removed' ? null : role;
+            invalidateSharedSessionCacheForIdentity({ provider: 'synthetic-storage', providerUserId: 'synthetic-subject', storeId: 'synthetic-store' });
+            resume();
+            const result = await response;
+            const permitted = role !== 'removed' && (operation === 'download' || role === 'editor');
+            expect(result.status).toBe(permitted ? 200 : 403);
+            if (!permitted) expect(await result.text()).not.toContain('/synthetic-download');
+            expect(fixture.sign).toHaveBeenCalledTimes(!permitted ? 0 : 1);
+        });
+    }
+    for (const stage of ['before signing', 'after signing'] as const) {
         it(`bounds retries under repeated membership invalidation ${stage}`, async () => {
             if (stage === 'after signing') fixture.list.mockImplementationOnce(async () => [{ id: 'synthetic-workspace', name: 'Synthetic', role: 'owner' }]);
             fixture.list.mockImplementation(async () => {

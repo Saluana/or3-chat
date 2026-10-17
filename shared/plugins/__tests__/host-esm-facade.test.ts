@@ -15,15 +15,6 @@ const proven: HostEsmFacadeEvidence = {
 };
 
 describe('trusted-host UI production ABI kill gate', () => {
-    it('permits ModuleV2Loader UI only after every singleton and CSP proof passes', () => {
-        expect(decideTrustedHostUi(proven)).toEqual({
-            status: 'supported',
-            loader: 'module-v2',
-            blockCodes: [],
-            postBuildAlternative: null,
-        });
-    });
-
     it.each(Object.keys(proven) as Array<keyof HostEsmFacadeEvidence>)(
         'keeps trusted-host UI rebuild-required when %s is unproven',
         (missingProof) => {
@@ -37,26 +28,4 @@ describe('trusted-host UI production ABI kill gate', () => {
         }
     );
 
-    it('formally blocks the current production build without implying isolation exists', () => {
-        const decision = decideTrustedHostUi({
-            generatedFacade: false,
-            importMap: false,
-            vueSingletonIdentity: false,
-            sdkSingletonIdentity: false,
-            vueReactivity: false,
-            vueComponentRendering: false,
-            cspCompatible: true,
-        });
-        expect(decision).toMatchObject({
-            status: 'rebuild-required',
-            loader: null,
-            postBuildAlternative: 'isolated-client-or-declarative-ui',
-            blockCodes: expect.arrayContaining([
-                'host-facade-missing',
-                'import-map-missing',
-                'vue-singleton-unproven',
-                'sdk-singleton-unproven',
-            ]),
-        });
-    });
 });

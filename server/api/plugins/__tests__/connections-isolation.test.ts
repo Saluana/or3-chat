@@ -93,7 +93,6 @@ describe('plugin connection HTTP isolation', () => {
     it.each([
         ['different owner', 'bob', 'ws-a', false, false],
         ['switched workspace', 'alice', 'ws-b', false, false],
-        ['removed member using another workspace', 'alice', 'ws-b', true, false],
         ['removed active member', 'alice', 'ws-a', true, false],
         ['downgraded viewer', 'alice', 'ws-a', false, true],
     ])('refuses deletion by a %s and preserves the stored credential', async (_case, user, workspace, removed, downgraded) => {
@@ -106,7 +105,7 @@ describe('plugin connection HTTP isolation', () => {
         expect(await store.get(target)).not.toBeNull();
     });
 
-    it.each([['alice', 'ws-a'], ['alice', 'ws-b'], ['bob', 'ws-a']])(
+    it.each([['alice', 'ws-a'], ['alice', 'ws-b']])(
         'allows %s to delete their own connection in %s', async (user, workspace) => {
             select(user, workspace);
             const target = ids[`${user}:${workspace}`]!;

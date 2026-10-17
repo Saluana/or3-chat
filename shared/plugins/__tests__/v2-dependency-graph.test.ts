@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-    canLoadPluginV2GraphNode,
     resolvePluginV2DependencyGraph,
     type PluginV2GraphNode,
 } from '../v2-dependency-graph';
@@ -55,9 +54,6 @@ describe('Plugin V2 dependency graph', () => {
         expect(result.blocked['acme.version-user']?.[0]?.code).toBe(
             'dependency-version-mismatch'
         );
-        expect(canLoadPluginV2GraphNode(result, 'acme.missing-user')).toBe(false);
-        expect(canLoadPluginV2GraphNode(result, 'acme.version-user')).toBe(false);
-        expect(canLoadPluginV2GraphNode(result, 'acme.core')).toBe(true);
     });
 
     it('negotiates optional absence and incompatible versions without blocking', () => {
@@ -112,7 +108,6 @@ describe('Plugin V2 dependency graph', () => {
                 code: 'dependency-cycle',
                 cyclePath: ['acme.a', 'acme.b', 'acme.c', 'acme.a'],
             });
-            expect(canLoadPluginV2GraphNode(result, id)).toBe(false);
         }
         expect(result.blocked['acme.consumer']?.[0]).toMatchObject({
             code: 'required-dependency-blocked',

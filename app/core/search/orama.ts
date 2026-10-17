@@ -1,12 +1,11 @@
 /**
  * Shared Orama search helpers for client-side indexing and search.
- * Preserves SSR safety, provides race-guard token pattern, and handles import failures gracefully.
+ * Preserves SSR safety and handles import failures gracefully.
  *
  * Design goals:
  * - Dynamic import to keep bundle small when search unused
  * - SSR-safe (only imports on client)
  * - Memoized import to avoid repeated loads
- * - Token-based race guard (caller owns tokens)
  * - Isolated DB instances per schema (no cross-contamination)
  */
 
@@ -21,7 +20,7 @@ let oramaModuleCache: OramaModule | null = null;
  * Returns the Orama module or throws if unavailable.
  * Memoized after first successful import.
  */
-export async function importOrama(): Promise<OramaModule> {
+async function importOrama(): Promise<OramaModule> {
     if (typeof window === 'undefined') {
         throw new Error('Orama import attempted on server (SSR guard)');
     }
@@ -170,29 +169,6 @@ export function yieldToMain(): Promise<void> {
         }
         resolve();
     });
-}
-
-/**
- * Token factory for race-guard pattern.
- * Each composable should maintain its own token counter.
- *
- * Usage:
- * ```ts
- * let tokenCounter = 0;
- * const token = ++tokenCounter;
- * const results = await searchWithIndex(db, query, limit);
- * if (token !== tokenCounter) return; // stale
- * ```
- */
-export function createTokenCounter(): {
-    next: () => number;
-    current: () => number;
-} {
-    let counter = 0;
-    return {
-        next: () => ++counter,
-        current: () => counter,
-    };
 }
 
 /**

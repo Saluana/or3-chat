@@ -291,7 +291,9 @@ describe('CLI Commands', () => {
                 );
 
                 expect(result.success).toBe(true);
-                expect(result.themes.length).toBeGreaterThan(0);
+                expect(result.themes.map((theme) => theme.name)).toEqual(
+                    expect.arrayContaining(['retro', 'cyberpunk'])
+                );
                 expect(retroTheme?.errors).toEqual([]);
                 expect(
                     existsSync(join(outputRoot, 'types/theme-generated.d.ts'))
@@ -309,26 +311,4 @@ describe('CLI Commands', () => {
             }
         });
     });
-
-    describe('Theme Discovery', () => {
-        it('should discover all theme directories', async () => {
-            const compiler = new ThemeCompiler();
-            const themes = await compiler['discoverThemes']();
-
-            expect(themes.length).toBeGreaterThan(0);
-
-            // Should include retro and nature (from example-refined)
-            const themeNames = themes
-                .map((path) => {
-                    const match = path.match(/theme\/([^/]+)\/theme\.ts/);
-                    return match ? match[1] : null;
-                })
-                .filter(Boolean);
-
-            expect(themeNames).toContain('retro');
-            // Symlinked extension themes (e.g. cyberpunk) must be discoverable too.
-            expect(themeNames).toContain('cyberpunk');
-        });
-    });
-
 });

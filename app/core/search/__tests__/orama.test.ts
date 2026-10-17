@@ -30,40 +30,20 @@ describe('Orama search helpers', () => {
     });
 
     describe('importOrama', () => {
-        it('should successfully import Orama on client', async () => {
-            // Mock dynamic import
-            vi.doMock('@orama/orama', () => mockOramaModule);
-            
-            const { importOrama } = await import('../orama');
-            const result = await importOrama();
-            
-            expect(result).toBeDefined();
-        });
-
         it('should throw error when called on server (SSR guard)', async () => {
             // Remove window to simulate SSR
             const win = global.window;
             // @ts-ignore
             delete global.window;
             
-            const { importOrama } = await import('../orama');
+            const { createDb } = await import('../orama');
             
-            await expect(importOrama()).rejects.toThrow('SSR guard');
+            await expect(createDb({ id: 'string' })).rejects.toThrow('SSR guard');
             
             // Restore
             global.window = win;
         });
 
-        it('should memoize import after first success', async () => {
-            vi.doMock('@orama/orama', () => mockOramaModule);
-            
-            const { importOrama } = await import('../orama');
-            const first = await importOrama();
-            const second = await importOrama();
-            
-            // Same reference indicates memoization
-            expect(first).toBe(second);
-        });
     });
 
     describe('createDb', () => {
@@ -112,22 +92,6 @@ describe('Orama search helpers', () => {
     });
 
     describe('searchWithIndex', () => {
-        it('should search with term and limit', async () => {
-            const mockResults = { hits: [{ id: '1', score: 0.9 }] };
-            mockOramaModule.search.mockResolvedValue(mockResults);
-            vi.doMock('@orama/orama', () => mockOramaModule);
-            
-            const { searchWithIndex } = await import('../orama');
-            const mockDb = { id: 'test-db' };
-            const results = await searchWithIndex(mockDb, 'test query', 50);
-            
-            expect(mockOramaModule.search).toHaveBeenCalledWith(mockDb, {
-                term: 'test query',
-                limit: 50,
-            });
-            expect(results).toStrictEqual(mockResults);
-        });
-
         it('should use default limit of 100', async () => {
             mockOramaModule.search.mockResolvedValue({ hits: [] });
             vi.doMock('@orama/orama', () => mockOramaModule);
@@ -154,18 +118,20 @@ describe('Orama search helpers', () => {
         });
 
         it('should forward boost, tolerance, properties, and offset', async () => {
-            mockOramaModule.search.mockResolvedValue({ hits: [] });
+            const mockResults = { hits: [{ id: '1', score: 0.9 }] };
+            mockOramaModule.search.mockResolvedValue(mockResults);
             vi.doMock('@orama/orama', () => mockOramaModule);
 
             const { searchWithIndex } = await import('../orama');
             const mockDb = { id: 'test-db' };
-            await searchWithIndex(mockDb, 'test', 24, {
+            const results = await searchWithIndex(mockDb, 'test', 24, {
                 properties: ['title', 'body'],
                 boost: { title: 5, body: 1 },
                 tolerance: 1,
                 offset: 0,
             });
 
+            expect(results).toStrictEqual(mockResults);
             expect(mockOramaModule.search).toHaveBeenCalledWith(mockDb, {
                 term: 'test',
                 limit: 24,
@@ -191,36 +157,6 @@ describe('Orama search helpers', () => {
             });
 
             expect(mockOramaModule.insertMultiple).toHaveBeenCalledTimes(2);
-        });
-    });
-
-    describe('createTokenCounter', () => {
-        it('should create independent token counters', async () => {
-            const { createTokenCounter } = await import('../orama');
-            
-            const counter1 = createTokenCounter();
-            const counter2 = createTokenCounter();
-            
-            expect(counter1.next()).toBe(1);
-            expect(counter1.next()).toBe(2);
-            expect(counter2.next()).toBe(1); // Independent counter
-            expect(counter1.current()).toBe(2);
-            expect(counter2.current()).toBe(1);
-        });
-
-        it('should support race-guard pattern', async () => {
-            const { createTokenCounter } = await import('../orama');
-            
-            const counter = createTokenCounter();
-            const token1 = counter.next(); // 1
-            const token2 = counter.next(); // 2
-            
-            // Simulate async results arriving out of order
-            const isStale1 = token1 !== counter.current(); // true (stale)
-            const isStale2 = token2 !== counter.current(); // false (latest)
-            
-            expect(isStale1).toBe(true);
-            expect(isStale2).toBe(false);
         });
     });
 

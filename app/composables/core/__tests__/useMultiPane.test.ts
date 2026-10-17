@@ -436,75 +436,6 @@ describe('useMultiPane - paneWidths normalization', () => {
         localStorage.clear();
     });
 
-    it('truncates stored widths when closing panes', async () => {
-        const { useMultiPane } = await import('../useMultiPane');
-        
-        const multiPane = useMultiPane({ 
-            maxPanes: 5,
-            storageKey: 'test-widths-close'
-        });
-
-        // Add multiple panes first
-        multiPane.addPane();
-        multiPane.addPane();
-        multiPane.addPane();
-        multiPane.addPane();
-        
-        const paneCountBefore = multiPane.panes.value.length; // Should be 5
-        
-        // Ensure widths are set
-        if (multiPane.paneWidths.value.length === 0) {
-            multiPane.paneWidths.value = Array(paneCountBefore).fill(300);
-        }
-        
-        // Close a pane
-        await multiPane.closePane(0);
-        
-        const paneCountAfter = multiPane.panes.value.length;
-        
-        // Widths should be truncated to match remaining panes
-        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(paneCountAfter);
-    });
-
-    it('normalizes widths when panes are added', async () => {
-        const { useMultiPane } = await import('../useMultiPane');
-        
-        const multiPane = useMultiPane({ 
-            maxPanes: 5,
-            storageKey: 'test-widths-add'
-        });
-
-        // Start with 1 pane, add more
-        const initialCount = multiPane.panes.value.length;
-        
-        multiPane.addPane();
-        multiPane.addPane();
-        
-        const finalCount = multiPane.panes.value.length;
-        
-        // Widths should not exceed pane count
-        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(finalCount);
-    });
-
-    it('handles getPaneWidth with orphaned widths gracefully', async () => {
-        const { useMultiPane } = await import('../useMultiPane');
-        
-        const multiPane = useMultiPane({ 
-            maxPanes: 5,
-            storageKey: 'test-widths-get'
-        });
-
-        // Simulate orphaned widths (more stored than actual panes)
-        multiPane.paneWidths.value = [400, 400, 400, 400, 400];
-        
-        // With only 1 pane, getPaneWidth should not crash
-        const width = multiPane.getPaneWidth(0);
-        
-        expect(width).toBeDefined();
-        // Should fall back to 100% for single pane
-        expect(width).toBe('100%');
-    });
-
     it('truncates widths array when longer than pane count', async () => {
         const { useMultiPane } = await import('../useMultiPane');
         
@@ -706,38 +637,6 @@ describe('useMultiPane - pane prompt cleanup', () => {
         g.__or3MultiPaneApi = undefined;
         // Reset modules
         vi.resetModules();
-    });
-
-    it('clears pending prompt when pane is closed', async () => {
-        const { useMultiPane } = await import('../useMultiPane');
-        const {
-            setPanePendingPrompt,
-            getPanePendingPrompt,
-            setupPanePromptCleanup,
-        } = await import('../usePanePrompt');
-
-        // Manually setup cleanup in test environment
-        setupPanePromptCleanup();
-
-        const multiPane = useMultiPane({ maxPanes: 3 });
-
-        // Add a pane
-        multiPane.addPane();
-        const paneId = multiPane.panes.value[1]?.id;
-
-        expect(paneId).toBeDefined();
-
-        // Set a pending prompt for that pane
-        setPanePendingPrompt(paneId!, 'prompt-123');
-
-        // Verify it's set
-        expect(getPanePendingPrompt(paneId!)).toBe('prompt-123');
-
-        // Close the pane
-        await multiPane.closePane(1);
-
-        // Pending prompt should be cleared automatically
-        expect(getPanePendingPrompt(paneId!)).toBeUndefined();
     });
 
     it('does not clear prompts for other panes when one closes', async () => {

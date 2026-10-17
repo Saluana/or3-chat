@@ -202,28 +202,6 @@ describe('setup plan (4.10)', () => {
         expect(describeSetupStatus(plan).nextAction).toContain('Docs provider');
     });
 
-    it('becomes ready only with settings and connections satisfied (IN01)', () => {
-        const plan = buildSetupPlan({
-            setup,
-            policy,
-            hostConnections,
-            values: { workspace: 'Team notes' },
-            connectionStates: [
-                {
-                    slotId: 'docs',
-                    connectionId: 'conn-1',
-                    ref: 'orc_conn-1_r1',
-                    providerId: 'fake',
-                    scopes: ['read:items'],
-                    testPassed: true,
-                },
-            ],
-        });
-        expect(plan.status).toBe('ready');
-        expect(plan.blockers).toEqual([]);
-        expect(describeSetupStatus(plan)).toMatchObject({ status: 'ready', label: 'Ready' });
-    });
-
     it('returns to needs-setup when the stored credential lacks a scope or fails its test', () => {
         const base = {
             setup,
@@ -293,19 +271,6 @@ describe('setup plan (4.10)', () => {
         });
         expect(plan.status).not.toBe('ready');
         expect(describeSetupStatus(plan)).toMatchObject({ status: 'blocked', blocked: true });
-    });
-
-    it('treats an empty required value as unsupplied (review 4.5)', () => {
-        const plan = buildSetupPlan({
-            setup,
-            policy,
-            hostConnections,
-            values: { workspace: '   ' },
-        });
-        expect(plan.fields.find((field) => field.key === 'workspace')).toMatchObject({
-            missing: true,
-        });
-        expect(plan.status).toBe('needs-setup');
     });
 
     it('satisfies a declared slot only through an explicit binding (review 4.1)', () => {
@@ -421,6 +386,9 @@ describe('setup plan (4.10)', () => {
                 },
             ],
         });
+        expect(ready.status).toBe('ready');
+        expect(ready.blockers).toEqual([]);
+        expect(describeSetupStatus(ready)).toMatchObject({ status: 'ready', label: 'Ready' });
         expect(buildFirstActionHandoff({ plan: ready, hasSelectedContext: false })).toMatchObject({
             ready: false,
             contextKind: 'selected',

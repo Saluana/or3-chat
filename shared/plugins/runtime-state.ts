@@ -47,51 +47,6 @@ export interface PluginRuntimeRecord {
     readonly hookCount: number;
 }
 
-const TRANSITIONS = {
-    discovered: ['verified', 'blocked'],
-    verified: ['preparing', 'blocked'],
-    blocked: ['discovered'],
-    preparing: ['activating', 'failed', 'quarantined', 'stopping'],
-    activating: ['active', 'failed', 'quarantined', 'stopping'],
-    active: ['stopping'],
-    stopping: ['discovered', 'failed'],
-    failed: ['discovered', 'quarantined', 'stopping'],
-    quarantined: ['discovered'],
-} as const satisfies Record<PluginRuntimeStatus, readonly PluginRuntimeStatus[]>;
-
-export const PLUGIN_RUNTIME_TRANSITIONS: Readonly<
-    Record<PluginRuntimeStatus, readonly PluginRuntimeStatus[]>
-> = TRANSITIONS;
-
-export interface InvalidRuntimeTransition {
-    readonly code: 'invalid-runtime-transition';
-    readonly from: PluginRuntimeStatus;
-    readonly to: PluginRuntimeStatus;
-}
-
-export type RuntimeTransitionResult =
-    | { readonly ok: true; readonly status: PluginRuntimeStatus }
-    | { readonly ok: false; readonly error: InvalidRuntimeTransition };
-
-export function canTransitionRuntimeStatus(
-    from: PluginRuntimeStatus,
-    to: PluginRuntimeStatus
-): boolean {
-    return (PLUGIN_RUNTIME_TRANSITIONS[from] as readonly PluginRuntimeStatus[]).includes(to);
-}
-
-/** Validate a lifecycle edge without mutating a runtime record or invoking plugin code. */
-export function transitionRuntimeStatus(
-    from: PluginRuntimeStatus,
-    to: PluginRuntimeStatus
-): RuntimeTransitionResult {
-    if (canTransitionRuntimeStatus(from, to)) return { ok: true, status: to };
-    return {
-        ok: false,
-        error: { code: 'invalid-runtime-transition', from, to },
-    };
-}
-
 export interface RuntimeFailurePolicyError {
     readonly code: 'invalid-runtime-failure-policy';
     readonly field: 'previousFailureCount' | 'quarantineThreshold';

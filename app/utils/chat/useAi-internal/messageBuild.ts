@@ -31,8 +31,6 @@ import {
     DISABLED_PROMPT_SELECTION,
 } from '~/utils/chat/prompt-utils';
 import { getDefaultPromptId } from '~/composables/chat/useDefaultPrompt';
-import { trimOrMessagesByTokenBudget } from '~/utils/chat/messages';
-import { countTokensApprox } from '~/utils/chat/tokens';
 import type { ChatMessage, ContentPart, ToolCall } from '~/utils/chat/types';
 import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
@@ -159,36 +157,11 @@ export type BuildOpenRouterMessagesParams = {
         | 'recent-user'
         | 'recent-assistant';
     /**
-     * Approximate input-token budget. When set, oldest non-system/non-user
-     * messages are dropped until the remaining text fits. The system message
-     * and last user message are always kept.
-     */
-    maxInputTokens?: number;
-    /**
      * False when the selected model's catalog entry lacks image input. Unknown
      * metadata keeps images (the provider decides).
      */
     acceptsImageInput?: boolean;
 };
-
-/**
- * Applies the final text/tool token budget to a provider-ready message list.
- * Call this after request hooks so extensions cannot accidentally push the
- * payload back over the selected model's context allowance.
- */
-export async function enforceOpenRouterMessageTokenBudget(
-    messages: OpenRouterMessage[],
-    maxInputTokens: number
-): Promise<OpenRouterMessage[]> {
-    if (!Number.isFinite(maxInputTokens) || maxInputTokens <= 0) {
-        return messages;
-    }
-    return trimOrMessagesByTokenBudget(
-        messages,
-        maxInputTokens,
-        countTokensApprox
-    );
-}
 
 /**
  * A stored tool-calling assistant row keeps all of its text, including what was
@@ -254,7 +227,6 @@ export async function buildOpenRouterMessagesForSend(
     // awaits. A reactive message array is not a request snapshot by itself.
     const maxImageInputs = params.maxImageInputs ?? 5;
     const imageInclusionPolicy = params.imageInclusionPolicy ?? 'all';
-    const { maxInputTokens } = params;
     const acceptsImageInput = params.acceptsImageInput !== false;
     // User rows already send their own images; a carried copy would send the
     // same image twice per turn. Assistant-row images still need carrying.
@@ -362,7 +334,7 @@ export async function buildOpenRouterMessagesForSend(
     }
 
     const { buildOpenRouterMessages } = await getOpenRouterBuildModule();
-    let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
+    const orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
         modelInputMessages,
         {
             maxImageInputs,
@@ -371,13 +343,6 @@ export async function buildOpenRouterMessagesForSend(
             debug: false,
         }
     );
-
-    if (maxInputTokens && maxInputTokens > 0) {
-        orMessages = await enforceOpenRouterMessageTokenBudget(
-            orMessages,
-            maxInputTokens
-        );
-    }
 
     return orMessages;
 }

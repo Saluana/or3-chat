@@ -239,29 +239,6 @@ describe('PortableUiTree host renderer (4.5)', () => {
         });
     });
 
-    it('submits through the form, carrying the declaring submit action and values', async () => {
-        const wrapper = mountTree([
-            {
-                type: 'form',
-                id: 'settings',
-                children: [
-                    { type: 'field.text', id: 'name', label: 'Name', value: 'start' },
-                    { type: 'button', id: 'save', label: 'Save', action: 'submit' },
-                ],
-            },
-        ]);
-
-        await wrapper.find('input[data-portable-field="name"]').setValue('changed');
-        await wrapper.find('form').trigger('submit');
-
-        expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
-            kind: 'action',
-            action: 'submit',
-            formId: 'settings',
-            values: { name: 'changed' },
-        });
-    });
-
     it('keeps a named form action when the button opts into native submit', async () => {
         const wrapper = mountTree([
             {

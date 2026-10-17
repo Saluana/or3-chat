@@ -30,14 +30,4 @@ describe('StreamMarkdown XML / custom element handling', () => {
         expect(html).toMatch(/bold[\s]*<\/strong>/);
     });
 
-    it('does not accidentally convert custom tags into text nodes', () => {
-        const wrapper = mount(StreamMarkdown as any, {
-            props: { content: '<or3-image hash="z" alt="z"></or3-image>' },
-        });
-        // Should produce empty or no custom element; ensure raw tag absent.
-        const el = wrapper.element.querySelector('or3-image');
-        expect(el).toBeFalsy();
-        // Ensure wrapper still rendered container div.
-        expect(wrapper.html()).toMatch(/streamdown-vue/);
-    });
 });

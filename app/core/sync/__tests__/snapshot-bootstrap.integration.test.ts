@@ -59,17 +59,13 @@ function messageChange(version: number, content: string): SyncChange {
 }
 
 class PrunedHistoryProvider implements SyncProvider {
-    id: string;
+    id = 'pruned-history-fixture';
     mode = 'direct' as const;
     pullCursors: number[] = [];
     snapshotRequests: SnapshotRequest[] = [];
     subscribeCursors: number[] = [];
     onChanges: ((changes: SyncChange[]) => void | Promise<void>) | null = null;
     private duringSnapshotChangeAvailable = false;
-
-    constructor(providerName: string) {
-        this.id = `${providerName}-pruned-history-fixture`;
-    }
 
     async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
         this.snapshotRequests.push(request);
@@ -166,9 +162,9 @@ describe('fresh-client snapshot bootstrap after history retention', () => {
         await db.delete();
     });
 
-    it.each(['sqlite', 'convex'])(
-        '%s bootstraps unchanged materialized rows without original log entries and applies boundary changes once',
-        async (providerName) => {
+    it(
+        'bootstraps unchanged materialized rows without original log entries and applies boundary changes once',
+        async () => {
             const writesByRevision = new Map<number, number>();
             const recordWrite = (clock: unknown) => {
                 if (typeof clock === 'number') {
@@ -180,7 +176,7 @@ describe('fresh-client snapshot bootstrap after history retention', () => {
                 recordWrite((changes as Record<string, unknown>).clock);
             });
 
-            const provider = new PrunedHistoryProvider(providerName);
+            const provider = new PrunedHistoryProvider();
             manager = new SubscriptionManager(db, provider, scope, {
                 tables: ['messages'],
                 bootstrapPageSize: 1,

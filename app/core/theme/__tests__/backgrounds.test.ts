@@ -215,64 +215,6 @@ describe('Theme Backgrounds', () => {
             );
         });
 
-        it('should set color variables when provided by the theme', async () => {
-            const backgrounds: ThemeBackgrounds = {
-                content: {
-                    base: {
-                        color: '#123456',
-                    },
-                    overlay: {
-                        color: '#654321',
-                    },
-                },
-                sidebar: {
-                    color: '#abcdef',
-                },
-            };
-
-            await applyThemeBackgrounds(backgrounds, {
-                resolveToken: mockResolveToken,
-            });
-
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-color',
-                '#123456'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-2-color',
-                '#654321'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-color',
-                '#abcdef'
-            );
-        });
-
-        it('should remove color variables when a layer omits color', async () => {
-            const removeProperty = document.documentElement.style
-                .removeProperty as any;
-
-            await applyThemeBackgrounds(
-                {
-                    content: {
-                        base: {},
-                    },
-                    sidebar: {},
-                },
-                {
-                    resolveToken: mockResolveToken,
-                }
-            );
-
-            expect(removeProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-color'
-            );
-            expect(removeProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-color'
-            );
-        });
     });
 });
 
@@ -288,6 +230,7 @@ describe('applyThemeBackgrounds', () => {
             {
                 content: {
                     base: { color: '#123456' },
+                    overlay: { color: '#654321' },
                 },
                 sidebar: { color: '#abcdef' },
             },
@@ -299,6 +242,7 @@ describe('applyThemeBackgrounds', () => {
                 '--app-content-bg-1-color'
             )
         ).toBe('#123456');
+        expect(document.documentElement.style.getPropertyValue('--app-content-bg-2-color')).toBe('#654321');
         expect(
             document.documentElement.style.getPropertyValue(
                 '--app-sidebar-bg-color'
@@ -307,24 +251,9 @@ describe('applyThemeBackgrounds', () => {
     });
 
     it('removes color variables when a layer omits color', async () => {
-        document.documentElement.style.setProperty(
-            '--app-content-bg-1-color',
-            '#ffffff'
-        );
-
-        await applyThemeBackgrounds(
-            {
-                content: {
-                    base: {},
-                },
-            },
-            { resolveToken: identityResolver }
-        );
-
-        expect(
-            document.documentElement.style.getPropertyValue(
-                '--app-content-bg-1-color'
-            )
-        ).toBe('');
+        const colors = ['--app-content-bg-1-color', '--app-content-bg-2-color', '--app-sidebar-bg-color'];
+        for (const color of colors) document.documentElement.style.setProperty(color, '#ffffff');
+        await applyThemeBackgrounds({ content: { base: {}, overlay: {} }, sidebar: {} }, { resolveToken: identityResolver });
+        for (const color of colors) expect(document.documentElement.style.getPropertyValue(color)).toBe('');
     });
 });

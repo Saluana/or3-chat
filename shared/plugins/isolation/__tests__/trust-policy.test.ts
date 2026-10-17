@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    describeGrantBoundary,
-    evaluateTrustImport,
-    isIsolatedTrust,
-    labelForTrust,
-} from '../trust-policy';
+import { evaluateTrustImport } from '../trust-policy';
 
 describe('trust-policy (8.16)', () => {
     it('allows trusted-host whether isolation is on or off', () => {
@@ -77,13 +72,4 @@ describe('trust-policy (8.16)', () => {
         });
     });
 
-    it('never labels trusted grants as a sandbox', () => {
-        expect(labelForTrust('trusted-host')).toBe('trusted-in-process');
-        expect(describeGrantBoundary('trusted-host')).toContain('not a sandbox');
-        expect(describeGrantBoundary('trusted-host').toLowerCase()).not.toMatch(
-            /^sandbox/
-        );
-        expect(isIsolatedTrust('trusted-host')).toBe(false);
-        expect(isIsolatedTrust('isolated-client')).toBe(true);
-    });
 });

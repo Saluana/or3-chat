@@ -5,7 +5,6 @@ import type {
     EditorMarkDescriptor,
     EditorExtensionDescriptor,
 } from '../useEditorExtensionLoader';
-import { useLazyBoundaries } from '../../core/useLazyBoundaries';
 
 describe('useEditorExtensionLoader', () => {
     let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
@@ -15,30 +14,6 @@ describe('useEditorExtensionLoader', () => {
     });
 
     afterEach(() => {
-        // Reset all lazy boundary states to prevent test pollution
-        const boundaries = useLazyBoundaries();
-        const keys = [
-            'editor-extensions',
-            'editor-extensions:node:node1',
-            'editor-extensions:node:good-node',
-            'editor-extensions:node:bad-node',
-            'editor-extensions:node:node2',
-            'editor-extensions:mark:mark1',
-            'editor-extensions:mark:mark2',
-            'editor-extensions:ext:ext1',
-            'editor-extensions:node:node0',
-            'editor-extensions:node:node1',
-            'editor-extensions:node:node2',
-            'editor-extensions:node:eager',
-            'editor-extensions:node:lazy',
-        ];
-        keys.forEach((key: any) => {
-            try {
-                boundaries.reset(key);
-            } catch {
-                // Ignore errors for non-existent keys
-            }
-        });
         consoleWarnSpy.mockRestore();
     });
 
@@ -126,42 +101,6 @@ describe('useEditorExtensionLoader', () => {
             expect(result.nodes).toEqual([mockNode]);
             expect(result.marks).toEqual([mockMark]);
             expect(result.extensions).toEqual([]);
-            expect(consoleWarnSpy).toHaveBeenCalledTimes(3);
-        });
-
-        it('should return empty arrays when all loaders fail', async () => {
-            const nodes: EditorNodeDescriptor[] = [
-                {
-                    id: 'node1',
-                    factory: async () => {
-                        throw new Error('Fail');
-                    },
-                },
-            ];
-            const marks: EditorMarkDescriptor[] = [
-                {
-                    id: 'mark1',
-                    factory: async () => {
-                        throw new Error('Fail');
-                    },
-                },
-            ];
-            const extensions: EditorExtensionDescriptor[] = [
-                {
-                    id: 'ext1',
-                    factory: async () => {
-                        throw new Error('Fail');
-                    },
-                },
-            ];
-
-            const result = await loadEditorExtensions(nodes, marks, extensions);
-
-            expect(result).toEqual({
-                nodes: [],
-                marks: [],
-                extensions: [],
-            });
             expect(consoleWarnSpy).toHaveBeenCalledTimes(3);
         });
 

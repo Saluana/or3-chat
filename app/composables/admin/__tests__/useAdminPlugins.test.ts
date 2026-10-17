@@ -235,25 +235,5 @@ describe('useAdminPlugins', () => {
             expect(result).toBe(component);
         });
 
-        it('evicts old entries when cache exceeds MAX_CACHE_SIZE', () => {
-            // Register more than 50 components to trigger eviction
-            for (let i = 0; i < 55; i++) {
-                registerAdminPage({
-                    id: `page-${i}`,
-                    label: `Page ${i}`,
-                    component: () => Promise.resolve({ default: {} as any }),
-                });
-            }
-
-            // Access first page to trigger cache
-            const pages = useAdminPages();
-            for (const page of pages.value.slice(0, 5)) {
-                resolveAdminComponent(page);
-            }
-
-            // Cache should only hold 50 entries
-            // This is tested indirectly - the function should not throw
-            expect(pages.value).toHaveLength(55);
-        });
     });
 });

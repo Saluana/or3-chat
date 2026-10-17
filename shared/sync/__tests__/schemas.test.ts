@@ -230,6 +230,10 @@ describe('sync schemas', () => {
                     ...baseChange,
                     pk: 'message-2',
                     serverVersion: 1,
+                    stamp: {
+                        ...baseChange.stamp,
+                        opId: 'a1b2c3d4-5678-4abc-8def-123456789002',
+                    },
                 },
             ],
             nextCursor: 2,
@@ -239,6 +243,16 @@ describe('sync schemas', () => {
         });
 
         expect(parsed.success).toBe(false);
+        expect(PullResponseSchema.safeParse({
+            changes: [
+                { ...baseChange, serverVersion: 1 },
+                { ...baseChange, pk: 'message-2', serverVersion: 2 },
+            ],
+            nextCursor: 2,
+            hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
+        }).success).toBe(false);
     });
 
     it('rejects duplicate push request and response operation IDs', () => {

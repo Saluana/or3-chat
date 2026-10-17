@@ -109,7 +109,6 @@ describe('useUserApiKey', () => {
     });
 });
 
-
 // Exercise production hydration, KV transactions and logout with synthetic keys.
 // Only unrelated logout services are mocked; IndexedDB is supplied by fake-indexeddb.
 describe('personal key lifecycle', () => {
@@ -201,7 +200,7 @@ describe('personal key lifecycle', () => {
 
     it('clears a previous account key before switching its workspace DB', async () => {
         const session = ref({ session: { authenticated: true, user: { id: 'synthetic-account-a' } } });
-        vi.doMock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: session, refresh: vi.fn() }) }));
+        vi.doMock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: session, refresh: vi.fn().mockResolvedValue(undefined) }) }));
         vi.doMock('~/composables/workspace/useWorkspaceManager', () => ({ useWorkspaceManager: () => ({ activeWorkspaceId: ref(null) }) }));
         vi.stubGlobal('defineNuxtPlugin', (callback: () => unknown) => callback());
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));
@@ -222,7 +221,7 @@ describe('personal key lifecycle', () => {
         const confirmation = deferred<boolean>();
         const session = ref({ session: { authenticated: true, user: { id: 'synthetic-account-a' } } });
         vi.doMock('~/composables/auth/confirmClientSignedOut', () => ({ confirmClientSignedOut: () => confirmation.promise }));
-        vi.doMock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: session, refresh: vi.fn() }) }));
+        vi.doMock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: session, refresh: vi.fn().mockResolvedValue(undefined) }) }));
         vi.doMock('~/composables/workspace/useWorkspaceManager', () => ({ useWorkspaceManager: () => ({ activeWorkspaceId: ref(null) }) }));
         vi.stubGlobal('defineNuxtPlugin', (callback: () => unknown) => callback());
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));

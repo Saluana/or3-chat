@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     useLazyBoundaries,
     onLazyBoundaryTelemetry,
-    createLoadTimer,
     resetLazyBoundariesForHMR,
 } from '../useLazyBoundaries';
 
@@ -329,25 +328,5 @@ describe('useLazyBoundaries', () => {
         const boundaries2 = useLazyBoundaries();
         expect(boundaries2.getState('editor-host')).toBe('idle');
         expect(boundaries2.getState('docs-search-panel')).toBe('idle');
-    });
-});
-
-describe('createLoadTimer', () => {
-    it('should measure elapsed time', async () => {
-        const timer = createLoadTimer();
-        await new Promise((r) => setTimeout(r, 50));
-        const elapsed = timer.stop();
-
-        expect(elapsed).toBeGreaterThanOrEqual(40); // Allow some variance
-        expect(elapsed).toBeLessThan(200);
-    });
-
-    it('should return time in milliseconds', () => {
-        const timer = createLoadTimer();
-        // Immediately stop
-        const elapsed = timer.stop();
-
-        expect(elapsed).toBeGreaterThanOrEqual(0);
-        expect(typeof elapsed).toBe('number');
     });
 });

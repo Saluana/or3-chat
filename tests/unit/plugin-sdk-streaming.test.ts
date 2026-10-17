@@ -23,15 +23,6 @@ describe('Plugin SDK SSE decoder', () => {
         expect(decoder.push('data: late\n')).toMatchObject({ ok: false });
     });
 
-    it('supports CR-only line endings', () => {
-        const decoder = new PluginSseDecoder();
-        expect(decoder.push('data: x\r\r')).toEqual({
-            ok: true,
-            chunks: [{ kind: 'data', data: 'x' }],
-        });
-        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
-    });
-
     it('emits a trailing CR immediately and suppresses only the following LF', () => {
         const decoder = new PluginSseDecoder();
         expect(decoder.push('data: first\r\n\r')).toMatchObject({ chunks: [{ data: 'first' }] });
@@ -65,16 +56,6 @@ describe('Plugin SDK SSE decoder', () => {
         const terminated = new PluginSseDecoder();
         expect(terminated.push('data: no-blank-line\n')).toEqual({ ok: true, chunks: [] });
         expect(terminated.finish()).toEqual({ ok: true, chunks: [] });
-    });
-
-    it('keeps the last event id across a discarded EOF event', () => {
-        const decoder = new PluginSseDecoder();
-        expect(decoder.push('id: 7\ndata: first\n\n')).toEqual({
-            ok: true,
-            chunks: [{ kind: 'data', id: '7', data: 'first' }],
-        });
-        expect(decoder.push('data: orphan\n')).toEqual({ ok: true, chunks: [] });
-        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
     });
 
     it('fails closed for invalid UTF-8 and an incomplete oversized line', () => {

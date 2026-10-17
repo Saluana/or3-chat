@@ -165,76 +165,6 @@ describe('webhook dispatcher', () => {
         expect(log?.status).toBe('pending');
     });
 
-    it('marks successful deliveries as success', async () => {
-        const { store } = createTestContext();
-        const webhook = await createStoredWebhook(store);
-        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
-        const dispatcher = createWebhookDispatcher(
-            store,
-            {
-                rateLimitPerMinute: 10,
-                deliveryTimeoutMs: 1000,
-                blockPrivateIps: false,
-                encryptionKey: 'test-encryption-key',
-                maxRetryHours: 1,
-                fetchImpl,
-            },
-            'worker-1'
-        );
-
-        await dispatcher.enqueue({
-            webhookId: webhook.id,
-            eventType: 'thread.created',
-            eventId: randomUUID(),
-            payload: {
-                ok: true,
-            },
-        });
-        await dispatcher.claimAndProcess();
-
-        const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
-        expect(log).toMatchObject({
-            status: 'success',
-            http_status: 200,
-            response_body: 'ok',
-        });
-    });
-
-    it('schedules a retry with the expected backoff after failure', async () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
-
-        const { store } = createTestContext();
-        const webhook = await createStoredWebhook(store);
-        const dispatcher = createWebhookDispatcher(
-            store,
-            {
-                rateLimitPerMinute: 10,
-                deliveryTimeoutMs: 1000,
-                blockPrivateIps: false,
-                encryptionKey: 'test-encryption-key',
-                maxRetryHours: 1,
-                fetchImpl: vi.fn(async () => new Response('nope', { status: 500 })),
-            },
-            'worker-1'
-        );
-
-        await dispatcher.enqueue({
-            webhookId: webhook.id,
-            eventType: 'thread.created',
-            eventId: randomUUID(),
-            payload: { ok: true },
-        });
-        await dispatcher.claimAndProcess();
-
-        const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log).toBeDefined();
-        expect(log!.status).toBe('pending');
-        expect(log!.attempt).toBe(2);
-        expect(log!.next_retry_at).toBe(Date.now() + 30_000);
-    });
-
     it('preserves replay identity and raw payload while re-signing each retry', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
@@ -274,6 +204,8 @@ describe('webhook dispatcher', () => {
             payload,
         });
         await dispatcher.claimAndProcess();
+        const [pendingLog] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(pendingLog).toMatchObject({ status: 'pending', attempt: 2, next_retry_at: Date.now() + 30_000 });
 
         vi.setSystemTime(new Date('2026-03-01T12:00:30.000Z'));
         await dispatcher.claimAndProcess();
@@ -311,6 +243,8 @@ describe('webhook dispatcher', () => {
             event_id: eventId,
             attempt: 2,
             status: 'success',
+            http_status: 200,
+            response_body: 'ok',
         });
     });
 

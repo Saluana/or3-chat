@@ -43,36 +43,11 @@ export interface RuntimeManagerControlSurface {
     schedule(trigger: string): Promise<void>;
 }
 
-export interface RuntimePackageLifecycleSurface {
-    disable(workspaceId: string, pluginId: string): Promise<readonly string[] | unknown>;
-}
-
-export interface RuntimePackageRollbackResult {
-    readonly status: 'rolled-back' | 'blocked';
-    readonly code?: string;
-}
-
-export interface RuntimePackagePromotionSurface {
-    rollback(input: {
-        readonly pluginId: string;
-        readonly storedStateVersion: number | null;
-        readonly snapshotState: () => unknown | Promise<unknown>;
-        readonly restoreState: (snapshot: unknown) => void | Promise<void>;
-    }): Promise<RuntimePackageRollbackResult>;
-}
-
 export interface RuntimeControlContext {
     readonly managerV2Enabled: boolean;
     readonly safeModeEnabled: boolean;
     readonly manager?: RuntimeManagerControlSurface | null;
-    readonly packageLifecycle?: RuntimePackageLifecycleSurface | null;
-    readonly packagePromotion?: RuntimePackagePromotionSurface | null;
-    readonly workspaceId?: string;
-    readonly pluginId?: string;
     readonly descriptorKey?: Sha256;
-    readonly storedStateVersion?: number | null;
-    readonly snapshotState?: () => unknown | Promise<unknown>;
-    readonly restoreState?: (snapshot: unknown) => void | Promise<void>;
 }
 
 export type RuntimeControlResult =
@@ -127,12 +102,6 @@ export function listRuntimeControls(
 ): readonly RuntimeControlDescriptor[] {
     const hasManager = context.managerV2Enabled && !!context.manager;
     const hasDescriptor = typeof context.descriptorKey === 'string';
-    const hasLifecycle = !!context.packageLifecycle && !!context.workspaceId && !!context.pluginId;
-    const hasPromotion =
-        !!context.packagePromotion &&
-        !!context.pluginId &&
-        typeof context.snapshotState === 'function' &&
-        typeof context.restoreState === 'function';
 
     return Object.freeze([
         {
@@ -172,10 +141,8 @@ export function listRuntimeControls(
                 'Disable a plugin for a workspace without deleting packages, settings, or migrated state.',
             scope: 'persisted-package-state',
             availability: availability(
-                hasLifecycle,
-                hasLifecycle
-                    ? 'Calls PluginPackageLifecycleService.disable (retains digests and data).'
-                    : 'Requires server package lifecycle + workspaceId + pluginId. Client shadow mode cannot persist disable.'
+                false,
+                'Requires server package lifecycle + workspaceId + pluginId. Client shadow mode cannot persist disable.'
             ),
         },
         {
@@ -198,10 +165,8 @@ export function listRuntimeControls(
                 'Roll the persisted package pointer to previous when state preflight allows; never claims incompatible migrated state was restored.',
             scope: 'persisted-package-state',
             availability: availability(
-                hasPromotion,
-                hasPromotion
-                    ? 'Calls PluginPackagePromotionService.rollback with state preflight.'
-                    : 'Requires server promotion service, pluginId, and snapshot/restore adapters. Not available from client-only shadow mode.'
+                false,
+                'Requires server promotion service, pluginId, and snapshot/restore adapters. Not available from client-only shadow mode.'
             ),
         },
         {
@@ -265,26 +230,6 @@ export async function executeRuntimeControl(
                 detail: { cleared, status: record?.status },
             };
         }
-        case 'disable': {
-            if (!context.packageLifecycle || !context.workspaceId || !context.pluginId) {
-                return {
-                    status: 'unavailable',
-                    controlId,
-                    message:
-                        'Disable requires PluginPackageLifecycleService with workspaceId and pluginId.',
-                };
-            }
-            const enabled = await context.packageLifecycle.disable(
-                context.workspaceId,
-                context.pluginId
-            );
-            return {
-                status: 'ok',
-                controlId,
-                message: `Disabled ${context.pluginId} for workspace ${context.workspaceId}. Packages and settings are retained.`,
-                detail: { enabled },
-            };
-        }
         case 'inspect': {
             const records = context.manager?.listRecords() ?? [];
             const selected = context.descriptorKey
@@ -313,39 +258,12 @@ export async function executeRuntimeControl(
                 }),
             };
         }
+        case 'disable':
         case 'rollback': {
-            if (
-                !context.packagePromotion ||
-                !context.pluginId ||
-                !context.snapshotState ||
-                !context.restoreState
-            ) {
-                return {
-                    status: 'unavailable',
-                    controlId,
-                    message:
-                        'Rollback requires PluginPackagePromotionService with snapshot/restore adapters.',
-                };
-            }
-            const result = await context.packagePromotion.rollback({
-                pluginId: context.pluginId,
-                storedStateVersion: context.storedStateVersion ?? null,
-                snapshotState: context.snapshotState,
-                restoreState: context.restoreState,
-            });
-            if (result.status === 'rolled-back') {
-                return {
-                    status: 'ok',
-                    controlId,
-                    message: `Rolled back package pointer for ${context.pluginId}.`,
-                    detail: result,
-                };
-            }
             return {
-                status: 'failed',
+                status: 'unavailable',
                 controlId,
-                message: `Rollback blocked${result.code ? ` (${result.code})` : ''}. Current pointer unchanged.`,
-                detail: result,
+                message: control.availability.reason ?? control.description,
             };
         }
         case 'safe-mode-guidance': {

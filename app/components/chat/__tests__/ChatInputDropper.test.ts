@@ -321,8 +321,11 @@ describe('ChatInputDropper', () => {
             global: { mocks: { $theme: createThemeMock() } },
         });
         try {
-            await vi.waitFor(() => expect(wrapper.emitted('model-change')?.at(-1)?.[0])
-                .toBe(choice === 'explicit' ? 'fixture/explicit:nitro' : 'fixture/current-default'));
+            await vi.waitFor(() => {
+                expect(wrapper.emitted('model-change')?.at(-1)?.[0])
+                    .toBe(choice === 'explicit' ? 'fixture/explicit:nitro' : 'fixture/current-default');
+                expect(wrapper.get<HTMLButtonElement>('[aria-label="Send message"]').element.disabled).toBe(false);
+            });
             await (wrapper.vm as unknown as { triggerSend: () => Promise<SendResult> }).triggerSend();
             expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Keep this draft',
                 model: choice === 'explicit' ? 'fixture/explicit' : 'fixture/current-default',

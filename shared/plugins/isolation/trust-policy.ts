@@ -127,16 +127,3 @@ export function evaluateTrustImport(
         label: labelForTrust(trust) as Exclude<TrustLabelKind, 'trusted-in-process'>,
     };
 }
-
-/**
- * UI/docs helper: never describe trusted-host grants as a sandbox.
- */
-export function describeGrantBoundary(trust: PluginTrustMode): string {
-    if (trust === 'trusted-host') {
-        return 'Trusted in-process mediation (not a sandbox)';
-    }
-    if (trust === 'isolated-client') {
-        return 'Isolated client sandbox (Worker or iframe)';
-    }
-    return 'Isolated server process boundary';
-}

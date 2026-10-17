@@ -72,16 +72,6 @@ describe('hash utilities', () => {
         expect(hex).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
     });
 
-    it('falls back to spark-md5 when subtle is unavailable', async () => {
-        vi.stubGlobal('crypto', {} as Crypto);
-        const blob = makeBlobLike('hello');
-
-        const hex = await computeHashHex(blob, 'md5');
-
-        expect(hex).toBe('5d41402abc4b2a76b9719d911017c592');
-        expect(sparkState.appendCalls).toBeGreaterThan(0);
-    });
-
     it('falls back to @noble/hashes for SHA-256 when WebCrypto is unavailable', async () => {
         vi.stubGlobal('crypto', {} as Crypto);
         const blob = makeBlobLike('hello');
@@ -104,7 +94,8 @@ describe('hash utilities', () => {
         const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
         const large = makeBlobLike(new Uint8Array(600_000));
-        await computeHashHex(large, 'md5');
+        const hex = await computeHashHex(large, 'md5');
+        expect(hex).toBe('5d41402abc4b2a76b9719d911017c592');
 
         expect(sparkState.appendCalls).toBeGreaterThan(2);
         expect(timeoutSpy).toHaveBeenCalled();

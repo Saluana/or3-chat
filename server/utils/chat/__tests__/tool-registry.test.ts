@@ -96,40 +96,6 @@ describe('server tool registry', () => {
         unregisterServerTool('client_only');
     });
 
-    it('passes exact request-scoped execution context while legacy handlers remain valid', async () => {
-        const def: ToolDefinition = {
-            type: 'function',
-            function: {
-                name: 'context_tool',
-                description: 'Context test',
-                parameters: { type: 'object', properties: {} },
-            },
-            runtime: 'server',
-        };
-        let received: ToolExecutionContext | undefined;
-        registerServerTool(def, (_args, context) => {
-            received = context;
-            return context.callId;
-        }, { override: true });
-        const controller = new AbortController();
-        const context: ToolExecutionContext = {
-            subject: 'user-1',
-            workspaceId: 'ws-1',
-            threadId: 'thread-1',
-            messageId: 'message-1',
-            callId: 'call-1',
-            requestId: 'request-1',
-            abortSignal: controller.signal,
-        };
-
-        await expect(executeServerTool('context_tool', '{}', context)).resolves.toMatchObject({
-            result: 'call-1',
-        });
-        expect(received).toMatchObject({ ...context, abortSignal: expect.any(AbortSignal) });
-        expect(received?.abortSignal).not.toBe(context.abortSignal);
-        unregisterServerTool('context_tool');
-    });
-
     it('rejects a request definition that differs from the registered server tool', async () => {
         const def: ToolDefinition = {
             type: 'function',
@@ -213,7 +179,6 @@ describe('server tool registry', () => {
         unregisterServerTool(def.function.name);
     });
 });
-
 
 /** Host authorization owner. External storage alone is scripted; job identity,
  * registry, can(), scope construction and retrieval are production code. */

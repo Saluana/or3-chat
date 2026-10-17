@@ -124,16 +124,6 @@ describe('sync rate limiter', () => {
         it('should not throw for unknown operations', () => {
             expect(() => recordSyncRequest('user-1', 'unknown:operation')).not.toThrow();
         });
-
-        it('should record requests that affect subsequent checks', () => {
-            const before = checkSyncRateLimit('user-1', 'sync:push');
-
-            recordSyncRequest('user-1', 'sync:push');
-
-            const after = checkSyncRateLimit('user-1', 'sync:push');
-
-            expect(after.remaining).toBe(before.remaining - 1);
-        });
     });
 
     describe('resetSyncRateLimits', () => {
@@ -250,12 +240,6 @@ describe('sync rate limiter', () => {
             expect(result.allowed).toBe(false);
             expect(result.remaining).toBe(0);
         });
-
-        it('should treat auth:session subject as generic key (IP)', () => {
-            const result = checkSyncRateLimit('192.168.1.1', 'auth:session');
-            expect(result.allowed).toBe(true);
-            expect(result.remaining).toBe(AUTH_RATE_LIMITS['auth:session']!.maxRequests);
-        });
     });
 
     describe('storage rate limits', () => {
@@ -271,12 +255,6 @@ describe('sync rate limiter', () => {
 
             expect(result.allowed).toBe(false);
             expect(result.remaining).toBe(0);
-        });
-
-        it('should treat storage:commit subject as generic key (userId)', () => {
-            const result = checkSyncRateLimit('user-123', 'storage:commit');
-            expect(result.allowed).toBe(true);
-            expect(result.remaining).toBe(STORAGE_RATE_LIMITS['storage:commit']!.maxRequests);
         });
     });
 

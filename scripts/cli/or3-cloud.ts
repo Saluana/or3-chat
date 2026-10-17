@@ -918,9 +918,8 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     if (dockerExposure) wizardParams.set('dockerExposure', dockerExposure);
     if (publicDomain) wizardParams.set('publicDomain', publicDomain);
     const wizardUrl = `${baseUrl}/wizard?${wizardParams.toString()}`;
-    // Use a static asset prefix to health-check: this path is served by Vite/Nitro
-    // without going through SSR auth middleware and cannot redirect-loop.
-    const healthUrl = `${baseUrl}/_nuxt/`;
+    // The unauthenticated health endpoint supplies the OR3 JSON readiness check.
+    const healthUrl = `${baseUrl}/api/health`;
 
     const uiHostDir = await createWizardUiHost(uiSourceDir);
     console.log('\nHosting setup in a temporary workspace.');

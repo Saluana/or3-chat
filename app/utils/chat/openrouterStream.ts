@@ -1438,37 +1438,6 @@ export async function abortBackgroundAdmission(
 }
 
 /**
- * `waitForJobCompletion`
- *
- * Purpose:
- * Polls a job until it completes or errors.
- */
-export async function waitForJobCompletion(
-    jobId: string,
-    onProgress?: (status: BackgroundJobStatus) => void,
-    pollIntervalMs = 1000,
-    maxWaitMs = 5 * 60 * 1000
-): Promise<BackgroundJobStatus> {
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitMs) {
-        const status = await pollJobStatus(jobId);
-        
-        if (onProgress) {
-            onProgress(status);
-        }
-
-        if (status.status !== 'streaming') {
-            return status;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-    }
-
-    throw new Error('Job timed out waiting for completion');
-}
-
-/**
  * `subscribeBackgroundJobStream`
  *
  * Purpose:
