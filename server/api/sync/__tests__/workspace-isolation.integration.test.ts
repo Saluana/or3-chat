@@ -6,11 +6,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ChatGenerationAdmissionEnvelope, CanonicalGenerationSnapshot } from '~~/shared/chat/background-history';
 import type { SessionContext } from '~/core/hooks/hook-types';
-import { initializeSqliteDb, destroySqliteDb, _resetForTest, getRawDb } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/kysely.ts';
-import { runMigrations } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/migrate.ts';
-import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/auth/sqlite-auth-workspace-store.ts';
-import { createSqliteWorkspaceAccessStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/admin/stores/sqlite-store.ts';
-import { SqliteSyncGatewayAdapter } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts';
+import { initializeSqliteDb, destroySqliteDb, _resetForTest, getRawDb } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/db/kysely.js';
+import { runMigrations } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/db/migrate.js';
+import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/auth/sqlite-auth-workspace-store.js';
+import { createSqliteWorkspaceAccessStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/admin/stores/sqlite-store.js';
+import { SqliteSyncGatewayAdapter } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/sync/sqlite-sync-gateway-adapter.js';
 
 const fixture = vi.hoisted(() => ({
     auth: null as SqliteAuthWorkspaceStore | null,

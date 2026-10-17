@@ -23,12 +23,37 @@ import { assertServerProjectExecutionSupported } from '../chat/project-policy';
 
 interface WorkflowJobOrigin { jobId: string; userId: string; workspaceId: string; threadId: string; messageId: string }
 
-let warnedLegacyWorkflowOrigin = false;
-
 /** Generic host operations supplied only after the package dispatcher authorizes the route. */
 export function createTrustedPluginServerServices(requestEvent: H3Event, grants: ReadonlySet<string>) {
     const allow = (grant: string) => { if (!grants.has(grant)) throw createError({ statusCode: 403, statusMessage: 'Plugin grant required' }); };
     const reservedRequests = new Set<string>();
+    const authorizeWorkflowOrigin = async (origin: WorkflowJobOrigin, signal: AbortSignal) => {
+        const session = await resolveSessionContext(requestEvent);
+        if (!session.authenticated || session.user?.id !== origin.userId)
+            throw new Error('Workflow execution authority is missing or changed.');
+        const provider = await getJobProvider();
+        const job = await provider.getJob(origin.jobId, origin.userId);
+        if (!job || job.kind !== 'workflow' || job.status !== 'streaming'
+            || job.threadId !== origin.threadId || job.messageId !== origin.messageId
+            || job.execution?.workspaceId !== origin.workspaceId)
+            throw new Error('The originating workflow job is no longer available.');
+        const jobSignal = provider.getAbortController?.(origin.jobId)?.signal;
+        const executionSignal = jobSignal ? AbortSignal.any([signal, jobSignal]) : signal;
+        const fenceSignal = AbortSignal.any([AbortSignal.timeout(10_000), executionSignal]);
+        await requireJobWorkspaceAccess(requestEvent, session, origin.workspaceId, 'workspace.write');
+        const history = canonicalHistoryContext({ subject: origin.userId, workspaceId: origin.workspaceId,
+            threadId: origin.threadId, syncProviderId: useRuntimeConfig().public.sync.provider!, signal: fenceSignal });
+        const result = await history.read({ kind: 'messages', message_ids: [origin.messageId] });
+        const message = result.status === 'ok' ? result.messages?.find(row => row.id === origin.messageId) : undefined;
+        if (!message || message.deleted || message.thread_id !== origin.threadId
+            || (message.data as { type?: string } | undefined)?.type !== 'workflow-execution')
+            throw new Error('The originating workflow message is no longer available.');
+        await requireJobWorkspaceAccess(requestEvent, session, origin.workspaceId, 'workspace.write');
+        await assertServerProjectExecutionSupported({ subject: origin.userId, workspaceId: origin.workspaceId,
+            threadId: origin.threadId, abortSignal: fenceSignal }, 'workspace.write');
+        fenceSignal.throwIfAborted();
+        return executionSignal;
+    };
     return {
         readBody,
         setNoStore(event: H3Event) {
@@ -115,7 +140,19 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
         hasJobViewers,
         initJobLiveState,
         logBackgroundEvent,
-        executeServerTool: (...args: Parameters<typeof executeServerTool>) => { allow('tools.use'); return executeServerTool(...args); },
+        async executeServerTool(...args: Parameters<typeof executeServerTool>) {
+            allow('tools.use');
+            const [name, argsJson, input, admission] = args;
+            const context = input && { ...input };
+            if (!context?.subject || !context.workspaceId || !context.threadId || !context.messageId || !context.requestId)
+                throw new Error('Workflow execution authority is missing. Update the Workflows package.');
+            const origin = { jobId: context.requestId, userId: context.subject, workspaceId: context.workspaceId,
+                threadId: context.threadId, messageId: context.messageId };
+            context.abortSignal = await authorizeWorkflowOrigin(origin, context.abortSignal);
+            const result = await executeServerTool(name, argsJson, context, admission);
+            await authorizeWorkflowOrigin(origin, context.abortSignal);
+            return result;
+        },
         listServerTools: () => { allow('tools.use'); return listServerTools(); },
         getNotificationEmitter,
         emitWebhook: emitBackgroundJobWebhookEvent,
@@ -125,39 +162,14 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
             const origin = input.origin && { ...input.origin };
             const httpClient = new HTTPClient({ fetcher: async (request, init) => {
                 if (!origin) {
-                    // Transition for Workflows builds that predate run origins: job
-                    // admission (createJob) still refuses project chats; only the
-                    // per-request move fence needs the origin.
-                    if (!warnedLegacyWorkflowOrigin) {
-                        warnedLegacyWorkflowOrigin = true;
-                        console.warn('[workflows] This Workflows package predates run origins; update it to fence project moves during background runs.');
-                    }
-                    return fetch(request, init);
+                    throw new Error('Workflow origin is required. Update the Workflows package before background execution.');
                 }
-                const session = await resolveSessionContext(requestEvent);
-                if (session.user?.id !== origin.userId) throw new Error('Workflow actor changed.');
-                const provider = await getJobProvider();
-                const job = await provider.getJob(origin.jobId, origin.userId);
-                if (!job || job.kind !== 'workflow' || job.status !== 'streaming'
-                    || job.threadId !== origin.threadId || job.messageId !== origin.messageId
-                    || job.execution?.workspaceId !== origin.workspaceId)
-                    throw new Error('The originating workflow job is no longer available.');
-                const jobSignal = provider.getAbortController?.(origin.jobId)?.signal;
-                const requestSignal = request instanceof Request ? request.signal : init?.signal;
-                const signal = AbortSignal.any([AbortSignal.timeout(10_000),
-                    ...(jobSignal ? [jobSignal] : []), ...(requestSignal ? [requestSignal] : [])]);
-                await requireJobWorkspaceAccess(requestEvent, session, origin.workspaceId, 'workspace.write');
-                const history = canonicalHistoryContext({ subject: origin.userId, workspaceId: origin.workspaceId,
-                    threadId: origin.threadId, syncProviderId: useRuntimeConfig().public.sync.provider!, signal });
-                const result = await history.read({ kind: 'messages', message_ids: [origin.messageId] });
-                const message = result.status === 'ok' ? result.messages?.find(row => row.id === origin.messageId) : undefined;
-                if (!message || message.deleted || message.thread_id !== origin.threadId
-                    || (message.data as { type?: string } | undefined)?.type !== 'workflow-execution')
-                    throw new Error('The originating workflow message is no longer available.');
-                await requireJobWorkspaceAccess(requestEvent, session, origin.workspaceId, 'workspace.write');
-                await assertServerProjectExecutionSupported({ subject: origin.userId, workspaceId: origin.workspaceId, threadId: origin.threadId, abortSignal: signal }, 'workspace.write');
-                signal.throwIfAborted();
-                return fetch(request, { ...init, ...(jobSignal ? { signal: AbortSignal.any([jobSignal, ...(requestSignal ? [requestSignal] : [])]) } : {}) });
+                const requestSignal = AbortSignal.any([
+                    ...(request instanceof Request ? [request.signal] : []),
+                    ...(init?.signal ? [init.signal] : []),
+                ]);
+                const signal = await authorizeWorkflowOrigin(origin, requestSignal);
+                return fetch(request, { ...init, signal });
             } });
             return {
                 client: buildOpenRouterClient({ apiKey: input.apiKey, serverURL, httpClient }),

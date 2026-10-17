@@ -12,7 +12,7 @@
         <button type="button" class="flex flex-1 min-w-0 -my-2.5 items-center gap-2.5 py-2.5 pr-7 sm:pr-0 text-left rounded-[var(--md-border-radius-small)] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`Open ${item.title || 'Untitled'}`" @click="emit('select', item.id)">
         <!-- Icon -->
         <slot name="icon"><UIcon
-            :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
+            :name="item.icon ?? (item.family?.kind === 'group-header' ? iconBranched : item.type === 'thread' ? iconChat : iconNote)"
             class="w-[18px] h-[18px] shrink-0 transition-colors sb-btn-icon"
             :class="{
                 'text-[color:var(--md-primary)] sb-btn-icon-active': active,
@@ -175,6 +175,7 @@ const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
 // Icons
 const iconChat = useIcon('sidebar.chat');
+const iconBranched = useIcon('sidebar.chat.branched');
 const iconNote = useIcon('sidebar.note');
 const iconMore = useIcon('ui.more');
 const iconEdit = useIcon('ui.edit');

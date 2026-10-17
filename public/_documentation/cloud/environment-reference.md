@@ -1,5 +1,10 @@
 # OR3 Environment and Provider Settings Reference
 
+`OR3_CLOUD_WAITLIST_ENABLED=true` includes the optional [Cloud waitlist](/documentation/cloud/waitlist)
+server extension in the build. It defaults to absent. Basic Auth, SSR and the
+default lock-page adapter are required. Its live admin toggle defaults off and
+is saved separately from this installation flag.
+
 This is the deployment-oriented reference for environment variables consumed by
 `or3-chat` and its first-party provider packages. It complements the typed
 configuration reference:

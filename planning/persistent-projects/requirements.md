@@ -63,7 +63,7 @@ Nested projects, graph databases, autonomous memory agents, new vector infrastru
 
 **Acceptance Criteria:**
 
-- R5.AC1: WHEN executing tools THEN runtime checks SHALL enforce project/resource restrictions, existing permissions, and approvals; other projects SHALL be inaccessible by default, including through legacy tools.
+- R5.AC1: WHEN executing tools THEN runtime checks SHALL enforce project/resource restrictions, existing permissions, and approvals; items addressed by ID SHALL belong to the project, including through legacy tools. Revised October 15, 2026: project chats start with the chat-settings tool toggles like any chat, so tools that take no ID (find chats/documents, see open tabs) can see the whole workspace unless a project turns them Off.
 
 ### R6: Continuity — Phase 2
 

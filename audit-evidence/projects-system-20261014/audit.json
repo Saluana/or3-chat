@@ -161,65 +161,101 @@
     {
       "id": "F01",
       "severity": "high",
-      "status": "unchanged",
+      "status": "fixed",
       "issue": "The workflow plugin omits model origins and supplies null tool authority, so post-admission project moves cannot be fenced by the host.",
       "files": [
         "../or3-plugin-workflows/src/server/background-execution.ts:104",
         "../or3-plugin-workflows/src/server/background-execution.ts:297"
       ],
-      "requiredWork": "Carry originating user/workspace/thread/message and cancellation through runtime ports and model/tool calls, with lifecycle regression coverage."
+      "requiredWork": "Carry originating user/workspace/thread/message and cancellation through runtime ports and model/tool calls, with lifecycle regression coverage.",
+      "originalStatus": "unchanged",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "Workflow runtime ports carry user/workspace/thread/message, job origin and combined cancellation. Host model/tool dispatch checks the active job, live execution message, fresh write access and canonical ownership; tools recheck before delivery. Missing origins refuse.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F02",
       "severity": "high",
-      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "status": "verified_concurrent_fix",
       "issue": "Filesystem presign lacked atomic quota reservation and commit provenance; concurrent uploads could exceed a workspace quota.",
       "files": [
         "../or3-provider-fs/src/runtime/server/storage/fs-storage-gateway-adapter.ts"
       ],
-      "note": "Independent edits added reserve/consume binding during this audit. This task made no FS changes and does not claim acceptance of those edits."
+      "note": "Independent edits added reserve/consume binding during this audit. This task made no FS changes and does not claim acceptance of those edits.",
+      "originalStatus": "concurrent_repair_not_qualified_by_this_audit",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "Filesystem reserves atomic upload quota before signing; commit consumes the matching intent before publishing the sidecar. Failed consumption/sidecar publication can retry.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F03",
       "severity": "high",
-      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "status": "verified_concurrent_fix",
       "issue": "S3 wrote a commit marker before fallible intent consumption; transient failure or response loss poisoned retries with permanent 409s.",
       "files": [
         "../or3-provider-s3/src/runtime/server/storage/s3-storage-gateway-adapter.ts"
       ],
-      "note": "Independent edits changed consumption/marker ordering and matching-marker reconciliation during this audit. This task made no S3 changes and does not claim acceptance."
+      "note": "Independent edits changed consumption/marker ordering and matching-marker reconciliation during this audit. This task made no S3 changes and does not claim acceptance.",
+      "originalStatus": "concurrent_repair_not_qualified_by_this_audit",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "S3 consumes the bound intent before marker publication and reconciles matching markers after conditional-write conflicts. Mismatched tuples refuse.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F04",
       "severity": "high",
-      "status": "concurrent_repair_not_qualified_by_this_audit",
+      "status": "verified_concurrent_fix",
       "issue": "Consumed reservations stopped counting before canonical file metadata arrived, permitting quota overshoot in the commit-to-sync gap.",
       "files": [
         "../or3-provider-sqlite/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts",
         "../or3-provider-convex/templates/convex/storage.ts"
       ],
-      "note": "Independent upload lifecycle changes were in progress; their suites reported failures separately from project ownership regressions."
+      "note": "Independent upload lifecycle changes were in progress; their suites reported failures separately from project ownership regressions.",
+      "originalStatus": "concurrent_repair_not_qualified_by_this_audit",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "Native SQLite and D1 retain consumed quota during valid receipt authorization until canonical metadata arrives. Exact replay cannot outlive original expiry. Convex commits canonical metadata and consumes the intent within its mutation.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F05",
       "severity": "medium",
-      "status": "unchanged",
+      "status": "fixed",
       "issue": "Internal-record after-write hooks may run before a caller's outer transaction commits, so observers can react to a save later rolled back.",
       "files": [
         "app/db/project-workspace.ts:392",
         "app/db/project-workspace.ts:398"
       ],
-      "requiredWork": "Define a caller-owned after-commit notification queue without awaiting outer completion from within that transaction."
+      "requiredWork": "Define a caller-owned after-commit notification queue without awaiting outer completion from within that transaction.",
+      "originalStatus": "unchanged",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "Nested project saves defer post/reference notifications to the outermost Dexie commit outside its transaction context. They return without waiting for the outer commit; rollbacks emit nothing.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F06",
       "severity": "high",
-      "status": "documented_existing_compatibility_policy",
+      "status": "fixed",
       "issue": "Older providers without projectOwnership retain warning-only fallback for legacy folder membership.",
       "files": [
         "server/utils/chat/project-policy.ts"
       ],
-      "note": "Documentation now reflects the existing compatibility behavior; changing that policy would affect older provider deployments."
+      "note": "Documentation now reflects the existing compatibility behavior; changing that policy would affect older provider deployments.",
+      "originalStatus": "documented_existing_compatibility_policy",
+      "resolution": {
+        "date": "2026-10-15",
+        "summary": "Unresolved canonical ownership refuses server tools/workflows, including older providers. The warning-only fallback was removed. Provider/backend upgrades are required before retrying.",
+        "report": "../projects-followups-20261015/audit.json"
+      }
     },
     {
       "id": "F07",

@@ -401,6 +401,9 @@ using it in source controls. Theme maps use `IconMap` from
 tokens. Let the theme loader register maps; theme authors do not need a second
 registration plugin. See [icon authoring](/documentation/themes/styling#icons).
 
+The token may also be a ref or getter, such as `useIcon(() => props.iconToken)`,
+when the requested semantic token can change after setup.
+
 ### useUserThemeOverrides
 
 `app/core/theme/useUserThemeOverrides.ts` manages browser-local personal

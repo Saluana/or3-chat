@@ -16,6 +16,7 @@ import { compactClientChunksPlugin } from './plugins/vite-compact-client-chunks'
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
+import blankSolarIcons from './app/theme/blank/icon-collection';
 
 const env = { ...process.env };
 
@@ -294,8 +295,9 @@ export default defineNuxtConfig({
     icon: {
         serverBundle: {
             // Only bundle the iconify collections we actually use
-            // (pixelarticons = theme tokens, tabler/lucide/carbon = inline
-            // prefixes, simple-icons = provider brand logos).
+            // (pixelarticons = retro theme tokens, tabler/lucide/carbon = inline
+            // prefixes, simple-icons = provider brand logos). Blank's Solar
+            // subset is registered as a custom collection below.
             collections: [
                 'pixelarticons',
                 'lucide',
@@ -303,6 +305,11 @@ export default defineNuxtConfig({
                 'tabler',
                 'simple-icons',
             ],
+        },
+        customCollections: [blankSolarIcons],
+        clientBundle: {
+            // Custom icons must also work in static builds without an icon API.
+            includeCustomCollections: true,
         },
     },
     // Nuxt UI registers this module as a dependency. Keep its resolver local so

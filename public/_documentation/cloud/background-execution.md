@@ -294,6 +294,14 @@ This scope contains no chat recovery body or credential envelope. Its settled hi
 phase excludes it from chat-worker claims while preserving normal terminal retention
 in the existing SQLite and Convex providers.
 
+The Workflows package passes that job ID and the originating user, workspace,
+thread and execution-message IDs to every model and server-tool call. The host
+checks the active job, current write membership, live execution message and
+canonical chat ownership before dispatch. Tool results are checked again before
+delivery. Job and request cancellation reach both model requests and tools.
+Older Workflows packages that omit this authority refuse with an upgrade message;
+job admission alone cannot authorize subsequent work after a project move.
+
 Cancellation is authoritative at the provider. External providers are polled
 through a run-local abort signal so Stop interrupts the active model request and
 prevents later nodes from starting. The abort response also emits a terminal

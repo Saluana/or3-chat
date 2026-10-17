@@ -99,5 +99,8 @@ export function resolvePostAuthRedirectTarget(
     lockPageRoute: string
 ): string {
     const target = sanitizeLockPageRedirectTarget(next, '/');
-    return normalizePath(target) === normalizePath(lockPageRoute) ? '/' : target;
+    const targetPath = new URL(target, 'http://or3.local').pathname;
+    return normalizePath(targetPath).toLowerCase() === normalizePath(lockPageRoute).toLowerCase()
+        ? '/'
+        : target;
 }

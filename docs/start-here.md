@@ -6,16 +6,17 @@ file, or hand-written `OR3_*` values.
 
 ## I want a private Cloud on this computer
 
-Run this once from an empty directory:
+Run this once:
 
 ```bash
 npx @or3/cloud init --local
 ```
 
-The operator starts the supported Basic Auth + SQLite + filesystem profile,
-prints the local URL, and saves the bootstrap credentials in a private file.
-Open the URL, sign in as the owner, and remove the credentials file after
-saving it in a password manager. Continue with [Cloud installation and
+The operator creates an `or3-cloud` folder, starts the supported Basic Auth +
+SQLite + filesystem profile, and prints the local URL and the login to use.
+Sign in, save the password from `or3-cloud/.or3-initial-credentials` in a
+password manager, then delete that file. Run later commands from inside
+`or3-cloud`. Continue with [Cloud installation and
 operations](installation.md) for updates, backups, and recovery.
 
 ## I want a public Cloud on a VPS

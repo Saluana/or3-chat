@@ -34,7 +34,7 @@
                     :name="groupIcon"
                     class="size-4 shrink-0"
                 />
-                <span class="min-w-0 leading-5">{{ groupLabel }}</span>
+                <span class="min-w-0 truncate leading-5" :title="groupLabel">{{ groupLabel }}</span>
                 <UIcon
                     v-if="isExpandable"
                     name="i-lucide-chevron-down"
@@ -230,17 +230,25 @@ const groupLabel = computed(() => {
         return `Waiting for this browser · ${names.join(', ')}`;
     }
     const labels: string[] = [];
+    const failures = new Map<string, number>();
     for (const call of props.toolCalls) {
-        if (call.status === 'error') labels.push(`${toolLabel(call)} failed`);
+        if (call.status !== 'error') continue;
+        const label = toolLabel(call);
+        failures.set(label, (failures.get(label) ?? 0) + 1);
     }
+    for (const [label, total] of failures) labels.push(total > 1 ? `${label} failed ${total} times` : `${label} failed`);
     const running = isRunning.value;
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;
     if (count('edit'))
         labels.push(running ? 'Editing files' : 'Edited files');
     if (count('read')) {
+        const total = count('read');
         const workspace = kinds.value.get('read')?.every((call) => call.name === 'workspace_read');
-        labels.push(workspace ? running ? 'Reading workspace sources' : 'Read workspace sources'
-            : running ? 'Reading files' : 'Read files');
+        labels.push(workspace
+            ? total > 1 ? `${running ? 'Reading' : 'Read'} ${total} workspace sources`
+                : running ? 'Reading workspace sources' : 'Read workspace sources'
+            : total > 1 ? `${running ? 'Reading' : 'Read'} ${total} files`
+                : running ? 'Reading files' : 'Read files');
     }
     if (count('command')) {
         const total = count('command');
@@ -254,10 +262,12 @@ const groupLabel = computed(() => {
                   : `Ran ${total} commands`
         );
     }
-    if (count('search'))
+    if (count('search')) {
+        const total = count('search');
         labels.push(
-            running ? 'Searching the workspace' : 'Searched the workspace'
+            `${running ? 'Searching the workspace' : 'Searched the workspace'}${total > 1 ? ` ${total} times` : ''}`
         );
+    }
     if (count('tests')) labels.push(running ? 'Running tests' : 'Ran tests');
     const other = kinds.value.get('other') ?? [];
     labels.push(

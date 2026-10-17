@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification."
+                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification. Internal notifications wait for the outer transaction; server execution requires resolved canonical ownership."
                 },
                 {
                     "name": "posts.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab icons, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers, CSS and scoped theme rules."
+                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers, CSS and scoped theme rules."
                 },
                 {
                     "name": "package-install.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers current originating-workspace read and write authorization, membership changes before model dispatch, scoped admission recovery, confirmed cancellation, bound browser-tool approvals and retention."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers required workflow origins, current job/message/workspace authorization, project moves, scoped admission recovery, cancellation, bound browser-tool approvals and retention."
                 },
                 {
                     "name": "notifications.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, invitation preflight and retries, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, email-first lock page, invitation preflight and retries, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -731,13 +731,22 @@
                     "summary": "Diagnose Cloud authentication, sync, storage, and notifications, including redacted public health codes and administrative provider diagnostics."
                 },
                 {
+                    "name": "waitlist.md",
+                    "path": "/cloud/waitlist",
+                    "title": "Optional Cloud waitlist",
+                    "category": "Reference",
+                    "categoryOrder": 4,
+                    "order": 16,
+                    "summary": "Opt-in hosted waitlist, persistent admin toggle and email list, sign-in and invite handoffs, storage, privacy, and unchanged self-hosted defaults."
+                },
+                {
                     "name": "config-reference.md",
                     "path": "/cloud/config-reference",
                     "title": "Configuration reference",
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 16,
-                    "summary": "This page is the typed reference for the base and cloud configuration objects, including defaults, validation, and how settings affect behavior. The complete deployment environment-variable matrix is maintained separately below."
+                    "summary": "Typed base and cloud settings, including lock-page session checks, safe redirects, denied-access recovery, responsive cloud artwork and sign-in layout, custom adapters, defaults, validation, and environment-variable references."
                 },
                 {
                     "name": "environment-reference.md",

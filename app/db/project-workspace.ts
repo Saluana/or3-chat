@@ -127,6 +127,11 @@ async function save(
     newDocument?: Post,
 ): Promise<Post> {
     scope.assertCurrent('write');
+    // Dexie returns null outside a transaction, despite its non-nullable type.
+    const currentTransaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | null;
+    let outerTransaction = currentTransaction?.db === scope.db
+        ? currentTransaction : undefined;
+    while (outerTransaction?.parent) outerTransaction = outerTransaction.parent;
     const hooks = useHooks();
     const candidate = PostSchema.parse({
         id,
@@ -387,21 +392,27 @@ async function save(
             scope.assertCurrent('write');
         },
     );
-    for (const change of referenceChanges) {
-        try {
-            await Dexie.waitFor(hooks.doAction('db.files.refchange:action:after', change));
-        } catch (error) {
-            console.warn('[projects] Source saved; reference notification failed', error);
+    const notify = async () => {
+        for (const change of referenceChanges) {
+            try {
+                await hooks.doAction('db.files.refchange:action:after', change);
+            } catch (error) {
+                console.warn('[projects] Source saved; reference notification failed', error);
+            }
         }
-    }
-    try {
-        await Dexie.waitFor(hooks.doAction('db.posts.upsert:action:after', {
-            entity: row,
-            tableName: 'posts',
-        }));
-    } catch (error) {
-        console.warn('[projects] Record saved; notification failed', error);
-    }
+        try {
+            await hooks.doAction('db.posts.upsert:action:after', {
+                entity: row,
+                tableName: 'posts',
+            });
+        } catch (error) {
+            console.warn('[projects] Record saved; notification failed', error);
+        }
+    };
+    // A nested transaction's completion is only a savepoint. Its caller owns
+    // the durable commit; awaiting that commit here would deadlock the caller.
+    if (outerTransaction) outerTransaction.on('complete', () => { void Dexie.ignoreTransaction(notify); });
+    else await notify();
     return row;
 }
 

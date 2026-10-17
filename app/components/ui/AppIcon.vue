@@ -10,19 +10,24 @@
             draggable="false"
             @error="imageFailed = true"
         />
-        <UIcon v-else-if="icon" :name="icon" class="h-full w-full" />
+        <UIcon v-else-if="resolvedIcon" :name="resolvedIcon" class="h-full w-full" />
     </span>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useIcon } from '~/composables/useIcon';
+import type { IconToken } from '~/config/icon-tokens';
 
 const props = defineProps<{
     icon?: string;
+    iconToken?: IconToken;
     image?: string;
 }>();
 
 const imageFailed = ref(false);
+const themedIcon = useIcon(() => props.iconToken ?? 'ui.unknown');
+const resolvedIcon = computed(() => props.iconToken ? themedIcon.value : props.icon);
 
 watch(
     () => props.image,

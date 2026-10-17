@@ -38,7 +38,7 @@ async function client() {
     const jobId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 'thread', messageId: 'execution', model: 'model', kind: 'workflow',
         historyPhase: 'committed', execution: { version: 1, kind: 'workflow', workspaceId: 'workspace' } });
     const origin = { jobId, userId: 'owner', workspaceId: 'workspace', threadId: 'thread', messageId: 'execution' };
-    const bridge = createTrustedPluginServerServices({} as H3Event, new Set(['ai.provider', 'jobs.background']));
+    const bridge = createTrustedPluginServerServices({} as H3Event, new Set(['ai.provider', 'jobs.background', 'tools.use']));
     return { origin, bridge, config: bridge.createOpenRouterClient({ apiKey: 'fixture', origin }) };
 }
 describe('workflow server provider boundary', () => {
@@ -83,10 +83,17 @@ describe('workflow server provider boundary', () => {
         await expect(config.client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } })).rejects.toThrow(/project/i);
         expect(fetch).toHaveBeenCalledOnce();
     });
-    it('keeps context-free older package requests working behind job admission', async () => {
-        // Transition: job creation refuses project chats; only the per-request move fence needs an origin.
+    // Missing origins bypass every dispatch fence; cancellation during an
+    // awaited ownership read must also prevent network dispatch.
+    it('refuses context-free older package requests after job admission', async () => {
         const { bridge } = await client();
-        await bridge.createOpenRouterClient({ apiKey: 'fixture' }).client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } });
-        expect(fetch).toHaveBeenCalledOnce(); expect(fixture.send).toHaveBeenCalledOnce();
+        await expect(bridge.createOpenRouterClient({ apiKey: 'fixture' }).client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } })).rejects.toThrow(/origin/i);
+        expect(fetch).not.toHaveBeenCalled(); expect(fixture.send).not.toHaveBeenCalled();
+    });
+    it('refuses tools with missing or forged execution authority', async () => {
+        const { bridge } = await client();
+        for (const subject of [null, 'someone-else']) {
+            await expect(bridge.executeServerTool('fixture', '{}', { subject, workspaceId: 'workspace', threadId: 'thread', messageId: 'execution', callId: 'call', requestId: 'request', abortSignal: new AbortController().signal })).rejects.toThrow(/authority/i);
+        }
     });
 });

@@ -202,13 +202,13 @@ it.each(['brief', 'settings', 'note', 'memory'] as const)('retains the %s draft 
     expect((wrapper.get(selector).element as HTMLTextAreaElement).value).toBe('Keep my draft');
 });
 
-it('offers only enforceable permissions for external tools', async () => {
+it('offers only Off and Ask first for tools that always need approval', async () => {
     wrapper.unmount();
-    toolCatalog.tools = [{ definition: { type: 'function', function: { name: 'external_read', description: 'Read external content', parameters: { type: 'object', properties: {} } }, ui: { label: 'External read' } }, runtime: 'client', enabled: ref(true) }];
+    toolCatalog.tools = [{ definition: { type: 'function', function: { name: 'external_send', description: 'Send external content', parameters: { type: 'object', properties: {} } }, ui: { label: 'External send' } }, runtime: 'client', enabled: ref(true) }];
     wrapper = mount(SidebarProjectsPage, { global: { stubs: { SidebarTimeGroupedList: defineComponent({ template: '<div><slot name="header" /></div>' }),
         USelect: defineComponent({ props: ['items', 'modelValue'], template: '<select :value="modelValue"><option v-for="item in items" :value="item.value">{{ item.label }}</option></select>' }), USelectMenu: true } } });
     await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
     await wrapper.get('button[title="Project settings"]').trigger('click');
-    const permission = wrapper.get('select[aria-label="Permission for External read"]');
+    const permission = wrapper.get('select[aria-label="Permission for External send"]');
     expect(permission.findAll('option').map(option => option.text())).toEqual(['Off', 'Ask first']);
 });

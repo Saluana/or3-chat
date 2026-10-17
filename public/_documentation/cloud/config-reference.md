@@ -1,5 +1,9 @@
 # Configuration Reference
 
+Hosted Basic Auth deployments can opt into the [Cloud waitlist extension](/documentation/cloud/waitlist)
+with `OR3_CLOUD_WAITLIST_ENABLED=true`. The extension adds its own database-backed
+admin toggle and email list; ordinary installs retain the default email flow.
+
 This page is the typed reference for the base and cloud configuration objects,
 including defaults, validation, and how settings affect behavior. The complete
 deployment environment-variable matrix is maintained separately below.
@@ -52,13 +56,16 @@ Exceptions:
 - Purpose: Redirect protected shell routes to a public pre-auth page before `PageShell` initializes.
 - Notes:
   - Ignored unless `SSR_AUTH_ENABLED=true`.
-  - Applies only to the main shell routes (`/`, `/chat`, `/docs`).
+  - Applies only to protected shell routes: `/`, `/chat`, `/chat/[id]`, `/docs`, `/docs/[id]`, and `/connect`.
   - Admin routes remain reachable.
   - Guest access bypasses the lock page when `auth.guestAccessEnabled=true`.
   - The lock page route is fixed at `/welcome`.
-  - `adapter: "default"` prefers the active auth provider's registered lock page component and falls back to the built-in generic lock page.
-  - Unknown custom adapter ids fall back to the built-in lock page.
-  - Successful sign-in redirects back to the original safe in-app destination via `?next=`.
+  - Session checks finish before redirecting, so refreshing a page with a valid authenticated session does not briefly display the lock page. Failed checks are not cached as successful validations; subsequent callers recheck the session. An expired Basic Auth access cookie can pass through `/welcome` while the browser recovers its session with the refresh cookie.
+  - `adapter: "default"` displays the branded welcome layout with the active auth provider's registered lock page component, falling back to the generic auth controls. Desktop keeps an app preview and bird illustration over a rounded cloud-and-sky panel. Mobile uses a full sky scene and an overlapping curved sign-in card. Both layouts include a green headline accent and handwritten captions. The illustration and spacing adjust to screen height, with a side-by-side layout on short landscape screens. Each layout downloads only its own lightweight WebP background; the app preview downloads only at desktop sizes. The caption font is bundled locally, and dark mode uses a subdued sky and dark surfaces.
+  - A registered explicit adapter owns the full page. Unknown custom adapter ids fall back to the branded layout with the generic auth controls.
+  - Auth adapters mount on the client; the server renders the branded layout with a loading placeholder to avoid hydration mismatches.
+  - Session failures show a retry state, including failures during client startup, and do not trigger logout cleanup. Authenticated accounts without workspace access see an explanation, their account controls, and a retry button instead of another sign-in form.
+  - Successful sign-in redirects back to the original safe in-app destination via `?next=`, preserving its query and fragment. External destinations and paths back to `/welcome` (including query, fragment, and trailing-slash variants) fall back to `/`.
 
 Example:
 

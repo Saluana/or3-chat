@@ -268,8 +268,9 @@ describe('persistent project workspace', () => {
     });
     // Failure inventory: a timer in a reference notification closes the source
     // transaction; a throwing notification misreports a committed save; a later
-    // missing hash must roll back all ownership changes without notifying.
-    it.each(['delayed', 'throwing', 'rollback', 'soft-delete', 'hard-delete'] as const)('commits source ownership before %s reference notifications', async mode => {
+    // missing hash must roll back all ownership changes without notifying;
+    // nested saves must wait for the outer commit and remain silent on rollback.
+    it.each(['delayed', 'throwing', 'rollback', 'soft-delete', 'hard-delete', 'outer-commit', 'outer-rollback'] as const)('commits source ownership before %s reference notifications', async mode => {
         const hash = 'sha256:' + '4'.repeat(64);
         await db.file_meta.put({ hash, name: 'Original', mime_type: 'text/plain', kind: 'file',
             size_bytes: 1, ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false });
@@ -289,16 +290,25 @@ describe('persistent project workspace', () => {
             current_revision_id: 'r1', revisions: [{ id: 'r1', original_hash: hash,
                 ...(mode === 'rollback' ? { text_hash: 'sha256:' + '5'.repeat(64) } : {}),
                 status: 'ready' as const, coverage: 'full' as const, created_at: 1 }] };
-        const write = saveProjectSource(scope(), 'a', value, 'hook-binding');
-        if (mode === 'rollback') {
-            await expect(write).rejects.toThrow('unavailable');
+        const write = mode.startsWith('outer-')
+            ? db.transaction('rw', db.tables, async () => {
+                const saved = await db.transaction('rw', db.tables, () =>
+                    saveProjectSource(scope(), 'a', value, 'hook-binding'));
+                expect(hookActions.mock.calls.filter(([name]) => name.endsWith(':after'))).toEqual([]);
+                if (mode === 'outer-rollback') throw new Error('Outer transaction rolled back');
+                return saved;
+            })
+            : saveProjectSource(scope(), 'a', value, 'hook-binding');
+        if (mode === 'rollback' || mode === 'outer-rollback') {
+            await expect(write).rejects.toThrow(mode === 'rollback' ? 'unavailable' : 'Outer transaction rolled back');
             expect(await db.posts.get('hook-binding')).toBeUndefined();
             expect((await db.file_meta.get(hash))?.ref_count).toBe(0);
             expect((await db.projects.get('a'))?.data).toEqual([]);
             expect(notifications).toEqual([]);
         } else {
             await expect(write).resolves.toMatchObject({ row: { id: 'hook-binding' } });
-            expect(notifications).toEqual([{ transaction: false, source: true, references: 1 }]);
+            await vi.waitFor(() => expect(notifications).toEqual([{ transaction: false, source: true, references: 1 }]));
+            await vi.waitFor(() => expect(hookActions).toHaveBeenCalledWith('db.posts.upsert:action:after', expect.objectContaining({ entity: expect.objectContaining({ id: 'hook-binding' }) })));
             expect((await db.projects.get('a'))?.data).toEqual([{ id: 'hook-original', kind: 'file', name: 'Original' }]);
             if (mode === 'soft-delete' || mode === 'hard-delete') {
                 notifications.length = 0;

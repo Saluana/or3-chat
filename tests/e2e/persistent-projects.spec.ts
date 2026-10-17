@@ -1309,15 +1309,10 @@ test('project chat keeps captured context and memory actions without an inline i
     expect(body).toContain('preserve the original source');
     expect(body).toContain('data:image/png;base64,');
     expect(body).not.toContain('Basil secret isolation marker');
+    // Project chats use the chat-settings tool toggles, like any other chat.
     expect(
-        requests[0].tools.some((tool: any) =>
-            [
-                'search_threads',
-                'search_documents',
-                'get_open_pane_context',
-            ].includes(tool.function.name),
-        ),
-    ).toBe(false);
+        requests[0].tools.map((tool: any) => tool.function.name),
+    ).toContain('get_open_pane_context');
     const indicator = page.getByRole('button', { name: /^Context ·/ });
     await expect(indicator).toHaveCount(0);
     await expect(page.getByText(/· Context used$/)).toHaveCount(0);
