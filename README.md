@@ -13,7 +13,7 @@
   <a href="https://or3.chat">Website</a> · <a href="https://or3.chat/documentation">Docs</a> · <a href="docs/start-here.md">Setup guide</a> · <a href="https://github.com/Saluana/or3-chat/issues">Report an issue</a>
 </p>
 
-![OR3 chat workspace with a sample conversation](public/screenshots/chat-screenshot.png)
+![OR3 chat workspace with a sample conversation](public/screenshots/chat-workspace-2026-10.png)
 
 OR3 brings models from OpenRouter into one workspace. Ask questions, work on a
 project, and turn ideas into documents without jumping between apps. Choose a
@@ -42,7 +42,7 @@ devices. OR3 is free software; model providers may charge for AI use.
 - **Make it feel like home.** Choose Blank, Retro, or Cyberpunk, switch between
   light and dark mode, and adjust colors, fonts, and backgrounds.
 
-![OR3 document editor with sample project notes](public/screenshots/editor-screenshot.png)
+![OR3 document editor with sample project notes](public/screenshots/document-workspace-2026-10.png)
 
 *Screenshots show the current app with sample content, captured in October 2026.*
 
