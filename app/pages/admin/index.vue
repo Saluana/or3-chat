@@ -53,19 +53,11 @@
         </div>
 
         <!-- Warnings -->
-        <div v-if="!pending && !errorMessage && warnings.length > 0" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-amber-500/30 bg-amber-500/5">
-            <h3 class="text-sm font-semibold text-amber-500 mb-2">System Warnings</h3>
-            <div class="space-y-1">
-                <div
-                    v-for="(w, idx) in warnings"
-                    :key="idx"
-                    class="text-sm text-amber-600 dark:text-amber-400 flex items-start gap-2"
-                >
-                    <span class="mt-1">•</span>
-                    {{ w.message }}
-                </div>
-            </div>
-        </div>
+        <AdminSystemWarnings
+            v-if="!pending && !errorMessage && status"
+            :warnings="warnings"
+            :storage="status.storage"
+        />
 
         <!-- Overview Widgets -->
         <div v-if="!pending && !errorMessage && overviewWidgets.length > 0">
@@ -89,6 +81,7 @@
 		    resolveAdminComponent,
 		} from '~/composables/admin/useAdminPlugins';
 		import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import AdminSystemWarnings from '~/components/admin/system/AdminSystemWarnings.vue';
 
 definePageMeta({
     layout: 'admin',

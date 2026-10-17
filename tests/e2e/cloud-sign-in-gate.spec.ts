@@ -249,6 +249,133 @@ test('instance admin controls load without a Chat account or selected workspace'
     await saveEvidence(info, 'instance-admin-without-workspace', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
+test('signup invite setup failures guide the administrator without exposing server errors', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const login = await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    });
+    expect(login.ok()).toBe(true);
+    let missingSecret = true;
+    await page.route('**/api/admin/signup-invites/create', route => route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ statusCode: 503, statusMessage: missingSecret
+            ? 'Invite token secret not configured'
+            : 'Unexpected failure: secret=private-server-value' }),
+    }));
+    const historyLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/list');
+    await page.goto('/admin/signup-invites');
+    await historyLoaded;
+    await page.getByLabel('Recipient email', { exact: true }).fill('invite-setup@example.test');
+    await expect(page.getByLabel('Recipient email', { exact: true })).toHaveValue('invite-setup@example.test');
+    const setupFailure = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/create');
+    await page.getByRole('button', { name: 'Create invite', exact: true }).click();
+    expect((await setupFailure).status()).toBe(503);
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('OR3_AUTH_INVITE_TOKEN_SECRET');
+    await expect(alert).toContainText('Restart OR3');
+    await expect(alert).toContainText('No invitation was created');
+    await expect(alert).not.toContainText('response was lost');
+    await expect(page.getByRole('link', { name: 'View invite setup instructions' })).toHaveAttribute('href', '/documentation/cloud/environment-reference#invite-signing-setup');
+    await saveEvidence(info, 'signup-invite-setup-guidance', { body: await page.screenshot(), contentType: 'image/png' });
+
+    // Unclassified failures still use safe copy and uncertain-outcome recovery.
+    missingSecret = false;
+    await page.getByRole('button', { name: 'Create invite', exact: true }).click();
+    await expect(alert).toContainText('The service could not complete the request.');
+    await expect(alert).toContainText('response was lost');
+    await expect(alert).not.toContainText('private-server-value');
+    await expect(page.getByRole('link', { name: 'View invite setup instructions' })).toHaveCount(0);
+});
+
+test('admin invite guidance distinguishes open registration from required invitations', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const login = await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    });
+    expect(login.ok()).toBe(true);
+    const history = await page.request.get('/api/admin/signup-invites/list');
+    expect(history.ok()).toBe(true);
+    const payload = await history.json();
+    expect(payload.registrationMode).toBe('invite_only');
+
+    let mode = 'open';
+    await page.route('**/api/admin/signup-invites/list*', route => route.fulfill({
+        json: { ...payload, registrationMode: mode },
+    }));
+    await page.goto('/admin/signup-invites');
+    await expect(page.getByText('Invites are optional', { exact: true })).toBeVisible();
+    await expect(page.getByText('Registration is open. New users can sign up without an invitation.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Invitation history', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create invite', exact: true })).toBeEnabled();
+    await saveEvidence(info, 'admin-open-registration-guidance', { body: await page.screenshot(), contentType: 'image/png' });
+
+    for (mode of ['invite_only', 'disabled']) {
+        await page.reload();
+        await expect(page.getByRole('heading', { name: 'Invitation history', exact: true })).toBeVisible();
+        await expect(page.getByText('Invites are optional', { exact: true })).toHaveCount(0);
+    }
+});
+
+test('admin storage notice opens usage for an explicitly selected workspace', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const login = await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    });
+    expect(login.ok()).toBe(true);
+    const response = await page.request.get('/api/admin/system/status');
+    expect(response.ok()).toBe(true);
+    const payload = await response.json();
+    const rawWarning = 'Destructive filesystem blob GC is disabled until provider-owned deletion coordination is available.';
+    await page.route('**/api/admin/system/status', route => route.fulfill({ json: {
+        ...payload,
+        status: { ...payload.status, storage: {
+            enabled: true, provider: 'fs',
+            details: { gcStatus: 'disabled', gcDisabledReason: 'deletion_coordination_required' },
+            actions: [{ id: 'storage.usage', label: 'Observe Storage Usage', description: 'Read-only storage usage.' }],
+        } },
+        warnings: [{ level: 'warning', message: rawWarning }, { level: 'error', message: 'Another provider needs attention.' }],
+    } }));
+    await page.route('**/api/admin/workspaces?*', route => route.fulfill({ json: {
+        items: [{ id: 'ux-workspace', name: 'Walkthrough workspace', memberCount: 1 }], total: 1,
+    } }));
+    const requests: unknown[] = [];
+    await page.route('**/api/admin/system/provider-action', route => {
+        requests.push(route.request().postDataJSON());
+        return route.fulfill({ json: { ok: true, result: {
+            consistency: 'non_atomic_observation', filesystem: { complete: false, apparentFileBytes: 1024 },
+            warnings: ['filesystem_entry_limit'],
+        } } });
+    });
+
+    await page.goto('/admin');
+    await expect(page.getByText('Deleted files still use storage', { exact: true })).toBeVisible();
+    await expect(page.getByText(rawWarning, { exact: true })).toBeHidden();
+    await expect(page.getByText('Another provider needs attention.', { exact: true })).toBeVisible();
+    await saveEvidence(info, 'admin-storage-notice', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.getByRole('link', { name: 'View storage usage', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/system#storage-usage$/);
+    const action = page.locator('#storage-usage');
+    await action.getByRole('button', { name: 'View storage usage', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: 'Select a Workspace' });
+    await expect(picker).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
+    expect(requests).toHaveLength(0);
+
+    await action.getByRole('button', { name: 'View storage usage', exact: true }).click();
+    await picker.getByRole('button', { name: /Walkthrough workspace/ }).click();
+    await expect.poll(() => requests).toEqual([{ kind: 'storage', actionId: 'storage.usage', workspaceId: 'ux-workspace' }]);
+    const result = page.getByRole('status').filter({ hasText: 'Storage usage for Walkthrough workspace' });
+    await expect(result).toContainText('filesystem_entry_limit');
+    await expect(result).toContainText('1024');
+    await result.scrollIntoViewIfNeeded();
+    await saveEvidence(info, 'admin-workspace-storage-usage', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
 test('ordinary sign-in finishes credential-first signup with a replacement invite', async ({ page, browser }, info) => {
     const origin = new URL(info.project.use.baseURL!).origin;
     const admin = await browser.newContext({ baseURL: origin });

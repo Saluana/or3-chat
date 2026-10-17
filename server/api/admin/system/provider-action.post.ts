@@ -6,7 +6,9 @@
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
-import { requireAdminApi } from '../../../admin/api';
+import { requireAdminApi, getAdminContext } from '../../../admin/api';
+import { resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
+import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
 import { getProviderAdminAdapter } from '../../../admin/providers/registry';
 import { createStubProviderAdapter } from '../../../admin/providers/adapters/stub';
 import type { ProviderKind } from '../../../admin/providers/types';
@@ -14,6 +16,7 @@ import type { ProviderKind } from '../../../admin/providers/types';
 const BodySchema = z.object({
     kind: z.enum(['auth', 'sync', 'storage']),
     actionId: z.string().min(1),
+    workspaceId: z.string().trim().min(1).optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -60,10 +63,20 @@ export default defineEventHandler(async (event) => {
             ? Boolean(config.sync.enabled)
             : Boolean(config.storage.enabled);
 
+    let actionSession = session;
+    if (kind === 'storage' && body.data.actionId === 'storage.usage') {
+        const workspaceId = resolveAdminWorkspaceTarget(getAdminContext(event)!, body.data.workspaceId);
+        const workspace = await getWorkspaceAccessStore(event).getWorkspace({ workspaceId });
+        if (!workspace || workspace.deleted) {
+            throw createError({ statusCode: 404, statusMessage: 'Workspace not found' });
+        }
+        actionSession = { ...session, workspace: { id: workspace.id, name: workspace.name } };
+    }
+
     const result = await adapter.runAction(event, body.data.actionId, body.data.payload, {
         provider,
         enabled,
-        session,
+        session: actionSession,
     });
 
     return { ok: true, result };

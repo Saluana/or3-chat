@@ -59,6 +59,10 @@ export const sidebarOverrides = {
     'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
     'button#sidebar.new-project': SidebarCollapsedTopButtonConfig,
 
+    // Row "more" menu: same gray as row icons, darker when hovered or open.
+    'button#sidebar.unified-item.trigger': {
+        class: 'text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-active)]! data-[state=open]:text-[var(--md-on-surface)]!',
+    },
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
     'button#sidebar.thread-add-to-project': SidebarPopoverButtonConfig,
     'button#sidebar.thread-delete': SidebarPopoverButtonConfig,
@@ -212,14 +216,15 @@ export const sidebarCssSelectors = {
     },
     '.sb-group-header-label': {
         style: {
-            fontSize: '11px',
-            letterSpacing: '0.08em',
+            fontSize: '12px',
+            fontWeight: '500',
+            letterSpacing: 'normal',
+            textTransform: 'none',
         },
     },
     '.time-group-header .sb-group-header-label': {
         style: {
             color: 'color-mix(in srgb, var(--md-on-surface-variant) 85%, transparent)',
-            fontWeight: '600',
         },
     },
     '.time-group-header': {

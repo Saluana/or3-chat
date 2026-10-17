@@ -8,6 +8,7 @@
     --blank-brand-accent: #2a8fd6;
     --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
     --blank-sb-row-icon: 16px;
+    --blank-sb-row-muted: color-mix(in srgb, var(--md-on-surface-variant) 45%, transparent);
     --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
     --md-surface-dim: #ececec;
     --md-surface-bright: #ffffff;
@@ -173,7 +174,12 @@
     }
 
     .sb-group-header {
-        @apply px-0 text-xs font-medium text-(--md-on-surface-variant) uppercase tracking-wider;
+        @apply px-0 text-xs font-medium text-(--md-on-surface-variant);
+    }
+
+    /* Open sections show their arrow only on hover or focus; collapsed ones keep it. */
+    .sb-group-header button[aria-expanded="true"]:not(:hover, :focus-visible) .sb-group-header-icon {
+        opacity: 0;
     }
 
     .sidebar-scroll {
@@ -235,7 +241,7 @@
 
     .unified-sb-item .sb-btn-icon:not(.sb-btn-icon-active),
     .sidebar-family-toggle {
-        color: color-mix(in srgb, var(--md-on-surface-variant) 45%, transparent) !important;
+        color: var(--blank-sb-row-muted) !important;
     }
 
     .unified-sb-item:is(:hover, :focus-within) .sb-btn-icon:not(.sb-btn-icon-active),
@@ -244,24 +250,27 @@
         color: var(--md-on-surface-variant) !important;
     }
 
-    /* Give fine stroke icons enough size and contrast in project lists. */
-    .project-root-toggle .project-icon,
-    .project-child-toggle .project-child-icon {
-        width: 20px;
-        height: 20px;
-        min-width: 20px;
-        min-height: 20px;
-        font-size: 20px;
-        opacity: 1;
-    }
-
-    .sb-btn-icon:not(.sb-btn-icon-active),
-    .project-root-toggle .project-icon {
+    .sb-btn-icon:not(.sb-btn-icon-active) {
         color: var(--md-on-surface-variant);
     }
 
+    /* Project rows match chat rows: small muted icons and a gray menu button. */
+    .project-root-toggle .project-icon,
+    .project-child-toggle .project-child-icon {
+        width: var(--blank-sb-row-icon);
+        height: var(--blank-sb-row-icon);
+        min-width: var(--blank-sb-row-icon);
+        min-height: var(--blank-sb-row-icon);
+        font-size: var(--blank-sb-row-icon);
+        opacity: 1;
+    }
+
+    .project-root-toggle .project-icon {
+        color: var(--blank-sb-row-muted);
+    }
+
     .project-root-toggle:is(:hover, :focus-within) .project-icon {
-        color: var(--md-on-surface);
+        color: var(--md-on-surface-variant);
     }
 
     .project-child-toggle .project-child-icon {
@@ -269,8 +278,28 @@
     }
 
     .project-root-toggle > button:has(> .project-icon) {
-        width: 20px;
-        height: 20px;
+        width: var(--blank-sb-row-icon);
+        height: var(--blank-sb-row-icon);
+    }
+
+    .project-more-btn {
+        color: var(--md-on-surface-variant);
+    }
+
+    .project-more-btn:is(:hover, :focus-visible, [data-state="open"]) {
+        color: var(--md-on-surface);
+        background: var(--md-surface-active);
+    }
+
+    /* Section actions such as "+ New" stay quiet until hovered. */
+    .sb-group-header-action {
+        color: var(--md-on-surface-variant);
+        font-weight: 500;
+    }
+
+    .sb-group-header-action:is(:hover, :focus-visible) {
+        color: var(--md-on-surface);
+        background: var(--md-surface-hover);
     }
 
     /* Center family disclosures in the same column as chat/document icons. */
@@ -333,7 +362,12 @@
 
     .sb-item-time {
         @apply text-[11px] tracking-normal tabular-nums;
-        opacity: 0.6 !important;
+    }
+
+    /* Dates share the row icons' muted tone; the hover-hide stays in control. */
+    .sb-item-time:not(.sb-item-time-active) {
+        color: var(--blank-sb-row-muted) !important;
+        opacity: 1 !important;
     }
 
     .project-empty-state {
@@ -1275,6 +1309,23 @@ html[data-theme='blank']
         min-width: 0.95rem;
         min-height: 0.95rem;
         font-size: 0.95rem !important;
+    }
+}
+
+/* Desktop lists are denser, with a little air above each time section. */
+@media (hover: hover) and (min-width: 48rem) {
+    html[data-theme="blank"] .unified-sb-item {
+        padding-block: 0.5rem;
+    }
+
+    html[data-theme="blank"] .unified-sb-item > button {
+        margin-block: -0.5rem;
+        padding-block: 0.5rem;
+    }
+
+    html[data-theme="blank"] .time-group-header {
+        height: 2.75rem;
+        padding-top: 0.5rem;
     }
 }
 

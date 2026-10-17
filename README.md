@@ -5,442 +5,191 @@
 <h1 align="center">OR3.chat</h1>
 
 <p align="center">
-  <strong>Open-source, local-first AI chat that you actually own.</strong><br/>
-  Use any model on OpenRouter. Keep your data on your machine. Deploy to the cloud when you're ready.
+  <strong>Your models. Your workspace. Your way.</strong><br/>
+  An open-source AI workspace for chats, documents, and projects.
 </p>
 
 <p align="center">
-  <a href="https://or3.chat">Website</a> · <a href="https://or3.chat/documentation">Docs</a> · <a href="https://github.com/Saluana/or3-chat/issues">Issues</a> · <a href="docs/start-here.md">Start Here</a>
+  <a href="https://or3.chat">Website</a> · <a href="https://or3.chat/documentation">Docs</a> · <a href="docs/start-here.md">Setup guide</a> · <a href="https://github.com/Saluana/or3-chat/issues">Report an issue</a>
 </p>
 
----
+![OR3 chat workspace with a sample conversation](public/screenshots/chat-screenshot.png)
 
-## Table of Contents
+OR3 brings models from OpenRouter into one workspace. Ask questions, work on a
+project, and turn ideas into documents without jumping between apps. Choose a
+clean layout, a retro look, or something more colorful.
 
-- [What is OR3?](#-what-is-or3)
-- [Core Features](#-core-features)
-- [Quick Start](#-quick-start)
-- [Start Here](docs/start-here.md)
-- [Static vs Cloud — Which Do I Pick?](#%EF%B8%8F-static-vs-cloud--which-do-i-pick)
-- [Static Mode (Default)](#-static-mode-default)
-- [Cloud Mode](#%EF%B8%8F-cloud-mode)
-- [Plugins](#-plugins)
-- [Themes](#-themes)
-- [Configuration Reference](#%EF%B8%8F-configuration-reference)
-- [Documentation](#-documentation)
-- [Contributing](#-contributing)
-- [License](#-license)
+Your browser saves your work locally. Use the browser-only app for personal
+work, or host OR3 Cloud to add accounts, shared workspaces, and sync across
+devices. OR3 is free software; model providers may charge for AI use.
 
----
+[Get started](#get-started) · [Features](#what-you-can-do) · [Your data](#your-data-and-privacy) · [Customize](#make-it-yours) · [Contribute](#contribute)
 
-## 🤔 What is OR3?
+## What you can do
 
-OR3.chat is a free, open-source AI chat app built with [Nuxt](https://nuxt.com). It connects to [OpenRouter](https://openrouter.ai) so you can talk to hundreds of AI models — GPT-4o, Claude, Gemini, Llama, Mistral, and more — all from one place.
+- **Chat with different models.** Connect OpenRouter, pick a model, and switch
+  when you need a different approach. Responses appear as they arrive.
+- **Keep useful context together.** Give a project a brief, add files and notes
+  to its Knowledge library, and manage saved project memories.
+- **Write alongside your chats.** Open documents in the rich text editor, save
+  useful answers, and keep chats and documents side by side.
+- **Explore another direction.** Branch a conversation or retry a response
+  without losing the original thread.
+- **Bring your files.** Attach images and documents, browse saved files, and
+  restore deleted items from Trash. Model support varies by file type.
+- **Find your work.** Press **Cmd+K** or **Ctrl+K** to search saved work and run
+  commands. Use tabs and split panes to keep it in view.
+- **Make it feel like home.** Choose Blank, Retro, or Cyberpunk, switch between
+  light and dark mode, and adjust colors, fonts, and backgrounds.
 
-**The big idea:** you bring your own API key, and your data stays on your device by default. No middleman. No subscriptions. No tracking. Just you and the models you choose.
+![OR3 document editor with sample project notes](public/screenshots/editor-screenshot.png)
 
-OR3 runs in two modes:
+*Screenshots show the current app with sample content, captured in October 2026.*
 
-1. **Static** — a pure browser app. Zero servers, zero sign-ups. Everything lives in your browser's IndexedDB.
-2. **Cloud** — add authentication, cross-device sync, file storage, and team workspaces by running OR3 on a server.
+## Get started
 
-You start with static. When you need more, the managed `@or3/cloud` operator
-sets up the supported cloud profile for you.
+### Use OR3 in your browser
 
-![Chat workspace](public/screenshots/chat-screenshot.png)
+Visit [or3.chat](https://or3.chat) and follow the link to the chat app. On an
+instance that requires an account, sign in first.
 
----
+1. Choose **Connect with OpenRouter**, or paste your key under **Use an existing
+   API key**. A Cloud host may provide model access for you.
+2. Open **Settings → Model catalog** and choose a model.
+3. Type a message and send it.
 
-## ✨ Core Features
+See [Send your first message](public/_documentation/start/first-chat.md) for a
+walkthrough. OpenRouter access and an OR3 Cloud account are separate.
 
-### Chat
+### Host your own Cloud
 
-- **Real-time streaming** with token-by-token display
-- **Multi-model access** via OpenRouter (hundreds of models)
-- **Reasoning tracks** — see the model's chain-of-thought when supported
-- **File attachments** — send images and documents alongside your messages
-- **Branching & retry** — fork conversations or regenerate any response
-- **Background streaming** — optional cloud capability that keeps AI generating if you navigate away
+The supported installer needs **Node.js 20+**, **Docker**, and **Docker Compose
+v2**. Run it from an empty directory.
 
-### Documents
-
-- **Rich text editor** powered by TipTap with slash commands
-- **System prompts** — write, save, and reuse custom instructions
-- **Chat-to-doc** — turn any conversation into an editable document
-- **@mentions** — reference documents or past chats inline
-
-### Workspace
-
-- **Multi-pane layout** — open chats and docs side-by-side (up to 4 panes)
-- **Projects** — organize threads and documents into groups
-- **Dashboard** — manage models, themes, backups, images, and settings
-- **Full-text search** — find anything across threads, docs, and projects instantly
-
-### Privacy & Control
-
-- **Local-first storage** — Dexie (IndexedDB) keeps everything on your machine
-- **No telemetry** — OR3 does not phone home
-- **Your API key** — connect via OpenRouter OAuth (PKCE) or paste a key. Your personal key is stored in your browser and excluded from workspace sync. When used for a model request, your key is sent to the configured model endpoint, directly or through your OR3 host, depending on the request route
-- **Open source** — GPL-3.0 licensed. Read every line, fork it, make it yours
-
-![Documents editor](public/screenshots/editor-screenshot.png)
-
----
-
-## 🚀 Quick Start
-
-New here? Start with the [one-page setup guide](docs/start-here.md) and choose
-local Cloud, public Cloud, local Intern, or source development.
-
-The supported installation path is the small `@or3/cloud` operator package. It
-uses the version-matched OR3 container and keeps the application data in a
-managed Docker volume.
-
-For a private local instance:
+For a private instance on your computer:
 
 ```bash
 npx @or3/cloud init --local
 ```
 
-For a public VPS behind Caddy:
+For a public server, point your domain at the server and follow the
+[DNS and firewall steps](docs/installation.md#public-vps-with-caddy), then run:
 
 ```bash
 npx @or3/cloud init --public --domain chat.example.com
 ```
 
-Node.js 20 or newer and Docker Compose v2 are required. The supported cloud
-profile is Basic Auth, SQLite, and filesystem storage, so no external database,
-authentication, or storage account is needed. See
-[Installation and operations](docs/installation.md) for prerequisites,
-firewall/DNS guidance, updates, backups, and recovery.
+The installer sets up sign-in, a SQLite database, and file storage. Public mode
+also sets up HTTPS through Caddy. You do not need separate database or storage
+accounts. Save the generated credentials in a password manager, then remove
+the credentials file as instructed.
 
-The repository-local wizard remains available for contributors who are building
-an editable source checkout or custom provider combination; it is not required
-for normal deployments.
+Use the [installation guide](docs/installation.md) for backups and recovery,
+and [Updating OR3](docs/cloud-updates.md) for updates.
 
-### Backups and recovery
+### Run from source
 
-Managed Cloud deployments keep authentication, SQLite, and uploaded files in a
-named `/data` volume. Use `npx @or3/cloud backup` before upgrades; the operator
-CLI verifies the archive and retains an immediate rollback point.
-
-For port conflicts, missing Docker, invalid domains, provider checks, and other
-diagnostics, run:
+Use this path to change the app or build custom extensions. You need **Git**,
+**Node.js 24+**, and the **Bun version pinned in [package.json](package.json)**.
 
 ```bash
-npx @or3/cloud doctor
+git clone https://github.com/Saluana/or3-chat.git
+cd or3-chat
+bun install
+bun run dev:offline
 ```
 
-See [Installation and operations](docs/installation.md) for the supported local
-and public VPS deployment. [Updating OR3](docs/cloud-updates.md) is the
-canonical guide for routine updates: it explains the development image
-workflow, updating a Docker Compose development deployment by exact digest, and
-the separate stable release path. Maintainers can follow
-[Releasing OR3 Cloud](docs/releasing.md) for the image-first release workflow.
-Editable source and custom provider development still use the repository-local
-wizard.
+Open the URL printed in your terminal. This starts local-first development
+with Cloud features off. No environment file or OR3 account is required.
+Connect OpenRouter in the app when you want an AI response.
 
----
-
-## ⚖️ Static vs Cloud — Which Do I Pick?
-
-OR3 ships as a **static app** by default. You can optionally turn on **cloud mode** for multi-user and multi-device features. Here's how they compare:
-
-| Feature | Static | Cloud |
-|---|:---:|:---:|
-| Chat with any OpenRouter model | ✅ | ✅ |
-| Documents & system prompts | ✅ | ✅ |
-| Multi-pane workspace | ✅ | ✅ |
-| Plugins & themes | ✅ | ✅ |
-| Full-text search | ✅ | ✅ |
-| Works offline | ✅ | ✅ |
-| No server required | ✅ | — |
-| User accounts & login | — | ✅ |
-| Cross-device sync | — | ✅ |
-| Cloud file storage | — | ✅ |
-| Team workspaces | — | ✅ |
-| Server-side API key (users don't need their own) | — | Optional |
-| Background streaming | — | Optional |
-| Admin panel | — | ✅ |
-| Rate limiting & usage controls | — | ✅ |
-
-**Start static.** If you later need accounts, sync, or shared workspaces, run
-`npx @or3/cloud init` to add the supported cloud deployment; your existing
-browser data stays intact.
-
-The generated first-login credentials also protect the `/admin` dashboard.
-Move them to a password manager and remove the mode-`0600` credentials file.
-
-Managed Cloud keeps bundled plugins and themes available, but does not expose
-upload/install or source rebuild controls. Those extension workflows require
-the editable source path and a deliberate trusted-code deployment.
-
----
-
-## 📦 Static Mode (Default)
-
-Static mode is the simplest way to use OR3. It generates a plain HTML/JS/CSS bundle you can host anywhere — GitHub Pages, Netlify, Vercel, Cloudflare Pages, or just open the files locally.
-
-### Build for Production
+To build a browser-only site:
 
 ```bash
-npm run generate:static
+bun run generate:static
+bun run preview:static
 ```
 
-This outputs a fully static site to `.output/public/`. Upload that folder to any static host.
-
-### Preview the Static Build Locally
-
-```bash
-npm run preview:static
-```
-
-Opens a local server at **http://localhost:4173**.
-
-### How Static Mode Works
-
-- All data is stored in your browser using **IndexedDB** (via Dexie)
-- Your OpenRouter API key is stored in your browser and sent to the configured model endpoint to authenticate AI requests
-- There is no backend, no database, and no authentication
-- You connect to OpenRouter using **OAuth PKCE** (secure browser-only flow) or by pasting an API key
-- Conversations, documents, prompts, files, and settings all live in your browser
-
-> **Perfect for:** personal use, trying out models, privacy-focused users, or hosting on free static platforms.
-
----
-
-## ☁️ Cloud Mode
-
-Cloud mode adds accounts, sync, file storage, and administration through the
-supported Basic Auth + SQLite + filesystem profile. Start it with the operator
-package:
-
-```bash
-npx @or3/cloud init --local
-```
-
-Use `--public --domain chat.example.com` on a VPS to add Caddy and automatic
-HTTPS. The operator also provides `update`, `backup`, `restore`, `rollback`,
-`doctor`, `recover`, and the narrow `adopt` command for an existing generated
-deployment.
-See [Installation and operations](docs/installation.md) for the complete
-workflow.
-
-Remote OR3 Connect is currently withheld from the managed Cloud profile until
-its Cloudflare/domain staging flow is proved. Use [Start Here](docs/start-here.md)
-for the supported local Intern path and the exact source-only boundary.
-
-If you need an editable checkout or providers other than the supported cloud
-profile, use the repository-local source wizard documented in
-[`public/_documentation/cloud/or3-cloud-wizard.md`](public/_documentation/cloud/or3-cloud-wizard.md).
-
----
-
-## 🔌 Plugins
-
-OR3 has a WordPress-style plugin system. You can add features without forking the project or touching core code.
-
-### What Plugins Can Do
-
-| Plugin Type | What It Adds | Example |
-|---|---|---|
-| **Dashboard tile** | Custom page in the dashboard | Settings panel, mini-app, tool |
-| **Message action** | Button on chat messages | Copy, save-as-doc, translate |
-| **Sidebar section** | Widget in the sidebar | Quick links, stats, status |
-| **Sidebar page** | Full page in the sidebar | Custom history view, search |
-| **Header action** | Button in the header bar | Toggle layout, quick action |
-| **Composer action** | Button below the chat input | Insert template, attach file |
-| **AI tool** | Function the AI model can call | Web search, calculator, API lookup |
-| **Pane app** | Custom content in a workspace pane | Game, preview, canvas |
-| **Editor extension** | TipTap node, mark, or toolbar button | Syntax highlighting, emoji picker |
-
-### Creating a Plugin
-
-Plugins are Nuxt client plugins. Create a file in `app/plugins/` with a `.client.ts` extension:
-
-```typescript
-// app/plugins/my-plugin.client.ts
-export default defineNuxtPlugin(() => {
-    registerDashboardPlugin({
-        id: 'my-plugin:hello',
-        icon: 'pixelarticons:star',
-        label: 'Hello World',
-        description: 'My first OR3 plugin',
-        order: 250,
-        handler() {
-            useToast().add({ title: 'Hello from my plugin!' });
-        },
-    });
-});
-```
-
-That's it — restart the dev server and your tile appears on the dashboard.
-
-### Hooks System
-
-Under the hood, plugins use an **action/filter hook system** (similar to WordPress). Hooks let you:
-
-- **Actions** — run side effects when something happens (message sent, thread created, file uploaded)
-- **Filters** — transform data as it flows through the system (modify AI request before sending, change how messages render)
-
-```typescript
-// Listen for new messages
-hooks.addAction('db:messages:after_create', ({ entity }) => {
-    console.log('New message:', entity.content);
-});
-
-// Transform AI request before sending
-hooks.addFilter('ai:request:filter:body', (body) => {
-    body.temperature = 0.7;
-    return body;
-});
-```
-
-For authoring and release steps, see the [Plugin authoring guide](public/_documentation/plugins/first-plugin.md).
-
----
-
-## 🎨 Themes
-
-OR3 has a full theme engine that goes beyond colors. Themes can change fonts, borders, component styles, backgrounds, and even icons.
-
-### Built-in Themes
-
-OR3 ships with several themes including a clean modern look and a retro pixel-art style. Switch themes from the dashboard at any time.
-
-### Creating a Theme
-
-Themes live in `app/theme/<name>/` and use `defineTheme()`:
-
-```typescript
-// app/theme/my-theme/theme.ts
-import { defineTheme } from '../_shared/define-theme';
-
-export default defineTheme({
-    name: 'my-theme',
-    displayName: 'My Theme',
-    description: 'A custom look for OR3',
-    colors: {
-        primary: '#086DB8',
-        surface: '#ffffff',
-        onSurface: '#022344',
-        dark: {
-            primary: '#2C638B',
-            surface: '#0a0a0a',
-            onSurface: '#e2e2e6',
-        },
-    },
-    fonts: {
-        sans: '"Inter", system-ui, sans-serif',
-        heading: '"Inter", system-ui, sans-serif',
-    },
-});
-```
-
-### Theme CLI Tools
-
-```bash
-# Create a new theme from a template
-bun run theme:create
-
-# Validate your theme has no errors
-bun run theme:validate
-
-# Switch the active theme
-bun run theme:switch
-```
-
-### What Themes Can Customize
-
-- **Colors** — primary, secondary, surface, and dark mode variants
-- **Fonts** — sans, heading, mono, and base size
-- **Borders** — radius and width tokens
-- **Component overrides** — change default props for any Nuxt UI component based on context (e.g., "buttons inside the chat composer should be ghost style")
-- **CSS selectors** — target specific DOM elements like the TipTap editor or code blocks
-- **Backgrounds** — layered background effects (gradients, patterns, images)
-- **Icons** — swap the icon set used throughout the app
-
-For the full theme API, see the [Theme Documentation](public/_documentation/themes/overview.md).
-
----
-
-## ⚙️ Configuration Reference
-
-OR3 uses two config files at the project root:
-
-### `config.or3.ts` — Base Configuration
-
-Controls branding, features, limits, and UI defaults. Works in both static and cloud mode.
-
-| Category | Examples |
-|---|---|
-| **Branding** | Site name, logo, favicon, default theme |
-| **Features** | Toggle workflows, documents, dashboard, backups, mentions |
-| **Limits** | Max file size, max files per message, storage quota |
-| **UI** | Default pane count, max panes, sidebar collapsed |
-| **Legal** | Terms of service URL, privacy policy URL |
-
-### `config.or3cloud.ts` — Cloud Configuration
-
-Controls auth, sync, storage, rate limiting, admin, and background streaming. Only relevant when running in cloud mode.
-
-| Category | Examples |
-|---|---|
-| **Auth** | Provider, guest access, registration mode |
-| **Sync** | Provider, Convex URL |
-| **Storage** | Provider, allowed MIME types, workspace quota |
-| **LLM** | Instance OpenRouter key, allow user override |
-| **Limits** | Requests per minute, max conversations, max messages/day |
-| **Security** | Allowed origins, force HTTPS, proxy settings |
-| **Admin** | Admin credentials, extension upload limits |
-| **Background Streaming** | Enable/disable, max concurrent jobs, timeout |
-
-Advanced/source deployments drive these values with environment variables. The
-managed Cloud CLI writes its own protected deployment state; normal users do
-not need to create or edit `.env` by hand.
-
----
-
-## 📖 Documentation
-
-Start with [Start Here](docs/start-here.md), then use the focused guides below.
-
-For the complete deployment environment and provider settings matrix, see
-[Environment and provider settings](public/_documentation/cloud/environment-reference.md).
-
-Full documentation lives inside the project at [`public/_documentation/`](public/_documentation/)
-
-### What's Covered
-
-| Section | Topics |
-|---|---|
-| **Getting Started** | What is OR3, plugin quickstart, dev setup, pane app tutorial |
-| **Composables** | 30+ documented composables — chat, search, sidebar, editor, multi-pane, and more |
-| **Hooks** | Hook catalog, engine internals, typed hooks, adding editor extensions |
-| **Database** | Table schemas, CRUD helpers, file storage, KV store, transactions |
-| **Auth** | Session context, token broker, admin stores, auth UI adapters |
-| **Utils** | Tool registry, server tools, streaming, HLC clock, config resolution |
-| **Types** | Chat types, hook payload types, cloud config types |
-| **Themes** | Architecture, quick start, API reference, CSS selectors, best practices |
-| **Cloud** | Cloud operator, source provider system, sync protocol, storage, background jobs |
-
-The documentation map is defined in [`public/_documentation/docmap.json`](public/_documentation/docmap.json).
-
----
-
-## 🤝 Contributing
-
-1. Fork the repo
-2. Create a branch (`git checkout -b my-feature`)
-3. Make your changes
-4. Run tests (`bun run test`)
-5. Run type-check (`bun run type-check`)
-6. Open a pull request
-
-Please keep changes minimal, type-safe, and consistent with the existing code style.
-
----
-
-## 📄 License
+The static files are in `.output/public/`. Serve that folder through a web
+server or static host. For Cloud development and custom providers, follow
+[Develop from source](public/_documentation/start/development-setup.md).
+
+## Browser-only or Cloud?
+
+Both offer chats, documents, projects, search, and built-in themes.
+
+| | Browser-only | Cloud |
+| --- | --- | --- |
+| Where work is saved | This browser | This browser, plus the configured server sync and storage |
+| OR3 sign-in | Not required | Managed by your host |
+| Sync across devices | No | Yes, when enabled |
+| Shared workspaces | No | Yes, with access controls |
+| Server to manage | No app server; just static hosting | Your own server or an existing host |
+| Admin controls | No | Accounts, access, and instance settings |
+
+Saved local work stays available offline. **AI responses need a network
+connection.** Cloud sync resumes when you reconnect. Optional Cloud features,
+such as server-provided model access and background generation, depend on the
+host's setup.
+
+## Your data and privacy
+
+Chats, documents, and files are saved in your browser's local database. Clearing
+site data can remove them. A different browser profile or site address has its
+own local workspace.
+
+When you ask a model a question, the request and its included context go to the
+configured model service. Requests may pass through your OR3 host. Your personal
+OpenRouter key is stored in the browser and excluded from workspace sync; it is
+sent with requests that use it.
+
+Export your work from **Dashboard → Workspace Backup** before moving instances
+or clearing browser storage. Cloud sync shares changes; a backup gives you a
+recovery point. See [Back up and restore](public/_documentation/database/backup.md)
+for details, and keep downloaded backups private.
+
+## Make it yours
+
+**Themes:** Start with the built-in appearance controls, or
+[build a theme](public/_documentation/themes/first-theme.md). Themes can change
+colors, fonts, icons, backgrounds, and controls. Installing a new theme requires
+an administrator and a rebuild.
+
+**Plugins:** Add tools, forms, saved data, and workspace apps through the
+[plugin SDK](public/_documentation/plugins/overview.md). Start with
+[Build your first plugin](public/_documentation/plugins/first-plugin.md), or
+explore the [example plugins](official-plugins/README.md).
+
+Installable plugins need a Cloud server with sign-in and package loading enabled.
+Portable plugins currently run in Chrome and Edge. Static builds can include
+source extensions, but do not run the installable package system. Managed Cloud
+keeps bundled extensions and hides custom upload and install controls; use an
+editable source deployment for those workflows.
+
+## Learn more
+
+| I want to… | Guide |
+| --- | --- |
+| Choose a setup path | [Start here](docs/start-here.md) |
+| Organize a project | [Projects, Knowledge, and Memory](public/_documentation/start/projects.md) |
+| Change the look | [Customize your appearance](public/_documentation/themes/customize.md) |
+| Install or manage plugins | [Plugin guide](public/_documentation/plugins/install-and-manage.md) |
+| Configure a source deployment | [Configuration reference](public/_documentation/cloud/config-reference.md) |
+| Find the code for a feature | [Source contributor map](public/_documentation/start/source-map.md) |
+
+Browse the [full docs](https://or3.chat/documentation) or read them
+[in this repository](public/_documentation/).
+
+## Contribute
+
+Bug reports, documentation fixes, themes, and code contributions are welcome.
+Open an [issue](https://github.com/Saluana/or3-chat/issues) or a pull request.
+
+For code changes, follow [AGENTS.md](AGENTS.md), keep the change focused, and run
+the checks that match it. Start with `bun run test:changed` and
+`bun run type-check`. The [development guide](public/_documentation/start/development-setup.md)
+explains the test lanes and project structure.
+
+## License
 
 OR3.chat is licensed under [GPL-3.0](LICENSE).

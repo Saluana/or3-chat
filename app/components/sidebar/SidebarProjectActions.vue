@@ -23,6 +23,7 @@ const deleteButtonProps = useSidebarProjectActionButtonProps({
     <UPopover v-model:open="menuOpen" :content="{ side: 'right', align: 'start', sideOffset: 6 }">
         <UButton
             :icon="moreIcon"
+            class="project-more-btn"
             :aria-label="`Project actions for ${name}`"
             :disabled="disabled"
             color="neutral"
