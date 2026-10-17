@@ -17,7 +17,7 @@
  */
 
 import { ref, shallowRef } from 'vue';
-import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
+import { DEFAULT_ICONS, type IconToken } from '../../config/icon-tokens';
 
 /**
  * `IconMap`

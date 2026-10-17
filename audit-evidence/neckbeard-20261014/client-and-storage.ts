@@ -11,22 +11,26 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { useModelSearch } from '../../app/core/search/useModelSearch';
+import type { OpenRouterModel } from '../../app/core/auth/models-service';
 import { setActiveWorkspaceDb } from '../../app/db/client';
 import { createAttachment } from '../../app/db/attachments';
+import { AttachmentCreateSchema } from '../../app/db/schema';
 import { createHookEngine } from '../../app/core/hooks/hooks';
 import { createTypedHookEngine } from '../../app/core/hooks/typed-hooks';
 import { setHookEngine } from '../../app/core/hooks/useHooks';
 import { saveStoredPreset, listStoredPresets } from '../../shared/cloud/wizard/store';
 
 const root = await mkdtemp(join(tmpdir(), 'or3-review-client-'));
-const original = { window: globalThis.window, client: (process as NodeJS.Process & { client?: boolean }).client, wizardHome: process.env.OR3_CLOUD_WIZARD_HOME };
+const browserGlobals = globalThis as unknown as { window: Partial<Window> | undefined };
+const clientProcess = process as NodeJS.Process & { client?: boolean };
+const original = { window: browserGlobals.window, client: clientProcess.client, wizardHome: process.env.OR3_CLOUD_WIZARD_HOME };
 const scope = effectScope();
 const report = (name: string, observed: unknown) => console.log(JSON.stringify({ name, observed }));
 const pause = () => new Promise(resolve => setTimeout(resolve, 180));
 try {
-    (globalThis as any).window = {};
-    (process as any).client = true;
-    const models = ref<any[]>([
+    browserGlobals.window = {};
+    clientProcess.client = true;
+    const models = ref<OpenRouterModel[]>([
         { id: 'alpha', name: 'Alpha', description: 'astronomy' },
         { id: 'beta', name: 'Beta', description: 'biology' },
     ]);
@@ -50,22 +54,22 @@ try {
     const hooks = createHookEngine();
     setHookEngine(createTypedHookEngine(hooks));
     hooks.addFilter('db.attachments.create:filter:input', (input: unknown) => { setActiveWorkspaceDb(b); return input; });
-    await createAttachment({ id: 'audit-attachment', type: 'url', name: 'from A', url: 'https://example.test/file', clock: 1 } as any);
+    await createAttachment(AttachmentCreateSchema.parse({ id: 'audit-attachment', type: 'url', name: 'from A', url: 'https://example.test/file', clock: 1 }));
     assert.equal(Boolean(await dbA.attachments.get('audit-attachment')), true);
     assert.equal(Boolean(await dbB.attachments.get('audit-attachment')), false);
     report('attachment-write-follows-workspace-switch', { inA: Boolean(await dbA.attachments.get('audit-attachment')), inB: Boolean(await dbB.attachments.get('audit-attachment')) });
     setActiveWorkspaceDb(null); await dbA.delete(); await dbB.delete();
     process.env.OR3_CLOUD_WIZARD_HOME = root;
     await Promise.all([
-        saveStoredPreset({ name: 'one', answers: {} } as any),
-        saveStoredPreset({ name: 'two', answers: {} } as any),
+        saveStoredPreset({ name: 'one', createdAt: new Date().toISOString(), answers: {} }),
+        saveStoredPreset({ name: 'two', createdAt: new Date().toISOString(), answers: {} }),
     ]);
     assert.deepEqual((await listStoredPresets()).map(p => p.name), ['one', 'two']);
     report('concurrent-preset-saves-lose-an-entry', (await listStoredPresets()).map(p => p.name));
 } finally {
     scope.stop(); setHookEngine(null);
-    (globalThis as any).window = original.window;
-    (process as any).client = original.client;
+    browserGlobals.window = original.window;
+    clientProcess.client = original.client;
     if (original.wizardHome === undefined) delete process.env.OR3_CLOUD_WIZARD_HOME;
     else process.env.OR3_CLOUD_WIZARD_HOME = original.wizardHome;
     await rm(root, { recursive: true, force: true });

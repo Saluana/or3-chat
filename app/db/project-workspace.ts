@@ -127,8 +127,10 @@ async function save(
     newDocument?: Post,
 ): Promise<Post> {
     scope.assertCurrent('write');
-    let outerTransaction = Dexie.currentTransaction?.db === scope.db
-        ? Dexie.currentTransaction : undefined;
+    // Dexie returns null outside a transaction, despite its non-nullable type.
+    const currentTransaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | null;
+    let outerTransaction = currentTransaction?.db === scope.db
+        ? currentTransaction : undefined;
     while (outerTransaction?.parent) outerTransaction = outerTransaction.parent;
     const hooks = useHooks();
     const candidate = PostSchema.parse({

@@ -1,4 +1,4 @@
-import type { IconMap } from '~/theme/_shared/icon-registry';
+import type { IconMap } from '../_shared/icon-registry';
 
 // Solar Linear icons use Blank's 2-unit stroke collection; selected states use Bold.
 export default {
