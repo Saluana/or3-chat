@@ -24,10 +24,11 @@ export function createServerSecretStore(input: {
             if (!input.current()) refuse('stale-context');
             refuse(response.status === 409 ? conflict ? 'conflict' : 'stale-context' : response.status === 403 ? 'permission-denied' : 'host-unavailable');
         }
-        let payload: { value?: unknown };
+        let payload: unknown;
         try { payload = await response.json(); } catch { refuse(); }
         if (!input.current()) refuse('stale-context');
-        return payload.value;
+        if (!payload || typeof payload !== 'object') refuse();
+        return 'value' in payload ? payload.value : undefined;
     };
     const status = async (key?: string): Promise<PluginSecretState> => {
         const value = await call('status', key);

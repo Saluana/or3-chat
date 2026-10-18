@@ -389,7 +389,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
 
     const guarded = <T extends object>(client: T): T => Object.fromEntries(Object.entries(client).map(([name, method]) => [name, async (...args: unknown[]) => {
         if (ended()) { sessionSecrets.clear(); return pluginError('stale-context', 'Plugin activation has ended'); }
-        try { const result = await method(...args); if (ended()) { sessionSecrets.clear(); return pluginError('stale-context', 'Plugin activation has ended'); } return result; }
+        try { const result: unknown = await method(...args); if (ended()) { sessionSecrets.clear(); return pluginError('stale-context', 'Plugin activation has ended'); } return result; }
         catch (error) { const e = error as { code?: string; message?: string }; return pluginError((ended() ? 'stale-context' : e.code || 'host-unavailable') as Parameters<typeof pluginError>[0], e.message || 'Host operation failed'); }
     }])) as T;
     return {

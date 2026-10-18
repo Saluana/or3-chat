@@ -1,8 +1,8 @@
 # Optional secret store
 
-`or3-secrets` supplies an optional private Unix-socket vault for remembered secrets in reviewed, package-backed trusted plugins. The service runs on Bun 1.3.14; OR3 uses a Node 24 client. The first implementation is unpublished development software and has no independent security audit or FIPS validation. Qualify the release and deployment security profile before using real credentials.
+`@or3/secrets@0.1.1` supplies an optional private Unix-socket vault for remembered secrets in reviewed, package-backed trusted plugins. The service runs on Bun 1.3.14; OR3 uses a Node 24 client. It has no independent security audit or FIPS validation. Qualify the release and deployment security profile before using real credentials.
 
-Build/install the qualified local `@or3/secrets` package and add `@or3/secrets/nuxt` to `modules`. Select it through private runtime configuration:
+Install the published package with `bun add --exact @or3/secrets@0.1.1` and add `@or3/secrets/nuxt` to `modules`. Select it through private runtime configuration:
 
 ```ts
 export default defineNuxtConfig({

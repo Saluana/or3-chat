@@ -1581,7 +1581,9 @@ export interface CreateTrustedHostContextInput {
     }) => () => void;
     readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;
     readonly requestedFeatures?: readonly string[];
+    readonly activationId?: string;
     readonly runtimeServices?: (authority: {
+        activationId?: string;
         pluginId: string;
         db: ReturnType<typeof getDb>;
         messageTypes?: ReadonlySet<string>;

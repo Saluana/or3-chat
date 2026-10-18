@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 602,
-    "callableExportCount": 277,
+    "exportCount": 603,
+    "callableExportCount": 278,
     "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "f252e7f6c61fc20e4b3b0e89dfc571386a1c5339442aee64cf9d0a2d3e6abb1f",
+      "apiSha256": "8e562a745186ab0eeed4abf1f06cfedf42b839a7a7fbe8fb14e44f00c9491cb0",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3714,6 +3714,32 @@
           ]
         },
         {
+          "name": "focusPaneInput",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string): boolean",
+              "declaredReturnType": "boolean",
+              "resolvedReturnType": "boolean",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 172,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function focusPaneInput(paneId: string): boolean;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 172,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function focusPaneInput(paneId: string): boolean;"
+            }
+          ]
+        },
+        {
           "name": "getActiveDocumentEditorSession",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -3984,7 +4010,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 215,
+                "line": 223,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasPane(paneId: string);"
               }
@@ -3993,7 +4019,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 215,
+              "line": 223,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasPane(paneId: string);"
             }
@@ -4049,7 +4075,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 41,
+              "line": 45,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -4820,7 +4846,7 @@
               "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 201,
+                "line": 209,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
               }
@@ -4829,7 +4855,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 201,
+              "line": 209,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
             }
@@ -4846,7 +4872,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 189,
+                "line": 197,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4855,7 +4881,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 189,
+              "line": 197,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4872,7 +4898,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 177,
+                "line": 185,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4881,7 +4907,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 177,
+              "line": 185,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -7651,7 +7677,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 182,
+                "line": 185,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7660,7 +7686,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 182,
+              "line": 185,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7703,7 +7729,7 @@
               "resolvedReturnType": "Promise<boolean>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 220,
+                "line": 228,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
               }
@@ -7712,7 +7738,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 220,
+              "line": 228,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
             }
@@ -7726,7 +7752,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 47,
+              "line": 51,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
@@ -7740,9 +7766,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 21,
+              "line": 25,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | null>;\n    error: Ref<AppError | null>;\n}"
+              "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
           ]
         },
@@ -7754,7 +7780,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 19,
+              "line": 23,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }
@@ -7764,7 +7790,7 @@
     },
     {
       "source": "app/composables/plugins/trusted-host-context.ts",
-      "apiSha256": "df92b958b4ce6118716c940fbee4aa884ea738c5f93a17759c517899c5cc32c7",
+      "apiSha256": "84a379b72224996c60327a27481725224dc37f1466c219e63bbe093ac249dc23",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/trusted-host-context"
@@ -7786,7 +7812,7 @@
               "resolvedReturnType": "TrustedHostContext",
               "declaration": {
                 "source": "app/composables/plugins/trusted-host-context.ts",
-                "line": 277,
+                "line": 278,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
               }
@@ -7795,7 +7821,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 277,
+              "line": 278,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
             }
@@ -7811,7 +7837,7 @@
               "source": "app/composables/plugins/trusted-host-context.ts",
               "line": 154,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly signal?: AbortSignal;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;\n    readonly requestedFeatures?: readonly string[];\n    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;\n    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'\n    >;\n}"
+              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly signal?: AbortSignal;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;\n    readonly requestedFeatures?: readonly string[];\n    readonly activationId?: string;\n    readonly runtimeServices?: (authority: { activationId?: string; pluginId: string; db: ReturnType<typeof getDb>; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;\n    readonly emitHook?: (name: string, payload: unknown) => Promise<void>;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts' | 'limits'\n    >;\n}"
             }
           ]
         },
@@ -7837,7 +7863,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 181,
+              "line": 182,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedHostContext {\n    readonly context: PluginContext;\n    /** Trusted execution-model registrations; SDK tools expose list/execute. */\n    readonly tools: TrustedPluginToolsClient;\n    readonly editor: TrustedPluginEditorClient;\n    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];\n    readonly renderers: {\n        register(definition: MessageRendererDefinition): PluginRegistrationHandle;\n    };\n    /**\n     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules\n     * register through this object; it is the same runtime as `context`.\n     */\n    readonly workspaceApi: Or3WorkspacePluginApi;\n    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */\n    readonly liveListenerCount: number;\n    dispose(reason?: unknown): Promise<LegacyCleanupReport>;\n}"
             }
@@ -12434,7 +12460,7 @@
     },
     {
       "source": "server/utils/chat/tool-registry.ts",
-      "apiSha256": "f8bf168a7ebb9a0e308e17e093c7b92fbdcdad9728fd02272f5f9a82d5c6f9c8",
+      "apiSha256": "35c452af105706523f03251ee3cc2f7b86ca56e7b03094aa6b7fb34851e826d2",
       "runtime": "server",
       "publicPaths": [
         "~~/server/utils/chat/tool-registry"
@@ -12455,7 +12481,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 35,
+              "line": 36,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -12472,7 +12498,7 @@
               "resolvedReturnType": "Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 175,
+                "line": 176,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
               }
@@ -12481,7 +12507,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 175,
+              "line": 176,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
             }
@@ -12498,7 +12524,7 @@
               "resolvedReturnType": "RegisteredServerTool | undefined",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 138,
+                "line": 139,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
               }
@@ -12507,7 +12533,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 138,
+              "line": 139,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
             }
@@ -12521,7 +12547,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 32,
+              "line": 33,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -12538,7 +12564,7 @@
               "resolvedReturnType": "RegisteredServerTool[]",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 142,
+                "line": 143,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listServerTools(): RegisteredServerTool[];"
               }
@@ -12547,7 +12573,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 142,
+              "line": 143,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listServerTools(): RegisteredServerTool[];"
             }
@@ -12561,7 +12587,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 43,
+              "line": 44,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredServerTool {\n    definition: ToolDefinition;\n    handler: ContextualToolHandler<Record<string, unknown>>;\n    runtime: ToolRuntime;\n    timeoutMs: number;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    owner: symbol;\n}"
             }
@@ -12578,7 +12604,7 @@
               "resolvedReturnType": "() => boolean",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 92,
+                "line": 93,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
               }
@@ -12587,7 +12613,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 92,
+              "line": 93,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
             }
@@ -12601,7 +12627,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 52,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterServerToolOptions {\n    runtime?: ToolRuntime;\n    timeoutMs?: number;\n    override?: boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
@@ -12615,7 +12641,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 41,
+              "line": 42,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12632,7 +12658,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 133,
+                "line": 134,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterServerTool(name: string): void;"
               }
@@ -12641,7 +12667,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 133,
+              "line": 134,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterServerTool(name: string): void;"
             }
@@ -12658,7 +12684,7 @@
               "resolvedReturnType": "{ valid: true; } | { valid: false; error: string; }",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 147,
+                "line": 148,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
               }
@@ -12667,7 +12693,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 147,
+              "line": 148,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
             }
