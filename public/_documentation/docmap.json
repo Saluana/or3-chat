@@ -826,7 +826,7 @@
                     "title": "Optional secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Private Bun vault provider for remembered trusted-plugin secrets, scoped activation grants, workspace authorization fencing, account credential cleanup, row-content integrity, pinned socket identity and explicit recovery."
+                    "summary": "Private vault provider for remembered trusted-plugin secrets, activation and workspace fencing, unchanged credential stores, packaged operator/browser qualification and separate production acceptance."
                 }
             ]
         },
