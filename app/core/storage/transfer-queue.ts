@@ -23,6 +23,8 @@ import {
 import { err, reportError } from '~/utils/errors';
 import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
+import { cacheDownloadedFile, cleanupFileCache, markUploadedFileCached, touchFileCache } from './file-cache';
+import { isCloudFileStorageEnabled, loadFilePolicy } from './file-policy';
 import {
     DEFAULT_BACKOFF_BASE_MS,
     DEFAULT_BACKOFF_MAX_MS,
@@ -82,6 +84,8 @@ export class FileTransferQueue {
     private leaseDurationMs: number;
     private maxDownloadBytes: number;
     private readonly workerId = createRuntimeUuid();
+    private completedDownloads = new Map<string, Blob>();
+    private directUploads = 0;
     private leaseRenewals = new Map<string, ReturnType<typeof setInterval>>();
 
     constructor(
@@ -121,6 +125,34 @@ export class FileTransferQueue {
 
     getWorkspaceId(): string | null {
         return this.workspaceId;
+    }
+
+    hasDirectUploads(): boolean { return this.directUploads > 0; }
+
+    /** Large user-selected files remain outside IndexedDB and are published after commit. */
+    async uploadDirect(meta: FileMeta, blob: Blob, context: BoundQueueContext, assertCurrent: () => void): Promise<FileMeta> {
+        this.assertBoundContext(context);
+        assertCurrent();
+        if (!this.provider.commitUpload) throw new Error('Verified Cloud uploads are unavailable for this provider.');
+        const controller = new AbortController();
+        const transfer = { id: createRuntimeUuid(), hash: meta.hash, workspace_id: context.workspaceId,
+            direction: 'upload', state: 'running', attempts: 0, created_at: nowSec(), updated_at: nowSec() } as FileTransfer;
+        this.abortControllers.set(transfer.id, controller);
+        this.running.add(transfer.id);
+        this.directUploads++;
+        try {
+            const storageId = await this.doUpload(transfer, controller.signal,
+                { ...context, dbName: context.db.name }, { meta, blob });
+            this.assertBoundContext(context);
+            assertCurrent();
+            if (isCloudFileStorageEnabled()) await markUploadedFileCached(context.db, context.workspaceId, this.provider.id, meta.hash).catch(() => {});
+            return { ...meta, storage_id: storageId, storage_provider_id: this.provider.id };
+        } finally {
+            this.abortControllers.delete(transfer.id);
+            this.running.delete(transfer.id);
+            this.requeueOnAbort.delete(transfer.id);
+            this.directUploads--;
+        }
     }
 
     /** Cancel a specific transfer by ID */
@@ -298,7 +330,7 @@ export class FileTransferQueue {
         const capturedContext = workspaceId ? { workspaceId, db } : undefined;
         const existing = await db.file_blobs.get(hash);
         if (capturedContext) this.assertBoundContext(capturedContext);
-        if (existing?.blob) return existing.blob;
+        if (existing?.blob) { await touchFileCache(db, hash); return existing.blob; }
         if (!workspaceId) return undefined;
         if (capturedContext) this.assertBoundContext(capturedContext);
         const transfer = await this.enqueue(hash, 'download', {
@@ -325,6 +357,8 @@ export class FileTransferQueue {
             throw error;
         }
         if (capturedContext) this.assertBoundContext(capturedContext);
+        const transient = this.completedDownloads.get(transfer.id);
+        if (transient) return transient;
         const row = await db.file_blobs.get(hash);
         if (capturedContext) this.assertBoundContext(capturedContext);
         return row?.blob;
@@ -419,7 +453,8 @@ export class FileTransferQueue {
             if (transfer.direction === 'upload') {
                 await this.doUpload(transfer, controller.signal, context);
             } else {
-                await this.doDownload(transfer, controller.signal, context);
+                const blob = await this.doDownload(transfer, controller.signal, context);
+                this.completedDownloads.set(transfer.id, blob);
             }
 
             const latest = await context.db.file_transfers.get(transfer.id);
@@ -434,6 +469,14 @@ export class FileTransferQueue {
                 return;
             }
             this.resolveWaiters(transfer.id);
+            if (isCloudFileStorageEnabled()) void (async () => {
+                if (transfer.direction === 'upload' && this.provider.commitUpload) {
+                    await markUploadedFileCached(context.db, context.workspaceId, this.provider.id, transfer.hash);
+                }
+                const policy = await loadFilePolicy(context.workspaceId);
+                this.assertBoundContext(context);
+                await cleanupFileCache(context.db, context.workspaceId, this.provider, policy);
+            })().catch(() => {}); // Cache maintenance cannot fail a committed transfer.
         } catch (error) {
             if (this.isDatabaseClosedError(error)) {
                 await this.requeueTransferAfterDatabaseClose(transfer, context);
@@ -518,6 +561,7 @@ export class FileTransferQueue {
 
             this.scheduleProcessQueue(delay);
         } finally {
+            setTimeout(() => this.completedDownloads.delete(transfer.id), 0);
             this.requeueOnAbort.delete(transfer.id);
             this.stopLeaseRenewal(transfer.id);
             this.abortControllers.delete(transfer.id);
@@ -655,10 +699,11 @@ export class FileTransferQueue {
             workspaceId: transfer.workspace_id,
             dbName: this.db.name,
             db: this.db,
-        }
-    ): Promise<void> {
-        const meta = await context.db.file_meta.get(transfer.hash);
-        const blobRow = await context.db.file_blobs.get(transfer.hash);
+        },
+        source?: { meta: FileMeta; blob: Blob }
+    ): Promise<string> {
+        const meta = source?.meta ?? await context.db.file_meta.get(transfer.hash);
+        const blobRow = source ? { blob: source.blob } : await context.db.file_blobs.get(transfer.hash);
         if (!meta || !blobRow?.blob) {
             throw err(
                 'ERR_STORAGE_FILE_NOT_FOUND',
@@ -785,6 +830,7 @@ export class FileTransferQueue {
             workspace_id: transfer.workspace_id,
             storage_id: storageId,
         });
+        return storageId;
     }
 
     private async doDownload(
@@ -795,7 +841,7 @@ export class FileTransferQueue {
             dbName: this.db.name,
             db: this.db,
         }
-    ): Promise<void> {
+    ): Promise<Blob> {
         const meta = await context.db.file_meta.get(transfer.hash);
         if (!meta?.storage_id) {
             throw recoverableTransferError(
@@ -893,7 +939,7 @@ export class FileTransferQueue {
             response,
             transfer.id,
             context.db,
-            this.maxDownloadBytes,
+            isCloudFileStorageEnabled() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes,
             blobMime,
             signal
         );
@@ -920,13 +966,22 @@ export class FileTransferQueue {
             );
         }
 
-        await context.db.file_blobs.put({ hash: meta.hash, blob });
+        if (isCloudFileStorageEnabled()) {
+            try {
+                const policy = await loadFilePolicy(context.workspaceId);
+                this.assertBoundContext(context);
+                await cacheDownloadedFile(context.db, context.workspaceId, this.provider.id, meta.hash, meta.storage_id, blob, policy);
+            } catch { /* The verified download is usable even when cache admission fails. */ }
+        } else {
+            await context.db.file_blobs.put({ hash: meta.hash, blob });
+        }
 
         await hooks.doAction('storage.files.download:action:after', {
             hash: meta.hash,
             workspace_id: transfer.workspace_id,
             size_bytes: bytesTotal,
         });
+        return blob;
     }
 
     private async readBlobWithProgress(
@@ -1090,10 +1145,7 @@ export class FileTransferQueue {
             .where('[state+created_at]')
             .between(['done', 0], ['done', cutoff])
             .delete();
-        await this.db.file_transfers
-            .where('[state+created_at]')
-            .between(['failed', 0], ['failed', cutoff])
-            .delete();
+        // Failed uploads remain visible and protect their staging originals.
     }
 
     private getBackoffDelay(attempt: number): number {

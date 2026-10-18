@@ -52,6 +52,10 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
 
+## Browser cache and backups
+
+The host’s [admin file settings](/documentation/cloud/storage-layer#browser-cache-and-upload-settings) control upload size and reusable browser caching without a rebuild. Cache cleanup never unlinks filesystem originals or commit sidecars. Cloud workspace backups stream originals from this provider into a verified `.or3cloud` archive and restore into a fresh workspace; see [backup and restore](/documentation/database/backup). Operator filesystem backups must still include commit sidecars.
+
 ## Upload reservations and retries
 
 With a sync backend that supplies both upload-intent reservation and consumption,

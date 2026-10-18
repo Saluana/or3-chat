@@ -45,6 +45,20 @@ export default defineNuxtPlugin(async () => {
                 ? session.workspace?.id ?? null
                 : null;
             queue?.setWorkspaceId(workspaceId);
+            if (workspaceId && queue) {
+                void (async () => {
+                    const [{ getDb }, { getActiveStorageProvider }, { loadFilePolicy }, { cleanupFileCache }] = await Promise.all([
+                        import('~/db/client'), import('~/core/storage/provider-registry'),
+                        import('~/core/storage/file-policy'), import('~/core/storage/file-cache'),
+                    ]);
+                    const db = getDb();
+                    const policy = await loadFilePolicy(workspaceId);
+                    const provider = getActiveStorageProvider();
+                    if (provider && queue.getWorkspaceId() === workspaceId && getDb() === db) {
+                        await cleanupFileCache(db, workspaceId, provider, policy);
+                    }
+                })().catch(() => {}); // Offline/settings failure preserves every local copy.
+            }
         },
         { immediate: true }
     );

@@ -421,6 +421,7 @@ const navLinks = computed<NavLink[]>(() => {
 
     if (isWorkspaceAdmin.value) {
         base.push({ label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value, section: 'Extensions' });
+        base.push({ label: 'File settings', to: '/admin/workspace', icon: 'i-lucide-hard-drive', section: 'Workspace' });
     }
     
     // Sort logic or visual separators could be added here

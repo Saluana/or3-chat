@@ -22,6 +22,7 @@
 import Dexie from 'dexie';
 import type { IndexableType } from 'dexie';
 import type { Or3DB } from '~/db/client';
+import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 
 /**
  * `WORKSPACE_BACKUP_FORMAT`
@@ -92,6 +93,7 @@ export interface WorkspaceBackupProgress {
 const DEFAULT_EXPORT_LIMIT = 500;
 const FILE_BLOBS_MAX_ROWS_PER_BATCH = 20;
 const FILE_BLOBS_MAX_SERIALIZED_BYTES = 256 * 1024; // ~256 KB per JSONL line
+const MAX_IMPORT_LINE_CHARS = 128 * 1024 * 1024;
 
 const textEncoder = new TextEncoder();
 
@@ -127,8 +129,12 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 function base64ToBlob(payload: { data: string; type: string }): Blob {
+    if (payload.data.length > Math.ceil(STATIC_FILE_CEILING / 3) * 4) {
+        throw new Error('Local restore cannot import a file larger than 50 MiB. Use a Cloud backup for larger files.');
+    }
     const binaryString = atob(payload.data);
     const len = binaryString.length;
+    if (len > STATIC_FILE_CEILING) throw new Error('Local restore file exceeds 50 MiB.');
     const bytes = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
@@ -145,7 +151,9 @@ function base64ToBlob(payload: { data: string; type: string }): Blob {
 export async function detectWorkspaceBackupFormat(
     file: Blob
 ): Promise<'stream' | 'dexie' | 'unknown'> {
-    const firstLine = await readFirstLine(file);
+    // Older Dexie archives can be one enormous JSON line. Inspect a bounded
+    // prefix, then let its streaming parser handle the actual import.
+    const firstLine = (await file.slice(0, 16 * 1024).text()).split('\n')[0] ?? '';
     if (!firstLine) return 'unknown';
     if (firstLine.includes('"formatName"') && firstLine.includes('"dexie"')) {
         return 'dexie';
@@ -830,31 +838,6 @@ export async function importWorkspaceStream({
     emitProgress(progress, onProgress);
 }
 
-async function readFirstLine(file: Blob): Promise<string> {
-    const reader = file
-        .stream()
-        .pipeThrough(new TextDecoderStream())
-        .getReader();
-    let buffer = '';
-    let done = false;
-    try {
-        do {
-            const result = await reader.read();
-            done = result.done;
-            if (!done && result.value) {
-                buffer += result.value;
-                const newlineIndex = buffer.indexOf('\n');
-                if (newlineIndex !== -1) {
-                    return buffer.slice(0, newlineIndex).replace(/\r$/, '');
-                }
-            }
-        } while (!done);
-        return buffer.replace(/\r$/, '');
-    } finally {
-        reader.releaseLock();
-    }
-}
-
 async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
     const reader = blob
         .stream()
@@ -870,6 +853,7 @@ async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
                 buffer += result.value;
                 let newlineIndex = buffer.indexOf('\n');
                 while (newlineIndex !== -1) {
+                    if (newlineIndex > MAX_IMPORT_LINE_CHARS) throw new Error('Backup record exceeds the supported line size.');
                     const line = buffer
                         .slice(0, newlineIndex)
                         .replace(/\r$/, '');
@@ -877,6 +861,7 @@ async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
                     yield line;
                     newlineIndex = buffer.indexOf('\n');
                 }
+                if (buffer.length > MAX_IMPORT_LINE_CHARS) throw new Error('Backup record exceeds the supported line size.');
             }
         } while (!done);
         if (buffer.length > 0) {

@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export, inspect, append or replace with duplicate-source rejection and atomic rollback, and verify active-workspace recovery."
+                    "summary": "Export complete streamed Cloud archives with checksummed originals including retained SQLite and Convex Trash, restore into fresh workspaces with verified revisions and Trash state, and recover local-only JSONL backups with transactional limits."
                 }
             ]
         },
@@ -443,7 +443,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Maintain the JSONL codec, strict import validation, and transactional restore guarantees."
+                    "summary": "Maintain local JSONL transactional restore and Cloud binary archives with bounded buffers, original-file hashes, and fresh-workspace recovery."
                 }
             ]
         },
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained metadata, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
+                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained Trash archive snapshots, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Filesystem signed transfers, upload reservations, retryable commits, plain-language maintenance tools, retained Trash guidance, readable storage summaries with expandable JSON, and disabled physical cleanup."
+                    "summary": "Configure filesystem object storage, host-managed cache and upload limits, complete Cloud workspace backups, and safe retained-object cleanup boundaries."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, plain-language maintenance controls, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations with short codes."
+                    "summary": "Convex setup, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations with short codes."
                 },
                 {
                     "name": "provider-s3.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Authenticated storage, fresh read/write membership checks around download and upload signing, quota validation, bounded active/deleted/incomplete/disk observations, and remaining generation-coordinated cleanup requirements."
+                    "summary": "Configure Cloud upload limits and bounded browser caching in admin, protect local originals and unfinished uploads, and implement authorized transfers and server-only retained-original backup reads."
                 },
                 {
                     "name": "plugin-access-gating.md",

@@ -104,6 +104,8 @@
                 />
             </div>
 
+            <FileCacheSettings v-if="!workspace.deleted" :workspace-id="workspace.id" />
+
             <!-- Members Card -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -245,6 +247,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
+import FileCacheSettings from '~/components/admin/FileCacheSettings.vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 

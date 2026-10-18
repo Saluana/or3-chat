@@ -42,6 +42,10 @@ export default defineConfig({
         url: baseURL,
         timeout: 120 * 1000,
         reuseExistingServer: !process.env.CI,
+        ...(process.env.OR3_FILE_BACKUP_E2E_DIR ? {
+          env: { CI: '', TEST: '' },
+          gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },
+        } : {}),
         ...(process.env.OR3_RESTART_E2E === 'true' ? {
           // Qualify a normal development server, independently of runner hints.
           // The installed Nitro dev worker skips awaited cleanup in CI/test mode.

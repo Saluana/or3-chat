@@ -24,7 +24,7 @@ import { requireStorageWorkspaceAccess } from '../../utils/storage/workspace-acc
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
-import { or3Config } from '~~/config.or3';
+import { readFilePolicy } from '../../utils/storage/file-policy';
 import { DEFAULT_STORAGE_ALLOWED_MIME_TYPES } from '~~/shared/config/constants';
 import {
     checkSyncRateLimit,
@@ -128,8 +128,8 @@ export default defineEventHandler(async (event) => {
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:upload');
     enforceRateLimit(event, rateLimitResult);
 
-    // Size limit check (from config)
-    const MAX_FILE_SIZE = or3Config.limits.maxCloudFileSizeBytes;
+    // Private admin settings override the initial configured workspace limit.
+    const MAX_FILE_SIZE = (await readFilePolicy(event, body.data.workspace_id)).maxUploadBytes;
     if (body.data.size_bytes > MAX_FILE_SIZE) {
         throw createError({
             statusCode: 413,

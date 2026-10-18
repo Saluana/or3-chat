@@ -1320,7 +1320,7 @@ describe('FileTransferQueue', () => {
         expect(queue.getWorkspaceId()).toBeNull();
     });
 
-    it('rejects upload via policy filter and cleans old done/failed transfers', async () => {
+    it('rejects upload via policy filter, clears completed history and retains failed uploads', async () => {
         const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png' });
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
 
@@ -1377,7 +1377,7 @@ describe('FileTransferQueue', () => {
         await (queue as any).cleanupOldTransfers();
 
         expect(await db.file_transfers.get('old-done')).toBeUndefined();
-        expect(await db.file_transfers.get('old-failed')).toBeUndefined();
+        expect(await db.file_transfers.get('old-failed')).toMatchObject({ state: 'failed', direction: 'upload' });
     });
 
     it('rebinds to active db when old db is closed during workspace handoff', async () => {
