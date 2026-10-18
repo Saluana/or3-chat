@@ -42,7 +42,7 @@
                 :disabled="loading || !value.trim()"
                 @click="emit('submit')"
             >
-                <span v-if="!loading">Create</span>
+                <span v-if="!loading">{{ submitLabel ?? 'Create' }}</span>
                 <span v-else class="inline-flex items-center gap-1">
                     <UIcon :name="loadingIcon" class="animate-spin" />
                     Creating
@@ -64,6 +64,7 @@ defineProps<{
     icon: string;
     loadingIcon: string;
     loading: boolean;
+    submitLabel?: string;
     formFieldProps: Record<string, unknown>;
 }>();
 

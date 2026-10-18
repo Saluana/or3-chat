@@ -12,7 +12,7 @@ Import from `~/db/util`:
 | `nowSec()` | Returns Unix time in seconds. |
 | `newId()` | Runtime-compatible UUID-shaped record ID. Prefers secure browser UUID/random values; its last fallback is non-cryptographic. Do not use it as an auth token. |
 | `nextClock(clock?)` | Returns `(clock ?? 0) + 1`; with no input it returns 1. |
-| `getWriteTxTableNames(db, primary, options?)` | Includes primary tables, existing optional related tables, `pending_ops` by default, and `tombstones` when requested. |
+| `getWriteTxTableNames(db, primary, options?)` | Includes primary tables, existing optional related tables, and both `pending_ops` and `tombstones` by default when present. |
 
 Entity timestamps generally use seconds. Sync scheduling fields such as `pending_ops.createdAt` and `nextAttemptAt` use milliseconds; do not convert every timestamp using one rule. Revision allocation should stay in the existing entity helpers rather than caller-written read/increment/write sequences.
 

@@ -36,6 +36,7 @@ export interface ThemeDefinition {
   ui?: Record<string, unknown>;
   propMaps?: PropClassMaps;
   backgrounds?: ThemeBackgrounds;
+  chatEmptyState?: ThemeChatEmptyState;
   icons?: Record<string, string>;
   customComponents?: Partial<Record<AppThemeComponent, string>>;
   componentContractVersion?: 1;
@@ -77,6 +78,7 @@ export type AppThemeComponent =
   | 'chat-page'
   | 'chat-message'
   | 'chat-input'
+  | 'chat-empty-state'
   | 'document-editor'
   | 'dashboard-modal'
   | 'model-selector'
@@ -536,3 +538,39 @@ recompiles types and CSS on theme file changes (HMR).
 - `ThemeContext` (known context names)
 - `ThemeIdentifier` (available identifiers from overrides)
 - `ThemeDirective` / `ThemeDirectiveValue` (directive binding types)
+
+
+## Empty chat panes
+
+`chatEmptyState` is optional. Omission or `false` disables the surface. Only Blank opts in by default. It appears in an unbound chat pane with no messages or active operation, directly above the existing composer. Saved conversations loading history do not show it. The first-run welcome modal retains priority.
+
+```ts
+chatEmptyState: {
+  heading: 'Welcome',
+  description: 'Choose where to begin.',
+  hero: { src: '/welcome.webp', width: 1536, height: 1024 },
+  accent: false,
+  background: { image: '/clouds.webp', fit: 'cover', repeat: 'no-repeat' },
+  actions: [
+    { id: 'start-chat', label: 'Start a chat', icon: 'sidebar.category.chats' },
+    { id: 'start-project', label: 'Start a project' },
+    { id: 'create-document', label: 'Create a document' },
+  ],
+  layout: 'cards', // 'cards' | 'compact' | 'stacked'
+  dark: {
+    hero: { src: '/welcome-dark.webp', width: 1536, height: 1024 },
+    background: { image: '/clouds-dark.webp', fit: 'cover' },
+  },
+},
+```
+
+- An enabled empty object uses neutral action labels/descriptions and semantic icons, with no default artwork or heading. Blank's artwork lives in its definition; its heading and introduction are disabled.
+- Hide `heading`, `description`, `hero`, `accent`, or `background` individually with `false`. Image objects accept `src`, positive intrinsic `width`/`height`, and optional `alt` (omitted/empty means decorative).
+- Assets accept public paths beginning with `/`, HTTP(S) URLs, and existing `internal-file://` tokens. Keep editable source files outside the application bundle. Preserve exported alpha, including partial background alpha.
+- Backgrounds accept the existing `image`, `color`, `opacity` (0–1), `fit`, `size`, and `repeat` fields. They apply only inside the eligible pane. Failed images disappear without disabling actions or the composer.
+- Omitted `actions` means the three standard actions. An array defines visible IDs and their order; omitted IDs are hidden and `[]` hides all actions. Each entry can override `label`, `description` (or `false`), and a semantic `icon` token. Unknown or duplicate IDs fail validation.
+- Dark fields override base fields by top-level property. Image/background objects and action arrays replace whole values. Omitted dark fields inherit base values; explicit `false` or `[]` remains disabled. `dark: false` disables the entire surface in dark mode. Set dark image fields explicitly to avoid inheriting light artwork.
+- Start a chat focuses the existing composer, preserving its draft and attachments. Creation opens the shared naming forms and existing stores. Documents open in a new tab, preserving the blank chat tab. Legacy layouts without workspace tabs defer document opening so the draft stays visible. Projects open the existing project workspace in the sidebar.
+- Deployment settings and workspace write access restrict available actions. Theme configuration cannot grant capabilities. Stale pane/workspace requests cannot redirect another pane. A saved item with failed navigation offers Open without creating it again.
+
+Use `bun run theme:validate <theme>` and `bun run theme:build-css` after authoring changes. Declarative installation validates the same schema. Custom layout/spacing belongs in the styling hooks below or a trusted `chat-empty-state` replacement.

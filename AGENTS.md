@@ -1,400 +1,99 @@
-## System Prompt: OR3 Cloud Planning Copilot (SSR Auth + Sync + Storage)
-
-You are an expert systems engineer working inside the OR3 Chat codebase. Your job is to help implement the **OR3 Cloud** feature set while preserving local-first behavior, static builds, and the plugin-centric architecture.
-
-Priorities (in order):
-
-1. Correctness and safety (no data loss, no auth regressions).
-2. Extensibility (provider-agnostic, hook-driven).
-3. Developer experience (minimal glue, predictable surfaces).
-4. Performance (avoid hot-path bloat).
-
-This prompt is specific to the planning docs under:
-
--   `planning/or3-cloud/`
--   `planning/ssr-auth-system/`
--   `planning/db-sync-layer/`
--   `planning/db-storage-system/`
-
----
-
-## Using Bun
-
--   **Bun**: Use Bun for everything. No Node.js, npm, or others.
-
-## Tools
-
--   **Bun Only**: Use Bun for everything. No Node.js, npm, or others.
-
-    -   Scripts: `bun run <script>`
-    -   Install: `bun install`
-    -   Build: `bun build <file.ts>`
-    -   Run: `bun <file>`
-
--   **Bun Docs**: Check `node_modules/bun-types/docs/**.md` for help.
-
-## Navigation workflow (required)
-
-1. Start with `public/_documentation/docmap.json` to find relevant docs.
-2. Open the referenced doc pages before proposing changes.
-3. Search the repo for existing extension points (hooks/registries/composables).
-4. Only then plan changes.
-
-If you find deprecated docs, update or remove them, and refresh doc references where needed.
-
----
-
-## Locked design decisions (do not change without explicit approval)
-
--   **Canonical store**: users/workspaces live in the selected SyncProvider backend (Convex default) via `AuthWorkspaceStore`.
--   **Auth propagation**:
-    -   Direct providers use `AuthTokenBroker` with provider-specific JWT templates.
-    -   Gateway providers use SSR endpoints that enforce `can()`.
--   **Local DB scoping**: one Dexie DB per workspace (`or3-db-${workspaceId}`).
--   **Wire schema**: snake_case aligned with Dexie. Mapping only when a backend enforces different conventions.
--   **Sync capture**: Dexie hooks for atomic outbox writes + remote-apply suppression.
--   **Message ordering**: stable order via `index` + `order_key` (HLC-derived).
--   **File refs**: `ref_count` is derived, not LWW-synced.
--   **Static builds**: unchanged; SSR auth is gated and must not load in static builds.
-
----
-
-## Architecture reminders
-
--   **Core extension model**: hooks + registries + composables. Prefer adding extension points over hard-coding.
--   **Provider modes**: Sync providers declare `mode: 'direct' | 'gateway'`.
--   **SSR boundaries**:
-    -   Server-only code in `server/**`.
-    -   Client-only code in `.client.ts` or `process.client` guard.
-    -   Never import Clerk or server SDKs into static builds.
-
----
-
-## What to check before implementing
-
--   **Auth**:
-    -   `can()` is the sole authorization gate for SSR endpoints.
-    -   `AuthTokenBroker` is used for direct provider tokens.
-    -   Auth store uses the same backend as sync (no duplicate DB).
--   **Sync**:
-    -   Outbox coalescing is enabled (avoid unbounded queues).
-    -   Remote-applied writes do not re-enqueue.
-    -   `order_key` exists and is indexed.
-    -   Single `server_version` cursor per workspace.
-    -   Change log retention uses device cursors + retention window.
--   **Storage**:
-    -   Blob transfers are local-first and queued.
-    -   Presigned URLs are short-lived and authorized via `can()`.
-    -   Transfer state is local-only (`file_transfers`).
-
----
-
-## Do / Don’t
-
-Do:
-
--   Use existing hook/registry patterns and update hook type maps.
--   Keep wire schema in snake_case for sync/storage payloads.
--   Gate SSR auth modules in `nuxt.config.ts` to preserve static builds.
--   Update docs and docmap entries when adding new surfaces.
--   Use Context7 when unsure about external libraries.
-
-Don’t:
-
--   Add new global singletons without a registry or composable.
--   Duplicate workspace/user stores in multiple backends.
--   Add client-only deps to server code paths (or vice versa).
--   Introduce per-table cursors when a global change log is used.
--   Ship unbounded queues or logs without retention policies.
-
----
-
-## Documentation expectations
-
--   Keep planning docs in sync with implementation.
--   Update:
-    -   `planning/or3-cloud/findings.md` when issues are resolved.
-    -   `planning/or3-cloud/architecture.md` for major decisions.
-    -   `planning/or3-cloud/implementation-plan.md` for phase shifts.
--   Update hook docs if new hooks are added.
-
----
-
-## Testing guidance
-
--   Never write unit tests after you write code.
--   Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
--   If you must test a system in isolation, first write down all the ways it could fail, then write the code.
-
-### Test lanes and future agent policy
-
--   During normal implementation, run the narrowest affected file(s) or `bun run test:changed`.
--   `bun run test` is the fast production-backed core lane. It intentionally excludes live, release-policy, script, broad integration, and frozen plugin-compatibility gates.
--   Use `bun run test:integration`, `bun run test:scripts`, `bun run test:release-policy`, or `bun run test:plugin-compatibility` only when the change touches that lane.
--   Reserve `bun run test:full` for cross-cutting/high-risk changes, scheduled CI, and release qualification.
--   Never use a broad Playwright command for credential-writing, paid-network, visual-artifact, stress, or performance suites. Use the named `test:e2e:*` harness.
--   Do not add permanently skipped tests, test-local reimplementations of production behavior, source-string assertions for cosmetic details, or a new test file when an existing canonical suite can hold the case.
--   Prefer compact output (`dot`, failed output only) so successful checks do not consume agent tokens.
-
-### Updating OR3 deployments
-
--   Routine application changes use the fast path: push to `or3-cloud` → **Checks** workflow → development image → update the Docker Compose development deployment by exact digest.
--   Stable releases require explicit intent and the candidate/tag ceremony; they are not a routine update step.
--   [`docs/cloud-updates.md`](docs/cloud-updates.md) is the canonical update guide. Do not restate or invent update procedures.
--   Agents must not invent release commands, publish packages or images outside the documented workflows, bump versions, or alter live or production data merely to update application code.
-
-## Tooling and research
-
--   Use Context7 MCP for docs on Clerk, Convex, Dexie, Nuxt, etc.
--   Prefer `rg` for repo search.
--   Keep changes minimal and type-safe.
-
-## Nuxt UI
-
-    -   Use **UButton, UInput, UCard, UForm** with **theme variants** defined in `app.config.ts`. If you need new variants, extend them **once** in `app.config.ts` (respect the `retro` look and sizes).
-    -   Keep “icon-only” buttons square and centered (see `.retro-btn.aspect-square`).
-
-## State, Storage & Search
-
-    -   **Persist** local app entities with **Dexie** in `or3-db` using the existing tables (`projects`, `threads`, `messages`, `kv`, `attachments`).
-    -   Use the **KV table** to store small app prefs (e.g., model favorites, OpenRouter key). Prefer helpers that already wrap `kv.set/get`.
-    -   **Search**: build client-side Orama indexes via dynamic imports; debounce queries (\~120ms), cap result limits (100–200).
-    -   Follow the repo’s **fallback substring search** if Orama is unavailable or errors, to avoid “empty results” UX.
-
-## Performance
-
-    -   Prefer **dynamic imports** for heavy providers (Orama) and optional screens.
-    -   Keep Orama indexes **per collection** (threads, model catalog) and **rebuild only on data length change** as in existing composables.
-    -   Avoid re-render storms: debounce user input; memoize id→entity maps for mapping hits.
-
-## Completing tasks
-
--   **Follow the plan**: If provided stick to the steps outlined in the planning documents.
--   **Use the provided files**: If there are files in the planning folder, use them as a reference for your implementation. This includes files like `requirements.md`, `tasks.md`, and `design.md`, but only if the user has provided them, or the tasks file.
--   **Cross of items as you go**: If there is a planning document with a tasks.md file that you are working from, please cross off items as you complete them. example location: `planning/cool-feature/tasks.md`
-
-## Code Rules
-
--   **No Guesses**: Review files first to understand.
--   **Performance**: Think basics—cut waste, cache smart, scale well.
--   **Refactor**: Update old code to standards without breaking.
--   **Commits**: "[Type] Short note on changes."
-
-## Do/Don’t
-
--   ✅ **Use** Nuxt UI variants and tokens; extend in `app.config.ts`.
--   ✅ **Use** Orama dynamic imports and repo’s fallback search strategy.
--   ✅ **Use** KV for prefs and user-provided keys; fire the existing custom events.
--   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
--   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
--   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
-
----
-
-## Agent Accelerators (learned during `or3-provider-sqlite`)
-
-1. **Provider wiring is registry-first (Nitro plugin), not “Nuxt module magic”**
-    - Providers register implementations via server registries (e.g. `registerAuthWorkspaceStore(...)`, `registerSyncGatewayAdapter(...)`) inside a Nitro server plugin.
-    - The Nuxt module should stay thin and only `addServerPlugin(...)`.
-
-2. **SSR boundaries are non-negotiable**
-    - Provider runtime that touches auth/DB must live under `runtime/server/**`.
-    - Don’t import server SDKs or DB drivers into shared/client paths (static builds will explode in creative ways).
-
-3. **Sync invariants that prevent data loss (don’t “simplify”)**
-    - `op_id` is mandatory idempotency: duplicate pushes must replay, never double-apply.
-    - `server_version` must be allocated contiguously/monotonically per workspace (single transaction).
-    - LWW must compare `clock` then `hlc`; deletes are tombstones; GC must respect the **minimum device cursor** + retention.
-
-4.  For provider packages, copy `or3-provider-clerk`/`or3-provider-convex` structure first (`src/module.ts`, runtime register plugin, `vitest.config.ts`, shims). This avoids most registry/module wiring mistakes.
-
-5.   Core auth UI is still Clerk-tied in `app/components/sidebar/SidebarAuthButton.vue` (it renders `SidebarAuthButtonClerk`). The provider-agnostic auth UI adapter is planned in `planning/default-ssr-providers/*`, not fully in core yet.
-
-6.  Reuse the existing server security pattern for auth endpoints: `isSsrAuthEnabled` gate, `Cache-Control: no-store`, per-operation rate limits, and same-origin checks based on host/origin validation (see admin guard + request identity helpers).
-
-7.  Wizard-generated provider modules are merged with config-derived modules in `nuxt.config.ts`, not used in isolation.
-    - `activeProviderModules` is `or3.providers.generated.ts` **union** provider IDs derived from `or3CloudConfig.*`.
-    - Provider module ids are normalized via `or3-provider-${id}/nuxt`, but local ids (`custom`, `memory`, `redis`, `postgres`) are intentionally excluded.
-
-8.  The safe env editor already exists in `server/admin/config/env-file.ts`, but it is currently hardwired to `process.cwd()` + `.env`.
-    - It preserves comments/unknown lines and updates keys in place, which is exactly what the install wizard needs.
-    - For wizard work, extract/reuse this logic with `(instanceDir, envFile)` arguments instead of duplicating a new parser/writer.
-
-9.  Use `server/admin/config/resolve-config.ts` as the authoritative “wizard validation entrypoint”, not ad-hoc env checks.
-    - `buildOr3ConfigFromEnv(env)` and `buildOr3CloudConfigFromEnv(env)` already encode coercion/default behavior used by runtime/admin paths.
-    - Important gotcha: `buildOr3CloudConfigFromEnv` strictness currently reads `process.env`, so a wizard should either run it in a controlled env context or call `defineOr3CloudConfig(config, { strict })` directly with explicit strict mode.
-
-10. **The wizard engine is already implemented in-core (not just planning docs)**
-    - The “API-first” wizard lives in `shared/cloud/wizard/*` with `Or3CloudWizardApi`, step graph generation, env derivation, apply/deploy, and disk-backed session/preset storage.
-    - Sessions persist to `~/.or3-cloud/` by default; secrets are kept in a transient in-memory map unless explicitly opted in.
-
-11. **Env var naming is intentionally messy (aliases exist; don’t “clean up” casually)**
-    - The wizard currently emits both legacy and canonical keys for forward-compat: e.g. `AUTH_PROVIDER` + `OR3_AUTH_PROVIDER`, `OR3_SYNC_ENABLED` + `OR3_CLOUD_SYNC_ENABLED`, `OR3_STORAGE_ENABLED` + `OR3_CLOUD_STORAGE_ENABLED`.
-    - The whitelist of “wizard-owned keys” is centralized in `shared/cloud/wizard/catalog.ts` (`WIZARD_OWNED_ENV_KEYS`). Touch that list or your env merge/apply behavior will silently drift.
-
-12. **Basic Auth needs bootstrap creds to be usable on first boot**
-    - The basic-auth provider is not just `OR3_BASIC_AUTH_JWT_SECRET`: it also supports/needs bootstrap email/password (`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL`, `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD`) or you’ve built an instance nobody can log into.
-    - Basic-auth also has its own auth DB path (`OR3_BASIC_AUTH_DB_PATH`) that is separate from the sync SQLite DB (`OR3_SQLITE_DB_PATH`).
-
-13. **Provider edits must be rebuilt because `or3-chat` consumes provider `dist/`**
-    - With `file:` provider dependencies, the sandbox can be correctly linked but still show old behavior if provider `dist/` was not rebuilt.
-    - After changing `or3-provider-*` source, run the provider build before testing in `or3-chat`.
-
-14. **Session identity split matters: internal user ID vs provider user ID**
-    - `SessionContext.user.id` must be the internal store user ID (used by workspace/sync/storage APIs).
-    - `SessionContext.providerUserId` must remain the external provider subject for cache keys/admin checks.
-    - Mixing these IDs causes “workspace exists but list is empty” style bugs.
-
-15. **SQLite workspace resolution must respect `users.active_workspace_id`**
-    - When multiple memberships exist, default-workspace resolution must prefer the active pointer.
-    - Falling back to “first membership row” causes post-login drift where old workspace data appears after switch/reload.
-
-16. **Auth UI adapters must trigger global session refresh events**
-    - Provider-owned auth components should dispatch a session-change signal after sign-in/sign-out/password changes.
-    - Core should listen and call `useSessionContext().refresh()` so workspace DB switching happens immediately without manual refresh.
-
-17. **Stale dev servers can look like stale data bugs**
-    - If ports (`3000`, `24678`) are already occupied, you may be hitting an old Nuxt process with stale transforms.
-    - Always confirm/kill old dev processes before concluding a code change did not apply.
-
-18. **OpenRouter in SSR mode must use server route when no client key exists**
-    - If `ssrAuthEnabled=true` and no client/user OpenRouter key is available, do not fall back to direct OpenRouter.
-    - Require `/api/openrouter/stream` and fail loudly if it is missing/unavailable.
-
-19. **FS token upload endpoint is PUT-only**
-    - `/api/storage/fs/upload?token=...` must be called with `PUT`.
-    - If presign metadata is missing `method`, default to `PUT` for the FS upload endpoint to avoid silent `POST` -> `404`.
-
-20. **Server-route availability cache can cause false negatives**
-    - `localStorage` keys like `or3:server-route-available` and `or3:background-streaming-available` can persist stale state across runtime/provider switches.
-    - Clear or invalidate these caches when behavior looks inconsistent after changing setup.
-
-21. **“404 on API route” is often the wrong dev process**
-    - If `3000`/HMR ports are already occupied, requests may hit an old Nuxt instance.
-    - Verify/kill stale processes before treating 404s as code regressions.
-
-22. **Wizard success needs both wiring and installed packages**
-    - `or3.providers.generated.ts` must include selected provider modules.
-    - Selected provider packages must also be installed/resolvable in the target instance, or provider routes/components disappear at runtime.
-
-23. **Background streaming is SSR-only and is body-gated**
-    - Feature flag: `OR3_BACKGROUND_STREAMING_ENABLED=true` (maps to `runtimeConfig.backgroundJobs.enabled` and `runtimeConfig.public.backgroundStreaming.enabled`).
-    - The “start background job” signal is in the request body: `_background: true` plus `_threadId` + `_messageId`.
-    - Ignore the stale docstring mention of `x-or3-background` in `server/api/openrouter/stream.post.ts`—the implementation checks `_background`.
-
-24. **Client capability gating is cached and can lie**
-    - Server-route detection cache: `localStorage['or3:server-route-available']` with a 15-minute TTL in `app/utils/chat/openrouterStream.ts`.
-    - Background streaming cache: `localStorage['or3:background-streaming-available']` is a blunt `"true"|"false"` flag set after first successful/failed background start.
-    - If behavior looks inconsistent after toggling SSR/providers, clear both keys (or use a fresh profile) before debugging “404 means broken”.
-
-25. **What actually happens (end-to-end) and where to look**
-    - Start: `app/composables/chat/useAi.ts` calls `startBackgroundStream(...)` (client helper) when eligible.
-    - Server entry: `server/api/openrouter/stream.post.ts` detects `_background: true`, requires SSR auth session + workspace, then calls `startBackgroundStream(...)` (server) and returns `{ jobId, status: 'streaming' }`.
-    - Streaming loop: `server/utils/background-jobs/stream-handler.ts` fetches OpenRouter SSE, parses via `shared/openrouter/parseOpenRouterSSE`, flushes chunks to the provider, and emits live deltas.
-    - Client tracking: `app/utils/chat/useAi-internal/backgroundJobs.ts` maintains a global `backgroundJobTrackers` map, persists incremental updates to Dexie (throttled), and can attach via SSE (`/api/jobs/:id/stream`) or poll (`/api/jobs/:id/status`).
-    - Observe/attach routes:
-        - SSE: `GET /api/jobs/:id/stream?offset=N`
-        - Poll: `GET /api/jobs/:id/status?offset=N`
-        - Abort: `POST /api/jobs/:id/abort`
-
-26. **Eligibility rules (easy to forget) are intentionally strict**
-    - Background mode is only attempted when:
-        - `backgroundStreamingAllowed` is true
-        - no tool calls are enabled (`enabledToolDefs.length === 0`)
-        - modality is text-only (`modalities === ['text']`)
-    - If you’re testing tools/images and expecting background mode: you won’t get it.
-
-27. **Providers, abort semantics, and multi-instance gotchas**
-    - Memory provider (`server/utils/background-jobs/providers/memory.ts`):
-        - In-process `AbortController` stops the upstream fetch immediately.
-        - Jobs are lost on server restart.
-        - Timeouts are enforced during periodic cleanup (`jobTimeoutMs`).
-    - Convex provider is registered by the Convex package (`or3-provider-convex/src/runtime/server/plugins/register.ts`) and implemented at `or3-provider-convex/src/runtime/server/background-jobs/convex-provider.ts`.
-        - Abort is poll-based (`checkJobAborted`) so the streaming loop periodically checks.
-    - Viewer suppression is process-local:
-        - Server-side “don’t notify while someone is watching” is based on `server/utils/background-jobs/viewers.ts` and only reflects viewers connected to the *same* instance.
-        - In multi-instance setups, cross-instance “viewer presence” isn’t tracked; expect occasional notifications even if a user is watching on a different server.
-
-28. **Notifications: why you sometimes get none (and why that’s correct)**
-    - Client notifications are only created when there are no in-app subscribers (`tracker.subscribers.size === 0`) and the thread isn’t muted (`kv['notification_muted_threads']`).
-    - Server-side notifications only fire when no SSE viewers are connected to that instance (`!hasJobViewers(jobId)` in `server/utils/background-jobs/stream-handler.ts`).
-    - Practical effect: if the tab stays open, the SSE viewer often stays attached, so server notifications are suppressed; you’ll only get the local notification if the app decides you “navigated away” (no subscribers).
-
-29. **Debug checklist (fast path)**
-    - 401 on background start: you don’t have SSR auth session + workspace (background mode is forbidden for guests/unauth’d).
-    - 404/405 on `/api/openrouter/stream`: you’re on a static build or hitting the wrong dev process; clear `or3:server-route-available`.
-    - Background mode never triggers: you’re using tools/images or config flag is off.
-    - 503 “Server busy”: concurrency cap hit (`OR3_BACKGROUND_MAX_JOBS`).
-    - “It worked yesterday” weirdness: stale localStorage availability caches.
-
-30. **Background completion notifications should go through hooks first**
-    - For detached/background jobs, prefer `hooks.doAction('notify:action:push', payload)` over creating `NotificationService` directly with tracker state.
-    - This keeps notification writes aligned with the currently active `NotificationService` instance and avoids stale user scoping.
-
-31. **Non-component utilities need cached session access, not composable flows**
-    - Utility modules like `app/utils/chat/useAi-internal/backgroundJobs.ts` should not depend on setup-lifecycle composable behavior.
-    - Use a safe cached accessor (`getCachedSessionContext()`) and fallback logic for user resolution when emitting cross-cutting events.
-
-32. **If background jobs finish but Notification Center is empty, check scope first**
-    - Confirm notifications are written for the same resolved user ID used by `useNotifications()` (`resolveNotificationUserId(session)`), not an old tracker/session value.
-    - Mismatched user scope can make notifications “exist” in Dexie but be invisible in the panel query (`where('[user_id+created_at]')`).
-
-33. **Sync push rate limiting is request-based, so flush cadence matters more than batch size**
-    - Server limit for push is enforced per request (`sync:push` in `server/utils/sync/rate-limiter.ts`), not per-op payload size.
-    - A hot outbox loop can hit 429s even with tiny batches; don’t assume “small batch” means “safe”.
-
-34. **Transport-level 429s must be treated as deferrals, not failures**
-    - In outbox push handling, 429 should move ops back to `pending` with `nextAttemptAt` from `Retry-After` and should not increment `attempts`.
-    - If 429s go through normal failure/retry accounting, healthy ops are eventually marked failed under sustained pressure.
-
-35. **Gateway sync errors should carry structured retry metadata**
-    - `gateway-sync-provider` should parse and propagate `Retry-After` as milliseconds (`retryAfterMs`) on request errors.
-    - Centralizing retry timing in the error object keeps provider-specific backoff logic out of higher layers and prevents string-parsing drift.
-
-36. **`or3-provider-convex` no longer depends on `~~/convex/_generated/*` at compile-time**
-    - Runtime function references now come from `anyApi` (`convex/server`) and ID typing uses `GenericId` (`convex/values`).
-    - This is the key prerequisite for keeping `or3-chat` buildable when Convex is not selected and `convex/**` is absent.
-
-37. **When testing Convex adapters/providers, mock `convex/server` (not generated api paths)**
-    - Old tests mocking `~~/convex/_generated/api` will silently stop controlling function refs after decoupling.
-    - Use `vi.mock('convex/server', () => ({ anyApi: { ... } }))` so assertions still validate exact routed function names.
-
-38. **Wizard deploy should initialize Convex scaffold before `convex dev`/env commands**
-    - For Convex-selected stacks, include `bunx or3-provider-convex init` in deploy flow before `bunx convex dev --once`.
-    - Without this step, first-run sandboxes fail preflight with missing `convex/` even when dependencies are installed correctly.
-
-39. **Use the supported entry point for the job**
-    - Managed local/VPS deployments use `npx @or3/cloud init --local|--public`; they do not use the source developer launcher.
-    - Source contributors use `bun run dev` from this authoritative tree; it loads `.env`, so it starts browser-only and SSR setups alike (`dev:ssr` only forces SSR on). `bun start` delegates to `scripts/cli/start.mjs` for legacy source convenience only and is not a release or beginner setup path.
-    - Do not document `scripts/cli/start.ts`, hand-written `.env`, or manual `OR3_*` values as normal setup; those are advanced source/operator paths.
-
-40. **`scripts/cli/dev.ts` wraps `nuxt dev` with port preflight**
-    - Detects port conflicts (stale Nuxt servers on both IPv4 and IPv6 loopback), explains the cause, and offers interactive port fallback.
-    - `package.json` `dev` script points here; `dev:ssr` and `dev:offline` transitively use it.
-
-41. **Key persistence must go through `persistUserApiKey()` in `app/core/auth/useUserApiKey.ts`**
-    - Writes to Dexie `kv`, updates global reactive state, dispatches `openrouter:connected`.
-    - Do NOT set `state.value.openrouterKey` directly without `kv.set()` — the key is lost on reload.
-    - `isValidOpenRouterKeyFormat()` validates `sk-or-` prefix.
-
-42. **First-run welcome card: `app/components/chat/ChatWelcomeCard.vue`**
-    - Shown in `ChatContainer` when message list is empty and no OpenRouter key exists.
-    - Offers OAuth PKCE connect, paste-input with validation, and KV-persisted dismiss.
-    - Also connected to `ChatInputDropper.vue` toast action (replaces lost-on-reload `prompt()`).
-    - Teleported modal (`z-50` backdrop) above mobile chat input; `role="dialog"` + focus trap + Escape dismiss.
-
-43. **Startup banner: `shared/dev/startup-banner.ts`** (wired from `nuxt.config.ts` listen hook)
-    - Prints mode (LOCAL / CLOUD, with provider stack), URL, admin URL, next-step commands.
-    - Skipped in production builds.
-    - Next-step commands come from `shared/cloud/wizard/next-steps.ts` (shared with CLI cheat sheet).
-
-44. **Wizard steps collapsed behind advanced toggles**
-    - Step 1 (Getting Started): `instanceDir`, `envFile`, `deploymentTarget`, `dryRun` hidden unless `targetAdvancedEnabled` is true.
-    - Features step: per-feature toggles hidden unless `featuresAdvancedEnabled` is true.
-    - AI/Limits/Security step: `limitsEnabled`, `forceHttps`, `trustProxy` behind `cloudAdvancedEnabled`.
-    - `WizardAnswers` types: `targetAdvancedEnabled: boolean`, `featuresAdvancedEnabled: boolean`.
-    - Default admin username is `'admin'` (in `createDefaultAnswers`). Password auto-generates on empty Enter.
-
-45. **`or3-cloud:doctor` for health checks**
-    - Extends `or3-cloud validate` with provider package checks, generated providers file sync, DB path writability, port availability, and Convex CLI checks.
-    - `validate` parses config only; `doctor` adds extended checks. Exit code 1 on failures.
+# OR3 Chat contributor instructions
+
+OR3 is a local-first Nuxt/Vue application with optional Cloud providers and a plugin SDK.
+Prioritize correctness and data safety, then extensibility, developer experience, and performance.
+
+## Working in this checkout
+
+- Use Bun for repository commands and dependency management: `bun install`, `bun run <script>`, and `bunx <tool>`.
+- Use the supported dev/build wrappers; they select Node where required by the SQLite stack.
+- Source development starts with `bun run dev`; managed installations follow [Cloud setup](public/_documentation/cloud/setup.md).
+- Start with [the docmap](public/_documentation/docmap.json) and the relevant public guide, then inspect the defining types, callers, and existing extension points.
+- [The source map](public/_documentation/start/source-map.md) locates feature owners and registries; source types and current code define exact APIs.
+- Prefer `rg` for search and current library documentation when an external contract is uncertain.
+- Preserve unrelated worktree changes and use the user's existing authorization; ask only when material information or approval is missing.
+- Keep changes focused and type-safe, and follow a supplied plan, checking off completed tasks when applicable.
+- Update affected documentation and docmap entries when public behavior or extension contracts change.
+- Commit messages use `[Type] Short note on changes`.
+
+## Extension and runtime boundaries
+
+- Prefer supported configuration, themes, plugins, and providers; change core when it owns the defect or a public contract is missing.
+- Reuse hooks, registries, and composables; avoid parallel registries and unmanaged global state.
+- Keep server-only auth/DB code under `server/**` or provider `runtime/server/**` and browser code behind client boundaries.
+- Gate SSR modules in `nuxt.config.ts`; static builds must remain usable without server SDKs or Cloud providers.
+- Providers register server implementations through Nitro plugins; keep their Nuxt modules thin.
+- Source integrations may use private app imports; installable plugins use documented `@or3/plugin-sdk` entry points.
+- Check the current SDK support table: a type or manifest field alone does not prove host support.
+- `trusted-host` is reviewed host code; isolated plugins must fail closed rather than fall back to trusted execution.
+- Retain owner-scoped cleanup handles for registrations, subscriptions, and resources across unmount, replacement, and HMR.
+- Update hook payload types and public hook docs when adding or changing an emitted hook.
+
+## Cloud and data invariants
+
+Changing these architecture contracts requires explicit approval.
+
+- Canonical users/workspaces live in the selected sync backend through `AuthWorkspaceStore`; do not add a duplicate authority store.
+- Direct sync providers use `AuthTokenBroker` with provider-specific tokens; gateway SSR operations enforce `can()`.
+- Keep one Dexie database per workspace (`or3-db-${workspaceId}`).
+- Use snake_case sync/storage wire schemas aligned with Dexie; map only where the backend requires it.
+- Capture local writes and outbox operations atomically through Dexie hooks; remote-applied writes must not re-enqueue.
+- Preserve outbox coalescing, bounded queues, and retention policies.
+- `op_id` provides idempotency: repeated pushes replay their result rather than apply twice.
+- Allocate contiguous, monotonically increasing `server_version` values in one workspace transaction and use one workspace cursor.
+- Preserve LWW comparison by `clock` then `hlc`, tombstone deletes, and GC constrained by the minimum device cursor plus retention.
+- Order messages by `index` and HLC-derived, indexed `order_key`.
+- Treat `ref_count` as derived state; do not LWW-sync it.
+- Keep blob transfers local-first and queued, with local-only `file_transfers` state.
+- Authorize short-lived presigned URLs through `can()` and preserve upload reservation/commit contracts.
+
+## Authentication and workspace safety
+
+- `can()` is the authorization gate for SSR operations; reuse the route's feature gate, no-store, rate-limit, and origin-validation patterns.
+- `SessionContext.user.id` is the internal store ID; `providerUserId` is the external subject.
+- Honor the active workspace pointer and refresh session state after provider sign-in, sign-out, or credential changes.
+- Resolve the current DB at operation start; capture and guard originating workspace/account identity across asynchronous work.
+- Use existing Dexie entity and KV helpers; persist user OpenRouter keys through `persistUserApiKey()`.
+- Keep server credentials server-only and secrets out of source, logs, reports, and `localStorage`.
+- In SSR mode without a user key, require the OpenRouter server route rather than falling back to a direct request.
+- Reuse wizard/config APIs and nondestructive env merges; preserve unknown entries and supported aliases.
+- Back up and obtain explicit approval before destructive data replacement or provider migration.
+- Verify configured providers are installed and registered; provider defaults differ between managed and source deployments.
+
+## UI, search, and background work
+
+- Use Nuxt UI components, semantic theme tokens, and existing variants; centralize shared variants instead of adding a styling system.
+- Respect the active theme's appearance and existing retro defaults where used; keep icon-only buttons square and centered.
+- Use `v-theme` for DOM decoration and `useThemeOverrides()` for reactive component props; see the current theme docs for contexts and selectors.
+- Preserve accessible keyboard/focus behavior, responsive layouts, and light/dark states.
+- Lazy-load heavy optional features and reuse existing search/index composables.
+- Keep search debounced and bounded with substring fallback; indexed edits and replacements must invalidate or update search even when row counts stay unchanged.
+- Background eligibility and tool execution depend on current auth, sync, runtime, and provider capabilities; use [background execution](public/_documentation/cloud/background-execution.md).
+- Preserve durable admission, cancellation, recovery, and canonical history contracts; a transport failure must not fabricate a terminal generation result.
+- Scope background notifications to the originating account/workspace and dispatch through the existing notification hooks/service.
+- Treat sync HTTP 429 responses as deferrals using structured `Retry-After` metadata without incrementing failed-attempt counts.
+
+## Validation
+
+- Verify changed behavior with the smallest appropriate existing suite; add regression coverage when it protects a meaningful failure mode.
+- Normal implementation uses targeted files or `bun run test:changed`; `bun run test` is the fast core lane.
+- Use `test:integration`, `test:scripts`, `test:release-policy`, or `test:plugin-compatibility` only for changes touching those lanes.
+- Reserve `bun run test:full` for cross-cutting/high-risk changes, scheduled CI, and release qualification.
+- Use named `test:e2e:*` harnesses for credential-writing, paid-network, visual-artifact, stress, and performance suites; retain their repeatable artifacts.
+- Extend canonical suites; avoid permanently skipped tests, test-local copies of production logic, and cosmetic source-string assertions.
+- Run relevant type checks when changing contracts, inspect the final diff, and prefer compact test output.
+- Report the result and validation concisely; include material limitations, artifact/activation status, or recovery steps when relevant.
+
+## Deployment and release
+
+- [docs/cloud-updates.md](docs/cloud-updates.md) is the canonical update guide; follow it instead of inventing release procedures.
+- Routine application updates use the documented development workflow and exact image digests.
+- Stable releases require explicit intent and the documented candidate/tag ceremony.
+- Do not publish packages/images outside documented workflows, bump versions, or alter live data merely to update application code.
+
+## Task-specific references
+
+- [Cloud providers](public/_documentation/cloud/providers.md), [auth](public/_documentation/cloud/auth-system.md), [sync](public/_documentation/cloud/sync-layer.md), and [storage](public/_documentation/cloud/storage-layer.md).
+- [Database safety](public/_documentation/database/safe-changes.md) and [chat lifecycle](public/_documentation/architecture/chat-lifecycle.md).
+- [Plugins](public/_documentation/plugins/overview.md), [hooks](public/_documentation/hooks/reference.md), and [themes](public/_documentation/themes/overview.md).
+- [Development commands and runtime requirements](public/_documentation/start/development-setup.md).

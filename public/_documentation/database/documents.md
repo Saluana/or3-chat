@@ -8,6 +8,10 @@ retained history and shared file references. Chat validates native content with
 the same lazy extension/schema loader as the mounted editor, including enabled
 custom nodes.
 
+Moving an open document to Trash hides its selection toolbar and disables editing
+without an editor error. Restoring it re-enables editing and the selection toolbar
+with the saved content intact.
+
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 
 ---

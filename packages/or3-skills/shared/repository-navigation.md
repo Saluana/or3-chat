@@ -1,22 +1,15 @@
 # Repository navigation
 
-When working in an OR3 Chat checkout, use this order:
+Start with the applicable `AGENTS.md` and `public/_documentation/docmap.json`.
+Read the relevant feature guide and inspect defining types, callers, registries, examples, and canonical tests as needed.
+Current checkout contracts take precedence over old skill examples.
 
-1. Read the closest applicable `AGENTS.md`.
-2. Read `public/_documentation/docmap.json`.
-3. Open only the relevant public documentation pages named by the map.
-4. Inspect exported types, SDKs, examples, and tests.
-5. Inspect implementation only after the public surface is understood.
-
-Required paths by surface:
-
-| Surface | First paths |
+| Surface | Useful starting points in the checkout |
 | --- | --- |
-| Setup | `public/_documentation/cloud/or3-cloud-wizard.md`, `cloud/configure.md`, `scripts/cli/or3-cloud.ts` |
-| Plugin | `public/_documentation/plugins/`, `packages/plugin-sdk/`, `examples/plugins/`, `tests/plugin-runtime/` |
-| Theme | `public/_documentation/themes/`, `app/theme/`, `scripts/cli/validate-theme.ts` |
-| Core | `public/_documentation/start/source-map.md`, relevant feature guide, defining source type/JSDoc, existing extension registry or hook, its canonical test |
+| Setup | `public/_documentation/cloud/setup.md`, `cloud/or3-cloud-wizard.md`, `server/admin/config/` |
+| Plugin | `public/_documentation/plugins/`, `packages/plugin-sdk/`, source contributor map |
+| Theme | `public/_documentation/themes/`, `app/theme/` |
+| Core | `public/_documentation/start/source-map.md`, relevant feature owner and public contract |
 
-Never assume a command, manifest field, contribution kind, or host capability
-exists because an older reference mentions it. Confirm it in the checkout and
-report an unsupported contract plainly.
+Confirm commands, manifest fields, and capabilities in the target checkout; report unsupported contracts plainly.
+Use the package's context/drift commands when checkout identity or compatibility is uncertain.

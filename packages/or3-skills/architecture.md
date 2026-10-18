@@ -1,37 +1,14 @@
 # OR3 Skills architecture
 
-## Boundary
+Skills carry task-specific decisions and non-obvious constraints.
+The target checkout's public docs, SDKs, schemas, CLIs, and implementation define exact contracts.
 
-Skills select and orchestrate a supported extension surface. OR3 Chat's public
-documentation, SDKs, CLIs, schemas, and tests remain the source of truth and
-perform deterministic validation. A skill never substitutes prose for a
-successful command.
+- Use configuration, theme, plugin, provider, or core changes according to the requested outcome.
+- Prefer supported extension points, and fix core defects at their actual owner.
+- Distinguish source integrations from installable SDK packages.
+- Select supported portable or trusted runtimes from current host documentation and capability checks.
+- Treat trusted-host as host code and fail closed when required isolation is unavailable.
+- Preserve meaningful validation, truthful artifact status, and recovery information without prescribing a report template.
 
-```mermaid
-flowchart TD
-  Request["User request"] --> Route["Classify extension surface"]
-  Route --> Setup["Setup"]
-  Route --> Theme["Theme"]
-  Route --> Plugin["Plugin"]
-  Route --> Core["Core"]
-  Setup & Theme & Plugin & Core --> Docs["AGENTS.md + docmap + public contracts"]
-  Docs --> Change["Smallest supported change"]
-  Change --> Verify["Targeted validation"]
-  Verify --> Report["Architecture, grants, validation, rollback"]
-```
-
-## Decisions
-
-- Classify by the user's outcome: setup, presentation, functionality, or a
-  missing public contract.
-- Escalate in this order: configuration, theme tokens/overrides, plugin,
-  provider, new public extension point, core behavior.
-- Prefer V1 for a feature that must run in the current product today; choose
-  V2 for its public authoring/package contracts and state its activation limit.
-- Treat `trusted-host` as reviewed host code, not a sandbox. Never silently
-  replace isolated execution with trusted-host execution.
-- Require an explicit completion report that includes rollback and only genuine
-  remaining risks.
-
-The detailed product exploration remains in the source repository's planning
-materials; this portable package intentionally does not link outside its root.
+The shared references keep routing, safety, validation, and completion guidance consistent.
+Package scripts validate metadata, local links, checkout compatibility, and fixture consistency; they do not simulate a model completing a task.

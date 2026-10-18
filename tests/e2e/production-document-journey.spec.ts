@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { Editor } from '@tiptap/core';
 import { writeFile } from 'node:fs/promises';
 
 const recoveryScripts = new WeakMap<Page, string[]>();
@@ -424,34 +425,80 @@ for (const width of [1440, 390]) {
     });
 }
 
-test('document polish: trash disables open replacement and table controls', async ({ page }, info) => {
-    const scripts: string[] = [];
-    page.on('request', request => scripts.push(request.url()));
-    await page.goto('/__or3-document-journey-test');
-    const body = page.getByRole('textbox', { name: 'Document body' });
-    await expect(body).toBeVisible();
-    await body.fill('keep this text');
-    await body.evaluate(element => {
-        (element as HTMLElement & { editor: { commands: { insertTable: (options: { rows: number; cols: number; withHeaderRow: boolean }) => void } } }).editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });
+for (const deletion of ['soft delete', 'Files Trash'] as const) {
+    test(`document polish: ${deletion} disables open replacement and table controls without editor errors`, async ({ page }, info) => {
+        const scripts: string[] = [];
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.stack ?? error.message));
+        page.on('console', message => {
+            if (message.type() === 'error' && message.text().startsWith('[err]')) errors.push(message.text());
+        });
+        page.on('request', request => scripts.push(request.url()));
+        await page.goto('/__or3-document-journey-test');
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await expect(body).toBeVisible();
+        await body.fill('keep this text');
+        await body.evaluate(element => {
+            (element as HTMLElement & { editor: { commands: { insertTable: (options: { rows: number; cols: number; withHeaderRow: boolean }) => void } } }).editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });
+        });
+        await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeVisible();
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('keep this text');
+        await page.getByRole('button', { name: 'Find in document', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Find text', exact: true }).fill('keep');
+        await page.getByRole('textbox', { name: 'Replacement text', exact: true }).fill('changed');
+        const documentsUrl = scripts.find(url => /\/db\/documents\.ts(?:\?|$)/.test(url));
+        expect(documentsUrl).toBeTruthy();
+        const clientUrl = scripts.find(url => /\/db\/client\.ts(?:\?|$)/.test(url));
+        expect(clientUrl).toBeTruthy();
+        async function setTrashed(trashed: boolean) {
+            return page.evaluate(async ({ documentsUrl, clientUrl, deletion, trashed }) => {
+                const id = localStorage.getItem('or3:e2e:production-document-id')!;
+                if (deletion === 'soft delete') {
+                    const { softDeleteDocument } = await import(documentsUrl!);
+                    await softDeleteDocument(id);
+                    return;
+                }
+                const { getDb } = await import(clientUrl!);
+                const { updateWorkspaceFile } = await import(new URL('./workspace-files.ts', documentsUrl!).href);
+                const { workspaceRevision } = await import(new URL('../utils/chat/workspace-items.ts', documentsUrl!).href);
+                const db = getDb();
+                const row = await db.posts.get(id);
+                await updateWorkspaceFile({ db, workspaceId: 'local', signal: new AbortController().signal,
+                    writable: true, assertCurrent() {} }, id, await workspaceRevision(row), { trashed });
+            }, { documentsUrl, clientUrl, deletion, trashed });
+        }
+        await setTrashed(true);
+        await expect(body).toHaveAttribute('contenteditable', 'false');
+        await expect(page.getByRole('button', { name: 'Replace', exact: true })).toBeDisabled();
+        await expect(page.getByRole('button', { name: 'All', exact: true })).toBeDisabled();
+        await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeHidden();
+        await expect(body).toHaveText('keep this text');
+        expect(errors).toEqual([]);
+        await page.screenshot({ path: info.outputPath('document-read-only.png') });
+        if (deletion === 'Files Trash') {
+            await expect(page.getByRole('status').filter({ hasText: 'Restore it from Files Trash' })).toBeVisible();
+            await setTrashed(false);
+            await expect(body).toHaveAttribute('contenteditable', 'true');
+            await expect(page.getByRole('button', { name: 'Replace', exact: true })).toBeEnabled();
+            await page.getByRole('button', { name: 'Close find', exact: true }).click();
+            await body.fill('keep this text');
+            await body.evaluate(element => {
+                (element as HTMLElement & { editor: Editor }).editor
+                    .chain().focus().setTextSelection({ from: 1, to: 5 }).run();
+            });
+            await expect(page.locator('.selection-menu')).toBeVisible();
+            await page.locator('.selection-menu').getByRole('button', { name: 'Bold', exact: true }).click();
+            await expect(body.locator('strong')).toHaveText('keep');
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('keep this text');
+            await page.screenshot({ path: info.outputPath('document-restored.png') });
+        }
+        expect(errors).toEqual([]);
+        const path = info.outputPath('document-trash-receipt.json');
+        await writeFile(path, JSON.stringify({ deletion, errors, readOnlyVerified: true,
+            contentPreserved: true, restoredSelectionToolbarVerified: deletion === 'Files Trash' }, null, 2));
+        await info.attach('document-trash-receipt', { path, contentType: 'application/json' });
     });
-    await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeVisible();
-    await expect(page.getByTestId('persisted-document-body')).toHaveText('keep this text');
-    await page.getByRole('button', { name: 'Find in document', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Find text', exact: true }).fill('keep');
-    await page.getByRole('textbox', { name: 'Replacement text', exact: true }).fill('changed');
-    const documentsUrl = scripts.find(url => /\/db\/documents\.ts(?:\?|$)/.test(url));
-    expect(documentsUrl).toBeTruthy();
-    await page.evaluate(async url => {
-        const { softDeleteDocument } = await import(url!);
-        await softDeleteDocument(localStorage.getItem('or3:e2e:production-document-id'));
-    }, documentsUrl);
-    await expect(body).toHaveAttribute('contenteditable', 'false');
-    await expect(page.getByRole('button', { name: 'Replace', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'All', exact: true })).toBeDisabled();
-    await expect(page.getByRole('toolbar', { name: 'Table controls' })).toBeHidden();
-    await expect(body).toHaveText('keep this text');
-    await page.screenshot({ path: info.outputPath('document-read-only.png') });
-});
+}
 
 test('document quick action edits persist after leaving the fields and reloading', async ({ page }, info) => {
     await page.goto('/__or3-document-journey-test');

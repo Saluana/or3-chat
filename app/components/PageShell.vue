@@ -429,6 +429,18 @@
                 @selected="notifySystemPromptSelected"
             />
         </ClientOnly>
+        <LazySidebarCreateProjectModal v-if="emptyCreate.active.value && emptyCreate.project.value"
+            :open="true" title="Start a project" :name="emptyCreate.form.title" :description="emptyCreate.form.brief"
+            :name-error="emptyCreate.form.error" :loading="emptyCreate.form.pending" :submit-label="emptyCreate.request.value?.savedId ? 'Open' : undefined"
+            :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon-folder="emptyProjectIcon" :loading-icon="emptyLoadingIcon"
+            @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
+            @update:name="emptyCreate.form.title = $event" @update:description="emptyCreate.form.brief = $event" />
+        <LazySidebarCreateDocumentModal v-if="emptyCreate.active.value && !emptyCreate.project.value"
+            :open="true" title="Create a document" placeholder="Document title" :value="emptyCreate.form.title"
+            :error="emptyCreate.form.error" :loading="emptyCreate.form.pending" :submit-label="emptyCreate.request.value?.savedId ? 'Open' : undefined"
+            :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon="emptyDocumentIcon" :loading-icon="emptyLoadingIcon"
+            @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
+            @update:value="emptyCreate.form.title = $event" />
         <SearchCommandPalette />
     </resizable-sidebar-layout>
 </template>
@@ -441,6 +453,10 @@ import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
+import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
+import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
+import type { SessionPayload } from '~/composables/auth/useSessionContext';
 import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
@@ -451,6 +467,8 @@ import {
     getDb,
     subscribeActiveWorkspaceDb,
 } from '~/db/client';
+import { prepareDocumentCreate } from '~/db/documents';
+import { getWriteTxTableNames } from '~/db/util';
 import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
     flush as flushDocument,
@@ -1686,6 +1704,59 @@ watch(
     () => activePaneIndex.value,
     () => updateUrl()
 );
+
+// Empty-chat creation is scoped to its originating pane/tab and workspace.
+const emptySession = useState<SessionPayload | null>('auth-session', () => null);
+const emptyAvailable = computed<readonly EmptyChatActionId[]>(() => {
+    const role = emptySession.value?.session?.role;
+    const writable = runtimeConfig.public.ssrAuthEnabled !== true || role === 'owner' || role === 'editor';
+    return writable ? ['start-chat', 'start-project', ...(documentsEnabled.value ? ['create-document' as const] : [])] : ['start-chat'];
+});
+const { openProjectSidebar: openEmptyProject } = useProjectSidebar();
+const emptyProjectIcon = useIcon('sidebar.folder');
+const emptyDocumentIcon = useIcon('sidebar.note');
+const emptyLoadingIcon = useIcon('ui.loading');
+const emptyCreateModalProps = useThemeOverrides({ component: 'modal', context: 'chat', identifier: 'chat.empty.create', isNuxtUI: true });
+const emptyCreate = useEmptyChatActions({
+    available: emptyAvailable,
+    async activateOrigin(origin) {
+        const index = panes.value.findIndex(pane => pane.id === origin.paneId && pane.mode === 'chat' && !pane.threadId);
+        if (index < 0) return false;
+        if (workspaceTabsEnabled.value) {
+            if (!origin.tabId || workspaceTabs.state.value.paneBindings.get(origin.paneId) !== origin.tabId) return false;
+            return workspaceTabs.activateTab(origin.tabId, 'pointer');
+        }
+        setActive(index);
+        return true;
+    },
+    isCurrent(origin) {
+        const pane = panes.value[activePaneIndex.value];
+        return Boolean(pane && pane.id === origin.paneId && pane.mode === 'chat' && !pane.threadId
+            && (!workspaceTabsEnabled.value || workspaceTabs.state.value.paneBindings.get(pane.id) === origin.tabId));
+    },
+    async createDocument(title, scope) {
+        const document = await prepareDocumentCreate({ title });
+        await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts'), async () => {
+            // Hooks and transaction admission can yield across workspace/account changes.
+            scope.assertCurrent('write');
+            await scope.db.posts.put(document.row);
+            scope.assertCurrent('write');
+        });
+        try { await document.afterCommit(); }
+        catch (error) { console.warn('Document saved; after-create hook failed.', error); }
+        return document.row.id;
+    },
+    async openDocument(id) {
+        if (!documentsEnabled.value) throw new Error('Documents are disabled.');
+        if (!workspaceTabsEnabled.value) {
+            toast.add({ title: 'Document created', description: 'Open it from Documents when your chat draft is ready.', color: 'success' });
+            return;
+        }
+        const result = await workspaceTabs.openResource({ kind: 'document', documentId: id }, { reuseActiveBlank: false });
+        if (result.status === 'failed') throw new Error('Document could not be opened.');
+    },
+    async openProject(id) { await openEmptyProject(id, 'projects'); expandSidebar(); },
+});
 
 // --------------- Documents Integration ---------------
 const hooks = useHooks();

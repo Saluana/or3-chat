@@ -38,7 +38,7 @@
                 @keydown="handleKeydown"
             >
                 <div
-                    v-if="errorMessage"
+                    v-if="errorMessage && !deleteConfirmPrompt"
                     class="shrink-0 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
                     role="alert"
                 >
@@ -727,6 +727,7 @@
         <p class="text-sm text-[var(--md-on-surface-variant)]">
             “{{ deleteConfirmPrompt?.title || 'Untitled Prompt' }}” will be removed from your prompt library.
         </p>
+        <p v-if="errorMessage" role="alert" class="mt-3 text-sm text-error">{{ errorMessage }}</p>
         <template #footer>
             <UButton variant="ghost" size="modal" @click="deleteConfirmId = null">Cancel</UButton>
             <UButton color="error" size="modal" data-test="system-prompts-confirm-delete" @click="confirmDeletePrompt">Delete prompt</UButton>
@@ -737,6 +738,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { reportError } from '~/utils/errors';
 import {
     createPrompt,
     listPrompts,
@@ -1060,8 +1062,7 @@ async function loadPrompts(): Promise<void> {
         selectedPromptId.value ??= prompts.value[0]?.id ?? null;
     } catch (error) {
         if (!current()) return;
-        errorMessage.value =
-            error instanceof Error ? error.message : 'Failed to load prompts.';
+        errorMessage.value = reportError(error, { message: 'Failed to load prompts.', toast: false }).message;
     } finally {
         if (current()) loading.value = false;
     }
@@ -1132,8 +1133,7 @@ async function createNewPrompt(): Promise<void> {
         selectedPromptId.value = prompt.id;
         await startEditing(prompt.id);
     } catch (error) {
-        errorMessage.value =
-            error instanceof Error ? error.message : 'Failed to create prompt.';
+        errorMessage.value = reportError(error, { message: 'Failed to create prompt.', toast: false }).message;
     }
 }
 
@@ -1144,8 +1144,7 @@ async function startEditing(id: string): Promise<void> {
         selectedPromptId.value = id;
         view.value = 'edit';
     } catch (error) {
-        errorMessage.value =
-            error instanceof Error ? error.message : 'Failed to open editor.';
+        errorMessage.value = reportError(error, { message: 'Failed to open editor.', toast: false }).message;
     }
 }
 
@@ -1235,14 +1234,12 @@ async function useSelectedPrompt(): Promise<void> {
         }
         emit('selected', prompt.id);
     } catch (error) {
-        errorMessage.value =
-            error instanceof Error
-                ? error.message
-                : 'Failed to apply prompt to chat.';
+        errorMessage.value = reportError(error, { message: 'Failed to apply prompt to chat.', toast: false }).message;
     }
 }
 
 function requestDeletePrompt(id: string): void {
+    errorMessage.value = '';
     promptActionsId.value = null;
     deleteConfirmId.value = id;
 }
@@ -1250,6 +1247,7 @@ function requestDeletePrompt(id: string): void {
 async function confirmDeletePrompt(): Promise<void> {
     const id = deleteConfirmId.value;
     if (!id) return;
+    errorMessage.value = '';
     try {
         await softDeletePrompt(id);
         if (defaultPromptId.value === id) await clearDefaultPrompt();
@@ -1267,8 +1265,7 @@ async function confirmDeletePrompt(): Promise<void> {
         deleteConfirmId.value = null;
         view.value = 'library';
     } catch (error) {
-        errorMessage.value =
-            error instanceof Error ? error.message : 'Failed to delete prompt.';
+        errorMessage.value = reportError(error, { message: 'Failed to delete prompt.', toast: false }).message;
     }
 }
 

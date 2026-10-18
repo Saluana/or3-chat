@@ -94,8 +94,8 @@ type WriteTxTableNamesOptions = {
  * Build transaction table scopes that keep sync capture atomic when possible.
  * - Always includes primary table(s)
  * - Includes optional extra tables only when present in current DB schema
- * - Includes `pending_ops` by default when available
- * - Includes `tombstones` when explicitly requested and available
+ * - Includes `pending_ops` and `tombstones` by default when available, since
+ *   generic writes and hooks can turn an update into a deletion
  */
 export function getWriteTxTableNames(
     db: Pick<Or3DB, 'tables'> | { tables?: Array<{ name: string }> },
@@ -118,7 +118,7 @@ export function getWriteTxTableNames(
         names.add('pending_ops');
     }
 
-    if (options.includeTombstones && existing.has('tombstones')) {
+    if ((options.includeTombstones ?? true) && existing.has('tombstones')) {
         names.add('tombstones');
     }
 

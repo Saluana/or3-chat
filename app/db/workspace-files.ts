@@ -258,7 +258,7 @@ export async function removeWorkspaceFile(scope: WorkspaceOperationScope, id: st
     const removed = PostSchema.parse({ ...base, deleted: true, updated_at: nowSec(), clock: nextClock(base.clock) });
     const event = await prepareFileChange(scope, 'remove', base, removed);
     const referenceChanges: FileRefNotification[] = [];
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta']), async () => {
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta'], { includeTombstones: true }), async () => {
         const current = await scope.db.posts.get(id);
         scope.assertCurrent('write');
         if (JSON.stringify(current) !== JSON.stringify(base)) throw changed();

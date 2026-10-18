@@ -17,7 +17,7 @@ interface RoutingCase {
 
 interface CompletionCase {
   id: string
-  requiredSections?: string[]
+  requiredEvidence?: string[]
 }
 
 export async function validateEvaluationFixtures(root = packageRoot) {
@@ -52,11 +52,14 @@ export async function validateEvaluationFixtures(root = packageRoot) {
     }
   }
 
-  const requiredSections = ['Architecture', 'Changes', 'Permissions', 'Validation', 'Artifact or installation', 'Rollback', 'Remaining risks']
+  const requiredEvidence = ['result', 'validation']
   for (const testCase of completionCases) {
-    const missing = requiredSections.filter((section) => !testCase.requiredSections?.includes(section))
-    if (!testCase.id || missing.length > 0) {
-      checks.push({ code: 'completion-case-incomplete', level: 'error', message: `Case ${testCase.id || '(unnamed)'} omits ${missing.join(', ') || 'an ID'}.`, path: completionPath })
+    const evidence = testCase.requiredEvidence
+    const missing = Array.isArray(evidence)
+      ? requiredEvidence.filter((item) => !evidence.includes(item))
+      : requiredEvidence
+    if (!testCase.id || missing.length > 0 || !Array.isArray(evidence) || evidence.some((item) => typeof item !== 'string' || !item.trim())) {
+      checks.push({ code: 'completion-case-incomplete', level: 'error', message: `Case ${testCase.id || '(unnamed)'} needs an ID and non-empty evidence including result and validation.`, path: completionPath })
     }
   }
 

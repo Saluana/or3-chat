@@ -1,5 +1,7 @@
 import type { Component, Ref, ShallowRef } from 'vue';
 import type { RuntimeResolver } from './runtime-resolver';
+import type { ThemeChatEmptyState } from './chat-empty-state';
+export type { ThemeChatEmptyState, ThemeEmptyChatAppearance, EmptyChatImage, ThemeEmptyChatAction, EmptyChatActionId } from './chat-empty-state';
 import type { WorkspaceProfileV1 } from '../../core/workspace-profiles/schema';
 
 /**
@@ -25,6 +27,7 @@ export const APP_THEME_COMPONENT_KEYS = [
     'chat-page',
     'chat-message',
     'chat-input',
+    'chat-empty-state',
     'document-editor',
     'dashboard-modal',
     'model-selector',
@@ -358,6 +361,9 @@ export interface ThemeDefinition {
     /** Background descriptions that map to CSS variables */
     backgrounds?: ThemeBackgrounds;
 
+    /** Optional new-chat presentation; omitted or false disables it. */
+    chatEmptyState?: ThemeChatEmptyState;
+
     /** Font family tokens for this theme */
     fonts?: ThemeFonts;
 
@@ -506,6 +512,9 @@ export interface CompiledTheme {
 
     /** Theme background metadata (optional) */
     backgrounds?: ThemeBackgrounds;
+
+    /** Optional new-chat presentation; omitted or false disables it. */
+    chatEmptyState?: ThemeChatEmptyState;
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;

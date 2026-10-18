@@ -14,6 +14,7 @@ import {
 } from '../message-files';
 import { createOrRefFile } from '../files';
 import { parseFileHashes } from '../files-util';
+import { HookBridge } from '~/core/sync/hook-bridge';
 
 const hooks = vi.hoisted(() => {
     const filters = new Map<
@@ -174,7 +175,9 @@ describe('message file ref_count integrity', () => {
         expect((await db.file_meta.get(TEST_HASH))?.ref_count).toBe(1);
     });
 
-    it('permanently removes a trashed native document while retaining its checkpoint references', async () => {
+    // With sync capture active, removal must commit the tombstone, outbox and
+    // ownership change together; an aborted tombstone write must retain them all.
+    it.each(['commit', 'abort'] as const)('permanently removes a trashed native document atomically with sync: %s', async (outcome) => {
         const { updateWorkspaceFile, removeWorkspaceFile } = await import('../workspace-files');
         const { workspaceRevision } = await import('~/utils/chat/workspace-items');
         const db = getDb();
@@ -186,7 +189,34 @@ describe('message file ref_count integrity', () => {
             file_hashes: JSON.stringify([TEST_HASH]), deleted: false, clock: 1, created_at: 1, updated_at: 1 };
         await db.posts.bulkPut([row, { ...row, id: 'retained-checkpoint', postType: 'or3:document-revision' }]);
         const trashed = await updateWorkspaceFile(scope, row.id, await workspaceRevision(row), { trashed: true });
-        await removeWorkspaceFile(scope, row.id, await workspaceRevision(trashed));
+        const bridge = new HookBridge(db);
+        bridge.start();
+        const revision = await workspaceRevision(trashed);
+        const originalPut = IDBObjectStore.prototype.put;
+        const tombstonePut = outcome === 'abort'
+            ? vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args) {
+                if (this.name === 'tombstones') throw new Error('Synthetic tombstone write failure');
+                return originalPut.apply(this, args);
+            }) : undefined;
+        try {
+            if (outcome === 'abort') {
+                await expect(removeWorkspaceFile(scope, row.id, revision)).rejects.toThrow();
+                expect((await db.posts.get(row.id))?.deleted).toBe(false);
+                expect((await db.file_meta.get(TEST_HASH))?.ref_count).toBe(2);
+                expect(await db.tombstones.get(`posts:${row.id}`)).toBeUndefined();
+                expect(await db.pending_ops.count()).toBe(0);
+                tombstonePut!.mockRestore();
+            }
+            await removeWorkspaceFile(scope, row.id, revision);
+            const tombstone = await db.tombstones.get(`posts:${row.id}`);
+            const ops = await db.pending_ops.where('[tableName+pk]').equals(['posts', row.id]).toArray();
+            expect(ops).toHaveLength(1);
+            expect(ops[0]).toMatchObject({ operation: 'delete', pk: row.id });
+            expect(tombstone).toMatchObject({ tableName: 'posts', pk: row.id, opId: ops[0]!.stamp.opId });
+        } finally {
+            tombstonePut?.mockRestore();
+            bridge.stop();
+        }
         expect((await db.posts.get(row.id))?.deleted).toBe(true);
         expect((await db.posts.get('retained-checkpoint'))?.deleted).toBe(false);
         expect((await db.file_meta.get(TEST_HASH))?.ref_count).toBe(1);

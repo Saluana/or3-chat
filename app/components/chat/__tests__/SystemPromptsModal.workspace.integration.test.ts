@@ -11,6 +11,9 @@ import { getDefaultPromptId, useDefaultPrompt } from '~/composables/chat/useDefa
 import * as savedPrompts from '~/db/prompts';
 import SystemPromptsModal from '../SystemPromptsModal.vue';
 import AppModal from '~/components/ui/AppModal.vue';
+import { HookBridge } from '~/core/sync/hook-bridge';
+
+vi.unmock('~/utils/errors');
 
 vi.mock('#imports', async original => ({
     ...await original<typeof import('#imports')>(), useHooks: () => useHooks(),
@@ -50,7 +53,7 @@ const stubs = {
     UModal: {
         props: ['open'],
         template:
-            '<div class="modal-stub"><slot name="header" /><slot name="body" /></div>',
+            '<div class="modal-stub"><slot name="header" /><slot name="body" /><slot name="footer" /></div>',
     },
     UButton: {
         inheritAttrs: false,
@@ -204,7 +207,7 @@ describe('prompt library workspace continuation with real saved prompts', () => 
         });
         wrapper = mount(SystemPromptsModal, { props: { showModal: true, mode: 'home' }, global: { stubs } });
         await modalState().loadPrompts(); await flushPromises();
-        expect(modalState().errorMessage).toBe('Synthetic current library failure');
+        expect(modalState().errorMessage).toBe('Failed to load prompts.');
         expect(modalState().loading).toBe(false);
         expect(await getDefaultPromptId()).toBe(current.promptId);
     });
@@ -217,6 +220,42 @@ describe('prompt library workspace continuation with real saved prompts', () => 
         await modalState().loadPrompts();
         expect(list).not.toHaveBeenCalled();
         expect(modalState().loading).toBe(false);
+    });
+
+    // Failure inventory: storage diagnostics leak into the prompt library;
+    // failed deletion clears the user's selection/default or cannot be retried.
+    it('shows a safe deletion error and retries without losing the saved prompt or default', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const current = await fixture('Current'); setActiveWorkspaceDb(current.id);
+        const defaults = useDefaultPrompt(); await defaults.ensureLoaded();
+        wrapper = mount(SystemPromptsModal, { props: { showModal: true, mode: 'home' }, global: { stubs } });
+        await modalState().loadPrompts(); await flushPromises();
+        const bridge = new HookBridge(current.db); bridge.start();
+        const original = IDBObjectStore.prototype.put;
+        const fault = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
+            if (this.name === 'tombstones') throw new Error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope');
+            return original.apply(this, args);
+        });
+        try {
+            await wrapper.findAll('button').find(button => button.text() === 'Delete')!.trigger('click');
+            const confirmation = () => wrapper!.findAllComponents(AppModal)[1]!;
+            await confirmation().findAll('button').find(button => button.text() === 'Delete prompt')!.trigger('click');
+            await flushPromises();
+            await vi.waitFor(() => expect(wrapper!.get('[role="alert"]').text()).toBe('Failed to delete prompt.'));
+            expect(wrapper.text()).not.toContain('HookBridge');
+            expect(confirmation().props('open')).toBe(true);
+            expect((await current.db.posts.get(current.promptId))?.deleted).toBe(false);
+            expect(await getDefaultPromptId()).toBe(current.promptId);
+            expect(await current.db.pending_ops.count()).toBe(0);
+            fault.mockRestore();
+            await confirmation().findAll('button').find(button => button.text() === 'Delete prompt')!.trigger('click');
+            await flushPromises();
+            await vi.waitFor(async () => {
+                expect((await current.db.posts.get(current.promptId))?.deleted).toBe(true);
+                expect(await getDefaultPromptId()).toBe(null);
+                expect(confirmation().props('open')).toBe(false);
+            });
+        } finally { fault.mockRestore(); bridge.stop(); }
     });
 
     it('does not restore an old delete confirmation when the new library has the same prompt ID', async () => {

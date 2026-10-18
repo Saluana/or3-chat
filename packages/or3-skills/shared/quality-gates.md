@@ -1,16 +1,15 @@
 # Quality gates
 
-Run the smallest relevant checks after a coherent implementation batch. Inspect
-the final diff in every case.
+Follow the target checkout's `AGENTS.md` test lanes and inspect the final diff.
+Choose checks that exercise the changed contract rather than widening scope by default.
 
-| Surface | Required evidence | Typical checkout command |
+| Surface | Relevant evidence | Typical checkout commands |
 | --- | --- | --- |
-| Setup | Redacted config validation and health/doctor result | `bun run or3-cloud:validate`; `bun run doctor` |
-| V1 plugin | Public/internal surface confirmed, cleanup, targeted test | Canonical affected test plus `bun run type-check` when types change |
-| V2 plugin artifact | Manifest, grants, SDK-only imports, test/build/pack/inspect | `bun run plugin-runtime:cli -- validate|test|build|pack|inspect <dir>` |
-| Theme | Schema, light/dark, responsive and interaction states | `bun run theme:validate`; `bun run theme:build-css` when selector CSS changes |
-| Core | Existing callers, types, targeted tests, docs/docmap | Canonical test plus `bun run type-check` when public types change |
+| Setup | Config validation and relevant health checks | `bun run or3-cloud:validate`; `bun run doctor` |
+| Source plugin/core | Canonical behavior checks and changed public types | Targeted suite; `bun run type-check` when relevant |
+| SDK package | Manifest/grants, SDK imports, tests, built archive | Current `plugin-runtime:cli` validate/test/build/pack/inspect operations |
+| Theme | Schema and affected visual/interaction states | `bun run theme:validate`; `bun run theme:build-css` for selector CSS |
 
-Use commands that exist in the target checkout. Do not run broad paid-network,
-credential-writing, stress, or visual suites by default. Treat a changed or
-missing command as a compatibility finding, not an invitation to improvise one.
+Use named harnesses for paid-network, credential-writing, stress, performance, or visual-artifact suites.
+A missing or changed command is a compatibility finding; inspect its supported replacement rather than inventing a successful check.
+Successful packaging alone does not prove installation, activation, or isolation.

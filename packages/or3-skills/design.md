@@ -1,15 +1,11 @@
-# OR3 Skills V1 design
+# OR3 Skills design
 
-The package has four short entry-point skills and six shared references. The
-entry points carry routing and workflow decisions; the shared references hold
-rules that must remain consistent across all skills. Scripts validate the skill
-format, inspect an OR3 checkout, detect documentation drift, and verify the
-evaluation corpus.
+Six task-oriented entry points cover setup, plugins, themes, core changes, OpenClaw, and Hermes.
+Shared references hold common safety and compatibility guidance; skills load only the material relevant to a request.
 
-The skills use direct checkout paths instead of a copied documentation bundle:
-the checkout's `AGENTS.md`, docmap, public API docs, tests, and implementation
-are authoritative. This avoids a second documentation source that can drift.
+The checkout's `AGENTS.md`, docmap, current public contracts, and implementation are authoritative.
+Keep APIs and operational recipes in their maintained product docs instead of copying another catalog into a skill.
 
-Scripts emit human-readable output by default and structured JSON with
-`--json`. They report missing contracts as errors and warnings separately, so
-automation can fail closed without hiding compatibility uncertainty.
+Validation scripts inspect metadata, links, checkout contracts, and evaluation fixture structure.
+They support readable output and `--json`; fixture validation does not claim model execution.
+Completion fixtures specify evidence appropriate to each task without requiring fixed headings.

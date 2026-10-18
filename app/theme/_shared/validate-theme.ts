@@ -21,6 +21,7 @@ import type {
     ValidationError,
 } from './types';
 import { THEME_COMPONENT_CONTRACT_VERSION } from './types';
+import { ThemeChatEmptyStateSchema } from './chat-empty-state';
 import { WorkspaceProfileV1Schema } from '../../core/workspace-profiles/schema';
 
 /**
@@ -197,6 +198,11 @@ export function validateThemeDefinition(
     }
 
     validateAppearanceTokens(config, errors);
+    const emptyState = ThemeChatEmptyStateSchema.safeParse(config.chatEmptyState);
+    if (!emptyState.success) for (const issue of emptyState.error.issues) {
+        errors.push({ severity: 'error', code: 'THEME_EMPTY_CHAT', file: 'theme.ts',
+            message: 'chatEmptyState' + (issue.path.length ? '.' + issue.path.join('.') : '') + ': ' + issue.message });
+    }
 
     // Validate background definitions if present
     if (config.backgrounds) {

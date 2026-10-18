@@ -1971,3 +1971,193 @@ html[data-theme='blank'].dark .agent-conn-sidebar .border-dashed,
 	border-color: var(--agent-conn-border) !important;
 	background: var(--agent-conn-selected) !important;
 }
+
+/* Illustrated new-chat state: Blank opts in through its theme definition. */
+html[data-theme='blank'] .chat-empty-heading { letter-spacing: -0.035em; }
+html[data-theme='blank'] .chat-empty-action { background: color-mix(in srgb, var(--md-surface) 88%, transparent); border: 1px solid color-mix(in srgb, var(--md-outline) 65%, transparent); box-shadow: 0 1px 3px rgb(0 0 0 / 0.04); border-radius: 20px; }
+html[data-theme='blank'] .chat-empty-action:hover { background: var(--md-surface); box-shadow: var(--app-elevation-low); }
+html[data-theme='blank'] [data-empty-chat-action='start-chat'] .chat-empty-action-icon { color: #0098ef; background: color-mix(in srgb, #0098ef 12%, var(--md-surface)); }
+html[data-theme='blank'] [data-empty-chat-action='start-project'] .chat-empty-action-icon { color: #b68f54; background: color-mix(in srgb, #d5ab69 14%, var(--md-surface)); }
+html[data-theme='blank'] [data-empty-chat-action='create-document'] .chat-empty-action-icon { color: #31b78e; background: color-mix(in srgb, #31b78e 14%, var(--md-surface)); }
+
+/* Feather the decoration into the pane without baking a matte into the art. */
+html[data-theme='blank'] .chat-empty-background {
+    -webkit-mask-image: radial-gradient(ellipse at 50% 46%, #000 38%, rgb(0 0 0 / 0.9) 58%, rgb(0 0 0 / 0.45) 78%, transparent 100%);
+    mask-image: radial-gradient(ellipse at 50% 46%, #000 38%, rgb(0 0 0 / 0.9) 58%, rgb(0 0 0 / 0.45) 78%, transparent 100%);
+}
+html[data-theme='blank'] .chat-empty-hero {
+    -webkit-mask-image: linear-gradient(to bottom, #000 78%, rgb(0 0 0 / 0.85) 88%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 78%, rgb(0 0 0 / 0.85) 88%, transparent 100%);
+}
+
+/* Dark clouds recede into the charcoal surface; keep the face and bubble crisp. */
+html[data-theme='blank'].dark .chat-empty-hero {
+    -webkit-mask-image: linear-gradient(to bottom, #000 67%, rgb(0 0 0 / 0.75) 77%, rgb(0 0 0 / 0.18) 88%, transparent 98%), radial-gradient(ellipse 24% 18% at 56% 70%, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 67%, rgb(0 0 0 / 0.75) 77%, rgb(0 0 0 / 0.18) 88%, transparent 98%), radial-gradient(ellipse 24% 18% at 56% 70%, #000 55%, transparent 100%);
+}
+
+/*
+ * Phone empty panes: open sky edge to edge, the bird above one group of roomy
+ * actions, and the composer parked where the chat composer sits once a thread
+ * starts, so sending the first message does not move it.
+ */
+@media (max-width: 767px) {
+    /*
+     * A portrait pane already crops the art to its middle, so keep its edges
+     * and skip most of the haze at its top: the blue sky starts under the
+     * header. The media component writes size/position inline.
+     */
+    html[data-theme='blank'] .chat-empty-background {
+        background-size: auto 122% !important;
+        background-position: center 66% !important;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+    /*
+     * The dark cloud art is already translucent; dimming it again left the
+     * hero's clouds sitting alone like rocks. Show it at full strength over a
+     * faint moonlit glow so the bird rests in a cloud bank, as in light mode.
+     */
+    html[data-theme='blank'].dark .chat-container--empty {
+        background-image: radial-gradient(ellipse 85% 40% at 50% 26%, rgb(120 150 200 / 0.26), transparent 75%);
+    }
+    html[data-theme='blank'].dark .chat-empty-background {
+        background-color: transparent !important;
+        opacity: 1 !important;
+    }
+    @container chat-pane (min-height: 421px) {
+        html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+            justify-content: flex-start;
+            gap: 14px;
+            padding: 12px 16px 28px !important;
+        }
+        html[data-theme='blank'] .chat-container--empty .chat-empty-state[data-layout='cards'] {
+            flex: 1 0 auto;
+            justify-content: flex-end;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork {
+            flex: 1 0 auto;
+            flex-direction: column;
+            align-items: center;
+            height: auto;
+            max-height: none;
+            margin-bottom: 0;
+        }
+        /* Weight free space above the bird so it floats in the sky. */
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::before,
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
+            content: '';
+            flex: 3 1 0;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
+            flex-grow: 1;
+            min-height: 12px;
+            max-height: 40px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
+            flex: none;
+            height: clamp(150px, 26cqh, 230px);
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+            grid-template-columns: 1fr;
+            /* Narrow phones wrap some descriptions; keep the rows even. */
+            grid-auto-rows: 1fr;
+            gap: 9px;
+            margin-top: 0;
+            padding: 12px;
+            border: 1px solid color-mix(in srgb, var(--md-outline) 50%, transparent);
+            border-radius: 26px;
+            background: color-mix(in srgb, var(--md-surface) 72%, transparent);
+            box-shadow: 0 12px 36px rgb(0 0 0 / 0.05);
+            -webkit-backdrop-filter: blur(14px);
+            backdrop-filter: blur(14px);
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+            align-items: center;
+            gap: 14px;
+            border-radius: 18px;
+            background: var(--md-surface);
+        }
+        /* Override Nuxt UI's fixed control height and important touch minimum. */
+        @layer utilities {
+            html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+                height: auto !important;
+                min-height: 66px !important;
+                padding: 10px 16px 10px 12px !important;
+            }
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+            display: grid;
+            flex-basis: 46px;
+            height: 46px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon .iconify {
+            width: 24px;
+            height: 24px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-copy {
+            flex: 1;
+            gap: 3px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-label {
+            font-size: 14px;
+            line-height: 20px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
+            display: block;
+            font-size: 12px;
+            line-height: 17px;
+            text-wrap: pretty;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-chevron {
+            display: block;
+            flex: 0 0 18px;
+            width: 18px;
+            height: 18px;
+            color: var(--md-on-surface-variant);
+        }
+        /* The mockup's composer rests in a soft bezel; focus keeps its own ring. */
+        html[data-theme='blank'] .chat-container--empty .chat-inner-input-container .blank2-chat-dropper.chat-input-main:not(:focus-within) {
+            box-shadow:
+                0 0 0 5px color-mix(in srgb, var(--md-outline) 45%, transparent),
+                0 10px 30px rgb(0 0 0 / 0.06);
+        }
+    }
+    @container chat-pane (421px <= height <= 600px) {
+        html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+            gap: 10px;
+            padding-top: 8px !important;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
+            height: clamp(72px, 18cqh, 110px);
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+            gap: 6px;
+            padding: 8px;
+            border-radius: 22px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+            gap: 10px;
+        }
+        @layer utilities {
+            html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+                min-height: 60px !important;
+                padding: 8px 14px 8px 10px !important;
+            }
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+            flex-basis: 38px;
+            height: 38px;
+        }
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
+            line-height: 16px;
+        }
+    }
+}
+@media (max-width: 767px) and (display-mode: standalone) {
+    @container chat-pane (min-height: 421px) {
+        html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+            padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
+        }
+    }
+}
