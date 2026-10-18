@@ -187,7 +187,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(28);
+        expect(db.verno).toBe(29);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -195,13 +195,11 @@ describe('derived index maintenance', () => {
             activeDoc.file_hashes,
             'doc-active',
         ]);
-        expect(storedActive?.content).toBe(activeDoc.content);
-        expect(storedActive?.clock).toBe(activeDoc.clock);
-        expect(storedActive?.created_at).toBe(activeDoc.created_at);
+        expect(storedActive).toMatchObject(activeDoc);
 
         const storedDeleted = await db.posts.get('doc-deleted');
         expect(storedDeleted?.document_reference_key).toBeUndefined();
-        expect(storedDeleted?.content).toBe(deletedDoc.content);
+        expect(storedDeleted).toMatchObject(deletedDoc);
 
         const storedSnapshot = await db.posts.get('doc-snapshot');
         expect(storedSnapshot?.postType).toBe('doc');
@@ -231,9 +229,11 @@ describe('derived index maintenance', () => {
         const legacyRaster = await db.file_meta.get(`sha256:${'d'.repeat(64)}`);
         expect(legacyRaster?.gallery_state).toBe('active');
         expect(await db.file_meta.get(HASH_A)).toMatchObject({
+            ...fileMeta(HASH_A),
             gallery_state: 'active',
         });
         expect(await db.file_meta.get(HASH_B)).toMatchObject({
+            ...fileMeta(HASH_B, { deleted: true }),
             gallery_state: 'trash',
         });
         expect(
@@ -665,7 +665,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(28);
+        expect(db.verno).toBe(29);
         if (sourceVersion >= 18) expect(await db.snapshot_staging.get('__active__')).toEqual(sentinel);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.

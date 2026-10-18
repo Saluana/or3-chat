@@ -206,6 +206,7 @@ describe('durable workspace tab drafts', () => {
         const name = `synthetic-draft-migration-${Date.now()}`;
         const template = new client.Or3DB(name);
         const stores = Object.fromEntries(template.tables.filter(table => table.name !== 'workspace_draft_versions').map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',')]));
+        stores.file_blobs = 'hash'; // v27 predates the cache-access index.
         const old = new Dexie(name); old.version(27).stores(stores); await old.open();
         const value = { version: 1 as const, text: 'v27 retained draft', attachments: [{ hash: 'legacy-blob', name: 'legacy.txt', mime: 'text/plain', kind: 'image' as const }], largeTextBlocks: [], updatedAt: 1 };
         await old.table('workspace_tab_drafts').put({ id: 'local\u0000legacy-tab', account_key: 'local', tab_id: 'legacy-tab', updated_at: 1, draft: value });
@@ -214,11 +215,11 @@ describe('durable workspace tab drafts', () => {
         await old.table('file_blobs').put({ hash: 'legacy-blob', blob: new NodeBlob(['synthetic legacy bytes']) as unknown as Blob });
         old.close();
         try {
-            await template.open(); expect(template.verno).toBe(28);
+            await template.open(); expect(template.verno).toBe(29);
             expect((await template.workspace_tab_drafts.get('local\u0000legacy-tab'))?.draft).toEqual(value);
             expect((await template.kv.get('legacy-sentinel'))?.value).toBe('unchanged');
-            expect((await template.pending_ops.get('legacy-op'))?.id).toBe('legacy-op');
-            expect((await template.file_blobs.get('legacy-blob'))?.blob.size).toBe(22);
+            expect(await template.pending_ops.get('legacy-op')).toMatchObject({ id: 'legacy-op', status: 'pending', createdAt: 1, readyAt: 0, payload: { synthetic: true } });
+            expect(await (await template.file_blobs.get('legacy-blob'))?.blob.text()).toBe('synthetic legacy bytes');
             expect(await template.workspace_draft_versions.count()).toBe(0);
         } finally { template.close(); await Dexie.delete(name); }
     });

@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { Blob as NodeBlob } from 'node:buffer';
+import Dexie from 'dexie';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Or3DB } from '~/db/client';
 import { cleanupFileCache } from '../file-cache';
@@ -53,10 +54,35 @@ it('reclaims only verified redundant bytes and preserves canonical metadata', as
     expect(await db.file_blobs.get(hash)).toBeUndefined();
     expect((await db.file_meta.get(hash))?.storage_id).toBe('object-1');
 });
-it('never expires a legacy or local-only original', async () => {
-    await db.file_blobs.put({ hash, blob: new NodeBlob([bytes]) as unknown as Blob });
-    await cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY);
-    expect(await db.file_blobs.get(hash)).toBeDefined();
+it('keeps a v28 legacy original unclassified and protected after upgrade and reopen', async () => {
+    const metadata = (await db.file_meta.get(hash))!;
+    const name = db.name;
+    await db.delete();
+    const legacy = new Dexie(name);
+    legacy.version(28).stores({ file_meta: 'hash', file_blobs: 'hash' });
+    try {
+        await legacy.open();
+        await legacy.table('file_meta').put(metadata);
+        await legacy.table('file_blobs').put({ hash, blob: new NodeBlob([bytes]) });
+    } finally { legacy.close(); }
+
+    db = new Or3DB(name);
+    await db.open();
+    expect(db.verno).toBe(29);
+    expect(await db.file_blobs.get(hash)).toEqual({ hash, blob: expect.any(NodeBlob) });
+    // The new sparse index exists, but migrating must not enroll legacy bytes.
+    expect(await db.file_blobs.where('cache_accessed_at').aboveOrEqual(1).count()).toBe(0);
+    await cleanupFileCache(db, 'workspace', provider as any, {
+        ...DEFAULT_FILE_POLICY, maxCachedFileBytes: 0, maxCacheBytes: 0, retentionDays: 1,
+    });
+    db.close();
+    db = new Or3DB(name);
+    await db.open();
+    const retained = await db.file_blobs.get(hash);
+    expect(retained).toEqual({ hash, blob: expect.any(NodeBlob) });
+    expect(Array.from(new Uint8Array(await retained!.blob.arrayBuffer()))).toEqual(Array.from(bytes));
+    expect(await db.file_meta.get(hash)).toEqual(metadata);
+    expect(await db.pending_ops.count()).toBe(0);
 });
 
 it.each(['trash', 'upload', 'unavailable'] as const)('advances past protected %s rows without deleting them', async protection => {
