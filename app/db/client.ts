@@ -63,6 +63,12 @@ const WORKSPACE_DB_TTL_MS = 5 * 60 * 1000;
 export interface FileBlobRow {
     hash: string; // primary key
     blob: Blob; // actual binary Blob
+    // Absent on originals/legacy rows: these must never be automatically evicted.
+    cache_accessed_at?: number;
+    cache_workspace_id?: string;
+    cache_provider_id?: string;
+    cache_storage_id?: string;
+    cache_bytes?: number;
 }
 
 /** Temporary snapshot rows; never part of the synchronized data model. */
@@ -422,6 +428,9 @@ export class Or3DB extends Dexie {
         this.version(28).stores({
             workspace_draft_versions: 'id, account_key, [account_key+tab_id], kind',
         });
+
+        // Index only verified redundant copies; no migration classifies legacy originals.
+        this.version(29).stores({ file_blobs: 'hash, cache_accessed_at' });
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

@@ -139,8 +139,9 @@ export async function createBackup(
         dataBytes: volumeSize,
         configSha256: await sha256File(join(backupDir, 'config.env')),
         managedAssetSha256,
-        managedAssetInventoryVersion: managedAssetSha256?.['compose.operator.yaml']
+        managedAssetInventoryVersion: managedAssetSha256?.['dashboard-lifecycle.mjs']
           ? MANAGED_ASSET_INVENTORY_VERSION
+          : managedAssetSha256?.['compose.operator.yaml'] ? 3
           : managedAssetSha256?.['dashboard-operator.mjs'] ? 2 : undefined,
         mode: state.mode,
         domain: state.domain,

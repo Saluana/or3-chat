@@ -20,6 +20,7 @@ import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
 import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
 import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
 import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
+import { getShutdownRuntime } from '../../shutdown/runtime';
 
 
 const config = vi.hoisted(() => ({
@@ -103,6 +104,38 @@ describe('memory background job admission and lifecycle', () => {
         expect(() =>
             decryptBackgroundCredential(`${encrypted}tampered`, secret)
         ).toThrow('Failed to decrypt background job credential');
+    });
+
+    it('blocks restart after cancellation until pending admission history settles', async () => {
+        // A Stop can make status terminal before canonical admission completes.
+        // Worker counts must not turn that outstanding history delivery into idle.
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1',
+            model: 'test-model', historyPhase: 'admission_pending',
+        });
+        expect(await memoryJobProvider.getShutdownBlockerCount!()).toBe(1);
+        await memoryJobProvider.abortJob(jobId, 'user-1');
+        expect(await memoryJobProvider.getActiveJobCount!()).toBe(0);
+        expect(await memoryJobProvider.getShutdownBlockerCount!()).toBe(1);
+        await memoryJobProvider.setHistoryPhase!(jobId, 'committed');
+        expect(await memoryJobProvider.getShutdownBlockerCount!()).toBe(0);
+    });
+
+    it('leaves pending jobs unclaimed during restart preparation and resumes after cancellation', async () => {
+        const { controller } = getShutdownRuntime();
+        const requestId = crypto.randomUUID();
+        expect(await controller.prepare(requestId, 100)).toEqual({ drained: true });
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model', execution: execution(),
+        });
+        const execute = vi.fn(async () => { await memoryJobProvider.completeJob(jobId, ''); });
+        const dependencies = { provider: memoryJobProvider, encryptionKey: secret, execute };
+        try {
+            expect(await reconcileBackgroundJobs(dependencies)).toBe(0);
+            expect((await memoryJobProvider.getJob(jobId, 'user-1'))?.leaseOwner).toBeUndefined();
+        } finally { controller.cancel(requestId); }
+        expect(await reconcileBackgroundJobs(dependencies)).toBe(1);
+        await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
     });
 
     it.each([true, false])('restores only checkpointed usage on reclaim (checkpoint=%s) and fences stale usage', async (checkpoint) => {
@@ -210,6 +243,10 @@ describe('memory background job admission and lifecycle', () => {
         await expect(
             memoryJobProvider.claimJob?.(jobId, 'worker', Date.now(), Date.now() + 30_000)
         ).resolves.toBeNull();
+        // Parked memory records still disappear with the process even though
+        // they do not consume a generation concurrency slot.
+        const preparing = crypto.randomUUID();
+        expect(await getShutdownRuntime().controller.prepare(preparing, 10)).toMatchObject({ drained: false });
         const claimed = await memoryJobProvider.claimClientToolCall?.(
             jobId,
             'user-1',

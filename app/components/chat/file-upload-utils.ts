@@ -8,10 +8,14 @@ import { captureWorkspaceOperation, workspaceFilesAvailable, type WorkspaceOpera
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { getCachedSessionContext, refreshCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
+import { isCloudFileStorageEnabled } from '~/core/storage/file-policy';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 export function getMaxFileBytes(): number {
+    // Cloud's current private policy is enforced asynchronously at intake and presign.
+    if (isCloudFileStorageEnabled()) return 1024 * 1024 * 1024;
     try {
         const runtimeConfig = useRuntimeConfig();
         const candidate = Number(
@@ -19,7 +23,7 @@ export function getMaxFileBytes(): number {
                 ?.limits?.maxFileSizeBytes
         );
         if (Number.isFinite(candidate) && candidate > 0) {
-            return Math.floor(candidate);
+            return Math.min(STATIC_FILE_CEILING, Math.floor(candidate));
         }
     } catch {
         // Fall through to default when runtime config is not available.

@@ -8,6 +8,8 @@ import { writeAdminCredentials } from '../../../../admin/auth/credentials';
 import adminGate from '../../../../middleware/admin-gate';
 import login from '../login.post';
 import changePassword from '../change-password.post';
+import restartStatus from '../../system/restart-status.get';
+import * as workspaceSession from '../../../../auth/session';
 
 // Transport-level contracts missing from the primitive suites: admission before
 // bcrypt, bounded parsing, host gating, and session revocation after rotation.
@@ -30,16 +32,30 @@ describe('admin authentication HTTP security', () => {
         const ip = `198.51.100.${++sequence}`;
         const app = createApp().use(defineEventHandler(event => {
             Object.defineProperty(event.node.req, 'socket', { value: { remoteAddress: ip }, configurable: true });
-        })).use(adminGate).use('/api/admin/auth/login', login).use('/api/admin/auth/change-password', changePassword);
+        })).use(adminGate).use('/api/admin/auth/login', login).use('/api/admin/auth/change-password', changePassword)
+            .use('/api/admin/system/restart-status', restartStatus);
         request = toWebHandler(app);
     });
-    afterEach(async () => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); await rm(dir, { recursive: true, force: true }); });
+    afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); await rm(dir, { recursive: true, force: true }); });
     const post = (path: string, body: unknown, host = 'admin.example.test', cookie = '') => request(new Request(`http://${host}/api/admin/auth/${path}`, {
         method: 'POST', headers: { 'content-type': 'application/json', host, cookie }, body: JSON.stringify(body),
     }));
 
     it('hides login on a host outside the allowlist', async () => {
         expect((await post('login', { username: 'admin', password }, 'public.example.test')).status).toBe(404);
+    });
+    it('authenticates restart observation without resolving or provisioning workspace state', async () => {
+        const signedIn = await post('login', { username: 'admin', password });
+        expect(signedIn.status).toBe(200);
+        const cookie = signedIn.headers.get('set-cookie')!.split(';')[0]!;
+        const resolveSession = vi.spyOn(workspaceSession, 'resolveSessionContext');
+        const observe = (cookie: string) => request(new Request('http://admin.example.test/api/admin/system/restart-status', {
+            headers: { host: 'admin.example.test', cookie },
+        }));
+        expect((await observe(cookie)).status).toBe(200);
+        expect(resolveSession).not.toHaveBeenCalled();
+        expect((await observe('')).status).toBe(401);
+        expect(resolveSession).not.toHaveBeenCalled();
     });
     it('rejects oversized and malformed login bodies', async () => {
         expect((await post('login', { username: 'admin', password, padding: 'x'.repeat(9000) })).status).toBe(413);

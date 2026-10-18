@@ -388,3 +388,7 @@ JavaScript and CSS budgets. The harnesses retain versioned JSON reports under `o
 ## Device-only state and pull failures
 
 Incremental application and server push admission reject the built-in device-only KV names (`openrouter_api_key`, `MODELS_CATALOG`, and `workspace.manager.cache`). Client plugins may add names through `sync.kv:blocklist`; they cannot remove the built-in exclusions. Remote deletes also preserve these rows. Malformed pulled records abort the apply transaction and leave the cursor unacknowledged, allowing repair and retry instead of silently skipping history. Cursor advancement and completion timestamps are persisted atomically; ordinary advancement cannot lower a cursor.
+
+## Restart continuity
+
+Server maintenance may briefly defer gateway operations. Keep the existing outbox IDs and workspace binding; reconnection must use the normal idempotent push path, without resetting cursors or manufacturing replacement operations. See [server restarts](/documentation/cloud/operations).

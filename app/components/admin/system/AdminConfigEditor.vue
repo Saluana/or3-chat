@@ -35,6 +35,7 @@
             </div>
 
             <template v-else>
+                <p class="text-sm opacity-70">Settings marked Build or Deployment are read-only here. Apply them through your source build or managed deployment workflow. Registration is managed on its own page.</p>
                 <div
                     v-if="restartRequired"
                     class="flex flex-col gap-3 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)] sm:flex-row sm:items-center sm:justify-between"
@@ -108,7 +109,7 @@
                                 :class="variant === 'features' ? 'sm:flex sm:items-center sm:justify-between sm:gap-6' : ''"
                             >
                                 <div :class="variant === 'features' ? 'min-w-0 flex-1' : 'mb-2'">
-                                    <div class="text-sm font-medium">{{ entry.label }}</div>
+                                    <div class="text-sm font-medium">{{ entry.label }} <UBadge size="xs" color="neutral" variant="subtle">{{ entry.application === 'unsupported' ? 'Deployment' : entry.application }}</UBadge></div>
                                     <p class="mt-0.5 text-xs leading-relaxed opacity-60">
                                         {{ entry.description }}
                                     </p>
@@ -123,7 +124,7 @@
                                 <USwitch
                                     v-if="variant === 'features' && entry.valueType === 'boolean' && !entry.masked"
                                     :model-value="entry.value === 'true'"
-                                    :disabled="!isOwner"
+                                    :disabled="!isOwner || !entry.editable"
                                     :aria-label="entry.label"
                                     class="mt-3 sm:mt-0"
                                     @update:model-value="entry.value = $event ? 'true' : 'false'"
@@ -134,7 +135,8 @@
                                     :items="booleanItems"
                                     value-key="value"
                                     size="sm"
-                                    :disabled="!isOwner"
+                                    :disabled="!isOwner || !entry.editable"
+                                    :aria-label="entry.label"
                                     class="w-full"
                                     @update:model-value="entry.value = $event ?? null"
                                 />
@@ -144,7 +146,8 @@
                                     :type="entry.valueType === 'number' ? 'number' : 'text'"
                                     :placeholder="entry.masked ? 'Leave unchanged' : ''"
                                     size="sm"
-                                    :disabled="!isOwner"
+                                    :disabled="!isOwner || !entry.editable"
+                                    :aria-label="entry.label"
                                     class="w-full"
                                     @update:model-value="entry.value = $event ?? null"
                                 >
@@ -173,6 +176,9 @@
                         </template>
                         <template v-else>Everything is up to date.</template>
                     </p>
+                    <UButton v-if="changedCount" color="neutral" variant="ghost" :disabled="isSaving" @click="discardChanges">
+                        Discard changes
+                    </UButton>
                     <UButton
                         :disabled="!isOwner || isSaving || changedCount === 0"
                         :loading="isSaving"
@@ -226,6 +232,9 @@ const originalValues = ref<Record<string, string | null | undefined>>({});
 const restartRequired = ref(false);
 const isSaving = ref(false);
 const searchQuery = ref('');
+const editingRevision = ref<string | null>(null);
+const draftKey = `or3:admin:config-draft:${props.variant}:${props.groups.join(',')}`;
+let restoredDraft = false;
 
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 const pending = computed(() => configFetchStatus.value === 'pending' && !configData.value);
@@ -259,10 +268,9 @@ const GROUP_DESCRIPTIONS: Record<ConfigGroup, string> = {
     'External Services': 'OpenRouter and other service connections',
 };
 
-watch(
-    () => configData.value?.entries,
-    (next) => {
+function applyEntries(next: EnrichedConfigEntry[] | undefined, discard = false) {
         if (!next) return;
+        if (!discard && entries.value.some(entry => entry.editable && normalizeForSave(entry.value, entry.masked) !== normalizeForSave(originalValues.value[entry.key], entry.masked))) return;
         const selected = next
             .filter((entry) => props.groups.includes(entry.group))
             .map((entry) => ({
@@ -279,9 +287,38 @@ watch(
         originalValues.value = Object.fromEntries(
             selected.map((entry) => [entry.key, entry.value])
         );
-    },
+        editingRevision.value = configData.value?.savedRevision ?? null;
+        if (!restoredDraft && typeof sessionStorage !== 'undefined') {
+            restoredDraft = true;
+            try {
+                const saved: unknown = JSON.parse(sessionStorage.getItem(draftKey) ?? 'null');
+                if (saved && typeof saved === 'object' && 'expiresAt' in saved && typeof saved.expiresAt === 'number' && saved.expiresAt > Date.now()
+                    && 'revision' in saved && typeof saved.revision === 'string' && saved.revision.length <= 128
+                    && 'allowRestart' in saved && (saved.allowRestart === null || saved.allowRestart === 'true' || saved.allowRestart === 'false')) {
+                    const entry = entries.value.find(entry => entry.key === 'OR3_ADMIN_ALLOW_RESTART' && entry.editable);
+                    if (entry) { entry.value = saved.allowRestart; editingRevision.value = saved.revision; }
+                }
+            } catch { /* Non-secret draft storage is optional. */ }
+        }
+}
+watch(
+    () => configData.value?.entries,
+    next => applyEntries(next),
     { immediate: true }
 );
+watch(() => entries.value.map(entry => entry.value), () => {
+    if (!restoredDraft || typeof sessionStorage === 'undefined') return;
+    const entry = entries.value.find(entry => entry.key === 'OR3_ADMIN_ALLOW_RESTART' && entry.editable);
+    try {
+        if (entry && entry.value !== originalValues.value[entry.key] && editingRevision.value) {
+            sessionStorage.setItem(draftKey, JSON.stringify({ allowRestart: entry.value, revision: editingRevision.value, expiresAt: Date.now() + 30 * 60_000 }));
+        } else sessionStorage.removeItem(draftKey);
+    } catch { /* Never persist masked values or credentials. */ }
+});
+function discardChanges() {
+    try { sessionStorage.removeItem(draftKey); } catch { /* Optional browser draft. */ }
+    applyEntries(configData.value?.entries, true);
+}
 
 const filteredEntries = computed(() => {
     const query = searchQuery.value.trim().toLowerCase();
@@ -343,11 +380,11 @@ async function saveConfig() {
     if (!changedEntries.value.length || isSaving.value) return;
     isSaving.value = true;
     try {
-        const response = await $fetch<{ ok: boolean; restartRequired?: boolean }>(
+        const response = await $fetch<{ ok: boolean; restartRequired?: boolean; savedRevision: string }>(
             '/api/admin/system/config/write',
             {
                 method: 'POST',
-                body: { entries: changedEntries.value },
+                body: { entries: changedEntries.value, expectedRevision: editingRevision.value },
                 headers: { 'x-or3-admin-intent': 'admin' },
             }
         );
@@ -356,6 +393,8 @@ async function saveConfig() {
         originalValues.value = Object.fromEntries(
             entries.value.map((entry) => [entry.key, entry.value])
         );
+        editingRevision.value = response.savedRevision;
+        try { sessionStorage.removeItem(draftKey); } catch { /* Optional browser draft. */ }
         toast.add({
             title: 'Changes saved',
             description: response.restartRequired

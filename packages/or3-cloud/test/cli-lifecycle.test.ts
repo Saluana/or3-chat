@@ -1,5 +1,5 @@
 import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { installedManagedAssetChecksums } from '../src/deployment/assets';
@@ -30,6 +30,23 @@ afterEach(async () => {
 
 const NEW_IMAGE = `${REPOSITORY}@${NEW_DIGEST}`;
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
+
+test('an unresolved dashboard restart blocks competing CLI mutations before Docker runs', async () => {
+  const fixture = await sandbox();
+  await mkdir(join(fixture.cloud, 'restarts'), { recursive: true });
+  const input = { requestId: crypto.randomUUID(), policy: 'wait', target: { kind: 'current', activeRevision: 'fixture-revision' } };
+  await writeFile(join(fixture.cloud, 'restarts', 'restarts.json'), JSON.stringify({ schemaVersion: 1, identity: fixture.env.OR3_DEPLOYMENT_ID, operations: [{
+    request: input, requestId: input.requestId, fingerprint: sha256(JSON.stringify(input)), phase: 'needs_attention',
+    originalBootId: 'fixture-boot', targetRevision: 'fixture-revision', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    expected: { registrationMode: 'open' }, executionIntent: true,
+  }] }));
+  for (const args of [['restart'], ['update'], ['backup'], ['credentials', 'reset', '--yes']]) {
+    const result = await fixture.cli(args);
+    expect(result.exitCode, args.join(' ')).toBe(1);
+    expect(result.stderr).toMatch(/restart.*reconcil|restart.*unresolved/i);
+  }
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+});
 
 test.each(['restore', 'rollback'] as const)('%s refuses archive inventory failure before journal or service mutation', async (operation) => {
   const fixture = await sandbox();

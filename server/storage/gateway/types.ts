@@ -175,6 +175,17 @@ export interface StorageGatewayAdapter {
         input: PresignDownloadRequest
     ): Promise<PresignDownloadResponse>;
 
+    /** Server-only archive read of the exact committed snapshot original,
+     * including retained Trash. Recheck current membership and object identity
+     * before returning bytes. Never publish native URLs or modify/delete data.
+     * Providers whose ordinary downloads already include retained originals
+     * can continue using presignDownload for backups.
+     */
+    readBackupFile?(
+        event: H3Event,
+        input: { workspaceId: string; hash: string; storageId: string }
+    ): Promise<Response>;
+
     /**
      * Optional: Commit/finalize an upload.
      *

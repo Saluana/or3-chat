@@ -6,6 +6,18 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 
 ## What It Provides
 
+Dashboard restarts support Convex background jobs when both the provider artifact
+and its deployed backend include `getShutdownBlockerCount`. Its internal query
+includes parked work and pending history delivery, uses indexed existence checks
+without loading full pages of response snapshots,
+and never treats a failed lookup as idle. Keep the generated backend and provider
+contract together; a dashboard restart does not deploy backend changes. See
+[background execution](/documentation/cloud/background-execution#dashboard-restart-admission).
+
+History delivery and cleanup batches are bounded by bytes as well as rows, so
+large retained snapshots do not prevent recovery. Source scaffolds require
+Convex SDK 1.31.7 or newer for the size-accounting helper.
+
 - Convex sync provider (direct mode)
 - Consistent materialized snapshot pages pinned to one server high-watermark
 - Convex storage provider
@@ -296,6 +308,20 @@ canonical MIME, disposition, sanitized filename, and private/no-store headers.
 Downloads require the server-only admin credential. Deploy the matching
 `storage.ts` backend: `storage:getFileUrl` is now internal-only, and permanent
 native Convex URLs are never returned to the browser.
+
+Workspace backups use separate server-only `sync:backupSnapshot` and
+`storage:getBackupFileUrl` functions to include retained Trash originals.
+Backup continuations are bound to their frozen watermark and mode; normal
+sync continues to return tombstones. Each original read checks current
+membership and the exact snapshot workspace/hash/storage ID, including after
+opening the stream. Missing or replaced bytes fail the archive. Backup reads
+never mutate or delete source files or unfinished uploads. Upgrade the provider
+artifact and deploy its matching schema, sync, storage and snapshot templates;
+older runtimes/backends fail closed. No extra dashboard setting is needed.
+Native writes advance past existing record and retained tombstone revisions.
+Frozen backups keep their prior metadata, while fresh backups select the latest
+committed original after synced edits or repeated uploads.
+
 Native URLs issued by older provider builds remain usable until the stored file
 is deleted; upgrading the provider does not revoke those historical links. See
 [Convex's file storage security model](https://docs.convex.dev/file-storage/overview).

@@ -1,3 +1,7 @@
+vi.mock('../../../utils/storage/file-policy', async () => {
+    const { DEFAULT_FILE_POLICY } = await import('~~/shared/storage/file-policy');
+    return { readFilePolicy: async () => ({ ...DEFAULT_FILE_POLICY }) };
+});
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { STORAGE_CONTROL_BODY_LIMIT_BYTES } from '../../../utils/security/limited-json-body';

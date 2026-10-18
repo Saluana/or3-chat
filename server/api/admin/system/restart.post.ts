@@ -1,38 +1,20 @@
-/**
- * @module server/api/admin/system/restart.post
- *
- * Purpose:
- * Restarts the application server process.
- */
-import { defineEventHandler, createError } from 'h3';
-import { requireAdminApi } from '../../../admin/api';
-import { requestRestart } from '../../../admin/system/server-control';
+import { defineEventHandler, readBody, setResponseHeader, setResponseStatus } from 'h3';
+import { useRuntimeConfig } from '#imports';
+import { requireAdminApiContext } from '../../../admin/api';
+import { enforceGenericAdminRateLimit } from '../../../admin/auth/rate-limit';
+import { callRestartController, parseRestartOperation, restartControlError } from '../../../admin/system/server-control';
+import { restartRequestSchema } from '../../../../shared/server/restarts/controller';
+import { getJobProvider, isBackgroundStreamingEnabled } from '../../../utils/background-jobs/store';
 
-/**
- * POST /api/admin/system/restart
- *
- * Purpose:
- * Apply configuration changes that require a process reboot.
- *
- * Behavior:
- * - Checks `admin.allowRestart` feature flag.
- * - Usually signals the process manager (PM2/Docker) to restart.
- */
-export default defineEventHandler(async (event) => {
-    await requireAdminApi(event, { ownerOnly: true, mutation: true });
-
-    const config = useRuntimeConfig();
-    const adminConfig = config.admin as { allowRestart?: boolean } | undefined;
-    if (!adminConfig?.allowRestart) {
-        throw createError({ statusCode: 501, statusMessage: 'Restart disabled' });
-    }
-    if (import.meta.dev || process.env.NODE_ENV !== 'production') {
-        throw createError({
-            statusCode: 409,
-            statusMessage: 'Restart not supported in development mode',
-        });
-    }
-
-    await requestRestart();
-    return { ok: true };
+export default defineEventHandler(async event => {
+    await requireAdminApiContext(event, { superAdminOnly: true, superAdminCookieOnly: true, mutation: true });
+    setResponseHeader(event, 'Cache-Control', 'no-store');
+    enforceGenericAdminRateLimit(event, 'server-restart');
+    if (!useRuntimeConfig(event).admin.allowRestart) return restartControlError('restart_disabled', 501);
+    if (isBackgroundStreamingEnabled() && !(await getJobProvider()).getShutdownBlockerCount) return restartControlError('background_drain_unsupported', 501);
+    const body = restartRequestSchema.safeParse(await readBody(event));
+    if (!body.success) return restartControlError('invalid_request', 400);
+    const operation = parseRestartOperation(await callRestartController('start', body.data));
+    setResponseStatus(event, 202);
+    return { operation };
 });

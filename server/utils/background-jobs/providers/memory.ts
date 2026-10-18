@@ -650,6 +650,11 @@ export const memoryJobProvider: BackgroundJobProvider = {
             (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall
         ).length;
     },
+    async getShutdownBlockerCount(): Promise<number> {
+        return Array.from(jobs.values()).filter(job => job.status === 'streaming'
+            || job.historyPhase === 'admission_pending'
+            || job.historyPhase === 'finalization_pending').length;
+    },
 };
 
 /**

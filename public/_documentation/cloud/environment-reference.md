@@ -138,11 +138,7 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 
 **Admin → Registration → Settings** saves **Open registration**, **Invite only**,
 or **Registration closed** to `OR3_AUTH_REGISTRATION_MODE` in the server's `.env`.
-Restart OR3 to apply a saved mode; the page distinguishes it from the current
-mode and retains the restart notice after reload. **Restart now** asks for confirmation
-and is available to the owner when `OR3_ADMIN_ALLOW_RESTART=true`; development
-servers require a manual restart. Reload after OR3 returns to check the active
-mode. Settings also shows invitation setup status. Invite only requires the
+Use **Apply saved settings and restart** through the supported lifecycle controller. The page retains saved/current state and verifies the effective policy after recovery. See [server restarts](/documentation/cloud/operations). Settings also shows invitation setup status. Invite only requires the
 signing secret to be configured in the
 running server before it can be saved. Deployment environment overrides can
 take precedence over `.env` and must be updated by the operator if necessary.
@@ -365,8 +361,8 @@ encryption key is required before webhook creation.
 | `OR3_ADMIN_BASE_PATH` | `/admin` | Admin route prefix. |
 | `OR3_ADMIN_ALLOWED_HOSTS` | empty | Comma-separated admin host allowlist. |
 | `OR3_ADMIN_ALLOW_RESTART` | `false` | Allow admin-triggered restart. |
-| `OR3_ADMIN_ALLOW_REBUILD` | `false` | Allow admin-triggered rebuild and restart. |
-| `OR3_ADMIN_REBUILD_COMMAND` | `bun run build` | Command used for admin rebuilds. |
+| `OR3_ADMIN_ALLOW_REBUILD` | `false` | Legacy flag; dashboard live-output rebuilding is retired. |
+| `OR3_ADMIN_REBUILD_COMMAND` | `bun run build` | Legacy value; never executed by the dashboard. |
 | `OR3_ADMIN_DATA_DIR` | `.data` | Persistent location for admin credentials and generated JWT secret. |
 | `OR3_SHUTDOWN_TIMEOUT_MS` | `15000` | Graceful-shutdown request-drain timeout. |
 

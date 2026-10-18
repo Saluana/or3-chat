@@ -91,6 +91,22 @@ describe('Health check endpoint', () => {
         expect(response.providers).toBeUndefined();
     });
 
+    it('checks providers for readiness even without a deep query', async () => {
+        runtimeConfigMock.sync = { enabled: true, provider: '' };
+        const response = await handler(createMockH3Event({ method: 'GET', path: '/api/ready' }));
+        expect(response.status).toBe('degraded');
+    });
+
+    it('bounds a hung provider probe and reports it unavailable', async () => {
+        vi.useFakeTimers();
+        try {
+            getProviderAdminAdapterMock.mockReturnValue({ getStatus: () => new Promise(() => {}) });
+            const pending = handler(createMockH3Event({ method: 'GET', path: '/api/health?deep=true' }));
+            await vi.advanceTimersByTimeAsync(2_000);
+            expect(await Promise.race([pending, Promise.resolve({ status: 'still_pending' })])).toMatchObject({ status: 'degraded' });
+        } finally { vi.useRealTimers(); }
+    });
+
     it('includes provider status when deep=true', async () => {
         const event = createMockH3Event({
             method: 'GET',

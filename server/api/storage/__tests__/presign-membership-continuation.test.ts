@@ -1,3 +1,7 @@
+vi.mock('../../../utils/storage/file-policy', async () => {
+    const { DEFAULT_FILE_POLICY } = await import('~~/shared/storage/file-policy');
+    return { readFilePolicy: async () => ({ ...DEFAULT_FILE_POLICY }) };
+});
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, toWebHandler } from 'h3';
 import { testRuntimeConfig } from '../../../../tests/setup';

@@ -217,6 +217,6 @@ export default defineEventHandler(async (event) => {
         disposition: downloadPolicy.disposition,
         ...(typeof result.method === 'string' ? { method: result.method } : {}),
         ...(result.headers ? { headers: result.headers } : {}),
-        ...(typeof result.storageId === 'string' ? { storageId: result.storageId } : {}),
+        storageId: typeof result.storageId === 'string' ? result.storageId : liveFile.storageId,
     };
 });

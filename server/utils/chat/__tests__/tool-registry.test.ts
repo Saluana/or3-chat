@@ -20,10 +20,12 @@ import { placeHistoryTools } from '~/utils/chat/history-placement';
 import { getChatJobExecution } from '../../background-jobs/types';
 import { startBackgroundStream } from '../../background-jobs/stream-handler';
 import { resetJobProvider } from '../../background-jobs/store';
+import * as jobStore from '../../background-jobs/store';
 import type { CanonicalHistoryActor, CanonicalHistoryRecord } from '~~/shared/chat/background-history';
 import type { CanonicalChatQuery } from '~~/shared/chat/history-reader';
 import { historyToolDefinitions } from '~~/shared/chat/history-tools';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
+import { getShutdownRuntime } from '../../shutdown/runtime';
 
 describe('server tool registry', () => {
     // These execution tests use an authorized unowned canonical chat. The
@@ -160,15 +162,24 @@ describe('server tool registry', () => {
             runtime: 'server',
         };
         let signal: AbortSignal | undefined;
+        let finish!: () => void;
         registerServerTool(def, (_args, context) => {
             signal = context.abortSignal;
-            return new Promise(() => undefined);
+            return new Promise<string>(resolve => { finish = () => resolve('finished'); });
         }, { override: true, timeoutMs: 5 });
         vi.useFakeTimers();
         const timed = executeServerTool(def.function.name, '{}');
         await vi.advanceTimersByTimeAsync(5);
         await expect(timed).resolves.toMatchObject({ timedOut: true });
         expect(signal?.aborted).toBe(true);
+        vi.useRealTimers();
+        const backgroundEnabled = vi.spyOn(jobStore, 'isBackgroundStreamingEnabled').mockReturnValue(false);
+        const controller = getShutdownRuntime().controller;
+        const id = crypto.randomUUID();
+        try {
+            const drain = controller.prepare(id, 100);
+            await expect(drain).resolves.toMatchObject({ drained: false });
+        } finally { finish(); controller.cancel(id); backgroundEnabled.mockRestore(); await Promise.resolve(); }
         unregisterServerTool(def.function.name);
 
         registerServerTool(def, () => { throw new Error('domain timeout rule'); }, { override: true });

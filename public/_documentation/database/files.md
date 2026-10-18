@@ -26,7 +26,7 @@ File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and
 | `ref_count`      | Derived local ownership count; canonical retained rows govern deletion. |
 | `deleted`        | Soft delete flag set by `softDeleteFile`/`softDeleteMany`.      |
 
-The max size cap defaults to 20 MB and is configurable via `or3.limits.maxFileSizeBytes` in runtime config.
+Local-only intake defaults to 20 MiB via `or3.limits.maxFileSizeBytes`, with a 50 MiB absolute ceiling. Cloud limits, reusable cache size, and retention are adjustable in the admin dashboard; see [storage settings](/documentation/cloud/storage-layer#browser-cache-and-upload-settings). Large selected Cloud files upload before publication without IndexedDB staging. Existing local-only and unclassified legacy originals never expire automatically.
 
 ---
 

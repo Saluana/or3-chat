@@ -73,6 +73,7 @@ OR3 uses Nuxt 4.5.2, Vue, Nitro 2.13.4, Bun repository commands, Vitest, and Pla
 - R4.AC3: IF explicit recoverable interruption is selected THEN only participants/providers advertising and passing a fenced checkpoint/handoff contract SHALL be interrupted; lease release SHALL occur only after execution is quiescent and its checkpoint is durable.
 - R4.AC4: WHEN a job recovers THEN completed tool receipts SHALL remain authoritative; uncertain effects SHALL not replay, and any repeated model request/partial-output reset SHALL be surfaced as recovery rather than seamless continuation.
 - R4.AC5: IF a memory-backed job, workflow, browser tool, or plugin cannot prove safe handoff THEN the dashboard SHALL wait for completion or refuse interruption; a generic abort SHALL not masquerade as restart-safe suspension.
+- R4.AC6: WHEN SQLite or Convex background execution is selected THEN wait-policy accounting SHALL include streaming jobs, parked browser tools, workflows and pending admission/history delivery across the durable store. Zero SHALL prove no blockers; missing backend capabilities or lookup failures SHALL never authorize replacement.
 
 ### R5: Managed restart without deployment drift
 

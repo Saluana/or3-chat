@@ -49,6 +49,9 @@ import {
     type FileKind,
 } from '~~/shared/files/file-kind';
 import { parseDocumentFileHashes } from '~/utils/documents/document-content';
+import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
+import { isCloudFileStorageEnabled, loadFilePolicy } from '~/core/storage/file-policy';
+import { touchFileCache } from '~/core/storage/file-cache';
 
 /** Derived counts cannot authorize deletion; live ownership rows are authoritative. */
 async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: string[]): Promise<void> {
@@ -74,9 +77,6 @@ async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: str
 // Default max file size (20MB) - can be overridden by config
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
-// Cached config value to avoid repeated dynamic imports
-let cachedMaxFileSize: number | null = null;
-
 function resolveConfiguredMaxFileSize(): number {
     try {
         const runtimeConfig = useRuntimeConfig();
@@ -95,11 +95,7 @@ function resolveConfiguredMaxFileSize(): number {
 
 // Get max file size from OR3 config
 function getMaxFileSizeBytes(): number {
-    if (cachedMaxFileSize !== null) {
-        return cachedMaxFileSize;
-    }
-    cachedMaxFileSize = resolveConfiguredMaxFileSize();
-    return cachedMaxFileSize;
+    return Math.min(STATIC_FILE_CEILING, resolveConfiguredMaxFileSize());
 }
 
 const FILE_TABLE = 'files';
@@ -231,8 +227,7 @@ async function changeRefCount(
  * - Enforces max file size limit.
  * - Requires browser APIs for blob hashing and storage.
  *
- * Non-Goals:
- * - Does not upload to remote storage directly.
+ * Large Cloud files commit directly from the selected disk file before publication.
  */
 export async function createOrRefFile(
     file: Blob,
@@ -254,7 +249,24 @@ export async function createOrRefFile(
             ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
             : undefined;
     if (markId && hasPerf) performance.mark(`${markId}:start`);
-    if (file.size > getMaxFileSizeBytes()) throw new Error('file too large');
+    const cloud = isCloudFileStorageEnabled();
+    const queue = cloud ? (await import('~/core/storage/transfer-queue')).getStorageTransferQueue() : null;
+    const workspaceId = queue?.getWorkspaceId();
+    if (cloud && (!queue || !workspaceId)) throw new Error('Cloud storage is not ready. Please retry.');
+    const policy = cloud && workspaceId ? await loadFilePolicy(workspaceId) : null;
+    assertCurrentDb();
+    if (file.size > (policy?.maxUploadBytes ?? getMaxFileSizeBytes())) throw new Error('File exceeds the upload size limit.');
+    const direct = Boolean(policy && file.size > policy.maxCachedFileBytes);
+    if (direct && !(typeof File !== 'undefined' && file instanceof File)) {
+        throw new Error('Save this large generated file to disk, then select it for Cloud upload.');
+    }
+    if (!direct && typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+        const storage = await navigator.storage.estimate();
+        if (storage.quota && (storage.usage ?? 0) + file.size > storage.quota) {
+            throw new Error('Browser storage is full. Save your local originals before freeing space, or use Cloud upload.');
+        }
+    }
+    assertCurrentDb();
     const hooks = useHooks();
     const declaredMime = normalizeFileMimeType(file.type);
     let kind: FileKind = classifyFileKind(declaredMime);
@@ -273,12 +285,16 @@ export async function createOrRefFile(
     const existing = await db.file_meta.get(hash);
     assertCurrentDb();
     if (existing) {
+        if (direct) {
+            await queue!.uploadDirect(existing, file, { db, workspaceId: workspaceId! }, assertCurrentDb);
+            assertCurrentDb();
+        }
         // The supplied bytes have already been hashed. Metadata may have arrived
         // through sync before its original; preserve the original atomically with intake.
         const changed = await db.transaction('rw',
             getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }), async () => {
                 assertCurrentDb();
-                if (!(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
+                if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
                 const incremented = await changeFileRefRows(hash, 1, db);
                 assertCurrentDb();
                 return incremented;
@@ -357,7 +373,10 @@ export async function createOrRefFile(
     const referenceChanges: FileRefNotification[] = [];
     const wasCreated = (): boolean => createdNew;
     await hooks.doAction('db.files.create:action:before', actionPayload);
-    const mergedMeta = parseOrThrow(FileMetaSchema, applyFileEntityToMeta(seededMeta, actionPayload.entity));
+    let mergedMeta = parseOrThrow(FileMetaSchema, applyFileEntityToMeta(seededMeta, actionPayload.entity));
+    if (direct) {
+        mergedMeta = await queue!.uploadDirect(mergedMeta, file, { db, workspaceId: workspaceId! }, assertCurrentDb);
+    }
     assertCurrentDb();
     await db.transaction(
         'rw',
@@ -369,7 +388,8 @@ export async function createOrRefFile(
         const concurrentExisting = await db.file_meta.get(hash);
         if (concurrentExisting) {
             assertCurrentDb();
-            if (!(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
+            if (direct) await db.file_meta.update(hash, { storage_id: mergedMeta.storage_id, storage_provider_id: mergedMeta.storage_provider_id });
+            if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
             const changed = (await changeFileRefRows(hash, 1, db))!;
             referenceChanges.push(changed.notification);
             storedMeta = changed.row;
@@ -380,7 +400,7 @@ export async function createOrRefFile(
         assertCurrentDb();
         await Promise.all([
             db.file_meta.put(mergedMeta),
-            db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
+            ...(!direct ? [db.file_blobs.put({ hash: mergedMeta.hash, blob: file })] : []),
         ]);
         storedMeta = mergedMeta;
         createdNew = true;
@@ -456,7 +476,7 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
  */
 export async function getFileBlob(hash: string, db = getDb()): Promise<Blob | undefined> {
     const row = await db.file_blobs.get(hash);
-    if (row?.blob) return row.blob;
+    if (row?.blob) { if (row.cache_accessed_at) await touchFileCache(db, hash); return row.blob; }
     return ensureFileBlob(hash, db);
 }
 
@@ -478,7 +498,7 @@ export async function ensureFileBlob(
     db = getDb()
 ): Promise<Blob | undefined> {
     const row = await db.file_blobs.get(hash);
-    if (row?.blob) return row.blob;
+    if (row?.blob) { if (row.cache_accessed_at) await touchFileCache(db, hash); return row.blob; }
     if (!import.meta.client) return undefined;
     try {
         const { getStorageTransferQueue } = await import(

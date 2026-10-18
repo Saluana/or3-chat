@@ -31,9 +31,17 @@
                     <AdminSystemOperationsCard
                         :is-owner="isOwner"
                         :allow-restart="Boolean(status.admin?.allowRestart)"
-                        :allow-rebuild="Boolean(status.admin?.allowRebuild)"
+                        :can-restart="serverRestart.canRestart.value"
+                        :busy="serverRestart.busy.value"
+                        :progress="serverRestart.progress.value"
+                        :needs-attention="serverRestart.operation.value?.phase === 'needs_attention'"
+                        :can-cancel="serverRestart.operation.value?.phase === 'preparing'"
+                        :reason="serverRestart.status.value?.capability.reason"
+                        :saved-pending="Boolean(serverRestart.status.value?.capability.applySaved && serverRestart.status.value?.activeRevision !== serverRestart.status.value?.savedRevision)"
                         @restart="restart"
-                        @rebuild-restart="rebuildRestart"
+                        @apply-saved="serverRestart.restart('saved')"
+                        @reconcile="serverRestart.reconcile()"
+                        @cancel="serverRestart.cancel()"
                     />
                 </div>
 
@@ -190,35 +198,6 @@ const serverRestart = useServerRestart(
 
 async function restart() {
     await serverRestart.restart();
-}
-
-async function rebuildRestart() {
-    const confirmed = await confirm({
-        title: 'Rebuild & Restart Server',
-        message:
-            'Are you sure you want to rebuild and restart the server now? This process may take several minutes.',
-        danger: true,
-        confirmText: 'Rebuild & Restart',
-    });
-    if (!confirmed) return;
-
-    try {
-        await $fetch('/api/admin/system/rebuild-restart', {
-            method: 'POST',
-            headers: ADMIN_HEADERS,
-        });
-        toast.add({
-            title: 'Rebuild initiated',
-            description: 'The server is rebuilding and will restart.',
-            color: 'success',
-        });
-    } catch (error: unknown) {
-        toast.add({
-            title: 'Rebuild failed',
-            description: parseErrorMessage(error, 'Rebuild failed'),
-            color: 'error',
-        });
-    }
 }
 
 async function runProviderAction(action: {

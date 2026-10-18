@@ -4,6 +4,7 @@
             <h1 class="text-2xl font-semibold">Registration</h1>
             <p class="mt-1 text-sm opacity-70">Choose who can create an account and manage invitations.</p>
         </header>
+        <p v-if="serverRestart.progress.value" role="status" aria-live="polite" class="text-sm">{{ serverRestart.progress.value }}</p>
         <UTabs v-model="activeTab" :items="tabs" :unmount-on-hide="false" color="neutral" variant="link" class="w-full" aria-label="Registration tabs">
             <template #settings>
                 <div class="space-y-5 pt-4">
@@ -31,7 +32,7 @@
                                 <UAlert v-if="saveError" role="alert" color="error" variant="soft" title="Unable to save registration settings" :description="saveError" />
                                 <p v-if="needsInviteSetup" class="text-sm">Set up invitations before choosing Invite only.</p>
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <UButton type="submit" :loading="saving" :disabled="saving || restarting || !hasChanges || needsInviteSetup">Save settings</UButton>
+                                    <UButton type="submit" :loading="saving" :disabled="saving || restarting || !hasChanges || needsInviteSetup || settings.application === 'unsupported'">Save settings</UButton>
                                     <span v-if="hasChanges" class="text-sm opacity-70">Unsaved changes</span>
                                     <span v-else-if="saved && !settings.restartRequired" role="status" class="text-sm">Settings saved.</span>
                                 </div>
@@ -68,9 +69,9 @@ const router = useRouter();
 const { data: statusData } = useAdminSystemStatus();
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 const allowRestart = computed(() => statusData.value?.status.admin?.allowRestart === true);
-const canRestart = computed(() => isOwner.value && allowRestart.value);
 const serverRestart = useServerRestart(isOwner, allowRestart);
-const restarting = ref(false);
+const canRestart = serverRestart.canRestart;
+const restarting = serverRestart.busy;
 const tabs = [{ label: 'Settings', value: 'settings', slot: 'settings' }, { label: 'Invitations', value: 'invitations', slot: 'invitations' }];
 const activeTab = computed({
     get: () => route.query.tab === 'invitations' ? 'invitations' : 'settings',
@@ -90,14 +91,24 @@ const loadError = ref('');
 const saveError = ref('');
 const hasChanges = computed(() => settings.value !== null && form.mode !== settings.value.savedMode);
 const needsInviteSetup = computed(() => form.mode === 'invite_only' && settings.value?.inviteSigningConfigured === false);
+const draftKey = 'or3:admin:registration-draft';
+watch(() => form.mode, mode => {
+    if (loading.value || typeof sessionStorage === 'undefined') return;
+    try {
+        if (hasChanges.value) sessionStorage.setItem(draftKey, JSON.stringify({ mode, expiresAt: Date.now() + 30 * 60_000 }));
+        else sessionStorage.removeItem(draftKey);
+    } catch { /* The form remains usable when browser storage is unavailable. */ }
+}, { flush: 'sync' });
 function modeLabel(mode: RegistrationMode) { return modes.find(item => item.value === mode)!.label; }
 
 async function loadSettings() {
     loading.value = true;
     loadError.value = '';
     try {
-        settings.value = await $fetch<RegistrationSettings>('/api/admin/registration');
-        form.mode = settings.value.savedMode;
+        const next = await $fetch<RegistrationSettings>('/api/admin/registration');
+        const preserveDraft = hasChanges.value;
+        settings.value = next;
+        if (!preserveDraft) form.mode = settings.value.savedMode;
     } catch (error) { loadError.value = parseErrorMessage(error, 'Please try again.'); }
     finally { loading.value = false; }
 }
@@ -107,16 +118,23 @@ async function saveSettings() {
     saved.value = false;
     saveError.value = '';
     try {
-        settings.value = await $fetch<RegistrationSettings>('/api/admin/registration', { method: 'POST', headers: ADMIN_HEADERS, body: { mode: form.mode } });
+        settings.value = await $fetch<RegistrationSettings>('/api/admin/registration', { method: 'POST', headers: ADMIN_HEADERS, body: { mode: form.mode, expectedRevision: settings.value?.savedRevision } });
         saved.value = true;
+        try { sessionStorage.removeItem(draftKey); } catch { /* Non-secret draft only. */ }
     } catch (error) { saveError.value = parseErrorMessage(error, 'Please try again.'); }
     finally { saving.value = false; }
 }
 async function restart() {
     if (restarting.value || saving.value || !canRestart.value) return;
-    restarting.value = true;
-    try { await serverRestart.restart(); }
-    finally { restarting.value = false; }
+    await serverRestart.restart('saved');
 }
-onMounted(() => { void loadSettings(); });
+watch(() => serverRestart.operation.value?.phase, phase => { if (phase === 'succeeded') void loadSettings(); });
+onMounted(async () => {
+    await loadSettings();
+    try {
+        const draft = JSON.parse(sessionStorage.getItem(draftKey) ?? 'null');
+        if (draft?.expiresAt > Date.now() && modes.some(mode => mode.value === draft.mode)) form.mode = draft.mode;
+        else sessionStorage.removeItem(draftKey);
+    } catch { /* Ignore malformed browser-only drafts. */ }
+});
 </script>

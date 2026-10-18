@@ -10,8 +10,7 @@
                 <p class="dashboard-page-eyebrow">Workspace</p>
                 <h1 class="dashboard-page-title">Backup and restore</h1>
                 <p class="dashboard-page-description">
-                    Export a portable local backup or restore workspace data
-                    from a previous OR3 archive.
+                    {{ cloud ? 'Back up Cloud data and originals, or restore into a fresh workspace.' : 'Export a local backup or restore workspace data from a previous OR3 archive.' }}
                 </p>
             </div>
         </header>
@@ -31,10 +30,7 @@
                         Workspace backup
                     </h2>
                     <p class="supporting-text">
-                        Export your entire on-device workspace before making
-                        risky changes, and keep the backup in a safe location.
-                        Restoring a backup replaces or merges everything in the
-                        app, so double-check selections before importing.
+                        {{ cloud ? 'Cloud backups include server records and original files, including files absent from this browser. Finish syncing and uploading first. Restores create a new workspace and keep your source intact.' : 'Local backups contain this browser’s workspace database and stored files. Keep a fresh export before restoring or clearing browser data.' }}
                     </p>
                 </div>
                 <div></div>
@@ -45,7 +41,7 @@
                 variant="subtle"
                 :icon="iconWarning"
                 class="text-xs"
-                title="Always create a fresh export before importing a backup—replace mode wipes current data."
+                :title="cloud ? 'Keep your downloaded backup safe. If restore fails, the original workspace and incomplete destination are retained.' : 'Always create a fresh export before importing a backup—replace mode wipes current data.'"
             />
         </section>
 
@@ -65,9 +61,7 @@
                 <div></div>
             </div>
             <p class="supporting-text">
-                Downloads a timestamped JSONL backup of the active workspace
-                database. Large workspaces stream directly to disk to avoid
-                freezing the UI.
+                {{ cloud ? 'Downloads a complete .or3cloud archive with original files and checksums. Data streams directly to disk; unfinished sync or missing originals prevent a complete backup.' : 'Downloads a timestamped JSONL backup of the on-device workspace database. Data streams to disk. Files that exist only on a remote server are not included.' }}
             </p>
             <div class="space-y-2">
                 <UProgress
@@ -113,16 +107,14 @@
                 </span>
             </div>
             <p class="supporting-text">
-                Validate a backup file, choose an import mode, and restore your
-                data. Append keeps current records; replace wipes everything
-                first.
+                {{ cloud ? 'Validate a .or3cloud archive, then restore into a new workspace. Your current workspace is kept. Leave this page open until restoration finishes.' : 'Validate a backup file, choose an import mode, and restore your data. Append adds records; replace clears current tables inside the restore transaction.' }}
             </p>
             <div class="space-y-4">
                 <div class="theme-upload-panel">
                     <input
                         ref="fileInput"
                         type="file"
-                        accept="application/json,.json,.jsonl,.or3.jsonl"
+                        :accept="cloud ? '.or3cloud' : 'application/json,.json,.jsonl,.or3.jsonl'"
                         class="hidden"
                         @change="onFilePicked"
                     />
@@ -268,7 +260,7 @@
                     </div>
                 </Transition>
 
-                <div class="space-y-3">
+                <div v-if="!cloud" class="space-y-3">
                     <div class="space-y-2">
                         <p
                             class="text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
@@ -324,7 +316,7 @@
                         :disabled="overwriteDisabled"
                         class="theme-checkbox"
                         label="Overwrite records on key conflict"
-                        description="When disabled, conflicting rows are skipped and reported."
+                        description="When disabled, any key conflict aborts the import and rolls back changes."
                     />
                 </div>
 
@@ -388,6 +380,8 @@ import {
 import { useIcon } from '~/composables/useIcon';
 import { err, reportError, type AppError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
+const cloud = isCloudWorkspaceBackupEnabled();
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
@@ -604,10 +598,11 @@ const importStatusText = computed(() => {
 });
 
 const importWarning = computed(() => {
+    if (cloud) return 'Restore creates a fresh Cloud workspace. Existing workspace data is preserved.';
     if (importMode.value === 'replace')
         return 'Replace mode clears all existing workspace data before importing.';
     if (importMode.value === 'append' && !overwriteValues.value)
-        return 'Append mode keeps existing data; enable overwrite to update conflicting records.';
+        return 'Append aborts on key conflicts. Enable overwrite to replace conflicting records.';
     return '';
 });
 
@@ -641,7 +636,7 @@ const importModeOptions: Array<{
 
 const selectedFileSummary = computed(() => {
     if (!selectedFile.value)
-        return 'Accepted formats: .or3.jsonl, .jsonl, .json';
+        return cloud ? 'Accepted format: .or3cloud' : 'Accepted formats: .or3.jsonl, .jsonl, .json';
     return `${selectedFile.value.name} • ${formatBytes(
         selectedFile.value.size
     )}`;
@@ -881,7 +876,7 @@ watch(overwriteValuesModel, (value, previous) => {
     announce(
         value
             ? 'Overwrite conflicts enabled for append mode.'
-            : 'Overwrite conflicts disabled; conflicting rows will be skipped.'
+            : 'Overwrite conflicts disabled; a conflict aborts the import.'
     );
 });
 

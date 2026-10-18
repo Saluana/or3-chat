@@ -1,80 +1,70 @@
-/**
- * @module server/admin/system/server-control.ts
- *
- * Purpose:
- * Provides utilities for managing the Nuxt server process lifecycle from the
- * admin dashboard. It uses a file-based signaling mechanism to communicate
- * with an external process manager (like PM2 or a custom watcher).
- *
- * Responsibilities:
- * - Signaling for immediate server restarts.
- * - Signaling for server rebuilds followed by a restart.
- * - Graceful process termination.
- *
- * Architecture:
- * This module writes timestamps and command hints to a `restart.requested` file
- * in the current working directory. The server process then exits, and it's
- * expected that an external watcher will detect the file change and restart the service.
- *
- * Constraints:
- * - Only works in environments where the process has write access to `process.cwd()`.
- * - Requires an external watcher to perform the actual restart/rebuild.
- */
-import { promises as fs } from 'node:fs';
-import { resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { request } from 'node:http';
+import { createError } from 'h3';
+import { z } from 'zod';
+import type { RestartOperation, RestartStatus } from '../../../shared/admin/restarts';
 
-/**
- * Path to the signal file monitored by the process manager.
- */
-const REQUEST_PATH = resolve(process.cwd(), 'restart.requested');
-
-/**
- * Requests an immediate restart of the server process.
- *
- * Behavior:
- * 1. Writes the current timestamp to the `restart.requested` file.
- * 2. Schedules a process exit (`process.exit(0)`) after 250ms.
- *
- * Constraints:
- * The 250ms delay allows the HTTP response to be flushed to the client before
- * the server terminates.
- */
-export async function requestRestart(): Promise<void> {
-    await fs.writeFile(REQUEST_PATH, String(Date.now()), 'utf8');
-    setTimeout(() => {
-        process.exit(0);
-    }, 250);
+type Adapter = { id: 'managed' | 'development'; socketPath: string; token?: string };
+const adapters = new Map<string, Adapter>();
+export function registerRestartAdapter(adapter: Adapter) {
+    adapters.set(adapter.id, adapter);
+    return () => { if (adapters.get(adapter.id) === adapter) adapters.delete(adapter.id); };
 }
-
-/**
- * Executes a shell command (typically a build script) and then restarts the server.
- *
- * Behavior:
- * 1. Signals a "rebuild" intent by writing to `restart.requested`.
- * 2. Spawns the provided `command` in a shell with inherited stdio.
- * 3. Waits for the command to exit successfully.
- * 4. Schedules a process exit after 250ms.
- *
- * @param command - The shell command to execute (e.g., `npm run build`).
- * @throws Error if the rebuild command exits with a non-zero code.
- */
-export async function rebuildAndRestart(command: string): Promise<void> {
-    await fs.writeFile(REQUEST_PATH, `rebuild:${Date.now()}`, 'utf8');
-    await new Promise<void>((resolvePromise, rejectPromise) => {
-        const child = spawn(command, {
-            shell: true,
-            stdio: 'inherit',
+const text = z.string().min(1).max(128);
+const operation = z.object({
+    requestId: z.string().uuid(), phase: z.enum(['accepted', 'preparing', 'draining', 'restarting', 'verifying', 'succeeded', 'cancelled', 'failed', 'needs_attention']),
+    originalBootId: text, observedBootId: text.optional(), targetRevision: text,
+    createdAt: z.string().datetime(), updatedAt: z.string().datetime(), reasonCode: text.optional(),
+    preparedAt: z.string().datetime().optional(), replacedAt: z.string().datetime().optional(),
+}).strict();
+const status = z.object({
+    capability: z.object({ mode: z.enum(['managed', 'development', 'unsupported']), restart: z.boolean(), applySaved: z.boolean(), rebuild: z.literal(false), reason: text.optional() }).strict(),
+    bootId: text.nullable(), activeRevision: text.nullable(), savedRevision: text.nullable(), operation: operation.nullable(),
+    savedSettings: z.object({ registrationMode: z.enum(['open', 'invite_only', 'disabled']), allowRestart: z.boolean() }).strict().optional(),
+}).strict();
+export function restartControlError(code: string, statusCode = 409): never {
+    throw createError({ statusCode, statusMessage: code.replaceAll('_', ' '), data: { code } });
+}
+export async function callRestartController(path: string, body?: unknown): Promise<unknown> {
+    const adapter = adapters.get('development') ?? adapters.get('managed');
+    if (!adapter) return restartControlError('restart_unsupported', 501);
+    return await new Promise((resolve, reject) => {
+        const payload = body === undefined ? undefined : JSON.stringify(body);
+        const req = request({ socketPath: adapter.socketPath, path: `/lifecycle/v1/${path}`, method: payload ? 'POST' : 'GET',
+            headers: { ...(adapter.token ? { 'x-or3-controller-token': adapter.token } : {}), ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}) },
+        }, response => {
+            let size = 0; const chunks: Buffer[] = [];
+            response.on('data', chunk => { size += chunk.length; if (size > 64 * 1024) { req.destroy(new Error('response_limit')); return; } chunks.push(chunk); });
+            response.once('error', reject);
+            response.once('end', () => {
+                clearTimeout(timer);
+                try {
+                    const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                    if ((response.statusCode ?? 500) >= 400) {
+                        const parsed = z.object({ code: z.string().regex(/^[a-z_]{1,64}$/) }).safeParse(value);
+                        reject(createError({ statusCode: response.statusCode, statusMessage: 'Restart controller refused the operation', data: { code: parsed.success ? parsed.data.code : 'controller_unavailable' } }));
+                    } else resolve(value);
+                } catch { reject(createError({ statusCode: 503, data: { code: 'controller_invalid_response' } })); }
+            });
         });
-        child.on('exit', (code) => {
-            if (code === 0) resolvePromise();
-            else rejectPromise(new Error(`Rebuild failed with code ${code}`));
-        });
-        child.on('error', (err) => {
-            rejectPromise(err);
-        });
+        const timer = setTimeout(() => req.destroy(new Error('controller_timeout')), ['start', 'config', 'reconcile'].includes(path) ? 30_000 : 2_000);
+        req.once('error', () => { clearTimeout(timer); reject(createError({ statusCode: 503, statusMessage: 'Restart controller unavailable', data: { code: 'controller_unavailable' } })); });
+        if (payload) req.write(payload); req.end();
     });
-    setTimeout(() => {
-        process.exit(0);
-    }, 250);
 }
+export async function readRestartStatus(requestId?: string): Promise<RestartStatus> {
+    try { return status.parse(await callRestartController(`status${requestId ? `?requestId=${encodeURIComponent(requestId)}` : ''}`)); }
+    catch (error) {
+        if ((error as { statusCode?: number }).statusCode === 404) return {
+            capability: { mode: 'unsupported', restart: false, applySaved: false, rebuild: false, reason: 'controller_upgrade_required' },
+            bootId: null, activeRevision: null, savedRevision: null, operation: null,
+        };
+        throw error;
+    }
+}
+export async function saveRestartConfiguration(updates: Record<string, string | null>, expectedRevision: string): Promise<RestartStatus> {
+    return status.parse(await callRestartController('config', { updates, expectedRevision }));
+}
+export function parseRestartOperation(value: unknown): RestartOperation {
+    return z.object({ operation }).strict().parse(value).operation;
+}
+export function hasRestartController() { return adapters.size > 0; }

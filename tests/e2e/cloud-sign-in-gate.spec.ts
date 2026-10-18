@@ -372,7 +372,7 @@ test('registration settings preserve saved and active modes across tabs and relo
     let savedMode = currentMode;
     let failSave = true;
     const writes: Array<{ mode: string; intent: string | undefined }> = [];
-    const settings = () => ({ currentMode, savedMode, restartRequired: currentMode !== savedMode, inviteSigningConfigured: true });
+    const settings = () => ({ currentMode, savedMode, restartRequired: currentMode !== savedMode, inviteSigningConfigured: true, savedRevision: "fixture-revision", application: "restart" });
     // Browser saves are intercepted; the user's source .env is never modified.
     // Disk persistence and policy validation belong to the real route fixture.
     await page.route('**/api/admin/registration', async route => {
@@ -416,74 +416,27 @@ test('registration settings preserve saved and active modes across tabs and relo
     await saveEvidence(info, 'registration-settings-active-mobile', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 });
 
-test('registration restart requires confirmation, handles failures, and respects server controls', async ({ page }, info) => {
+test('registration explains an unsupported restart without submitting a mutation', async ({ page }, info) => {
     const origin = new URL(info.project.use.baseURL!).origin;
     expect((await page.request.post('/api/admin/auth/login', {
         headers: { origin, 'x-or3-admin-intent': 'admin' },
         data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
     })).ok()).toBe(true);
-    const statusResponse = await page.request.get('/api/admin/system/status');
-    expect(statusResponse.ok()).toBe(true);
-    const payload = await statusResponse.json();
-    expect(payload.session.role).toBe('owner');
-    let allowRestart = true;
-    await page.route('**/api/admin/system/status', route => route.fulfill({ json: {
-        ...payload, status: { ...payload.status, admin: { ...payload.status.admin, allowRestart } },
-    } }));
     await page.route('**/api/admin/registration', route => route.fulfill({ json: {
-        currentMode: 'open', savedMode: 'invite_only', restartRequired: true, inviteSigningConfigured: true,
+        currentMode: 'open', savedMode: 'invite_only', restartRequired: true, inviteSigningConfigured: true, savedRevision: null, application: 'unsupported',
     } }));
-    const requests: Array<{ method: string; intent: string | undefined }> = [];
-    let response: 'development' | 'failure' | 'success' = 'development';
-    let releaseRestart = () => {};
-    // Intercept every restart request; this test must never stop a running server.
-    await page.route('**/api/admin/system/restart', async route => {
-        requests.push({ method: route.request().method(), intent: route.request().headers()['x-or3-admin-intent'] });
-        if (response === 'development') return route.fulfill({ status: 409, json: { statusMessage: 'Restart not supported in development mode' } });
-        if (response === 'failure') return route.fulfill({ status: 500, json: { statusMessage: 'Restart failed' } });
-        await new Promise<void>(resolve => { releaseRestart = resolve; });
-        return route.fulfill({ json: { ok: true } });
-    });
+    await page.route('**/api/admin/system/restart-status*', route => route.fulfill({ json: {
+        capability: { mode: 'unsupported', restart: false, applySaved: false, rebuild: false, reason: 'restart_unsupported' },
+        bootId: null, activeRevision: null, savedRevision: null, operation: null,
+    } }));
+    let submitted = false;
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/system/restart')) submitted = true; });
     await page.goto('/admin/registration');
-    const restart = page.getByRole('button', { name: 'Restart now', exact: true });
-    await expect(restart).toBeEnabled();
-    await restart.click();
-    const confirmation = page.getByRole('dialog', { name: 'Restart Server', exact: true });
-    await expect(confirmation).toContainText('temporary downtime');
-    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(restart).toBeEnabled();
-    expect(requests).toEqual([]);
-
-    for (const outcome of ['development', 'failure'] as const) {
-        response = outcome;
-        await restart.click();
-        await confirmation.getByRole('button', { name: 'Restart', exact: true }).click();
-        await expect(page.getByText(outcome === 'development' ? 'Restart unavailable in dev' : 'The service could not complete the request. Please try again later.', { exact: true })).toBeVisible();
-        await expect(restart).toBeEnabled();
-        await expect(page.getByText('Restart required', { exact: true })).toBeVisible();
-    }
-
-    response = 'success';
-    await restart.click();
-    await confirmation.getByRole('button', { name: 'Restart', exact: true }).click();
-    try {
-        await expect.poll(() => requests.length).toBe(3);
-        await expect(restart).toBeDisabled();
-        await saveEvidence(info, 'registration-restart-pending', { body: await page.screenshot(), contentType: 'image/png' });
-    } finally { releaseRestart(); }
-    await expect(page.getByText('Restart initiated', { exact: true })).toBeVisible();
-    await expect(restart).toBeEnabled();
-    expect(requests).toEqual(Array.from({ length: 3 }, () => ({ method: 'POST', intent: 'admin' })));
-    await expect(page.getByText('Current mode: Open registration', { exact: true })).toBeVisible();
-    await expect(page.getByText('Restart required', { exact: true })).toBeVisible();
-
-    allowRestart = false;
-    await page.reload();
-    await expect(restart).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Restart now', exact: true })).toBeDisabled();
     await expect(page.getByText('Restart from the dashboard is unavailable. Ask the person managing your server to restart OR3.', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Go to Operations', exact: true })).toHaveAttribute('href', '/admin/system');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await saveEvidence(info, 'registration-restart-unavailable-mobile', { body: await page.screenshot(), contentType: 'image/png' });
+    expect(submitted).toBe(false);
+    await saveEvidence(info, 'registration-restart-unavailable', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
 test('registration settings recover from load failures and explain missing invitation setup', async ({ page }, info) => {
@@ -495,7 +448,7 @@ test('registration settings recover from load failures and explain missing invit
     let failLoad = true;
     await page.route('**/api/admin/registration', route => route.fulfill(failLoad
         ? { status: 503, json: { statusMessage: 'Unavailable' } }
-        : { json: { currentMode: 'open', savedMode: 'open', restartRequired: false, inviteSigningConfigured: false } }));
+        : { json: { currentMode: 'open', savedMode: 'open', restartRequired: false, inviteSigningConfigured: false, savedRevision: 'fixture-revision', application: 'restart' } }));
     await page.goto('/admin/registration');
     await expect(page.getByRole('alert')).toContainText('Unable to load registration settings');
     failLoad = false;

@@ -149,7 +149,7 @@ export async function restoreBackupData(
   // An inventory older than v3 cannot safely re-enable the overlay: its
   // archived assets do not contain compose.operator.yaml. Treat it as a
   // CLI-only snapshot rather than leaving an orphaned Docker-socket sidecar.
-  const restoresOperatorOverlay = manifest.managedAssetInventoryVersion === MANAGED_ASSET_INVENTORY_VERSION
+  const restoresOperatorOverlay = [3, MANAGED_ASSET_INVENTORY_VERSION].includes(manifest.managedAssetInventoryVersion ?? 1)
     && Boolean(manifest.managedAssetSha256?.['compose.operator.yaml']);
   const restoredEnv = restoresOperatorOverlay
     ? {

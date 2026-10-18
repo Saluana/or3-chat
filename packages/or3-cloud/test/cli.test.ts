@@ -14,7 +14,7 @@ import { assessUpdate } from '../src/commands/update';
 import { validatePassword } from '../src/credentials/inputs';
 import { buildCredentialsResetScript } from '../src/credentials/reset-script';
 import { assertSupportedSource, assertSupportedSourceCompose } from '../src/deployment/adoption-source';
-import { copyAssets, restoreManagedAssets, snapshotManagedAssets } from '../src/deployment/assets';
+import { copyAssets, restoreManagedAssets, snapshotManagedAssets, MANAGED_ASSET_INVENTORY_VERSION } from '../src/deployment/assets';
 import { STATE_SCHEMA_COMPATIBILITY, assertKnownStateSchema } from '../src/deployment/contracts';
 import {
   buildEnv,
@@ -57,7 +57,7 @@ async function authenticatedBackupFixture(directory: string, backupId: string) {
     mode: 'local',
     dataSha256: hash(data),
     configSha256: hash(config),
-    managedAssetInventoryVersion: 3,
+    managedAssetInventoryVersion: MANAGED_ASSET_INVENTORY_VERSION,
     managedAssetSha256: await snapshotManagedAssets(directory, 'local', path),
   };
   const contents = JSON.stringify(manifest);
@@ -497,7 +497,7 @@ test('snapshots and restores checksummed managed deployment assets', async () =>
       imageDigest: `sha256:${'a'.repeat(64)}`,
       dataSha256: 'b'.repeat(64),
       managedAssetSha256,
-      managedAssetInventoryVersion: 3 as const,
+      managedAssetInventoryVersion: MANAGED_ASSET_INVENTORY_VERSION,
       mode: 'public' as const,
     };
 
@@ -533,6 +533,7 @@ test('first dashboard update can snapshot and restore a pre-operator deployment'
     await copyAssets(directory, 'public');
     await rm(join(directory, 'dashboard-operator.mjs'));
     await rm(join(directory, 'compose.operator.yaml'));
+    await rm(join(directory, 'dashboard-lifecycle.mjs'));
     const managedAssetSha256 = await snapshotManagedAssets(directory, 'public', backup);
     expect(managedAssetSha256['dashboard-operator.mjs']).toBeUndefined();
     const manifest = {

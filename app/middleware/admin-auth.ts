@@ -11,6 +11,7 @@ import {
     defineNuxtRouteMiddleware,
     navigateTo,
     useNuxtData,
+    createError,
 } from '#app';
 
 type AdminSessionKind = 'super_admin' | 'workspace_admin';
@@ -55,6 +56,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
         const data = await requestFetch<{ authenticated: boolean; kind: AdminSessionKind }>('/api/admin/auth/session', {
             credentials: 'include',
             cache: 'no-store',
+            retry: 0,
+            timeout: 3000,
             headers: {
                 Accept: 'application/json',
             },
@@ -78,11 +81,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
             return navigateTo(resolveAdminLanding(data.kind));
         }
 
+        useNuxtData('admin:auth:session').data.value = undefined;
         return navigateTo('/admin/login');
     } catch (error: unknown) {
         const status = getStatus(error);
 
         if (status === 404) {
+            useNuxtData('admin:auth:session').data.value = undefined;
             if (import.meta.dev) {
                 console.log(
                     '[admin-auth middleware] Admin session route unavailable (404), redirecting to login'
@@ -92,6 +97,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
 
         if (status === 401 || status === 403) {
+            useNuxtData('admin:auth:session').data.value = undefined;
             if (import.meta.dev) {
                 console.log(
                     '[admin-auth middleware] Not authenticated, redirecting to login'
@@ -100,7 +106,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
             return navigateTo('/admin/login');
         }
 
-        console.error('[admin-auth middleware] Auth check error:', error);
-        return navigateTo('/admin/login');
+        // Maintenance or a transport outage does not invalidate authentication.
+        // Do not render protected content from cached identity or redirect to login.
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Admin session temporarily unavailable. Please retry shortly.',
+        });
     }
 });

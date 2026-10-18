@@ -16,7 +16,7 @@ The updated Convex scaffold records a private `storage_deletion_claims` barrier 
 
 Filesystem physical cleanup is disabled until it can coordinate with canonical sync writes across instances. Files Trash and logical item removal remain available; operators should expect retained disk bytes.
 
-The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a **local-first, hash-addressed** architecture to ensure assets are always available offline once downloaded.
+The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a **local-first, hash-addressed** architecture with protected durable staging and a bounded reusable browser cache. Offline availability depends on whether a file is still cached.
 
 ---
 
@@ -32,7 +32,7 @@ All files are identified by their SHA-256 hash. This leads to several benefits:
 ### 2. Local-First Data Flow
 
 *   **Metadata**: Stored in `db.file_meta` (synced via main DB sync).
-*   **Binary Data**: Stored in `db.file_blobs` (IndexedDB).
+*   **Binary Data**: Small originals stage in `db.file_blobs` until upload commits. Large selected files upload directly from the disk File. Downloaded originals are cached only within the current policy.
 *   **Transfers**: Managed by `FileTransferQueue` (upload/download).
 
 `file_meta.ref_count` is derived locally from reference edges in messages/posts;
@@ -44,6 +44,18 @@ When a component needs an image:
 3.  Once downloaded, the blob URL is served locally.
 
 ---
+
+## Browser cache and upload settings
+
+In **Admin → Workspaces → select workspace → Cloud files and browser cache**, a deployment administrator can change the maximum cached original, browser cache budget, retention days, and maximum Cloud upload. Workspace owners can use **Admin → File settings**. Changes apply at the next file operation without a rebuild or restart. Values live in private workspace settings, outside client-writable sync KV.
+
+Defaults: 10 MiB per cached file, 250 MiB reusable cache across this browser origin, and 14 days since successful upload or use. The initial upload limit comes from `OR3_MAX_CLOUD_FILE_SIZE_BYTES` (100 MiB by default); a saved admin setting overrides it, up to 1 GiB. Provider limits and workspace/server storage quotas still apply. A workspace’s budget counts cache bytes in other workspaces too, but cleanup only touches authorized copies in the active workspace.
+
+Cleanup runs in bounded passes at startup and after transfers. Each pass advances past protected or unavailable entries so they cannot permanently block later expired copies; the scan wraps after reaching the end. It considers old or over-budget copies, proves that a current matching original can be read from the same workspace and provider, verifies its hash, then rechecks eligibility atomically before removing **only local blob bytes**. It never deletes remote files, metadata, or references. Use refreshes the last-access time. IndexedDB quota failures do not discard protected data. If cross-tab locks or origin inventory are unavailable, downloads skip cache admission.
+
+Local-only originals, unknown legacy blobs, and files with unfinished uploads or metadata sync remain protected. Failed upload history stays until a successful retry resolves it. Protected staging can exceed the cache budget: cleanup cannot turn the budget into a reason to delete the only copy. Existing legacy bytes are retained conservatively. Static builds keep the configured 20 MiB default, impose a 50 MiB per-file ceiling on new intake/restore, preflight available storage, and never expire originals automatically.
+
+Selected files above the cache threshold upload without IndexedDB staging; attachments appear only after commit. Keep the disk source until completion and reselect it after interruption. Large generated Blobs are refused until saved to disk and selected. Large downloads may use transient browser memory for display but never enter the persistent cache. See [workspace backup](/documentation/database/backup) for independent recovery of originals absent from the browser.
 
 ## Transfer Queue
 
@@ -90,7 +102,7 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
     sustained contention returns 503. This fence uses the existing process-local
     invalidation revision and does not establish distributed revocation.
 4.  **Stream**: The file is downloaded and verified against its hash.
-5.  **Cache**: The blob is stored in `file_blobs` for future offline use.
+5.  **Cache**: Eligible small blobs enter `file_blobs` within the browser budget. Larger downloads are returned to the active caller without persistent caching.
 
 Filesystem download tokens also bind the issuing user and workspace. The
 download route rechecks `workspace.read` on each request: another user, a
@@ -110,6 +122,17 @@ membership, and live canonical storage identity before streaming bytes with
 canonical response headers. Native Convex URLs remain server-only. Like
 filesystem downloads, a stream already authorized can finish after access is
 revoked.
+For server archives, storage gateways may implement `readBackupFile(event,
+{ workspaceId, hash, storageId })` to stream the exact retained original as a
+`Response`. Sync gateways may implement `backupSnapshot` with the existing
+snapshot request/response contract to preserve retained file metadata. These
+are server-only capabilities; ordinary presign and sync requests cannot select
+them. Convex requires both capabilities and matching deployed templates.
+Membership and object identity are rechecked after opening the stream; source
+files and upload intents are never modified. Other providers continue through
+their authorized snapshot and download paths. Archive size/hash verification
+still applies to every original, including Trash.
+
 Previously exposed native Convex URLs remain bearer links until the underlying
 file is deleted; the new host route does not revoke historical links.
 
@@ -302,3 +325,7 @@ The provider still returns `deletion_coordination_required`. Existing
 restore/reference/hash-reuse tests verify this refusal only, not a deleting
 collector. See [the coordination design](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/storage-cleanup-coordination.md)
 for the remaining implementation and acceptance gates.
+
+## Restart maintenance
+
+An announced 503 maintenance response with retry metadata defers queued blob transfer without spending permanent-failure attempts. Pending bytes remain local, and the next attempt requests a fresh presigned URL. Authentication and validation errors retain their existing semantics. See [server restarts](/documentation/cloud/operations).

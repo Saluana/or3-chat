@@ -889,6 +889,28 @@ describe('or3 cloud wizard apply', () => {
         expect((await stat(envPath)).mode & 0o777).toBe(0o600);
     });
 
+    it('preserves blank lines and unrelated quoted entries when updating an env key', async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-env-preserve-'));
+        const envPath = resolve(dir, '.env');
+        await writeFile(envPath, '# Keep\n\nKEEP="quoted value" # comment\nCHANGE=old\n');
+        await writeEnvFileDetailed({ CHANGE: 'new' }, { instanceDir: dir });
+        expect(await readFile(envPath, 'utf8')).toBe('# Keep\n\nKEEP="quoted value" # comment\nCHANGE=new\n');
+    });
+
+    it('serializes concurrent env writes and refuses stale expected contents', async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-env-race-'));
+        const envPath = resolve(dir, '.env');
+        await writeFile(envPath, 'KEEP=original\n');
+        await Promise.all([
+            writeEnvFileDetailed({ FIRST: 'one' }, { instanceDir: dir }),
+            writeEnvFileDetailed({ SECOND: 'two' }, { instanceDir: dir }),
+        ]);
+        const text = await readFile(envPath, 'utf8');
+        expect(text).toContain('FIRST=one'); expect(text).toContain('SECOND=two');
+        await expect(writeEnvFileDetailed({ KEEP: 'stale' }, { instanceDir: dir, expectedContent: 'KEEP=original\n' })).rejects.toThrow('revision_conflict');
+        expect(await readFile(envPath, 'utf8')).toBe(text);
+    });
+
     it('writes self-hosted convex runtime keys to .env.local for local-dev flows', async () => {
         const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-env-local-convex-'));
         const result = await applyAnswers(

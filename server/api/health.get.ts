@@ -61,8 +61,12 @@ async function resolveDeepProviderStatus(
         getProviderAdminAdapter(kind, provider) ??
         createStubProviderAdapter(kind, provider);
 
+    let timer: ReturnType<typeof setTimeout>;
     try {
-        const status = await adapter.getStatus(event, { enabled, provider });
+        const status = await Promise.race([
+            adapter.getStatus(event, { enabled, provider }),
+            new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('provider_probe_timeout')), 1_500); }),
+        ]);
         const warnings = status.warnings
             .filter((warning) => warning.level === 'warning')
             .map(() => 'PROVIDER_WARNING');
@@ -79,8 +83,7 @@ async function resolveDeepProviderStatus(
             },
             details: {},
         };
-    } catch (error) {
-        console.warn(`[health] ${kind} provider status failed`, error);
+    } catch {
         return {
             available: false,
             provider,
@@ -90,7 +93,7 @@ async function resolveDeepProviderStatus(
             },
             details: {},
         };
-    }
+    } finally { clearTimeout(timer!); }
 }
 
 /**
@@ -109,7 +112,7 @@ async function resolveDeepProviderStatus(
  */
 export default defineEventHandler(async (event): Promise<HealthResponse> => {
     const query = getQuery(event);
-    const deep = query.deep === 'true';
+    const deep = query.deep === 'true' || (event.path || event.node.req.url || '').split('?')[0] === '/api/ready';
 
     const response: HealthResponse = {
         status: 'ok',

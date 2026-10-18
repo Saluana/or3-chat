@@ -150,7 +150,7 @@ Default budgets, configurable only through validated operator/source settings:
 | Final application drain | 15 s maximum; finish immediately when work settles. |
 | Supervisor cleanup / container stop | At least 20 s / existing 25 s grace, with explicit nesting verified. |
 | New-boot verification | 180 s managed; 120 s development; no repeated restart on expiry. |
-| Browser automatic observation | 10 min; then retain ID and offer a status check. |
+| Browser automatic observation | 9 min; then retain ID, show uncertainty and reduce status polling. |
 
 ### C3: background execution policy
 
@@ -305,3 +305,32 @@ Use narrow affected `bun run test <files>`, `bun run test:scripts <files>`, and 
 | Background/tool/plugin execution cannot be classified safely. | Default wait/cancel; register actual owners, qualify provider-specific recovery, and keep interruption unavailable for unknown participants. |
 | A controller crash or competing CLI mutation crosses the process-replacement boundary. | Durable intent plus shared lease and unresolved-journal gates in all mutation entry points; failure injection must prove no blind second execution. |
 | Managed configuration activation or recreation drifts image/data identity. | Start with a small nonsecret settings allowlist, verify authoritative mappings and effective settings, assert image/volume identity in the real Compose fixture, and preserve data on failure. |
+
+## Durable-provider drain follow-up
+
+SQLite uses disjoint covering-index counts for streaming jobs and terminal rows
+with pending admission/history. Convex uses transactionally consistent indexed
+existence checks, reading at most one document per status/history bucket and
+returning a lower bound of one on the first blocker. This avoids the transaction
+byte limit for large pending snapshots; zero is exact. Parked tools,
+workflows and expired leases remain blockers. Neither implementation swallows
+lookup failures. The existing controller cancels preparation on uncertainty;
+no force/interruption capability or new scheduler is introduced.
+
+Convex backend verification remains awaited before requests are accepted. Nitro
+server transforms target ES2022, supported by Node 24/Bun, because its default
+ES2019 transform rejects that existing top-level await. Client targets and
+static provider gates are unchanged. Memory accounting also retains terminal
+admission-pending records until their history phase settles.
+
+Preparation pauses new claims and cleanup, while the tracked retry scan keeps
+delivering pending canonical history. Final drain pauses all scans. Cancelling
+preparation releases a stalled accounting lookup immediately; its late result
+cannot advance a later operation or authorize replacement.
+
+Convex history and cleanup scans use the SDK's native value-size accounting and
+stop each indexed bucket after 2 MiB or its existing row cap. The next scan
+continues from remaining pending rows. Four cleanup buckets plus one-document
+overshoot per bucket stay below the transaction read limit; small rows retain
+the original throughput. The provider SDK floor is 1.31.7, where that helper was
+introduced; the host already pins a newer version.

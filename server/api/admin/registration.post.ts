@@ -3,10 +3,10 @@ import { useRuntimeConfig } from '#imports';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../admin/api';
 import { enforceGenericAdminRateLimit } from '../../admin/auth/rate-limit';
-import { writeEnvFile } from '../../admin/config/env-file';
+import { hasRestartController, saveRestartConfiguration, restartControlError } from '../../admin/system/server-control';
 import { resolveRegistrationMode } from '../../auth/registration';
 
-const Body = z.object({ mode: z.enum(['open', 'invite_only', 'disabled']) }).strict();
+const Body = z.object({ mode: z.enum(['open', 'invite_only', 'disabled']), expectedRevision: z.string().min(1).max(128) }).strict();
 
 export default defineEventHandler(async event => {
     await requireAdminApiContext(event, { superAdminOnly: true, mutation: true });
@@ -20,10 +20,9 @@ export default defineEventHandler(async event => {
     if (parsed.data.mode === 'invite_only' && !inviteSigningConfigured) {
         throw createError({ statusCode: 400, statusMessage: 'Set up invitations before choosing Invite only.' });
     }
-    try {
-        await writeEnvFile({ OR3_AUTH_REGISTRATION_MODE: parsed.data.mode });
-    } catch {
-        throw createError({ statusCode: 500, statusMessage: 'Unable to save registration settings.' });
-    }
-    return { currentMode, savedMode: parsed.data.mode, restartRequired: parsed.data.mode !== currentMode, inviteSigningConfigured };
+    if (!hasRestartController()) return restartControlError('configuration_unsupported', 501);
+    const lifecycle = await saveRestartConfiguration({ OR3_AUTH_REGISTRATION_MODE: parsed.data.mode }, parsed.data.expectedRevision);
+    const savedMode = lifecycle.savedSettings?.registrationMode ?? parsed.data.mode;
+    return { currentMode, savedMode, restartRequired: savedMode !== currentMode, inviteSigningConfigured,
+        savedRevision: lifecycle.savedRevision, application: lifecycle.capability.applySaved ? 'restart' : 'unsupported' };
 });

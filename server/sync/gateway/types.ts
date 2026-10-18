@@ -238,6 +238,15 @@ export interface SyncGatewayAdapter {
         input: SnapshotRequest
     ): Promise<SnapshotResponse>;
 
+    /** Server archive snapshot retaining materialized Trash file metadata.
+     * Normal sync may represent those rows as tombstones. Continuations must
+     * stay bound to this mode and the original frozen high-watermark.
+     */
+    backupSnapshot?(
+        event: H3Event,
+        input: SnapshotRequest
+    ): Promise<SnapshotResponse>;
+
     /**
      * Read bounded pages from canonical materialized storage state. Retained
      * operation/change logs must never be consulted by this method.

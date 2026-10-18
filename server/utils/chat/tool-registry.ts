@@ -9,6 +9,7 @@
  */
 
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from '~/utils/chat/types';
+import { getShutdownRuntime } from '../shutdown/runtime';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
 import { validateToolArguments, validateToolDefinition, validateToolDefinitions } from '~~/shared/chat/tool-schema';
 import {
@@ -245,10 +246,9 @@ export async function executeServerTool(
         abortSignal: new AbortController().signal,
     };
     const execution = await withTimeout(
-        (abortSignal) => tool.handler(
-            parsed.value,
-            { ...baseContext, abortSignal }
-        ),
+        (abortSignal) => getShutdownRuntime().controller.track(Promise.resolve().then(() => tool.handler(
+            parsed.value, { ...baseContext, abortSignal }
+        ))),
         baseContext.abortSignal,
         tool.timeoutMs
     );

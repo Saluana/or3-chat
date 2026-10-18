@@ -264,6 +264,7 @@ describe('POST /api/storage/presign-download', () => {
         await expect(handler(makeEvent())).resolves.toEqual({
             url: 'https://download.example',
             expiresAt: 777_777,
+            storageId: 'storage-live',
             disposition: 'attachment',
         });
 
@@ -283,6 +284,7 @@ describe('POST /api/storage/presign-download', () => {
         await expect(handler(makeEvent())).resolves.toEqual({
             url: 'https://download.example',
             expiresAt: Date.now() + 60_000,
+            storageId: 'storage-live',
             disposition: 'attachment',
         });
 

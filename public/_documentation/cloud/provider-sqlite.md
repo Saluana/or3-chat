@@ -14,6 +14,7 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 - Global `server_version` cursor progression per workspace.
 - Durable outbox push/pull support with idempotency (`op_id`) and LWW conflict semantics.
 - Consistent materialized snapshot pages pinned to one server high-watermark.
+- A separate `backupSnapshot` on native SQLite and D1 retains Trash file metadata for workspace archives. Paging is frozen and bound to archive mode; ordinary sync still returns tombstones. Backup reads preserve originals and unfinished uploads.
 - A 256 KB serialized payload ceiling per sync operation, shared with the core
   gateway and other providers.
 
@@ -28,6 +29,13 @@ native SQLite and D1. They read materialized deleted file rows, preserve unknown
 sizes for delete-before-put records, and never infer liveness from sync history.
 
 ## Install
+
+The background job provider supports dashboard drain accounting when its built
+artifacts expose `getShutdownBlockerCount`. All streaming jobs, parked browser
+tools, workflows, and pending admission/history delivery block restart. The
+additive history/status index migration keeps polling off stored response blobs.
+Database failures cancel restart preparation safely. See
+[background execution](/documentation/cloud/background-execution#dashboard-restart-admission).
 
 ```bash
 bun add or3-provider-sqlite

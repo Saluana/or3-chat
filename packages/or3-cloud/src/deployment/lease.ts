@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { readText, writeSecure } from '../util/fs';
 import { now } from '../util/primitives';
 import { deploymentPaths } from './paths';
+import { readRestartJournal } from '../../../../shared/server/restarts/controller';
 
 const DASHBOARD_LEASE_STALE_MS = 30_000;
 
@@ -52,7 +53,7 @@ export function dashboardLeaseOwnerIsStale(owner: LeaseOwner, jobId?: string) {
   return Number.isFinite(heartbeat) && Date.now() - heartbeat > DASHBOARD_LEASE_STALE_MS;
 }
 
-async function acquireDeploymentLease(directory: string, command: string) {
+export async function acquireDeploymentLease(directory: string, command: string, dashboardJobId?: string) {
   const leasePath = deploymentPaths(directory).lease;
   await mkdir(dirname(leasePath), { recursive: true, mode: 0o700 });
   const nonce = randomBytes(16).toString('hex');
@@ -60,8 +61,8 @@ async function acquireDeploymentLease(directory: string, command: string) {
     schemaVersion: 1,
     nonce,
     command,
-    origin: process.env.OR3_DASHBOARD_UPDATE_JOB_ID ? 'dashboard' : 'cli',
-    jobId: process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim() || undefined,
+    origin: dashboardJobId || process.env.OR3_DASHBOARD_UPDATE_JOB_ID ? 'dashboard' : 'cli',
+    jobId: dashboardJobId || process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim() || undefined,
     pid: process.pid,
     acquiredAt: now(),
     heartbeatAt: now(),
@@ -110,10 +111,25 @@ async function acquireDeploymentLease(directory: string, command: string) {
 }
 
 export async function withDeploymentLease<T>(directory: string, command: string, action: () => Promise<T>) {
+  await assertRestartJournalSettled(directory);
   const release = await acquireDeploymentLease(directory, command);
   try {
+    await assertRestartJournalSettled(directory);
     return await action();
   } finally {
     await release();
+  }
+}
+
+export async function assertRestartJournalSettled(directory: string) {
+  try {
+    const journal = await readRestartJournal(join(directory, '.or3-cloud', 'restarts', 'restarts.json'));
+    if (journal.operations.some(operation => !['succeeded', 'cancelled', 'failed'].includes(operation.phase))) {
+      throw new Error('A dashboard restart is unresolved. Run the compatible CLI recover --dry-run to inspect and recover --finish to reconcile it before another mutation.');
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    if (error instanceof Error && error.message.startsWith('A dashboard restart')) throw error;
+    throw new Error('The dashboard restart journal is invalid. Inspect it with the deployment owner before reconciliation; mutations are blocked.');
   }
 }

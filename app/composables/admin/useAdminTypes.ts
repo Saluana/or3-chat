@@ -9,6 +9,8 @@ export type RegistrationSettings = {
     savedMode: RegistrationMode;
     restartRequired: boolean;
     inviteSigningConfigured: boolean;
+    savedRevision: string | null;
+    application: 'restart' | 'unsupported';
 };
 
 export type ProviderStatus = {
@@ -98,6 +100,8 @@ export type ConfigEntry = {
 };
 
 export type EnrichedConfigEntry = ConfigEntry & {
+    application: import('~~/shared/admin/configuration').ConfigurationApplication;
+    editable: boolean;
     label: string;
     description: string;
     group: ConfigGroup;

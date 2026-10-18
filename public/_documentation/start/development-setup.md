@@ -252,3 +252,7 @@ in-flight module URLs during the first load. Reload the tab after dependency opt
 persists, restart the source dev server and reload. Production browser journeys and scroll canaries
 use separate build directories and Vite caches so their config cannot invalidate an active source
 dev server's dependency cache.
+
+## Dashboard restart in development
+
+The standard `bun run dev` and `bun run dev:ssr` launchers supervise the owned Nuxt child on macOS/Linux. With SSR auth and restart permission enabled, Operations can restart it on the same origin while retaining provider artifacts and caches. The wrapper reloads its explicit environment profile and preserves real shell overrides. Ctrl+C stops the owned child tree. Other launchers and Windows report unsupported. See [server restarts](/documentation/cloud/operations).

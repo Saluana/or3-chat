@@ -38,7 +38,7 @@ existing error/cancelled flow instead of reporting success.
 ## Import guarantees and boundaries
 
 The importer targets the database passed by the caller. It rejects an
-unsupported format/version, a different database name, a backup schema newer
+unsupported format/version, lines larger than 128 Mi characters, a different database name, a backup schema newer
 than the running database, invalid or unknown table declarations, and
 row-count/marker mismatches. Replace mode requires metadata for every current
 table before clearing any rows.
@@ -55,6 +55,13 @@ key conflicts fail unless overwrite is enabled. Overwrite uses record-level
 
 This codec is not an unrelated-schema migration format and does not encrypt
 its contents. Workspace backups can contain private conversations, files,
-documents, and stored preferences; follow the [backup safety guidance](/documentation/database/backup#export).
+documents, and stored preferences; follow the [backup safety guidance](/documentation/database/backup#local-only-export).
 The UI recognizes supported older Dexie exports separately; do not assume
 those files use this stream format or these stream-import guarantees.
+## Cloud archive
+
+Cloud uses a separate binary format (`.or3cloud`), not base64 JSONL. `shared/storage/workspace-archive.ts` owns version 1: `OR3CLOUD1\n`, a metadata frame, bounded JSON row frames, original-file frames, and a terminal checksum/count frame. Each frame has one bounded JSON header ending in a newline followed by exactly its declared number of body bytes. The archive digest covers every pre-terminal header/body after the magic. Original file hashes independently verify each binary body. Missing originals, duplicate identities, dangling attachment references, trailing bytes, private device KV, and checksum/size mismatches are rejected.
+
+`GET /api/workspaces/backup?workspaceId=…` uses an authorized consistent paged snapshot. It spools metadata to a private temporary server file, streams originals with backpressure, and removes the spool afterward. No archive-sized buffer or base64 file body is created. A storage failure truncates the stream; the client checks frame boundaries, counts, and the terminal frame before closing the destination successfully. Original-file content cannot imitate that terminal frame. An incomplete file must be discarded.
+
+The browser validates the entire immutable backup File before creating a fresh workspace, hashing 1 MiB slices and yielding during validation to keep the UI responsive. It reuses slices for direct upload and re-reads bounded row bodies for authorized sync writes. It does not restore transport state or replace an existing Cloud workspace. See [backup and restore](/documentation/database/backup).

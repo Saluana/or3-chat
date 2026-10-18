@@ -135,14 +135,14 @@ export function checkResolvedLoopbackBinding(config: string, expectedPort?: numb
   }
 }
 
-export async function resolvedComposeConfig(directory: string, mode: Mode) {
-  const result = await run('docker', composeArgs(directory, mode, ['config', '--format', 'json']), directory);
+export async function resolvedComposeConfig(directory: string, mode: Mode, deadline = performance.now() + 180_000) {
+  const result = await run('docker', composeArgs(directory, mode, ['config', '--format', 'json']), directory, undefined, deadline - performance.now());
   if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
   return result.stdout;
 }
 
-export async function assertSafeComposeBinding(directory: string, mode: Mode, env: Record<string, string>) {
-  const config = await resolvedComposeConfig(directory, mode);
+export async function assertSafeComposeBinding(directory: string, mode: Mode, env: Record<string, string>, deadline?: number) {
+  const config = await resolvedComposeConfig(directory, mode, deadline);
   const parsed = parseComposeConfig(config);
   const service = parsed.services?.or3;
   if (parsed.name !== undefined && parsed.name !== env.OR3_COMPOSE_PROJECT) {
@@ -186,22 +186,23 @@ export async function assertSafeComposeBinding(directory: string, mode: Mode, en
   }
 }
 
-export async function assertRunningAppImage(directory: string, mode: Mode, expectedImage: string) {
-  const container = await run('docker', composeArgs(directory, mode, ['ps', '-q', 'or3']), directory);
+export async function assertRunningAppImage(directory: string, mode: Mode, expectedImage: string, deadline = performance.now() + 180_000) {
+  const invoke = (args: string[]) => run('docker', args, directory, undefined, deadline - performance.now());
+  const container = await invoke(composeArgs(directory, mode, ['ps', '-q', 'or3']));
   const containerId = container.stdout.trim();
   if (!container.ok || !containerId) throw new Error('OR3 started without a running application container.');
-  const image = await run('docker', ['inspect', '--format', '{{.Image}}', containerId], directory);
+  const image = await invoke(['inspect', '--format', '{{.Image}}', containerId]);
   if (!image.ok || !image.stdout.trim()) throw new Error('Could not inspect the image of the running OR3 container.');
   const expectedDigest = expectedImage.match(/@((?:sha256:)[0-9a-f]{64})$/i)?.[1];
   if (!expectedDigest && process.env.OR3_CLOUD_SKIP_PULL === 'true') {
-    const expectedId = await run('docker', ['image', 'inspect', '--format', '{{.Id}}', expectedImage], directory);
+    const expectedId = await invoke(['image', 'inspect', '--format', '{{.Id}}', expectedImage]);
     if (!expectedId.ok || expectedId.stdout.trim() !== image.stdout.trim()) {
       throw new Error('The local qualification fixture started a different OR3 image than the one selected by the managed environment.');
     }
     return;
   }
   if (!expectedDigest) throw new Error(`Managed OR3 image ${expectedImage} is not digest-qualified.`);
-  const repoDigests = await run('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', image.stdout.trim()], directory);
+  const repoDigests = await invoke(['image', 'inspect', '--format', '{{json .RepoDigests}}', image.stdout.trim()]);
   if (!repoDigests.ok) throw new Error('Could not inspect repository digests for the running OR3 container.');
   let values: string[];
   try {

@@ -459,6 +459,12 @@ export interface BackgroundJobProvider {
      * Optional count of active streaming jobs.
      */
     getActiveJobCount?(): Promise<number>;
+    /**
+     * Wait-policy blockers: streaming (including parked work) and pending
+     * admission/history delivery. A bounded lower-bound count is permitted,
+     * but zero must mean no blockers. Lookup failures must reject, never return 0.
+     */
+    getShutdownBlockerCount?(): Promise<number>;
 }
 
 /**
