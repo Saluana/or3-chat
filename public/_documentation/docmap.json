@@ -819,6 +819,14 @@
                     "categoryOrder": 1,
                     "order": 4.5,
                     "summary": "Supervised dev and managed restarts, active-work protection, verified settings activation, bounded outage observation, and uncertain-receipt recovery."
+                },
+                {
+                    "name": "secret-store.md",
+                    "path": "/cloud/secret-store",
+                    "title": "Optional secret store",
+                    "category": "Providers",
+                    "order": 10,
+                    "summary": "Private Bun vault provider for remembered trusted-plugin secrets, separate custody, scoped activation grants, replay detection, pinned socket identity, bounded admission and explicit recovery."
                 }
             ]
         },

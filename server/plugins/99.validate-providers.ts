@@ -4,6 +4,8 @@
  * Purpose:
  * Strict-mode validation for provider registrations.
  */
+import { isAbsolute } from 'node:path';
+import { listSecretStoreIds } from '../secrets/registry';
 import { listProviderIds } from '../auth/registry';
 import { listAuthWorkspaceStoreIds } from '../auth/store/registry';
 import { listSyncGatewayAdapterIds } from '../sync/gateway/registry';
@@ -24,6 +26,10 @@ function isStrictMode(): boolean {
 }
 
 export default defineNitroPlugin(() => {
+    const secrets = useRuntimeConfig().secrets;
+    if (secrets?.provider && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
+        throw new Error('[or3-cloud-config] Selected secret provider is missing or invalid.');
+    }
     if (!isStrictMode()) return;
 
     // Optional subsystems may be absent in older or partial runtime configurations.

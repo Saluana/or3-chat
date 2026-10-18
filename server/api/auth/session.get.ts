@@ -87,6 +87,7 @@ export default defineEventHandler(async (event) => {
     return {
         session: clientSession,
         appAccessAllowed,
+        ...(config.secrets?.provider ? { secretStoreEnabled: true } : {}),
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
     };
 });

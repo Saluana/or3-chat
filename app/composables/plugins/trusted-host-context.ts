@@ -170,7 +170,8 @@ export interface CreateTrustedHostContextInput {
     ) => () => void;
     readonly settingDefaults?: Readonly<Record<string, PluginJsonValue>>;
     readonly requestedFeatures?: readonly string[];
-    readonly runtimeServices?: (authority: { pluginId: string; db: ReturnType<typeof getDb>; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;
+    readonly activationId?: string;
+    readonly runtimeServices?: (authority: { activationId?: string; pluginId: string; db: ReturnType<typeof getDb>; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean; cleanup(callback: () => void): void }) => ReturnType<typeof createTrustedRuntimeServices>;
     readonly emitHook?: (name: string, payload: unknown) => Promise<void>;
     readonly mediation?: Pick<
         TrustedMediationOptions,
@@ -296,7 +297,7 @@ export function createTrustedHostContext(
     const messageTypes = new Set<string>();
     let beforeSendDepth = 0;
     const cleanup = (callback: () => void) => runtime.api.onCleanup(callback);
-    const services = input.runtimeServices?.({ pluginId: input.pluginId, db: activationDb, messageTypes, allow, current: () => !ended(), cleanup });
+    const services = input.runtimeServices?.({ activationId: input.activationId, pluginId: input.pluginId, db: activationDb, messageTypes, allow, current: () => !ended(), cleanup });
     const { settings, storage } = createTrustedWorkspaceStorage({ pluginId: input.pluginId, db: activationDb, grants: granted, ended, defaults: { ...services?.settingDefaults, ...input.settingDefaults } });
     const records = createTrustedRecords({ db: activationDb, allow, postTypes, messageTypes, inBeforeSend: () => beforeSendDepth > 0, current: () => !ended(), cleanup });
     const workspaceFiles = createTrustedWorkspaceFiles({ pluginId: input.pluginId,
@@ -710,7 +711,8 @@ export function createTrustedHostContext(
         requestAccess: async (value) => { allow('network.http'); return access.requestAccess(value); },
         revokeAccess: async (value) => { allow('network.http'); return access.revokeAccess(value); },
         ownOrigin: (globalThis as { location?: Location }).location?.origin,
-        secrets: input.mediation?.secrets,
+        secrets: input.mediation?.secrets ?? services?.secrets,
+        cleanup,
         files: input.mediation?.files,
         posts: input.mediation?.posts,
         ended,

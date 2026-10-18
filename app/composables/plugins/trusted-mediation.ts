@@ -31,6 +31,7 @@ export interface TrustedMediationOptions {
     readonly files?: FileStore;
     readonly posts?: PostStore;
     readonly ended?: () => boolean;
+    readonly cleanup?: (callback: () => void) => void;
     readonly signal?: AbortSignal;
     readonly allow?: (grant: PluginGrant) => void;
 }
@@ -245,57 +246,42 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
         },
     };
 
+    const sessionSecrets = new Map<string, { value: string; revision: number }>();
+    options.cleanup?.(() => sessionSecrets.clear());
     const secretsClient: PluginSecretsClient = {
         async get(key) {
-            try {
-                allow('secrets.read');
-            } catch {
-                return denied('secrets.read');
-            }
-            return pluginOk(secrets.get(key) ?? null);
+            try { allow('secrets.read'); } catch { return denied('secrets.read'); }
+            return pluginOk(sessionSecrets.get(key)?.value ?? await secrets.get(key) ?? null);
         },
-        async set(key, value) {
-            try {
-                allow('secrets.write');
-            } catch {
-                return denied('secrets.write');
+        async set(key, value, settings) {
+            try { allow('secrets.write'); } catch { return denied('secrets.write'); }
+            if (settings?.persistence === 'session') {
+                sessionSecrets.set(key, { value, revision: (sessionSecrets.get(key)?.revision ?? 0) + 1 });
+            } else {
+                await secrets.set(key, value);
+                sessionSecrets.delete(key);
             }
-            secrets.set(key, value);
             return pluginOk(undefined);
         },
         async delete(key) {
-            try {
-                allow('secrets.write');
-            } catch {
-                return denied('secrets.write');
-            }
-            secrets.delete(key);
+            try { allow('secrets.write'); } catch { return denied('secrets.write'); }
+            await secrets.delete(key); sessionSecrets.delete(key);
             return pluginOk(undefined);
         },
         async ref(key) {
-            try {
-                allow('secrets.use');
-            } catch {
-                return denied('secrets.use');
-            }
-            return pluginOk({ id: key, revision: 1, state: secrets.has(key) ? 'available' : 'missing' });
+            try { allow('secrets.use'); } catch { return denied('secrets.use'); }
+            const local = sessionSecrets.get(key);
+            if (local) return pluginOk({ id: key, revision: local.revision, state: 'available', persistence: 'session' });
+            return pluginOk(secrets.ref ? await secrets.ref(key) : { id: key, revision: 1, state: await secrets.has(key) ? 'available' : 'missing' });
         },
         async status(key) {
-            try {
-                allow('secrets.read');
-            } catch {
-                return denied('secrets.read');
-            }
-            if (!key) return pluginOk('available');
-            return pluginOk(secrets.has(key) ? 'available' : 'missing');
+            try { allow('secrets.read'); } catch { return denied('secrets.read'); }
+            if (key && sessionSecrets.has(key)) return pluginOk('available');
+            return pluginOk(secrets.status ? await secrets.status(key) : !key || await secrets.has(key) ? 'available' : 'missing');
         },
         async unlock() {
-            try {
-                allow('secrets.use');
-            } catch {
-                return denied('secrets.use');
-            }
-            return pluginOk(undefined);
+            try { allow('secrets.use'); } catch { return denied('secrets.use'); }
+            await secrets.unlock?.(); return pluginOk(undefined);
         },
     };
 
@@ -402,8 +388,8 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
     };
 
     const guarded = <T extends object>(client: T): T => Object.fromEntries(Object.entries(client).map(([name, method]) => [name, async (...args: unknown[]) => {
-        if (ended()) return pluginError('stale-context', 'Plugin activation has ended');
-        try { return await method(...args); }
+        if (ended()) { sessionSecrets.clear(); return pluginError('stale-context', 'Plugin activation has ended'); }
+        try { const result = await method(...args); if (ended()) { sessionSecrets.clear(); return pluginError('stale-context', 'Plugin activation has ended'); } return result; }
         catch (error) { const e = error as { code?: string; message?: string }; return pluginError((ended() ? 'stale-context' : e.code || 'host-unavailable') as Parameters<typeof pluginError>[0], e.message || 'Host operation failed'); }
     }])) as T;
     return {
