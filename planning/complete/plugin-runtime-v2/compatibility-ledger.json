@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 602,
-    "callableExportCount": 277,
+    "exportCount": 603,
+    "callableExportCount": 278,
     "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "f252e7f6c61fc20e4b3b0e89dfc571386a1c5339442aee64cf9d0a2d3e6abb1f",
+      "apiSha256": "4ecc39763fc0ee02150862d218560ee61d2b82a648fd5612a75a22ac053a87e4",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3714,6 +3714,32 @@
           ]
         },
         {
+          "name": "focusPaneInput",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string): boolean",
+              "declaredReturnType": "boolean",
+              "resolvedReturnType": "boolean",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 172,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function focusPaneInput(paneId: string): boolean;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 172,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function focusPaneInput(paneId: string): boolean;"
+            }
+          ]
+        },
+        {
           "name": "getActiveDocumentEditorSession",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -3984,7 +4010,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 215,
+                "line": 223,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasPane(paneId: string);"
               }
@@ -3993,7 +4019,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 215,
+              "line": 223,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasPane(paneId: string);"
             }
@@ -4820,7 +4846,7 @@
               "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 201,
+                "line": 209,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
               }
@@ -4829,7 +4855,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 201,
+              "line": 209,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
             }
@@ -4846,7 +4872,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 189,
+                "line": 197,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4855,7 +4881,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 189,
+              "line": 197,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4872,7 +4898,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 177,
+                "line": 185,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4881,7 +4907,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 177,
+              "line": 185,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -7703,7 +7729,7 @@
               "resolvedReturnType": "Promise<boolean>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 220,
+                "line": 228,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
               }
@@ -7712,7 +7738,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 220,
+              "line": 228,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
             }
