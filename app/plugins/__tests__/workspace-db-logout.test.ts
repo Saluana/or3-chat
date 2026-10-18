@@ -5,6 +5,7 @@ const confirmClientSignedOut = vi.fn(async () => false);
 
 vi.mock('~/utils/logout-cleanup', () => ({
     logoutCleanup,
+    clearDevicePluginSecrets: vi.fn(),
 }));
 
 vi.mock('~/composables/auth/confirmClientSignedOut', () => ({

@@ -199,7 +199,25 @@ describe('personal key lifecycle', () => {
         expect(stateRef.value.openrouterKey).toBeNull();
     });
 
-    it('clears a previous account key before switching its workspace DB', async () => {
+    // Device secrets are not account-scoped. The old happy-path logout test
+    // never changes the workspace while teardown waits, so it misses the early
+    // return that lets the next account read the previous account's plaintext.
+    it('clears remembered plugin secrets even when logout teardown outlives its workspace', async () => {
+        const store = (await import('~/composables/plugins/trusted-production-stores')).createLocalStorageSecretStore('synthetic');
+        store.set('key', 'synthetic-previous-account-secret');
+        const stopped = deferred<void>();
+        const release = deferred<void>();
+        const cleanup = logout.logoutCleanup({ $syncEngine: { stop() { stopped.resolve(); return release.promise; } } } as never);
+        try {
+            await stopped.promise;
+            client.setActiveWorkspaceDb(null);
+        } finally { release.resolve(); await cleanup; }
+        expect(await store.get('key')).toBeNull();
+    });
+
+    it('clears previous account credentials before switching its workspace DB', async () => {
+        const store = (await import('~/composables/plugins/trusted-production-stores')).createLocalStorageSecretStore('synthetic');
+        store.set('key', 'synthetic-previous-account-secret');
         const session = ref({ session: { authenticated: true, user: { id: 'synthetic-account-a' } } });
         vi.doMock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: session, refresh: vi.fn().mockResolvedValue(undefined) }) }));
         vi.doMock('~/composables/workspace/useWorkspaceManager', () => ({ useWorkspaceManager: () => ({ activeWorkspaceId: ref(null) }) }));
@@ -210,6 +228,7 @@ describe('personal key lifecycle', () => {
             await (await import('~/plugins/00-workspace-db.client')).default;
             session.value = { session: { authenticated: true, user: { id: 'synthetic-account-b' } } };
             expect(stateRef.value.openrouterKey).toBeNull();
+            expect(await store.get('key')).toBeNull();
             client.setActiveWorkspaceDb(null);
             await auth.hydrateUserApiKeyFromKv();
             expect(stateRef.value.openrouterKey).toBeNull();
@@ -219,6 +238,8 @@ describe('personal key lifecycle', () => {
     });
 
     it('ignores sign-out confirmation that finishes after a new account signs in', async () => {
+        const store = (await import('~/composables/plugins/trusted-production-stores')).createLocalStorageSecretStore('synthetic');
+        store.set('key', 'synthetic-previous-account-secret');
         const confirmation = deferred<boolean>();
         const session = ref({ session: { authenticated: true, user: { id: 'synthetic-account-a' } } });
         vi.doMock('~/composables/auth/confirmClientSignedOut', () => ({ confirmClientSignedOut: () => confirmation.promise }));
@@ -232,12 +253,16 @@ describe('personal key lifecycle', () => {
             session.value = { session: { authenticated: false, user: { id: 'synthetic-account-a' } } };
             await nextTick();
             session.value = { session: { authenticated: true, user: { id: 'synthetic-account-b' } } };
+            expect(await store.get('key')).toBeNull();
+            store.set('key', 'synthetic-new-account-secret');
             await auth.persistUserApiKey(newKey);
             confirmation.resolve(true);
             await flushPromises();
             expect(stateRef.value.openrouterKey).toBe(newKey);
             expect((await storage.kv.get('openrouter_api_key', db))?.value).toBe(newKey);
+            expect(await store.get('key')).toBe('synthetic-new-account-secret');
         } finally {
+            confirmation.resolve(true);
             vi.unstubAllGlobals();
         }
     });

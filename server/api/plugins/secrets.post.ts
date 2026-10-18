@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createError, defineEventHandler, setResponseHeader } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { requireCan, requireSession } from '../../auth/can';
-import { resolveSessionContext } from '../../auth/session';
+import { getAuthorizationRevision, resolveSessionContext } from '../../auth/session';
 import { EXTENSIONS_BASE_DIR } from '../../admin/extensions/paths';
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import { ImmutablePluginPackageStore } from '../../admin/plugins/package-store';
@@ -27,6 +27,12 @@ export default defineEventHandler(async event => {
     const userId = session.user?.id, workspaceId = session.workspace?.id;
     if (!userId || !workspaceId) refuse(401);
     requireCan(session, 'workspace.write', { kind: 'workspace', id: workspaceId });
+    const storeId = config.sync?.provider || config.public?.sync?.provider || 'convex';
+    const revision = () => getAuthorizationRevision(session.provider ?? '', session.providerUserId ?? '', storeId);
+    const authorizationRevision = revision();
+    const live = (activationId: string) => {
+        if (revision() !== authorizationRevision || !checkHostActivationLive(activationId).ok) refuse(409);
+    };
     if (!await checkRateLimit(`plugin-secrets:${userId}`, { max: 60, window: 60 })) {
         setResponseHeader(event, 'Retry-After', 60); refuse(429);
     }
@@ -53,8 +59,7 @@ export default defineEventHandler(async event => {
             if (!authorized.ok) refuse(authorized.statusCode);
             const grant = operation === 'set' || operation === 'delete' ? 'secrets.write' : operation === 'ref' || operation === 'unlock' ? 'secrets.use' : 'secrets.read';
             if (!authorized.record.grants.approvedGrants.includes(grant)) refuse(403);
-            const live = () => { if (!checkHostActivationLive(activationId).ok) refuse(409); };
-            live();
+            live(activationId);
             const context = { requestId: randomUUID(), actorId: userId, activationId: createHash('sha256').update(activationId).digest('hex') };
             const scope = { namespace: config.secrets.namespace, ownerUserId: userId, workspaceId, consumerId: pluginId };
             // Fixed fields only; the corresponding vault event records this same request/actor/activation.
@@ -67,7 +72,7 @@ export default defineEventHandler(async event => {
                     catch (error) { if ((error as { code?: string }).code === 'not_found') result = null; else throw error; }
                 } else if (operation === 'set' || operation === 'delete') {
                     const meta = await store.inspect({ scope, name: key as string }, context);
-                    live();
+                    live(activationId);
                     if (operation === 'set') await store.put({ scope, name: key as string, value: value as string, expectedRevision: meta?.ref.revision ?? 0 }, context);
                     else if (meta && meta.state !== 'deleted') await store.delete({ scope, name: key as string, expectedRevision: meta.ref.revision }, context);
                 } else if (operation === 'ref' || operation === 'status' && key !== undefined) {
@@ -75,10 +80,10 @@ export default defineEventHandler(async event => {
                     const state = meta?.state === 'available' ? 'available' : 'missing';
                     result = operation === 'ref' ? { id: meta?.ref.id ?? key, revision: meta?.ref.revision ?? 0, state, persistence: 'persistent', owner: 'plugin' } : state;
                 } else { await store.available(context); result = operation === 'status' ? 'available' : undefined; }
-                live();
+                live(activationId);
                 return { value: result };
             } catch (error) {
-                live();
+                live(activationId);
                 const status = (error as { status?: number; statusCode?: number }).status ?? (error as { statusCode?: number }).statusCode;
                 refuse(status === 409 ? 409 : status === 403 ? 403 : 503, (error as { code?: string }).code === 'revision_conflict' ? 'conflict' : undefined);
             }
