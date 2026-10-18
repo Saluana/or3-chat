@@ -594,7 +594,7 @@ function readGrants(descriptor: PackageV2PluginDescriptor) {
  * digest and approved grants; a refusal blocks the activation rather than
  * letting the sandbox run without a verified identity.
  */
-async function mintHostActivation(
+export async function mintHostActivation(
     pluginId: string
 ): Promise<
     | { readonly ok: true; readonly activationId: string; readonly generation: number; readonly packageDigest: string; readonly approvedGrants: readonly string[] }
@@ -656,7 +656,7 @@ async function mintHostActivation(
  * while the session is still valid, so a refusal is unexpected and worth
  * surfacing in development instead of silently leaving a live handle behind.
  */
-async function revokeHostActivationHandle(activationId: string): Promise<boolean> {
+export async function revokeHostActivationHandle(activationId: string): Promise<boolean> {
     if (!activationId) return true;
     try {
         const response = await fetch('/api/plugins/isolation/activation', {

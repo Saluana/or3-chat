@@ -246,6 +246,7 @@ export function buildApplicationPlan(input: {
     };
 
     const runtimeConfig = {
+        secrets: { provider: '', socketPath: '', tokenFile: '', namespace: '', vaultId: '', serviceUid: '' },
         // Server-only env variables (auto-mapped from NUXT_*)
         openrouterApiKey:
             or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',

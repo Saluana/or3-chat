@@ -234,3 +234,7 @@ Configuration is normalized once for modules, feature decisions, and private/pub
 - [Accounts and access](/documentation/cloud/auth-system)
 - [Sync internals](/documentation/cloud/sync-layer)
 - [Storage internals](/documentation/cloud/storage-layer)
+
+## Optional remembered-plugin secret storage
+
+The separate [secret-store provider](/documentation/cloud/secret-store) supplies private Bun vault custody through a Node socket client. It does not replace auth/sync/storage providers or migrate their credentials. Configure its private runtime paths and dedicated service identity explicitly.

@@ -1,10 +1,15 @@
 
 
+import type { PluginSecretRef, PluginSecretState } from '@or3/plugin-sdk';
+
 export interface SecretStore {
-    get(key: string): string | null;
-    set(key: string, value: string): void;
-    delete(key: string): void;
-    has(key: string): boolean;
+    get(key: string): string | null | Promise<string | null>;
+    set(key: string, value: string): void | Promise<void>;
+    delete(key: string): void | Promise<void>;
+    has(key: string): boolean | Promise<boolean>;
+    ref?(key: string): Promise<PluginSecretRef>;
+    status?(key?: string): Promise<PluginSecretState>;
+    unlock?(): Promise<void>;
 }
 
 export interface StoredFile {

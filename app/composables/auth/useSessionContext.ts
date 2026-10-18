@@ -13,6 +13,7 @@ export type SessionPayload = {
     session: SessionContext | null;
     appAccessAllowed: boolean;
     workspaceItemCapability?: 'v1';
+    secretStoreEnabled?: boolean;
 };
 type SessionContextState = {
     data: ComputedRef<SessionPayload | null>;

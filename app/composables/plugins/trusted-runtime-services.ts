@@ -1,3 +1,4 @@
+import { createServerSecretStore } from './trusted-secret-store';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
@@ -23,11 +24,18 @@ import { resolveChatProject } from '~/db/project-workspace';
 
 /** Resolve Nuxt services once during activation; callbacks retain their authority. */
 export function createTrustedRuntimeServices(input: {
-    pluginId: string; db: Or3DB; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean;
+    activationId?: string; pluginId: string; db: Or3DB; messageTypes?: ReadonlySet<string>; allow(grant: PluginGrant): void; current(): boolean;
     cleanup(callback: () => void): void;
 }) {
     const runtime = useRuntimeConfig(); const config = useOr3Config();
     const toast = useToast(); const session = useSessionContext(); const { apiKey } = useUserApiKey();
+    const owner = session.data.value?.session?.user?.id;
+    const workspace = session.data.value?.session?.workspace?.id;
+    const secrets = session.data.value?.secretStoreEnabled === true ? createServerSecretStore({
+        pluginId: input.pluginId, activationId: input.activationId,
+        current: () => input.current() && !!owner && !!workspace && session.data.value?.session?.authenticated === true &&
+            session.data.value.session.user?.id === owner && session.data.value.session.workspace?.id === workspace,
+    }) : undefined;
     const models = useModelStore(); const registry = useToolRegistry();
     const run = async <T>(grant: PluginGrant, callback: () => Promise<T>) => {
         try { input.allow(grant); const result = await callback(); input.allow(grant); return pluginOk(result); }
@@ -122,6 +130,7 @@ export function createTrustedRuntimeServices(input: {
         status: id => run('jobs.background', async () => (await pollJobStatus(id)).status),
     };
     return {
+        secrets,
         kit: createTrustedUiKit(), ai, tools, jobs, connections,
         settingDefaults: { ...buildPluginSettingDefaults(config.features.workflows, useAppConfig() as { workflowSlashCommands?: { enabled?: boolean } })[input.pluginId], ...(runtime.public.pluginSettingDefaults as Record<string, Record<string, PluginJsonValue>> | undefined)?.[input.pluginId] },
         limits: { maxFilesPerMessage: config.limits.maxFilesPerMessage, maxFileSizeBytes: config.limits.maxFileSizeBytes },

@@ -121,8 +121,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     if (property.default !== undefined) manifestDefaults[key] = property.default;
                 }
             }
-            const trusted = await nuxtApp.runWithContext(() => createTrustedHostContext({
+            let activationId: string | undefined;
+            let revokeActivation = async () => {};
+            if (session.data.value?.secretStoreEnabled === true) {
+                const handles = await import('~/composables/plugins/portable-client-runtime');
+                const activation = await handles.mintHostActivation(descriptor.id);
+                if (!activation.ok) throw new Error('Secret host activation unavailable');
+                activationId = activation.activationId;
+                revokeActivation = async () => { await handles.revokeHostActivationHandle(activation.activationId); };
+                if (!isCurrent() || signal.aborted || activation.packageDigest !== descriptor.artifact.packageDigest ||
+                    [...activation.approvedGrants].sort().join('\n') !== [...descriptor.effectiveGrants].sort().join('\n')) {
+                    await revokeActivation(); throw new Error('Secret host activation changed');
+                }
+            }
+            const trusted = await Promise.resolve().then(() => nuxtApp.runWithContext(() => createTrustedHostContext({
                 pluginId: descriptor.id,
+                activationId,
                 version: descriptor.version,
                 workspaceId: descriptor.workspaceId,
                 generation, signal,
@@ -156,7 +170,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                         off();
                     };
                 },
-            }));
+            }))).catch(async error => { await revokeActivation(); throw error; });
             let removeStyles = () => {};
             try {
                 for (const feature of definition.manifest.features.required) trusted.context.features.require(feature);
@@ -168,11 +182,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 return {
                     async dispose() {
                         await trusted.dispose('plugin-disabled');
+                        await revokeActivation();
                         removeStyles();
                     },
                 };
             } catch (error) {
                 await trusted.dispose(error);
+                await revokeActivation();
                 removeStyles();
                 throw error;
             }
