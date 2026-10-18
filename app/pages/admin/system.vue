@@ -31,9 +31,17 @@
                     <AdminSystemOperationsCard
                         :is-owner="isOwner"
                         :allow-restart="Boolean(status.admin?.allowRestart)"
-                        :allow-rebuild="Boolean(status.admin?.allowRebuild)"
+                        :can-restart="serverRestart.canRestart.value"
+                        :busy="serverRestart.busy.value"
+                        :progress="serverRestart.progress.value"
+                        :needs-attention="serverRestart.operation.value?.phase === 'needs_attention'"
+                        :can-cancel="serverRestart.operation.value?.phase === 'preparing'"
+                        :reason="serverRestart.status.value?.capability.reason"
+                        :saved-pending="Boolean(serverRestart.status.value?.capability.applySaved && serverRestart.status.value?.activeRevision !== serverRestart.status.value?.savedRevision)"
                         @restart="restart"
-                        @rebuild-restart="rebuildRestart"
+                        @apply-saved="serverRestart.restart('saved')"
+                        @reconcile="serverRestart.reconcile()"
+                        @cancel="serverRestart.cancel()"
                     />
                 </div>
 
@@ -84,6 +92,12 @@
                         </UButton>
                     </div>
                 </section>
+                <WorkspaceSelector
+                    v-if="showStorageWorkspaceSelector"
+                    v-model="showStorageWorkspaceSelector"
+                    description="Choose the workspace whose storage usage you want to view."
+                    @select="viewStorageUsage"
+                />
             </template>
 
             <template #fallback>
@@ -107,6 +121,7 @@ import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCa
 import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
 import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
 import AdminSystemUpdateCard from '~/components/admin/system/AdminSystemUpdateCard.vue';
+import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
     layout: 'admin',
@@ -116,6 +131,8 @@ definePageMeta({
 const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();
 const { confirm } = useConfirmDialog();
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
 
 const pending = computed(() => statusFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
@@ -123,6 +140,7 @@ const warnings = computed(() => statusData.value?.warnings ?? []);
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 const providerActionResult = ref<{ label: string; value: unknown } | null>(null);
 const runningActionId = ref<string | null>(null);
+const showStorageWorkspaceSelector = ref(false);
 
 const providerActions = computed(() => {
     if (!status.value) return [];
@@ -138,6 +156,40 @@ const providerActions = computed(() => {
     }
     return actions;
 });
+const storageUsageAction = computed(() => providerActions.value.find(action =>
+    action.kind === 'storage' && action.id === 'storage.usage'));
+
+// Consume the notice link after status loads so it opens the chooser on both
+// entry points, including repeated clicks after cancellation.
+watch([() => route.hash, statusFetchStatus], ([hash, fetchStatus]) => {
+    if (hash !== '#storage-usage' || fetchStatus === 'pending' || fetchStatus === 'idle') return;
+    openStorageUsage();
+    void router.replace({ query: route.query, hash: '' });
+}, { immediate: true });
+
+function openStorageUsage() {
+    if (!isOwner.value || !storageUsageAction.value) {
+        toast.add({
+            title: 'Storage usage unavailable',
+            description: statusFetchStatus.value === 'error'
+                ? 'Could not load server status. Refresh this page and try again.'
+                : !isOwner.value
+                    ? 'Only the server owner can view storage usage.'
+                    : 'The active storage provider does not offer storage usage checks.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (runningActionId.value) {
+        toast.add({ title: 'Action in progress', description: 'Wait for the current check to finish, then try again.', color: 'info' });
+        return;
+    }
+    showStorageWorkspaceSelector.value = true;
+}
+
+function viewStorageUsage(workspace: { id: string; name: string }) {
+    if (storageUsageAction.value) void runProviderAction(storageUsageAction.value, workspace);
+}
 
 const serverRestart = useServerRestart(
     isOwner,
@@ -148,35 +200,6 @@ async function restart() {
     await serverRestart.restart();
 }
 
-async function rebuildRestart() {
-    const confirmed = await confirm({
-        title: 'Rebuild & Restart Server',
-        message:
-            'Are you sure you want to rebuild and restart the server now? This process may take several minutes.',
-        danger: true,
-        confirmText: 'Rebuild & Restart',
-    });
-    if (!confirmed) return;
-
-    try {
-        await $fetch('/api/admin/system/rebuild-restart', {
-            method: 'POST',
-            headers: ADMIN_HEADERS,
-        });
-        toast.add({
-            title: 'Rebuild initiated',
-            description: 'The server is rebuilding and will restart.',
-            color: 'success',
-        });
-    } catch (error: unknown) {
-        toast.add({
-            title: 'Rebuild failed',
-            description: parseErrorMessage(error, 'Rebuild failed'),
-            color: 'error',
-        });
-    }
-}
-
 async function runProviderAction(action: {
     id: string;
     label: string;
@@ -185,6 +208,10 @@ async function runProviderAction(action: {
     danger?: boolean;
     description?: string;
 }, workspace?: { id: string; name: string }) {
+    if (action.kind === 'storage' && action.id === 'storage.usage' && !workspace) {
+        openStorageUsage();
+        return;
+    }
     if (runningActionId.value) return;
     if (action.danger) {
         const confirmed = await confirm({
@@ -221,6 +248,10 @@ async function runProviderAction(action: {
             description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
             color: disabled ? 'warning' : 'success',
         });
+        await nextTick();
+        const resultElement = document.getElementById('provider-action-result');
+        resultElement?.focus({ preventScroll: true });
+        resultElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error: unknown) {
         toast.add({
             title: 'Action failed',

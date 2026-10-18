@@ -151,10 +151,33 @@ for (const [label, viewport] of [
             }
             const form = page.getByRole('dialog', { name: 'Create Account', exact: true });
             await expect(form).toBeVisible({ timeout: 30_000 });
-            await expect(form.getByRole('textbox', { name: 'Invite token (from your invite link)', exact: true })).not.toHaveValue('');
-            await form.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+            const inviteCode = form.getByRole('textbox', { name: 'Invite code (from your invite link)', exact: true });
+            await expect(inviteCode).not.toHaveValue('');
+            const token = await inviteCode.inputValue();
+            const emailField = form.getByRole('textbox', { name: 'Email', exact: true });
+            await emailField.fill(`${email}.typo`);
             await form.getByLabel('Password', { exact: true }).fill('DisposableInvitee!123');
             await form.getByLabel('Confirm password', { exact: true }).fill('DisposableInvitee!123');
+
+            // Exercise the real preflight and rendered errors before correcting
+            // the form. Rejected attempts must leave this invitation usable.
+            for (const [code, message] of [
+                [token, 'This invitation is for a different email address. Check for typos or use the email that received the invite.'],
+                [`${token}x`, 'This invite code is invalid or has expired. Check your invite link or ask for a new invitation.'],
+            ] as const) {
+                await inviteCode.fill(code);
+                const rejected = page.waitForResponse(response =>
+                    new URL(response.url()).pathname === '/api/basic-auth/register' && response.request().method() === 'POST');
+                await form.getByRole('button', { name: 'Create account', exact: true }).click();
+                expect((await rejected).status()).toBe(403);
+                await expect(form.getByRole('alert')).toHaveText(message);
+                await expect(emailField).toHaveValue(`${email}.typo`);
+                await saveEvidence(info, `rejected-${kind}-invite-${label}-${code === token ? 'email' : 'code'}`, {
+                    body: await page.screenshot({ mask: [inviteCode] }), contentType: 'image/png',
+                });
+            }
+            await inviteCode.fill(token);
+            await emailField.fill(email.toUpperCase());
             const registration = page.waitForResponse(response =>
                 new URL(response.url()).pathname === '/api/basic-auth/register' && response.request().method() === 'POST');
             await form.getByRole('button', { name: 'Create account', exact: true }).click();
@@ -232,7 +255,8 @@ test('instance admin controls load without a Chat account or selected workspace'
     const historyLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/list');
     await page.goto('/admin/signup-invites');
     await historyLoaded;
-    await expect(page.getByRole('heading', { name: 'Signup invites', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registration', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/registration\?tab=invitations$/);
     await expect(page.getByText('Each recipient gets their own private workspace.', { exact: true })).toBeVisible();
     const email = 'admin-ui-'+crypto.randomUUID()+'@example.test';
     await page.getByLabel('Recipient email', {exact:true}).fill(email);
@@ -265,7 +289,7 @@ test('signup invite setup failures guide the administrator without exposing serv
             : 'Unexpected failure: secret=private-server-value' }),
     }));
     const historyLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/list');
-    await page.goto('/admin/signup-invites');
+    await page.goto('/admin/registration?tab=invitations');
     await historyLoaded;
     await page.getByLabel('Recipient email', { exact: true }).fill('invite-setup@example.test');
     await expect(page.getByLabel('Recipient email', { exact: true })).toHaveValue('invite-setup@example.test');
@@ -305,7 +329,7 @@ test('admin invite guidance distinguishes open registration from required invita
     await page.route('**/api/admin/signup-invites/list*', route => route.fulfill({
         json: { ...payload, registrationMode: mode },
     }));
-    await page.goto('/admin/signup-invites');
+    await page.goto('/admin/registration?tab=invitations');
     await expect(page.getByText('Invites are optional', { exact: true })).toBeVisible();
     await expect(page.getByText('Registration is open. New users can sign up without an invitation.', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Invitation history', exact: true })).toBeVisible();
@@ -319,6 +343,111 @@ test('admin invite guidance distinguishes open registration from required invita
     }
 });
 
+test('registration settings preserve saved and active modes across tabs and reloads', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    expect((await page.request.get('/api/admin/registration')).status()).toBe(401);
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers, data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    expect((await page.request.post('/api/admin/registration', { headers: { origin }, data: { mode: 'open' } })).status()).toBe(403);
+    expect((await page.request.post('/api/admin/registration', { headers, data: { mode: 'invalid' } })).status()).toBe(400);
+
+    let currentMode = 'invite_only';
+    let savedMode = currentMode;
+    let failSave = true;
+    const writes: Array<{ mode: string; intent: string | undefined }> = [];
+    const settings = () => ({ currentMode, savedMode, restartRequired: currentMode !== savedMode, inviteSigningConfigured: true, savedRevision: "fixture-revision", application: "restart" });
+    // Browser saves are intercepted; the user's source .env is never modified.
+    // Disk persistence and policy validation belong to the real route fixture.
+    await page.route('**/api/admin/registration', async route => {
+        if (route.request().method() === 'POST') {
+            const { mode } = route.request().postDataJSON();
+            writes.push({ mode, intent: route.request().headers()['x-or3-admin-intent'] });
+            if (failSave) return route.fulfill({ status: 500, json: { statusMessage: 'Unable to save registration settings.' } });
+            savedMode = mode;
+        }
+        return route.fulfill({ json: settings() });
+    });
+    await page.goto('/admin/registration');
+    await expect(page.getByRole('heading', { name: 'Registration', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Registration', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('radio', { name: 'Open registration', exact: true }).click();
+    await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Unable to save registration settings');
+    await expect(page.getByRole('radio', { name: 'Open registration', exact: true })).toBeChecked();
+    failSave = false;
+    await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+    await expect(page.getByText('Restart required', { exact: true })).toBeVisible();
+    await expect(page.getByText('Current mode: Invite only', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saved mode: Open registration', { exact: true })).toBeVisible();
+    expect(writes).toEqual([{ mode: 'open', intent: 'admin' }, { mode: 'open', intent: 'admin' }]);
+    await page.reload();
+    await expect(page.getByText('Saved mode: Open registration', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Invitations', exact: true }).click();
+    await expect(page).toHaveURL(/tab=invitations/);
+    await expect(page.getByRole('heading', { name: 'Invitation history', exact: true })).toBeVisible();
+    await expect(page.getByText('Invites are optional', { exact: true })).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('radio', { name: 'Open registration', exact: true })).toBeChecked();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await saveEvidence(info, 'registration-settings-pending-mobile', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    currentMode = savedMode;
+    await page.reload();
+    await expect(page.getByText('Current mode: Open registration', { exact: true })).toBeVisible();
+    await expect(page.getByText('Restart required', { exact: true })).toHaveCount(0);
+    await saveEvidence(info, 'registration-settings-active-mobile', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+});
+
+test('registration explains an unsupported restart without submitting a mutation', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    await page.route('**/api/admin/registration', route => route.fulfill({ json: {
+        currentMode: 'open', savedMode: 'invite_only', restartRequired: true, inviteSigningConfigured: true, savedRevision: null, application: 'unsupported',
+    } }));
+    await page.route('**/api/admin/system/restart-status*', route => route.fulfill({ json: {
+        capability: { mode: 'unsupported', restart: false, applySaved: false, rebuild: false, reason: 'restart_unsupported' },
+        bootId: null, activeRevision: null, savedRevision: null, operation: null,
+    } }));
+    let submitted = false;
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/system/restart')) submitted = true; });
+    await page.goto('/admin/registration');
+    await expect(page.getByRole('button', { name: 'Restart now', exact: true })).toBeDisabled();
+    await expect(page.getByText('Restart from the dashboard is unavailable. Ask the person managing your server to restart OR3.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go to Operations', exact: true })).toHaveAttribute('href', '/admin/system');
+    expect(submitted).toBe(false);
+    await saveEvidence(info, 'registration-restart-unavailable', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('registration settings recover from load failures and explain missing invitation setup', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    let failLoad = true;
+    await page.route('**/api/admin/registration', route => route.fulfill(failLoad
+        ? { status: 503, json: { statusMessage: 'Unavailable' } }
+        : { json: { currentMode: 'open', savedMode: 'open', restartRequired: false, inviteSigningConfigured: false, savedRevision: 'fixture-revision', application: 'restart' } }));
+    await page.goto('/admin/registration');
+    await expect(page.getByRole('alert')).toContainText('Unable to load registration settings');
+    failLoad = false;
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
+    await expect(page.getByText('Invitations need one-time setup', { exact: true })).toBeVisible();
+    await page.getByRole('radio', { name: 'Invite only', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled();
+    await expect(page.getByText('Set up invitations before choosing Invite only.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View invite setup instructions' })).toHaveAttribute('href', '/documentation/cloud/environment-reference#invite-signing-setup');
+    await page.getByRole('radio', { name: 'Registration closed', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeEnabled();
+    await saveEvidence(info, 'registration-settings-invitation-setup', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
 test('admin storage notice opens usage for an explicitly selected workspace', async ({ page }, info) => {
     const origin = new URL(info.project.use.baseURL!).origin;
     const login = await page.request.post('/api/admin/auth/login', {
@@ -329,18 +458,23 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
     const response = await page.request.get('/api/admin/system/status');
     expect(response.ok()).toBe(true);
     const payload = await response.json();
+    expect(payload.status.storage).toMatchObject({ enabled: true, provider: 'fs' });
+    expect(payload.status.storage.actions).toContainEqual(expect.objectContaining({ id: 'storage.usage' }));
     const rawWarning = 'Destructive filesystem blob GC is disabled until provider-owned deletion coordination is available.';
+    let usageAvailable = true;
     await page.route('**/api/admin/system/status', route => route.fulfill({ json: {
         ...payload,
         status: { ...payload.status, storage: {
-            enabled: true, provider: 'fs',
-            details: { gcStatus: 'disabled', gcDisabledReason: 'deletion_coordination_required' },
-            actions: [{ id: 'storage.usage', label: 'Observe Storage Usage', description: 'Read-only storage usage.' }],
+            ...payload.status.storage,
+            actions: payload.status.storage.actions.filter((action: { id: string }) => usageAvailable || action.id !== 'storage.usage'),
         } },
         warnings: [{ level: 'warning', message: rawWarning }, { level: 'error', message: 'Another provider needs attention.' }],
     } }));
     await page.route('**/api/admin/workspaces?*', route => route.fulfill({ json: {
-        items: [{ id: 'ux-workspace', name: 'Walkthrough workspace', memberCount: 1 }], total: 1,
+        items: [
+            { id: 'ux-workspace', name: 'Walkthrough workspace', memberCount: 1 },
+            { id: 'other-workspace', name: 'Second workspace', memberCount: 1 },
+        ], total: 2,
     } }));
     const requests: unknown[] = [];
     await page.route('**/api/admin/system/provider-action', route => {
@@ -357,23 +491,56 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
     await expect(page.getByText('Another provider needs attention.', { exact: true })).toBeVisible();
     await saveEvidence(info, 'admin-storage-notice', { body: await page.screenshot(), contentType: 'image/png' });
     await page.getByRole('link', { name: 'View storage usage', exact: true }).click();
-    await expect(page).toHaveURL(/\/admin\/system#storage-usage$/);
-    const action = page.locator('#storage-usage');
-    await action.getByRole('button', { name: 'View storage usage', exact: true }).click();
     const picker = page.getByRole('dialog', { name: 'Select a Workspace' });
     await expect(picker).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/system$/);
     await page.keyboard.press('Escape');
     await expect(picker).toBeHidden();
     expect(requests).toHaveLength(0);
 
-    await action.getByRole('button', { name: 'View storage usage', exact: true }).click();
+    // The same notice must work again on Operations after cancellation, without
+    // finding and clicking a second action card or scrolling the page manually.
+    await page.getByRole('link', { name: 'View storage usage', exact: true }).click();
+    await expect(picker).toBeVisible();
     await picker.getByRole('button', { name: /Walkthrough workspace/ }).click();
     await expect.poll(() => requests).toEqual([{ kind: 'storage', actionId: 'storage.usage', workspaceId: 'ux-workspace' }]);
     const result = page.getByRole('status').filter({ hasText: 'Storage usage for Walkthrough workspace' });
     await expect(result).toContainText('filesystem_entry_limit');
     await expect(result).toContainText('1024');
-    await result.scrollIntoViewIfNeeded();
+    await expect(result).toBeInViewport();
+    await expect(result).toBeFocused();
     await saveEvidence(info, 'admin-workspace-storage-usage', { body: await page.screenshot(), contentType: 'image/png' });
+
+    // Repeat on mobile and explicitly choose a different workspace.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('link', { name: 'View storage usage', exact: true }).click();
+    await expect(picker).toBeVisible();
+    await picker.getByRole('button', { name: /Second workspace/ }).click();
+    await expect.poll(() => requests).toEqual([
+        { kind: 'storage', actionId: 'storage.usage', workspaceId: 'ux-workspace' },
+        { kind: 'storage', actionId: 'storage.usage', workspaceId: 'other-workspace' },
+    ]);
+    const secondResult = page.getByRole('status').filter({ hasText: 'Storage usage for Second workspace' });
+    await expect(secondResult).toBeInViewport();
+    await expect(secondResult).toBeFocused();
+    await saveEvidence(info, 'admin-workspace-storage-usage-mobile', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.locator('#storage-usage').getByRole('button', { name: 'View storage usage', exact: true }).click();
+    await expect(picker).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
+    expect(requests).toHaveLength(2);
+
+    usageAvailable = false;
+    // A hash-only navigation retains the existing status. Reload to simulate
+    // the server no longer advertising this capability before opening its link.
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'View storage usage', exact: true })).toHaveCount(0);
+    await page.goto('/admin/system#storage-usage');
+    await expect(page.getByText('Storage usage unavailable', { exact: true })).toBeVisible();
+    await expect(picker).toBeHidden();
+    await expect(page.getByRole('link', { name: 'View storage usage', exact: true })).toHaveCount(0);
+    expect(requests).toHaveLength(2);
 });
 
 test('ordinary sign-in finishes credential-first signup with a replacement invite', async ({ page, browser }, info) => {
@@ -405,7 +572,7 @@ test('ordinary sign-in finishes credential-first signup with a replacement invit
         await page.goto(first.inviteUrl);
         const registrationForm = page.getByRole('dialog', { name: 'Create Account', exact: true });
         await expect(registrationForm).toBeVisible({ timeout: 30_000 });
-        await registrationForm.getByRole('textbox', { name: 'Invite token (from your invite link)', exact: true }).fill(replacement.token);
+        await registrationForm.getByRole('textbox', { name: 'Invite code (from your invite link)', exact: true }).fill(replacement.token);
         await registrationForm.getByRole('button', { name: 'Already registered? Sign in', exact: true }).click();
         const signIn = page.getByRole('dialog', { name: 'Sign In', exact: true });
         await expect(signIn).toBeVisible();

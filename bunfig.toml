@@ -1,0 +1,3 @@
+# Source launchers load files explicitly so inherited shell overrides retain provenance.
+# Requires the Bun version pinned in package.json.
+env = false

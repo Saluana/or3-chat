@@ -136,15 +136,24 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 | `OR3_AUTH_LOCK_PAGE_ENABLED` | `false` | Redirect signed-out shell visitors to `/welcome`. |
 | `OR3_AUTH_LOCK_PAGE_ADAPTER` | `default` | Registered lock-page adapter ID. |
 
-**Admin → Signup invites** remains available when registration is open, including
-invitation history. The page shows **Invites are optional** when the running
+**Admin → Registration → Settings** saves **Open registration**, **Invite only**,
+or **Registration closed** to `OR3_AUTH_REGISTRATION_MODE` in the server's `.env`.
+Use **Apply saved settings and restart** through the supported lifecycle controller. The page retains saved/current state and verifies the effective policy after recovery. See [server restarts](/documentation/cloud/operations). Settings also shows invitation setup status. Invite only requires the
+signing secret to be configured in the
+running server before it can be saved. Deployment environment overrides can
+take precedence over `.env` and must be updated by the operator if necessary.
+
+**Admin → Registration → Invitations** remains available when registration is open, including
+invitation history. The tab shows **Invites are optional** when the running
 registration policy is `open`: new users can sign up without an invitation.
 This notice does not appear for `invite_only` or `disabled` registration.
 
 ### Invite signing setup
 
-If **Admin → Signup invites** shows **Invitations need one-time setup**, no
-invitation was created. Set `OR3_AUTH_INVITE_TOKEN_SECRET` before trying again:
+If **Admin → Registration → Settings** shows **Invitations need one-time setup**,
+set `OR3_AUTH_INVITE_TOKEN_SECRET` before choosing Invite only. The same guidance
+appears in Invitations if creating an invite fails because setup is missing;
+in that case, no invitation was created.
 
 1. Generate a long, random secret locally. For an editable source checkout, run:
 
@@ -156,7 +165,7 @@ invitation was created. Set `OR3_AUTH_INVITE_TOKEN_SECRET` before trying again:
    environment. For source development, add or update that setting in the
    project's `.env` file. Keep it server-only; do not use a `NUXT_PUBLIC_*`
    variable or commit the value.
-3. Restart OR3 so it loads the setting, then return to **Signup invites** and
+3. Restart OR3 so it loads the setting, then return to **Registration → Invitations** and
    select **Create invite** again.
 
 Keep the same value across restarts and all instances of the deployment.
@@ -352,8 +361,8 @@ encryption key is required before webhook creation.
 | `OR3_ADMIN_BASE_PATH` | `/admin` | Admin route prefix. |
 | `OR3_ADMIN_ALLOWED_HOSTS` | empty | Comma-separated admin host allowlist. |
 | `OR3_ADMIN_ALLOW_RESTART` | `false` | Allow admin-triggered restart. |
-| `OR3_ADMIN_ALLOW_REBUILD` | `false` | Allow admin-triggered rebuild and restart. |
-| `OR3_ADMIN_REBUILD_COMMAND` | `bun run build` | Command used for admin rebuilds. |
+| `OR3_ADMIN_ALLOW_REBUILD` | `false` | Legacy flag; dashboard live-output rebuilding is retired. |
+| `OR3_ADMIN_REBUILD_COMMAND` | `bun run build` | Legacy value; never executed by the dashboard. |
 | `OR3_ADMIN_DATA_DIR` | `.data` | Persistent location for admin credentials and generated JWT secret. |
 | `OR3_SHUTDOWN_TIMEOUT_MS` | `15000` | Graceful-shutdown request-drain timeout. |
 

@@ -11,9 +11,10 @@ export async function prepareConvexBackend(
     projectRoot: string,
     env: NodeJS.ProcessEnv = process.env,
     localModules: Record<string, string> = {},
+    options: { loadEnv?: boolean } = {},
 ): Promise<NodeJS.ProcessEnv> {
     const fileEnv: Record<string, string> = {};
-    configDotenv({ path: resolve(projectRoot, '.env'), processEnv: fileEnv, quiet: true });
+    if (options.loadEnv !== false) configDotenv({ path: resolve(projectRoot, '.env'), processEnv: fileEnv, quiet: true });
     const startupEnv = { ...fileEnv, ...env };
     if (startupEnv.OR3_WIZARD_UI_ENABLED === 'true') return startupEnv;
     // Auth workspace provisioning still needs its store when sync transfer is

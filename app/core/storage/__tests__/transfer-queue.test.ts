@@ -1073,7 +1073,7 @@ describe('FileTransferQueue', () => {
         expect((await db.file_transfers.get(transfer.id))?.state).toBe('done');
     });
 
-    it('treats 413 uploads as non-retryable permanent failure', async () => {
+    it.each([413, 429, 503])('preserves permanent errors and defers HTTP %s without exhausting maintenance attempts', async status => {
         const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png', size_bytes: 10 * 1024 * 1024 });
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
 
@@ -1087,7 +1087,7 @@ describe('FileTransferQueue', () => {
 
         const queue = new FileTransferQueue(db as any, provider, { maxAttempts: 5 });
         queue.setWorkspaceId('ws-1');
-        const upload = vi.fn(async () => new Response('upstream token=private-token', { status: 413 }));
+        const upload = vi.fn(async () => new Response('upstream token=private-token', { status, headers: { 'Retry-After': '5' } }));
         vi.stubGlobal('fetch', upload);
 
         const transfer: FileTransfer = {
@@ -1106,6 +1106,13 @@ describe('FileTransferQueue', () => {
         await (queue as any).processTransfer(transfer);
 
         const failed = await db.file_transfers.get(transfer.id);
+        if (status !== 413) {
+            expect(failed).toMatchObject({ state: 'queued', attempts: 0, retry_at: expect.any(Number) });
+            expect(failed!.retry_at).toBeGreaterThanOrEqual(Date.now() + 5000);
+            expect(await db.file_blobs.get(meta.hash)).toBeDefined();
+            queue.dispose();
+            return;
+        }
         expect(failed?.state).toBe('failed');
         expect(failed?.attempts).toBe(1);
         expect(failed?.last_error).toBe('Choose a smaller file and try again.');

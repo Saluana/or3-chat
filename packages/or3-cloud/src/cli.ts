@@ -9,6 +9,7 @@ import { withDeploymentLease } from './deployment/lease';
 import { deploymentPaths } from './deployment/paths';
 import { PACKAGE_VERSION } from './package-info';
 import { fileExists } from './util/fs';
+import { recoverRestart } from './commands/recover-restart';
 import { redact } from './util/primitives';
 
 async function main(argv = process.argv.slice(2)) {
@@ -21,6 +22,7 @@ async function main(argv = process.argv.slice(2)) {
     assertCommandFlags(command, parsed.flags);
     assertCommandPositionals(command, parsed.positionals);
     await assertDeploymentFolder(command);
+    if (command === 'recover' && await recoverRestart(process.cwd(), parsed.flags)) return;
     const dispatch = () => dispatchCommand(command, parsed);
     if (requiresMutationLease(command, parsed)) {
       return await withDeploymentLease(mutationDirectory(command, parsed.positionals, parsed.flags), command, dispatch);

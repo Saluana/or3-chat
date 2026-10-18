@@ -64,6 +64,14 @@ describe('source startup backend selection', () => {
         await prepareConvexBackend(f.root, { SSR_AUTH_ENABLED: 'true', ...flags }, f.modules);
         expect(JSON.parse(readFileSync(f.receipt, 'utf8'))).toEqual(['deploy']);
     });
+
+    it('does not mix a complete custom launch environment with the checkout env file', async () => {
+        const f = fixture();
+        writeFileSync(join(f.root, '.env'), 'CHECKOUT_ONLY=stale\n');
+        const env = { SSR_AUTH_ENABLED: 'false', OR3_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false' };
+        const prepared = await prepareConvexBackend(f.root, env, f.modules, { loadEnv: false });
+        expect(prepared).toEqual(env);
+    });
 });
 
 // Exercise the real launcher and subprocess boundary without starting Nuxt or
@@ -82,6 +90,20 @@ describe('dev launcher runtime', () => {
         mkdirSync(bin);
         mkdirSync(join(nuxt, 'bin'), { recursive: true });
         mkdirSync(join(root, 'node_modules/.bin'));
+        mkdirSync(join(root, 'shared/dev'), { recursive: true });
+        writeFileSync(join(root, 'shared/dev/nuxt-child.mjs'), readFileSync(resolve('shared/dev/nuxt-child.mjs')));
+        const cli = join(root, 'node_modules/@nuxt/cli');
+        mkdirSync(cli, { recursive: true });
+        writeFileSync(join(cli, 'package.json'), JSON.stringify({ name: '@nuxt/cli', type: 'module', exports: './index.mjs' }));
+        // Only the CLI dependency is substituted. Runtime selection executes the
+        // real owned child, whose actual cleanup is qualified by the E2E lane.
+        writeFileSync(join(cli, 'index.mjs'), `export async function runCommand(name, args) {
+            console.log('NUXT_RECEIPT=' + JSON.stringify({
+                runtime: process.versions.bun ? 'bun' : 'node', args: [name, ...args],
+                nodeOptions: process.env.NODE_OPTIONS ?? '', ssr: process.env.SSR_AUTH_ENABLED,
+            }));
+            return { result: { close: async () => {} } };
+        }`);
         symlinkSync(process.execPath, join(bin, 'node'));
         if (withBun) symlinkSync(execFileSync('bun', ['-p', 'process.execPath'], { encoding: 'utf8' }).trim(), join(bin, 'bun'));
         writeFileSync(join(root, 'package.json'), '{}');

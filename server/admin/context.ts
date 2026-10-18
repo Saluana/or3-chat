@@ -54,10 +54,16 @@ export type AdminRequestContext = {
  * The combined context or `null` if no valid admin identity is found.
  */
 export async function resolveAdminRequestContext(
-    event: H3Event
+    event: H3Event,
+    options: { superAdminOnly?: boolean } = {}
 ): Promise<AdminRequestContext | null> {
     // Try super admin JWT first
     const adminClaims = await getAdminFromCookie(event);
+    // Lifecycle controls remain available while persistent work is draining.
+    // Their authentication must not trigger workspace auto-provisioning.
+    if (options.superAdminOnly) {
+        return adminClaims ? { principal: { kind: 'super_admin', username: adminClaims.username } } : null;
+    }
     if (adminClaims) {
         let session: SessionContext | undefined;
         try {

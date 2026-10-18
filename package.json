@@ -45,6 +45,7 @@
         "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",
         "test:e2e:storage": "PW_PORT=3109 bunx playwright test tests/e2e/storage-layer.spec.ts --workers=1 --reporter=line",
         "test:e2e:admin-auth": "bun run scripts/test/run-admin-auth-e2e.ts",
+        "test:e2e:server-restarts": "bun scripts/test/run-server-restarts-e2e.ts",
         "test:e2e:sign-in-gate": "bun run scripts/test/run-sign-in-gate-e2e.ts",
         "test:e2e:waitlist": "bun run scripts/test/run-sign-in-gate-e2e.ts --waitlist",
         "test:e2e:workspace-cloud": "bun run scripts/test/run-workspace-cloud-e2e.ts",

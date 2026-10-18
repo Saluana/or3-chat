@@ -12,7 +12,7 @@
  * - Synchronizing updates to disk while maintaining file structure.
  *
  * Constraints:
- * - Operates synchronously on the `.env` file located in `process.cwd()`.
+ * - Uses the authoritative instance/env path supplied by its controller.
  * - Limited to basic `KEY=VALUE` pair parsing; does not support complex shell features.
  *
  * Non-goals:
@@ -21,6 +21,8 @@
  */
 import { promises as fs } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { parse } from 'dotenv';
 
 /**
  * Represents a single line in an .env file.
@@ -43,6 +45,8 @@ export type EnvFileLocation = {
 };
 
 export type EnvWriteOptions = EnvFileLocation & {
+    /** Compare under the writer lock; stale editors must reread before saving. */
+    expectedContent?: string;
     /**
      * When true, creates a timestamped backup before writing if target exists.
      * Backup files use `<envFile>.backup.<timestamp>`.
@@ -87,7 +91,7 @@ function parseLine(line: string): EnvLine {
  */
 function formatValue(value: string): string {
     if (value === '') return '';
-    if (/[\s#]/.test(value)) return `"${value.replace(/"/g, '\\"')}"`;
+    if (/[\s#"'\\]/.test(value)) return JSON.stringify(value);
     return value;
 }
 
@@ -117,12 +121,7 @@ export async function readEnvFile(
     }
     const rawLines = content.split(/\r?\n/);
     const lines = rawLines.map(parseLine);
-    const map: Record<string, string> = {};
-    for (const line of lines) {
-        if (line.type === 'entry') {
-            map[line.key] = line.value;
-        }
-    }
+    const map: Record<string, string> = parse(content);
     return { lines, map, path: envPath };
 }
 
@@ -173,13 +172,21 @@ async function createBackupIfNeeded(
     return backupPath;
 }
 
-export async function writeEnvFileDetailed(
+async function writeLockedEnvFile(
     updates: Record<string, string | null>,
     options: EnvWriteOptions = {}
 ): Promise<EnvWriteResult> {
-    const { lines, map, path } = await readEnvFile(options);
+    const path = resolveEnvPath(options);
+    const original = await fs.readFile(path, 'utf8').catch(error => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+        throw error;
+    });
+    if (options.expectedContent !== undefined && original !== options.expectedContent) throw new Error('revision_conflict');
+    const lines = original.split(/\r?\n/).map(parseLine);
+    const map = parse(original);
     const updatedMap = { ...map };
     for (const [key, value] of Object.entries(updates)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error('Invalid environment key');
         if (value === null) {
             delete updatedMap[key];
         } else {
@@ -191,20 +198,24 @@ export async function writeEnvFileDetailed(
     const nextLines = lines
         .map((line) => {
             if (line.type !== 'entry') return line.raw;
-            const nextValue = updatedMap[line.key];
             seen.add(line.key);
-            if (nextValue === undefined) return '';
+            if (!Object.hasOwn(updates, line.key) || updates[line.key] === map[line.key]) return line.raw;
+            const nextValue = updatedMap[line.key];
+            if (nextValue === undefined) return null;
             return `${line.key}=${formatValue(nextValue)}`;
         })
-        .filter((line) => line !== '');
+        .filter((line): line is string => line !== null);
 
     const newKeys = Object.keys(updatedMap).filter((key) => !seen.has(key));
+    const trailingNewline = nextLines.at(-1) === '';
+    if (newKeys.length && trailingNewline) nextLines.pop();
     for (const key of newKeys) {
         nextLines.push(`${key}=${formatValue(updatedMap[key] ?? '')}`);
     }
+    if (newKeys.length && trailingNewline) nextLines.push('');
 
-    const nextContent = nextLines.join('\n');
-    const previousContent = lines.map((line) => line.raw).join('\n');
+    const nextContent = nextLines.join(original.includes('\r\n') ? '\r\n' : '\n');
+    const previousContent = original;
     const changed = nextContent !== previousContent;
 
     if (!changed) {
@@ -222,13 +233,39 @@ export async function writeEnvFileDetailed(
     }
 
     const backupPath = await createBackupIfNeeded(path, options.createBackup);
-    await fs.writeFile(path, nextContent, { encoding: 'utf8', mode: 0o600 });
-    await fs.chmod(path, 0o600);
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+        const file = await fs.open(temporary, 'wx', 0o600);
+        try { await file.writeFile(nextContent); await file.sync(); } finally { await file.close(); }
+        const current = await fs.readFile(path, 'utf8').catch(error => {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+            throw error;
+        });
+        if (current !== original) throw new Error('revision_conflict');
+        await fs.rename(temporary, path);
+        const directory = await fs.open(dirname(path), 'r');
+        try { await directory.sync(); } finally { await directory.close(); }
+    } finally { await fs.rm(temporary, { force: true }); }
     return {
         path,
         backupPath,
         changed: true,
     };
+}
+
+export async function writeEnvFileDetailed(updates: Record<string, string | null>, options: EnvWriteOptions = {}): Promise<EnvWriteResult> {
+    const lock = `${resolveEnvPath(options)}.or3-write-lock`;
+    const deadline = performance.now() + 5_000;
+    for (;;) {
+        try { await fs.mkdir(lock, { mode: 0o700 }); break; }
+        catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+            if (performance.now() >= deadline) throw new Error('configuration_writer_busy');
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+    }
+    try { return await writeLockedEnvFile(updates, options); }
+    finally { await fs.rmdir(lock); }
 }
 
 export async function writeEnvFile(

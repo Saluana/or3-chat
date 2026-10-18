@@ -1,11 +1,36 @@
 import { readFileSync } from 'node:fs';
 import type { IncomingMessage, Server } from 'node:http';
 import { createServer, type Server as HttpsServer } from 'node:https';
+import type { Duplex } from 'node:stream';
 
 const httpsListener = Symbol.for('or3.dev.https-listener');
+const upgradeDeadline = Symbol.for('or3.dev.upgrade-deadline');
 
 /** Serve the same live Nuxt app over HTTP/1.1 TLS without replacing localhost. */
 export async function attachDevHttpsListener(server: Server): Promise<void> {
+    const upgrades = server as Server & { [upgradeDeadline]?: boolean };
+    if (!upgrades[upgradeDeadline]) {
+        // The listener opens before Vite attaches its upgrade handler. Vite's
+        // reconnect ping has no timeout, so an unanswered early handshake can
+        // otherwise leave HMR waiting forever. Bound only the handshake: an
+        // established, idle WebSocket must remain connected.
+        const boundHandshake = (_request: IncomingMessage, socket: Duplex & { bytesWritten?: number }) => {
+            const written = socket.bytesWritten;
+            const clear = () => clearTimeout(timer);
+            const timer = setTimeout(() => {
+                socket.off('close', clear);
+                if (socket.bytesWritten === written) socket.destroy();
+            }, 5000);
+            timer.unref();
+            socket.once('close', clear);
+        };
+        upgrades[upgradeDeadline] = true;
+        server.prependListener('upgrade', boundHandshake);
+        server.once('close', () => {
+            server.off('upgrade', boundHandshake);
+            delete upgrades[upgradeDeadline];
+        });
+    }
     const cert = process.env.OR3_DEV_HTTPS_CERT;
     const key = process.env.OR3_DEV_HTTPS_KEY;
     if (!cert && !key) return;

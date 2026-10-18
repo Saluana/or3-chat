@@ -24,6 +24,7 @@ export type RegistrationDecision =
               | 'invite_required'
               | 'invite_secret_missing'
               | 'invite_invalid'
+              | 'invite_email_mismatch'
               | 'invite_expired'
               | 'invite_unsupported';
       };
@@ -181,7 +182,7 @@ export async function validateInviteRegistration(input: {
         return {
             allowed: false,
             mode: 'invite_only',
-            reason: 'invite_invalid',
+            reason: 'invite_email_mismatch',
         };
     }
 

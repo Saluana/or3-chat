@@ -44,6 +44,12 @@ services:
         bind:
           create_host_path: false
       - type: bind
+        source: ./dashboard-lifecycle.mjs
+        target: /operator/dashboard-lifecycle.mjs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ${OR3_DOCKER_SOCKET}
         target: /var/run/docker.sock
       - type: bind

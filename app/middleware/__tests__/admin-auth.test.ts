@@ -7,6 +7,7 @@ vi.mock('#app', () => ({
     defineNuxtRouteMiddleware: (handler: unknown) => handler,
     navigateTo: (path: string) => navigateToMock(path),
     useNuxtData: () => cachedSession,
+    createError: (error: unknown) => error,
 }));
 
 type AdminSessionKind = 'super_admin' | 'workspace_admin';
@@ -96,5 +97,39 @@ describe('admin-auth middleware', () => {
 
         await expect(middleware({ path: '/admin/plugins' })).resolves.toBe('/admin/login');
         expect(navigateToMock).toHaveBeenCalledWith('/admin/login');
+    });
+
+    it.each([503, 502, undefined])('preserves auth identity and reports temporary unavailability for %s', async (status) => {
+        cachedSession.data.value = { authenticated: true, kind: 'super_admin' };
+        setRequestFetch(async () => { throw { status }; });
+        const middleware = (await import('../admin-auth')).default as (
+            to: { path: string }
+        ) => Promise<unknown>;
+
+        await expect(middleware({ path: '/admin/system' })).rejects.toMatchObject({ statusCode: 503 });
+        expect(navigateToMock).not.toHaveBeenCalled();
+        expect(cachedSession.data.value?.authenticated).toBe(true);
+    });
+
+    it('bounds auth lookup without automatically retrying during shutdown', async () => {
+        setRequestFetch(async () => ({ authenticated: true, kind: 'super_admin' }));
+        const middleware = (await import('../admin-auth')).default as (
+            to: { path: string }
+        ) => Promise<unknown>;
+        await middleware({ path: '/admin/system' });
+        expect(requestFetchMock).toHaveBeenCalledWith('/api/admin/auth/session', expect.objectContaining({
+            retry: 0,
+            timeout: 3000,
+        }));
+    });
+
+    it.each([401, 403])('clears cached identity when authentication is rejected with %s', async (status) => {
+        cachedSession.data.value = { authenticated: true, kind: 'super_admin' };
+        setRequestFetch(async () => { throw { status }; });
+        const middleware = (await import('../admin-auth')).default as (
+            to: { path: string }
+        ) => Promise<unknown>;
+        await expect(middleware({ path: '/admin/system' })).resolves.toBe('/admin/login');
+        expect(cachedSession.data.value).toBeUndefined();
     });
 });

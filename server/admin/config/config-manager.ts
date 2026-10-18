@@ -21,6 +21,7 @@
  * - Does not manage runtime process environment (handled by process manager/host).
  */
 import { readEnvFile, writeEnvFile } from './env-file';
+import { configurationApplication } from '../../../shared/admin/configuration';
 import {
     validateEnvConfig,
 } from './resolve-config';
@@ -97,7 +98,9 @@ const DEFAULT_CONFIG_ORDER = 999;
  * schema information from `config-metadata.ts`.
  */
 export async function readEnrichedConfigEntries(): Promise<EnrichedConfigEntry[]> {
-    const { map } = await readEnvFile();
+    // Infrastructure values are informational. Writes use the controller,
+    // never an assumed container/checkout-local .env.
+    const map = process.env;
     return Array.from(WHITELIST).map((key) => {
         const value = map[key] ?? null;
         const masked = value !== null && isSecretConfigKey(key);
@@ -111,6 +114,8 @@ export async function readEnrichedConfigEntries(): Promise<EnrichedConfigEntry[]
             group: metadata?.group ?? DEFAULT_CONFIG_GROUP,
             order: metadata?.order ?? DEFAULT_CONFIG_ORDER,
             valueType: metadata?.valueType ?? 'string',
+            application: configurationApplication(key),
+            editable: false,
         };
     });
 }

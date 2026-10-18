@@ -973,6 +973,9 @@ export function validStartInput(input) {
 async function main() {
   await mkdir(dirname(socketPath), { recursive: true, mode: 0o700 });
   await rm(socketPath, { force: true });
+  // Kept separate from the legacy update protocol and bundled by this exact CLI.
+  let lifecycle;
+  const getLifecycle = () => lifecycle ??= import('./dashboard-lifecycle.mjs').then(module => module.createManagedLifecycle(deploymentDirectory));
 
   const server = createServer(async (request, response) => {
     // Protocol 2 is additive: the versioned routes are the same handlers with a
@@ -982,6 +985,13 @@ async function main() {
     const route = isV2 ? request.url.slice(3) : request.url;
     const reply = (statusCode, payload) => send(response, statusCode, isV2 ? { protocolVersion: currentProtocolVersion, ...payload } : payload);
     try {
+      if ((request.url || '').startsWith('/lifecycle/v1/')) {
+        if (updateClaimed) return send(response, 409, { code: 'update_in_progress' });
+        try {
+          const service = await getLifecycle();
+          if (await service.handle(service.controller, request, response)) return;
+        } catch { return send(response, 503, { code: 'controller_unavailable' }); }
+      }
       if (request.method === 'GET' && route === '/status') return reply(200, await status(isV2));
       if (request.method === 'POST' && route === '/check') {
         if (!consumeRateLimit(checkAttempts, Date.now(), 30, 60_000)) {
@@ -1008,6 +1018,9 @@ async function main() {
         }
         updateClaimed = true;
         try {
+          const service = await getLifecycle();
+          const restart = (await service.controller.status()).operation;
+          if (restart && !['succeeded', 'cancelled', 'failed'].includes(restart.phase)) throw new Error('A dashboard restart is unresolved. Reconcile it before updating.');
           await assertHandoffReady();
           const checked = await check(isV2);
           if (!checked.updateAvailable) {
@@ -1073,6 +1086,7 @@ async function main() {
       reply(503, { message: error instanceof Error ? error.message : 'The update operator is unavailable.' });
     }
   });
+  server.requestTimeout = 5_000;
 
   server.listen(socketPath, () => {
     // The read-only app bind mount needs to connect as a distinct container UID.

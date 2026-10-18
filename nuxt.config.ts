@@ -232,6 +232,7 @@ export default defineNuxtConfig({
                   '/__or3-projects-journey': { ssr: false },
                   '/__or3-document-journey-test': { ssr: false },
                   '/__or3-mobile-auth-test': { ssr: false },
+                  '/__or3-restart-continuity': { ssr: false },
               }
             : {}),
     },
@@ -317,9 +318,15 @@ export default defineNuxtConfig({
         provider: 'local',
     },
     nitro: {
-        ...(process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true'
-            ? { plugins: [resolve(__dirname, 'tests/e2e/fixtures/chat-tools-server.ts')] }
-            : {}),
+        // Supported server runtimes (Node 24/Bun) can await provider backend
+        // verification during module initialization before accepting requests.
+        esbuild: { options: { target: 'es2022' } },
+        plugins: [
+            ...(process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true'
+                ? [resolve(__dirname, 'tests/e2e/fixtures/chat-tools-server.ts')] : []),
+            ...(process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true' && process.env.OR3_RESTART_E2E === 'true'
+                ? [resolve(__dirname, 'tests/e2e/fixtures/RestartLifecycleServer.ts')] : []),
+        ],
         alias: {
             ...pluginSdkSourceAliases,
         },
@@ -881,6 +888,7 @@ export default defineNuxtConfig({
             }
             if (isProductionJourneyTestHarnessEnabled) {
                 pages.push(
+                    { name: 'or3-restart-continuity', path: '/__or3-restart-continuity', file: resolve(__dirname, 'tests/e2e/fixtures/RestartContinuityJourney.vue') },
                     { name: 'or3-projects-journey', path: '/__or3-projects-journey', file: resolve(__dirname, 'tests/e2e/fixtures/ProjectsJourney.vue') },
                     {
                         name: 'or3-chat-journey-test-harness',

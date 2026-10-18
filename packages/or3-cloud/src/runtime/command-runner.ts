@@ -76,7 +76,7 @@ function commandEnvironment(command: string, args: string[], cwd?: string, suppl
     : process.env;
 }
 
-export async function run(command: string, args: string[], cwd?: string, environment?: NodeJS.ProcessEnv): Promise<CommandResult> {
+export async function run(command: string, args: string[], cwd?: string, environment?: NodeJS.ProcessEnv, timeoutMs = COMMAND_TIMEOUT_MS): Promise<CommandResult> {
   const printable = `${command} ${args.map(quote).join(' ')}`;
   await lifecycleFaults.beforeCommand?.(command, args);
   try {
@@ -84,7 +84,7 @@ export async function run(command: string, args: string[], cwd?: string, environ
       cwd,
       maxBuffer: 4 * 1024 * 1024,
       encoding: 'utf8',
-      timeout: COMMAND_TIMEOUT_MS,
+      timeout: Math.floor(Math.max(1, Math.min(COMMAND_TIMEOUT_MS, timeoutMs))),
       killSignal: 'SIGKILL',
       env: commandEnvironment(command, args, cwd, environment),
     });

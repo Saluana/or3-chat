@@ -479,8 +479,11 @@ export class FileTransferQueue {
                 return;
             }
 
-            const attempts = transfer.attempts + 1;
             const metadata = normalizeError(error, { source: 'storage', code: 'ERR_STORAGE_PROVIDER_ERROR' });
+            // Server maintenance/rate-limit deferrals retain the durable transfer
+            // and its retry budget. A later attempt obtains a fresh presigned URL.
+            const deferred = metadata.status === 429 || (metadata.status === 503 && metadata.retryAfterMs !== undefined);
+            const attempts = transfer.attempts + (deferred ? 0 : 1);
             const message = presentError(metadata).message;
 
             // Check if error is marked as non-retryable (e.g., file too large)
@@ -489,8 +492,8 @@ export class FileTransferQueue {
                 'retryable' in error && 
                 (error as { retryable?: boolean }).retryable === false;
 
-            const failed = isNonRetryable || attempts >= this.maxAttempts;
-            const delay = failed ? 0 : Math.max(this.getBackoffDelay(attempts), metadata.retryAfterMs ?? 0);
+            const failed = isNonRetryable || (!deferred && attempts >= this.maxAttempts);
+            const delay = failed ? 0 : Math.max(this.getBackoffDelay(Math.max(1, attempts)), metadata.retryAfterMs ?? 0);
             const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,

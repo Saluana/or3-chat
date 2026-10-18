@@ -93,6 +93,8 @@ setDefault('NUXT_ADMIN_AUTH_USERNAME', adminUsername);
 setDefault('NUXT_ADMIN_AUTH_PASSWORD', adminPassword);
 setDefault('NUXT_ADMIN_AUTH_JWT_SECRET', adminJwtSecret);
 setDefault('NUXT_ADMIN_AUTH_JWT_EXPIRY', adminJwtExpiry);
+setDefault('NUXT_ADMIN_ALLOW_RESTART', firstDefined(env.OR3_ADMIN_ALLOW_RESTART, 'false'));
+setDefault('NITRO_SHUTDOWN_TIMEOUT', '20000');
 setDefault(
     'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
     firstDefined(env.OR3_BACKGROUND_ENCRYPTION_KEY)

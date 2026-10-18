@@ -45,6 +45,8 @@ type AdminApiOptions = {
      * Use for sensitive operations like password changes, system configuration.
      */
     superAdminOnly?: boolean;
+    /** Authenticate only the deployment cookie, without workspace resolution. */
+    superAdminCookieOnly?: boolean;
     /**
      * Allow workspace-admin principals to access this endpoint.
      * Defaults to false (super-admin-only).
@@ -129,11 +131,13 @@ export async function requireAdminApiContext(
         requireAdminMutation(event);
     }
 
-    let context = getAdminContext(event);
+    let context = options.superAdminCookieOnly ? null : getAdminContext(event);
     
     // If not in context, try to resolve
     if (!context) {
-        context = await resolveAdminRequestContext(event);
+        context = options.superAdminCookieOnly
+            ? await resolveAdminRequestContext(event, { superAdminOnly: true })
+            : await resolveAdminRequestContext(event);
         if (context) {
             event.context.admin = context;
         }

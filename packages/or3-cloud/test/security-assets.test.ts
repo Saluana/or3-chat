@@ -344,10 +344,9 @@ test('credential reset keeps plaintext passwords out of Docker arguments', () =>
   expect(cli).not.toContain('`OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`');
 });
 
-test('lifecycle commands are deadline-bound and power-loss durable', () => {
+test('lifecycle writes retain durability and streaming child ownership safeguards', () => {
   const cli = cloudCliSource();
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
-  expect(cli).toContain('timeout: COMMAND_TIMEOUT_MS');
   expect(cli).toContain('detached: process.platform');
   expect(cli).toContain("process.kill(-child.pid, 'SIGKILL')");
   expect(cli).toContain("await run('docker', ['info', '--format', '{{.Architecture}}'])");
@@ -619,6 +618,7 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     'NUXT_SYNC_ENABLED',
     'NUXT_STORAGE_ENABLED',
     'NUXT_ADMIN_AUTH_JWT_SECRET',
+    'NUXT_ADMIN_ALLOW_RESTART',
     'NUXT_BACKGROUND_JOBS_ENABLED',
     'NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED',
     'NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER',
@@ -654,6 +654,7 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
       OR3_BACKGROUND_JOB_TIMEOUT: '45',
       OR3_BASIC_AUTH_JWT_SECRET: 'basic-auth-secret',
       OR3_BACKGROUND_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
+      OR3_ADMIN_ALLOW_RESTART: 'true',
       OR3_PLUGIN_CONNECTION_SECRET: 'runtime-plugin-connection-secret',
       OR3_LIBRARY_LINK_SECRET: 'runtime-library-link-secret',
       OR3_PLUGIN_ALLOWED_MODELS: 'vendor/alpha,vendor/beta',
@@ -674,6 +675,7 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     NUXT_SYNC_ENABLED: 'true',
     NUXT_STORAGE_ENABLED: 'true',
     NUXT_ADMIN_AUTH_JWT_SECRET: 'explicit-admin-secret',
+    NUXT_ADMIN_ALLOW_RESTART: 'true',
     NUXT_BACKGROUND_JOBS_ENABLED: 'true',
     NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED: 'true',
     NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER: 'convex',

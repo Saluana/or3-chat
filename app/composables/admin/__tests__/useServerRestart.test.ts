@@ -1,163 +1,91 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ref, nextTick } from 'vue';
+import { ref } from 'vue';
 import { useServerRestart } from '../useServerRestart';
 
-const mockConfirm = vi.fn();
-const mockToastAdd = vi.fn();
-const mockFetch = vi.fn();
-
-vi.mock('../useConfirmDialog', () => ({
-    useConfirmDialog: () => ({
-        confirm: mockConfirm,
-    }),
-}));
-
+const fixture = vi.hoisted(() => ({ confirm: vi.fn(), toast: vi.fn(), fetch: vi.fn(), states: new Map() }));
+vi.mock('../useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: fixture.confirm }) }));
 vi.mock('#imports', () => ({
-    useToast: () => ({
-        add: mockToastAdd,
-    }),
+    useToast: () => ({ add: fixture.toast }),
+    useState: (key: string, initial: () => unknown) => {
+        if (!fixture.states.has(key)) fixture.states.set(key, ref(initial()));
+        return fixture.states.get(key);
+    },
+    refreshNuxtData: vi.fn(),
 }));
-
-globalThis.$fetch = mockFetch as unknown as typeof $fetch;
-
-describe('useServerRestart', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+globalThis.$fetch = fixture.fetch as unknown as typeof $fetch;
+const status = (operation: unknown = null) => ({
+    capability: { mode: 'development', restart: true, applySaved: true, rebuild: false },
+    bootId: 'boot-1', activeRevision: 'revision-1', savedRevision: 'revision-1', operation,
+});
+describe('admin restart observation', () => {
+    beforeEach(() => { vi.clearAllMocks(); fixture.states.clear(); localStorage.clear(); fixture.confirm.mockResolvedValue(true); });
+    it('never submits a restart without ownership or when disabled', async () => {
+        await useServerRestart(ref(false)).restart();
+        await useServerRestart(ref(true), ref(false)).restart();
+        expect(fixture.fetch).not.toHaveBeenCalled();
     });
-
-    it('does not restart when not owner', async () => {
-        const isOwner = ref(false);
-        const { restart } = useServerRestart(isOwner);
-
-        await restart();
-
-        expect(mockConfirm).not.toHaveBeenCalled();
-        expect(mockFetch).not.toHaveBeenCalled();
+    it('submits only the saved revision presented before confirmation, even if polling observes another save', async () => {
+        let confirm!: (value: boolean) => void;
+        fixture.confirm.mockImplementation(() => new Promise<boolean>(resolve => { confirm = resolve; }));
+        fixture.fetch.mockResolvedValue(status());
+        const restart = useServerRestart(ref(true));
+        const pending = restart.restart('saved');
+        await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
+        fixture.fetch.mockResolvedValue({ ...status(), savedRevision: 'unseen-revision' });
+        await restart.refresh();
+        fixture.fetch.mockImplementation(async (_path, options) => options?.method === 'POST'
+            ? { operation: { requestId: options.body.requestId, phase: 'preparing' } } : status());
+        confirm(true); await pending;
+        expect(fixture.fetch).toHaveBeenCalledWith('/api/admin/system/restart', expect.objectContaining({
+            body: expect.objectContaining({ target: { kind: 'saved', savedRevision: 'revision-1' } }),
+        }));
     });
-
-    it('does not restart when user cancels confirmation', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner);
-
-        mockConfirm.mockResolvedValue(false);
-
-        await restart();
-
-        expect(mockConfirm).toHaveBeenCalledWith({
-            title: 'Restart Server',
-            message: 'Are you sure you want to restart the server now? This will cause temporary downtime.',
-            danger: true,
-            confirmText: 'Restart',
+    it('reconciles a lost acknowledgement with the same identity and never announces success at acceptance', async () => {
+        let requestId: string | undefined;
+        fixture.fetch.mockImplementation(async (_path, options) => {
+            if (options?.method === 'POST') { requestId = options.body.requestId; throw new Error('connection lost after acceptance'); }
+            return status(requestId ? { requestId, phase: 'preparing', originalBootId: 'boot-1', targetRevision: 'revision-1' } : null);
         });
-        expect(mockFetch).not.toHaveBeenCalled();
+        const first = useServerRestart(ref(true));
+        await first.restart();
+        const second = useServerRestart(ref(true));
+        expect(first.busy.value).toBe(true);
+        expect(second.operation.value?.requestId).toBe(requestId);
+        expect(fixture.fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+        expect(fixture.toast.mock.calls.some(([value]) => value.color === 'success')).toBe(false);
     });
-
-    it('restarts server when confirmed and successful', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner);
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockResolvedValue({ ok: true });
-
-        await restart();
-
-        expect(mockFetch).toHaveBeenCalledWith('/api/admin/system/restart', {
-            method: 'POST',
-            headers: { 'x-or3-admin-intent': 'admin' },
+    it('requires a verified new boot before reporting success', async () => {
+        let requestId: string | undefined;
+        fixture.fetch.mockImplementation(async (_path, options) => {
+            if (options?.method === 'POST') { requestId = options.body.requestId; return { operation: { requestId, phase: 'preparing' } }; }
+            return status(requestId ? { requestId, phase: 'succeeded', originalBootId: 'boot-1', observedBootId: 'boot-2', targetRevision: 'revision-1' } : null);
         });
-        expect(mockToastAdd).toHaveBeenCalledWith({
-            title: 'Restart initiated',
-            description: 'The server is restarting...',
-            color: 'success',
-        });
+        const restart = useServerRestart(ref(true));
+        await restart.restart();
+        fixture.fetch.mockResolvedValue({ ...status({ requestId, phase: 'succeeded', originalBootId: 'boot-1', observedBootId: 'boot-2', targetRevision: 'revision-1' }), bootId: 'boot-2' });
+        await restart.refresh();
+        expect(restart.busy.value).toBe(false);
+        expect(fixture.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Server restarted', color: 'success' }));
     });
-
-    it('shows error toast when restart fails', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner);
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockRejectedValue(new Error('Network error'));
-
-        await restart();
-
-        expect(mockToastAdd).toHaveBeenCalledWith({
-            title: 'Error',
-            description: 'Restart failed',
-            color: 'error',
-        });
-    });
-
-    it('shows error toast with default message on unknown error', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner);
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockRejectedValue({}); // Empty error object
-
-        await restart();
-
-        expect(mockToastAdd).toHaveBeenCalledWith({
-            title: 'Error',
-            description: 'Restart failed',
-            color: 'error',
-        });
-    });
-
-    it('does not restart when disabled by configuration', async () => {
-        const isOwner = ref(true);
-        const allowRestart = ref(false);
-        const { restart } = useServerRestart(isOwner, allowRestart);
-
-        await restart();
-
-        expect(mockConfirm).not.toHaveBeenCalled();
-        expect(mockFetch).not.toHaveBeenCalled();
-        expect(mockToastAdd).toHaveBeenCalledWith({
-            title: 'Restart Disabled',
-            description: 'Server restart is disabled in configuration.',
-            color: 'error',
-        });
-    });
-
-    it('restarts when allowRestart is undefined (no restriction)', async () => {
-        const isOwner = ref(true);
-        const { restart } = useServerRestart(isOwner, undefined);
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockResolvedValue({ ok: true });
-
-        await restart();
-
-        expect(mockFetch).toHaveBeenCalled();
-    });
-
-    it('exposes restartRequired ref', () => {
-        const isOwner = ref(true);
-        const { restartRequired } = useServerRestart(isOwner);
-
-        expect(restartRequired.value).toBe(false);
-
-        restartRequired.value = true;
-        expect(restartRequired.value).toBe(true);
-    });
-
-    it('reacts to ownership changes', async () => {
-        const isOwner = ref(false);
-        const { restart } = useServerRestart(isOwner);
-
-        // First try as non-owner
-        await restart();
-        expect(mockConfirm).not.toHaveBeenCalled();
-
-        // Become owner
-        isOwner.value = true;
-        await nextTick();
-
-        mockConfirm.mockResolvedValue(true);
-        mockFetch.mockResolvedValue({ ok: true });
-
-        await restart();
-        expect(mockConfirm).toHaveBeenCalled();
+    it('retains identity and blocks another restart after observation expires, including reauthentication', async () => {
+        const requestId = crypto.randomUUID();
+        localStorage.setItem('or3:admin:restart-observation', JSON.stringify({ requestId, startedAt: Date.now() - 10 * 60_000 }));
+        const restart = useServerRestart(ref(true));
+        fixture.fetch.mockRejectedValue({ statusCode: 503 });
+        await restart.refresh();
+        expect(restart.progress.value).toContain('Observation timed out');
+        expect(JSON.parse(localStorage.getItem('or3:admin:restart-observation')!).requestId).toBe(requestId);
+        fixture.fetch.mockRejectedValue({ statusCode: 401 });
+        await restart.refresh();
+        expect(restart.progress.value).toContain('Sign in again');
+        fixture.fetch.mockResolvedValue(status({ requestId, phase: 'verifying', originalBootId: 'boot-1', targetRevision: 'revision-1' }));
+        await restart.refresh();
+        expect(restart.canRestart.value).toBe(false);
+        await restart.restart();
+        expect(fixture.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+        fixture.fetch.mockResolvedValue({ ...status({ requestId, phase: 'succeeded', originalBootId: 'boot-1', observedBootId: 'boot-2', targetRevision: 'revision-1' }), bootId: 'boot-2' });
+        await restart.refresh();
+        expect(localStorage.getItem('or3:admin:restart-observation')).toBeNull();
+        expect(fixture.toast).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
     });
 });

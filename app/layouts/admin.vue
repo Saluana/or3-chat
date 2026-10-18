@@ -406,7 +406,7 @@ const navLinks = computed<NavLink[]>(() => {
     if (isSuperAdmin.value) {
         base.push(
             { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
-            { label: 'Signup invites', to: '/admin/signup-invites', icon: 'i-lucide-mail-plus', section: 'Site' },
+            { label: 'Registration', to: '/admin/registration', icon: 'i-lucide-user-plus', section: 'Site' },
             { label: 'Administrators', to: '/admin/admin-users', icon: 'i-lucide-shield', section: 'Site' },
             { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },
             { label: 'UI & Branding', to: '/admin/branding', icon: brandingIcon, section: 'Experience' },

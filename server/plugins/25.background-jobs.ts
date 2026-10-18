@@ -9,6 +9,7 @@ import {
 import { reconcileBackgroundJobs } from '../utils/background-jobs/lifecycle';
 import { executeBackgroundJob } from '../utils/background-jobs/stream-handler';
 import { reconcilePendingBackgroundHistory } from '../utils/background-jobs/history';
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 
 const RECONCILE_INTERVAL_MS = 5_000;
 let activeInterval: ReturnType<typeof setInterval> | null = null;
@@ -31,15 +32,20 @@ export default defineNitroPlugin((nitroApp) => {
     const workerId = randomUUID();
     let scanning = false;
     const reconcile = async () => {
-        if (scanning) return;
+        const { controller } = getShutdownRuntime();
+        if (scanning || controller.phase() === 'draining' || controller.phase() === 'closed') return;
         scanning = true;
         try {
             const provider = await getJobProvider();
-            await provider.cleanupExpired();
+            if (controller.canStartWork()) await provider.cleanupExpired();
+            // Pending delivery is existing work and must finish while preparing.
+            // Pausing it along with new claims would make its own drain blocker
+            // impossible to clear after a transient canonical-history failure.
             await reconcilePendingBackgroundHistory(
                 provider,
                 getJobConfig().maxConcurrentJobs
             );
+            if (!controller.canStartWork()) return;
             await reconcileBackgroundJobs(
                 {
                     provider,
@@ -61,9 +67,10 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Provider modules register during Nitro startup; defer the first scan so
     // provider selection cannot be cached before registration completes.
-    activeStartup = setTimeout(() => void reconcile(), 1_000);
+    const scan = () => { void getShutdownRuntime().controller.track(reconcile()); };
+    activeStartup = setTimeout(scan, 1_000);
     if (typeof activeStartup.unref === 'function') activeStartup.unref();
-    activeInterval = setInterval(() => void reconcile(), RECONCILE_INTERVAL_MS);
+    activeInterval = setInterval(scan, RECONCILE_INTERVAL_MS);
     if (typeof activeInterval.unref === 'function') activeInterval.unref();
 
     nitroApp.hooks.hook('close', () => {

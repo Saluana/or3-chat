@@ -731,6 +731,8 @@ export function getConfigMetadata(key: string): ConfigMetadata | undefined {
  * - Value may be masked (e.g., '******') before reaching this structure.
  */
 export type EnrichedConfigEntry = {
+    application: import('../../../shared/admin/configuration').ConfigurationApplication;
+    editable: boolean;
     /** The environment variable key name */
     key: string;
     /** The current value (masked if it's a secret) */

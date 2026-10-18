@@ -84,11 +84,14 @@ storage** as an informational notice. Permanent server cleanup is not yet
 available; no configuration change enables it. The provider diagnostic remains
 available under **Technical details**, and other provider warnings stay visible.
 
-When the provider exposes usage reporting, **View storage usage** opens its
-action in **Admin → Operations**. Select **View storage usage** on the
-**Observe Storage Usage** card, then choose a workspace. Canceling the chooser
-does not run an observation. Each result names the selected workspace; the
-observation does not delete files or empty Trash.
+When the provider exposes usage reporting, **View storage usage** in either
+notice opens the workspace chooser in **Admin → Operations** immediately.
+Choose a workspace to run the check; its result is brought into view and receives
+keyboard focus. Canceling the chooser does not run an observation, and the notice
+can be used again after canceling. The **Observe Storage Usage** card opens the
+same chooser. Each result names the selected workspace; the observation does not
+delete files or empty Trash. If a direct usage link can no longer run because
+the provider is unavailable, Operations explains why.
 
 The matching provider adds **Observe Storage Usage** to the Operations provider
 actions. It reports logical active/deleted metadata separately from observed

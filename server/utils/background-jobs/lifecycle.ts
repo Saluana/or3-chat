@@ -6,6 +6,7 @@ import type { BackgroundStreamParams } from './stream-handler';
 import { decryptBackgroundCredential } from './crypto';
 import { emitJobStatus } from './viewers';
 import { reconcileBackgroundJobHistory } from './history';
+import { getShutdownRuntime } from '../shutdown/runtime';
 
 export const BACKGROUND_JOB_LEASE_MS = 30_000;
 const BACKGROUND_JOB_HEARTBEAT_MS = 10_000;
@@ -35,7 +36,7 @@ function launchClaimedJob(
     job: BackgroundJob,
     dependencies: BackgroundJobLifecycleDependencies
 ): void {
-    void runClaimedBackgroundJob(job, dependencies).catch((error) => {
+    void getShutdownRuntime().controller.track(runClaimedBackgroundJob(job, dependencies)).catch((error) => {
         console.warn(
             '[background-jobs] Claimed job runner failed:',
             error instanceof Error ? error.message : 'Unknown error'
@@ -249,16 +250,16 @@ export async function claimAndRunBackgroundJob(
     jobId: string,
     dependencies: BackgroundJobLifecycleDependencies
 ): Promise<boolean> {
-    if (!supportsDurableClaims(dependencies.provider)) return false;
+    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableClaims(dependencies.provider)) return false;
     const workerId = `${dependencies.workerId ?? 'worker'}:${randomUUID()}`;
     const now = dependencies.now ?? Date.now;
     const leaseMs = dependencies.leaseMs ?? BACKGROUND_JOB_LEASE_MS;
-    const job = await dependencies.provider.claimJob!(
+    const job = await getShutdownRuntime().controller.track(dependencies.provider.claimJob!(
         jobId,
         workerId,
         now(),
         now() + leaseMs
-    );
+    ));
     if (!job) return false;
     launchClaimedJob(job, { ...dependencies, workerId });
     return true;
@@ -269,17 +270,17 @@ export async function reconcileBackgroundJobs(
     dependencies: BackgroundJobLifecycleDependencies,
     maxClaims = 20
 ): Promise<number> {
-    if (!supportsDurableClaims(dependencies.provider)) return 0;
+    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableClaims(dependencies.provider)) return 0;
     const now = dependencies.now ?? Date.now;
     const leaseMs = dependencies.leaseMs ?? BACKGROUND_JOB_LEASE_MS;
     let claimed = 0;
-    while (claimed < maxClaims) {
+    while (claimed < maxClaims && getShutdownRuntime().controller.canStartWork()) {
         const workerId = `${dependencies.workerId ?? 'worker'}:${randomUUID()}`;
-        const job = await dependencies.provider.claimNextJob!(
+        const job = await getShutdownRuntime().controller.track(dependencies.provider.claimNextJob!(
             workerId,
             now(),
             now() + leaseMs
-        );
+        ));
         if (!job) break;
         claimed += 1;
         launchClaimedJob(job, { ...dependencies, workerId });

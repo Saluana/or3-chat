@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Account identities, invitations, team membership, account-owned local credentials and retained-database cleanup, bounded login admission, host restrictions, password policy, and admin session revocation."
+                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers required workflow origins, current job/message/workspace authorization, project moves, scoped admission recovery, cancellation, bound browser-tool approvals and retention."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, recovery, cancellation, browser-tool approvals, retention, and safe dashboard drain accounting for Memory, SQLite and Convex."
                 },
                 {
                     "name": "notifications.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Filesystem signed transfers, paired upload reservations, retryable commits, retained Trash guidance, workspace selection for read-only storage usage, and disabled physical cleanup."
+                    "summary": "Filesystem signed transfers, upload reservations, retryable commits, retained Trash guidance, direct storage-usage workspace selection from Overview and Operations, visible results, and disabled physical cleanup."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery, retained metadata, and atomic signup invitations."
+                    "summary": "Convex setup, authenticated downloads, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations."
                 },
                 {
                     "name": "provider-s3.md",
@@ -755,7 +755,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 17,
-                    "summary": "Environment variables for OR3 and its providers, including optional invitations during open registration, invite-signing setup, secret persistence, and recovery from missing invitation configuration."
+                    "summary": "Environment variables for OR3 and its providers, dashboard registration mode changes and Restart now requirements, optional invitations, signing setup, and deployment overrides."
                 },
                 {
                     "name": "capability-matrix.md",
@@ -810,6 +810,15 @@
                     "categoryOrder": 5,
                     "order": 23,
                     "summary": "> Managed Cloud status: withheld. Remote Connect is not part of the > supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a > disposable staging lifecycle must pass before the production UI or beginner > docs can offe"
+                },
+                {
+                    "name": "operations.md",
+                    "path": "/cloud/operations",
+                    "title": "Server restarts",
+                    "category": "Using Cloud",
+                    "categoryOrder": 1,
+                    "order": 4.5,
+                    "summary": "Supervised dev and managed restarts, active-work protection, verified settings activation, bounded outage observation, and uncertain-receipt recovery."
                 }
             ]
         },

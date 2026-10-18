@@ -59,3 +59,6 @@ or3-*-audit.md
 
 # Build-owned offline inspection descriptor (generated from provider versions).
 scripts/docker/backup-inspection-profile.json
+
+# Built and packaged by packages/or3-cloud's build/prepack command.
+packages/or3-cloud/assets/dashboard-lifecycle.mjs

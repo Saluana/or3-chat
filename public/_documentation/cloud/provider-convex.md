@@ -6,6 +6,18 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 
 ## What It Provides
 
+Dashboard restarts support Convex background jobs when both the provider artifact
+and its deployed backend include `getShutdownBlockerCount`. Its internal query
+includes parked work and pending history delivery, uses indexed existence checks
+without loading full pages of response snapshots,
+and never treats a failed lookup as idle. Keep the generated backend and provider
+contract together; a dashboard restart does not deploy backend changes. See
+[background execution](/documentation/cloud/background-execution#dashboard-restart-admission).
+
+History delivery and cleanup batches are bounded by bytes as well as rows, so
+large retained snapshots do not prevent recovery. Source scaffolds require
+Convex SDK 1.31.7 or newer for the size-accounting helper.
+
 - Convex sync provider (direct mode)
 - Consistent materialized snapshot pages pinned to one server high-watermark
 - Convex storage provider

@@ -29,6 +29,13 @@ sizes for delete-before-put records, and never infer liveness from sync history.
 
 ## Install
 
+The background job provider supports dashboard drain accounting when its built
+artifacts expose `getShutdownBlockerCount`. All streaming jobs, parked browser
+tools, workflows, and pending admission/history delivery block restart. The
+additive history/status index migration keeps polling off stored response blobs.
+Database failures cancel restart preparation safely. See
+[background execution](/documentation/cloud/background-execution#dashboard-restart-admission).
+
 ```bash
 bun add or3-provider-sqlite
 ```

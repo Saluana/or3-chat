@@ -398,7 +398,7 @@ async function resolveSessionContextAttempt(
                 if (!providerEmail || providerEmail !== inviteEmail) {
                     throw createError({
                         statusCode: 403,
-                        statusMessage: 'Invite token is invalid or expired.',
+                        statusMessage: 'This invitation is for a different email address. Check for typos or use the email that received the invite.',
                     });
                 }
 

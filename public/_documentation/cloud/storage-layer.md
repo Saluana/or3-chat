@@ -302,3 +302,7 @@ The provider still returns `deletion_coordination_required`. Existing
 restore/reference/hash-reuse tests verify this refusal only, not a deleting
 collector. See [the coordination design](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/storage-cleanup-coordination.md)
 for the remaining implementation and acceptance gates.
+
+## Restart maintenance
+
+An announced 503 maintenance response with retry metadata defers queued blob transfer without spending permanent-failure attempts. Pending bytes remain local, and the next attempt requests a fresh presigned URL. Authentication and validation errors retain their existing semantics. See [server restarts](/documentation/cloud/operations).

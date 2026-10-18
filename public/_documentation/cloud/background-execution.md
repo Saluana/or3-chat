@@ -437,3 +437,25 @@ Deterministic browser harness + Playwright specs cover:
 - [Tool runtime](/documentation/utils/tool-runtime)
 - [Chat streaming](/documentation/utils/openrouterStream)
 - [Workflow editor](/documentation/workflows/editor)
+
+## Dashboard restart admission
+
+Dashboard restarts wait for execution and history flushes before stopping. Memory,
+SQLite and Convex accounting includes parked browser tools and workflows. The
+durable providers also block on pending admission and terminal history delivery;
+an expired lease or terminal job status alone does not mean the server is idle.
+SQLite counts through covering indexes without loading response bodies. Convex
+reads bounded indexed buckets in one transaction; its count can be a lower bound,
+but zero always means no blockers.
+
+Use rebuilt provider artifacts containing `getShutdownBlockerCount`. Convex also
+requires the matching generated backend functions to be deployed through its
+normal source setup. Older providers without accounting disable dashboard
+restart. Missing backend functions or database lookup failures cancel preparation
+and restore admission; they never authorize replacement.
+
+New claims pause during preparation, while existing leases continue renewing
+until their execution settles. Parked work or failed history delivery can keep
+preparation waiting; cancel the restart and resolve that work through its existing
+controls before trying again. Uncertain tools are never replayed by restart.
+See [server restarts](/documentation/cloud/operations).

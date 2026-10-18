@@ -24,29 +24,20 @@
                     :variant="action.danger ? 'soft' : 'solid'"
                     :disabled="!isOwner || !!runningActionId"
                     :loading="runningActionId === action.kind + ':' + action.id"
-                    @click="run(action)"
+                    @click="emit('run', action)"
                 >
                     {{ isStorageUsage(action) ? 'View storage usage' : 'Run Action' }}
                 </UButton>
             </div>
         </div>
-        <section v-if="result" role="status" class="mt-4 space-y-2 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] p-4">
+        <section v-if="result" id="provider-action-result" role="status" tabindex="-1" class="mt-4 scroll-mt-4 space-y-2 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] p-4">
             <h4 class="font-medium">{{ result.label }} result</h4>
             <pre class="max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs">{{ JSON.stringify(result.value, null, 2) }}</pre>
         </section>
-        <WorkspaceSelector
-            v-if="showWorkspaceSelector"
-            v-model="showWorkspaceSelector"
-            description="Choose the workspace whose storage usage you want to view."
-            @select="viewStorageUsage"
-        />
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import WorkspaceSelector from '../WorkspaceSelector.vue';
-
 interface Action {
     id: string;
     label: string;
@@ -64,23 +55,8 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-    run: [action: Action, workspace?: { id: string; name: string }];
+    run: [action: Action];
 }>();
 
-const showWorkspaceSelector = ref(false);
-const storageUsageAction = ref<Action | null>(null);
 const isStorageUsage = (action: Action) => action.kind === 'storage' && action.id === 'storage.usage';
-
-function run(action: Action) {
-    if (isStorageUsage(action)) {
-        storageUsageAction.value = action;
-        showWorkspaceSelector.value = true;
-    } else {
-        emit('run', action);
-    }
-}
-
-function viewStorageUsage(workspace: { id: string; name: string }) {
-    if (storageUsageAction.value) emit('run', storageUsageAction.value, workspace);
-}
 </script>
