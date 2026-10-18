@@ -94,7 +94,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 - [x] 2.5 Implement the pure runtime state machine and transition table
       Requirements: R2.AC4, R2.AC8
-      Done when: every legal transition and every rejected transition has a table-driven unit test.
+      Historical prototype: the transition table and exhaustive matrix were never wired into the manager and were retired during the test audit. Live lifecycle behavior is covered by the manager suite; shared failure classification remains.
 
 - [x] 2.6 Implement `DescriptorResolver` validation and client recomputation of descriptor keys
       Requirements: R2.AC2, R2.AC4
@@ -460,23 +460,25 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R8.AC3
       Done when: the decision records which CPU, memory, fs, env, and network controls are enforceable on supported deployments.
 
-- [x] 8.11 Implement isolated-server spawn/handshake/health/termination lifecycle
+The original tasks 8.11–8.15 were marked complete using an injected fake-child prototype. It never had a production caller or a real spawn implementation and was retired during the test audit. These server-boundary controls remain unqualified; `isolated-server` is not an installable host mode.
+
+- [ ] 8.11 Implement isolated-server spawn/handshake/health/termination lifecycle
       Requirements: R8.AC1, R8.AC3
       Done when: crash, failed handshake, host shutdown, and repeated start/stop leave no child runtime.
 
-- [x] 8.12 Enforce server CPU/wall/memory and request/response budgets
+- [ ] 8.12 Enforce server CPU/wall/memory and request/response budgets
       Requirements: R8.AC3
       Done when: each budget terminates only the offending plugin request/runtime and reports a stable error.
 
-- [x] 8.13 Enforce deny-by-default filesystem, environment, and network policies for the selected server boundary
+- [ ] 8.13 Enforce deny-by-default filesystem, environment, and network policies for the selected server boundary
       Requirements: R8.AC3
       Done when: adversarial fixtures cannot read host secrets/files or open undeclared network targets.
 
-- [x] 8.14 Bridge approved server SDK services through the grant-checking RPC broker
+- [ ] 8.14 Bridge approved server SDK services through the grant-checking RPC broker
       Requirements: R8.AC3
       Done when: request-scoped workspace identity is host-created and grant revocation stops subsequent calls.
 
-- [x] 8.15 Run the full isolated-server escape/resource adversarial suite
+- [ ] 8.15 Run the full isolated-server escape/resource adversarial suite
       Requirements: R8.AC3, R9.AC6
       Done when: all threat-model controls have passing evidence on each supported deployment target.
 

@@ -64,7 +64,8 @@
 
 - [x] 5.3 Switch native/D1 LWW and tombstone predicates to `incomingRevisionWins`; check orphan tombstones before insert
       Requirements: R11.AC1, R11.AC2, R11.AC3
-      Done when: equal clock/hlc different opId is deterministic; a tombstone-only pk rejects a stale put. `verifySyncContract` uses production LWW.
+      Done when: equal clock/hlc different opId is deterministic; a tombstone-only pk rejects a stale put.
+      Audit qualification: the host `verifySyncContract` self-test used an in-memory fixture and the same comparator for actual and expected winners. It was removed; production LWW qualification must come from the provider's native/D1 tests.
 
 - [x] 5.4 Return `applied` (and winning `payload` when false) from native and D1 push results
       Requirements: R5.AC3

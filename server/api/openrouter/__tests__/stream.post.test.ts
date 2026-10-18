@@ -558,13 +558,13 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         }));
     });
 
-    it('does not forward OR3 background metadata when using the foreground fallback', async () => {
+    it('strips OR3 metadata from a foreground provider request', async () => {
         backgroundStreamingAvailableMock.mockReturnValue(false);
         readBodyMock.mockResolvedValue({
             model: 'test/model',
             messages: [],
             stream: true,
-            _background: true,
+            _background: false,
             _threadId: 'thread-1',
             _messageId: 'message-1',
             _toolRuntime: { private_tool: 'server' },
@@ -573,10 +573,10 @@ describe('POST /api/openrouter/stream credential authorization', () => {
 
         await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
 
-        const request = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as
-            | { body?: string }
-            | undefined;
-        const body = JSON.parse(request?.body ?? '{}') as Record<string, unknown>;
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+        const request = vi.mocked(fetch).mock.calls[0]![1]!;
+        const body = JSON.parse(request.body as string) as Record<string, unknown>;
         expect(body).not.toHaveProperty('_background');
         expect(body).not.toHaveProperty('_threadId');
         expect(body).not.toHaveProperty('_messageId');

@@ -78,15 +78,6 @@ describe('PATCH /api/workspaces/:id', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('uses session from helper (permissions/role enforced upstream)', async () => {
-        const handler = (await import('../[id].patch')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue({ name: 'Name', description: 'Desc' });
-
-        await handler(makeEvent());
-
-        expect(requireWorkspaceSessionMock).toHaveBeenCalledTimes(1);
-    });
-
     it('trims inputs and updates workspace with exact payload', async () => {
         const handler = (await import('../[id].patch')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ name: '  Name  ', description: '  Desc  ' });

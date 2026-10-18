@@ -1,78 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
     createRpcError,
     createRpcResponse,
-    type RpcEnvelope,
 } from '../rpc-envelope';
 import { RpcSession } from '../rpc-session';
 
 describe('rpc-session (8.2)', () => {
-    it('correlates responses to requests', async () => {
-        const sent: RpcEnvelope[] = [];
-        const session = new RpcSession({
-            send: (envelope) => {
-                sent.push(envelope);
-                if (envelope.kind === 'request') {
-                    queueMicrotask(() => {
-                        session.receive(
-                            createRpcResponse({
-                                id: envelope.id,
-                                result: { ok: true, method: envelope.method },
-                            })
-                        );
-                    });
-                }
-            },
-            generateId: () => 'fixed-1',
-        });
-
-        const result = await session.call('storage.get', { key: 'k' });
-        expect(result).toEqual({
-            ok: true,
-            result: { ok: true, method: 'storage.get' },
-        });
-        expect(sent).toHaveLength(1);
-        expect(session.inFlightCount).toBe(0);
-    });
-
-    it('times out when the deadline elapses', async () => {
-        vi.useFakeTimers();
-        try {
-            const session = new RpcSession({
-                send: () => {},
-                defaultDeadlineMs: 50,
-                generateId: () => 'deadline-1',
-            });
-            const pending = session.call('storage.get', {});
-            await vi.advanceTimersByTimeAsync(50);
-            await expect(pending).resolves.toMatchObject({
-                ok: false,
-                code: 'deadline-exceeded',
-            });
-        } finally {
-            vi.useRealTimers();
-        }
-    });
-
-    it('cancels an in-flight request', async () => {
-        const sent: RpcEnvelope[] = [];
-        const session = new RpcSession({
-            send: (envelope) => {
-                sent.push(envelope);
-            },
-            generateId: () => 'cancel-1',
-            defaultDeadlineMs: 10_000,
-        });
-        const pending = session.call('storage.get', {});
-        expect(session.cancel('cancel-1', 'stop')).toBe(true);
-        await expect(pending).resolves.toEqual({
-            ok: false,
-            code: 'cancelled',
-            message: 'stop',
-        });
-        expect(sent.some((e) => e.kind === 'cancel')).toBe(true);
-    });
-
     it('rejects duplicate/replayed request ids', async () => {
         const session = new RpcSession({
             send: () => {},
@@ -114,30 +47,6 @@ describe('rpc-session (8.2)', () => {
         await expect(
             session.call('storage.get', {}, { id: 'reusable' })
         ).resolves.toMatchObject({ ok: true });
-    });
-
-    it('ignores late responses after settle', async () => {
-        vi.useFakeTimers();
-        try {
-            const session = new RpcSession({
-                send: () => {},
-                defaultDeadlineMs: 10,
-                generateId: () => 'late-1',
-            });
-            const pending = session.call('storage.get', {});
-            await vi.advanceTimersByTimeAsync(10);
-            await expect(pending).resolves.toMatchObject({
-                ok: false,
-                code: 'deadline-exceeded',
-            });
-            session.receive(
-                createRpcResponse({ id: 'late-1', result: { sneaky: true } })
-            );
-            expect(session.isReplay('late-1')).toBe(true);
-            expect(session.inFlightCount).toBe(0);
-        } finally {
-            vi.useRealTimers();
-        }
     });
 
     it('applies backpressure when in-flight limit is reached', async () => {

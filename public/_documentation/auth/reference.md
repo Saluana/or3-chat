@@ -24,7 +24,7 @@ const { startLogin, logoutOpenRouter, isLoggingIn } = useOpenRouterAuth();
 | `isLoggingIn` | Reactive ref used to prevent duplicate attempts and show progress. |
 | `logoutOpenRouter()` | Clears personal key state, persisted KV, and legacy localStorage; dispatches the connection-change signal. |
 
-The login helper prefers S256 when Web Crypto is available and uses the plain challenge fallback when it is unavailable. The callback uses the saved challenge method. Configuration comes from public runtime values `openRouterAuthUrl`, `openRouterRedirectUri`, and `openRouterClientId`; the API base URL is `public.openRouter.baseUrl`. Use the source configuration rather than adding a second redirect implementation.
+The login helper always uses S256. It hashes with Web Crypto when available and loads the SHA-256 fallback when Web Crypto is unavailable. The callback uses the saved challenge method. Configuration comes from public runtime values `openRouterAuthUrl`, `openRouterRedirectUri`, and `openRouterClientId`; the API base URL is `public.openRouter.baseUrl`. Use the source configuration rather than adding a second redirect implementation.
 
 ## Persist or clear a personal key
 

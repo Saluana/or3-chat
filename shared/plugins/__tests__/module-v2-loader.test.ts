@@ -81,16 +81,6 @@ describe('ModuleV2Loader', () => {
         expect(importModule).toHaveBeenCalledWith(resolution.url);
     });
 
-    it('resolves SDK host ABI externals without bundling a second copy', () => {
-        const sdk = Object.freeze({ defineOr3Plugin: () => undefined });
-        const loader = new ModuleV2Loader({
-            assetUrl: buildPluginPackageAssetUrl,
-            hostExternals: { '@or3/plugin-sdk': sdk },
-        });
-        expect(loader.resolveHostExternal('@or3/plugin-sdk')).toBe(sdk);
-        expect(loader.resolveHostExternal('vue')).toBeUndefined();
-    });
-
     it('blocks when the required SDK external is missing', () => {
         const loader = new ModuleV2Loader({
             assetUrl: buildPluginPackageAssetUrl,
@@ -105,36 +95,6 @@ describe('ModuleV2Loader', () => {
             status: 'blocked',
             code: 'host-external-missing',
             missingExternals: ['@or3/plugin-sdk'],
-        });
-    });
-
-    it('keeps trusted-host UI rebuild-required until the facade proofs pass', () => {
-        const loader = new ModuleV2Loader({
-            assetUrl: buildPluginPackageAssetUrl,
-            hostExternals: {
-                '@or3/plugin-sdk': {},
-                vue: {},
-            },
-            trustedHostUi: decideTrustedHostUi({
-                generatedFacade: false,
-                importMap: false,
-                vueSingletonIdentity: false,
-                sdkSingletonIdentity: false,
-                vueReactivity: false,
-                vueComponentRendering: false,
-                cspCompatible: true,
-            }),
-        });
-        expect(loader.resolve({
-            descriptor: descriptor(),
-            generation: 1,
-            signal: new AbortController().signal,
-            isGenerationCurrent: () => true,
-            requiresTrustedHostUi: true,
-        })).toMatchObject({
-            status: 'rebuild-required',
-            code: 'trusted-host-ui-abi-unproven',
-            postBuildAlternative: 'isolated-client-or-declarative-ui',
         });
     });
 

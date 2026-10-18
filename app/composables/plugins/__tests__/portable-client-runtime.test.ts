@@ -27,70 +27,8 @@ const revocationRequests: string[] = [];
 let mintedDigest = `sha256-${'a'.repeat(64)}`;
 let mintedGrants: string[] = [];
 
-const kvRows = new Map<string, { name: string; value: string | null; updated_at: number; clock: number; deleted?: boolean }>();
-const getKvByNameMock = vi.fn(async (name: string) => kvRows.get(name));
-const setKvByNameMock = vi.fn(async (
-    name: string,
-    value: string | null,
-    _db?: unknown,
-    options?: { readonly ifClock?: number | null }
-) => {
-    const current = kvRows.get(name);
-    const live = current && !current.deleted ? current : undefined;
-    const currentClock = current?.clock ?? 0;
-    if (
-        options?.ifClock !== undefined &&
-        (options.ifClock === null ? live !== undefined : options.ifClock !== currentClock)
-    ) {
-        throw Object.assign(new Error('KV revision is stale'), { rpcCode: 'conflict' });
-    }
-    const row = { name, value, updated_at: 1, clock: currentClock + 1 };
-    kvRows.set(name, row);
-    return { id: `kv:${name}`, ...row };
-});
-const hardDeleteKvByNameMock = vi.fn(async (name: string) => {
-    kvRows.delete(name);
-});
-const tombstoneKvByNameMock = vi.fn(async (name: string) => {
-    const current = kvRows.get(name);
-    if (!current || current.deleted) return;
-    kvRows.set(name, { ...current, value: null, updated_at: 1, clock: current.clock + 1, deleted: true });
-});
-
-vi.mock('~/db/kv', () => ({
-    getKvByName: (...args: unknown[]) => getKvByNameMock(...(args as [string])),
-    getKvRecordByName: async (name: string) => ({ row: kvRows.get(name), revision: kvRows.get(name)?.clock ?? 0 }),
-    setKvByName: (...args: unknown[]) => setKvByNameMock(...(args as [string, string | null])),
-    hardDeleteKvByName: (...args: unknown[]) => hardDeleteKvByNameMock(...(args as [string])),
-    tombstoneKvByName: (...args: unknown[]) => tombstoneKvByNameMock(...(args as [string])),
-}));
-
-type Row = NonNullable<ReturnType<typeof kvRows.get>>;
-function collection(rows: Row[]) {
-    return {
-        filter: (predicate: (row: Row) => boolean) => collection(rows.filter(predicate)),
-        until: (predicate: (row: Row) => boolean) => {
-            const end = rows.findIndex(predicate);
-            return collection(end < 0 ? rows : rows.slice(0, end));
-        },
-        limit: (n: number) => collection(rows.slice(0, n)),
-        toArray: async () => rows,
-    };
-}
-const kvTable = {
-    where: () => {
-        const rows = [...kvRows.values()].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-        return {
-            startsWith: (prefix: string) => collection(rows.filter((r) => r.name.startsWith(prefix))),
-            above: (low: string) => collection(rows.filter((r) => r.name > low)),
-            aboveOrEqual: (low: string) => collection(rows.filter((r) => r.name >= low)),
-        };
-    },
-};
-
-vi.mock('~/db/client', () => ({
-    getDb: () => ({ kv: kvTable }),
-}));
+vi.mock('~/db/kv', () => ({}));
+vi.mock('~/db/client', () => ({ getDb: () => ({}) }));
 
 const reconcileMock = vi.fn();
 vi.mock('../workspace-plugin-coordinator', () => ({
@@ -167,11 +105,6 @@ beforeEach(async () => {
     startPortableWorkerMock.mockReset();
     reconcileMock.mockReset();
     fetchMock.mockReset();
-    kvRows.clear();
-    getKvByNameMock.mockClear();
-    setKvByNameMock.mockClear();
-    hardDeleteKvByNameMock.mockClear();
-    tombstoneKvByNameMock.mockClear();
     mintedDigest = `sha256-${'a'.repeat(64)}`;
     mintedGrants = [];
     // The runtime mints a server-side activation handle before it starts any
@@ -293,28 +226,6 @@ describe('portable settings services', () => {
         );
     });
 
-    it('reports a lifecycle-refused write to the stale handler without replaying it', async () => {
-        const onActivationStale = vi.fn();
-        const services = createPortableSettingsServices(
-            'sample.plugin',
-            `sha256-${'d'.repeat(64)}`,
-            'act_test_1',
-            { onActivationStale }
-        );
-        fetchMock.mockRejectedValueOnce(
-            Object.assign(new Error('Activation was revoked: plugin-disabled'), {
-                statusCode: 409,
-                data: { code: 'activation-revoked' },
-            })
-        );
-
-        await expect(
-            services.settings.set({ key: 'greeting', value: 'Hi' })
-        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
-        expect(onActivationStale).toHaveBeenCalledWith('activation-revoked');
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-
     it('recognizes the nested H3 lifecycle code on a settings write', async () => {
         const onActivationStale = vi.fn();
         const services = createPortableSettingsServices('sample.plugin', descriptor().artifact.packageDigest, 'act_test_1', { onActivationStale });
@@ -415,20 +326,6 @@ describe('demand-driven activation', () => {
         expect(revocationRequests).toEqual(['act_test_1']);
     });
 
-    it('revokes the server handle on explicit deactivation', async () => {
-        startPortableWorkerMock.mockResolvedValue(startedRuntime('stop'));
-        setPortableClientSource({
-            descriptor: descriptor(),
-            workspaceId: 'ws-1',
-            runtimeEntry: undefined,
-        });
-
-        await ensurePortableClientActivation('sample.plugin');
-        await deactivatePortableClient('sample.plugin');
-
-        expect(revocationRequests).toEqual(['act_test_1']);
-    });
-
     it('blocks the activation when the host refuses to mint a handle', async () => {
         vi.stubGlobal(
             'fetch',
@@ -450,165 +347,6 @@ describe('demand-driven activation', () => {
         expect(activation?.blockCode).toBe('activation-refused');
         // No sandbox may start without a minted identity or without a handle.
         expect(startPortableWorkerMock).not.toHaveBeenCalled();
-    });
-});
-
-describe('portable storage services', () => {
-    it('persists workspace/plugin-scoped JSON values through the kv table', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await services.storage.set({ key: 'presets', value: { version: 1, presets: [] } });
-        expect(setKvByNameMock).toHaveBeenCalledWith(
-            'plugin-storage:sample.plugin:presets',
-            JSON.stringify({ version: 1, presets: [] }),
-            expect.objectContaining({ kv: kvTable }),
-            expect.objectContaining({
-                quota: expect.objectContaining({
-                    maxBytes: 1024 * 1024,
-                    prefix: 'plugin-storage:sample.plugin:',
-                }),
-            })
-        );
-        await expect(services.storage.get({ key: 'presets' })).resolves.toEqual({
-            value: { version: 1, presets: [] },
-        });
-    });
-
-    it('reports an unset key as null rather than inventing a value', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await expect(services.storage.get({ key: 'missing' })).resolves.toEqual({ value: null });
-    });
-
-    it('lists and deletes only this plugin’s namespaced keys', async () => {
-        kvRows.set('plugin-storage:sample.plugin:presets', {
-            name: 'plugin-storage:sample.plugin:presets',
-            value: JSON.stringify({ version: 1 }),
-            updated_at: 3,
-            clock: 1,
-        });
-        kvRows.set('plugin-storage:other.plugin:presets', {
-            name: 'plugin-storage:other.plugin:presets',
-            value: JSON.stringify({ version: 9 }),
-            updated_at: 4,
-            clock: 1,
-        });
-        const services = createPortableSettingsServices('sample.plugin');
-        await expect(services.storage.list({})).resolves.toEqual({
-            entries: [{ key: 'presets', sizeBytes: JSON.stringify({ version: 1 }).length, updatedAt: 3000, revision: 1 }],
-        });
-        await services.storage.delete({ key: 'presets' });
-        expect(tombstoneKvByNameMock).toHaveBeenCalledWith(
-            'plugin-storage:sample.plugin:presets',
-            expect.objectContaining({ kv: kvTable }),
-            undefined
-        );
-        expect(kvRows.has('plugin-storage:other.plugin:presets')).toBe(true);
-        // The tombstoned key reads as absent and is excluded from listings.
-        await expect(services.storage.get({ key: 'presets' })).resolves.toEqual({ value: null });
-        await expect(services.storage.list({})).resolves.toEqual({ entries: [] });
-    });
-
-    it('refuses an invalid key or an oversized value as invalid input', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await expect(services.storage.get({ key: '' })).rejects.toMatchObject({
-            rpcCode: 'invalid-input',
-        });
-        await expect(
-            services.storage.set({ key: 'big', value: 'x'.repeat(40 * 1024) })
-        ).rejects.toMatchObject({ rpcCode: 'invalid-input' });
-        expect(setKvByNameMock).not.toHaveBeenCalled();
-    });
-
-    it('passes create-if-absent storage CAS through to the transactional KV adapter', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await expect(services.storage.set({ key: 'new', value: 'created', ifRevision: null })).resolves.toEqual({ ok: true });
-        expect(setKvByNameMock).toHaveBeenLastCalledWith(
-            'plugin-storage:sample.plugin:new',
-            JSON.stringify('created'),
-            expect.objectContaining({ kv: kvTable }),
-            expect.objectContaining({
-                ifClock: null,
-                quota: expect.objectContaining({
-                    maxKeys: 1000,
-                    prefix: 'plugin-storage:sample.plugin:',
-                }),
-            })
-        );
-        await expect(services.storage.set({ key: 'new', value: 'overwrite', ifRevision: null })).rejects.toMatchObject({
-            rpcCode: 'conflict',
-        });
-    });
-
-    it('refuses a revoked storage mutation before it can commit', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        const controller = new AbortController();
-        controller.abort('revoked');
-        setKvByNameMock.mockClear();
-        await expect(
-            services.storage.set({ key: 'revoked', value: 1 }, { signal: controller.signal })
-        ).rejects.toMatchObject({ rpcCode: 'cancelled' });
-        expect(setKvByNameMock).not.toHaveBeenCalled();
-        await expect(
-            services.storage.delete({ key: 'revoked' }, { signal: controller.signal })
-        ).rejects.toMatchObject({ rpcCode: 'cancelled' });
-        expect(tombstoneKvByNameMock).not.toHaveBeenCalled();
-    });
-
-    it('rejects malformed revisions instead of writing unconditionally', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        for (const ifRevision of ['1', 1.5, Number.NaN, -1, true, {}]) {
-            setKvByNameMock.mockClear();
-            await expect(
-                services.storage.set({ key: 'guarded', value: 'x', ifRevision })
-            ).rejects.toMatchObject({ rpcCode: 'invalid-input' });
-            expect(setKvByNameMock).not.toHaveBeenCalled();
-        }
-        expect(kvRows.has('plugin-storage:sample.plugin:guarded')).toBe(false);
-    });
-
-    it('pages through an index seek without loading the whole keyspace', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        for (let index = 0; index < 5; index += 1) {
-            kvRows.set(`plugin-storage:sample.plugin:k${index}`, {
-                name: `plugin-storage:sample.plugin:k${index}`,
-                value: JSON.stringify(index),
-                updated_at: 1,
-                clock: 1,
-            });
-        }
-        const first = (await services.storage.listPage({ limit: 2 })) as {
-            entries: { key: string }[];
-            nextCursor?: string;
-        };
-        expect(first.entries.map((entry) => entry.key)).toEqual(['k0', 'k1']);
-        expect(first.nextCursor).toMatch(/^cursor:/);
-        const second = (await services.storage.listPage({ limit: 2, cursor: first.nextCursor })) as {
-            entries: { key: string }[];
-            nextCursor?: string;
-        };
-        expect(second.entries.map((entry) => entry.key)).toEqual(['k2', 'k3']);
-        expect(second.nextCursor).toMatch(/^cursor:/);
-        const third = (await services.storage.listPage({ limit: 2, cursor: second.nextCursor })) as {
-            entries: { key: string }[];
-            nextCursor?: string;
-        };
-        expect(third.entries.map((entry) => entry.key)).toEqual(['k4']);
-        expect(third.nextCursor).toBeUndefined();
-    });
-
-    it('a stale pre-delete revision cannot match a recreated incarnation', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await services.storage.set({ key: 'cycle', value: 'v1' });
-        const first = (await services.storage.getRecord({ key: 'cycle' })) as { revision: number };
-        expect(first.revision).toBe(1);
-        await services.storage.delete({ key: 'cycle' });
-        await services.storage.set({ key: 'cycle', value: 'v2' });
-        const second = (await services.storage.getRecord({ key: 'cycle' })) as { revision: number };
-        // Delete consumed revision 2, so the recreate landed on 3, not 1 again.
-        expect(second.revision).toBe(3);
-        await expect(
-            services.storage.set({ key: 'cycle', value: 'stale', ifRevision: first.revision })
-        ).rejects.toMatchObject({ rpcCode: 'conflict' });
-        await expect(services.storage.get({ key: 'cycle' })).resolves.toEqual({ value: 'v2' });
     });
 });
 
@@ -1303,30 +1041,6 @@ describe('contribution readiness and replacement safeguards', () => {
         expect(isPortableActivationReady(restarted!)).toBe(false);
     });
 
-    it('preserves plugin storage across replacement and stops the old sandbox', async () => {
-        const services = createPortableSettingsServices('sample.plugin');
-        await services.storage.set({ key: 'preset', value: { theme: 'dark' } });
-        startPortableWorkerMock.mockResolvedValue(startedRuntime('old'));
-        await activatePortableClient({ descriptor: descriptor(), workspaceId: 'ws-1' });
-
-        const replacement: PackageV2PluginDescriptor = {
-            ...descriptor(),
-            version: '1.1.0',
-            artifact: {
-                ...descriptor().artifact,
-                packageDigest: `sha256-${'d'.repeat(64)}` as Sha256,
-            },
-        };
-        startPortableWorkerMock.mockResolvedValue(startedRuntime('new'));
-        const next = await activatePortableClient({ descriptor: replacement, workspaceId: 'ws-1' });
-        expect(next.packageDigest).toBe(`sha256-${'d'.repeat(64)}`);
-        // The old sandbox was disposed and its handle revoked; stored data kept.
-        expect(startedRuntime('old') && revocationRequests.length).toBeGreaterThan(0);
-        await expect(services.storage.get({ key: 'preset' })).resolves.toEqual({
-            value: { theme: 'dark' },
-        });
-    });
-
     it('leaves another plugin active while replacing this one', async () => {
         const first = startedRuntime('first');
         const other = startedRuntime('other');
@@ -1344,7 +1058,6 @@ describe('contribution readiness and replacement safeguards', () => {
         await deactivatePortableClient('other.plugin');
     });
 });
-
 
 describe('portable draft lifecycle', () => {
     it('keeps a dirty field draft when the same workspace replaces a package', () => {

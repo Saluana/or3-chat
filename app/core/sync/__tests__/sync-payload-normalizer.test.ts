@@ -2,7 +2,7 @@
  * Tests for sync-payload-normalizer.ts
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeSyncPayload, normalizeSyncPayloadForStaging } from '../sync-payload-normalizer';
+import { normalizeSyncPayload } from '../sync-payload-normalizer';
 
 describe('normalizeSyncPayload', () => {
     const stamp = { clock: 1, hlc: '2024-01-01T00:00:00.000Z-0001-abc123' };
@@ -199,41 +199,5 @@ describe('normalizeSyncPayload', () => {
             // No schema means isValid: true (passthrough)
             expect(result.isValid).toBe(true);
         });
-    });
-});
-
-describe('normalizeSyncPayloadForStaging', () => {
-    const stamp = { clock: 1, hlc: '2024-01-01T00:00:00.000Z-0001-abc123' };
-
-    it('should return payload even if validation fails', () => {
-        const rawPayload = {
-            id: 'thread-1',
-            // Missing required fields - would fail validation
-        };
-
-        const result = normalizeSyncPayloadForStaging('threads', 'thread-1', rawPayload, stamp);
-
-        // Should still return the payload object
-        expect(result.id).toBe('thread-1');
-        expect(result.clock).toBe(1);
-        expect(result.hlc).toBe('2024-01-01T00:00:00.000Z-0001-abc123');
-    });
-
-    it('should apply all normalization logic', () => {
-        const rawPayload = {
-            id: 'post-1',
-            title: 'Test',
-            content: 'Content',
-            post_type: 'article',
-            deleted: false,
-            created_at: 1000,
-            updated_at: 1000,
-            clock: 1,
-        };
-
-        const result = normalizeSyncPayloadForStaging('posts', 'post-1', rawPayload, stamp);
-
-        expect(result.postType).toBe('article');
-        expect(result.post_type).toBeUndefined();
     });
 });

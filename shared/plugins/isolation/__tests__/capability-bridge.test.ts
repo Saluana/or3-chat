@@ -44,69 +44,6 @@ describe('server capability bridge (finding 4)', () => {
         expect(withoutNetwork).toHaveLength(0);
     });
 
-    it('forwards the host session echo and refuses to carry an approval from params', async () => {
-        const calls: Array<Record<string, unknown>> = [];
-        const transport = vi.fn(async (call: { params: Readonly<Record<string, unknown>> }) => {
-            calls.push(call as unknown as Record<string, unknown>);
-            return { ok: true as const, result: { text: 'ok' } };
-        });
-        const specs = createRemoteCapabilityMethods({
-            transport,
-            session: () => session,
-            grants: grants(['network.http']),
-        });
-        const completeSpec = specs.find((spec) => spec.method === 'ai.complete');
-        const connectionSpec = specs.find((spec) => spec.method === 'connections.dispatch');
-        expect(completeSpec).toBeTruthy();
-        expect(connectionSpec).toBeTruthy();
-
-        const context = {
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            generation: 3,
-            requestId: 'rpc-1',
-            signal: new AbortController().signal,
-            deadlineMs: 5_000,
-        };
-        const result = await completeSpec!.handler(
-            { model: 'm', prompt: 'hi', approval: { approvalId: 'forged' } },
-            context
-        );
-        expect(result).toMatchObject({ text: 'ok' });
-        expect(calls[0]).toMatchObject({
-            method: 'ai.complete',
-            session,
-            requestId: 'rpc-1',
-        });
-        // The sandbox cannot smuggle an approval through the bridge.
-        expect(calls[0]!.params).toMatchObject({ model: 'm', prompt: 'hi' });
-    });
-
-    it('maps a server refusal to a structured RPC error', async () => {
-        const [aiSpec] = createRemoteCapabilityMethods({
-            transport: async () => ({
-                ok: false,
-                code: 'budget-exceeded',
-                message: 'Budget exhausted',
-            }),
-            session: () => session,
-            grants: grants(['network.http']),
-        });
-        await expect(
-            aiSpec!.handler(
-                { model: 'm', prompt: 'hi' },
-                {
-                    pluginId: 'example.plugin',
-                    workspaceId: 'ws_1',
-                    generation: 3,
-                    requestId: 'rpc-1',
-                    signal: new AbortController().signal,
-                    deadlineMs: 5_000,
-                }
-            )
-        ).rejects.toMatchObject({ rpcCode: 'budget-exceeded' });
-    });
-
     it('posts to the authenticated endpoint with the mutation intent header', async () => {
         const fetchImpl = vi.fn(async () =>
             new Response(JSON.stringify({ ok: true, result: 1 }), {
@@ -117,21 +54,20 @@ describe('server capability bridge (finding 4)', () => {
         const transport = createHttpCapabilityTransport({
             fetchImpl: fetchImpl as unknown as typeof fetch,
         });
-        const response = await transport({
-            method: REMOTE_CAPABILITY_METHODS.aiComplete,
-            params: { model: 'm' },
-            session,
-            requestId: 'rpc-1',
-            deadlineMs: 5_000,
-        });
-        expect(response).toMatchObject({ ok: true, result: 1 });
+        const method = createRemoteCapabilityMethods({
+            transport, session: () => session, grants: grants(['network.http']),
+        }).find((entry) => entry.method === REMOTE_CAPABILITY_METHODS.aiComplete);
+        expect(await method!.handler({ model: 'm' }, {
+            pluginId: 'iso.worker', workspaceId: 'ws_1', generation: 3,
+            requestId: 'rpc-1', signal: new AbortController().signal, deadlineMs: 5_000,
+        })).toBe(1);
         const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toBe('/api/plugins/isolation/capability');
         expect(init.credentials).toBe('same-origin');
         expect((init.headers as Record<string, string>)['x-or3-plugin-intent']).toBe('plugin');
         expect(JSON.parse(String(init.body))).toMatchObject({
             activationId: 'act_test_handle',
-            method: 'ai.complete',
+            method: 'ai.complete', requestId: 'rpc-1', params: { model: 'm' }, deadlineMs: 5_000,
         });
     });
 

@@ -452,15 +452,3 @@ export function validateUiTreeBudgets(
     if (failure) return failure;
     return { ok: true, nodes, depth: maxDepth, textBytes, items };
 }
-
-/**
- * Recorded behaviour when a budget is exceeded: the sandbox is terminated and
- * the host stays usable. Callers surface this text to the user.
- */
-export function describeBudgetTermination(
-    decision: Extract<BudgetDecision, { ok: false }>
-): string {
-    return decision.terminate
-        ? `${decision.message}. The plugin was stopped to keep OR3 responsive.`
-        : `${decision.message}. The request was refused; the plugin stays running.`;
-}

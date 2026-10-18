@@ -195,8 +195,8 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'files.catalog.read': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
             'files.catalog.write': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
             'files.actions.register': ['app/composables/plugins/trusted-workspace-files.ts', 'createTrustedWorkspaceFiles'],
-            'posts.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
-            'posts.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
+            'posts.read': ['app/composables/plugins/trusted-records.ts', 'createTrustedRecords'],
+            'posts.write': ['app/composables/plugins/trusted-records.ts', 'createTrustedRecords'],
         } as const satisfies Record<string, readonly [string, string]>).map(([grant, [module, exportName]]) => ({
             grant,
             reviewDescription: TRUSTED_PLUGIN_GRANT_DESCRIPTIONS[grant],

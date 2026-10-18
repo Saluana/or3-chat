@@ -8,8 +8,6 @@ import { messageRowKind, resolveMessageRenderer } from '~/composables/chat/messa
 import { TRUSTED_HOST_GRANTS } from '../trusted-host-context';
 import {
     createLocalStorageSecretStore,
-    createMemoryFileStore,
-    createMemoryPostStore,
 } from '../trusted-production-stores';
 import { slashFixtureExtension } from '../trusted-editor';
 import { readTrustedExecutionModel } from '../trusted-models';
@@ -458,7 +456,7 @@ describe('trusted host context', () => {
         expect(readTrustedExecutionModel('fixture/phase3-model')).toBeUndefined();
     });
 
-    it('streams, stores the agent vault key, and stages a file through approved mediation', async () => {
+    it('streams, stores the vault key, and forwards legacy posts through approved mediation', async () => {
         const encoder = new TextEncoder();
         const requests: Array<{ url: string; authorization: string | null; method: string; body: string | null }> = [];
         const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -481,12 +479,18 @@ describe('trusted host context', () => {
             );
         }) as typeof fetch;
         const secretStorage = new Map<string, string>();
+        const legacyPost = { id: 'legacy-post', title: 'One' };
+        const posts = {
+            read: vi.fn(async () => [legacyPost]),
+            write: vi.fn(async () => ({ id: legacyPost.id })),
+        };
         const { createTrustedHostContext } = await import('../trusted-host-context');
         const trusted = createTrustedHostContext({
             pluginId: 'fixture.mediation',
             version: '1.0.0',
             grants: TRUSTED_HOST_GRANTS,
             mediation: {
+                posts,
                 fetch: fetchImpl,
                 approvedDestinations: ['https://agent-host.example'],
                 secrets: createLocalStorageSecretStore('fixture.mediation', {
@@ -498,8 +502,6 @@ describe('trusted host context', () => {
                         secretStorage.delete(key);
                     },
                 }),
-                files: createMemoryFileStore(),
-                posts: createMemoryPostStore(),
             },
         });
 
@@ -549,23 +551,12 @@ describe('trusted host context', () => {
         expect(secret.ok && secret.value).toBe('sealed');
         expect(secretStorage.get('or3.plugin.fixture.mediation.secret.vault')).toBe('sealed');
 
-        const written = await trusted.context.files.write({
-            name: 'note.txt',
-            mimeType: 'text/plain',
-            data: (async function* () {
-                yield encoder.encode('staged');
-            })(),
-        });
-        expect(written.ok).toBe(true);
-        if (written.ok) {
-            const read = await trusted.context.files.read(written.value.id);
-            expect(read.ok).toBe(true);
-        }
-
-        const created = await trusted.posts.write({ postType: 'note', title: 'One' });
-        expect(created.ok).toBe(true);
-        const listed = await trusted.posts.read('note');
-        expect(listed.ok && listed.value).toEqual([{ id: 'post-1', title: 'One' }]);
+        await expect(trusted.posts.write({ postType: 'note', title: 'One' }))
+            .resolves.toEqual({ ok: true, value: { id: 'legacy-post' } });
+        expect(posts.write).toHaveBeenCalledWith({ postType: 'note', title: 'One' });
+        await expect(trusted.posts.read('note'))
+            .resolves.toEqual({ ok: true, value: [legacyPost] });
+        expect(posts.read).toHaveBeenCalledWith('note');
         await trusted.dispose();
     });
 
@@ -622,7 +613,6 @@ describe('trusted host context', () => {
             .toThrow(/Grant/);
         await trusted.dispose();
     });
-
 
 });
 

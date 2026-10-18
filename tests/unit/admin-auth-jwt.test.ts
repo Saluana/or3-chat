@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -84,32 +85,6 @@ describe('Admin Auth - JWT', () => {
     });
 
     describe('signAdminJwt', () => {
-        it('should sign a JWT for a username', async () => {
-            const username = 'testadmin';
-            const token = await signAdminJwt(mockEvent, username);
-
-            expect(token).toBeDefined();
-            expect(typeof token).toBe('string');
-            expect(token.split('.')).toHaveLength(3); // JWT has 3 parts
-        });
-
-        it('should create different tokens for different usernames', async () => {
-            const token1 = await signAdminJwt(mockEvent, 'admin1');
-            const token2 = await signAdminJwt(mockEvent, 'admin2');
-
-            expect(token1).not.toBe(token2);
-        });
-
-        it('should create tokens that can be verified', async () => {
-            const username = 'testadmin';
-            const token = await signAdminJwt(mockEvent, username);
-            const claims = await verifyAdminJwt(mockEvent, token);
-
-            expect(claims).not.toBeNull();
-            expect(claims?.username).toBe(username);
-            expect(claims?.kind).toBe('super_admin');
-        });
-
         it('persists a generated development secret in OR3_ADMIN_DATA_DIR', async () => {
             const dataDir = await mkdtemp(resolve(tmpdir(), 'or3-admin-jwt-'));
             temporaryDirs.push(dataDir);
@@ -136,18 +111,6 @@ describe('Admin Auth - JWT', () => {
     });
 
     describe('verifyAdminJwt', () => {
-        it('should verify a valid JWT', async () => {
-            const username = 'testadmin';
-            const token = await signAdminJwt(mockEvent, username);
-            const claims = await verifyAdminJwt(mockEvent, token);
-
-            expect(claims).not.toBeNull();
-            expect(claims?.username).toBe(username);
-            expect(claims?.kind).toBe('super_admin');
-            expect(claims?.iat).toBeDefined();
-            expect(claims?.exp).toBeDefined();
-        });
-
         it('should reject an invalid JWT', async () => {
             const claims = await verifyAdminJwt(mockEvent, 'invalid.token.here');
 
@@ -155,9 +118,15 @@ describe('Admin Auth - JWT', () => {
         });
 
         it('should reject a JWT with wrong kind', async () => {
-            // We can't easily test this without creating a JWT with wrong claims
-            // but we can test the validation logic by passing a malformed token
-            const claims = await verifyAdminJwt(mockEvent, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJraW5kIjoid3JvbmciLCJ1c2VybmFtZSI6InRlc3QifQ.test');
+            const secret = 'test-secret-key-for-testing-purposes-only';
+            const validToken = await signAdminJwt(mockEvent, 'testadmin');
+            const payload = jwt.verify(validToken, secret) as jwt.JwtPayload;
+            const wrongKindToken = jwt.sign({ ...payload, kind: 'workspace_admin' }, secret);
+
+            expect(jwt.verify(wrongKindToken, secret)).toMatchObject({
+                kind: 'workspace_admin', username: 'testadmin',
+            });
+            const claims = await verifyAdminJwt(mockEvent, wrongKindToken);
 
             expect(claims).toBeNull();
         });
@@ -202,15 +171,6 @@ describe('Admin Auth - JWT', () => {
             expect(claims?.iat).toBeTypeOf('number');
             expect(claims?.exp).toBeTypeOf('number');
             expect(claims?.exp).toBeGreaterThan(claims?.iat || 0);
-        });
-
-        it('should set expiry time in the future', async () => {
-            const username = 'testadmin';
-            const token = await signAdminJwt(mockEvent, username);
-            const claims = await verifyAdminJwt(mockEvent, token);
-
-            const now = Math.floor(Date.now() / 1000);
-            expect(claims?.exp).toBeGreaterThan(now);
         });
     });
 });

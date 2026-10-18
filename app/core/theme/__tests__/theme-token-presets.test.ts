@@ -4,8 +4,6 @@ import {
     ELEVATION_TOKEN_VARIABLES,
     getDensityPresetTokens,
     getElevationPresetTokens,
-    isDensityPreset,
-    isElevationPreset,
 } from '../theme-token-presets';
 
 describe('theme token presets', () => {
@@ -34,10 +32,4 @@ describe('theme token presets', () => {
         expect(getElevationPresetTokens('unknown')).toBeNull();
     });
 
-    it('accepts only documented preset names', () => {
-        expect(isDensityPreset('comfortable')).toBe(true);
-        expect(isDensityPreset('dense')).toBe(false);
-        expect(isElevationPreset('expressive')).toBe(true);
-        expect(isElevationPreset('raised')).toBe(false);
-    });
 });

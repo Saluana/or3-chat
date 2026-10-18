@@ -26,7 +26,6 @@ export default defineNuxtPlugin(async () => {
         { BundledV1Loader },
         {
             createWorkspaceManagerCanarySelector,
-            createStartupSelectedWorkspaceManager,
             createBundledV1WorkspaceManager,
             parseWorkspacePluginModule,
             desiredStateFromManifest,
@@ -60,11 +59,9 @@ export default defineNuxtPlugin(async () => {
         ]),
     });
     const isManagerWorkspace = createWorkspaceManagerCanarySelector(managerFlags);
-    const v2Manager = createStartupSelectedWorkspaceManager(managerFlags.enabled, () =>
-        createBundledV1WorkspaceManager({
-            loader: bundledV1Loader,
-        })
-    );
+    const v2Manager = managerFlags.enabled
+        ? createBundledV1WorkspaceManager({ loader: bundledV1Loader })
+        : null;
     const shadowObserver = createWorkspacePluginShadowObserver({
         enabled: runtimeConfig.public?.admin?.pluginRuntimeShadowEnabled !== false,
         catalog: bundledPluginCatalog,

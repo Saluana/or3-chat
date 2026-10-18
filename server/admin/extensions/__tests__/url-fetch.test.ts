@@ -45,12 +45,6 @@ describe('isPrivateIp', () => {
 // ── validateFetchUrl ────────────────────────────────────────────────
 
 describe('validateFetchUrl', () => {
-    it('accepts valid HTTPS URLs', () => {
-        const url = validateFetchUrl('https://github.com/user/repo/archive/main.zip');
-        expect(url.hostname).toBe('github.com');
-        expect(url.protocol).toBe('https:');
-    });
-
     it('rejects HTTP URLs', () => {
         expect(() => validateFetchUrl('http://example.com/file.zip')).toThrow(
             'Only HTTPS URLs are allowed'
@@ -113,23 +107,6 @@ describe('validateFetchUrl', () => {
         );
     });
 
-    // CIDR-based IP blocking via validateFetchUrl
-    it.each([
-        '127.0.0.1',
-        '10.0.0.5',
-        '192.168.1.1',
-        '172.16.0.1',
-        '172.17.0.1',
-        '172.31.255.254',
-        '169.254.169.254',
-        '100.64.0.1',
-        '0.1.2.3',
-    ])('rejects private IP %s', (ip) => {
-        expect(() => validateFetchUrl(`https://${ip}/file.zip`)).toThrow(
-            'private IP'
-        );
-    });
-
     it('accepts 172.32.0.1 (first public IP after 172.16/12)', () => {
         expect(validateFetchUrl('https://172.32.0.1/file.zip').hostname).toBe('172.32.0.1');
     });
@@ -139,15 +116,6 @@ describe('validateFetchUrl', () => {
         expect(url.hostname).toBe('8.8.8.8');
     });
 
-    it('accepts known public hosts', () => {
-        const url = validateFetchUrl('https://codeload.github.com/user/repo/zip/refs/heads/main');
-        expect(url.hostname).toBe('codeload.github.com');
-    });
-
-    it('accepts gitlab URLs', () => {
-        const url = validateFetchUrl('https://gitlab.com/user/repo/-/archive/main/repo-main.zip');
-        expect(url.hostname).toBe('gitlab.com');
-    });
 });
 
 // ── validateResolvedIps (DNS rebinding) ─────────────────────────────

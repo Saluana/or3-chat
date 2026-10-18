@@ -209,7 +209,7 @@ export default defineEventHandler(async (event) => {
 
     recordDownloadStart();
 
-    const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);
+    const expiresAt = resolvePresignExpiresAt(result);
 
     return {
         url: result.url,

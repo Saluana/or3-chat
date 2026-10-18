@@ -75,7 +75,7 @@
 </template>
 
 	<script setup lang="ts">
-        import { formatAdminError } from '~/composables/admin/formatAdminError';
+        import { parseErrorMessage } from '~/utils/admin/parse-error';
 		import {
 		    useAdminWidgets,
 		    resolveAdminComponent,
@@ -90,7 +90,7 @@ definePageMeta({
 
 const { data, error, refresh, status: fetchStatus } = useAdminSystemStatus();
 const errorMessage = computed(() =>
-    error.value ? formatAdminError(error.value) : null
+    error.value ? parseErrorMessage(error.value, 'Unknown error') : null
 );
 const hasStatus = computed(() => Boolean(data.value?.status));
 const pending = computed(() => !errorMessage.value && !hasStatus.value);

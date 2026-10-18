@@ -4,15 +4,6 @@ import { normalizePluginContributionSurfaces } from '~~/shared/plugins/contribut
 import { PLUGIN_CONTRIBUTION_SURFACES } from '~~/shared/plugins/contribution-surfaces';
 
 describe('contribution surface startup selection', () => {
-    it('selects and reverts one surface independently', () => {
-        const messageOnly = createContributionSurfaceSelection(['message-actions']);
-        expect(messageOnly.isSelected('message-actions')).toBe(true);
-        expect(messageOnly.isSelected('header-actions')).toBe(false);
-
-        const reverted = createContributionSurfaceSelection([]);
-        expect(reverted.isSelected('message-actions')).toBe(false);
-    });
-
     it('drills one-surface-at-a-time selection and rollback for every surface', () => {
         for (const surface of PLUGIN_CONTRIBUTION_SURFACES) {
             const selected = createContributionSurfaceSelection([surface]);

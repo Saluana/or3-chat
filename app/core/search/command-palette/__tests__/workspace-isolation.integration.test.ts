@@ -90,6 +90,7 @@ describe('palette workspace isolation', () => {
         const chatCategory = CORE_PALETTE_CATEGORIES.find((c) => c.id === 'chat')!;
         const deferred: { resolveA?: (value: PaletteResource[]) => void } = {};
         let loadCount = 0;
+        let firstSignal: AbortSignal | undefined;
 
         registerPaletteSource({
             id: 'chat',
@@ -103,6 +104,7 @@ describe('palette workspace isolation', () => {
                     workspaceId: string | null;
                 };
                 if (db.workspaceId === 'ws-a' && loadCount === 1) {
+                    firstSignal = context.signal;
                     return new Promise((resolve) => {
                         deferred.resolveA = resolve;
                     });
@@ -134,9 +136,11 @@ describe('palette workspace isolation', () => {
         const { createPaletteCoordinator } = await import('../coordinator');
         const coordinator = createPaletteCoordinator({ debounceMs: 0 });
         const warmA = coordinator.ensureWarm();
+        await vi.waitFor(() => expect(deferred.resolveA).toBeTypeOf('function'));
 
         client.setActiveWorkspaceDb('ws-b');
-        deferred.resolveA?.([
+        expect(firstSignal?.aborted).toBe(true);
+        deferred.resolveA!([
             {
                 key: 'chat:a',
                 sourceId: 'chat',
@@ -163,6 +167,7 @@ describe('palette workspace isolation', () => {
         coordinator.setQuery('workspace-a-secret-phrase');
         await new Promise((r) => setTimeout(r, 10));
 
+        expect(loadCount).toBeGreaterThanOrEqual(2);
         const snapshot = coordinator.getSnapshot();
         const leaked = snapshot.results.some(
             (result) =>

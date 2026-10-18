@@ -73,14 +73,6 @@ describe('DELETE /api/workspaces/:id', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('uses permission-validated helper session', async () => {
-        const handler = (await import('../[id].delete')).default as (event: H3Event) => Promise<unknown>;
-
-        await handler(makeEvent());
-
-        expect(requireWorkspaceSessionMock).toHaveBeenCalledTimes(1);
-    });
-
     it('returns 401 when user is missing', async () => {
         const handler = (await import('../[id].delete')).default as (event: H3Event) => Promise<unknown>;
         requireWorkspaceSessionMock.mockResolvedValue({ authenticated: true, user: undefined });

@@ -113,26 +113,3 @@ export function normalizeSyncPayload(
         isValid: true,
     };
 }
-
-/**
- * Purpose:
- * Normalize an incoming payload for staging flows (bootstrap/rescan).
- *
- * Behavior:
- * - Uses the same normalization pipeline as `normalizeSyncPayload`
- * - Always returns the normalized record payload even if invalid
- *
- * Constraints:
- * - Intended for staging tables and deferred validation during apply
- */
-export function normalizeSyncPayloadForStaging(
-    tableName: string,
-    pk: string,
-    rawPayload: unknown,
-    stamp: { clock: number; hlc: string; opId?: string }
-): Record<string, unknown> {
-    const normalized = normalizeSyncPayload(tableName, pk, rawPayload, stamp);
-    // For staging, we always return the payload even if validation fails
-    // (the actual validation check happens during apply)
-    return normalized.payload;
-}

@@ -54,17 +54,6 @@ describe('theme-components-registry', () => {
         );
     });
 
-    it('reuses the same async wrapper when the theme and key are unchanged', () => {
-        const firstMap = createThemeComponentMap('blank', {
-            'chat-input': './components/ChatInput.vue',
-        });
-        const secondMap = createThemeComponentMap('blank', {
-            'chat-input': './components/ChatInput.vue',
-        });
-
-        expect(secondMap['chat-input']).toBe(firstMap['chat-input']);
-    });
-
     it('invalidates only the requested theme cache entries', () => {
         const firstMap = createThemeComponentMap('blank', {
             'chat-input': './components/ChatInput.vue',

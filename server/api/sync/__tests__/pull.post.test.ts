@@ -317,7 +317,8 @@ describe('POST /api/sync/pull', () => {
     it.each([
         [
             'a regressing cursor',
-            { changes: [], nextCursor: -1, hasMore: false },
+            { changes: [], nextCursor: 4, hasMore: false },
+            5,
         ],
         [
             'unordered changes',
@@ -351,13 +352,18 @@ describe('POST /api/sync/pull', () => {
                 nextCursor: 6,
                 hasMore: false,
             },
+            0,
         ],
-    ])('returns 502 when the adapter returns %s', async (_label, response) => {
+    ])('returns 502 when the adapter returns %s', async (_label, response, cursor) => {
         const handler = (await import('../pull.post')).default as (
             event: H3Event
         ) => Promise<unknown>;
-        readBodyMock.mockResolvedValue(makeValidBody());
-        pullMock.mockResolvedValue(response);
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), cursor });
+        pullMock.mockResolvedValue({
+            ...response,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
+        });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 502,
@@ -377,6 +383,8 @@ describe('POST /api/sync/pull', () => {
             changes: [],
             nextCursor: 5,
             hasMore: true,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
         });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({

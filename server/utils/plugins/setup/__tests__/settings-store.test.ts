@@ -127,30 +127,6 @@ describe('scoped setup values', () => {
         ).resolves.toEqual({ token: 'scoped' });
     });
 
-    it('hydrates a candidate from the selected package digest before legacy values', async () => {
-        const { store } = createStore();
-        await writeScopedSetupValues(
-            store,
-            'ws-1',
-            'alpha',
-            { packageDigest: DIGEST_A },
-            { token: 'running' }
-        );
-        await store.set(
-            'ws-1',
-            setupValuesKey('alpha'),
-            JSON.stringify({ token: 'legacy' })
-        );
-
-        await expect(
-            readSetupValuesFor(store, 'ws-1', 'alpha', {
-                packageDigest: DIGEST_B,
-                operationId: 'op-2',
-                basePackageDigest: DIGEST_A,
-            })
-        ).resolves.toEqual({ token: 'running' });
-    });
-
     it('refuses a stale save instead of overwriting a concurrent one', async () => {
         const { store } = createStore();
         await writeScopedSetupValues(
@@ -184,19 +160,6 @@ describe('scoped setup values', () => {
         ).resolves.toEqual({ token: 'second' });
     });
 
-    it('never falls back when a scoped document exists but is corrupt', async () => {
-        const { map, store } = createStore();
-        await store.set(
-            'ws-1',
-            setupValuesKey('alpha'),
-            JSON.stringify({ token: 'legacy' })
-        );
-        map.set(`ws-1:${scopedSetupValuesKey('alpha', DIGEST_A)}`, 'not-json');
-        await expect(
-            readSetupValuesFor(store, 'ws-1', 'alpha', { packageDigest: DIGEST_A })
-        ).resolves.toEqual({});
-    });
-
     it('patches a corrupt scoped document without inheriting legacy values', async () => {
         const { map, store } = createStore();
         await store.set(
@@ -205,6 +168,8 @@ describe('scoped setup values', () => {
             JSON.stringify({ token: 'legacy' })
         );
         map.set(`ws-1:${scopedSetupValuesKey('alpha', DIGEST_A)}`, 'not-json');
+        await expect(readSetupValuesFor(store, 'ws-1', 'alpha', { packageDigest: DIGEST_A }))
+            .resolves.toEqual({});
         const written = await patchScopedSetupValues(
             store,
             'ws-1',
@@ -476,20 +441,6 @@ describe('scoped setup values', () => {
         ).resolves.toEqual({});
     });
 
-    it('runs the commit guard before each write attempt', async () => {
-        const { store } = createCasStore();
-        const guard = vi.fn();
-        await patchScopedSetupValues(
-            store,
-            'ws-1',
-            'alpha',
-            { packageDigest: DIGEST_A },
-            () => ({ token: 'guarded' }),
-            { guard }
-        );
-        expect(guard).toHaveBeenCalledTimes(2);
-    });
-
     it('seeds a candidate patch from the selected digest without touching it', async () => {
         const { store } = createStore();
         await writeScopedSetupValues(
@@ -499,6 +450,10 @@ describe('scoped setup values', () => {
             { packageDigest: DIGEST_A },
             { token: 'running' }
         );
+        await store.set('ws-1', setupValuesKey('alpha'), JSON.stringify({ token: 'legacy' }));
+        await expect(readSetupValuesFor(store, 'ws-1', 'alpha', {
+            packageDigest: DIGEST_B, operationId: 'op-2', basePackageDigest: DIGEST_A,
+        })).resolves.toEqual({ token: 'running' });
         const written = await patchScopedSetupValues(
             store,
             'ws-1',

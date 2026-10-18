@@ -1,4 +1,4 @@
-export const TABLE_METADATA = {
+const TABLE_METADATA = {
     threads: { pk: 'id' },
     messages: { pk: 'id' },
     projects: { pk: 'id' },

@@ -17,6 +17,8 @@ import {
     tryAdmitActivationCall,
 } from '../activation-admission';
 
+import { getRetainedSelectionAuthority } from '../../setup/selection-authority-registry';
+
 function grants(): PluginGrantReviewSnapshot {
     return {
         requestedGrants: ['network.http'],
@@ -83,7 +85,13 @@ describe('host activation registry lifecycle', () => {
     });
 
     it('clears admission state when an activation expires', () => {
-        const record = mint({ ttlMs: -1 });
+        let now = 1_000;
+        const record = registerHostActivation({
+            pluginId: 'example.plugin', workspaceId: 'ws-1', userId: 'user-1',
+            packageDigest: 'sha256-test', grants: grants(), ttlMs: 10, now: () => now,
+        });
+        expect(getRetainedSelectionAuthority('example.plugin', 'ws-1', record.generation))
+            .not.toBeNull();
         // Seed admission state before the expiry is observed.
         const admitted = tryAdmitActivationCall(record.activationId, {
             requestId: 'rpc-1',
@@ -92,22 +100,16 @@ describe('host activation registry lifecycle', () => {
         });
         expect(admitted.ok).toBe(true);
 
-        expect(resolveHostActivation(record.activationId)).toMatchObject({
+        now += 11;
+        expect(resolveHostActivation(record.activationId, { now: () => now })).toMatchObject({
             ok: false,
             code: 'activation-expired',
         });
+        expect(getRetainedSelectionAuthority('example.plugin', 'ws-1', record.generation))
+            .toBeNull();
         expect(getActivationAdmissionStats(record.activationId)).toMatchObject({
             inFlight: 0,
             seen: 0,
-        });
-    });
-
-    it('forgets handles on restart (clear) so stale calls fail closed', () => {
-        const record = mint({});
-        clearHostActivationsForTests();
-        expect(resolveHostActivation(record.activationId)).toMatchObject({
-            ok: false,
-            code: 'activation-unknown',
         });
     });
 

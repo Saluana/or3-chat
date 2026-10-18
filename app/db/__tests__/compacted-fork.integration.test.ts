@@ -160,8 +160,6 @@ describe('atomic compacted fork', () => {
         { summary_markdown: `~~~\n${markdown}\n~~~`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] },
         { summary_markdown: `<!--\n${markdown}\n-->`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] },
         ...['`', '~'].map((character) => ({ summary_markdown: `${character.repeat(4)}\n${character.repeat(3)}\n${markdown}\n${character.repeat(3)}\n${character.repeat(4)}`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] })),
-        { summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'x'.repeat(201) }] },
-        { summary_markdown: markdown, landmarks: [{ message_id: 'foreign', kind: 'decision', summary: 'Unrelated' }] },
         { summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence', thread_id: 'forged' }] },
     ])('rejects invalid model sections or model-authored/out-of-scope landmarks before writes %#', async (response) => {
         const { capture } = await prepared();

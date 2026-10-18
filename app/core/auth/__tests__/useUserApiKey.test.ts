@@ -109,7 +109,6 @@ describe('useUserApiKey', () => {
     });
 });
 
-
 // Exercise production hydration, KV transactions and logout with synthetic keys.
 // Only unrelated logout services are mocked; IndexedDB is supplied by fake-indexeddb.
 describe('personal key lifecycle', () => {

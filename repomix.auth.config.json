@@ -6,7 +6,7 @@
     "removeComments": false,
     "showLineNumbers": true,
     "topFilesLength": 20,
-    "headerText": "OR3 SSR Auth + can() Authorization — Security Audit Pack\n\nScope: Session resolution, can()/capability gates, token broker, admin auth hardening, workspace membership APIs, lock-page gating, client session recovery, related docs/tests.\n\nPrimary surfaces:\n1. server/auth/can.ts + capability-gate — sole authorization gate for SSR endpoints\n2. server/auth/session.ts + /api/auth/session — session resolution / identity split (internal user id vs providerUserId)\n3. server/auth/token-broker — direct-provider JWT templates\n4. server/admin/auth + guard — admin login, rate limits, trusted client identity\n5. server/api/workspaces — membership / active workspace switching\n6. app/composables/auth + session refresh plugins — client trust boundary\n7. app/core/lock-page — pre-auth lock surface\n\nExcluded: OpenRouter LLM proxy/background jobs (separate pack), sync/storage engines (separate packs), plugin runtime, themes, webhooks, Convex provider package internals."
+    "headerText": "OR3 SSR Auth + can() Authorization — Security Audit Pack\n\nScope: Session resolution, can() authorization, token broker, admin auth hardening, workspace membership APIs, lock-page gating, client session recovery, related docs/tests.\n\nPrimary surfaces:\n1. server/auth/can.ts — sole authorization gate for SSR endpoints\n2. server/auth/session.ts + /api/auth/session — session resolution / identity split (internal user id vs providerUserId)\n3. server/auth/token-broker — direct-provider JWT templates\n4. server/admin/auth + guard — admin login, rate limits, trusted client identity\n5. server/api/workspaces — membership / active workspace switching\n6. app/composables/auth + session refresh plugins — client trust boundary\n7. app/core/lock-page — pre-auth lock surface\n\nExcluded: OpenRouter LLM proxy/background jobs (separate pack), sync/storage engines (separate packs), plugin runtime, themes, webhooks, Convex provider package internals."
   },
   "include": [
     "server/auth/**",
@@ -32,7 +32,6 @@
     "app/plugins/__tests__/auth-session-workspace-revision.test.ts",
     "app/plugins/__tests__/workspace-db-logout.test.ts",
     "app/plugins/00-workspace-db.client.ts",
-    "shared/testing/contracts/authorization.ts",
     "planning/complete/ssr-auth-system/**",
     "planning/complete/admin-auth-hardening/**",
     "planning/complete/auth-registration-controls/**",

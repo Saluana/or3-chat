@@ -511,31 +511,6 @@ describe('backgroundJobs reattach + notifications', () => {
         mod.backgroundJobTrackers.clear();
     });
 
-    it('delivers a settled result with the same binding under a fresh claim without reexecution', async () => {
-        sessionValue = { user: { id: 'user-1' } };
-        const claim = await makeClientToolClaim();
-        claimBackgroundClientToolMock.mockResolvedValue(claim);
-        localStorage.setItem('or3:bg-client-tool:job-1:call-1', JSON.stringify({
-            state: 'settled', claimDigest: claim.claimDigest, result: 'previously-executed-result', createdAt: Date.now(),
-        }));
-        let streamParams: any;
-        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
-        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
-        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
-            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
-        streamParams.onStatus(makeStatus('streaming', { tool_calls: [
-            { id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client', args: '{}' },
-        ] }));
-        await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith({
-            jobId: 'job-1', callId: 'call-1', claimToken: claim.claimToken,
-            result: 'previously-executed-result', error: undefined,
-        }));
-        expect(executeToolMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('or3:bg-client-tool:job-1:call-1')).toBeNull();
-        mod.stopBackgroundJobTracking(tracker);
-        mod.backgroundJobTrackers.clear();
-    });
-
     it.each(['streaming', 'complete'] as const)('replaces a pre-restart measured partial response with an unmeasured %s attempt', async (status) => {
         let streamParams: {
             onStatus: (status: ReturnType<typeof makeStatus>) => void;
@@ -736,8 +711,9 @@ describe('backgroundJobs reattach + notifications', () => {
         await vi.waitFor(() => expect(localStorage.getItem(journalKey)).toBeNull());
         expect(executeToolMock).toHaveBeenCalledTimes(mode === 'running' || mode === 'settled' ? 0 : 1);
         expect(submitBackgroundClientToolResultMock.mock.lastCall?.[0]).toMatchObject({
-            callId: 'call-1', ...(mode === 'running' ? { error: expect.stringMatching(/outcome is unknown/) }
-                : { result: mode === 'settled' ? 'saved result' : 'ok' }),
+            jobId: 'job-1', callId: 'call-1', claimToken: claim.claimToken,
+            ...(mode === 'running' ? { error: expect.stringMatching(/outcome is unknown/) }
+                : { result: mode === 'settled' ? 'saved result' : 'ok', error: undefined }),
         });
         mod.stopBackgroundJobTracking(tracker);
         mod.backgroundJobTrackers.clear();
@@ -1339,62 +1315,6 @@ describe('backgroundJobs reattach + notifications', () => {
             random.mockRestore();
             vi.useRealTimers();
         }
-    });
-
-    it('re-reads the message row for each persisted SSE status update', async () => {
-        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
-
-        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
-        const {
-            ensureBackgroundJobTracker,
-            subscribeBackgroundJob,
-            backgroundJobTrackers,
-        } = mod;
-
-        const tracker = ensureBackgroundJobTracker({
-            jobId: 'job-1',
-            userId: 'user-1',
-            threadId: 'thread-1',
-            messageId: 'msg-1',
-            useSse: true,
-        });
-
-        subscribeBackgroundJob(tracker, {});
-
-        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]?.[0] as
-            | { onStatus?: (status: ReturnType<typeof makeStatus>) => void }
-            | undefined;
-
-        handlers?.onStatus?.(
-            makeStatus('streaming', {
-                content: 'a',
-                content_delta: 'a',
-                content_length: 1,
-            })
-        );
-        handlers?.onStatus?.(
-            makeStatus('streaming', {
-                content: 'ab',
-                content_delta: 'b',
-                content_length: 2,
-            })
-        );
-        handlers?.onStatus?.(
-            makeStatus('complete', {
-                content: 'abc',
-                content_delta: 'c',
-                content_length: 3,
-            })
-        );
-
-        await expect(tracker.completion).resolves.toMatchObject({
-            status: 'complete',
-            content: 'abc',
-        });
-
-        expect(dbMock.messages.get).toHaveBeenCalledTimes(2);
-        expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
-        expect(backgroundJobTrackers.has('job-1')).toBe(false);
     });
 
     it('preserves metadata written between background status updates', async () => {

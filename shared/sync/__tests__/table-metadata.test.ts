@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPkField, TABLE_METADATA } from '../table-metadata';
+import { getPkField } from '../table-metadata';
 
 describe('table metadata', () => {
     it('resolves PK field for all known synced tables', () => {
@@ -20,17 +20,5 @@ describe('table metadata', () => {
 
     it('returns id for unknown tables', () => {
         expect(getPkField('nonexistent_table')).toBe('id');
-    });
-
-    it('exports metadata entries for all expected tables', () => {
-        expect(Object.keys(TABLE_METADATA).sort()).toEqual([
-            'file_meta',
-            'kv',
-            'messages',
-            'notifications',
-            'posts',
-            'projects',
-            'threads',
-        ]);
     });
 });

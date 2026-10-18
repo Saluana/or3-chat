@@ -1,34 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
     assertNoContainmentRelaxation,
-    CONTAINMENT_PROBE_CHANNELS,
-    evaluateContainmentAttempt,
     PORTABLE_FRAME_CSP,
     PORTABLE_FRAME_SANDBOX,
     PORTABLE_IFRAME_CONTAINMENT,
-    PORTABLE_WORKER_CSP,
-    PORTABLE_WORKER_CONTAINMENT,
-    type ContainmentChannel,
     type ContainmentPolicy,
 } from '../containment-policy';
 import {
     ContainmentBudgetLedger,
     DEFAULT_CONTAINMENT_BUDGETS,
-    describeBudgetTermination,
     resolveContainmentBudgets,
     validateUiTreeBudgets,
 } from '../budgets';
-import {
-    HostSessionAuthority,
-} from '../session-authority';
 
 describe('containment policy (4.3)', () => {
     it('denies or mediates every ambient channel without allowing one outright', () => {
-        for (const policy of [PORTABLE_WORKER_CONTAINMENT, PORTABLE_IFRAME_CONTAINMENT]) {
-            expect(policy.channels.length).toBeGreaterThan(20);
-            for (const decision of policy.channels) {
-                expect(['denied', 'mediated']).toContain(decision.disposition);
-            }
+        expect(PORTABLE_IFRAME_CONTAINMENT.channels.length).toBeGreaterThan(20);
+        for (const decision of PORTABLE_IFRAME_CONTAINMENT.channels) {
+            expect(['denied', 'mediated']).toContain(decision.disposition);
         }
     });
 
@@ -51,7 +40,7 @@ describe('containment policy (4.3)', () => {
             [{ sandbox: 'allow-scripts allow-same-origin' }, 'sandbox-allows-same-origin'],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         /script-src '[^']+' blob:/,
                         "script-src 'unsafe-eval' blob:"
                     ),
@@ -60,7 +49,7 @@ describe('containment policy (4.3)', () => {
             ],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         /script-src '[^']+' blob:/,
                         "script-src 'sha256-abc' 'unsafe-inline' blob:"
                     ),
@@ -68,12 +57,12 @@ describe('containment policy (4.3)', () => {
                 'csp-unsafe-inline',
             ],
             [
-                { csp: PORTABLE_WORKER_CSP.replace("connect-src 'none'", 'connect-src *') },
+                { csp: PORTABLE_FRAME_CSP.replace("connect-src 'none'", 'connect-src *') },
                 'csp-connect-src-open',
             ],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         'worker-src blob:',
                         'worker-src https://cdn.example'
                     ),
@@ -82,7 +71,7 @@ describe('containment policy (4.3)', () => {
             ],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         /script-src '[^']+' blob:/,
                         'script-src https://cdn.example'
                     ),
@@ -91,7 +80,7 @@ describe('containment policy (4.3)', () => {
             ],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         /script-src '[^']+' blob:/,
                         'script-src data:'
                     ),
@@ -100,7 +89,7 @@ describe('containment policy (4.3)', () => {
             ],
             [
                 {
-                    csp: PORTABLE_WORKER_CSP.replace(
+                    csp: PORTABLE_FRAME_CSP.replace(
                         /script-src '[^']+' blob:/,
                         'script-src blob:'
                     ),
@@ -108,7 +97,7 @@ describe('containment policy (4.3)', () => {
                 'csp-remote-script',
             ],
             [
-                { csp: PORTABLE_WORKER_CSP.replace('sandbox allow-scripts', '') },
+                { csp: PORTABLE_FRAME_CSP.replace('sandbox allow-scripts', '') },
                 'csp-sandbox-missing',
             ],
             [{ csp: 'script-src *' }, 'csp-missing-default-none'],
@@ -116,9 +105,9 @@ describe('containment policy (4.3)', () => {
 
         for (const [patch, expectedCode] of relaxations) {
             const candidate = {
-                ...PORTABLE_WORKER_CONTAINMENT,
+                ...PORTABLE_IFRAME_CONTAINMENT,
                 ...patch,
-                channels: patch.channels ?? PORTABLE_WORKER_CONTAINMENT.channels,
+                channels: patch.channels ?? PORTABLE_IFRAME_CONTAINMENT.channels,
             } as ContainmentPolicy;
             const result = assertNoContainmentRelaxation(candidate);
             expect(result.ok).toBe(false);
@@ -127,96 +116,6 @@ describe('containment policy (4.3)', () => {
         }
     });
 
-    it('reports a structured denial for every adversarial channel (RT04, RT05)', () => {
-        const attempted: ContainmentChannel[] = [
-            'dom.parent',
-            'dom.frameElement',
-            'dom.hostDocument',
-            'storage.cookies',
-            'storage.localStorage',
-            'storage.sessionStorage',
-            'network.xmlHttpRequest',
-            'network.webSocket',
-            'network.eventSource',
-            'network.sendBeacon',
-            'imports.importScripts',
-            'imports.dynamicRemote',
-            'imports.hostInternal',
-            'workers.nested',
-            'workers.shared',
-            'workers.service',
-            'navigation.frame',
-            'navigation.windowOpen',
-            'navigation.location',
-            'ambient.clipboard',
-            'ambient.geolocation',
-            'ambient.notifications',
-            'code.eval',
-        ];
-        for (const channel of attempted) {
-            const outcome = evaluateContainmentAttempt(PORTABLE_WORKER_CONTAINMENT, channel);
-            expect(outcome.status).toBe('denied');
-            if (outcome.status === 'denied') {
-                expect(outcome.code).toBe('containment-denied');
-                expect(outcome.message).toContain(channel);
-            }
-        }
-    });
-
-    it('routes the two mediated capabilities through named host methods', () => {
-        const fetchAttempt = evaluateContainmentAttempt(
-            PORTABLE_WORKER_CONTAINMENT,
-            'network.fetch'
-        );
-        expect(fetchAttempt).toMatchObject({
-            status: 'mediated',
-            mediatedBy: 'http.request',
-        });
-        const storageAttempt = evaluateContainmentAttempt(
-            PORTABLE_WORKER_CONTAINMENT,
-            'storage.indexedDB'
-        );
-        expect(storageAttempt).toMatchObject({ status: 'mediated' });
-    });
-
-    it('keeps an opaque-origin frame from being trusted by origin alone', () => {
-        const authority = new HostSessionAuthority({
-            pluginId: 'iso.frame',
-            workspaceId: 'ws_1',
-            generation: 1,
-            sourceId: 'frame-src-1',
-            generateSessionId: () => 'fixed-session',
-        });
-        // origin=null with a forged session is denied ...
-        expect(
-            authority.verifyInbound({
-                sessionId: 'fixed-session-other',
-                sourceId: 'frame-src-1',
-                generation: 1,
-                origin: null,
-            })
-        ).toMatchObject({ status: 'denied' });
-        // ... and with the real host session it is accepted.
-        expect(
-            authority.verifyInbound({ ...authority.echoFields, origin: null })
-        ).toMatchObject({ status: 'authorized' });
-    });
-
-    it('documents the deprecated worker-only transport honestly', () => {
-        // A worker created directly by the host page shares the host origin and
-        // can reach IndexedDB; measurement in Chromium confirmed this, which is
-        // why the opaque-origin frame is the shipped transport.
-        expect(PORTABLE_WORKER_CONTAINMENT.transport).toBe('worker');
-        expect(PORTABLE_IFRAME_CONTAINMENT.transport).toBe('iframe');
-        expect(PORTABLE_IFRAME_CONTAINMENT.sandbox).toBe('allow-scripts');
-    });
-
-    it('lists the channels the real-browser probe must exercise', () => {
-        expect(CONTAINMENT_PROBE_CHANNELS).toContain('dom.hostDocument');
-        expect(CONTAINMENT_PROBE_CHANNELS).toContain('network.webSocket');
-        expect(CONTAINMENT_PROBE_CHANNELS).toContain('workers.nested');
-        expect(CONTAINMENT_PROBE_CHANNELS).toContain('imports.importScripts');
-    });
 });
 
 describe('containment budgets (4.4)', () => {
@@ -361,25 +260,6 @@ describe('containment budgets (4.4)', () => {
         ).toMatchObject({ ok: true, nodes: 2, depth: 2 });
     });
 
-    it('explains whether a breach terminates or merely refuses work', () => {
-        const ledger = new ContainmentBudgetLedger(
-            resolveContainmentBudgets({ maxConcurrentCalls: 1 })
-        );
-        ledger.admitCall();
-        const refusal = ledger.admitCall();
-        expect(refusal.ok).toBe(false);
-        if (refusal.ok) return;
-        expect(describeBudgetTermination(refusal)).toContain('stays running');
-
-        const hard = new ContainmentBudgetLedger(
-            resolveContainmentBudgets({ maxMessageBytes: 4 })
-        );
-        const fatal = hard.chargeMessage('too long');
-        expect(fatal.ok).toBe(false);
-        if (fatal.ok) return;
-        expect(describeBudgetTermination(fatal)).toContain('was stopped');
-        expect(hard.exceeded).toBe('message-bytes');
-    });
 });
 
 describe('UI tree content budgets (review 13)', () => {

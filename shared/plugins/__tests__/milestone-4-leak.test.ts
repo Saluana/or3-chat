@@ -41,7 +41,7 @@ describe('Milestone 4 leak gate', () => {
         expect(cleanupCount).toBe(1_000);
         expect(registry.inspect()).toEqual([]);
         expect(registry.snapshot(undefined)).toEqual([]);
-        expect(table.snapshot()).toEqual([]);
+        expect(table.current('leak-gate')).toBeUndefined();
         expect(registry.subscriberCount).toBe(1);
         expect(table.subscriberCount).toBe(1);
         stopProjection();

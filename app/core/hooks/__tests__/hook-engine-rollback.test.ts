@@ -35,16 +35,4 @@ describe('Hook Runtime V2 startup rollback', () => {
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
-    it('restores a fresh V1 engine after simulated flag-off restart', () => {
-        const beforeRestart: ClientHookEngineGlobal = {};
-        const afterRestart: ClientHookEngineGlobal = {};
-
-        expect(
-            '_runtimeV2' in getOrCreateClientHookEngine(beforeRestart, 'v2'),
-        ).toBe(true);
-        expect(
-            '_runtimeV2' in getOrCreateClientHookEngine(afterRestart, 'v1'),
-        ).toBe(false);
-        expect(afterRestart.__NUXT_HOOKS_VERSION__).toBe('v1');
-    });
 });

@@ -96,7 +96,7 @@ describe('POST /api/sync/update-cursor', () => {
     it('rejects missing/blank device IDs and negative or fractional versions with 400', async () => {
         const handler = (await import('../update-cursor.post')).default as (event: H3Event) => Promise<unknown>;
 
-        readBodyMock.mockResolvedValue({ version: -1 });
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), version: -1 });
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
 
         readBodyMock.mockResolvedValue({ scope: { workspaceId: 'ws-1' }, version: 2 });

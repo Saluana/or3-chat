@@ -89,27 +89,3 @@ export async function checkRateLimit(
     entry.count++;
     return true;
 }
-
-/**
- * Purpose:
- * Return the current status for a key.
- *
- * Behavior:
- * - Returns `null` when the key has no active window.
- * - Returns the current count and reset time for the window.
- *
- * Constraints:
- * - `remaining` reflects the current count, not the remaining allowance.
- */
-export function getRateLimitStatus(
-    key: string
-): { remaining: number; resetAt: number } | null {
-    pruneExpired(Date.now());
-    const entry = store.get(key);
-    if (!entry) return null;
-
-    return {
-        remaining: Math.max(0, entry.count),
-        resetAt: entry.resetAt,
-    };
-}

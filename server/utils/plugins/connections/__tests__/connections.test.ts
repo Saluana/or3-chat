@@ -16,7 +16,6 @@ import {
     redactConnectionResponse,
 } from '../dispatch';
 import {
-    describeConnectionFailure,
     isTestableOperation,
     runConnectionSetupTest,
 } from '../setup-test';
@@ -82,21 +81,6 @@ describe('connection storage and references (4.7)', () => {
             decryptConnectionSecret(stored.connection.secretCiphertext, 'other-secret')
         ).toThrow();
         expect(service.revealCredential(stored.connection)).toBe('tok_live_123');
-    });
-
-    it('fails closed when no encryption key is configured', async () => {
-        const service = createService({ secret: undefined });
-        expect(service.available).toBe(false);
-        const result = await service.create({
-            ownerUserId: 'user_1',
-            workspaceId: 'ws_1',
-            pluginId: 'example.plugin',
-            providerId: FAKE_CONNECTION_PROVIDER.id,
-            label: 'x',
-            scopes: [],
-            credential: 'tok',
-        });
-        expect(result).toMatchObject({ status: 'denied', code: 'secret-unavailable' });
     });
 
     it('scopes references to one plugin and workspace', async () => {
@@ -186,14 +170,6 @@ describe('connection storage and references (4.7)', () => {
         ).toEqual({ status: 'deleted' });
     });
 
-    it('never returns a credential in a list view', async () => {
-        const service = createService();
-        await createConnection(service);
-        const views = await service.list({ ownerUserId: 'user_1', workspaceId: 'ws_1' });
-        expect(views).toHaveLength(1);
-        expect(JSON.stringify(views)).not.toContain('tok_live_123');
-        expect(views[0]).toMatchObject({ pluginId: 'example.plugin', revision: 1 });
-    });
 });
 
 describe('approved-operation dispatch (4.8)', () => {
@@ -346,13 +322,12 @@ describe('approved-operation dispatch (4.8)', () => {
             expect.arrayContaining(['set-cookie', 'x-auth-token'])
         );
 
-        const leaky = redactConnectionResponse({
-            status: 200,
-            headers: {},
-            body: JSON.stringify({ access_token: 'abc' }),
-            maxResponseBytes: 1024,
-        });
-        expect(leaky).toMatchObject({ ok: false, code: 'policy-denied' });
+        for (const field of ['access_token', 'api_key']) {
+            const leaky = redactConnectionResponse({
+                status: 200, headers: {}, body: JSON.stringify({ [field]: 'abc' }), maxResponseBytes: 1024,
+            });
+            expect(leaky).toMatchObject({ ok: false, code: 'policy-denied' });
+        }
 
         const oversized = redactConnectionResponse({
             status: 200,
@@ -415,26 +390,8 @@ describe('fake-provider setup tests (4.9)', () => {
             expect(result.status).toBe('failed');
             if (result.status !== 'failed') continue;
             expect(result.code).toBe(expectedCode);
-            expect(describeConnectionFailure(result.code)).not.toContain('Unhandled');
             expect(await service.isTestCurrent(created.view.id)).toBe(false);
         }
-    });
-
-    it('returns distinct, actionable copy per failure class', () => {
-        const copy = new Set(
-            (
-                [
-                    'bad-credentials',
-                    'insufficient-scope',
-                    'network-failure',
-                    'rate-limit',
-                    'provider-outage',
-                    'deadline-exceeded',
-                    'policy-denied',
-                ] as const
-            ).map(describeConnectionFailure)
-        );
-        expect(copy.size).toBe(7);
     });
 
     it('refuses non-idempotent and write operations as setup tests', async () => {

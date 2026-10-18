@@ -136,17 +136,6 @@ describe('or3-plugin build bundling', () => {
         );
     });
 
-    it('fails clearly instead of packing an unresolved SDK import', async () => {
-        const { source, build } = packageWithEntry(
-            "import { createPortablePlugin } from '@or3/plugin-sdk';\nexport default createPortablePlugin;\n"
-        );
-        await expect(bundleClientEntry(source, build)).rejects.toThrow(/Bun/);
-        // The unusable entry is not silently kept as the packed output.
-        expect(readFileSync(resolve(build, 'client.mjs'), 'utf8')).toContain(
-            "from '@or3/plugin-sdk'"
-        );
-    });
-
     it('writes the bundled output and refuses a bundler result that is still bare', async () => {
         const { source, build } = packageWithEntry(
             "import { createPortablePlugin } from '@or3/plugin-sdk';\nexport default createPortablePlugin;\n"

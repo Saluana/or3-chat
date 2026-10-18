@@ -36,7 +36,7 @@ function withoutExtension(path: string): string {
     return extension ? path.slice(0, -extension.length) : path;
 }
 
-export function assertSnapshotEqual(label: string, expected: string, actual: string): void {
+function assertSnapshotEqual(label: string, expected: string, actual: string): void {
     if (expected === actual) return;
     const expectedLines = expected.split('\n');
     const actualLines = actual.split('\n');

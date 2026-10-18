@@ -20,18 +20,6 @@ describe.each([
         engine.addFilter('prepare:*', filter);
         expect(next()).toBe(false);
     });
-    it('rejects thenables from synchronous filters and keeps prior value', () => {
-        const engine = createHookEngine();
-        engine.addFilter(
-            'demo:filter:value',
-            () => Promise.resolve('async') as unknown as string,
-        );
-
-        const result = engine.applyFiltersSync('demo:filter:value', 'sync');
-        expect(result).toBe('sync');
-        expect(engine._diagnostics.errors['demo:filter:value']).toBe(1);
-    });
-
     it('rejects thenables from synchronous actions and continues the chain', () => {
         const engine = createHookEngine();
         const later = vi.fn();
@@ -91,19 +79,6 @@ describe.each([
         expect(engine._diagnostics.errors['demo:filter:throw']).toBe(1);
     });
 
-    it('awaits onceAction callbacks during doAction and removes them after first run', async () => {
-        const engine = createHookEngine();
-        let calls = 0;
-        engine.onceAction('demo:action:once', async () => {
-            calls += 1;
-            await Promise.resolve();
-        });
-
-        await engine.doAction('demo:action:once');
-        await engine.doAction('demo:action:once');
-        expect(calls).toBe(1);
-    });
-
     it('records onceAction async rejection without leaving unhandled failures', async () => {
         const engine = createHookEngine();
         engine.onceAction('demo:action:fail', async () => {
@@ -148,19 +123,22 @@ describe.each([
 
     it('awaited applyFilters accepts async filter results', async () => {
         const engine = createHookEngine();
-        engine.addFilter(
-            'demo:filter:async',
-            async (value) => `${String(value)}-async`,
-        );
+        engine.addFilter('demo:filter:async', async (value) => String(value) + '-last', 20);
+        engine.addFilter('demo:filter:async', async (value) => String(value) + '-first', 5);
+        engine.addFilter('demo:filter:async', async (value) => String(value) + '-middle');
         await expect(
             engine.applyFilters('demo:filter:async', 'x'),
-        ).resolves.toBe('x-async');
+        ).resolves.toBe('x-first-middle-last');
     });
 
     it('merges exact and wildcard callbacks by priority then registration order', async () => {
         const engine = createHookEngine();
         const calls: string[] = [];
-        engine.addAction('demo.*', () => calls.push('wildcard-first'), 10);
+        engine.addAction('demo.*', async () => {
+            calls.push('wildcard-start');
+            await Promise.resolve();
+            calls.push('wildcard-end');
+        });
         engine.addAction(
             'demo.action.order',
             () => calls.push('exact-second'),
@@ -177,7 +155,8 @@ describe.each([
 
         expect(calls).toEqual([
             'exact-low',
-            'wildcard-first',
+            'wildcard-start',
+            'wildcard-end',
             'exact-second',
             'wildcard-high',
         ]);

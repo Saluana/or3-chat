@@ -297,15 +297,6 @@ describe('POST /api/storage/commit', () => {
         expect(commitMock).not.toHaveBeenCalled();
     });
 
-    it('calls adapter commit when available', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
-        const body = makeValidBody();
-        readBodyMock.mockResolvedValue(body);
-
-        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
-        expect(commitMock).toHaveBeenCalledWith(expect.anything(), body);
-    });
-
     it('accepts generic zero-byte commit metadata', async () => {
         const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
         const body = {

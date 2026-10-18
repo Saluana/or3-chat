@@ -43,8 +43,13 @@ describe('automatic Document AI context', () => {
             current.setEditable(false, false);
             agent!.reset();
             expect(current.isEditable).toBe(false);
+            const onUpdate = vi.fn();
+            current.on('update', onUpdate);
             blocked.value = false;
             expect(current.isEditable).toBe(true);
+            blocked.value = true;
+            expect(current.isEditable).toBe(false);
+            expect(onUpdate).not.toHaveBeenCalled();
         } finally { scope.stop(); setHookEngine(null); }
     });
     it('keeps a selection as the strict target while seeding full small-document context', () => {

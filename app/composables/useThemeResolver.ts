@@ -51,7 +51,7 @@ const MAX_CACHE_ENTRIES = 50;
  * Internal helper to build deterministic cache keys for override resolution.
  * Returns null when caching should be skipped (e.g. element-specific matches).
  */
-export function __createThemeOverrideCacheKey(
+function createThemeOverrideCacheKey(
     params: ResolveParams | null | undefined
 ): string | null {
     if (!params) return null;
@@ -177,7 +177,7 @@ export function useThemeOverrides(
         // Use cache if available
         if (instance?.proxy) {
             const proxy = instance.proxy;
-            const cacheKey = __createThemeOverrideCacheKey(resolveParams);
+            const cacheKey = createThemeOverrideCacheKey(resolveParams);
 
             if (cacheKey) {
                 const currentTheme = activeTheme.value;

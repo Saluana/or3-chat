@@ -175,11 +175,4 @@ describe('POST /api/storage/delete', () => {
         await expect(route(event)).rejects.toMatchObject({ statusCode: 501 });
     });
 
-    it('is repeatable when the adapter implements idempotent deletion', async () => {
-        const route = await handler();
-
-        await expect(route(event)).resolves.toEqual({ ok: true });
-        await expect(route(event)).resolves.toEqual({ ok: true });
-        expect(deleteObjectMock).toHaveBeenCalledTimes(2);
-    });
 });

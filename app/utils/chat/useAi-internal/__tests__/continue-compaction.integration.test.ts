@@ -9,7 +9,6 @@ import type { ChatMessage } from '~/utils/chat/types';
 const boundary = vi.hoisted(() => ({ build: vi.fn(), provider: vi.fn(), report: vi.fn() }));
 vi.mock('../messageBuild', () => ({
     buildOpenRouterMessagesForSend: boundary.build,
-    enforceOpenRouterMessageTokenBudget: async (messages: unknown[]) => messages,
 }));
 vi.mock('~/utils/chat/openrouterStream', () => ({
     openRouterStreamWithRetry: boundary.provider, startBackgroundStream: boundary.provider,

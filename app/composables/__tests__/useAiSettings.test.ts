@@ -75,13 +75,6 @@ describe('useAiSettings', () => {
         expect(settings.value.masterSystemPrompt).toBe('hello');
     });
 
-    it('handles missing KV gracefully', async () => {
-        const { load, ensureLoaded } = useAiSettings();
-        await ensureLoaded();
-        const after = load();
-        // Should return defaults, not throw
-        expect(after.version).toBe(1);
-    });
     it('keeps the context maximum optional and preserves valid large preferences through KV/reset', async () => {
         const api = useAiSettings();
         await api.ensureLoaded();

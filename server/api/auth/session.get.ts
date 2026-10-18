@@ -91,5 +91,3 @@ export default defineEventHandler(async (event) => {
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
     };
 });
-
-export const SESSION_CACHE_CONTROL = 'no-store';

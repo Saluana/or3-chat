@@ -112,20 +112,4 @@ describe('upsert hook transaction scope', () => {
             'tx:end',
         ]);
     });
-
-    it('tolerates an async timer in the before hook', async () => {
-        const { db } = makeDb(baseMessage);
-        const { useHooks } = await import('../../core/hooks/useHooks');
-        const hooks = useHooks();
-        const original = hooks.doAction;
-        (hooks as any).doAction = async (name: string, ...rest: unknown[]) => {
-            if (name === 'db.messages.upsert:action:before') {
-                await new Promise((resolve) => setTimeout(resolve, 15));
-            }
-            return (original as any)(name, ...rest);
-        };
-        await expect(
-            upsertMessageInDb(db, { ...baseMessage })
-        ).resolves.toBeUndefined();
-    });
 });

@@ -12,8 +12,6 @@
  * - `compareAuthority` reports expansion and narrowing so an update that adds a
  *   hostname, scope, write or action still needs fresh consent even when the
  *   grant strings are unchanged; a narrowing still passes technical review.
- * - `evaluateConsent` refuses missing, release-changed, authority-expanded or
- *   generation-stale evidence.
  *
  * Constraints:
  * - Pure data and hashing only: no network, no storage, no UI.
@@ -337,102 +335,6 @@ export function compareAuthority(
         requiresFreshConsent: expansions.length > 0,
         requiresTechnicalReview: narrowings.length > 0 && expansions.length === 0,
     });
-}
-
-export interface AuthorityConsent {
-    readonly subjectId: string;
-    readonly workspaceId: string;
-    readonly pluginId: string;
-    readonly releaseId: string;
-    readonly generation: number;
-    readonly authorityHash: Sha256;
-    readonly approvedAt: number;
-    readonly approvedBy: string;
-}
-
-export interface AuthorityCandidate {
-    readonly pluginId: string;
-    readonly releaseId: string;
-    readonly workspaceId: string;
-    readonly generation: number;
-    readonly authorityHash: Sha256;
-}
-
-export type ConsentDecision =
-    | { readonly status: 'allowed'; readonly consent: AuthorityConsent }
-    | {
-          readonly status: 'denied';
-          readonly code:
-              | 'consent-missing'
-              | 'consent-release-changed'
-              | 'consent-authority-expanded'
-              | 'consent-stale-generation'
-              | 'consent-workspace-mismatch';
-          readonly message: string;
-      };
-
-/**
- * Decide whether an approval still covers the candidate release.
- * The release digest and generation are both bound, so a re-issued or
- * other-workspace consent cannot be reused.
- */
-export function evaluateConsent(input: {
-    readonly consent: AuthorityConsent | null;
-    readonly candidate: AuthorityCandidate;
-    /** Authority of the release the consent was granted for, when known. */
-    readonly consentedAuthority?: EffectiveAuthority;
-    readonly candidateAuthority?: EffectiveAuthority;
-}): ConsentDecision {
-    const { consent, candidate } = input;
-    if (!consent) {
-        return denied('consent-missing', 'No local approval exists for this plugin');
-    }
-    if (consent.workspaceId !== candidate.workspaceId) {
-        return denied(
-            'consent-workspace-mismatch',
-            'Approval belongs to a different workspace'
-        );
-    }
-    if (consent.pluginId !== candidate.pluginId) {
-        return denied('consent-workspace-mismatch', 'Approval belongs to a different plugin');
-    }
-    if (consent.releaseId !== candidate.releaseId) {
-        return denied(
-            'consent-release-changed',
-            'Approval was granted for a different release'
-        );
-    }
-    if (consent.generation !== candidate.generation) {
-        return denied(
-            'consent-stale-generation',
-            'Approval is stale after a package change'
-        );
-    }
-    if (consent.authorityHash !== candidate.authorityHash) {
-        return denied(
-            'consent-authority-expanded',
-            'Effective authority differs from what was approved'
-        );
-    }
-    if (input.consentedAuthority && input.candidateAuthority) {
-        const comparison = compareAuthority(input.consentedAuthority, input.candidateAuthority);
-        if (comparison.expanded) {
-            return denied(
-                'consent-authority-expanded',
-                `Approval no longer covers: ${comparison.expansions
-                    .map((change) => `${change.kind}(${change.detail})`)
-                    .join(', ')}`
-            );
-        }
-    }
-    return { status: 'allowed', consent };
-}
-
-function denied(
-    code: Extract<ConsentDecision, { status: 'denied' }>['code'],
-    message: string
-): ConsentDecision {
-    return { status: 'denied', code, message };
 }
 
 /** Host-created, generation-bound handle for a selected document or message. */

@@ -1,19 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ref, nextTick, createApp, defineComponent } from 'vue';
+import { ref, computed, nextTick, createApp, defineComponent } from 'vue';
 
-import {
-    useThemeOverrides,
-    __createThemeOverrideCacheKey,
-} from '../useThemeResolver';
+import { useThemeOverrides } from '../useThemeResolver';
+import type { ResolveParams } from '../../theme/_shared/runtime-resolver';
 
 vi.unmock('../useThemeResolver');
 
 const natureResolver = {
-    resolve: vi.fn(() => ({ props: { theme: 'nature', tone: 'forest' } })),
+    resolve: vi.fn((params: ResolveParams) => ({ props: { theme: 'nature', tone: 'forest', identifier: params.identifier, elementType: params.element?.getAttribute('type') } })),
 };
 
 const retroResolver = {
-    resolve: vi.fn(() => ({ props: { theme: 'retro', tone: 'neon' } })),
+    resolve: vi.fn((params: ResolveParams) => ({ props: { theme: 'retro', tone: 'neon', identifier: params.identifier, elementType: params.element?.getAttribute('type') } })),
 };
 
 const resolvers = {
@@ -72,20 +70,25 @@ describe('useThemeOverrides cache behaviour', () => {
     });
 
     it('reuses cached overrides for the same theme and invalidates on theme switch', async () => {
-        const harness = mountUseThemeOverrides({
-            component: 'button',
-            context: 'chat',
-            identifier: 'message.copy',
-            isNuxtUI: true,
-        });
+        const identifier = ref('message.copy');
+        const elementScoped = ref(false);
+        const element = document.createElement('input');
+        element.type = 'text';
+        const harness = mountUseThemeOverrides(computed(() => ({
+            component: 'button', context: 'chat', identifier: identifier.value, isNuxtUI: true,
+            element: elementScoped.value ? element : undefined,
+        })));
 
         const first = harness.overrides.value;
         expect(resolvers.nature.resolve).toHaveBeenCalledTimes(1);
         expect(first).toMatchObject({ theme: 'nature' });
 
-        // Second access with same inputs should hit cache
-        harness.overrides.value;
-        expect(resolvers.nature.resolve).toHaveBeenCalledTimes(1);
+        identifier.value = 'message.edit';
+        expect(harness.overrides.value).toMatchObject({ identifier: 'message.edit' });
+        expect(resolvers.nature.resolve).toHaveBeenCalledTimes(2);
+        identifier.value = 'message.copy';
+        expect(harness.overrides.value).toBe(first);
+        expect(resolvers.nature.resolve).toHaveBeenCalledTimes(2);
 
         await themeStub.setActiveTheme('retro');
         await nextTick();
@@ -95,36 +98,18 @@ describe('useThemeOverrides cache behaviour', () => {
         expect(second).toMatchObject({ theme: 'retro' });
         expect(second).not.toBe(first);
 
+        await themeStub.setActiveTheme('nature');
+        await nextTick();
+        expect(harness.overrides.value).not.toBe(first);
+        expect(resolvers.nature.resolve).toHaveBeenCalledTimes(3);
+        elementScoped.value = true;
+        expect(harness.overrides.value).toMatchObject({ elementType: 'text' });
+        element.type = 'password';
+        identifier.value = 'message.edit';
+        expect(harness.overrides.value).toMatchObject({ elementType: 'password' });
+        identifier.value = 'message.copy';
+        expect(harness.overrides.value).toMatchObject({ elementType: 'password' });
+        expect(resolvers.nature.resolve).toHaveBeenCalledTimes(6);
         harness.destroy();
-    });
-});
-
-describe('__createThemeOverrideCacheKey', () => {
-    it('builds deterministic keys for identical parameters', () => {
-        const base = {
-            component: 'button',
-            context: 'chat',
-            identifier: 'message.copy',
-            state: 'hover',
-            isNuxtUI: true,
-        } as const;
-
-        const k1 = __createThemeOverrideCacheKey(base);
-        const k2 = __createThemeOverrideCacheKey({ ...base });
-        expect(k1).toBe(k2);
-
-        const different = __createThemeOverrideCacheKey({
-            ...base,
-            identifier: 'message.edit',
-        });
-        expect(different).not.toBe(k1);
-    });
-
-    it('returns null for element-scoped matches (non-cacheable)', () => {
-        const cacheKey = __createThemeOverrideCacheKey({
-            component: 'button',
-            element: document.createElement('button'),
-        } as any);
-        expect(cacheKey).toBeNull();
     });
 });

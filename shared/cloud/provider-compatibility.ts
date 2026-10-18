@@ -75,19 +75,6 @@ export function providerIdToModuleId(providerId: string): string | null {
     return `${packageName}/nuxt`;
 }
 
-export function providerModuleIdsForStack(
-    stack: SupportedProviderStack,
-): string[] {
-    return Array.from(
-        new Set(
-            ([stack.auth, stack.sync, stack.storage] as const)
-                .filter((id): id is string => typeof id === 'string')
-                .map(providerIdToModuleId)
-                .filter((id): id is string => typeof id === 'string'),
-        ),
-    );
-}
-
 /** Package-backed requirements; custom registrations are verified at server startup. */
 export function requiredProviderModules(
     config: import('../../types/or3-cloud-config').Or3CloudConfig,

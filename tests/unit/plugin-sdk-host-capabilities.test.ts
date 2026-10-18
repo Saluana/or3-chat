@@ -80,17 +80,6 @@ describe('plugin SDK host capabilities', () => {
         expect(methods).toEqual([HOST_CAPABILITY_METHODS.complete])
     })
 
-    it('keeps refusal codes meaningful', async () => {
-        const { call } = fakeCall({
-            [HOST_CAPABILITY_METHODS.complete]: { ok: false, code: 'budget-exceeded', message: 'no budget' },
-        })
-        const refused = await completeWithHostModel(call, { model: 'vendor/alpha', prompt: 'Hi' })
-        expect(refused.ok).toBe(false)
-        if (refused.ok) return
-        expect(refused.error.code).toBe('quota-exceeded')
-        expect(refused.error.message).toBe('no budget')
-    })
-
     it('maps every structured host refusal to its own SDK error, never all to permission-denied', async () => {
         const cases: ReadonlyArray<[string, string, boolean]> = [
             ['permission-denied', 'permission-denied', false],
@@ -99,6 +88,7 @@ describe('plugin SDK host capabilities', () => {
             ['not-found', 'not-found', false],
             ['conflict', 'conflict', false],
             ['internal', 'internal', false],
+            ['budget-exceeded', 'quota-exceeded', false],
             ['deadline-exceeded', 'timeout', true],
             ['cancelled', 'aborted', false],
             ['network-failure', 'network-error', true],
@@ -111,7 +101,7 @@ describe('plugin SDK host capabilities', () => {
             const refused = await completeWithHostModel(call, { model: 'vendor/alpha', prompt: 'Hi' })
             expect(refused.ok).toBe(false)
             if (refused.ok) continue
-            expect(refused.error, hostCode).toMatchObject({ code: sdkCode, retryable })
+            expect(refused.error, hostCode).toMatchObject({ code: sdkCode, retryable, message: hostCode })
         }
     })
 

@@ -285,13 +285,10 @@ No existing server was stopped and no containment receipt was promoted.
 - [ ] 5.3 Add credential-reference injection and bounded multipart upload (4h).
       Component: Network Transport, Secret Custody, File Access. Requirements: R8.AC2, R8.AC5, R9.AC4, R10.AC1.
       Done when: credentials reach only their approved endpoint and a staged selected-file upload can cancel without a whole-file RPC envelope.
-- [x] 5.4 Define stream/socket control envelopes and lifetime budgets (3h).
+- [ ] 5.4 Define stream/socket control envelopes and lifetime budgets (3h).
       Component: Network Transport, Activation Boundary. Requirements: R11.AC1, R11.AC3, R11.AC4.
       Done when: stream IDs, owner checks, pull/ack/cancel/terminal messages and rolling versus cumulative limits have validated schemas and deterministic ledger tests.
-      Evidence: `stream-protocol.ts` validates versioned control envelopes,
-      `StreamOwnershipRegistry` enforces activation ownership, and
-      `StreamBudgetLedger` has injected-clock tests for queue, rolling and
-      cumulative byte/chunk limits.
+      Audit status: the original pure protocol/ledger prototype had no runtime caller and was retired. Implement and validate these controls with the transport owner in tasks 5.5–5.8; no streaming qualification is claimed.
 - [ ] 5.5 Implement raw-byte streaming and slow-consumer behavior (4h).
       Component: Network Transport. Requirements: R11.AC1, R11.AC3.
       Done when: bytes arrive before response completion, bounded queues backpressure upstream, abort reaches the transport and terminal settlement occurs once.

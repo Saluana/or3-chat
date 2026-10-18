@@ -100,7 +100,7 @@ describe('server-side setup test target (review 4.3)', () => {
         expect(result.message).toContain('belongs to provider other');
     });
 
-    it('bounds a package-declared deadline and defaults a non-finite one', () => {
+    it('bounds a package-declared deadline to the supported range', () => {
         const clamped = resolve({
             setup: { ...setup, testAction: { operationId: 'items.list', deadlineMs: 10_000_000 } },
         });

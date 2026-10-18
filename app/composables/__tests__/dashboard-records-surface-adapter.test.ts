@@ -301,6 +301,7 @@ describe('dashboard record contribution adapters', () => {
         const actual = run(true);
 
         expect(compareDifferentialSurfaces(expected, actual)).toEqual([]);
+        expect(getDashboardPluginPage('page-host', 'z-page')?.title).toBe('Replacement');
         expect(actual.projectedIds).toEqual([
             '["page-host","z-page"]',
             '["page-host","a-page"]',

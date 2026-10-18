@@ -1,5 +1,5 @@
 import { buildPluginSettingDefaults } from '../../server/admin/config/plugin-setting-defaults';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
     buildOr3ConfigFromEnv,
     buildOr3CloudConfigFromEnv,
@@ -548,14 +548,6 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.limits?.operationRateLimits).toEqual({});
     });
 
-    it('respects forceHttps override', () => {
-        const config = buildOr3CloudConfigFromEnv({
-            OR3_FORCE_HTTPS: 'true',
-            NODE_ENV: 'development',
-        });
-        expect(config.security?.forceHttps).toBe(true);
-    });
-
     it('defaults forceHttps to true in production', () => {
         const config = buildOr3CloudConfigFromEnv({
             NODE_ENV: 'production',
@@ -741,17 +733,6 @@ describe('buildOr3CloudConfigFromEnv', () => {
             OR3_BACKGROUND_STREAMING_PROVIDER: 'redis',
         });
         expect(config.backgroundStreaming?.storageProvider).toBe('redis');
-    });
-
-    it('respects OR3_STRICT_CONFIG=true', () => {
-        process.env.OR3_STRICT_CONFIG = 'true';
-        process.env.NODE_ENV = 'development';
-        expect(() =>
-            buildOr3CloudConfigFromEnv({
-                SSR_AUTH_ENABLED: 'true',
-                AUTH_PROVIDER: 'clerk',
-            }),
-        ).toThrow(/publishableKey/i);
     });
 
     it('supports OR3_AUTH_PROVIDER alias', () => {

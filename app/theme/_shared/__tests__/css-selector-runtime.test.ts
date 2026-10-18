@@ -182,26 +182,6 @@ describe('CSS Selector Runtime', () => {
     });
 
     describe('removeThemeClasses', () => {
-        it('should remove classes from elements', () => {
-            container.innerHTML =
-                '<div class="test-element">Content</div>';
-            const element = container.querySelector(
-                '.test-element'
-            ) as HTMLElement;
-
-            const selectors: Record<string, CSSelectorConfig> = {
-                '.test-element': {
-                    class: 'applied-class',
-                },
-            };
-
-            applyThemeClasses('remove-theme', selectors);
-            removeThemeClasses('remove-theme');
-
-            expect(element.classList.contains('applied-class')).toBe(false);
-            expect(element.classList.contains('test-element')).toBe(true);
-        });
-
         it('should handle multiple classes', () => {
             container.innerHTML =
                 '<div class="test-element class3">Content</div>';
@@ -362,62 +342,4 @@ describe('CSS Selector Runtime', () => {
         });
     });
 
-    describe('Integration', () => {
-        it('should handle complete theme switch workflow', async () => {
-            container.innerHTML = `
-                <div class="element1">Element 1</div>
-                <div class="element2">Element 2</div>
-            `;
-
-            const theme1Selectors: Record<string, CSSelectorConfig> = {
-                '.element1': { class: 'theme1-class' },
-                '.element2': { class: 'theme1-class' },
-            };
-
-            const theme2Selectors: Record<string, CSSelectorConfig> = {
-                '.element1': { class: 'theme2-class' },
-                '.element2': { class: 'theme2-class' },
-            };
-
-            // Apply theme 1
-            const promise1 = loadThemeCSS('theme1');
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            const link1 = document.querySelector(
-                'link[data-theme-css="theme1"]'
-            ) as HTMLLinkElement;
-            link1.dispatchEvent(new Event('load'));
-            await promise1;
-
-            applyThemeClasses('theme1', theme1Selectors);
-
-            const el1 = container.querySelector('.element1') as HTMLElement;
-            const el2 = container.querySelector('.element2') as HTMLElement;
-
-            await vi.waitFor(() => {
-                expect(el1.classList.contains('theme1-class')).toBe(true);
-                expect(el2.classList.contains('theme1-class')).toBe(true);
-            });
-
-            // Switch to theme 2
-            removeThemeClasses('theme1');
-            unloadThemeCSS('theme1');
-
-            const promise2 = loadThemeCSS('theme2');
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            const link2 = document.querySelector(
-                'link[data-theme-css="theme2"]'
-            ) as HTMLLinkElement;
-            link2.dispatchEvent(new Event('load'));
-            await promise2;
-
-            applyThemeClasses('theme2', theme2Selectors);
-
-            await vi.waitFor(() => {
-                expect(el1.classList.contains('theme1-class')).toBe(false);
-                expect(el1.classList.contains('theme2-class')).toBe(true);
-                expect(el2.classList.contains('theme1-class')).toBe(false);
-                expect(el2.classList.contains('theme2-class')).toBe(true);
-            });
-        });
-    });
 });

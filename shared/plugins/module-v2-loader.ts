@@ -153,11 +153,6 @@ export class ModuleV2Loader {
         this.#enabled = options.enabled !== false;
     }
 
-    /** Exposes the host ABI module registered for a bare import, if any. */
-    resolveHostExternal(specifier: ModuleV2HostAbiExternal): unknown | undefined {
-        return this.#hostExternals[specifier];
-    }
-
     resolve(input: ModuleV2ResolveInput): ModuleV2LoaderResolution {
         if (!this.#enabled) {
             return {

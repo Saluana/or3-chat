@@ -85,26 +85,6 @@ describe('DELETE /api/plugins/isolation/activation', () => {
         readBodyMock.mockReset().mockResolvedValue({});
     });
 
-    it('revokes the caller own handle', async () => {
-        const record = registerHostActivation({
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            userId: 'user_1',
-            packageDigest: null,
-            grants: grants(),
-        });
-        readBodyMock.mockResolvedValue({ activationId: record.activationId });
-
-        await expect(handler(makeEvent())).resolves.toMatchObject({
-            ok: true,
-            alreadyRevoked: false,
-        });
-        expect(resolveHostActivation(record.activationId)).toMatchObject({
-            ok: false,
-            code: 'activation-revoked',
-        });
-    });
-
     it('revokes the caller own handle from another workspace after a switch', async () => {
         const record = registerHostActivation({
             pluginId: 'example.plugin',

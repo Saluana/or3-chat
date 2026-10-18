@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     _clearProviders,
     getActiveSyncProvider,
-    getAllSyncProviders,
     getSyncProvider,
     registerSyncProvider,
     setActiveSyncProvider,
@@ -67,17 +66,6 @@ describe('sync-provider-registry', () => {
 
         unregisterSyncProvider('a');
 
-        expect(getActiveSyncProvider()).toBeNull();
-    });
-
-    it('_clearProviders resets all global state', () => {
-        registerSyncProvider(makeProvider('a') as any);
-        registerSyncProvider(makeProvider('b') as any);
-        setActiveSyncProvider('a');
-
-        _clearProviders();
-
-        expect(getAllSyncProviders()).toEqual([]);
         expect(getActiveSyncProvider()).toBeNull();
     });
 });

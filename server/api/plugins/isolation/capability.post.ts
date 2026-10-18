@@ -91,13 +91,6 @@ type CapabilityBody = {
     readonly deadlineMs?: unknown;
 };
 
-/** Retained for callers that reset the old in-process governor test state. */
-export function clearCapabilityGovernorsForTests(): void {
-    // AI spend is persisted by the active settings provider; there is no
-    // process-local cache to clear.
-    return undefined;
-}
-
 interface ClientDisconnectTracker {
     /** True once the connection closed before the response completed. */
     isDisconnected(): boolean;
@@ -319,7 +312,6 @@ export default defineEventHandler(async (event) => {
     // the slot past the configured call deadline. The broker keeps its own
     // deadline as a backstop; it starts later, so this timer fires first.
     const callDeadlineMs = clampCallDeadlineMs(requestedDeadline);
-    let releaseOutcome = 'completed';
     // Holder object: the timer callback flips this across awaits, which a
     // narrowed local boolean would misrepresent to the type checker.
     const admissionClock = { timedOut: false };
@@ -343,11 +335,9 @@ export default defineEventHandler(async (event) => {
     });
     const throwIfSettledEarly = (): void => {
         if (admissionClock.timedOut) {
-            releaseOutcome = 'deadline-exceeded';
             throw capabilityError('deadline-exceeded', 'Capability call exceeded its deadline');
         }
         if (admission.controller.signal.aborted || disconnect.isDisconnected()) {
-            releaseOutcome = 'cancelled';
             throw capabilityError('cancelled', 'Capability call was cancelled');
         }
     };
@@ -431,7 +421,6 @@ export default defineEventHandler(async (event) => {
         // disconnect or deadline during preparation must prevent dispatch.
         const current = resolveHostActivation(activationId);
         if (!current.ok) {
-            releaseOutcome = 'cancelled';
             throw createError({
                 statusCode: current.code === 'activation-unknown' ? 403 : 409,
                 statusMessage: current.message,
@@ -486,48 +475,30 @@ export default defineEventHandler(async (event) => {
                 (envelope) => envelope.kind === 'response' || envelope.kind === 'error'
             );
             if (!response) {
-                releaseOutcome = 'failed';
                 throw createError({
                     statusCode: 500,
                     statusMessage: outcome.status === 'rejected' ? outcome.message : 'No capability response',
                 });
             }
             if (response.kind === 'response') {
-                releaseOutcome = 'completed';
                 return { ok: true, result: response.result };
             }
             // The admission timer aborts through the same controller as a
             // disconnect, so a timeout that fires mid-dispatch would otherwise
             // surface as `cancelled`: prefer the recorded cause.
             if (admissionClock.timedOut) {
-                releaseOutcome = 'deadline-exceeded';
                 throw capabilityError('deadline-exceeded', 'Capability call exceeded its deadline');
             }
-            releaseOutcome =
-                response.code === 'cancelled' || response.code === 'deadline-exceeded'
-                    ? response.code
-                    : 'failed';
             throw capabilityError(response.code, response.message, response.details);
         } finally {
             admission.controller.signal.removeEventListener('abort', onAdmissionAbort);
             broker.dispose();
         }
-    } catch (error) {
-        // Paths that set their own outcome keep it; anything else (a failed
-        // preparation build) is labeled by its cause instead of `completed`.
-        if (releaseOutcome === 'completed') {
-            releaseOutcome = admissionClock.timedOut
-                ? 'deadline-exceeded'
-                : admission.controller.signal.aborted || disconnect.isDisconnected()
-                  ? 'cancelled'
-                  : 'failed';
-        }
-        throw error;
     } finally {
         clearTimeout(admissionTimer);
         stopDisconnectForward();
         disconnect.dispose();
-        admission.release(releaseOutcome);
+        admission.release();
     }
 });
 

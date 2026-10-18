@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -8,7 +7,6 @@ import {
     verifyCanonicalPackageEntries,
     verifyPackageTree,
     type PackageTreeEntryInput,
-    type PackageTreeValidationCode,
 } from '../../server/admin/plugins/package-tree';
 import { checkV2PackageConformance } from '../../scripts/plugin-runtime/check-v2-package-conformance';
 import { inspectV2Package } from '../../scripts/plugin-runtime/cli/inspect';
@@ -41,7 +39,6 @@ interface ExpectedFile {
             readonly conformanceStatus: string;
         }
     >;
-    readonly inMemory: Record<string, PackageTreeValidationCode | null>;
 }
 
 // The committed canonical-results file is the single source of truth for every
@@ -92,18 +89,6 @@ function syncErrorCode(action: () => unknown): string | undefined {
     }
 }
 
-const inMemoryManifest = {
-    manifestVersion: 2,
-    kind: 'plugin',
-    id: 'or3.golden-in-memory',
-    name: 'Golden In-Memory',
-    version: '1.0.0',
-};
-
-function manifestBytes(overrides: Record<string, unknown> = {}): Uint8Array {
-    return Buffer.from(JSON.stringify({ ...inMemoryManifest, ...overrides }), 'utf8');
-}
-
 function file(
     path: string,
     bytes: Uint8Array = Buffer.from('x'),
@@ -111,34 +96,6 @@ function file(
 ): PackageTreeEntryInput {
     return { path, kind: 'file', mode, bytes };
 }
-
-function baseEntries(): PackageTreeEntryInput[] {
-    return [
-        file('or3.manifest.json', manifestBytes()),
-        file('client.mjs', Buffer.from('export default {};\n')),
-        { path: 'lib', kind: 'directory', mode: 0o755 },
-        file('lib/util.mjs', Buffer.from('export const value = 1;\n')),
-    ];
-}
-
-const inMemoryCases: Record<string, () => PackageTreeEntryInput[]> = {
-    'path-not-normalized-dot': () => [...baseEntries(), file('./a.txt')],
-    'path-not-normalized-backslash': () => [...baseEntries(), file('a\\b.txt')],
-    'path-traversal': () => [...baseEntries(), file('../x')],
-    'case-fold-collision': () => [...baseEntries(), file('Case.txt'), file('case.txt')],
-    'duplicate-path': () => [...baseEntries(), file('dup.txt'), file('dup.txt')],
-    'unsafe-mode-setuid': () => [...baseEntries(), file('agent.txt', Buffer.from('x'), 0o4755)],
-    'unsupported-type-symlink': () => [
-        ...baseEntries(),
-        { path: 'link', kind: 'symlink', mode: 0o120777 },
-    ],
-    'unsupported-type-fifo': () => [
-        ...baseEntries(),
-        { path: 'pipe', kind: 'fifo', mode: 0o10644 },
-    ],
-    'missing-manifest': () =>
-        baseEntries().filter((entry) => entry.path !== 'or3.manifest.json'),
-};
 
 describe('golden package fixtures', () => {
     it('host verifyPackageTree matches the committed canonical results', async () => {
@@ -191,16 +148,6 @@ describe('golden package fixtures', () => {
         const inspectedArchive = await inspectV2Package(or3pkg, { repoRoot });
         expect(inspectedArchive.digest).toBe(expected.validPortable.digest);
         expect(inspectedArchive.manifestDigest).toBe(expected.validPortable.manifestDigest);
-    });
-
-    it('archive byte identity is distinct from the tree identity domain', async () => {
-        const archiveBytes = await writeDeterministicPackageZip(validRoot);
-        const archiveHash = `sha256-${createHash('sha256').update(archiveBytes).digest('hex')}`;
-        expect(archiveHash).toMatch(/^sha256-[a-f0-9]{64}$/);
-        expect(archiveHash).not.toBe(expected.validPortable.digest);
-        // The tree digest is structural, so it stays stable across archive
-        // re-encodes; the byte hash does not identify the tree.
-        expect((await verifyPackageTree(validRoot)).digest).toBe(expected.validPortable.digest);
     });
 
     it('reviewer conformance agrees for the valid portable fixture', async () => {
@@ -261,29 +208,4 @@ describe('golden package fixtures', () => {
         expect(strippedVerified.manifestDigest).toBe(expected.validPortable.manifestDigest);
     });
 
-    it.each(Object.entries(expected.inMemory).filter(([, code]) => code !== null))(
-        'in-memory canonical case %s reports %s',
-        (id, code) => {
-            const build = inMemoryCases[id];
-            expect(build, `missing in-memory case ${id}`).toBeDefined();
-            expect(syncErrorCode(() => verifyCanonicalPackageEntries(build!()))).toBe(code);
-        }
-    );
-
-    it('self-integrity exclusion leaves the tree and manifest digests unchanged', () => {
-        expect(expected.inMemory['self-integrity-exclusion']).toBeNull();
-        const first = verifyCanonicalPackageEntries(baseEntries());
-        const withSelfIntegrity = baseEntries().map((entry) =>
-            entry.path === 'or3.manifest.json'
-                ? file(
-                      'or3.manifest.json',
-                      manifestBytes({ integrity: { package: first.digest } })
-                  )
-                : entry
-        );
-        const second = verifyCanonicalPackageEntries(withSelfIntegrity);
-        expect(second.digest).toBe(first.digest);
-        expect(second.manifestDigest).toBe(first.manifestDigest);
-        expect(second.declaredManifestIntegrity).toBe(first.digest);
-    });
 });

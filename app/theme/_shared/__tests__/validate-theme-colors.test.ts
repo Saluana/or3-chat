@@ -14,12 +14,10 @@ function createTheme(primary: string): ThemeDefinition {
 }
 
 describe('validateThemeDefinition color validation', () => {
-    it('accepts valid colors', () => {
-        const result = validateThemeDefinition(createTheme('rgb(10 20 30 / 40%)'));
-        expect(result.warnings.find((w) => w.code === 'THEME_005')).toBeUndefined();
-    });
-
-    it('rejects invalid colors', () => {
+    it('accepts modern CSS colors and rejects invalid colors', () => {
+        const valid = validateThemeDefinition(createTheme('rgb(10 20 30 / 40%)'));
+        expect(valid.valid).toBe(true);
+        expect(valid.errors.some((error) => error.code === 'THEME_005')).toBe(false);
         const result = validateThemeDefinition(createTheme('not-a-color-value'));
         expect(result.valid).toBe(false);
         expect(result.errors.some((error) => error.code === 'THEME_005')).toBe(true);

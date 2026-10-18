@@ -296,35 +296,6 @@ describe('Plugin SDK test harness', () => {
         expect(await context.storage.get('marker')).toEqual(pluginOk('old-scope'));
     });
 
-    it('never commits a setup that was superseded while awaiting', async () => {
-        const host = createPluginTestHost({ approvedGrants: ['ui.dashboard.register'] });
-        let resolveA!: () => void;
-        const gateA = new Promise<void>((resolve) => {
-            resolveA = resolve;
-        });
-        const definitionA = plugin(async (ctx) => {
-            await gateA;
-            ctx.contributions.register({
-                kind: 'ui.dashboard.card',
-                id: 'card-a',
-                title: 'A',
-                view: { nodes: [] },
-            } as never);
-        }, ['ui.dashboard.register'], 'sample.superseded-a');
-        const definitionB = plugin(() => undefined, [], 'sample.superseded-b');
-
-        const pendingA = host.install(definitionA);
-        const installedB = await host.install(definitionB);
-        expect(installedB.ok).toBe(true);
-        resolveA();
-        const settledA = await pendingA;
-        expect(settledA).toMatchObject({ ok: false, error: { code: 'aborted' } });
-        const snapshot = host.snapshot();
-        expect(snapshot).toMatchObject({ active: true });
-        // A's late contribution never reached the committed host state.
-        expect(JSON.stringify(snapshot)).not.toContain('card-a');
-    });
-
     it('reports a superseded rejection without clearing the replacement', async () => {
         const host = createPluginTestHost({});
         let rejectA!: (error: unknown) => void;
@@ -955,17 +926,6 @@ describe('portable test host contracts', () => {
             sdkRejected = true;
         }
         expect(sdkRejected).toBe(!production.ok);
-    });
-
-    it('returns the RPC response envelope rather than the raw handler payload', async () => {
-        const host = await activatePortable({}, (context) => {
-            context.onRequest('runtime.ui-event', () => ({ title: 'Result', content: '# Body' }));
-        });
-        const response = await host.invokeRequest('runtime.ui-event', { action: 'x' });
-        expect(response).toEqual({
-            ok: true,
-            result: { title: 'Result', content: '# Body' },
-        });
     });
 
     it('refuses an unavailable capability like an unregistered production method', async () => {

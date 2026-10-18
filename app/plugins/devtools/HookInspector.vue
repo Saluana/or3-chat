@@ -372,12 +372,4 @@ onUnmounted(() => {
     }
 });
 
-// Expose for testing
-defineExpose({
-    updateSnapshot,
-    hookDetails,
-    stats,
-    diagnosticsSnapshot,
-    autoRefresh,
-});
 </script>

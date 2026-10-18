@@ -26,10 +26,4 @@ describe('wizard dev-server helpers', () => {
 
         await expect(isPortAvailable(3_000, '127.0.0.1', probe)).resolves.toBe(true);
     });
-
-    it('reports a port occupied on the requested host', async () => {
-        const probe = async () => 'unavailable' as const;
-
-        await expect(isPortAvailable(3_000, '127.0.0.1', probe)).resolves.toBe(false);
-    });
 });

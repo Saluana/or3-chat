@@ -42,10 +42,9 @@ function completed(child: ChildProcess): Promise<void> {
 }
 
 describe('multi-process plugin package operations', () => {
-    it.each([
-        ['install', 'update'],
-        ['update', 'uninstall'],
-    ])('serializes %s and %s for one plugin ID', async (firstOperation, secondOperation) => {
+    it('serializes competing processes for one plugin ID', async () => {
+        const firstOperation = 'first';
+        const secondOperation = 'second';
         const root = mkdtempSync(resolve(tmpdir(), 'or3-package-lock-process-'));
         const tracePath = resolve(root, 'trace.ndjson');
         const gatePath = resolve(root, 'release-first');

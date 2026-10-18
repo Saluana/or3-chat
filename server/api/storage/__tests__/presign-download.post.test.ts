@@ -60,14 +60,6 @@ vi.mock('../../../utils/storage/metrics', () => ({
     recordDownloadStart: recordDownloadStartMock as any,
 }));
 
-vi.mock('../../../utils/storage/presign-expiry', () => ({
-    DEFAULT_PRESIGN_EXPIRY_MS: 60_000,
-    resolvePresignExpiresAt: (result: { expiresAt?: unknown }) =>
-        typeof result.expiresAt === 'number'
-            ? result.expiresAt
-            : Date.now() + 60_000,
-}));
-
 const presignDownloadMock = vi.fn();
 const getActiveStorageGatewayAdapterMock = vi.fn();
 const queryCanonicalStorageMock = vi.fn();
@@ -256,17 +248,17 @@ describe('POST /api/storage/presign-download', () => {
         vi.setSystemTime(new Date('2026-02-06T12:00:00.000Z'));
         const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
-        presignDownloadMock.mockResolvedValue({
-            url: 'https://download.example',
-            expiresAt: 777_777,
-        });
-
-        await expect(handler(makeEvent())).resolves.toEqual({
-            url: 'https://download.example',
-            expiresAt: 777_777,
-            storageId: 'storage-live',
-            disposition: 'attachment',
-        });
+        const now = Date.now();
+        for (const [provider, expiresAt] of [
+            [{ expiresAt: 777_777 }, 777_777],
+            [{ expires_at: '2026-02-06T12:10:00.000Z' }, now + 10 * 60_000],
+            [{ expiresAt: now + 2 * 60 * 60_000 }, now + 60 * 60_000],
+        ] as const) {
+            presignDownloadMock.mockResolvedValue({ url: 'https://download.example', ...provider });
+            await expect(handler(makeEvent())).resolves.toEqual({
+                url: 'https://download.example', expiresAt, storageId: 'storage-live', disposition: 'attachment',
+            });
+        }
 
         vi.useRealTimers();
     });
@@ -283,7 +275,7 @@ describe('POST /api/storage/presign-download', () => {
 
         await expect(handler(makeEvent())).resolves.toEqual({
             url: 'https://download.example',
-            expiresAt: Date.now() + 60_000,
+            expiresAt: Date.now() + 15 * 60_000,
             storageId: 'storage-live',
             disposition: 'attachment',
         });

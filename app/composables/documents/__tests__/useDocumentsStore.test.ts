@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     loadDocument,
-    newDocument,
     setDocumentTitle,
     setDocumentContent,
     flush,
@@ -30,61 +29,6 @@ describe('useDocumentsStore - memory leaks', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
-    });
-
-    it('clears timer when flushing document', async () => {
-        const mockDoc = {
-            id: 'doc1',
-            title: 'Test Doc',
-            content: { type: 'doc' as const, content: [] },
-            postType: 'document',
-            created_at: Date.now(),
-            updated_at: Date.now(),
-            deleted: false,
-        };
-
-        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
-
-        await loadDocument('doc1');
-
-        // Schedule a save which creates a timer
-        setDocumentTitle('doc1', 'New Title');
-
-        const state = useDocumentState('doc1');
-        expect(state.debouncedSave).toBeDefined();
-
-        // Flush should cancel the debounced save
-        await flush('doc1');
-
-        // The debouncedSave function is still defined but any pending call is cancelled
-        expect(state.debouncedSave).toBeDefined();
-    });
-
-    it('clears timer when releasing document', async () => {
-        const mockDoc = {
-            id: 'doc2',
-            title: 'Test Doc 2',
-            content: { type: 'doc' as const, content: [] },
-            postType: 'document',
-            created_at: Date.now(),
-            updated_at: Date.now(),
-            deleted: false,
-        };
-
-        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
-
-        await loadDocument('doc2');
-        setDocumentTitle('doc2', 'New Title');
-
-        const state = useDocumentState('doc2');
-        expect(state.debouncedSave).toBeDefined();
-
-        await releaseDocument('doc2');
-
-        // After release, the debouncedSave should be cancelled (but may still be defined)
-        expect(state.debouncedSave).toBeDefined();
     });
 
     it('nullifies content field when releasing document', async () => {

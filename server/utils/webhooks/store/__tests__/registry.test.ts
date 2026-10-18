@@ -64,26 +64,6 @@ describe('webhook store registry', () => {
         expect(createCount).toBe(1);
     });
 
-    it('clears cached instances when re-registering', async () => {
-        const registry = await loadRegistry();
-        let createCount = 0;
-
-        registry.registerWebhookStore({
-            id: 'sqlite',
-            create: () => createStore(`sqlite-${++createCount}`),
-        });
-        const first = registry.getWebhookStore('sqlite');
-
-        registry.registerWebhookStore({
-            id: 'sqlite',
-            create: () => createStore(`sqlite-${++createCount}`),
-        });
-        const second = registry.getWebhookStore('sqlite');
-
-        expect(first).not.toBe(second);
-        expect(second).toEqual(createStore('sqlite-2'));
-    });
-
     it('resolves the active store from runtime config', async () => {
         const registry = await loadRegistry();
 

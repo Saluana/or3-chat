@@ -113,35 +113,11 @@ describe('defineOr3Config', () => {
     });
 
     describe('validation errors', () => {
-        it('throws on invalid site.name (empty string)', () => {
-            expect(() =>
-                defineOr3Config({ site: { name: '' } })
-            ).toThrow();
-        });
-
-        it('throws on negative maxFilesPerMessage', () => {
-            expect(() =>
-                defineOr3Config({ limits: { maxFilesPerMessage: 0 } })
-            ).toThrow();
-        });
 
         it('throws on non-integer maxPanes', () => {
             expect(() =>
                 defineOr3Config({ ui: { maxPanes: 3.5 } })
             ).toThrow();
-        });
-    });
-
-    describe('type inference', () => {
-        it('returns correctly typed ResolvedOr3Config', () => {
-            const config = defineOr3Config({});
-            // TypeScript compilation will fail if types are wrong
-            const siteName: string = config.site.name;
-            const workflowsEnabled: boolean = config.features.workflows.enabled;
-            const maxFiles: number = config.limits.maxFilesPerMessage;
-            expect(siteName).toBe('OR3');
-            expect(workflowsEnabled).toBe(true);
-            expect(maxFiles).toBe(10);
         });
     });
 

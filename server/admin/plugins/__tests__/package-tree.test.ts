@@ -59,10 +59,24 @@ describe('canonical package tree validation', () => {
         );
     });
 
-    it.each(['../escape.mjs', '/absolute.mjs', 'C:\\escape.mjs'])(
-        'rejects traversal or absolute path %s',
-        (path) => expectCode(() => verifyCanonicalPackageEntries(entries({ path, kind: 'file', mode: 0o644 })), 'path-traversal')
-    );
+    it.each([
+        ['../escape.mjs', 'path-traversal'],
+        ['/absolute.mjs', 'path-traversal'],
+        ['C:\\escape.mjs', 'path-traversal'],
+        ['./a.txt', 'path-not-normalized'],
+        ['a\\b.txt', 'path-not-normalized'],
+    ] as const)('rejects unsafe or noncanonical path %s', (path, code) => {
+        expectCode(
+            () => verifyCanonicalPackageEntries(entries({ path, kind: 'file', mode: 0o644 })),
+            code
+        );
+    });
+
+    it('requires a manifest in the canonical entries', () => {
+        expectCode(() => verifyCanonicalPackageEntries([
+            { path: 'client.mjs', kind: 'file', mode: 0o644, bytes: Buffer.from('export default {};') },
+        ]), 'manifest-missing');
+    });
 
     it('detects duplicate normalized paths before accepting noncanonical spelling', () => {
         expectCode(

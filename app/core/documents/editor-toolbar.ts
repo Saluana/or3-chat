@@ -13,7 +13,7 @@ export const DOCUMENT_BLOCK_TYPE_ITEMS: Array<{
  * horizontally scrollable essentials rail with pinned trailing controls.
  * Viewport "mobile" alone is not enough — multi-pane desktop can be narrower.
  */
-export const DOCUMENT_COMPACT_TOOLBAR_MAX_PX = 900;
+const DOCUMENT_COMPACT_TOOLBAR_MAX_PX = 900;
 
 /**
  * Compact scroll-rail essentials (Docs/Notion-style). Used on true mobile and

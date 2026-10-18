@@ -130,33 +130,6 @@ describe('useUserThemeOverrides', () => {
         vi.useRealTimers();
     });
 
-    it('switchMode() toggles between light/dark', () => {
-        const { switchMode, activeMode } = useUserThemeOverrides();
-
-        expect(activeMode.value).toBe('light');
-        switchMode('dark');
-        expect(activeMode.value).toBe('dark');
-        switchMode('light');
-        expect(activeMode.value).toBe('light');
-    });
-
-    it('separate light/dark profiles maintained', () => {
-        const { set, switchMode, overrides } = useUserThemeOverrides();
-
-        // Set light mode data
-        set({ colors: { enabled: true, primary: '#light' } });
-        expect(overrides.value.colors?.primary).toBe('#light');
-
-        // Switch to dark and set different data
-        switchMode('dark');
-        set({ colors: { enabled: true, primary: '#dark' } });
-        expect(overrides.value.colors?.primary).toBe('#dark');
-
-        // Switch back to light and verify data preserved
-        switchMode('light');
-        expect(overrides.value.colors?.primary).toBe('#light');
-    });
-
     it('keeps tiered shape overrides separate per color mode', () => {
         const { set, switchMode, overrides } = useUserThemeOverrides();
 

@@ -14,7 +14,6 @@
     "server/utils/sync/**",
     "server/sync/**",
     "shared/sync/**",
-    "shared/testing/contracts/sync.ts",
     "app/plugins/convex-sync.client.ts",
     "app/plugins/__tests__/convex-sync-auth.test.ts",
     "app/db/schema.ts",

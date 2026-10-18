@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { freezeDocumentForAi, type DocumentAiOperation } from '../document-ai-operations';
-import { DOCUMENT_AI_AGENT_TOOLS, executeDocumentAiTool } from '../document-ai-tools';
-import { validateToolDefinition } from '~~/shared/chat/tool-schema';
+import { executeDocumentAiTool } from '../document-ai-tools';
 
 let editor: Editor | undefined;
 afterEach(() => editor?.destroy());
@@ -23,12 +22,6 @@ function makeEditor() {
 }
 
 describe('document AI tools', () => {
-    it('publishes valid tool definitions', () => {
-        for (const tool of DOCUMENT_AI_AGENT_TOOLS) {
-            expect(validateToolDefinition(tool)).toMatchObject({ valid: true });
-        }
-    });
-
     it('reads outline/chunks and stages edits against the freeze', () => {
         const current = makeEditor();
         const snapshot = freezeDocumentForAi(current);

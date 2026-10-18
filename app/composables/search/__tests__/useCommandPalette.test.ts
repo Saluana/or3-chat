@@ -126,18 +126,6 @@ describe('useCommandPalette', () => {
         setPaletteHostContext(host);
     });
 
-    it('clears transient state on close', async () => {
-        const palette = useCommandPalette();
-        palette.open();
-        await Promise.resolve();
-        palette.query.value = 'chat: hello';
-        palette.close();
-
-        expect(palette.query.value).toBe('');
-        expect(palette.actionTrayOpen.value).toBe(false);
-        expect(palette.errorMessage.value).toBeNull();
-    });
-
     it('releases the search indexes after the palette stays closed', async () => {
         vi.useFakeTimers();
         try {
@@ -315,9 +303,11 @@ describe('useCommandPalette', () => {
 
         await Promise.resolve();
         await Promise.resolve();
+        palette.query.value = 'image';
         palette.close();
         expect(cleanup).toHaveBeenCalledTimes(2);
         expect(palette.preview.value).toBeNull();
+        expect(palette.query.value).toBe('');
     });
 
     it('falls back to an unavailable preview when hydration fails', async () => {
@@ -332,31 +322,6 @@ describe('useCommandPalette', () => {
 
         expect(palette.preview.value?.unavailable).toBe(true);
         expect(palette.previewLoading.value).toBe(false);
-    });
-
-    it('closes after a successful action but stays open on failure', async () => {
-        const palette = useCommandPalette();
-        palette.open();
-        await Promise.resolve();
-        emitSnapshot({ results: [result({ key: 'chat:a' })] });
-        await nextTick();
-
-        await palette.runPrimary();
-        expect(palette.isOpen.value).toBe(false);
-
-        palette.open();
-        await Promise.resolve();
-        emitSnapshot({ results: [result({ key: 'chat:a' })] });
-        await nextTick();
-        executePaletteAction.mockResolvedValueOnce({
-            ok: false,
-            error: { code: 'navigation-failed', message: 'Nope' },
-        });
-        await palette.runPrimary();
-
-        expect(palette.isOpen.value).toBe(true);
-        expect(palette.errorMessage.value).toBe('Nope');
-        expect(palette.activeKey.value).toBe('chat:a');
     });
 
     it('does not change the palette after a superseded navigation completes', async () => {
@@ -485,7 +450,7 @@ describe('useCommandPalette', () => {
                 await Promise.resolve();
                 emitSnapshot({ results: [result({ key: 'chat:shared', title: 'Synthetic workspace A' })], workspaceGeneration: getWorkspaceGeneration() });
                 await nextTick();
-                const pending = palette.runAction(action());
+                const pending = palette.runPrimary();
                 await vi.waitFor(() => expect(executePaletteAction).toHaveBeenCalledOnce());
                 if (change !== 'unchanged') {
                     setActiveWorkspaceDb('palette-action-isolation-b');
@@ -501,6 +466,9 @@ describe('useCommandPalette', () => {
                 await pending;
                 expect(palette.isOpen.value).toBe(change !== 'unchanged' || outcome !== 'success');
                 expect(palette.errorMessage.value).toBe(change === 'unchanged' && outcome === 'failure' ? 'synthetic-private-workspace-a-filename' : null);
+                if (change === 'unchanged' && outcome === 'failure') {
+                    expect(palette.activeKey.value).toBe('chat:shared');
+                }
                 if (change !== 'unchanged') expect(palette.announcement.value).not.toContain('synthetic-private-workspace-a-filename');
             } finally {
                 disposeCommandPalette();

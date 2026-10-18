@@ -123,10 +123,6 @@ export class NotificationService {
     }
 
     private async runNotificationWriteTx<T>(fn: () => Promise<T>): Promise<T> {
-        const tx = (this.db as { transaction?: unknown }).transaction;
-        if (typeof tx !== 'function') {
-            return await fn();
-        }
         return await this.db.transaction(
             'rw',
             this.getNotificationWriteTxTables(),

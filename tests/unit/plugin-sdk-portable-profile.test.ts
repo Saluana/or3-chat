@@ -108,15 +108,6 @@ function withSetup(overrides: Partial<Or3SetupDescriptorV1>): Or3SetupDescriptor
     return { ...defineOr3PortableProfile(baseConfig).setup, ...overrides };
 }
 
-function codes(input: {
-    manifest: PluginManifestV2;
-    policy?: Or3PackagePolicyV1 | null;
-    setup?: Or3SetupDescriptorV1 | null;
-    packageJson?: PortablePackageJson | null;
-}): string[] {
-    return validatePortableProfile(input).map((finding) => finding.code);
-}
-
 describe('defineOr3PortableProfile determinism', () => {
     it('produces byte-identical files and revisions for the same config twice', () => {
         const first = defineOr3PortableProfile(baseConfig);
@@ -213,23 +204,6 @@ describe('defineOr3PortableProfile determinism', () => {
         expect(changedFeature.revisions.policy).not.toBe(base.revisions.policy);
         expect(changedFeature.revisions.setup).toBe(base.revisions.setup);
     });
-
-    it('changing only the order of a set leaves both revisions unchanged', () => {
-        const base = defineOr3PortableProfile(baseConfig);
-        const reordered = defineOr3PortableProfile({
-            ...baseConfig,
-            dataScopes: ['documents.read'],
-            writes: ['documents.write'],
-            destinations: [
-                {
-                    ...baseConfig.destinations[0]!,
-                    hosts: ['api.weather.example'],
-                    scopes: ['forecast.read'],
-                },
-            ],
-        });
-        expect(reordered.revisions).toEqual(base.revisions);
-    });
 });
 
 describe('applyPortableProfileToManifest', () => {
@@ -245,22 +219,6 @@ describe('applyPortableProfileToManifest', () => {
         expect(applied.settings.schema).toBe('settings.schema.json');
         expect(manifest.features.required).toEqual([PORTABLE_PROFILE_ID]);
         expect(manifest.settings.schema).toBe('settings.schema.json');
-    });
-
-    it('does not let a config produce descriptors that disagree with its manifest', () => {
-        const profile = defineOr3PortableProfile(baseConfig);
-        const manifest = applyPortableProfileToManifest(validManifest(), profile);
-        const findings = validatePortableProfile({
-            manifest,
-            policy: profile.policy,
-            setup: profile.setup,
-            packageJson: validPackageJson,
-        });
-        expect(findings).toHaveLength(0);
-        expect(findings.map((finding) => finding.code)).not.toContain(
-            'portable-settings-schema-mismatch'
-        );
-        expect(findings.map((finding) => finding.code)).not.toContain('portable-feature-mismatch');
     });
 });
 
@@ -422,18 +380,13 @@ describe('validatePortableProfile', () => {
 
     const cases: ReadonlyArray<{
         code: string;
+        subjects?: readonly string[];
         mutate: () => Parameters<typeof validatePortableProfile>[0];
     }> = [
         {
             code: 'portable-profile-missing',
+            subjects: [PACKAGE_POLICY_FILE, PACKAGE_SETUP_FILE],
             mutate: () => ({ ...validInput(), policy: null, setup: null }),
-        },
-        {
-            code: 'portable-profile-version-unsupported',
-            mutate: () => ({
-                ...validInput(),
-                policy: { ...profile.policy, policyVersion: 2 } as unknown as Or3PackagePolicyV1,
-            }),
         },
         {
             code: 'portable-feature-flag-missing',
@@ -591,25 +544,20 @@ describe('validatePortableProfile', () => {
         },
     ];
 
-    it.each(cases)('emits $code as an actionable error', ({ code, mutate }) => {
+    it.each(cases)('emits $code as an actionable error', ({ code, subjects, mutate }) => {
         const findings = validatePortableProfile(mutate());
         const match = findings.find((finding) => finding.code === code);
         expect(match, `expected finding ${code}`).toBeDefined();
         expect(match?.severity).toBe('error');
         expect(match?.message.length ?? 0).toBeGreaterThan(0);
         expect(match?.subject.length ?? 0).toBeGreaterThan(0);
-    });
-
-    it('reports a missing descriptor name in the finding subject', () => {
-        const findings = validatePortableProfile({
-            manifest: validManifest(),
-            policy: null,
-            setup: profile.setup,
-        });
-        expect(codes({ manifest: validManifest(), policy: null, setup: profile.setup })).toContain(
-            'portable-profile-missing'
-        );
-        expect(findings.every((finding) => finding.severity === 'error')).toBe(true);
+        if (subjects) {
+            expect(
+                findings
+                    .filter((finding) => finding.code === code)
+                    .map((finding) => finding.subject)
+            ).toEqual(expect.arrayContaining(subjects));
+        }
     });
 });
 

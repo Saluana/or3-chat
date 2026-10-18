@@ -11,6 +11,37 @@ const baseTheme = {
 } as const;
 
 describe('generateThemeCssVariables', () => {
+    it('emits light and dark palettes with semantic and custom color tokens', () => {
+        const css = generateThemeCssVariables({
+            ...baseTheme,
+            colors: {
+                ...baseTheme.colors,
+                onPrimary: '#ffffff',
+                infoHover: '#222222',
+                surfaceActive: '#333333',
+                workspaceAccent: '#445566',
+                dark: {
+                    primary: '#888888',
+                    surface: '#121212',
+                    workspaceAccent: '#aabbcc',
+                },
+            },
+        });
+        const [light, dark] = css.split('html[data-theme="test"].dark');
+
+        expect(light).toContain('html[data-theme="test"]');
+        expect(light).toContain('--md-primary: #000000;');
+        expect(light).toContain('--md-secondary: #111111;');
+        expect(light).toContain('--md-surface: #ffffff;');
+        expect(light).toContain('--md-on-primary: #ffffff;');
+        expect(light).toContain('--md-info-hover: #222222;');
+        expect(light).toContain('--md-surface-active: #333333;');
+        expect(light).toContain('--md-workspace-accent: #445566;');
+        expect(dark).toContain('--md-primary: #888888;');
+        expect(dark).toContain('--md-surface: #121212;');
+        expect(dark).toContain('--md-workspace-accent: #aabbcc;');
+    });
+
     it('includes font variables for light palette', () => {
         const css = generateThemeCssVariables({
             ...baseTheme,

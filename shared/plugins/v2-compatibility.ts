@@ -341,22 +341,3 @@ export function verifyPluginV2Compatibility(
     }
     return immutable({ status: 'compatible', negotiation });
 }
-
-export type PluginV2PreImportResult<T> =
-    | {
-          readonly status: 'loaded';
-          readonly value: T;
-          readonly negotiation: PluginV2FeatureNegotiation;
-      }
-    | Extract<PluginV2CompatibilityResult, { status: 'blocked' }>;
-
-/** Guarantees the importer is never invoked for an incompatible V2 package. */
-export async function loadCompatiblePluginV2<T>(
-    input: VerifyPluginV2CompatibilityInput,
-    importer: () => Promise<T>
-): Promise<PluginV2PreImportResult<T>> {
-    const verification = verifyPluginV2Compatibility(input);
-    if (verification.status === 'blocked') return verification;
-    const value = await importer();
-    return immutable({ status: 'loaded', value, negotiation: verification.negotiation });
-}

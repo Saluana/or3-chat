@@ -12,8 +12,6 @@
  *   is either `denied` outright or `mediated` through a host RPC method.
  * - The policy carries the exact CSP and sandbox attributes used at runtime, and
  *   `assertNoContainmentRelaxation` fails when they are loosened.
- * - A denied attempt produces a structured `containment-denied` result instead of
- *   relying on the publisher's cooperation.
  *
  * Constraints:
  * - Never `allow-same-origin`, never `'unsafe-eval'`, never a wildcard
@@ -105,9 +103,6 @@ export function portableFrameCsp(scriptHash: string): string {
 
 export const PORTABLE_FRAME_CSP = portableFrameCsp(PORTABLE_FRAME_SCRIPT_HASH);
 
-/** Legacy alias retained for the worker-only transport prototype. */
-export const PORTABLE_WORKER_CSP = PORTABLE_FRAME_CSP;
-
 /**
  * Intentionally no `allow-same-origin`: without it the frame has an opaque
  * origin, which is the actual storage boundary.
@@ -185,20 +180,6 @@ function buildChannels(): readonly ContainmentDecision[] {
 }
 
 /**
- * @deprecated Superseded by `PORTABLE_IFRAME_CONTAINMENT`. A worker created
- * directly by the host page shares the host origin and can reach IndexedDB, so
- * the worker-only transport is not a containment boundary (measured in
- * Chromium during the section 4 qualification). Kept for tests that assert the
- * historical entries only.
- */
-export const PORTABLE_WORKER_CONTAINMENT: ContainmentPolicy = Object.freeze({
-    profile: PORTABLE_PROFILE,
-    transport: 'worker',
-    csp: PORTABLE_WORKER_CSP,
-    channels: buildChannels(),
-});
-
-/**
  * The portable client transport: an opaque-origin frame that hosts the plugin
  * worker. `transport: 'iframe'` describes the outermost boundary.
  */
@@ -209,49 +190,6 @@ export const PORTABLE_IFRAME_CONTAINMENT: ContainmentPolicy = Object.freeze({
     sandbox: PORTABLE_FRAME_SANDBOX,
     channels: buildChannels(),
 });
-
-export type ContainmentAttempt =
-    | {
-          readonly status: 'denied';
-          readonly channel: ContainmentChannel;
-          readonly code: 'containment-denied';
-          readonly message: string;
-      }
-    | {
-          readonly status: 'mediated';
-          readonly channel: ContainmentChannel;
-          readonly mediatedBy: string;
-          readonly message: string;
-      }
-    | { readonly status: 'unspecified'; readonly channel: ContainmentChannel };
-
-/**
- * Decide what happens when code in the sandbox reaches for an ambient channel.
- * There is no "allowed" outcome: a channel is either denied or host-mediated.
- */
-export function evaluateContainmentAttempt(
-    policy: ContainmentPolicy,
-    channel: ContainmentChannel
-): ContainmentAttempt {
-    const decision = policy.channels.find((entry) => entry.channel === channel);
-    if (!decision) {
-        return { status: 'unspecified', channel };
-    }
-    if (decision.disposition === 'mediated' && decision.mediatedBy) {
-        return {
-            status: 'mediated',
-            channel,
-            mediatedBy: decision.mediatedBy,
-            message: `${channel} is available only through host method ${decision.mediatedBy}`,
-        };
-    }
-    return {
-        status: 'denied',
-        channel,
-        code: 'containment-denied',
-        message: `${channel} is denied by the ${policy.transport} containment policy: ${decision.reason}`,
-    };
-}
 
 export type ContainmentRelaxation = {
     readonly code:
@@ -384,22 +322,3 @@ export function assertNoContainmentRelaxation(policy: ContainmentPolicy):
 
     return violations.length === 0 ? { ok: true } : { ok: false, violations };
 }
-
-/**
- * Channels a sandbox must never be able to use, regardless of transport.
- * Shared by adversarial unit fixtures and the real-browser probe.
- */
-export const CONTAINMENT_PROBE_CHANNELS: readonly ContainmentChannel[] = Object.freeze([
-    'dom.hostDocument',
-    'dom.frameElement',
-    'storage.cookies',
-    'storage.localStorage',
-    'storage.indexedDB',
-    'network.fetch',
-    'network.webSocket',
-    'network.xmlHttpRequest',
-    'imports.importScripts',
-    'imports.dynamicRemote',
-    'workers.nested',
-    'navigation.frame',
-]);

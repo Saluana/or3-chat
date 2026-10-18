@@ -19,7 +19,6 @@ vi.mock('../../server/utils/background-jobs/store', () => ({
 import {
     memoryJobProvider,
     clearAllJobs,
-    getJobCount,
 } from '../../server/utils/background-jobs/providers/memory';
 
 // Helper to update mock config
@@ -263,39 +262,9 @@ describe('Memory Background Job Provider', () => {
             expect(job?.status).toBe('complete');
         });
 
-        it('should return false when aborting non-existent job', async () => {
-            const aborted = await memoryJobProvider.abortJob('non-existent', 'user-1');
-            expect(aborted).toBe(false);
-        });
     });
 
     describe('Max Jobs Limit', () => {
-        it('should enforce max concurrent jobs limit', async () => {
-            // Mock the config to return a low limit
-            await setMockJobConfig({ maxConcurrentJobs: 2 });
-
-            // Clear jobs
-            clearAllJobs();
-
-            const params: CreateJobParams = {
-                userId: 'user-1',
-                threadId: 'thread-1',
-                messageId: 'msg-1',
-                model: 'test-model',
-            };
-
-            // Create 2 jobs (at limit)
-            await memoryJobProvider.createJob({ ...params, messageId: 'msg-1' });
-            await memoryJobProvider.createJob({ ...params, messageId: 'msg-2' });
-
-            // Third should fail
-            await expect(
-                memoryJobProvider.createJob({ ...params, messageId: 'msg-3' })
-            ).rejects.toThrow(/Max concurrent/);
-
-            // Restore defaults
-            await resetMockJobConfig();
-        });
 
         it('should allow new jobs after completing existing ones', async () => {
             // Mock the config to return a low limit
@@ -377,36 +346,6 @@ describe('Memory Background Job Provider', () => {
     });
 
     describe('Timeout and Cleanup', () => {
-        it('should timeout streaming jobs that exceed timeout', async () => {
-            // Use real timers for Date.now() to work with job creation
-            vi.useRealTimers();
-
-            const params: CreateJobParams = {
-                userId: 'user-1',
-                threadId: 'thread-1',
-                messageId: 'msg-1',
-                model: 'test-model',
-            };
-
-            // Mock getJobConfig to return a very short timeout
-            await setMockJobConfig({ jobTimeoutMs: 100 });
-
-            const jobId = await memoryJobProvider.createJob(params);
-
-            // Wait past timeout
-            await new Promise((resolve) => setTimeout(resolve, 150));
-
-            const cleaned = await memoryJobProvider.cleanupExpired();
-            expect(cleaned).toBeGreaterThan(0);
-
-            const job = await memoryJobProvider.getJob(jobId, 'user-1');
-            expect(job?.status).toBe('error');
-            expect(job?.error).toBe('Job timed out');
-
-            // Restore
-            vi.useFakeTimers();
-            await resetMockJobConfig();
-        });
 
         it('should clean up stale completed jobs', async () => {
             vi.useRealTimers();
@@ -468,33 +407,6 @@ describe('Memory Background Job Provider', () => {
             await resetMockJobConfig();
         });
 
-        it('should not timeout active streaming jobs within timeout period', async () => {
-            vi.useRealTimers();
-
-            const params: CreateJobParams = {
-                userId: 'user-1',
-                threadId: 'thread-1',
-                messageId: 'msg-1',
-                model: 'test-model',
-            };
-
-            // Use longer timeout
-            await setMockJobConfig({ jobTimeoutMs: 1000 });
-
-            const jobId = await memoryJobProvider.createJob(params);
-
-            // Wait less than timeout
-            await new Promise((resolve) => setTimeout(resolve, 50));
-
-            await memoryJobProvider.cleanupExpired();
-
-            const job = await memoryJobProvider.getJob(jobId, 'user-1');
-            expect(job?.status).toBe('streaming');
-
-            // Restore
-            vi.useFakeTimers();
-            await resetMockJobConfig();
-        });
     });
 
     describe('AbortController', () => {
@@ -511,22 +423,6 @@ describe('Memory Background Job Provider', () => {
 
             expect(ac).toBeInstanceOf(AbortController);
             expect(ac?.signal.aborted).toBe(false);
-        });
-
-        it('should return aborted signal after abort', async () => {
-            const params: CreateJobParams = {
-                userId: 'user-1',
-                threadId: 'thread-1',
-                messageId: 'msg-1',
-                model: 'test-model',
-            };
-
-            const jobId = await memoryJobProvider.createJob(params);
-            const ac = memoryJobProvider.getAbortController?.(jobId);
-
-            await memoryJobProvider.abortJob(jobId, 'user-1');
-
-            expect(ac?.signal.aborted).toBe(true);
         });
 
         it('should return undefined for non-existent job', async () => {

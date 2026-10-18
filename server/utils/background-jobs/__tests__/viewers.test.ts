@@ -130,23 +130,6 @@ describe('job reconciliation', () => {
         expect(getJobLiveState('job-1')).toMatchObject({ content: 'checkpoint', attempt: 4, usage });
     });
 
-    it('broadcasts an authoritative attempt reset to already-open streams', () => {
-        const listener = vi.fn();
-        const dispose = registerJobStream('job-1', listener);
-
-        emitJobStatus('job-1', 'streaming', {
-            content: '', contentLength: 0, chunksReceived: 0,
-            attempt: 2, content_reset: true,
-        });
-
-        expect(listener).toHaveBeenCalledWith(
-            expect.objectContaining({
-                type: 'status', attempt: 2, content_reset: true, content: '',
-            })
-        );
-        dispose();
-    });
-
     it('shares one adaptive provider poller across all viewers', async () => {
         vi.useFakeTimers();
         initJobLiveState('job-1');

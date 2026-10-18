@@ -110,7 +110,7 @@ These are application runtime bounds, not OS CPU/memory isolation.
 | Calls / concurrent calls per activation | 1000 / 8 |
 | Per-call deadline | 10 seconds |
 | Activation wall clock | 120 seconds |
-| UI depth / nodes / text / items | 8 / 200 / 16 KiB / 2048 |
+| UI depth / nodes / text / items | 12 / 1000 / 64 KiB / 12000 |
 | AI output per call | 4096 tokens |
 | AI spend per acting user/workspace/plugin budget window | $1.00 |
 

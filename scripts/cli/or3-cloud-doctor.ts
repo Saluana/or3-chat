@@ -6,7 +6,7 @@ import { accessSync, constants, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { preflightConvex } from '../../shared/cloud/wizard/deploy';
 import { isPortAvailable as sharedIsPortAvailable } from '../../shared/cloud/wizard/dev-server';
-import { providerIdToModuleId, requiredProviderModules } from '../../shared/cloud/provider-compatibility';
+import { requiredProviderModules } from '../../shared/cloud/provider-compatibility';
 import { resolveModuleEntry } from '../../shared/config/module-resolution';
 import { readProviderMetadata } from '../../shared/cloud/provider-metadata';
 import type { Or3CloudConfig } from '../../types/or3-cloud-config';
@@ -16,14 +16,6 @@ export type DoctorCheckResult = {
     /** Hard failures (missing required packages). Warnings do not flip this. */
     exitCode: number;
 };
-
-export function providerPackageInstalled(
-    providerId: string,
-    cwd = process.cwd()
-): boolean {
-    const moduleId = providerIdToModuleId(providerId);
-    return !moduleId || resolveModuleEntry(moduleId, cwd).ok;
-}
 
 export function checkWritableDir(pathValue: string): boolean {
     try {

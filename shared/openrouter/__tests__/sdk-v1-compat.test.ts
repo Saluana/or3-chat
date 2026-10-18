@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
     collectModelsFromListPages,
     fetchOpenRouterCatalog,
-    wrapLegacyChatSendArgs,
     wrapLegacyOAuthExchangeArgs,
 } from '../sdk-v1-compat';
 import { sdkModelToLocal } from '../types';
@@ -32,35 +31,6 @@ describe('openrouter sdk v1 compat helpers', () => {
         await fetchOpenRouterCatalog(client as never, undefined, { deadlineMs: 0 });
         await new Promise((resolve) => setTimeout(resolve, 5));
         expect(options.fetchOptions?.signal?.aborted).toBe(true);
-    });
-
-    it('wraps flat chat.send args into chatRequest', () => {
-        expect(
-            wrapLegacyChatSendArgs({
-                model: 'openai/gpt-4',
-                messages: [{ role: 'user', content: 'hi' }],
-                stream: false,
-                maxTokens: 100,
-            })
-        ).toEqual({
-            chatRequest: {
-                model: 'openai/gpt-4',
-                messages: [{ role: 'user', content: 'hi' }],
-                stream: false,
-                maxTokens: 100,
-            },
-        });
-    });
-
-    it('leaves already-nested chatRequest args alone', () => {
-        const nested = {
-            chatRequest: {
-                model: 'openai/gpt-4',
-                messages: [{ role: 'user', content: 'hi' }],
-            },
-            appTitle: 'or3.chat',
-        };
-        expect(wrapLegacyChatSendArgs(nested)).toEqual(nested);
     });
 
     it('wraps oauth exchange args into requestBody', () => {

@@ -77,22 +77,17 @@ hide the gap if they were meant to run.
 
 | Item | Location | Note |
 | --- | --- | --- |
-| `authorizePluginAction` | `server/utils/plugins/ai/plugin-invocation.ts:265` | Documented as the "RT14 boundary" for AI-initiated actions. Live enforcement calls `checkActionApproval` directly in `connections/dispatch.ts`. |
+| `authorizePluginAction` (removed) | Former `server/utils/plugins/ai/plugin-invocation.ts` wrapper | Unused wrapper removed during the test audit; live enforcement still calls `checkActionApproval` in `connections/dispatch.ts`. |
 | `revokeHostActivationsForWorkspace` | `server/utils/plugins/isolation/activation-registry.ts:241` | Doc says "(workspace switch)" but nothing calls it. Live activations may survive a workspace switch. |
-| `evaluateCapability` | `server/auth/capability-gate.ts:73` | Test-only parallel authz gate with a `wrong_workspace` check that `can()` lacks. |
-| `createConnectionDispatchMethod` | `server/utils/plugins/connections/broker-binding.ts:75` | Test-only duplicate of the live `connections.dispatch` handler. |
+| `evaluateCapability` (removed) | Former `server/auth/capability-gate.ts` | Unused parallel authz gate and tests removed; runtime routes retain `can()` workspace scoping. |
 | `installPortableUnloadTeardown` and `stopAllPortableClients` | `app/composables/plugins/portable-client-runtime.ts:1587` | The pagehide teardown is never installed. |
-| `evaluateContainmentAttempt`, `sha256CspHash` | `shared/plugins/isolation/containment-policy.ts:232`, `shared/plugins/digest.ts:100` | Containment helpers that production never calls. |
+| `sha256CspHash` | `shared/plugins/digest.ts:100` | Digest helper that production never calls. |
 | `validateCardHostMessage` | `shared/plugins/isolation/tool-card-protocol.ts:148` | Unused tool-card message validator. |
 | `canAdvanceAcquisitionStage`, `shouldResumeDownload` | `shared/plugins/acquisition/contracts.ts:249,269` | Acquisition state-machine guards with no caller. |
 | `withHostSession` | `shared/plugins/isolation/rpc-envelope.ts` | Session-binding helper with no caller. |
 | `CONTAINED_VIEW_CONTAINMENT` | `shared/plugins/isolation/contained-view-policy.ts:30` | Policy object nothing applies. |
 | `MAX_SYNC_GC_CONTINUATIONS`, `MAX_SYNC_GC_BATCH_SIZE`, `computePullRetention` | `shared/sync/history-gc-policy.ts` | Limits from the sync hardening requirements that GC never enforces. |
-| `isolated-server-runtime.ts` and its test | `server/admin/plugins/isolation/` | About 1,200 lines. Plugin-runtime task 8.11 is marked complete, but nothing spawns the runtime. |
 | `useClientSessionRecovery` | `app/composables/auth/useClientSessionRecovery.ts` | No provider registers a recovery handler, so `recoverClientSession` always returns false. |
-| `verifyAdminStoreProviderContract` | `shared/testing/contracts/admin.ts:42` | Provider contract suite that no provider runs. |
-| `transitionRuntimeStatus` and the related machinery | `shared/plugins/runtime-state.ts:84` | The plugin runtime state machine is only exercised by tests. |
-| `stream-protocol.ts` | `shared/plugins/isolation/` | Unwired stream module. Planning task 5.4 cites it as evidence. |
 
 ## 2. Large removals that need an owner's yes
 
@@ -111,7 +106,7 @@ hide the gap if they were meant to run.
   `requireAdminApiContext` and keep the session shape for the three callers that read it.
 - Legacy 2-argument `registerDocumentEditorSession` overload: only a test uses it.
 - `DOCUMENT_EDIT_TOOL` alias: one caller and one test.
-- `formatAdminError`: one caller. Inline `parseErrorMessage(error, 'Unknown error')`.
+- `formatAdminError` (removed): the admin page now calls `parseErrorMessage(error, 'Unknown error')` directly; duplicate mocked forwarding tests were removed.
 - `SendMessageParams.online`: never set to `true`. `modelVariant` replaced it.
 - Duplicate `images` field in the chat send payload (`ChatInputDropper.vue`,
   `ChatContainer.vue`): it carries the same array as `attachments`.
@@ -119,7 +114,7 @@ hide the gap if they were meant to run.
   point. Check external extensions first.
 - `app/pages/admin/workspace.vue` redirect page: replace with a `routeRules` redirect.
 - `listAllImageMetas`, `useThemeClasses` (dev-only warning shim),
-  `PORTABLE_WORKER_CONTAINMENT`, and the `useUserApiKey` compatibility re-export in
+  and the `useUserApiKey` compatibility re-export in
   `app/utils/index.ts`.
 
 ## 4. Duplicates to consolidate
@@ -153,7 +148,7 @@ hide the gap if they were meant to run.
 - `shared/plugins/connections/fake-provider.ts` is a test fixture in production `shared/`.
 - Endpoints to confirm and remove: the static `server/api/admin/workspaces/soft-delete.post.ts`
   and `restore.post.ts` (they always return 400; the UI uses the `[id]` routes),
-  `server/api/plugins/protected.get.ts` (a demo route), the unreferenced
+  the unreferenced
   `server/api/admin/auth/change-password.post.ts`, and `update-pin.post.ts` with
   `writeUpdatePin` (no UI caller).
 
@@ -174,11 +169,13 @@ them is a contract decision:
 
 ## 7. Test-only modules (delete with their tests, or keep as specs)
 
-`shared/plugins/transactional-plugin-scope.ts` and `shared/hooks/hook-shadow.ts` are
-cited by qualification records. Also: `inspectServerToolOwnership`,
-`setPluginAccessPolicy` (the write side was never wired), `describeConnectionFailure`,
-`getModelVariantDescription`, and `host-esm-facade-proof.ts`. The last one exercises
-the live `host-esm-facade.ts`, so deleting it loses coverage.
+The test audit removed the unused hook-shadow implementation, its tests, the
+unused connection-failure copy helper, and the protected plugin demo endpoint.
+Current qualification inputs no longer reference the removed shadow module;
+historical result records retain their original evidence. Transactional scope
+publication and the host ESM facade keep their independent executable proof.
+Other candidates still require caller and contract checks: inspectServerToolOwnership,
+setPluginAccessPolicy, and getModelVariantDescription.
 
 ## 8. Types, config and dependencies
 

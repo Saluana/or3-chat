@@ -11,22 +11,6 @@ describe('palette registry V2 lifecycle', () => {
         delete globals.__or3PaletteRegistryBumpUnsubscribe;
     });
 
-    it('clears V2 legacy contributions in the test reset', async () => {
-        const { initializeContributionSurfaceSelection } = await import(
-            '~/composables/plugins/contribution-surface-selection'
-        );
-        initializeContributionSurfaceSelection(['command-palette']);
-        const registry = await import('../registry');
-        registry.registerPaletteCommand(
-            { id: 'v2-command', label: 'V2 command' },
-            () => ({ ok: true })
-        );
-        expect(registry.listPaletteCommands()).toHaveLength(1);
-
-        registry.__resetPaletteRegistryForTests();
-        expect(registry.listPaletteCommands()).toEqual([]);
-    });
-
     it('replaces the HMR bump subscription instead of accumulating listeners', async () => {
         const { initializeContributionSurfaceSelection } = await import(
             '~/composables/plugins/contribution-surface-selection'

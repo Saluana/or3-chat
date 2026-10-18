@@ -50,24 +50,6 @@ describe('document AI lifecycle guards', () => {
         expect(shouldLockDocumentAiEditor({ status: 'idle', accepting: true })).toBe(true);
     });
 
-    it('setEditable(false) without emitUpdate does not imply a document content change', () => {
-        const editor = new Editor({
-            extensions: [StarterKit],
-            content: '<p>Lock me</p>',
-        });
-        let updates = 0;
-        editor.on('update', () => {
-            updates += 1;
-        });
-        editor.setEditable(false, false);
-        expect(editor.isEditable).toBe(false);
-        expect(updates).toBe(0);
-        editor.setEditable(true, false);
-        expect(editor.isEditable).toBe(true);
-        expect(updates).toBe(0);
-        editor.destroy();
-    });
-
     it('treats reject/reset as clearing proposal ownership', () => {
         const current = { documentId: 'doc-a' };
         expect(proposalStillOwned({

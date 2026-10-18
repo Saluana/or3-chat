@@ -13,14 +13,11 @@ import type {
     ThemeCompilationResult,
     CompilationResult,
     ValidationError,
-    OverrideProps,
 } from '../app/theme/_shared/types';
 import { validateThemeDefinition } from '../app/theme/_shared/validate-theme';
 import { KNOWN_THEME_CONTEXTS } from '../app/theme/_shared/contexts';
 import { DEFAULT_ICONS } from '../app/config/icon-tokens';
 import { compileThemeDefinition } from '../app/theme/_shared/compile-theme';
-import { generateThemeCssVariables } from '../app/theme/_shared/generate-css-variables';
-import { compileOverridesRuntime } from '../app/theme/_shared/runtime-compile';
 import {
     discoverThemeSourceFiles,
     importThemeSourceModule,
@@ -41,7 +38,7 @@ export class ThemeCompiler {
      * Compile all themes in the app/theme directory
      */
     async compileAll(): Promise<CompilationResult> {
-        const themes = await this.discoverThemes();
+        const themes = await discoverThemeSourceFiles();
         const results: ThemeCompilationResult[] = [];
 
         for (const themePath of themes) {
@@ -93,13 +90,6 @@ export class ThemeCompiler {
             totalErrors,
             totalWarnings,
         };
-    }
-
-    /**
-     * Discover all theme files
-     */
-    private async discoverThemes(): Promise<string[]> {
-        return discoverThemeSourceFiles();
     }
 
     /**
@@ -223,29 +213,6 @@ export class ThemeCompiler {
             warnings,
             success: errors.length === 0,
         };
-    }
-
-    /** Compatibility test seam; delegates to the canonical runtime generator. */
-    private generateCSSVariables(
-        colors: ThemeDefinition['colors'],
-        borderWidth?: string,
-        borderRadius?: string,
-        fonts?: ThemeDefinition['fonts']
-    ): string {
-        return generateThemeCssVariables({
-            name: 'compiler-test',
-            colors,
-            borderWidth,
-            borderRadius,
-            fonts,
-        });
-    }
-
-    /** Compatibility test seam; delegates to the canonical selector compiler. */
-    private compileOverrides(
-        overrides: Record<string, OverrideProps>
-    ): CompiledOverride[] {
-        return compileOverridesRuntime(overrides);
     }
 
     /**

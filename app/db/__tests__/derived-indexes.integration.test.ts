@@ -407,34 +407,6 @@ describe('derived index maintenance', () => {
         ).toBe(0);
     });
 
-    it('sanitizes derived fields from direct wire payloads', () => {
-        const post = sanitizePayloadForSync(
-            'posts',
-            {
-                id: 'doc-1',
-                postType: 'doc',
-                document_reference_key: [HASH_A, 'doc-1'],
-                file_hashes: JSON.stringify([HASH_A]),
-            },
-            'put'
-        );
-        expect(post?.document_reference_key).toBeUndefined();
-        expect(post?.postType).toBeUndefined();
-        expect(post?.post_type).toBe('doc');
-
-        const meta = sanitizePayloadForSync(
-            'file_meta',
-            {
-                hash: HASH_A,
-                ref_count: 3,
-                gallery_state: 'active',
-            },
-            'put'
-        );
-        expect(meta?.gallery_state).toBeUndefined();
-        expect(meta?.ref_count).toBeUndefined();
-    });
-
     it('rebuilds derived keys for restored rows', async () => {
         const db = await freshDb();
         // Direct bulkPut with stale derived values mimics a restore/import path.

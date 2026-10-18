@@ -17,10 +17,6 @@ import {
     PluginAiGovernor,
     type ModelPriceTable,
 } from '~~/shared/plugins/ai/plugin-usage';
-import {
-    checkActionApproval,
-    type PluginActionKind,
-} from '~~/shared/plugins/authority/action-approval';
 
 export const PLUGIN_AI_COMPLETE_METHOD = 'ai.complete';
 
@@ -255,25 +251,4 @@ export function createPluginAiCompleteMethod(
         grant: 'network.http',
         handler,
     };
-}
-
-/**
- * Gate for AI-initiated actions. This is the RT14 boundary: a plugin (or a model
- * driving one) may request an action, but the host requires an approval minted by
- * the host UI for anything destructive, external, commercial or access-related.
- */
-export function authorizePluginAction(input: {
-    readonly kind: PluginActionKind;
-    readonly pluginId: string;
-    readonly workspaceId: string;
-    readonly generation: number;
-    readonly target: string;
-    readonly approval?: unknown;
-    readonly now?: () => number;
-}) {
-    const decision = checkActionApproval(input);
-    if (decision.status === 'denied') {
-        throw Object.assign(new Error(decision.message), { rpcCode: 'policy-denied' });
-    }
-    return decision;
 }

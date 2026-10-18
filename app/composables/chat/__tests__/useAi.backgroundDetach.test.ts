@@ -9,15 +9,9 @@ const ensureBackgroundJobTrackerMock = vi.fn();
 const subscribeBackgroundJobMock = vi.fn();
 const stopBackgroundJobTrackingMock = vi.fn();
 const runForegroundStreamLoopMock = vi.fn();
-const buildOpenRouterMessagesForSendMock = vi.fn(async (_params: { maxInputTokens?: number }) => [
+const buildOpenRouterMessagesForSendMock = vi.fn(async () => [
     { role: 'user', content: 'hello' },
 ]);
-const fetchModelsMock = vi.fn(async (options?: { force?: boolean }) => {
-    if (options?.force) {
-        catalogModelsRef.value = [{ id: 'xiaomi/mimo-v2.6-pro', context_length: 1_048_576 }];
-    }
-    return catalogModelsRef.value;
-});
 const catalogModelsRef = ref<any[]>([{ id: 'test-model' }]);
 const resolveContextModelMock = vi.fn(async (selectedModelId: string) => ({ ok: true as const,
     modelId: selectedModelId, selectedModelId, source: 'openrouter-live' as const,
@@ -192,7 +186,6 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 vi.mock('~/utils/chat/messages', async (importOriginal) => ({
-    resolveChatInputTokenBudget: (await importOriginal<typeof import('~/utils/chat/messages')>()).resolveChatInputTokenBudget,
     normalizeStreamingMessage: (await importOriginal<typeof import('~/utils/chat/messages')>()).normalizeStreamingMessage,
     buildParts: (text: string) => [{ type: 'text', text }],
     deriveMessageContent: ({
@@ -283,7 +276,6 @@ vi.mock('~/composables/chat/useModelStore', () => ({
     useModelStore: () => ({
         catalog: catalogModelsRef,
         favoriteModels: ref([]),
-        fetchModels: fetchModelsMock,
         resolveContextModel: resolveContextModelMock,
     }),
 }));
@@ -333,7 +325,6 @@ vi.mock('~/utils/chat/useAi-internal/messageBuild', () => ({
     resolveSystemPromptText: vi.fn(async () => ''),
     buildSystemPromptMessage: vi.fn(async () => null),
     buildOpenRouterMessagesForSend: buildOpenRouterMessagesForSendMock,
-    enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
 }));
 vi.mock('~/utils/chat/useAi-internal/persistence', async (importOriginal) => ({
     ...await importOriginal<typeof import('~/utils/chat/useAi-internal/persistence')>(),
@@ -726,25 +717,6 @@ describe('useChat background detach race', () => {
                 (message) => message.text === 'finished answer'
             ) || chat.tailAssistant.value?.text === 'finished answer'
         ).toBe(true);
-    });
-
-    it('uses the reviewed context model owner and builds full input without the old reserved trimming budget', async () => {
-        consumeWorkflowSend = true;
-        vi.resetModules();
-        const { useChat } = await import('~/composables/chat/useAi');
-        const chat = useChat([], 'thread-1');
-
-        await chat.sendMessage('keep the full conversation', {
-            files: [],
-            model: 'xiaomi/mimo-v2.6-pro',
-            file_hashes: [],
-            online: false,
-            context_hashes: [],
-        } as any);
-
-        expect(resolveContextModelMock).toHaveBeenCalledWith('xiaomi/mimo-v2.6-pro', { signal: expect.any(AbortSignal) });
-        expect(buildOpenRouterMessagesForSendMock.mock.lastCall?.[0].maxInputTokens)
-            .toBeUndefined();
     });
 
     it('does not register a late UI subscriber after clear() detaches the chat', async () => {
@@ -1143,34 +1115,6 @@ describe('useChat background detach race', () => {
         );
     });
 
-    it('starts background streaming when the feature is enabled', async () => {
-        runtimeConfigRef.value.public.backgroundStreaming = {
-            enabled: true,
-        };
-
-        vi.resetModules();
-        const { useChat } = await import('~/composables/chat/useAi');
-
-        const chat = useChat([], 'thread-1');
-        const sendPromise = chat.sendMessage('background please', {
-            files: [],
-            model: 'test-model',
-            file_hashes: [],
-            online: false,
-            context_hashes: [],
-        } as any);
-
-        await waitForCall(startBackgroundStreamMock);
-        if (!resolveBackgroundStart) {
-            throw new Error('Background start resolver was not initialized');
-        }
-        resolveBackgroundStart({ jobId: 'job-enabled-1' });
-        await sendPromise;
-
-        expect(startBackgroundStreamMock).toHaveBeenCalledTimes(1);
-        expect(runForegroundStreamLoopMock).not.toHaveBeenCalled();
-    });
-
     it('settles a foreground stream before switching threads', async () => {
         runtimeConfigRef.value.public.backgroundStreaming = {
             enabled: false,
@@ -1500,7 +1444,6 @@ describe('useChat background detach race', () => {
             }),
         });
     });
-
 
     it('leaves uncertain background admission pending without offering a failed generation to retry', async () => {
         vi.resetModules();

@@ -80,20 +80,6 @@ describe('portable test host', () => {
         expect(host.calls[2]).toMatchObject({ method: 'ai.complete', params: { model: 'vendor/alpha', prompt: 'hi' } })
     })
 
-    it('records capability calls and reports an unconfigured response as a refusal', async () => {
-        const host = createPortableTestHost({
-            approvedGrants: ['network.http'],
-            responses: { 'ai.models': { configured: true, models: [], limits: {} } },
-        })
-        const definition = defineOr3Plugin({ manifest, async setup() {} })
-        createPortablePlugin(definition, { client: host.client, bootstrap: host.bootstrap })
-        await Promise.resolve()
-
-        expect(await host.client.call('ai.models')).toMatchObject({ ok: true })
-        expect(host.calls[0]).toMatchObject({ method: 'ai.models' })
-        expect(await host.client.call('nope.method')).toMatchObject({ ok: false, code: 'unknown-method' })
-    })
-
     it('supports create-if-absent CAS and deterministic cursor ordering', async () => {
         const host = createPortableTestHost({
             approvedGrants: ['storage.read', 'storage.write'],
@@ -124,7 +110,6 @@ describe('portable test host', () => {
         })).toMatchObject({ ok: true, result: { entries: [{ key: 'a-2' }, { key: 'a-A' }] } })
     })
 })
-
 
 describe('portable method dispatch parity', () => {
     it('does not run suffix lookalikes without a registered method', async () => {

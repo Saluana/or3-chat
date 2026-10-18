@@ -572,9 +572,6 @@ export async function consumeBackgroundStream(params: {
     context: BackgroundStreamParams;
     provider: BackgroundJobProvider;
     shouldNotify?: () => boolean;
-    flushOnEveryChunk?: boolean;
-    flushIntervalMs?: number;
-    flushChunkInterval?: number;
     streamedFieldMode?: StreamedFieldMode;
     usagePrefix?: UsagePrefix;
 }): Promise<void> {
@@ -605,19 +602,8 @@ export async function consumeBackgroundStream(params: {
             outputLimitBytes: remainingOutputBytes,
         })
     );
-    const flushEveryChunk = params.flushOnEveryChunk ?? false;
-    const UPDATE_INTERVAL =
-        typeof params.flushChunkInterval === 'number'
-            ? Math.max(1, Math.floor(params.flushChunkInterval))
-            : flushEveryChunk
-            ? 1
-            : 50;
-    const UPDATE_INTERVAL_MS =
-        typeof params.flushIntervalMs === 'number'
-            ? Math.max(0, Math.floor(params.flushIntervalMs))
-            : flushEveryChunk
-            ? 30
-            : 500;
+    const UPDATE_INTERVAL = 50;
+    const UPDATE_INTERVAL_MS = 500;
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
@@ -632,7 +618,6 @@ export async function consumeBackgroundStream(params: {
         userId: params.context.userId,
         workspaceId: params.context.workspaceId,
         threadId: params.context.threadId,
-        flushEveryChunk,
         updateInterval: UPDATE_INTERVAL,
         updateIntervalMs: UPDATE_INTERVAL_MS,
     });
@@ -659,18 +644,12 @@ export async function consumeBackgroundStream(params: {
     const maybeScheduleProgressFlush = () => {
         const now = Date.now();
         const shouldFlushByChunk = chunks % UPDATE_INTERVAL === 0;
-        const shouldFlushByTime =
-            UPDATE_INTERVAL_MS === 0
-                ? false
-                : now - lastUpdateAt >= UPDATE_INTERVAL_MS;
+        const shouldFlushByTime = now - lastUpdateAt >= UPDATE_INTERVAL_MS;
         if (!pendingChunk && !pendingReasoning) return;
         if (shouldFlushByChunk || shouldFlushByTime) {
             void flushPending();
         } else {
-            const remaining =
-                UPDATE_INTERVAL_MS > 0
-                    ? UPDATE_INTERVAL_MS - (now - lastUpdateAt)
-                    : 0;
+            const remaining = UPDATE_INTERVAL_MS - (now - lastUpdateAt);
             scheduleFlush(remaining);
         }
     };

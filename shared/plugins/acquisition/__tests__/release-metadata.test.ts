@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
     canonicalizeReleaseMetadata,
-    compareVersions,
     encodeReleaseMetadata,
-    evaluateArtifactDigest,
     evaluateArtifactUrl,
     evaluateClientEngineSupport,
     evaluateDownloadBounds,
     evaluateFreshness,
     evaluateReleaseMetadata,
     parseReleaseMetadata,
-    releaseMetadataSha256,
     supportedAcquisitionProfiles,
     type RegistryTrustRoot,
     type ReleaseMetadataDocument,
@@ -79,19 +76,11 @@ describe('release metadata encoding (5.2)', () => {
         );
     });
 
-    it('pins the exact bytes a document encodes to', async () => {
+    it('pins the exact bytes a document encodes to', () => {
         const encoded = new TextDecoder().decode(encodeReleaseMetadata({ b: 1, a: 2 }));
         expect(encoded).toBe('{"a":2,"b":1}');
-        // A frozen digest: if the encoder or the field set changes shape, the
-        // signature bytes this host verifies would change too.
-        expect(await releaseMetadataSha256({ b: 1, a: 2 })).toMatch(/^sha256-[a-f0-9]{64}$/);
     });
 
-    it('compares versions without requiring a semver library', () => {
-        expect(compareVersions('4.5.1', '1.0.0')).toBeGreaterThan(0);
-        expect(compareVersions('1.0.0', '1.0.0')).toBe(0);
-        expect(compareVersions('1.0.0', '1.2.0')).toBeLessThan(0);
-    });
 });
 
 describe('release metadata validation (5.2)', () => {
@@ -109,55 +98,6 @@ describe('release metadata validation (5.2)', () => {
         expect(traversal.problems.join(' ')).toContain('pluginId');
     });
 
-    it('refuses a document whose signature key is not in the trust root', () => {
-        const decision = evaluate({ signature: { keyId: 'unknown', algorithm: 'ed25519', value: 'x' } });
-        expect(decision).toMatchObject({ ok: false, refusal: { code: 'release-key-untrusted' } });
-    });
-
-    it('refuses an unsigned document and a bad signature', () => {
-        const unsigned = evaluate({ signature: undefined });
-        expect(unsigned).toMatchObject({ ok: false, refusal: { code: 'release-metadata-unsigned' } });
-
-        const bad = evaluateReleaseMetadata({
-            document: document(),
-            trustRoot,
-            expectation: { pluginId: 'acme.sample' },
-            signatureValid: false,
-            now: NOW,
-        });
-        expect(bad).toMatchObject({ ok: false, refusal: { code: 'release-key-untrusted' } });
-    });
-
-    it('refuses identity mismatches against what was requested', () => {
-        expect(evaluate({}, { pluginId: 'other.plugin' })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-identity-mismatch' },
-        });
-        expect(evaluate({}, { pluginId: 'acme.sample', version: '9.9.9' })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-identity-mismatch' },
-        });
-        expect(evaluate({}, { pluginId: 'acme.sample', releaseId: 'rel_other' })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-identity-mismatch' },
-        });
-    });
-
-    it('refuses profiles this host cannot run and engines it does not satisfy', () => {
-        expect(evaluate({ profile: 'or3-future-profile' })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-profile-unsupported' },
-        });
-        expect(evaluate({ engines: { or3: '>=99.0.0', pluginApi: '>=1.0.0' } })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-engine-unsupported' },
-        });
-        expect(evaluate({ engines: { or3: '>=1.0.0', pluginApi: '>=99.0.0' } })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-engine-unsupported' },
-        });
-    });
-
     it('accepts an old but intact release: age is not freshness', () => {
         // Quarantine decisions come from the signed advisory log, so a release
         // published long ago is not refused for being old.
@@ -165,12 +105,6 @@ describe('release metadata validation (5.2)', () => {
         expect(evaluate({ publishedAt: old }).ok).toBe(true);
     });
 
-    it('accepts a document that passes every check', () => {
-        const decision = evaluate();
-        expect(decision.ok).toBe(true);
-        if (!decision.ok) return;
-        expect(decision.document.releaseId).toBe('rel_1');
-    });
 });
 
 describe('freshness and bounds (5.2)', () => {
@@ -219,15 +153,6 @@ describe('freshness and bounds (5.2)', () => {
                 bounds: { maxBytes: 32 * 1024 * 1024, remainingDiskBytes: 1024 ** 3, reserveBytes: 0 },
             })
         ).toEqual({ ok: true });
-    });
-
-    it('refuses an artifact digest that disagrees with the signed metadata', () => {
-        expect(
-            evaluateArtifactDigest({ expected: `sha256-${'a'.repeat(64)}`, actual: `sha256-${'a'.repeat(64)}` })
-        ).toBeNull();
-        expect(
-            evaluateArtifactDigest({ expected: `sha256-${'a'.repeat(64)}`, actual: `sha256-${'b'.repeat(64)}` })
-        ).toMatchObject({ code: 'archive-digest-mismatch' });
     });
 
     it('refuses artifact URLs that are not same-origin HTTPS on the registry', () => {

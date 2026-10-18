@@ -76,37 +76,4 @@ describe('first-party Dashboard Insights V2 package', () => {
         });
     });
 
-    it('can reload the retained previous definition after candidate activation fails', async () => {
-        const events: string[] = [];
-        const host = createPluginTestHost({
-            approvedGrants: allGrants,
-            supportedFeatures: ['host.contributions'],
-            initialSettings: { displayMode: 'compact' },
-        });
-        const previous = createDashboardInsightsPlugin({
-            observe: (event) => events.push(`previous:${event}`),
-        });
-        expect((await host.activate(previous)).ok).toBe(true);
-
-        const failedCandidate = createDashboardInsightsPlugin({
-            failOnActivate: true,
-            observe: (event) => events.push(`candidate:${event}`),
-        });
-        expect(await host.activate(failedCandidate)).toMatchObject({
-            ok: false,
-            error: { message: 'sample activation failure' },
-        });
-        expect(host.snapshot().active).toBe(false);
-
-        const recovered = await host.activate(previous);
-        expect(recovered.ok).toBe(true);
-        expect(host.snapshot()).toMatchObject({ contributionCount: 1, hookCount: 1 });
-        expect(events).toEqual(
-            expect.arrayContaining([
-                'previous:cleanup',
-                'candidate:cleanup',
-                'previous:activate',
-            ])
-        );
-    });
 });

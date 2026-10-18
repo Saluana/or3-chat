@@ -55,7 +55,6 @@ vi.mock('../../../utils/net/request-identity', () => ({
     normalizeProxyTrustConfig: normalizeProxyTrustConfigMock as any,
 }));
 
-let SESSION_CACHE_CONTROL: string;
 let handler: (event: H3Event) => Promise<unknown>;
 
 function makeEvent(): H3Event {
@@ -83,7 +82,6 @@ beforeAll(async () => {
     globalAny.useRuntimeConfig = () => testRuntimeConfig.value;
 
     const mod = await import('../session.get');
-    SESSION_CACHE_CONTROL = mod.SESSION_CACHE_CONTROL;
     handler = mod.default as (event: H3Event) => Promise<unknown>;
 });
 
@@ -147,10 +145,6 @@ describe('GET /api/auth/session', () => {
 
         now += 60_000;
         await expect(handler(makeEvent())).resolves.toEqual({ session: null, appAccessAllowed: false });
-    });
-
-    it('never allows caching session responses', () => {
-        expect(SESSION_CACHE_CONTROL).toBe('no-store');
     });
 
     it('returns null session payload when SSR auth is disabled', async () => {

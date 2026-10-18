@@ -83,14 +83,6 @@ export function createV1HookDiagnosticsAdapter(options: {
     const diagnostics = new HookDiagnostics({
         legacySource: {
             read: () => ({ timings, timingStats, errors, overflow }),
-            reset(metric) {
-                if (metric === undefined || metric === 'timing') {
-                    replaceTimings({});
-                }
-                if (metric === undefined || metric === 'error') {
-                    replaceErrors({});
-                }
-            },
         },
     });
     const facade = {

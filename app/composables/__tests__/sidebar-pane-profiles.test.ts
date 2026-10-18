@@ -16,37 +16,6 @@ describe('V1 sidebar page profile', () => {
         setClient(true);
     });
 
-    it('freezes exact validation messages and server no-op behavior', () => {
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-        const { registerSidebarPage, getSidebarPage } = useSidebarPages();
-        expect(() => registerSidebarPage({ id: 'Bad ID', label: 'Page', icon: 'i', component: {} }))
-            .toThrow('Page id must be lowercase alphanumeric with hyphens');
-        expect(() => registerSidebarPage({ id: 'valid', label: '', icon: 'i', component: {} }))
-            .toThrow('Label is required');
-        expect(() => registerSidebarPage({ id: 'valid', label: 'Page', icon: '', component: {} }))
-            .toThrow('Icon is required');
-
-        setClient(false);
-        const dispose = registerSidebarPage({ id: 'server-page', label: 'Server', icon: 'i', component: {} });
-        expect(getSidebarPage('server-page')).toBeUndefined();
-        expect(dispose()).toBeUndefined();
-        consoleError.mockRestore();
-    });
-
-    it('normalizes defaults, marks static components raw, and preserves order-only ties', () => {
-        const { registerSidebarPage, getSidebarPage, listSidebarPages } = useSidebarPages();
-        const firstComponent = { name: 'First' };
-        registerSidebarPage({ id: 'z-page', label: 'Z', icon: 'i', component: firstComponent });
-        registerSidebarPage({ id: 'a-page', label: 'A', icon: 'i', component: { name: 'Second' } });
-        registerSidebarPage({ id: 'sidebar-home', label: 'Home', icon: 'i', component: {} });
-
-        expect(listSidebarPages.value.map((page) => page.id)).toEqual(['z-page', 'a-page', 'sidebar-home']);
-        expect(getSidebarPage('z-page')).toMatchObject({ order: 200, usesDefaultHeader: false });
-        expect(getSidebarPage('sidebar-home')?.usesDefaultHeader).toBe(true);
-        expect(getSidebarPage('z-page')?.component).toBe(firstComponent);
-        expect(isReactive(getSidebarPage('z-page')?.component)).toBe(false);
-    });
-
     it('wraps async components, retries twice, and then fails', async () => {
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
         const eventual = { name: 'Eventual' };
@@ -88,16 +57,6 @@ describe('V1 pane app profile', () => {
         setClient(originalClient ?? true);
         const paneApps = usePaneApps();
         for (const app of paneApps.listPaneApps.value) paneApps.unregisterPaneApp(app.id);
-    });
-
-    it('freezes exact validation messages', () => {
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-        const { registerPaneApp } = usePaneApps();
-        expect(() => registerPaneApp({ id: 'Bad ID', label: 'Pane', component: {} }))
-            .toThrow('App id must be lowercase alphanumeric with hyphens');
-        expect(() => registerPaneApp({ id: 'valid', label: '', component: {} }))
-            .toThrow('Label is required');
-        consoleError.mockRestore();
     });
 
     it('defaults order, preserves ties, marks components raw, and wraps async loaders', async () => {

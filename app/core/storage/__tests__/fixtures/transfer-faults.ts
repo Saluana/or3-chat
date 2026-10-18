@@ -32,29 +32,6 @@ export function installFaultClock(startAt: number) {
     };
 }
 
-/** Response whose declared metadata may intentionally disagree with streamed bytes. */
-export function faultingDownloadResponse(params: {
-    chunks: Array<string | Uint8Array>;
-    declaredLength?: number;
-    declaredMime?: string;
-}): Response {
-    const encoder = new TextEncoder();
-    const chunks = params.chunks.map((chunk) =>
-        typeof chunk === 'string' ? encoder.encode(chunk) : chunk
-    );
-    return new Response(new ReadableStream<Uint8Array>({
-        start(controller) {
-            for (const chunk of chunks) controller.enqueue(chunk);
-            controller.close();
-        },
-    }), {
-        headers: {
-            ...(params.declaredLength === undefined ? {} : { 'content-length': String(params.declaredLength) }),
-            ...(params.declaredMime === undefined ? {} : { 'content-type': params.declaredMime }),
-        },
-    });
-}
-
 /** Run competing claims together so tests cannot accidentally serialize workers. */
 export function raceWorkers<T extends ReadonlyArray<() => Promise<unknown>>>(
     ...claims: T

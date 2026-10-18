@@ -99,18 +99,4 @@ describe('theme manifest app config integration', () => {
         expect(await loadThemeAppConfig(mockEntry)).toEqual({ legacy: true });
     });
 
-    it('returns null when a theme entry has no appConfigLoader', async () => {
-        const mockEntry = {
-            name: 'mock-theme',
-            dirName: 'mock',
-            loader: async () => ({ default: {} as never }),
-            stylesheets: [],
-            isDefault: false,
-            hasCssSelectorStyles: false,
-            appConfigLoader: undefined,
-        };
-
-        const config = await loadThemeAppConfig(mockEntry);
-        expect(config).toBeNull();
-    });
 });

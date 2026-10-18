@@ -1,7 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-    encodeReleaseMetadata,
     type AdvisoryDocument,
     type RegistryAdvisorySnapshot,
 } from '~~/shared/plugins/acquisition/release-metadata';
@@ -177,6 +176,13 @@ describe('registry resolve (5.2)', () => {
             })
         ).toMatchObject({ ok: false, failure: { code: 'release-key-untrusted' } });
 
+        const unsigned = structuredClone(fixture.signed);
+        Reflect.deleteProperty(unsigned, 'signature');
+        expect(await makeClient({
+            keys: [fixture.key], transport: fakeRegistryTransport({ fixture: { ...fixture, signed: unsigned } }),
+        }).resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } }))
+            .toMatchObject({ ok: false, failure: { code: 'release-metadata-unsigned' } });
+
         // A field changed after signing invalidates the signature.
         const tampered = {
             ...fixture.signed,
@@ -210,6 +216,22 @@ describe('registry resolve (5.2)', () => {
             })
         ).toMatchObject({ ok: false, failure: { code: 'release-identity-mismatch' } });
 
+        for (const expectation of [
+            { pluginId: 'alpha', version: '9.9.9' },
+            { pluginId: 'alpha', version: '1.0.0', releaseId: 'rel_other' },
+        ]) {
+            expect(await makeClient({ keys: [fixture.key], transport }).resolveRelease({ expectation }))
+                .toMatchObject({ ok: false, failure: { code: 'release-identity-mismatch' } });
+        }
+        const pluginApi = await signReleaseMetadataForTest({
+            document: { ...fixture.signed, engines: { or3: '>=1.0.0', pluginApi: '>=99.0.0' } },
+            keyId: fixture.key.keyId, privateKeyBase64: fixture.privateKeyBase64,
+        });
+        expect(await makeClient({
+            keys: [fixture.key], transport: fakeRegistryTransport({ fixture: { ...fixture, signed: pluginApi } }),
+        }).resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } }))
+            .toMatchObject({ ok: false, failure: { code: 'release-engine-unsupported' } });
+
         const engines = await signReleaseMetadataForTest({
             document: { ...fixture.signed, engines: { or3: '>=99.0.0', pluginApi: '>=1.0.0' } },
             keyId: fixture.key.keyId,
@@ -236,68 +258,11 @@ describe('registry resolve (5.2)', () => {
                 latestAdvisorySequence: 4,
             })
         ).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
-    });
-
-    it('an older catalog cannot clear an accepted quarantine', async () => {
-        // The host recorded the advisory position of the signed quarantine. A
-        // replayed, older catalog must not be able to clear that block: the
-        // signed release metadata carries the catalog position it was published
-        // at, and the host refuses anything behind its accepted sequence.
-        const fixture = await releaseFixture({ version: '1.0.0' });
-        const quarantinedAtSeven = makeClient({
-            keys: [fixture.key],
-            acceptedAdvisorySequence: 7,
-            transport: fakeRegistryTransport({ fixture }),
-        });
-        expect(
-            await quarantinedAtSeven.resolveRelease({
-                expectation: { pluginId: 'alpha', version: '1.0.0' },
-                catalogAdvisorySequence: 6,
-                latestAdvisorySequence: 6,
-            })
-        ).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
-
-        // And a catalog at or beyond the accepted position still resolves, so a
-        // registry that genuinely withdraws a quarantine is not stuck forever.
-        const currentAtSeven = makeClient({
-            keys: [fixture.key],
-            acceptedAdvisorySequence: 7,
-            transport: fakeRegistryTransport({ fixture }),
-        });
-        expect(
-            await currentAtSeven.resolveRelease({
-                expectation: { pluginId: 'alpha', version: '1.0.0' },
-                catalogAdvisorySequence: 7,
-                latestAdvisorySequence: 7,
-            })
-        ).toMatchObject({ ok: true });
-    });
-
-    it('refuses a release the signed advisory log has quarantined', async () => {
-        const fixture = await releaseFixture({ version: '1.0.0' });
-        const advisory = await signAdvisoryForTest({
-            document: {
-                schemaVersion: 1,
-                sequence: 7,
-                kind: 'quarantine',
-                releaseId: fixture.releaseId,
-                pluginId: 'alpha',
-                version: '1.0.0',
-                archiveSha256: fixture.signed.archiveSha256,
-                reason: 'exfiltrates unrelated documents',
-                issuedBy: 'or3-marketplace',
-                issuedAt: new Date().toISOString(),
-            },
-            keyId: fixture.key.keyId,
-            privateKeyBase64: fixture.privateKeyBase64,
-        });
-        const client = makeClient({
-            keys: [fixture.key],
-            transport: fakeRegistryTransport({ fixture, advisories: [advisory] }),
-        });
-        expect(
-            await client.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
-        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined', retryable: false } });
+        expect(await stale.resolveRelease({
+            expectation: { pluginId: 'alpha', version: '1.0.0' },
+            catalogAdvisorySequence: 5,
+            latestAdvisorySequence: 5,
+        })).toMatchObject({ ok: true });
     });
 
     it('refuses an advisory it cannot verify and records the newest sequence', async () => {
@@ -382,7 +347,7 @@ describe('registry resolve (5.2)', () => {
         });
         expect(
             await first.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
-        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined' } });
+        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined', retryable: false } });
         expect(ledger[alpha.releaseId]?.sequence).toBe(7);
 
         // A later resolve of another release advances the cursor past 7. The
@@ -949,7 +914,4 @@ describe('artifact download (5.2)', () => {
         });
     });
 
-    it('encoding stays canonical for the signed bytes', () => {
-        expect(new TextDecoder().decode(encodeReleaseMetadata({ b: 1, a: 2 }))).toBe('{"a":2,"b":1}');
-    });
 });

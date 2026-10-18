@@ -21,7 +21,6 @@ vi.mock('~/composables/useThemeResolver', () => ({
     useThemeOverrides: () => ({ value: {} }),
 }));
 
-
 const tabs = [
     {
         id: 'tab-chat',

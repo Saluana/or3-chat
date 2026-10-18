@@ -126,7 +126,6 @@ vi.mock('../messageBuild', () => ({
     buildOpenRouterMessagesForSend: vi.fn(async () => [
         { role: 'user', content: 'continue' },
     ]),
-    enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
 }));
 
 vi.mock('../persistence', async (importOriginal) => ({

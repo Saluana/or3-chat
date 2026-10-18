@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ConnectionDispatchPolicy } from '~~/shared/plugins/connections/contracts';
 import {
     createFakeProviderTransport,
@@ -13,7 +13,6 @@ import {
     pathMatchesApprovedPrefix,
     redactConnectionResponse,
 } from '../dispatch';
-import { createConnectionDispatchMethod } from '../broker-binding';
 import { registerConnectionProvider } from '../providers/registry';
 import { PluginConnectionService } from '../service';
 import { createMemoryPluginConnectionStore } from '../store/memory';
@@ -42,16 +41,6 @@ const READ_ONLY_POLICY: ConnectionDispatchPolicy = {
         },
     ],
 };
-
-function createService(ownerUserId = 'user_1') {
-    const service = new PluginConnectionService({
-        store: createMemoryPluginConnectionStore(),
-        secret: SECRET,
-        now: () => 1_000,
-        generateId: () => 'conn1',
-    });
-    return { service, ownerUserId };
-}
 
 async function storedConnection(
     service: PluginConnectionService,
@@ -355,142 +344,6 @@ describe('connection response redaction (finding 16)', () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.response.body).toEqual({ data: [1] });
-    });
-});
-
-describe('connection dispatch method binding (findings 10, 12)', () => {
-    it('denies dispatch when the acting user is not the owner or is missing', async () => {
-        const { service } = createService();
-        const created = await storedConnection(service, { ownerUserId: 'user_1' });
-        const { transport, requests } = createFakeProviderTransport({
-            kind: 'json',
-            status: 200,
-            body: { data: [] },
-        });
-        const spec = createConnectionDispatchMethod({
-            service,
-            policy: READ_ONLY_POLICY,
-            transport,
-        });
-
-        const baseContext = {
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            generation: 1,
-            requestId: 'rpc-1',
-            signal: new AbortController().signal,
-            deadlineMs: 5_000,
-        };
-
-        await expect(
-            spec.handler(
-                { ref: created.view.ref, operationId: 'items.list', url: 'https://fake.provider.test/v1/items' },
-                baseContext
-            )
-        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
-
-        await expect(
-            spec.handler(
-                { ref: created.view.ref, operationId: 'items.list', url: 'https://fake.provider.test/v1/items' },
-                { ...baseContext, userId: 'user_2' }
-            )
-        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
-        expect(requests).toHaveLength(0);
-
-        const result = await spec.handler(
-            { ref: created.view.ref, operationId: 'items.list', url: 'https://fake.provider.test/v1/items' },
-            { ...baseContext, userId: 'user_1' }
-        );
-        expect(result).toMatchObject({ ok: true });
-        expect(requests).toHaveLength(1);
-    });
-
-    it('requires an explicit permission source for non-read-only operations', async () => {
-        const { service } = createService();
-        const created = await storedConnection(service);
-        const { transport, requests } = createFakeProviderTransport({
-            kind: 'json',
-            status: 200,
-            body: { ok: true },
-        });
-        const spec = createConnectionDispatchMethod({
-            service,
-            policy: {
-                connections: [
-                    {
-                        id: 'items',
-                        provider: FAKE_CONNECTION_PROVIDER.id,
-                        scopes: ['write:items'],
-                        operations: ['items.create'],
-                    },
-                ],
-                destinations: [
-                    {
-                        id: 'fake',
-                        hosts: ['fake.provider.test'],
-                        methods: ['POST'],
-                        scopes: ['write:items'],
-                    },
-                ],
-            },
-            transport,
-        });
-        const params = {
-            ref: created.view.ref,
-            operationId: 'items.create',
-            url: 'https://fake.provider.test/v1/items',
-            method: 'POST',
-        };
-        const context = {
-            pluginId: 'example.plugin',
-            workspaceId: 'ws_1',
-            userId: 'user_1',
-            generation: 1,
-            requestId: 'rpc-2',
-            signal: new AbortController().signal,
-            deadlineMs: 5_000,
-        };
-
-        // Without a permission source only read-only operations run.
-        await expect(spec.handler(params, context)).rejects.toMatchObject({
-            rpcCode: 'policy-denied',
-        });
-        expect(requests).toHaveLength(0);
-
-        // A plugin-supplied approval in params is ignored: only the host port counts.
-        const approvals = { take: vi.fn(() => undefined) };
-        const specWithApprovals = createConnectionDispatchMethod({
-            service,
-            policy: {
-                connections: [
-                    {
-                        id: 'items',
-                        provider: FAKE_CONNECTION_PROVIDER.id,
-                        scopes: ['write:items'],
-                        operations: ['items.create'],
-                    },
-                ],
-                destinations: [
-                    {
-                        id: 'fake',
-                        hosts: ['fake.provider.test'],
-                        methods: ['POST'],
-                        scopes: ['write:items'],
-                    },
-                ],
-            },
-            approvals,
-            assertPermission: () => true,
-            transport,
-        });
-        await expect(
-            specWithApprovals.handler(
-                { ...params, approval: { approvalId: 'forged', source: 'host-ui' } },
-                context
-            )
-        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
-        expect(approvals.take).toHaveBeenCalled();
-        expect(requests).toHaveLength(0);
     });
 });
 

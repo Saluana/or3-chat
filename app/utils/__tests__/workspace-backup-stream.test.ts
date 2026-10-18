@@ -239,23 +239,6 @@ describe('workspace backup import stream integrity', () => {
         tables: [{ name: 'messages', rowCount: 1, inbound: true }],
     };
 
-    it('rejects a truncated replace backup instead of reporting success', async () => {
-        const { db } = createImportDb();
-        const file = backupBlob([
-            header,
-            { type: 'table-start', table: 'messages' },
-        ]);
-
-        await expect(
-            importWorkspaceStream({
-                db: db as any,
-                file,
-                clearTables: true,
-                overwriteValues: true,
-            })
-        ).rejects.toThrow(/truncated|terminal marker/i);
-    });
-
     it('rejects a completed table whose row count differs from the header', async () => {
         const { db } = createImportDb();
         const file = backupBlob([

@@ -89,7 +89,7 @@ describe('candidate setup binding', () => {
             operationId: 'acq_new', version: '2.0.0', status: 'paused',
         } satisfies Partial<PluginAcquisitionOperation>]);
         await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-a',
-            candidateDigest: digest, requestedOperationId: 'acq_old', expectedVersion: '1.0.0' }))
+            candidateDigest: digest, requestedOperationId: 'acq_old', expectedVersion: '2.0.0' }))
             .resolves.toMatchObject({ ok: false, code: 'setup-operation-conflict' });
         await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-a',
             candidateDigest: digest, expectedVersion: '1.0.0' }))

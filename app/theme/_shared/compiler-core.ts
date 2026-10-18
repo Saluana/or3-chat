@@ -5,7 +5,7 @@
  * Parses theme selector DSL strings into structured components for matching.
  *
  * Behavior:
- * - Normalizes shorthand selectors into attribute selectors
+ * - Accepts shorthand and explicit context/identifier selectors
  * - Extracts component, context, identifier, state, and attribute matchers
  * - Caches parsed selectors for reuse
  *
@@ -33,7 +33,7 @@ import { KNOWN_THEME_CONTEXTS } from './contexts';
  * runtime and build time override matching.
  *
  * Behavior:
- * - Normalizes shorthand before parsing
+ * - Parses shorthand and attribute syntax directly
  * - Returns cached results for repeated inputs
  *
  * Constraints:
@@ -140,92 +140,6 @@ export function parseSelector(selector: string): ParsedSelector {
     }
     selectorCache.set(selector, result);
     return result;
-}
-
-/**
- * `escapeRegex`
- *
- * Purpose:
- * Escapes a string for safe regex construction in selector normalization.
- */
-function escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * `normalizeSelector`
- *
- * Purpose:
- * Expands shorthand selector syntax into attribute selectors.
- *
- * Behavior:
- * - Expands `#id` to `data-id` selectors
- * - Expands `.context` to `data-context` selectors for known contexts
- *
- * Constraints:
- * - Context expansion only applies to known contexts
- */
-export function normalizeSelector(selector: string): string {
-    let result = selector;
-
-    // Convert #identifier to [data-id="identifier"] first to preserve dot-separated identifiers
-     
-    result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
-
-    // Convert .context to [data-context="context"] (after identifiers are normalized)
-    for (const context of KNOWN_THEME_CONTEXTS) {
-        const escapedContext = escapeRegex(context);
-         
-        const regex = new RegExp(
-            '(\\w+)\\.' + escapedContext + '(?=[:\\[]|$)',
-            'g'
-        );
-        result = result.replace(regex, `$1[data-context="${context}"]`);
-    }
-
-    return result;
-}
-
-/**
- * `extractAttributes`
- *
- * Purpose:
- * Extracts attribute matchers from a normalized selector string.
- *
- * Constraints:
- * - Ignores data-context and data-id which are handled separately
- */
-export function extractAttributes(selector: string): AttributeMatcher[] {
-    const attributes: AttributeMatcher[] = [];
-    // Match: [attribute] or [attribute="value"] or [attribute*="value"] etc.
-    // Group 1: attribute name (without operator)
-    // Group 2: full operator+value part (optional)
-    // Group 3: operator (optional)
-    // Group 4: value (optional)
-    const attrRegex = /\[([a-zA-Z0-9-]+)([~|^$*]?=)?(?:"([^"]+)")?\]/g;
-    let match;
-
-    while ((match = attrRegex.exec(selector)) !== null) {
-        const attrName = match[1];
-        if (!attrName) continue;
-
-        // Skip data-context and data-id (already handled)
-        if (attrName === 'data-context' || attrName === 'data-id') continue;
-
-        const hasOperator = match[2] !== undefined;
-        const operator = hasOperator
-            ? (match[2] as AttributeOperator)
-            : ('exists' as AttributeOperator);
-        const value = match[3];
-
-        attributes.push({
-            attribute: attrName,
-            operator,
-            value,
-        });
-    }
-
-    return attributes;
 }
 
 /**

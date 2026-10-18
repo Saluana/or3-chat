@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     compareAuthority,
     computeAuthorityHash,
-    evaluateConsent,
     SelectionHandleAuthority,
-    type AuthorityConsent,
     type EffectiveAuthority,
 } from '../effective-authority';
 
@@ -34,17 +32,6 @@ function authority(
 }
 
 describe('effective authority (4.6)', () => {
-    it('hashes canonically regardless of set ordering', async () => {
-        const left = await computeAuthorityHash(
-            authority({ grants: ['storage.write', 'storage.read'] })
-        );
-        const right = await computeAuthorityHash(
-            authority({ grants: ['storage.read', 'storage.write'] })
-        );
-        expect(left).toBe(right);
-        expect(left).toMatch(/^sha256-[a-f0-9]{64}$/);
-    });
-
     it('changes the hash when only a destination method changes', async () => {
         const readOnly = await computeAuthorityHash(authority());
         const writable = await computeAuthorityHash(
@@ -170,7 +157,7 @@ describe('effective authority (4.6)', () => {
         });
 
         expect(compareAuthority(twoAccountsForOneHost, twoAccountsForOneHost)).toMatchObject({
-            identical: true,
+            identical: true, expanded: false, narrowed: false,
         });
 
         const widenedSecondEntry = compareAuthority(twoAccountsForOneHost, {
@@ -274,118 +261,6 @@ describe('effective authority (4.6)', () => {
         });
     });
 
-    it('reports identical authority for an unchanged update', () => {
-        const comparison = compareAuthority(authority(), authority());
-        expect(comparison).toMatchObject({ identical: true, expanded: false, narrowed: false });
-    });
-
-    it('denies missing, stale and mismatched consent (IN11)', () => {
-        const hash = `sha256-${'a'.repeat(64)}` as const;
-        const candidate = {
-            pluginId: 'example.plugin',
-            releaseId: 'rel_2',
-            workspaceId: 'ws_1',
-            generation: 2,
-            authorityHash: hash,
-        };
-
-        expect(evaluateConsent({ consent: null, candidate })).toMatchObject({
-            status: 'denied',
-            code: 'consent-missing',
-        });
-
-        const consent: AuthorityConsent = {
-            subjectId: 'user_1',
-            workspaceId: 'ws_1',
-            pluginId: 'example.plugin',
-            releaseId: 'rel_1',
-            generation: 2,
-            authorityHash: hash,
-            approvedAt: 1,
-            approvedBy: 'user_1',
-        };
-        expect(evaluateConsent({ consent, candidate })).toMatchObject({
-            status: 'denied',
-            code: 'consent-release-changed',
-        });
-
-        expect(
-            evaluateConsent({
-                consent: { ...consent, releaseId: 'rel_2', generation: 3 },
-                candidate,
-            })
-        ).toMatchObject({ status: 'denied', code: 'consent-stale-generation' });
-
-        expect(
-            evaluateConsent({
-                consent: { ...consent, releaseId: 'rel_2', generation: 2 },
-                candidate,
-            })
-        ).toMatchObject({ status: 'allowed' });
-
-        expect(
-            evaluateConsent({
-                consent: { ...consent, releaseId: 'rel_2', generation: 2, workspaceId: 'ws_2' },
-                candidate,
-            })
-        ).toMatchObject({ status: 'denied', code: 'consent-workspace-mismatch' });
-
-        expect(
-            evaluateConsent({
-                consent: {
-                    ...consent,
-                    releaseId: 'rel_2',
-                    generation: 2,
-                    authorityHash: `sha256-${'b'.repeat(64)}` as const,
-                },
-                candidate,
-            })
-        ).toMatchObject({ status: 'denied', code: 'consent-authority-expanded' });
-    });
-
-    it('denies consent whose recorded authority no longer covers the candidate', async () => {
-        const previous = authority();
-        const next = authority({
-            destinations: [{ host: 'api.example.com', methods: ['GET'], pathPrefixes: ['/'] }],
-        });
-        const consent: AuthorityConsent = {
-            subjectId: 'user_1',
-            workspaceId: 'ws_1',
-            pluginId: 'example.plugin',
-            releaseId: 'rel_1',
-            generation: 1,
-            authorityHash: `sha256-${'a'.repeat(64)}` as const,
-            approvedAt: 1,
-            approvedBy: 'user_1',
-        };
-        const decision = evaluateConsent({
-            consent,
-            candidate: {
-                pluginId: 'example.plugin',
-                releaseId: 'rel_1',
-                workspaceId: 'ws_1',
-                generation: 1,
-                authorityHash: `sha256-${'a'.repeat(64)}` as const,
-            },
-            consentedAuthority: previous,
-            candidateAuthority: next,
-        });
-        expect(decision).toMatchObject({ status: 'denied', code: 'consent-authority-expanded' });
-
-        const allowed = evaluateConsent({
-            consent,
-            candidate: {
-                pluginId: 'example.plugin',
-                releaseId: 'rel_1',
-                workspaceId: 'ws_1',
-                generation: 1,
-                authorityHash: `sha256-${'a'.repeat(64)}` as const,
-            },
-            consentedAuthority: previous,
-            candidateAuthority: previous,
-        });
-        expect(allowed).toMatchObject({ status: 'allowed' });
-    });
 });
 
 describe('selection handles (4.6)', () => {

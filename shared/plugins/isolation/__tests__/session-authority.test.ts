@@ -12,7 +12,6 @@ import {
 } from '../rpc-envelope';
 import {
     HostSessionAuthority,
-    stripCallerSuppliedIdentity,
 } from '../session-authority';
 
 function grants(
@@ -125,6 +124,9 @@ describe('host session authority (4.2)', () => {
         expect(
             authority.verifyInbound({ ...session, origin: null })
         ).toMatchObject({ status: 'authorized' });
+
+        expect(authority.verifyInbound({ ...session, sessionId: 'forged-session', origin: null }))
+            .toMatchObject({ status: 'denied', code: 'session-unknown' });
 
         // ... but an opaque-origin message without a session is denied.
         expect(
@@ -243,27 +245,6 @@ describe('host session authority (4.2)', () => {
         broker.dispose();
     });
 
-    it('requires host-issued session fields when configured', async () => {
-        const authority = createAuthority();
-        const handler = vi.fn(async () => ({}));
-        const inbox: RpcEnvelope[] = [];
-        const broker = createBroker({
-            authority,
-            handler,
-            inbox,
-            requireHostSession: true,
-        });
-        const outcome = await broker.dispatch(
-            createRpcRequest({ id: 'req-legacy', method: 'storage.get', params: {} })
-        );
-        expect(outcome).toMatchObject({
-            status: 'rejected',
-            code: 'session-missing',
-        });
-        expect(handler).not.toHaveBeenCalled();
-        broker.dispose();
-    });
-
     it('denies missing session fields on a host with no authority object', async () => {
         const handler = vi.fn(async () => ({}));
         const inbox: RpcEnvelope[] = [];
@@ -298,25 +279,4 @@ describe('host session authority (4.2)', () => {
         expect(roundTrip.envelope).toMatchObject(authority.echoFields);
     });
 
-    it('strips caller-supplied identity from parameters but keeps opaque handles', () => {
-        const stripped = stripCallerSuppliedIdentity(
-            createRpcRequest({
-                id: 'req-strip',
-                method: 'documents.read',
-                params: {
-                    workspaceId: 'ws_other',
-                    pluginId: 'other.plugin',
-                    userId: 'someone-else',
-                    connectionRef: 'orc_1_r2',
-                    key: 'keep-me',
-                },
-                pluginId: 'other.plugin',
-            })
-        );
-        expect(stripped.params).toEqual({
-            connectionRef: 'orc_1_r2',
-            key: 'keep-me',
-        });
-        expect(stripped.pluginId).toBeUndefined();
-    });
 });

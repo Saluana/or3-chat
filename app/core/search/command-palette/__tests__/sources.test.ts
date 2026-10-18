@@ -70,49 +70,8 @@ describe('palette source adapters', () => {
         ] as never[], context);
         expect(resources[0]?.content).toBe('visible question\ncurrent answer');
         expect(resources[0]?.metadata?.messageCount).toBe(2);
-    });
-
-    it('groups chat messages into one thread resource', () => {
-        const resources = buildChatResources(
-            [
-                {
-                    id: 't1',
-                    title: 'Trip',
-                    created_at: 1,
-                    updated_at: 2,
-                    deleted: false,
-                    clock: 1,
-                } as never,
-            ],
-            [
-                {
-                    id: 'm1',
-                    thread_id: 't1',
-                    role: 'user',
-                    data: { content: 'hello secret' },
-                    created_at: 1,
-                    updated_at: 1,
-                    deleted: false,
-                    clock: 1,
-                    index: 0,
-                } as never,
-                {
-                    id: 'm2',
-                    thread_id: 't1',
-                    role: 'assistant',
-                    data: { content: 'world' },
-                    created_at: 2,
-                    updated_at: 2,
-                    deleted: false,
-                    clock: 1,
-                    index: 1,
-                } as never,
-            ],
-            context
-        );
         expect(resources).toHaveLength(1);
-        expect(resources[0]?.content).toContain('hello secret');
-        expect(resources[0]?.secondaryActions?.length).toBe(1);
+        expect(resources[0]?.secondaryActions).toHaveLength(1);
     });
 
     it('indexes TipTap document bodies', () => {

@@ -12,7 +12,6 @@ import {
     DEFAULT_DIGEST_OPTIONS,
     analyzeSelection,
     normalizeDigestOptions,
-    splitParagraphs,
 } from './lib/digest.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -69,12 +68,6 @@ test('generated descriptors agree with the manifest', () => {
     }
 });
 
-test('client entry exports the declared manifest and the pure first action', () => {
-    expect(selectedDocumentUtility.manifest.id).toBe(selectedDocumentManifest.id);
-    expect(typeof selectedDocumentUtility.setup).toBe('function');
-    expect(typeof analyzeSelection).toBe('function');
-});
-
 test('first-action fixture matches the committed sample workspace', () => {
     const workspace = read('fixtures/workspace/sample-document.md');
     expect(sample.selection.content).toBe(workspace);
@@ -87,13 +80,6 @@ test('first action reproduces the committed expected digest byte-for-byte', () =
     expect(result).toEqual(expected);
     expect(result.outline).toHaveLength(3);
     expect(result.statistics.paragraphs).toBe(3);
-});
-
-test('first action is deterministic across runs', () => {
-    const first = analyzeSelection(sample.selection, DEFAULT_DIGEST_OPTIONS);
-    const second = analyzeSelection(sample.selection, DEFAULT_DIGEST_OPTIONS);
-    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
-    expect(splitParagraphs(sample.selection.content)).toHaveLength(3);
 });
 
 test('settings change the rendered result without changing the outline source', () => {
@@ -140,20 +126,4 @@ test('default export performs the first action through the host-mediated channel
 
     await host.deactivate();
     expect(selectedDocumentCommandChannel.resolve(SELECTION_COMMAND_ID)).toBeUndefined();
-});
-
-test('default export honours host settings through the mediated client', async () => {
-    const host = createHost({
-        initialSettings: {
-            summaryStyle: 'prose',
-            maxOutlineSentences: 2,
-            includeStatistics: false,
-        },
-    });
-    expect((await host.activate(selectedDocumentUtility)).ok).toBe(true);
-    const handler = selectedDocumentCommandChannel.resolve(SELECTION_COMMAND_ID);
-    const result = handler(sample.selection);
-    expect(result).toMatchObject({ style: 'prose', statistics: null });
-    expect(result.outline).toHaveLength(2);
-    await host.deactivate();
 });

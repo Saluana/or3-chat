@@ -132,22 +132,6 @@ describe('useMultiPane - Width Management', () => {
         expect(paneWidths.value).toEqual([1920, 280]);
     });
 
-    it('persists widths to localStorage', () => {
-        const { panes, addPane, paneWidths } = useMultiPane({
-            loadMessagesFor: async () => [],
-            storageKey: 'test-pane-widths',
-        });
-
-        addPane();
-        paneWidths.value = [500, 700];
-
-        // Trigger persistence (would normally happen in handleResize)
-        localStorage.setItem('test-pane-widths', JSON.stringify(paneWidths.value));
-
-        const stored = localStorage.getItem('test-pane-widths');
-        expect(stored).toBe('[500,700]');
-    });
-
     it('adds pane and redistributes widths proportionally', () => {
         const { panes, addPane, paneWidths } = useMultiPane({
             loadMessagesFor: async () => [],

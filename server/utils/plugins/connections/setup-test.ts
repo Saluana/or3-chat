@@ -177,31 +177,3 @@ export async function runConnectionSetupTest(input: {
         evidence,
     };
 }
-
-/** UI copy per failure class; distinct causes are never conflated. */
-export function describeConnectionFailure(code: ConnectionFailureCode): string {
-    switch (code) {
-        case 'bad-credentials':
-            return 'The credential was rejected. Check the value and try again.';
-        case 'insufficient-scope':
-            return 'The credential is valid but lacks the scopes this plugin needs.';
-        case 'network-failure':
-            return 'The provider could not be reached. Check network access and the provider URL.';
-        case 'rate-limit':
-            return 'The provider rate-limited this request. Wait and retry.';
-        case 'provider-outage':
-            return 'The provider reported an internal error. This is usually temporary.';
-        case 'deadline-exceeded':
-            return 'The provider did not answer before the deadline.';
-        case 'response-too-large':
-            return 'The provider returned more data than this operation allows.';
-        case 'policy-denied':
-            return 'The request was refused by host policy (destination, headers or response safety).';
-        case 'unknown':
-            return 'The test failed for a reason the provider did not classify.';
-        default: {
-            const exhaustive: never = code;
-            return `Unhandled failure code: ${String(exhaustive)}`;
-        }
-    }
-}

@@ -77,37 +77,4 @@ describe('storage provider registry', () => {
         // Factory should only be called once
         expect(createCallCount).toBe(1);
     });
-
-    it('clears cache on reset', () => {
-        let createCallCount = 0;
-        const registrationConfig = {
-            id: 'mock-provider',
-            create: () => {
-                createCallCount++;
-                return {
-                    id: 'mock-provider',
-                    displayName: 'Mock Provider',
-                    supports: {
-                        presignedUpload: true,
-                        presignedDownload: true,
-                    },
-                    async getPresignedUploadUrl() {
-                        return { url: 'upload', expiresAt: Date.now() };
-                    },
-                    async getPresignedDownloadUrl() {
-                        return { url: 'download', expiresAt: Date.now() };
-                    },
-                };
-            },
-        };
-
-        registerStorageProvider(registrationConfig);
-        getActiveStorageProvider();
-        expect(createCallCount).toBe(1);
-
-        _resetStorageProviders();
-        registerStorageProvider(registrationConfig);
-        getActiveStorageProvider();
-        expect(createCallCount).toBe(2);
-    });
 });

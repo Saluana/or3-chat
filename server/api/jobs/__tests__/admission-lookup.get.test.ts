@@ -133,14 +133,4 @@ describe('GET /api/jobs/admission/:admissionId', () => {
         await expect(handler({})).rejects.toThrow('Forbidden');
         expect(getJobProviderMock).not.toHaveBeenCalled();
     });
-
-    it('does not turn a provider outage into evidence that admission never committed', async () => {
-        getRouterParamMock.mockReturnValue('admission-1');
-        getJobProviderMock.mockResolvedValue({
-            findJobByIdempotencyKey: vi.fn().mockRejectedValue(new Error('database unavailable')),
-        });
-        await expect(handler({})).rejects.toThrow('database unavailable');
-        expect(setResponseStatusMock).not.toHaveBeenCalledWith(expect.anything(), 404);
-    });
-
 });

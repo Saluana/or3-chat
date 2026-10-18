@@ -21,23 +21,12 @@ const RECEIPT_KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const RECEIPT_ID_PATTERN = /^acq_[A-Za-z0-9]{4,60}$/;
 const RELEASE_ID_PATTERN = /^rel_[A-Za-z0-9._:-]{1,100}$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
-const RECEIPT_KEY_CACHE_MS = 5 * 60_000;
 
 export interface RemoteReceiptKey {
     readonly keyId: string;
     readonly algorithm: 'ed25519';
     readonly status: 'active' | 'retired' | 'compromised';
     readonly publicKeyJwk: { readonly kty: 'OKP'; readonly crv: 'Ed25519'; readonly x: string };
-}
-
-const receiptKeyCache = new Map<
-    string,
-    { readonly expiresAt: number; readonly keys: readonly RemoteReceiptKey[] }
->();
-
-/** Test seam; production callers use the bounded module cache. */
-export function clearLibraryReceiptKeyCache(): void {
-    receiptKeyCache.clear();
 }
 
 export type LibraryTransportFailureCode =
@@ -656,13 +645,7 @@ export function createHttpLibraryLinkTransport(
         return { ok: true, value: parsed };
     }
 
-    async function receiptKeys(
-        forceFresh = false
-    ): Promise<TransportResult<readonly RemoteReceiptKey[]>> {
-        const cached = receiptKeyCache.get(config.registryOrigin);
-        if (!forceFresh && cached && cached.expiresAt > Date.now()) {
-            return { ok: true, value: cached.keys };
-        }
+    async function receiptKeys(): Promise<TransportResult<readonly RemoteReceiptKey[]>> {
         const result = await request('/api/v1/catalog/trust/receipt-keys', { method: 'GET' });
         if (!result.ok) return result;
         const parsed = parseReceiptKeys(result.value);
@@ -675,10 +658,6 @@ export function createHttpLibraryLinkTransport(
                 ),
             };
         }
-        receiptKeyCache.set(config.registryOrigin, {
-            expiresAt: Date.now() + RECEIPT_KEY_CACHE_MS,
-            keys: parsed,
-        });
         return { ok: true, value: parsed };
     }
 
@@ -800,9 +779,8 @@ export function createHttpLibraryLinkTransport(
                 };
             }
             // Key status is security-sensitive and the public endpoint has no
-            // signed freshness envelope. Re-fetch it for every acquisition;
-            // the cache is reserved for non-security callers/test seams.
-            const keys = await receiptKeys(true);
+            // signed freshness envelope. Re-fetch it for every acquisition.
+            const keys = await receiptKeys();
             if (!keys.ok) return keys;
             const key = keys.value.find((candidate) => candidate.keyId === parsed.receipt.keyId);
             if (!key || key.status === 'compromised' || !(await verifyAcquisitionReceipt(parsed.receipt, key))) {
