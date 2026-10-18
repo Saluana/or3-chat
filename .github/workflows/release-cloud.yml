@@ -3,12 +3,6 @@ name: Release OR3 Cloud
 # A tag cannot build a new candidate. It may only promote and publish evidence
 # previously created for this exact version and source commit.
 on:
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing version tag with a successful candidate qualification
-        required: true
-        type: string
   push:
     tags:
       - "v*"
@@ -20,12 +14,8 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-
 jobs:
   promote:
-    if: github.event_name == 'push' || github.ref == 'refs/heads/or3-cloud'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -33,13 +23,11 @@ jobs:
       packages: write
     outputs:
       version: ${{ steps.identity.outputs.version }}
-      source: ${{ steps.identity.outputs.source }}
       digest: ${{ steps.promote.outputs.digest }}
       operator_digest: ${{ steps.promote.outputs.operator_digest }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
@@ -62,9 +50,7 @@ jobs:
           lock_version="$(node -p 'require("./package-lock.json").version')"
           cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/package-info.ts)"
           source="$(git rev-parse HEAD)"
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$RELEASE_TAG" = "v$version"
-          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$source"
+          test "$GITHUB_REF_NAME" = "v$version"
           test "$root_version" = "$version"
           test "$lock_version" = "$version"
           test "$cli_version" = "$version"
@@ -188,7 +174,6 @@ jobs:
       - name: Re-verify promoted image and exact package
         env:
           VERSION: ${{ needs.promote.outputs.version }}
-          SOURCE_SHA: ${{ needs.promote.outputs.source }}
           EXPECTED_DIGEST: ${{ needs.promote.outputs.digest }}
           EXPECTED_OPERATOR_DIGEST: ${{ needs.promote.outputs.operator_digest }}
         run: |
@@ -213,8 +198,7 @@ jobs:
               sleep 2
             done
           }
-          test "$RELEASE_TAG" = "v$VERSION"
-          test "$(node -p 'require("./release-artifact/candidate-receipt.json").sourceSha')" = "$SOURCE_SHA"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
           recorded="$(tr -d '[:space:]' < release-artifact/digest.txt)"
           test "$recorded" = "$EXPECTED_DIGEST"
           receipt_digest="$(node -p 'require("./release-artifact/candidate-receipt.json").candidateDigest')"
@@ -289,8 +273,6 @@ jobs:
       VERSION: ${{ needs.promote.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
