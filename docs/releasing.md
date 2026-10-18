@@ -161,6 +161,17 @@ git tag v<version>
 git push origin v<version>
 ```
 
+Do not put `[skip ci]` in the tagged commit message: it also suppresses the tag
+workflow. If a release tag already exists but its workflow was suppressed, run
+the same publish workflow from `or3-cloud`, using that existing tag:
+
+```bash
+gh workflow run release-cloud.yml --ref or3-cloud -f release_tag=v<version>
+```
+
+This recovery path checks out the tag and verifies its existing candidate
+receipt. It does not move the tag or rebuild the qualified artifacts.
+
 The `Release OR3 Cloud` workflow then:
 
 1. finds evidence whose version and source SHA exactly match the tag;
