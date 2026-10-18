@@ -93,6 +93,7 @@ export const CORE_APP_COMPONENT_DEFAULTS: Record<AppThemeComponent, Component> =
         'chat-page': ChatPageDefault,
         'chat-message': ChatMessageDefault,
         'chat-input': ChatInputDefault,
+        'chat-empty-state': defineAsyncVueComponent(() => import('~/components/chat/ChatEmptyState.vue')),
         'document-editor': DocumentEditorDefault,
         'dashboard-modal': DashboardModalDefault,
         'model-selector': ModelSelectorDefault,

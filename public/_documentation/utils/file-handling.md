@@ -112,3 +112,8 @@ references. Open native editors become read-only. **Restore** recovers the same
 item. Permanent removal requires Trash first, releases that item's ownership,
 and preserves shared bytes and retained document history. There is no automatic
 Trash purge or model tool for permanent deletion.
+
+**Remove entry** commits the removal, sync deletion marker, and file ownership
+change in one local transaction. If it fails, the entry stays in Trash and the
+confirmation stays open with an error alert so you can retry. Files shows
+plain-language errors instead of internal exception messages.

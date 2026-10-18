@@ -168,6 +168,14 @@ export async function programmaticSend(
     }
 }
 
+/** Focus the originating composer without changing its text, attachments, or tab. */
+export function focusPaneInput(paneId: string): boolean {
+    const registered = find(paneId);
+    if (!registered) return false;
+    registered.api.focus();
+    return true;
+}
+
 /**
  * Places text in a pane's composer without submitting it.
  *

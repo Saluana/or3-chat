@@ -69,11 +69,11 @@ Use [Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud
 
 ## Editable source
 
-Contributors use `bun run dev` for local-first development or `bun run dev:ssr` for the configured SSR application. For a custom Cloud stack, use the [source wizard](/documentation/cloud/or3-cloud-wizard), then read [Choose and wire providers](/documentation/cloud/providers) and [configuration](/documentation/cloud/configure). The source wizard and the managed operator have different responsibilities.
+Contributors start the checkout with `bun run dev`. It reads `.env`, so it runs the local-first app until the source wizard turns on SSR auth, and the configured SSR application after that. For a custom Cloud stack, use the [source wizard](/documentation/cloud/or3-cloud-wizard), then read [Choose and wire providers](/documentation/cloud/providers) and [configuration](/documentation/cloud/configure). The source wizard and the managed operator have different responsibilities.
 
-`dev:ssr` enables SSR using the existing provider configuration; configure it
-through the source wizard first. It does not generate credentials or select a
-provider stack. `dev:offline` disables Cloud features for browser-only development.
+`bun run dev` uses the existing provider configuration; configure it through the
+source wizard first. It does not generate credentials or select a provider
+stack. `dev:offline` disables Cloud features for browser-only development.
 
 The source launcher uses Node by default and selects Bun when an active SQLite
 provider uses `OR3_SQLITE_DRIVER=bun` (or `bun:sqlite`). This includes the auth

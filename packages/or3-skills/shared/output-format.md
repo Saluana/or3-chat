@@ -1,20 +1,20 @@
 # Output format
 
-Keep normal reports concise and use the headings defined in the
-[completion contract](./completion-contract.md). If structured output is
-requested, preserve these fields:
+Use a concise response suited to the task and the user's requested format.
+Follow [completion guidance](./completion-contract.md) for relevant evidence rather than a fixed report template.
+
+When structured output is requested, the existing field vocabulary is available:
 
 ```json
 {
-  "architecture": { "primarySurface": "plugin", "runtime": "v1" },
+  "architecture": { "primarySurface": "plugin", "runtime": "isolated-client" },
   "changes": [],
   "permissions": [],
-  "validation": [{ "name": "targeted test", "status": "passed" }],
+  "validation": [{ "name": "targeted check", "status": "passed" }],
   "artifactOrInstallation": null,
   "rollback": [],
   "remainingRisks": []
 }
 ```
 
-Use `null` for an unavailable artifact or installation status; do not replace a
-failure with an empty success-shaped value.
+Include fields relevant to the request and represent unavailable artifact/installation status honestly; an empty value must not disguise a failed check.

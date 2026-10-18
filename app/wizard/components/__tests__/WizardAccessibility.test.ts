@@ -2,7 +2,7 @@ import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import WizardStepGeneric from "../WizardStepGeneric.vue";
-import WizardStepPreset from "../WizardStepPreset.vue";
+import WizardStepTarget from "../WizardStepTarget.vue";
 import WizardStepReview from "../WizardStepReview.vue";
 import { createDefaultAnswers } from "~~/shared/cloud/wizard/catalog";
 import type {
@@ -39,8 +39,8 @@ const ButtonStub = defineComponent({
   },
 });
 
-const presetStep = {
-  id: "preset",
+const targetStep = {
+  id: "target",
   title: "Choose how OR3 runs",
   fields: [
     {
@@ -90,9 +90,9 @@ describe("wizard accessibility", () => {
   });
 
   it("uses a native named radio group with a visible selected indicator", async () => {
-    const wrapper = mount(WizardStepPreset, {
+    const wrapper = mount(WizardStepTarget, {
       props: {
-        step: presetStep,
+        step: targetStep,
         answers: { wizardMode: "personal-local" } as WizardAnswers,
         fieldErrors: {},
       },

@@ -1,22 +1,14 @@
-# Extension decision tree
+# Choosing an extension surface
 
-Classify before changing files. State the selected surface and why the lower
-surface was insufficient.
-
-| Request characteristic | Primary surface | First evidence to read |
+| Requested outcome | Usual surface | Current checkout documentation |
 | --- | --- | --- |
-| Install, configure, connect, deploy, or repair an installation | Setup | Cloud wizard and config docs |
-| Colors, typography, spacing, icons, backgrounds, or component presentation | Theme | Theme quick start and API reference |
-| A pane, command, action, tool, integration, or functional UI addition | Plugin | Plugin runtime and SDK docs |
-| Auth, sync, or storage implementation | Provider | Provider docs; outside this V1 skill set |
-| No public extension contract can support the request | Core | Relevant public types, hooks, callers, and tests |
+| Install, configure, connect, deploy, or repair an installation | Setup | Cloud setup, wizard, and configuration |
+| Colors, typography, spacing, icons, backgrounds, or presentation | Theme | Theme API, styling, and component overrides |
+| New panes, commands, actions, tools, or integrations | Plugin | Plugin runtime, SDK, and source registries |
+| Auth, sync, or storage implementation | Provider | Provider guides and selected package |
+| Core defect, host-owned behavior, or a missing extension contract | Core | Feature guide, public types, callers, and tests |
 
-Use these tie-breakers:
-
-1. Presentation-only work is a theme, even when it touches an existing plugin.
-2. New behavior is a plugin when a public contract supports it.
-3. Provider implementation is not core by default.
-4. Core is permitted only after recording why configuration, theme, plugin, and
-   provider surfaces cannot express the behavior.
-5. A mixed request may use theme plus plugin, but keep their changes and
-   rollback paths independently reviewable.
+Prefer a supported extension surface when it fits; explain the choice only when a material tradeoff or missing contract needs review.
+A provider implementation is not automatically a core change, and presentation-only work can remain a theme even inside a plugin.
+Mixed theme/plugin work can share a task while preserving clear ownership and removal paths.
+Do not manufacture a new abstraction to avoid fixing an existing core defect.

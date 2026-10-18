@@ -17,6 +17,7 @@ import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
+import { reportError } from '~/utils/errors';
 
 const pageElement = ref<HTMLElement | null>(null);
 const widePreview = ref(false);
@@ -91,6 +92,12 @@ let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 const { data: sessionData } = useSessionContext();
+function fileErrorMessage(caught: unknown, fallback: string): string {
+    const code = caught && typeof caught === 'object' && 'code' in caught ? caught.code : undefined;
+    const message = code === 'conflict' ? 'This item changed. Refresh Files and try again.'
+        : code === 'permission-denied' ? 'This file change is not allowed by workspace policy.' : fallback;
+    return reportError(caught, { message, toast: false, tags: { domain: 'files' } }).message;
+}
 function clearPreview() {
     preview.value = false; selected.value = null; previewText.value = '';
     releasePreviewImage();
@@ -180,7 +187,7 @@ async function runPluginFileAction(action: WorkspaceFileAction, row: Post) {
         const origin = scope ?? capture();
         const { workspaceFileSnapshot } = await import('~/db/workspace-files');
         await action.run(await workspaceFileSnapshot(origin, row));
-    } catch (failure) { error.value = failure instanceof Error ? failure.message : 'File action failed.'; }
+    } catch (failure) { error.value = fileErrorMessage(failure, 'The file action could not be completed. Try again.'); }
     finally { busy.value = false; }
 }
 
@@ -269,13 +276,13 @@ async function refresh() {
             }, 40);
         }, error: caught => {
             if (disposed || current !== generation || origin !== scope) return;
-            error.value = caught instanceof Error ? caught.message : 'Files are unavailable.';
+            error.value = fileErrorMessage(caught, 'Files could not be loaded. Try again.');
             loading.value = false;
         } });
     } catch (caught) {
         if (disposed || current !== generation) return;
         rows.value = []; fileDetails.value = {}; syncStatuses.value = {}; clearPreview();
-        error.value = caught instanceof Error ? caught.message : 'Files are unavailable.';
+        error.value = fileErrorMessage(caught, 'Files could not be loaded. Try again.');
         loading.value = false;
     }
 }
@@ -321,7 +328,7 @@ watch(() => preview.value ? selected.value?.id : null, id => {
     }, error: () => { if (!disposed && origin === scope) clearPreview(); } });
 });
 
-async function run(action: (origin: WorkspaceOperationScope) => Promise<void>) {
+async function run(action: (origin: WorkspaceOperationScope) => Promise<void>, failureMessage = 'The file action could not be completed. Try again.') {
     if (busy.value) return;
     busy.value = true; error.value = '';
     try {
@@ -330,7 +337,7 @@ async function run(action: (origin: WorkspaceOperationScope) => Promise<void>) {
         await action(origin);
         origin.assertCurrent();
         await refresh();
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'This operation failed. Try again.'; }
+    } catch (caught) { error.value = fileErrorMessage(caught, failureMessage); }
     finally { busy.value = false; }
 }
 
@@ -347,7 +354,7 @@ async function intake(files: File[], retry = false) {
                 feedback.value = result.restored ? 'Existing file restored locally' : result.duplicate ? 'File already exists' : 'File saved locally';
             } catch (caught) {
                 origin.assertCurrent('write');
-                failures.value.push({ file, error: caught instanceof Error ? caught.message : 'Upload failed' });
+                failures.value.push({ file, error: fileErrorMessage(caught, 'The file could not be uploaded. Try again.') });
             }
         }
         if (files.length > 1) feedback.value = `${saved} saved locally · ${failures.value.length} failed`;
@@ -392,7 +399,7 @@ async function open(row: Post) {
             if (blob && request === previewGeneration && preview.value && selected.value?.id === row.id) previewImageUrl.value = URL.createObjectURL(blob);
         }
     } catch (caught) {
-        if (request === previewGeneration) error.value = caught instanceof Error ? caught.message : 'This item is unavailable.';
+        if (request === previewGeneration) error.value = fileErrorMessage(caught, 'This item could not be opened. Refresh Files and try again.');
     }
 }
 async function openEditor(row: Post) {
@@ -405,7 +412,7 @@ async function openEditor(row: Post) {
         origin.assertCurrent();
         await openWorkspaceSource({ workspaceId: origin.workspaceId, source: { kind: 'document', id: row.id, title: row.title, revision }, partial: false });
         preview.value = false;
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'This document is unavailable.'; }
+    } catch (caught) { error.value = fileErrorMessage(caught, 'This document could not be opened. Refresh Files and try again.'); }
 }
 async function download(row = selected.value) {
     error.value = '';
@@ -444,7 +451,7 @@ async function download(row = selected.value) {
         if (!latest || !isVisibleWorkspaceItem(latest) || JSON.stringify(latest) !== JSON.stringify(current)
             || !metadata || metadata.deleted) throw new Error('This file changed. Open it again before downloading.');
         saveDownload(blob, current.title);
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Download failed.'; }
+    } catch (caught) { error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.'); }
 }
 function saveDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
@@ -504,7 +511,7 @@ async function askInChat(row: Post) {
             throw new Error('This chat cannot accept references. Enable mentions and retry.');
         }
         preview.value = false;
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Chat handoff failed.'; }
+    } catch (caught) { error.value = fileErrorMessage(caught, 'This item could not be added to chat. Try again.'); }
 }
 async function addExisting() {
     await run(async origin => {
@@ -538,7 +545,7 @@ async function removeCatalog() {
         await removeWorkspaceFile(origin, row.id, await workspaceRevision(row));
         remove.value = false; actionTarget.value = null;
         feedback.value = 'Catalog entry removed. Shared original bytes are retained.';
-    });
+    }, 'The item could not be removed. Try again.');
 }
 async function associateItem(remove = false) {
     await run(async origin => {
@@ -583,7 +590,7 @@ watch(() => props.recordId, async id => {
         origin.assertCurrent();
         if (!disposed && origin === scope && row && isVisibleWorkspaceItem(row)) await open(row);
     } catch (caught) {
-        if (!disposed && origin === scope) { clearPreview(); error.value = caught instanceof Error ? caught.message : 'This file is unavailable.'; }
+        if (!disposed && origin === scope) { clearPreview(); error.value = fileErrorMessage(caught, 'This file could not be opened. Refresh Files and try again.'); }
     }
 });
 function resetScope() {
@@ -622,7 +629,7 @@ async function initialize() {
         }
     } catch (caught) {
         if (disposed || origin !== scope) return;
-        clearPreview(); error.value = caught instanceof Error ? caught.message : 'Files are unavailable.'; loading.value = false;
+        clearPreview(); error.value = fileErrorMessage(caught, 'Files could not be loaded. Try again.'); loading.value = false;
     }
 }
 async function catalogExistingImages(origin: WorkspaceOperationScope) {
@@ -657,7 +664,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                 <div class="files-header-actions">
                     <UButton v-if="!trash" size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
                     <UButton v-if="!trash" size="workspace" label="Upload" :icon="icons.upload.value" :disabled="busy || readOnly" @click="uploadInput?.click()" />
-                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" :aria-pressed="trash" @click="trash = !trash" />
+                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" :icon="trash ? undefined : icons.trash.value" :aria-pressed="trash" @click="trash = !trash" />
                     <UDropdownMenu v-if="!trash" :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
                         { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
                     ]">
@@ -674,7 +681,9 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             <div v-if="readOnly || feedback || error" class="files-notices">
                 <p v-if="readOnly" role="status">This workspace is read-only.</p>
                 <p v-if="feedback" role="status">{{ feedback }}</p>
-                <p v-if="error" role="alert">{{ error }} <UButton size="workspace" label="Retry" color="neutral" variant="ghost" @click="refresh" /></p>
+                <UAlert v-if="error && !rename && !associate && !remove" role="alert" color="error" variant="soft" title="Files action failed" :description="error">
+                    <template #actions><UButton size="workspace" label="Refresh files" color="neutral" variant="ghost" @click="refresh" /></template>
+                </UAlert>
             </div>
             <div class="files-list">
                 <div class="files-columns" :data-trash="trash" aria-hidden="true">
@@ -709,7 +718,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                         <div class="files-row-actions">
                             <template v-if="trash">
                                 <UButton size="workspace" label="Restore" color="neutral" variant="ghost" :disabled="busy || readOnly" @click="change(row, { trashed: false })" />
-                                <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[{ label: 'Remove entry', color: 'error', disabled: busy || readOnly, onSelect: () => { actionTarget = row; remove = true; } }]">
+                                <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[{ label: 'Remove entry', color: 'error', disabled: busy || readOnly, onSelect: () => { error = ''; actionTarget = row; remove = true; } }]">
                                     <UButton size="workspace" :icon="icons.more.value" :aria-label="'More actions for ' + row.title" color="neutral" variant="ghost" square />
                                 </UDropdownMenu>
                             </template>
@@ -734,18 +743,18 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             <div class="files-inspector-header"><h2 ref="previewHeading" tabindex="-1">File preview</h2><UButton size="workspace" :icon="closeIcon" aria-label="Close" color="neutral" variant="ghost" square @click="closePreview" /></div>
             <div class="files-inspector-body">
             <WorkspaceFilePreview v-if="selected" :title="selected.title" :type="fileType(selected)" :size="formatSize(selected)" :icon="fileIcon(selected)" :coverage="textCoverage(selected)" :project="projectNames(selected).join(', ')" :text="previewText" :image-url="previewImageUrl" :partial="workspaceItemMetadata(selected.meta)?.text?.coverage !== 'full'" :disabled="trash" :document="selected.postType === 'doc'" :status="syncStatuses[selected.id]" @ask="askInChat(selected)" @download="download" @open="openEditor(selected)" />
-            <p v-if="error" role="alert">{{ error }}</p>
+            <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not open item" :description="error" />
             </div>
         </aside>
         </Transition>
         <AppModal v-model:open="rename" title="Rename item" close-label="Close">
             <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="actionTarget && change(actionTarget, { title: newTitle })" />
-            <p v-if="error" role="alert">{{ error }}</p>
+            <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not rename item" :description="error" class="mt-4" />
             <template #footer><UButton size="workspace" label="Save title" :disabled="busy || readOnly" @click="actionTarget && change(actionTarget, { title: newTitle })" /></template>
         </AppModal>
         <AppModal v-model:open="associate" title="Add to project" close-label="Close">
             <USelect v-model="associationProject" aria-label="Project" class="w-full" size="workspace" :ui="{ content: 'min-w-[240px] max-w-[calc(100vw-2rem)]' }" :items="projects.map(project => ({ label: project.name, value: project.id }))" />
-            <p v-if="error" role="alert">{{ error }}</p>
+            <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not update project" :description="error" class="mt-4" />
             <template #footer>
                 <UButton size="workspace" label="Remove from project" color="neutral" variant="ghost" :disabled="busy || readOnly || !associationProject" @click="associateItem(true)" />
                 <UButton size="workspace" label="Add to project" :disabled="busy || readOnly || !associationProject" @click="associateItem()" />
@@ -753,7 +762,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
         </AppModal>
         <AppModal v-model:open="remove" :title="actionTarget?.postType === 'doc' ? 'Remove document?' : 'Remove catalog entry?'" close-label="Cancel">
             <p>{{ actionTarget?.title }} will be removed from Files. Chat attachments and other retained references keep their original bytes.</p>
-            <p v-if="error" role="alert">{{ error }}</p>
+            <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not remove item" :description="error" class="mt-4" />
             <template #footer><UButton size="workspace" :label="actionTarget?.postType === 'doc' ? 'Remove document' : 'Remove catalog entry'" color="error" :disabled="busy || readOnly" @click="removeCatalog" /></template>
         </AppModal>
     </section>

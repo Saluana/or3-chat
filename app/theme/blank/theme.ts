@@ -53,6 +53,18 @@ export default defineTheme({
         'chat-input': './components/ChatInput.vue',
     },
     componentContractVersion: 1,
+    chatEmptyState: {
+        heading: false,
+        description: false,
+        hero: { src: '/bird-on-cloud.webp', width: 1536, height: 1024 },
+        accent: false,
+        background: { image: '/blank-chat-background.webp', fit: 'cover', repeat: 'no-repeat' },
+        layout: 'cards',
+        dark: {
+            hero: { src: '/bird-on-cloud-dark.webp', width: 1536, height: 1024 },
+            background: { image: '/blank-chat-bg-dark.webp', fit: 'cover', repeat: 'no-repeat', color: '#212121', opacity: 0.45 },
+        },
+    },
     colors: {
         // Primary: near-black like ChatGPT
         primary: '#0d0d0d',
@@ -266,7 +278,7 @@ export default defineTheme({
                 overlay:
                     'fixed inset-0 bg-black/30 backdrop-blur-[1px]',
                 content:
-                    'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[var(--app-elevation-high,0_12px_28px_rgba(0,0,0,0.12))] overflow-hidden bg-[var(--md-surface)]',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[var(--app-elevation-high,0_12px_28px_rgba(0,0,0,0.12))] overflow-hidden bg-[var(--md-surface)]',
                 body: 'p-5',
                 header: 'relative flex shrink-0 items-center justify-between gap-4 px-6 py-5 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
                 title: 'text-[var(--md-on-surface)] font-normal text-lg!',

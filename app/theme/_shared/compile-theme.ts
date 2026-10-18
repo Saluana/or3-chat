@@ -34,6 +34,7 @@ export function compileThemeDefinition(
         ui: definition.ui,
         propMaps: definition.propMaps,
         backgrounds: definition.backgrounds,
+        chatEmptyState: definition.chatEmptyState,
         icons: assets.icons ?? definition.icons,
         customComponents: definition.customComponents,
         componentContractVersion: definition.componentContractVersion,

@@ -414,8 +414,6 @@ See [OR3 Connect](/documentation/cloud/or3-connect) before enabling this feature
 | Variable | Scope | Purpose |
 |---|---|---|
 | `OR3_CLOUD_WIZARD_HOME` | source wizard CLI | Overrides the home directory used for wizard sessions/presets. |
-| `OR3_WIZARD_UI_ENABLED` | wizard UI process | Enables the browser wizard UI; disable for production runtime processes. |
-| `OR3_WIZARD_UI_TOKEN` | wizard UI process | Non-blank token required by the wizard UI API; if the UI is enabled without one, requests fail closed with HTTP 503. |
 | `OR3_WIZARD_ENABLE_INSTALL` | source wizard CLI | Set to `1` to allow the wizard to execute dependency installation. |
 
 The wizard writes only selected provider settings, removes stale values from

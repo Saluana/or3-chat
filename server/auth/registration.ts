@@ -1,7 +1,10 @@
-import { getCookie, getHeader, getQuery, type H3Event } from 'h3';
+import { getCookie, getHeader, getQuery, setResponseHeader, type H3Event } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import type { AuthWorkspaceStore } from './store/types';
-import { hashInviteToken, verifyInviteToken, type InviteTokenPayload } from './invite-token';
+import { checkSyncRateLimit, recordSyncRequest } from '../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../utils/rate-limit/enforce';
+import { getClientIp, normalizeProxyTrustConfig, type ProxyTrustConfigInput } from '../utils/net/request-identity';
+import { hashInviteToken, hashSignupInviteCode, normalizeSignupInviteCode, verifyInviteToken, type InviteTokenPayload } from './invite-token';
 
 export type RegistrationMode = 'open' | 'invite_only' | 'disabled';
 
@@ -90,14 +93,41 @@ export function getInviteTokenFromEvent(event: H3Event): string | null {
     return null;
 }
 
-export function evaluateUnknownUserRegistration(input: {
+/** Resolve short signup codes or previously issued signed invitation links. */
+export async function resolveInviteToken(event: H3Event, token: string, secret: string, store?: AuthWorkspaceStore | null): Promise<
+    { ok: true; payload: InviteTokenPayload; tokenHash: string } |
+    { ok: false; reason: 'invite_invalid' | 'invite_expired' | 'invite_unsupported' }
+> {
+    const code = normalizeSignupInviteCode(token);
+    if (code) {
+        setResponseHeader(event, 'Cache-Control', 'no-store');
+        const config = useRuntimeConfig();
+        const security = config.security as { proxy?: ProxyTrustConfigInput } | undefined;
+        const ip = getClientIp(event, normalizeProxyTrustConfig(security?.proxy))
+            || event.node.req.socket?.remoteAddress || 'unknown';
+        enforceRateLimit(event, checkSyncRateLimit(ip, 'auth:invite'));
+        recordSyncRequest(ip, 'auth:invite');
+        if (!store?.findSignupInviteByTokenHash) return { ok: false, reason: 'invite_unsupported' };
+        const tokenHash = hashSignupInviteCode(code, secret);
+        const invite = await store.findSignupInviteByTokenHash({ token_hash: tokenHash });
+        if (!invite) return { ok: false, reason: 'invite_invalid' };
+        if (invite.expires_at <= Date.now()) return { ok: false, reason: 'invite_expired' };
+        return { ok: true, tokenHash, payload: { purpose: 'signup', invite_id: invite.id, email: invite.email, exp: Math.floor(invite.expires_at / 1000) } };
+    }
+    const verified = verifyInviteToken(token, secret);
+    return verified.ok
+        ? { ...verified, tokenHash: hashInviteToken(token) }
+        : { ok: false, reason: verified.reason === 'expired' ? 'invite_expired' : 'invite_invalid' };
+}
+
+export async function evaluateUnknownUserRegistration(input: {
     event: H3Event;
     store: AuthWorkspaceStore;
     mode: RegistrationMode;
     inviteToken?: string | null;
     email?: string | null;
     bootstrapEmail?: string | null;
-}): RegistrationDecision {
+}): Promise<RegistrationDecision> {
     const { event, store, mode } = input;
 
     if (mode === 'disabled') {
@@ -125,12 +155,12 @@ export function evaluateUnknownUserRegistration(input: {
         return { allowed: false, mode, reason: 'invite_secret_missing' };
     }
 
-    const verified = verifyInviteToken(token, secret);
+    const verified = await resolveInviteToken(event, token, secret, store);
     if (!verified.ok) {
         return {
             allowed: false,
             mode,
-            reason: verified.reason === 'expired' ? 'invite_expired' : 'invite_invalid',
+            reason: verified.reason,
         };
     }
 
@@ -143,7 +173,7 @@ export function evaluateUnknownUserRegistration(input: {
         mode,
         invite: {
             token,
-            tokenHash: hashInviteToken(token),
+            tokenHash: verified.tokenHash,
             payload: verified.payload,
         },
     };
@@ -162,7 +192,7 @@ export async function validateInviteRegistration(input: {
     email: string;
     inviteToken?: string | null;
 }): Promise<RegistrationDecision> {
-    const decision = evaluateUnknownUserRegistration(input);
+    const decision = await evaluateUnknownUserRegistration(input);
     if (!decision.allowed || !decision.invite) {
         return decision;
     }

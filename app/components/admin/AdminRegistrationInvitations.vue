@@ -44,14 +44,16 @@
             <p v-else-if="message" role="alert" class="mt-3 text-sm">{{ message }}</p>
             <div v-if="created" class="mt-4 space-y-3">
                 <p class="text-sm">Copy this invitation now. It cannot be retrieved again.</p>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label for="signup-code" class="mb-1 block text-sm">Invite code</label>
+                        <UInput id="signup-code" :model-value="created.code" readonly class="w-40" :ui="{ base: 'font-mono text-lg tracking-widest' }" />
+                    </div>
+                    <UButton color="neutral" variant="soft" @click="copy(created.code)">Copy code</UButton>
+                </div>
                 <label for="signup-link" class="block text-sm">Invite link ({{ linkOrigin }})</label>
-                <UTextarea id="signup-link" :model-value="created.link" readonly :rows="3" class="w-full" />
+                <UTextarea id="signup-link" :model-value="created.link" readonly :rows="2" class="w-full" />
                 <UButton color="neutral" variant="soft" @click="copy(created.link)">Copy link</UButton>
-                <details>
-                    <summary class="cursor-pointer text-sm">Invite code for a separately hosted Chat</summary>
-                    <UTextarea aria-label="Signup invite code" :model-value="created.token" readonly :rows="3" class="mt-2 w-full" />
-                    <UButton color="neutral" variant="soft" class="mt-2" @click="copy(created.token)">Copy code</UButton>
-                </details>
             </div>
         </UCard>
         <UCard>
@@ -87,7 +89,7 @@ import { errorContains, parseErrorMessage } from '~/utils/admin/parse-error';
 
 const form = reactive({ email: '', hours: 72 });
 const creating = ref(false);
-const created = ref<{ id: string; link: string; token: string } | null>(null);
+const created = ref<{ id: string; link: string; code: string } | null>(null);
 const message = ref('');
 const inviteSetupRequired = ref(false);
 const registrationMode = ref<RegistrationMode | null>(null);
@@ -123,7 +125,7 @@ async function createInvite() {
         const result = await $fetch<{ invite: { id: string; token: string; inviteUrl: string } }>('/api/admin/signup-invites/create', {
             method: 'POST', headers: ADMIN_HEADERS, body: { email: form.email.trim(), expiresInSeconds: Number(form.hours) * 3600 },
         });
-        created.value = { id: result.invite.id, link: new URL(result.invite.inviteUrl, window.location.origin).href, token: result.invite.token };
+        created.value = { id: result.invite.id, link: new URL(result.invite.inviteUrl, window.location.origin).href, code: result.invite.token.replace(/^(.{4})(.{4})$/, '$1-$2') };
         await load();
     } catch (error) {
         if (errorContains(error, 'Invite token secret not configured')) {

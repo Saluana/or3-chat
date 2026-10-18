@@ -12,7 +12,7 @@ Vue replacements.
 ```ts
 type AppThemeComponent =
   | 'sidebar' | 'sidebar-collapsed' | 'chat-page' | 'chat-message'
-  | 'chat-input' | 'document-editor' | 'dashboard-modal' | 'model-selector'
+  | 'chat-input' | 'chat-empty-state' | 'document-editor' | 'dashboard-modal' | 'model-selector'
   | 'system-prompts-modal' | 'model-catalog-modal' | 'sidebar-auth-button'
   | 'documentation-shell' | 'workflow-status';
 ```
@@ -131,3 +131,12 @@ falls back or stops working after a host refactor.
 ## Preserve tool cards in chat-message replacements
 
 Render ChatToolBlock for ordered and legacy tool blocks, and ChatToolCardsEnd after the body. Forward their resize events as content-resize so the message list updates its measured height. Keep the user cardOrigin attribution chip. See [Tool cards](/documentation/plugins/tool-cards).
+
+
+## Replace the empty chat presenter
+
+A trusted theme may register `customComponents: { 'chat-empty-state': './components/Welcome.vue' }` with `componentContractVersion: 1`. It must also opt in with `chatEmptyState: {}` (or a configured object). Registering a replacement alone does not enable it.
+
+The version-1 contract supplies `appearance: ResolvedChatEmptyState` and readonly `actions: EmptyChatAction[]`. Render the supplied available actions and emit `action` with only the selected ID (`start-chat`, `start-project`, or `create-document`). The host rechecks availability and owns focus, writes, forms, and navigation. Do not implement a parallel creation path in the presenter. Preserve accessible labels and keyboard behavior. Configuration opt-out still applies to replacements.
+
+Themes replacing the entire `chat-page` own that surface; use the core ChatContainer wrapper or explicitly integrate the shared empty-state behavior. It is not injected into arbitrary replacement markup.

@@ -1241,3 +1241,183 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
         await page.screenshot({ path: info.outputPath('cyberpunk-icons-after-reload.png') });
     });
 }
+
+
+// Primary production boundary for empty-state eligibility, appearance and actions.
+for (const mode of modes) test('empty chat: Blank ' + mode + ' artwork, focus, and responsive controls', async ({ page }, info) => {
+    const assets: string[] = [];
+    page.on('request', request => { if (/bird-on-cloud|blank-chat-(?:background|bg)/.test(request.url())) assets.push(request.url()); });
+    await openResponsiveChat(page, 'blank', mode);
+    const state = page.locator('.chat-empty-state');
+    await expect(state).toBeVisible();
+    await expect(state.getByRole('heading')).toHaveCount(0);
+    await expect(state.locator('.chat-empty-description')).toHaveCount(0);
+    await expect(state.locator('[data-empty-chat-action]')).toHaveCount(3);
+    expect(await state.locator('[data-empty-chat-action]').evaluateAll(elements => elements.map(element => element.getAttribute('data-empty-chat-action'))))
+        .toEqual(['start-chat', 'start-project', 'create-document']);
+    await expect(state.locator('.chat-empty-hero')).toHaveAttribute('src', mode === 'dark' ? '/bird-on-cloud-dark.webp' : '/bird-on-cloud.webp');
+    await expect(page.locator('.chat-empty-background-image')).toHaveAttribute('src', mode === 'dark' ? '/blank-chat-bg-dark.webp' : '/blank-chat-background.webp');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    const draft = 'Keep my unsent ' + mode + ' draft';
+    await input.fill(draft);
+    const tabs = await page.getByRole('tab').count();
+    await state.getByRole('button', { name: 'Start a chat', exact: true }).click();
+    await expect(input).toBeFocused(); await expect(input).toHaveText(draft);
+    expect(await page.getByRole('tab').count()).toBe(tabs);
+    await captureChat(page, info, 'empty-chat-' + mode + '-desktop');
+    const desktopViewport = page.viewportSize()!;
+    const desktopFrame = await state.boundingBox();
+    for (const viewport of [
+        { width: 390, height: 844 },
+        { width: 390, height: 697 },
+        { width: 430, height: 932 },
+        { width: 320, height: 568 },
+        { width: 844, height: 390 },
+        { width: 390, height: 320 },
+    ]) {
+        await page.setViewportSize(viewport); await expectComposerFits(page);
+        for (const button of await state.getByRole('button').all()) await expect(button).toBeInViewport({ ratio: 1 });
+        if (viewport.width <= 440 && viewport.height >= 568) {
+            for (const description of await state.locator('.chat-empty-action-description').all()) await expect(description).toBeVisible();
+            await expect(state.locator('.chat-empty-action-chevron:visible')).toHaveCount(3);
+            const rows = await state.getByRole('button').evaluateAll(elements => elements.map(element => {
+                const r = element.getBoundingClientRect();
+                const copy = element.querySelector('.chat-empty-action-copy')!.getBoundingClientRect();
+                return { x: r.x, y: r.y, right: r.right, bottom: r.bottom,
+                    containsCopy: copy.top >= r.top + 6 && copy.bottom <= r.bottom - 6 && copy.right <= r.right - 20 };
+            }));
+            expect(rows.every(row => row.containsCopy), 'Every mobile card contains its complete title and description').toBe(true);
+            expect(rows.every((row, i) => i === 0 || (Math.abs(row.x - rows[0]!.x) < 1 && row.y >= rows[i - 1]!.bottom))).toBe(true);
+            await expect(state.locator('.chat-empty-hero')).toBeInViewport({ ratio: 1 });
+        }
+        await expect(input).toHaveText(draft);
+        await captureChat(page, info, 'empty-chat-' + mode + '-' + viewport.width + 'x' + viewport.height);
+    }
+    await page.setViewportSize(desktopViewport);
+    await expect(state.locator('.chat-empty-action-chevron:visible')).toHaveCount(0);
+    await expect.poll(async () => {
+        const restored = await state.boundingBox();
+        return Boolean(restored && desktopFrame && ['x', 'y', 'width', 'height'].every(key => Math.abs(restored[key as keyof typeof restored] - desktopFrame[key as keyof typeof desktopFrame]) < 1));
+    }).toBe(true);
+    expect(assets.length).toBeGreaterThan(0);
+    expect(assets.every(url => mode === 'dark' ? /-dark\.webp/.test(url) : !/-dark\.webp/.test(url))).toBe(true);
+    await info.attach('empty-chat-assets', { body: JSON.stringify(assets), contentType: 'application/json' });
+});
+
+test('empty chat: creation keeps the original draft and persists new resources', async ({ page }, info) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    const state = page.locator('.chat-empty-state');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('Retain this draft while creating resources');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+    await (await chooser).setFiles({ name: 'draft.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') });
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(1);
+    await state.getByRole('button', { name: 'Start a chat', exact: true }).click();
+    await expect(input).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(1);
+    await state.getByRole('button', { name: 'Start a project', exact: true }).click();
+    let dialog = page.getByRole('dialog', { name: 'Start a project', exact: true });
+    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Empty state project');
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(input).toHaveText('Retain this draft while creating resources');
+    await state.getByRole('button', { name: 'Create a document', exact: true }).click();
+    dialog = page.getByRole('dialog', { name: 'Create a document', exact: true });
+    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Empty state document');
+    await dialog.getByRole('button', { name: 'Create', exact: true }).dblclick();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Empty state document', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: /^New chat(?: 1)?$/ }).click();
+    await expect(input).toHaveText('Retain this draft while creating resources');
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(1);
+    await page.reload(); await expect(input).toHaveText('Retain this draft while creating resources');
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('tab', { name: 'Empty state document', exact: true })).toBeVisible();
+    await captureChat(page, info, 'empty-chat-created-resources-draft');
+});
+
+test('empty chat: missing decoration keeps actions usable', async ({ page }, info) => {
+    await page.route('**/bird-on-cloud.webp', route => route.abort());
+    await openResponsiveChat(page, 'blank', 'light');
+    await expect(page.locator('.chat-empty-state').getByRole('button', { name: 'Start a chat', exact: true })).toBeVisible();
+    await expect(page.locator('.chat-empty-hero')).toHaveCount(0);
+    await captureChat(page, info, 'empty-chat-missing-hero');
+});
+
+for (const theme of ['retro', 'cyberpunk'] as const) test('empty chat: ' + theme + ' remains opted out', async ({ page }) => {
+    const assets: string[] = [];
+    page.on('request', request => { if (/bird-on-cloud|blank-chat-(?:background|bg)/.test(request.url())) assets.push(request.url()); });
+    await openResponsiveChat(page, theme, 'dark');
+    await expect(page.locator('.chat-empty-state')).toHaveCount(0);
+    await expectComposerFits(page);
+    expect(assets).toEqual([]);
+});
+
+test('empty chat: split pane actions target the clicked pane and cancel preserves drafts', async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openResponsiveChat(page, 'blank', 'light');
+    await page.getByRole('textbox', { name: 'Message input' }).fill('First split draft');
+    await page.getByRole('button', { name: 'New split', exact: true }).click();
+    const panes = page.locator('.chat-container-root');
+    await expect(panes).toHaveCount(2);
+    await panes.nth(1).getByRole('textbox', { name: 'Message input' }).fill('Second split draft');
+    // The first pane is deliberately inactive when its action is clicked.
+    await panes.nth(0).getByRole('button', { name: 'Start a project', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Start a project', exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(panes.nth(0).getByRole('textbox', { name: 'Message input' })).toHaveText('First split draft');
+    await expect(panes.nth(1).getByRole('textbox', { name: 'Message input' })).toHaveText('Second split draft');
+    await captureChat(page, info, 'empty-chat-independent-splits');
+});
+
+
+test('empty chat: theme changes and the first send preserve composer ownership', async ({ page }, info) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    await page.goto('/__or3-chat-journey-test?workspace=1');
+    await expect(page.getByTestId('production-chat-journey')).toBeVisible();
+    await expect(page.locator('.chat-empty-state')).toBeVisible();
+    await page.goto('/chat');
+    await expect(page.locator('.chat-empty-state')).toBeVisible();
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('First message from the illustrated pane');
+    await page.getByRole('button', { name: 'Switch to dark mode', exact: true }).click();
+    await expect(page.locator('.chat-empty-hero')).toHaveAttribute('src', '/bird-on-cloud-dark.webp');
+    await expect(input).toHaveText('First message from the illustrated pane');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(page.locator('.cm-text-user').getByText('First message from the illustrated pane', { exact: true })).toBeVisible();
+    await expect(page.locator('.chat-empty-state')).toHaveCount(0);
+    await expect(page.locator('.chat-empty-background')).toHaveCount(0);
+    await expect(input).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/chat\/[^/?]+/);
+    await page.reload();
+    await expect(page.locator('.cm-text-user').getByText('First message from the illustrated pane', { exact: true })).toBeVisible();
+    await expect(page.locator('.chat-empty-state')).toHaveCount(0);
+    await captureChat(page, info, 'empty-chat-first-send');
+});
+
+
+// Theme studio must recolor both the modal frame and its internal dividers.
+for (const mode of modes) test('blank modal border follows custom colors in ' + mode + ' mode', async ({ page }, info) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openResponsiveChat(page, 'blank', mode);
+    await openThemeStudio(page, false);
+    await selectThemeAndMode(page, 'blank', mode);
+    await page.getByRole('tab', { name: 'Colors', exact: true }).click();
+    await page.getByText('Custom colors', { exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Custom colors' })).toBeChecked();
+    await page.getByRole('button', { name: /^Borders / }).click();
+    await page.getByRole('textbox', { name: 'Borders hex color', exact: true }).fill('#FF7171');
+    const settings = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    await expect(settings.locator('[data-slot="header"]').first()).toHaveCSS('border-bottom-color', 'rgb(255, 113, 113)');
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+        await expect(settings).toHaveCSS('border-' + side + '-color', 'rgb(255, 113, 113)');
+    }
+    await captureChat(page, info, 'blank-custom-modal-border-' + mode);
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Create a project', exact: true }).first().click();
+    await expect(page.getByRole('dialog', { name: 'New Project', exact: true })).toHaveCSS('border-top-color', 'rgb(255, 113, 113)');
+});

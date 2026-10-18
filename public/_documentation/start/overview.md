@@ -15,6 +15,8 @@ OR3 is an extensible AI chat workspace with conversations, documents, projects, 
 
 Local-first use does not require an OR3 account. A Cloud instance can require sign-in and add workspace synchronization, remote file storage, and server-side AI requests. Its available features depend on the operator's configuration. OpenRouter connection and OR3 Cloud sign-in are separate; see [Connect OpenRouter](/documentation/auth/connect).
 
+In the Blank theme, a new chat pane offers **Start a chat**, **Start a project**, and **Create a document** above the composer. Start a chat focuses your existing draft. Creation uses the normal naming forms; a new document opens in its own tab so your unsent chat remains available. Theme authors can customize or disable this surface through [empty chat appearance](/documentation/themes/api-reference#empty-chat-panes).
+
 ## Find and organize your work
 
 Use projects to group chats, documents for editable notes, and workspace panes to keep several items open. The [command palette](/documentation/start/command-palette) finds saved work and runs commands with Cmd+K or Ctrl+K.

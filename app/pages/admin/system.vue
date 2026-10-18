@@ -51,7 +51,7 @@
                     <div>
                         <h3 class="text-lg font-semibold">Maintenance</h3>
                         <p class="mt-1 text-sm opacity-60">
-                            Provider-specific cleanup and recovery tools.
+                            Tools to check storage and clear old records.
                         </p>
                     </div>
                     <AdminSystemProviderActions
@@ -138,7 +138,7 @@ const pending = computed(() => statusFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
-const providerActionResult = ref<{ label: string; value: unknown } | null>(null);
+const providerActionResult = ref<{ label: string; value: unknown; storageUsage: boolean } | null>(null);
 const runningActionId = ref<string | null>(null);
 const showStorageWorkspaceSelector = ref(false);
 
@@ -208,14 +208,15 @@ async function runProviderAction(action: {
     danger?: boolean;
     description?: string;
 }, workspace?: { id: string; name: string }) {
-    if (action.kind === 'storage' && action.id === 'storage.usage' && !workspace) {
+    const storageUsage = action.kind === 'storage' && action.id === 'storage.usage';
+    if (storageUsage && !workspace) {
         openStorageUsage();
         return;
     }
     if (runningActionId.value) return;
     if (action.danger) {
         const confirmed = await confirm({
-            title: 'Run Provider Action',
+            title: 'Confirm maintenance',
             message: [
                 `Are you sure you want to run "${action.label}"?`,
                 action.description || null,
@@ -240,14 +241,17 @@ async function runProviderAction(action: {
         providerActionResult.value = {
             label: workspace ? `Storage usage for ${workspace.name}` : action.label,
             value: response.result,
+            storageUsage,
         };
         const disabled = response.result !== null && typeof response.result === 'object'
             && 'status' in response.result && response.result.status === 'disabled';
-        toast.add({
-            title: disabled ? 'Action disabled' : 'Action completed',
-            description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
-            color: disabled ? 'warning' : 'success',
-        });
+        if (disabled || !storageUsage) {
+            toast.add({
+                title: disabled ? 'Action disabled' : 'Action completed',
+                description: disabled ? 'No files were deleted. See the provider result for the reason.' : `${action.label} returned a result below.`,
+                color: disabled ? 'warning' : 'success',
+            });
+        }
         await nextTick();
         const resultElement = document.getElementById('provider-action-result');
         resultElement?.focus({ preventScroll: true });

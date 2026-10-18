@@ -268,7 +268,9 @@ files and define `@font-face` in your scoped stylesheet.
 ## Dialogs and responsive layouts
 
 The shared `AppModal` uses theme surface/text, border, radius, elevation, and
-focus tokens while owning its geometry. Sizes are `sm` (560px), `md` (700px),
+focus tokens while owning its geometry. In Blank, both the outer frame and header
+divider use `--md-border-color`, so Theme studio’s **Colors → Borders** setting
+updates them live in the selected light/dark mode. Sizes are `sm` (560px), `md` (700px),
 `lg` (880px), and `workspace` (1280px with bounded height). Respect its scrolling
 body, accessible title, close control, and footer. Shared headers use 20px vertical
 and 24px horizontal padding, reduced to 16px in compact viewports, with a
@@ -293,3 +295,27 @@ adding translation utilities that remain active when mobile resets `transform`.
 Retro integrates user and assistant message actions into a right-aligned footer
 with inherited text color and a subtle divider; shared CSS retains the touch
 regions and wrapping.
+
+
+## Empty chat appearance
+
+Enable `chatEmptyState` in the theme definition, or set it to `false` to opt out. Blank is the only bundled theme that enables it. Copy, assets, action order, and color-mode overrides are documented in the [theme reference](/documentation/themes/api-reference#empty-chat-panes).
+
+Use these stable hooks in a theme-local stylesheet scoped to your theme:
+
+```css
+html[data-theme='my-theme'] .chat-empty-hero { max-width: 320px; }
+html[data-theme='my-theme'] .chat-empty-accent { right: 8%; width: 24%; }
+html[data-theme='my-theme'] .chat-empty-heading { font-size: 2rem; }
+html[data-theme='my-theme'] .chat-empty-action { border-radius: 12px; }
+```
+
+Other hooks: `.chat-container--empty`, `.chat-empty-background`, `.chat-empty-state`, `.chat-empty-artwork`, `.chat-empty-description`, `.chat-empty-actions`, `.chat-empty-action-icon`, `.chat-empty-action-label`, `.chat-empty-action-description`, and `.chat-empty-action-chevron`. Each action has `data-empty-chat-action="start-chat|start-project|create-document"`. The presenter exposes `data-layout="cards|compact|stacked"`.
+
+Reactive prop overrides are available at `section#chat.empty-state` and `button#chat.empty.start-chat`, `button#chat.empty.start-project`, `button#chat.empty.create-document`, all in the `chat` context. Shared creation dialogs expose `modal#chat.empty.create`. Preserve labeled keyboard actions, visible focus, 44px touch targets, and container queries that keep the composer usable in narrow or short panes. The default illustration is static, including with reduced motion enabled.
+
+The supplied Blank hero already includes its speech bubble, so its separate accent is disabled. Alternate themes may use independent hero/accent images and position them through their own CSS. The empty-state background is local to the pane; use the existing global background slots for artwork intended to remain behind populated chats too.
+
+Blank feathers the background with an elliptical CSS opacity mask and fades only the bottom of its hero cloud. Adjust or override `mask-image` / `-webkit-mask-image` on `.chat-empty-background` and `.chat-empty-hero` to change the blend. These masks affect decoration only, in both color modes; exported assets retain their alpha.
+
+On phone viewports, Blank’s `cards` layout groups the three actions into a rounded panel with visible descriptions, circular icons, and trailing chevrons. The artwork and spacing scale with available pane height; short screens retain a compact layout so the composer stays reachable. These rules are limited to viewports up to 767px and leave the desktop layout unchanged. Other themes and authored `compact`/`stacked` layouts retain their own presentation.

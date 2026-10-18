@@ -79,7 +79,7 @@ bun add or3-provider-s3
 
 ### Local provider development
 
-`bun run dev` and `bun run dev:ssr` automatically rebuild available sibling
+`bun run dev` (and its `dev:ssr` and `dev:offline` variants) automatically rebuilds available sibling
 `or3-provider-*` repositories and use their built Nuxt modules for that dev
 process. Each provider prints its version and resolved local path. Restart the
 dev command after editing provider source to rebuild it.

@@ -94,11 +94,19 @@
                         </div>
                     </slot>
                 </div>
-                <p class="lock-motto">
-                    <svg viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="m4 4 9 6M2 17h9M6 28l8-6" /></svg>
-                    <span>MORE MODELS. FEWER LIMITS.</span>
-                    <svg viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="m16 4-9 6m11 7H9m5 11-8-6" /></svg>
-                </p>
+                <nav class="lock-links" aria-label="About OR3">
+                    <svg class="lock-links-chirp" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="m4 4 9 6M2 17h9M6 28l8-6" /></svg>
+                    <a href="https://or3.net" target="_blank" rel="noopener noreferrer">
+                        <UIcon name="i-lucide-arrow-up-right" class="lock-links-icon" aria-hidden="true" />
+                        <span>Learn more</span>
+                    </a>
+                    <span class="lock-links-separator" aria-hidden="true">·</span>
+                    <a href="https://github.com/Saluana/or3-chat" target="_blank" rel="noopener noreferrer">
+                        <UIcon name="i-lucide-github" class="lock-links-icon" aria-hidden="true" />
+                        <span>GitHub</span>
+                    </a>
+                    <svg class="lock-links-chirp" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="m16 4-9 6m11 7H9m5 11-8-6" /></svg>
+                </nav>
             </div>
         </main>
     </div>
@@ -106,9 +114,20 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRuntimeConfig } from '#imports';
+import { useHead, useRuntimeConfig } from '#imports';
 
 const runtimeConfig = useRuntimeConfig();
+
+useHead({
+    link: [{
+        key: 'or3-lock-hand-font',
+        rel: 'preload',
+        href: '/lock-page/caveat-latin.woff2',
+        as: 'font',
+        type: 'font/woff2',
+        crossorigin: 'anonymous',
+    }],
+});
 
 const siteName = computed(
     () =>
@@ -122,14 +141,6 @@ const logoUrl = computed(
 </script>
 
 <style scoped>
-@font-face {
-    font-family: 'OR3 Lock Hand';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('/lock-page/caveat-captions.ttf') format('truetype');
-}
-
 .lock-mobile-card,
 .lock-desktop-note {
     display: none;
@@ -183,19 +194,56 @@ const logoUrl = computed(
     stroke-width: 3.5;
 }
 
-.lock-motto {
+.lock-links {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
     margin-top: 2rem;
-    color: var(--lock-hand);
-    font: 600 1rem/1.2 'OR3 Lock Hand', cursive;
-    letter-spacing: 0.13em;
+    color: color-mix(in srgb, var(--lock-hand) 78%, #0c1420);
+    font: 600 1.5rem/1.2 'OR3 Lock Hand', cursive;
     white-space: nowrap;
 }
 
-.lock-motto svg {
+.dark .lock-links {
+    color: var(--lock-hand);
+}
+
+.lock-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    border-radius: 0.25rem;
+    color: inherit;
+}
+
+.lock-links a span:last-child {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+}
+
+.lock-links a:hover {
+    color: var(--md-on-surface);
+}
+
+.lock-links a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+
+.lock-links-icon {
+    flex: none;
+    width: 1em;
+    height: 1em;
+}
+
+.lock-links-separator {
+    margin-inline: 0.25rem;
+}
+
+.lock-links-chirp {
     flex: none;
     width: 0.875rem;
     height: 1.375rem;
@@ -395,9 +443,9 @@ const logoUrl = computed(
         margin-top: clamp(1rem, 2.8svh, 1.5rem);
     }
 
-    .lock-motto {
+    .lock-links {
         margin-top: clamp(0.75rem, 3.4svh, 1.75rem);
-        font-size: clamp(0.75rem, 3.3vw, 1rem);
+        font-size: clamp(1.125rem, 5.2vw, 1.5rem);
     }
 
     .dark .lock-shell {
@@ -426,7 +474,7 @@ const logoUrl = computed(
         margin-top: 0.875rem;
     }
 
-    .lock-motto {
+    .lock-links {
         margin-top: 0.75rem;
     }
 }
@@ -445,9 +493,8 @@ const logoUrl = computed(
         margin-top: 0.625rem;
     }
 
-    .lock-motto {
+    .lock-links {
         margin-top: 0.375rem;
-        font-size: 0.6875rem;
     }
 }
 
@@ -493,9 +540,9 @@ const logoUrl = computed(
         display: none;
     }
 
-    .lock-motto {
+    .lock-links {
         margin-top: 0.5rem;
-        font-size: 0.625rem;
+        font-size: 1.125rem;
     }
 }
 

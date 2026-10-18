@@ -4,7 +4,11 @@ import { Socket } from 'net';
 import { createHmac } from 'node:crypto';
 import { createEvent, type H3Event } from 'h3';
 import { createInviteToken, verifyInviteToken } from '../../auth/invite-token';
+import { resetSyncRateLimits } from '../../utils/sync/rate-limiter';
 import { getInviteTokenFromEvent, INVITE_TOKEN_COOKIE } from '../../auth/registration';
+
+const lookup = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('../../auth/store/registry', () => ({ getAuthWorkspaceStore: () => ({ findSignupInviteByTokenHash: lookup }) }));
 
 const SECRET = 'invite-link-test-secret';
 const config = vi.hoisted(() => ({
@@ -35,6 +39,8 @@ const token = (expSeconds: number, secret = SECRET): string => createInviteToken
 // token; OR3 admits the new user only if a later request still carries it.
 describe('invite link middleware', () => {
     beforeEach(() => {
+        resetSyncRateLimits();
+        lookup.mockClear();
         config.value = {
             auth: { enabled: true, registrationMode: 'invite_only', invite: { tokenSecret: SECRET } },
             security: { proxy: { trustProxy: true } },
@@ -58,6 +64,23 @@ describe('invite link middleware', () => {
         // After a redirect or in a new tab, the session request has no query.
         const later = makeEvent('/api/auth/session', { cookie: cookie!.split(';')[0] });
         expect(getInviteTokenFromEvent(later)).toBe(invite);
+    });
+
+    it('limits short-code guesses before lookup and never replaces a usable cookie', async () => {
+        config.value.public = { sync: { provider: 'sqlite' } };
+        config.value.limits = { operationRateLimits: { 'auth:invite': { windowMs: 60_000, maxRequests: 2 } } };
+        const options = { cookie: `${INVITE_TOKEN_COOKIE}=${token(3600)}` };
+        for (let i = 0; i < 2; i++) {
+            const event = makeEvent('/?invite=ABCDEFGH', options);
+            await run(event);
+            expect(setCookie(event)).toEqual([]);
+        }
+        const blocked = makeEvent('/?invite=ABCDEFGH', options);
+        await expect(run(blocked)).rejects.toMatchObject({ statusCode: 429 });
+        expect(Number(blocked.node.res.getHeader('retry-after'))).toBeGreaterThan(0);
+        expect(blocked.node.res.getHeader('cache-control')).toBe('no-store');
+        expect(lookup).toHaveBeenCalledTimes(2);
+        expect(setCookie(blocked)).toEqual([]);
     });
 
     it('marks the cookie Secure for HTTPS, including behind a trusted proxy', async () => {

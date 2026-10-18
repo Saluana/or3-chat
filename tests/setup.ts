@@ -119,6 +119,9 @@ vi.mock('#app', async () => {
             },
             $theme: {
                 activeTheme: ref('light'),
+                current: ref('light'),
+                resolversVersion: ref(0),
+                getTheme: () => undefined,
                 getResolver: () => ({ resolve: () => ({ props: {} }) }),
                 setActiveTheme: vi.fn(),
             },
@@ -199,6 +202,9 @@ vi.mock('#imports', async (importOriginal) => {
             },
             $theme: {
                 activeTheme: { value: 'light' },
+                current: { value: 'light' },
+                resolversVersion: { value: 0 },
+                getTheme: () => undefined,
                 getResolver: () => ({ resolve: () => ({ props: {} }) }),
                 setActiveTheme: vi.fn(),
             },

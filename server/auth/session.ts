@@ -338,7 +338,7 @@ async function resolveSessionContextAttempt(
         if (existingUser) {
             userId = existingUser.userId;
         } else {
-            const registrationDecision = evaluateUnknownUserRegistration({
+            const registrationDecision = await evaluateUnknownUserRegistration({
                 event,
                 store,
                 mode: registrationMode,

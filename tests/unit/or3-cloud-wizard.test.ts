@@ -10,6 +10,11 @@ import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
 import { applyAnswers } from '../../shared/cloud/wizard/apply';
 import { buildDeployPlan } from '../../shared/cloud/wizard/deploy';
 import {
+    buildApplyOnlySuccessBody,
+    buildCheatSheetLines,
+    formatStartCommand,
+} from '../../shared/cloud/wizard/next-steps';
+import {
     deriveEnvFromAnswers,
     deriveWizardOwnedEnvUpdates,
 } from '../../shared/cloud/wizard/derive';
@@ -286,13 +291,11 @@ describe('or3 cloud wizard validation', () => {
 
     it('uses updated template wording and includes custom mode', () => {
         const steps = getWizardSteps(validRecommendedAnswers());
-        const presetStep = steps.find((step) => step.id === 'preset');
+        const presetStep = steps.find((step) => step.id === 'target');
         const providerStep = steps.find((step) => step.id === 'providers');
 
-        expect(presetStep?.title).toBe('Starting Template');
-        expect(presetStep?.description).toContain(
-            'Preset templates auto-configure providers and skip manual provider selection'
-        );
+        expect(presetStep?.title).toBe('Choose a setup');
+        expect(presetStep?.fields[0]?.key).toBe('wizardMode');
 
         const presetLabels = (presetStep?.fields[0]?.options ?? []).map(
             (option) => option.label
@@ -334,7 +337,7 @@ describe('or3 cloud wizard validation', () => {
         expect(providersStep.canSkip?.(validRecommendedAnswers())).toBe(true);
     });
 
-    it('reduces recommended self-host (local-dev) to setup, template, email, and review', () => {
+    it('reduces recommended self-host (local-dev) to setup, email, and review', () => {
         const answers = {
             ...validRecommendedAnswers(),
             wizardMode: 'preset-local' as const,
@@ -346,7 +349,6 @@ describe('or3 cloud wizard validation', () => {
         );
         expect(visibleSteps.map((step) => step.id)).toEqual([
             'target',
-            'preset',
             'provider-auth',
             'review',
         ]);
@@ -363,7 +365,7 @@ describe('or3 cloud wizard validation', () => {
             ...validRecommendedAnswers(),
             cloudSetupEntry: true,
         };
-        const presetStep = getStepById(getWizardSteps(answers), 'preset');
+        const presetStep = getStepById(getWizardSteps(answers), 'target');
         const labels = (presetStep.fields[0]?.options ?? []).map(
             (option) => option.label
         );
@@ -386,7 +388,6 @@ describe('or3 cloud wizard validation', () => {
         );
         expect(visibleSteps.map((step) => step.id)).toEqual([
             'target',
-            'preset',
             'provider-auth',
             'review',
         ]);
@@ -400,7 +401,7 @@ describe('or3 cloud wizard validation', () => {
         expect(answers.fsRoot).not.toContain('/tmp/');
     });
 
-    it('reduces the recommended Docker wizard to setup, template, email, and review', () => {
+    it('reduces the recommended Docker wizard to setup, email, and review', () => {
         const answers = {
             ...validRecommendedAnswers(),
             wizardMode: 'preset-local' as const,
@@ -413,7 +414,6 @@ describe('or3 cloud wizard validation', () => {
         );
         expect(visibleSteps.map((step) => step.id)).toEqual([
             'target',
-            'preset',
             'provider-auth',
             'review',
         ]);
@@ -614,7 +614,7 @@ describe('or3 cloud wizard apply', () => {
         const commands = plan.map(
             (command) => `${command.command} ${command.args.join(' ')}`
         );
-        expect(commands).toContain('bun run dev:ssr');
+        expect(commands).toContain('bun run dev');
         expect(commands).toContain('bun x or3-provider-convex init');
         expect(commands).toContain('bun x convex dev --once');
     });
@@ -664,8 +664,17 @@ describe('or3 cloud wizard apply', () => {
             (command) => `${command.command} ${command.args.join(' ')}`
         );
         expect(commands).toContain('npm install');
-        expect(commands).toContain('npm run dev:ssr');
+        expect(commands.at(-1)).toBe(formatStartCommand('npm'));
         expect(commands.every((command) => !command.includes('bun'))).toBe(true);
+    });
+
+    it('gives the same start command in every setup surface', () => {
+        for (const packageManager of ['bun', 'npm'] as const) {
+            const start = formatStartCommand(packageManager);
+            expect(start).toBe(`${packageManager} run dev`);
+            expect(buildCheatSheetLines({ packageManager }).join('\n')).toContain(start);
+            expect(buildApplyOnlySuccessBody(false, packageManager)).toContain(start);
+        }
     });
 
     it('builds private and public Docker Compose commands', () => {
@@ -991,8 +1000,6 @@ describe('or3 cloud wizard apply', () => {
     it('strips wizard-only env vars before starting local dev', () => {
         const env = createCleanWizardDeployEnv({
             SSR_AUTH_ENABLED: 'false',
-            OR3_WIZARD_UI_ENABLED: 'true',
-            OR3_WIZARD_UI_TOKEN: 'wizard-token',
             OR3_WIZARD_ENABLE_INSTALL: '1',
             AUTH_PROVIDER: 'clerk',
             OR3_SITE_NAME: 'OR3',
@@ -1001,8 +1008,6 @@ describe('or3 cloud wizard apply', () => {
 
         expect(env.SSR_AUTH_ENABLED).toBeUndefined();
         expect(env.AUTH_PROVIDER).toBeUndefined();
-        expect(env.OR3_WIZARD_UI_ENABLED).toBeUndefined();
-        expect(env.OR3_WIZARD_UI_TOKEN).toBeUndefined();
         expect(env.OR3_WIZARD_ENABLE_INSTALL).toBeUndefined();
         expect(env.OR3_SITE_NAME).toBeUndefined();
         expect(env.PATH).toBe(process.env.PATH);

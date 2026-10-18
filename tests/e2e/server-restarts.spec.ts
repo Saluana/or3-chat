@@ -114,12 +114,13 @@ if (process.env.OR3_RESTART_E2E_MODEL) test('browser queues retain identity and 
     expect((await context.request.post('/api/workspaces/active', { headers, data: { id: other } })).ok()).toBe(true);
     const initial = await (await context.request.get('/api/admin/system/restart-status')).json();
     const requestId = crypto.randomUUID();
-    const reloaded = page.waitForEvent('domcontentloaded', { timeout: 120_000 });
     expect((await context.request.post('/api/admin/system/restart', { headers: admin, data: {
         requestId, policy: 'wait', target: { kind: 'current', activeRevision: initial.activeRevision },
     } })).status()).toBe(202);
     await expect.poll(async () => { try { return (await (await context.request.get('/api/admin/system/restart-status')).json()).operation.phase; } catch { return 'unreachable'; } }, { timeout: 120_000 }).toBe('succeeded');
-    await reloaded;
+    // Reopen the real queues on the verified boot. Automatic Vite reload can
+    // race client-only startup; the dashboard journey owns HMR recovery checks.
+    await page.goto(url);
     await expect(page.getByTestId('continuity-ready')).toHaveText('true', { timeout: 30_000 });
     const parked = await snapshot();
     expect(parked.transfers[0].id).toBe(before.transfers[0].id); expect(parked.ops[0].stamp.opId).toBe(before.ops[0].stamp.opId);
@@ -163,7 +164,8 @@ test('dashboard restart replaces boots and activates saved registration', async 
     });
     expect(login.ok(), await login.text()).toBe(true);
     const status = async () => {
-        const response = await context.request.get('/api/admin/system/restart-status');
+        // A replacement boot can reset a connection pooled from the previous boot.
+        const response = await context.request.get('/api/admin/system/restart-status', { maxRetries: 1 });
         expect(response.ok(), await response.text()).toBe(true);
         return await response.json();
     };

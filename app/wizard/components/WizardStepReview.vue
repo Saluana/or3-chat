@@ -12,8 +12,9 @@
             </p>
         </header>
 
+        <!-- Results get one message: the banner below when there is one. -->
         <div
-            v-if="statusMessage"
+            v-if="statusMessage && !resultBanner"
             class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3 text-sm"
         >
             {{ statusMessage }}
@@ -79,23 +80,31 @@
             </div>
         </div>
 
-        <!-- Success banner (validate / apply / deploy) -->
+        <!-- Result banner (validate / save / deploy, or a startup failure) -->
         <div
-            v-if="successBanner && !isDeploying"
-            class="rounded-[var(--md-border-radius-large)] border-[length:var(--md-border-width-strong)] border-[var(--md-primary)]/40 bg-[var(--md-primary)]/6 px-5 py-5"
+            v-if="resultBanner && !isDeploying"
+            role="status"
+            class="rounded-[var(--md-border-radius-large)] border-[length:var(--md-border-width-strong)] px-5 py-5"
+            :class="resultBanner.failed
+                ? 'border-[var(--md-error)]/60 bg-[var(--md-error)]/6'
+                : 'border-[var(--md-primary)]/40 bg-[var(--md-primary)]/6'"
         >
             <div class="flex items-start gap-3">
-                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--md-primary)] text-[var(--md-on-primary,#fff)]">
-                    <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none">
-                        <path d="M3 8l4 4 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
+                <div
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--md-on-primary,#fff)]"
+                    :class="resultBanner.failed ? 'bg-[var(--md-error)]' : 'bg-[var(--md-primary)]'"
+                >
+                    <UIcon
+                        :name="resultBanner.failed ? 'i-lucide-triangle-alert' : 'i-lucide-check'"
+                        class="size-4"
+                    />
                 </div>
                 <div>
                     <p class="font-heading text-sm text-[var(--md-on-surface)]">
-                        {{ successBanner.title }}
+                        {{ resultBanner.title }}
                     </p>
-                    <p class="mt-1 text-sm leading-relaxed text-[var(--md-on-surface)]/50">
-                        {{ successBanner.body }}
+                    <p class="mt-1 text-sm leading-relaxed text-[var(--md-on-surface)]/60">
+                        {{ resultBanner.body }}
                     </p>
                 </div>
             </div>
@@ -159,13 +168,6 @@
 
         <div class="flex flex-wrap items-center gap-3 border-t-[length:var(--md-border-width-subtle)] border-[color:var(--md-border-color)] pt-5">
             <UButton
-                label="Validate"
-                variant="outline"
-                :loading="isDeploying"
-                :disabled="isDeploying"
-                @click="$emit('validate')"
-            />
-            <UButton
                 label="Save Settings"
                 variant="outline"
                 :loading="isDeploying"
@@ -174,7 +176,7 @@
             />
             <UButton
                 label="Apply + Deploy"
-                icon="i-heroicons-rocket-launch"
+                icon="i-lucide-rocket"
                 :loading="isDeploying"
                 :disabled="isDeploying"
                 @click="$emit('deploy')"
@@ -184,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type {
     WizardAnswers,
     WizardApplyResult,
@@ -221,7 +224,6 @@ const props = withDefaults(
 );
 
 defineEmits<{
-    (event: 'validate'): void;
     (event: 'apply-only'): void;
     (event: 'deploy'): void;
 }>();
@@ -244,24 +246,40 @@ async function copyBootstrapCredentials(): Promise<void> {
     );
 }
 
-const successBanner = computed(() => {
+const resultBanner = computed(() => {
     if (!props.deployResponse?.ok) return null;
     const apply = props.deployResponse.applyResult;
     if (apply?.dryRun) {
         return {
+            failed: false,
             title: 'Validation passed',
             body: 'Your configuration looks good. Nothing was written yet — use Save Settings or Apply + Deploy when you are ready.',
         };
     }
-    if (props.deployResponse.deployResult) {
+    const deployResult = props.deployResponse.deployResult;
+    if (deployResult && props.answers.deploymentTarget === 'configure-only') {
         return {
-            title: props.deployResponse.deployResult.started ? 'Deployment complete' : 'Settings saved — startup needs attention',
-            body: props.deployResponse.deployResult.started
-                ? 'Your OR3 Cloud instance has been configured and deployed. Check the next steps below to get started.'
-                : props.deployResponse.deployResult.instructions ?? 'Follow the next steps below to start your instance.',
+            failed: false,
+            title: 'Settings saved',
+            body: deployResult.instructions ?? 'No services were started.',
         };
     }
+    if (deployResult) {
+        // A start that never became reachable has no access URL.
+        return deployResult.started && deployResult.accessUrl
+            ? {
+                  failed: false,
+                  title: 'Deployment complete',
+                  body: deployResult.instructions ?? 'OR3 is running. Check the next steps below to get started.',
+              }
+            : {
+                  failed: true,
+                  title: 'Settings saved, but OR3 did not start',
+                  body: deployResult.instructions ?? 'Follow the next steps below to start OR3.',
+              };
+    }
     return {
+        failed: false,
         title: 'Settings saved',
         body: buildApplyOnlySuccessBody(
             props.answers.connectEnabled,

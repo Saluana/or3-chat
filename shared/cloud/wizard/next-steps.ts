@@ -3,12 +3,31 @@
  * the dev startup banner. Keep these strings in one place so docs and UX
  * don't drift.
  */
+type PackageManager = 'npm' | 'bun';
+
 export type NextStepsContext = {
     ssrAuthEnabled?: boolean;
     connectEnabled?: boolean;
     appUrl?: string;
-    packageManager?: 'npm' | 'bun';
+    packageManager?: PackageManager;
 };
+
+/**
+ * The one command that starts a source checkout. `dev` loads `.env`, so the
+ * same command starts browser-only and authenticated setups. Setup copy, the
+ * terminal cheat sheet and the wizard's local deploy all use it.
+ */
+export function startCommand(packageManager: PackageManager = 'npm'): {
+    command: PackageManager;
+    args: string[];
+} {
+    return { command: packageManager, args: ['run', 'dev'] };
+}
+
+export function formatStartCommand(packageManager: PackageManager = 'npm'): string {
+    const { command, args } = startCommand(packageManager);
+    return [command, ...args].join(' ');
+}
 
 const DEFAULT_APP_URL = 'http://localhost:3000';
 
@@ -26,7 +45,7 @@ export function buildCheatSheetLines(context: NextStepsContext = {}): string[] {
     const appUrl = resolveAppUrl(context.appUrl);
     const packageManager = context.packageManager ?? 'npm';
     const lines = [
-        `Start the app:    ${packageManager} run dev`,
+        `Start the app:    ${formatStartCommand(packageManager)}`,
         `Open:             ${appUrl}`,
     ];
     if (context.ssrAuthEnabled) {
@@ -43,10 +62,10 @@ export function buildCheatSheetLines(context: NextStepsContext = {}): string[] {
 
 export function buildApplyOnlySuccessBody(
     connectEnabled = false,
-    packageManager: 'npm' | 'bun' = 'npm'
+    packageManager: PackageManager = 'npm'
 ): string {
     const connectMessage = connectEnabled
         ? ' After OR3 is running publicly, connect a computer with npx @or3/connect.'
         : '';
-    return `Your .env and provider modules were written. Start the app with ${packageManager} run dev when you are ready.${connectMessage}`;
+    return `Your .env and provider modules were written. Start the app with ${formatStartCommand(packageManager)} when you are ready.${connectMessage}`;
 }

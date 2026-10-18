@@ -5,6 +5,7 @@
         :class="[
             'chat-container-root flex w-full flex-1 h-full min-h-0 flex-col overflow-hidden relative [container:chat-pane/size]',
             containerProps?.class ?? '',
+            { 'chat-container--empty': Boolean(emptyAppearance) },
         ]"
     >
         <!-- Virtualized messages (Req 3.1) -->
@@ -12,6 +13,10 @@
         <!-- Virtualized messages (Req 3.1) -->
         <!-- Or3Scroll is now the scroll container -->
         <ClientOnly>
+            <ChatEmptyStateMedia v-if="emptyAppearance?.background" :key="emptyMediaKey"
+                class="chat-empty-background" :background="emptyAppearance.background" :src="emptyAppearance.background.image" />
+        </ClientOnly>
+        <ClientOnly v-if="!emptyAppearance">
             <Or3Scroll
                 ref="scroller"
                 :items="allMessages"
@@ -108,6 +113,8 @@
             ]"
             :style="inputWrapperStyle"
         >
+            <component v-if="emptyAppearance" :is="$theme.activeComponents.value['chat-empty-state'] || CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']"
+                :key="emptyMediaKey" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
             <div
                 v-bind="innerInputContainerProps"
                 :class="[
@@ -209,6 +216,11 @@ import type {
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatEmptyStateMedia from './ChatEmptyStateMedia.vue';
+import { resolveChatEmptyState, type EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
+import { useEmptyChatActionHost } from '~/composables/chat/useEmptyChatActions';
+import { focusPaneInput } from '~/composables/chat/useChatInputBridge';
+import { useNuxtApp } from '#app';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
@@ -1397,10 +1409,83 @@ onBeforeUnmount(() => {
     } catch {}
 });
 
+const emptyActionHost = useEmptyChatActionHost();
+const emptyTheme = useNuxtApp().$theme;
+// The server cannot read a localStorage color preference. Hydrate text with
+// its emitted mode, then select artwork only once the client mode is applied.
+const emptyMounted = ref(false);
+const emptyInitialMode = useState('chat-empty-initial-mode', () => emptyTheme.current.value);
+const emptyMode = computed(() => emptyMounted.value ? emptyTheme.current.value : emptyInitialMode.value);
+onMounted(() => { emptyMounted.value = true; });
+const emptyAppearance = computed(() => {
+    if (props.threadId || currentThreadId.value || allMessages.value.length || inputLoading.value || streamingActive.value || compaction.active.value || showWelcomeCard.value) return null;
+    void emptyTheme.resolversVersion.value;
+    return resolveChatEmptyState(emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState, emptyMode.value);
+});
+const emptyMediaKey = computed(() => emptyTheme.activeTheme.value + ':' + emptyMode.value);
+const emptyActions = computed(() => emptyAppearance.value?.actions.filter(action => action.id === 'start-chat' || emptyActionHost?.available.value.includes(action.id)) ?? []);
+async function onEmptyChatAction(id: EmptyChatActionId) {
+    // Let the pane click/focus handler select an inactive split before dispatch.
+    await nextTick();
+    if (!emptyAppearance.value || !emptyActions.value.some(action => action.id === id) || !props.paneId) return;
+    if (id === 'start-chat') focusPaneInput(props.paneId);
+    else emptyActionHost?.request(id, { paneId: props.paneId, tabId: props.tabId });
+}
+
 defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread });
 </script>
 
 <style>
+/* Host layout must load even when a theme replaces ChatEmptyState. */
+.chat-container--empty .chat-empty-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+.chat-container--empty .chat-input-wrapper {
+    position: relative;
+    inset: auto;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    overflow: auto;
+    padding: 24px 24px max(24px, env(safe-area-inset-bottom)) !important;
+    pointer-events: auto;
+    contain: none !important;
+}
+.chat-container--empty .chat-inner-input-container {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 0;
+}
+.chat-container--empty .chat-empty-state {
+    flex: 0 0 auto;
+}
+@container chat-pane (max-width: 440px) {
+    .chat-container--empty .chat-input-wrapper {
+        padding: 16px 12px !important;
+        gap: 18px;
+    }
+}
+@container chat-pane (max-height: 660px) {
+    .chat-container--empty .chat-input-wrapper {
+        gap: 16px;
+        padding-block: 12px !important;
+    }
+}
+@container chat-pane (max-height: 420px) {
+    .chat-container--empty .chat-input-wrapper {
+        gap: 10px;
+        padding-block: 8px !important;
+    }
+}
+
 @media (max-width: 767px), (pointer: coarse) {
     /* The application frame already ends above Safari's keyboard. Collapse
        theme/home-indicator spacing to one small gap while it is visible. */

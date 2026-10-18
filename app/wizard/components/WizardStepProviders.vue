@@ -177,6 +177,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { listImplementedProviders } from '~~/shared/cloud/wizard/catalog';
 import type { WizardAnswers, WizardField, WizardStep } from '~~/shared/cloud/wizard/types';
 import WizardFieldRenderer from './WizardFieldRenderer.vue';

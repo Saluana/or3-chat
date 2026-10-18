@@ -288,3 +288,52 @@ query/migration behavior, authenticated controls, owned process replacement,
 managed leases and browser observation. No remaining restart-blocking finding
 was identified. Existing scope limitations above still apply; no package,
 image or live backend was published or changed.
+
+## Merge integration qualification (2026-10-17)
+
+Local landing integrates the host destination `or3-cloud` at `8d774864`, SQLite
+`main` at `ffbda7b`, and Convex `main` at `e55bd3e` with the reviewed restart
+snapshots `d4156412`, `8460107`, and `b230b14`, respectively. The newer signup
+invitation lookup/short-code work, storage maintenance UI and contributor
+guidance are preserved. Conflict resolution keeps the verified restart controls
+and revision contract alongside those changes. The combined Convex templates
+were rebuilt with digest
+`cae88023eee24930e4b30111d78a88630b977f73dd23bea033a87799fd103cd8`;
+earlier digests above describe their historical qualification inputs.
+
+Post-integration checks passed: 199 focused host tests, 235 SQLite tests with
+11 existing skips, 272 Convex tests, both provider builds, host-backed and
+standalone provider type checks, full host type checking, and the managed
+package's complete check (247 passed, four existing skips, zero failures,
+including type checking and both bundles). Receipts use
+`/tmp/or3-restart-merge-{host-tests,sqlite-tests,convex-tests,host-types,cloud-check}.log`
+and the corresponding provider build/type logs.
+
+The first integrated browser run completed active-job/queue recovery and
+repeated restarts, then its direct status GET encountered `ECONNRESET` on a
+connection pooled from the previous boot (`/tmp/or3-restart-merge-convex-backend/`,
+artifact `2026-10-18T00-48-29.568Z/`). That read-only helper now allows one
+transport retry. The next run passed dashboard/HMR recovery but its client-only
+queue fixture remained blank after an automatic Vite reload
+(`/tmp/or3-restart-merge-convex-qualified/`, artifact
+`2026-10-18T00-53-01.490Z/`). The persistence journey now reopens that fixture
+after verified server recovery before asserting the original queue identities,
+attempts, canonical metadata and bytes. The separate dashboard journey still
+owns automatic HMR/recovery checks; production deadlines and assertions are
+unchanged.
+
+The final combined-source run passed all six disposable backend scenarios,
+28 process/shutdown cases and all three browser journeys
+(`/tmp/or3-restart-merge-convex-final.log` and its `dashboard.log`). Artifact
+`test-results/server-restarts/2026-10-18T00-56-49.726Z/` retains
+`convex-drain.json`, canonical-history failure/recovery receipts, queue/byte
+proof, verified replacement boots/HMR, saved-policy activation and actual
+asynchronous cleanup. Owned ports closed and temporary application data was
+removed. These runs used a disposable loopback backend; no live backend,
+package or image was published or changed.
+
+Final documentation validation passed (114 files, 102 mapped routes, 20
+typechecked examples). Targeted production lint exited successfully with two
+pre-existing optional-chain warnings in registration's invitation-secret check;
+the repository ESLint policy excludes Vue files. All three worktree diff checks
+passed. Receipts: `/tmp/or3-restart-merge-{docs,lint}.log`.

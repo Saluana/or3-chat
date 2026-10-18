@@ -1,5 +1,6 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { createInviteToken } from '../../server/auth/invite-token';
 import { strToU8, zipSync } from 'fflate';
 
@@ -106,7 +107,7 @@ for (const [label, viewport] of [
             // The token outlives the root → /chat rewrite: a provider that reads
             // invite links has opened registration, or it is still there to read.
             await expect.poll(async () => new URL(page.url()).searchParams.get('invite') === 'e2e-invite-token'
-                || await page.getByRole('dialog', { name: 'Create Account' }).isVisible()).toBe(true);
+                || await page.getByRole('dialog', { name: 'Create your account' }).isVisible()).toBe(true);
             await saveEvidence(info, `invite-link-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
         });
 
@@ -138,7 +139,12 @@ for (const [label, viewport] of [
                     data: kind === 'signup' ? { email } : { workspaceId, email, role: 'viewer' },
                 });
                 expect(created.ok(), await created.text()).toBe(true);
-                inviteUrl = (await created.json()).invite.inviteUrl;
+                const invitation = (await created.json()).invite;
+                inviteUrl = invitation.inviteUrl;
+                if (kind === 'signup') {
+                    expect(invitation.token).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+                    expect(new URL(inviteUrl, origin).searchParams.get('invite')).toBe(invitation.token);
+                }
             } finally {
                 await owner.close();
             }
@@ -149,10 +155,13 @@ for (const [label, viewport] of [
                 await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
                 await page.getByRole('button', { name: 'More options', exact: true }).click();
             }
-            const form = page.getByRole('dialog', { name: 'Create Account', exact: true });
+            const form = page.getByRole('dialog', { name: 'Create your account', exact: true });
             await expect(form).toBeVisible({ timeout: 30_000 });
             const inviteCode = form.getByRole('textbox', { name: 'Invite code (from your invite link)', exact: true });
             await expect(inviteCode).not.toHaveValue('');
+            await saveEvidence(info, `registration-${kind}-${label}`, {
+                body: await page.screenshot({ mask: [inviteCode] }), contentType: 'image/png',
+            });
             const token = await inviteCode.inputValue();
             const emailField = form.getByRole('textbox', { name: 'Email', exact: true });
             await emailField.fill(`${email}.typo`);
@@ -176,7 +185,8 @@ for (const [label, viewport] of [
                     body: await page.screenshot({ mask: [inviteCode] }), contentType: 'image/png',
                 });
             }
-            await inviteCode.fill(token);
+            // Codes work when typed in lowercase, grouped, or copied with spaces.
+            await inviteCode.fill(kind === 'signup' ? ` ${token.slice(0, 4).toLowerCase()}-${token.slice(4).toLowerCase()} ` : token);
             await emailField.fill(email.toUpperCase());
             const registration = page.waitForResponse(response =>
                 new URL(response.url()).pathname === '/api/basic-auth/register' && response.request().method() === 'POST');
@@ -264,7 +274,12 @@ test('instance admin controls load without a Chat account or selected workspace'
     const created = page.waitForResponse(r => new URL(r.url()).pathname === '/api/admin/signup-invites/create');
     await page.getByRole('button',{name:'Create invite',exact:true}).click();
     expect((await created).ok()).toBe(true);
+    const shortCode = page.getByRole('textbox', { name: 'Invite code', exact: true });
+    await expect(shortCode).toHaveValue(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+    await expect(page.getByRole('button', { name: 'Copy code', exact: true })).toBeVisible();
     const visibleLink = await page.getByLabel(/Invite link/).inputValue();
+    expect(new URL(visibleLink).searchParams.get('invite')).toBe((await shortCode.inputValue()).replace('-', ''));
+    await saveEvidence(info, 'short-invitation', { body: await page.screenshot({ mask: [shortCode, page.getByLabel(/Invite link/)] }), contentType: 'image/png' });
     expect(new URL(visibleLink).origin).toBe(origin);
     await page.getByRole('listitem').filter({hasText:email}).getByRole('button',{name:'Revoke',exact:true}).click();
     await expect(page.getByRole('listitem').filter({hasText:email})).toContainText('revoked');
@@ -476,16 +491,45 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
             { id: 'other-workspace', name: 'Second workspace', memberCount: 1 },
         ], total: 2,
     } }));
+    // Summary contract: readable units, unknown is not zero, partial totals stay
+    // qualified, and the full provider response is available only on request.
+    const completeUsage = {
+        consistency: 'non_atomic_observation',
+        canonical: {
+            activeMetadataBytes: 16 * 1024 ** 2, retainedDeletedMetadataBytes: 4 * 1024 ** 2,
+            reservedUploadBytes: 0,
+            complete: { activeMetadata: true, retainedDeletedMetadata: true, reservedUploads: true },
+        },
+        filesystem: { complete: true, apparentFileBytes: 24 * 1024 ** 2, allocatedFileBytes: 28 * 1024 ** 2 },
+        volume: { totalBytes: 100 * 1024 ** 3, availableBytes: 40 * 1024 ** 3, freeBytes: 42 * 1024 ** 3 },
+        warnings: [],
+    };
+    const usageResults = [completeUsage, {
+        consistency: 'non_atomic_observation',
+        canonical: {
+            activeMetadataBytes: null, retainedDeletedMetadataBytes: null, reservedUploadBytes: null,
+            complete: { activeMetadata: false, retainedDeletedMetadata: false, reservedUploads: false },
+        },
+        filesystem: {
+            complete: false, apparentFileBytes: null, allocatedFileBytes: null,
+            categories: { retainedDeletedBlobs: { files: 0, apparentBytes: 0 } },
+        },
+        volume: null, warnings: ['filesystem_workspace_missing'],
+    }, {
+        ...completeUsage,
+        canonical: { ...completeUsage.canonical, activeMetadataBytes: 0, retainedDeletedMetadataBytes: 0 },
+        filesystem: { complete: false, apparentFileBytes: 1024, allocatedFileBytes: 4096 },
+        warnings: ['filesystem_entry_limit'],
+    }];
     const requests: unknown[] = [];
     await page.route('**/api/admin/system/provider-action', route => {
         requests.push(route.request().postDataJSON());
-        return route.fulfill({ json: { ok: true, result: {
-            consistency: 'non_atomic_observation', filesystem: { complete: false, apparentFileBytes: 1024 },
-            warnings: ['filesystem_entry_limit'],
-        } } });
+        return route.fulfill({ json: { ok: true, result: usageResults[requests.length - 1] } });
     });
 
+    const statusReady = page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/system/status' && response.ok());
     await page.goto('/admin');
+    await statusReady;
     await expect(page.getByText('Deleted files still use storage', { exact: true })).toBeVisible();
     await expect(page.getByText(rawWarning, { exact: true })).toBeHidden();
     await expect(page.getByText('Another provider needs attention.', { exact: true })).toBeVisible();
@@ -505,11 +549,27 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
     await picker.getByRole('button', { name: /Walkthrough workspace/ }).click();
     await expect.poll(() => requests).toEqual([{ kind: 'storage', actionId: 'storage.usage', workspaceId: 'ux-workspace' }]);
     const result = page.getByRole('status').filter({ hasText: 'Storage usage for Walkthrough workspace' });
-    await expect(result).toContainText('filesystem_entry_limit');
-    await expect(result).toContainText('1024');
+    await expect(result.getByText('Active files', { exact: true })).toBeVisible();
+    await expect(result.getByText('16 MB', { exact: true })).toBeVisible();
+    await expect(result.getByText('In Trash', { exact: true })).toBeVisible();
+    await expect(result.getByText('4 MB', { exact: true })).toBeVisible();
+    await expect(result.getByText('Files on disk', { exact: true })).toBeVisible();
+    await expect(result.getByText('24 MB', { exact: true })).toBeVisible();
+    await expect(result.getByText('Server space available', { exact: true })).toBeVisible();
+    await expect(result.getByText('40 GB', { exact: true })).toBeVisible();
+    await expect(result.locator('pre')).toBeHidden();
     await expect(result).toBeInViewport();
     await expect(result).toBeFocused();
-    await saveEvidence(info, 'admin-workspace-storage-usage', { body: await page.screenshot(), contentType: 'image/png' });
+    await expect(page.getByText('Action completed', { exact: true })).toHaveCount(0);
+    await saveEvidence(info, 'admin-workspace-storage-usage', { body: await result.screenshot(), contentType: 'image/png' });
+    const disclosure = result.getByText('Show JSON', { exact: true });
+    await disclosure.focus();
+    await page.keyboard.press('Enter');
+    await expect(result.locator('pre')).toBeVisible();
+    await expect(result.locator('pre')).toContainText('non_atomic_observation');
+    await expect(result.locator('pre')).toContainText('"allocatedFileBytes": 29360128');
+    await disclosure.click();
+    await expect(result.locator('pre')).toBeHidden();
 
     // Repeat on mobile and explicitly choose a different workspace.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -523,13 +583,29 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
     const secondResult = page.getByRole('status').filter({ hasText: 'Storage usage for Second workspace' });
     await expect(secondResult).toBeInViewport();
     await expect(secondResult).toBeFocused();
-    await saveEvidence(info, 'admin-workspace-storage-usage-mobile', { body: await page.screenshot(), contentType: 'image/png' });
+    await expect(secondResult.getByText('Storage usage couldn’t be measured for this workspace.', { exact: true })).toBeVisible();
+    await expect(secondResult.getByText('0 B', { exact: true })).toHaveCount(0);
+    await expect(secondResult.locator('pre')).toBeHidden();
+    await saveEvidence(info, 'admin-workspace-storage-unavailable-mobile', { body: await secondResult.screenshot(), contentType: 'image/png' });
 
     await page.locator('#storage-usage').getByRole('button', { name: 'View storage usage', exact: true }).click();
     await expect(picker).toBeVisible();
-    await page.keyboard.press('Escape');
+    await picker.getByRole('button', { name: /Walkthrough workspace/ }).click();
     await expect(picker).toBeHidden();
-    expect(requests).toHaveLength(2);
+    await expect.poll(() => requests.length).toBe(3);
+    await expect(result.getByText('0 B', { exact: true })).toHaveCount(2);
+    await expect(result.getByText('1 KB', { exact: true })).toBeVisible();
+    await expect(result.getByText('Partial scan', { exact: true })).toBeVisible();
+    await expect(result.getByText('The disk total may be higher. Some files could not be checked.', { exact: true })).toBeVisible();
+    await expect(result.locator('pre')).toBeHidden();
+    await saveEvidence(info, 'admin-workspace-storage-partial-mobile', { body: await result.screenshot(), contentType: 'image/png' });
+    await result.getByText('Show JSON', { exact: true }).click();
+    await expect(result.locator('pre')).toBeVisible();
+    await expect(result.locator('pre')).toContainText('filesystem_entry_limit');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await result.getByText('Show JSON', { exact: true }).click();
+    await expect(result.locator('pre')).toBeHidden();
+    await saveEvidence(info, 'admin-storage-summary-responses', { body: JSON.stringify(usageResults, null, 2), contentType: 'application/json' });
 
     usageAvailable = false;
     // A hash-only navigation retains the existing status. Reload to simulate
@@ -540,7 +616,7 @@ test('admin storage notice opens usage for an explicitly selected workspace', as
     await expect(page.getByText('Storage usage unavailable', { exact: true })).toBeVisible();
     await expect(picker).toBeHidden();
     await expect(page.getByRole('link', { name: 'View storage usage', exact: true })).toHaveCount(0);
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
 });
 
 test('ordinary sign-in finishes credential-first signup with a replacement invite', async ({ page, browser }, info) => {
@@ -570,10 +646,10 @@ test('ordinary sign-in finishes credential-first signup with a replacement invit
         const replacement = await create();
         // A stale cookie/link must not override a manually pasted replacement token.
         await page.goto(first.inviteUrl);
-        const registrationForm = page.getByRole('dialog', { name: 'Create Account', exact: true });
+        const registrationForm = page.getByRole('dialog', { name: 'Create your account', exact: true });
         await expect(registrationForm).toBeVisible({ timeout: 30_000 });
         await registrationForm.getByRole('textbox', { name: 'Invite code (from your invite link)', exact: true }).fill(replacement.token);
-        await registrationForm.getByRole('button', { name: 'Already registered? Sign in', exact: true }).click();
+        await registrationForm.getByRole('button', { name: 'Sign in', exact: true }).click();
         const signIn = page.getByRole('dialog', { name: 'Sign In', exact: true });
         await expect(signIn).toBeVisible();
         await signIn.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
@@ -616,6 +692,14 @@ test('signup preflight rejects revoked tokens and native accept/revoke has one w
             headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: { email, password, confirmPassword: password, inviteToken },
         });
         expect((await register(revokedInvite.token)).status()).toBe(403);
+        // Move only this disposable fixture past its expiry; no wall-clock wait.
+        const expired = await create();
+        expect(process.env.OR3_SQLITE_DB_PATH).toContain('or3-sign-in-gate-e2e-');
+        const Database = createRequire(import.meta.url)('better-sqlite3');
+        const db = new Database(process.env.OR3_SQLITE_DB_PATH);
+        try { db.prepare('UPDATE signup_invites SET expires_at = ? WHERE id = ?').run(Date.now() - 1000, expired.id); }
+        finally { db.close(); }
+        expect((await register(expired.token)).status()).toBe(403);
         const valid = await create();
         // Success with the same email proves preflight did not preclaim credentials.
         expect((await register(valid.token)).ok()).toBe(true);
@@ -635,6 +719,14 @@ test('signup preflight rejects revoked tokens and native accept/revoke has one w
             expect((await detail.json()).members).toHaveLength(1);
             const replay = (await (await page.request.get('/api/auth/session')).json()).session;
             expect(replay.workspace.id).toBe(session.workspace.id);
+            const outsider = await browser.newContext({ baseURL: origin });
+            try {
+                const reused = await outsider.request.post('/api/basic-auth/register', {
+                    headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+                    data: { email, password, confirmPassword: password, inviteToken: valid.token },
+                });
+                expect(reused.status()).toBe(403);
+            } finally { await outsider.close(); }
         } else {
             expect(row.status).toBe('revoked');
             expect(revokeResponse.ok()).toBe(true);

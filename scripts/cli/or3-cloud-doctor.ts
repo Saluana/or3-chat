@@ -62,7 +62,7 @@ export async function runDoctorChecks(input: {
             : `  ❌ ${setting} requires ${moduleId}. ${result.message} Install/build the selected provider.`);
         if (!result.ok) exitCode = 1;
     }
-    if (config.auth.enabled && map.OR3_WIZARD_UI_ENABLED !== 'true' && !map.OR3_PLUGIN_WATCH_ROOT) {
+    if (config.auth.enabled && !map.OR3_PLUGIN_WATCH_ROOT) {
         try {
             const metadata = readProviderMetadata(cwd);
             lines.push(...metadata.warnings.map((warning) => `  ⚠️  ${warning}`));

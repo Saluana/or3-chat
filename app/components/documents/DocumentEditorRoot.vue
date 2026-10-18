@@ -192,12 +192,15 @@
 
                     <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" :class="{ 'document-content--readonly': editorLocked }" />
 
-                    <BubbleMenu v-if="editor && !editorLocked" v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
-                        <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="editor.chain().focus().toggleBold().run()" />
-                        <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="editor.chain().focus().toggleItalic().run()" />
-                        <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="editor.chain().focus().toggleUnderline().run()" />
-                        <UButton :icon="icons.ai" color="primary" variant="ghost" size="sm" square aria-label="Edit selection with AI" @click="openAiForSelection" />
-                    </BubbleMenu>
+                    <!-- TipTap detaches the menu element. Keep Vue's conditional on a stable parent. -->
+                    <div v-if="editor && !editorLocked">
+                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
+                            <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="editor.chain().focus().toggleBold().run()" />
+                            <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="editor.chain().focus().toggleItalic().run()" />
+                            <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="editor.chain().focus().toggleUnderline().run()" />
+                            <UButton :icon="icons.ai" color="primary" variant="ghost" size="sm" square aria-label="Edit selection with AI" @click="openAiForSelection" />
+                        </BubbleMenu>
+                    </div>
 
                     <div v-if="slashOpen" ref="slashMenu" v-theme="'document.insert-menu'" class="slash-menu" role="listbox" aria-label="Insert block">
                         <div class="slash-menu-header">

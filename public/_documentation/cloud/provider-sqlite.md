@@ -79,7 +79,7 @@ OR3_SQLITE_DRIVER=bun
 OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
 ```
 
-For editable source development with the Bun driver, `bun run dev:ssr` selects
+For editable source development with the Bun driver, `bun run dev` selects
 Bun and checks `bun:sqlite` before Nuxt starts. `bun run build` also selects Bun
 for this driver; static generation and type-checking use Node. Use the Bun
 version pinned in the host's `package.json`. The wrappers load `.env` before
@@ -148,6 +148,12 @@ advertise this transactional capability.
 
 ## Operational Notes
 
+In **Operations → Maintenance**, **Clear old sync history** removes old update
+history, and **Clear old deletion history** removes old deletion records. Their
+descriptions explain the retention period and require active devices to be up to
+date. These actions preserve current chats and files and do not empty Trash.
+Card descriptions wrap fully, including on narrow screens.
+
 Persistent Projects stores version-1 settings, explicit memories, and source bindings as opaque internal posts with the existing workspace-item marker. Preserve their content, metadata, and all `file_hashes`, including original/extraction history; no separate project database is needed. Workspace capability checks still apply to viewers, old clients, and revoked members.
 
 The project-aware canonical reader returns `project_ownership: resolved | conflict` with explicit or legacy ownership resolved in the authorized SQLite snapshot, and the adapter declares `capabilities.projectOwnership: 'v1'`. The host always refuses server-owned execution for project-bound or conflicting chats. With a declaring provider it also refuses an absent field; with an older provider ordinary chats keep server execution and the host logs once that legacy folder membership is not enforced server-side. This reader change is in the Projects review branch and must be released to enforce legacy membership with a registry provider; normal browser project chat can be tested independently.
@@ -159,7 +165,7 @@ The project-aware canonical reader returns `project_ownership: resolved | confli
 
 ## Instance signup invitations
 
-The updated provider implements the five optional signup-invite methods on the existing AuthWorkspaceStore. A separate additive signup-invite table keeps email, hashed token, millisecond timestamps, admin actor, and an identity-bound acceptance receipt. Lists omit token material, paginate at most 100 rows, and derive expired status. Pending receipts expire from retention 90 days after invitation expiry; accepted/revoked receipts are retained 90 days after that transition. Create/list cleanup deletes at most 100 eligible records per call.
+The updated provider implements the five atomic signup-invite methods and the optional server-only `findSignupInviteByTokenHash` lookup on the existing AuthWorkspaceStore. Short codes use the existing indexed `token_hash` field with an HMAC hash; lookup returns only a pending invitation’s ID, email, and expiry to the trusted host. No raw code is stored or returned in history. A separate additive signup-invite table keeps email, hashed proof, millisecond timestamps, admin actor, and an identity-bound acceptance receipt. Lists omit token material, paginate at most 100 rows, and derive expired status. Pending receipts expire from retention 90 days after invitation expiry; accepted/revoked receipts are retained 90 days after that transition. Create/list cleanup deletes at most 100 eligible records per call.
 
 Acceptance atomically creates the canonical user, provider mapping, private workspace, recipient-only owner membership, active workspace pointer, and consumed receipt. Same-identity retry returns the committed result without changing active selection or recreating data. Existing canonical accounts cannot redeem a signup invite into another private workspace; use team invites for sharing.
 

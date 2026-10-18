@@ -26,9 +26,13 @@ Background jobs remain tied to their original workspace when you switch. Reading
 
 A signup invite never joins the inviter’s workspace or copies its data. If Basic Auth credentials were created but signup was interrupted, choose **Already registered? Sign in** with the same email and password. Keep the valid invite, or paste a replacement from an administrator. Revoking an invite does not delete credentials. Provider credentials alone do not grant access to protected OR3 data.
 
+New signup invitations use eight random letters and numbers, displayed as `K7MP-4X9Q`. **Registration → Invitations** shows **Copy code** and **Copy link**; both admit the same recipient. Codes accept lowercase letters, spaces, and the optional dash. Links fill in the code automatically. Previously issued signed links remain valid until they expire or are revoked.
+
+The server stores only a keyed hash of each code, using `OR3_AUTH_INVITE_TOKEN_SECRET`; neither the code nor the link can be retrieved from history. Short-code lookup shares a limit of 20 requests per minute per IP across links, registration preflight, sign-in handoff, and session provisioning. Existing registration/sign-in/session limits also apply. Email binding, expiry, revocation, and atomic single-use acceptance still apply. Rotating the secret invalidates existing codes and signed links.
+
 The Basic Auth registration form calls the invitation field **Invite code** and prompts **Paste invite code**. Opening an invite link fills in the code for you.
 
-If a signed, unexpired invitation is for a different email, registration asks you to check for typos or use the email that received the invite. It does not reveal the intended address. Invalid or expired codes instead prompt you to check the link or ask for a new invitation; a missing required code prompts you to enter one. Rejected attempts preserve the form and do not create credentials or accept the invitation, so you can correct the email or code and try again. Email matching ignores capitalization.
+If a valid, unexpired invitation is for a different email, registration asks you to check for typos or use the email that received the invite. It does not reveal the intended address. Invalid or expired codes instead prompt you to check the link or ask for a new invitation; a missing required code prompts you to enter one. Rejected attempts preserve the form and do not create credentials or accept the invitation, so you can correct the email or code and try again. Email matching ignores capitalization.
 
 Basic Auth registration and password changes show **Use at least 8 characters**. If a password is too long, the form asks you to shorten it. Password limits still apply, including when using emoji or other characters that take more storage space.
 

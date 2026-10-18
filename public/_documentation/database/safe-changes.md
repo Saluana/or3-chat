@@ -36,7 +36,7 @@ The caller supplies a real guard for the admitted workspace/session. Do not re-r
 
 Read/prepare data before entering a write transaction. Dexie transactions should not contain unrelated network requests or long UI waits. Use existing batch/entity helpers when available; their transaction rules are more specific than a generic example.
 
-Internal writes that participate in sync must include capture tables in the same transaction. `getWriteTxTableNames(db, primary, options)` from `~/db/util` includes `pending_ops` when present; `includeTombstones: true` adds deletion history when present. Additional related tables belong in `include` or the primary list. Adding the tables alone does not validate a row or supply entity hooks/revision semantics.
+Internal writes that participate in sync must include capture tables in the same transaction. `getWriteTxTableNames(db, primary, options)` from `~/db/util` includes both `pending_ops` and `tombstones` when present. Generic saves, patches, and hook filters can change `deleted` to `true`, so deletion history belongs in their transaction too. An explicit `includeTombstones: false` is only appropriate when the entire operation cannot delete a row. Additional related tables belong in `include` or the primary list. Adding the tables alone does not validate a row or supply entity hooks/revision semantics.
 
 Do not suppress remote-apply guards, overwrite outbox operation IDs, reset revision clocks, or sync derived fields. See [sync internals](/documentation/cloud/sync-layer). Sparse ordering is intentional; use message move/insert helpers rather than renumbering an entire thread after every edit.
 
@@ -45,6 +45,8 @@ Do not suppress remote-apply guards, overwrite outbox operation IDs, reset revis
 `dbTry` reports errors and **swallows them by default**, returning undefined. An undefined result can mean a suppressed error or a legitimate missing record. When failure must roll back a transaction or fail a save, use `{ rethrow: true }` and let the caller handle it.
 
 A closed-database error is quiet unless rethrow is requested. Quota failures receive storage guidance and are not automatically retryable. Do not clear workspace data as an automatic quota recovery step. Export a backup and let the user choose what to remove.
+
+UI error messages should describe the failed action using `reportError` with an application-owned message. Do not display a caught exception's raw `message`; database and sync diagnostics belong in developer logs. A failed system prompt deletion keeps its confirmation open with a visible error and allows retry without clearing the saved prompt or its default selection.
 
 ## Deletion and file ownership
 

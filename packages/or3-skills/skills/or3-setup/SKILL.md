@@ -1,6 +1,6 @@
 ---
 name: or3-setup
-description: Configure, validate, repair, or deploy a supported OR3 Chat installation. Use when a user asks to install OR3, choose auth/sync/storage providers, connect a remote computer, change instance configuration, or diagnose setup.
+description: Configure, validate, repair, or prepare deployment of an OR3 Chat installation using the supported operator or source wizard.
 license: GPL-3.0
 compatibility: Requires an OR3 Chat checkout and Bun for supported setup and validation commands.
 metadata:
@@ -11,76 +11,28 @@ metadata:
 
 # OR3 setup
 
-## Purpose
+Inspect the target mode, provider configuration, and data paths before making changes.
+Use [repository navigation](../../shared/repository-navigation.md) for the current setup and selected-provider docs.
+If checkout context is uncertain, this package's `bun run context --cwd <checkout>` identifies it.
 
-Use the existing OR3 setup and validation surfaces to configure an installation
-without inventing environment variables, destroying unknown configuration, or
-exposing secrets.
+## Supported paths
 
-## When to use
+- Normal local/VPS installs use `npx @or3/cloud init --local` or the documented public-domain route.
+- Editable source or custom-provider deployments use the checkout's `bun run or3-cloud:init` wizard.
+- Source development starts with `bun run dev`; its wrappers select the required runtime.
+- Remote Connect availability must be checked against the current deployment docs; do not infer managed support from source code.
 
-Use for installation, provider selection, setup repair, local-to-SSR changes,
-deployment preparation, or OR3 Connect configuration.
+## Safety
 
-Do not use for a new product feature, an appearance-only request, or a provider
-implementation. Route those requests using the
-[extension decision tree](../../shared/extension-decision-tree.md).
+- Reuse configuration builders and the wizard's nondestructive environment merge, preserving unknown entries and provider aliases.
+- Keep credentials server-only where required and out of source, examples, logs, and reports.
+- Provider switching is not data migration; back up and obtain explicit approval before replacing databases, storage roots, or live provider configuration.
+- Preserve static builds and unrelated changes; do not hand-author a replacement `.env` when the supported merge is sufficient.
 
-## Required first steps
+Validate with `bun run or3-cloud:validate` and the relevant `bun run doctor` checks.
+Run start/build or deep health checks as needed for the changed mode, and stop before deployment/promotion on failed validation.
+A dry run is not an installed or running configuration.
 
-1. Read [repository navigation](../../shared/repository-navigation.md).
-2. Run `bun run context --cwd <checkout>` from this package when context is
-   uncertain; inspect the target configuration and current provider modules.
-3. Read the docmap pages for the Cloud wizard, base configuration, selected
-   providers, and deployment only as needed.
-4. Preserve existing unrelated changes. Do not print `.env` values or secrets.
-
-## Workflow
-
-1. Identify the requested mode: local-only, recommended self-hosted, legacy
-   Clerk/Convex, custom, or remote-computer setup.
-2. Inspect existing configuration before proposing writes. State files,
-   providers, data paths, and operations that could replace data or deploy.
-3. For normal local or VPS installs, prefer the managed operator:
-   `npx @or3/cloud init --local` or `npx @or3/cloud init --public --domain
-   <hostname>`. Use the repository-local `bun run or3-cloud:init` wizard only
-   for source development or custom-provider deployments; use its `--dry-run`,
-   `--instance-dir`, and `--env-file` options when they clarify scope.
-4. Use existing configuration APIs or the wizard for changes. Preserve unknown
-   environment lines and keep provider-specific server credentials server-only.
-5. Validate with the checkout's `bun run or3-cloud:validate` and, when
-   appropriate, `bun run doctor`. Run start/build only when requested or needed
-   to verify the changed mode.
-6. If validation fails, stop before deploy or promotion. Report the failing
-   field and safe recovery path.
-
-## Safety rules
-
-- Never hand-author a replacement `.env` when the wizard supports a
-  non-destructive merge.
-- Treat database paths, storage roots, deployment commands, and provider
-  switches as potentially destructive. Back up and obtain explicit approval
-  before replacing them.
-- Never write a secret into source, generated examples, logs, or a report.
-- Keep static builds static: server-only providers and credentials must not be
-  imported into client paths.
-
-## Validation
-
-Record the exact wizard/config command, validation result, selected provider
-combination, and any health/build command actually run. A completed dry run is
-not an installed configuration.
-
-## Completion output
-
-Follow the [completion contract](../../shared/completion-contract.md). Include
-the product mode, provider names, redacted configuration summary, changed or
-backed-up files, start command, and restoration path.
-
-## References to load
-
-- [Quality gates](../../shared/quality-gates.md)
-- [Permissions and trust](../../shared/permissions-and-trust.md)
-- `public/_documentation/cloud/or3-cloud-wizard.md`
-- `public/_documentation/cloud/configure.md`
-- Provider page(s) selected from `public/_documentation/docmap.json`
+Report the effective mode/providers, validation, and any material startup or restoration instructions using [completion guidance](../../shared/completion-contract.md).
+See [quality gates](../../shared/quality-gates.md) and [permissions and trust](../../shared/permissions-and-trust.md).
+Checkout references: `public/_documentation/cloud/setup.md`, `or3-cloud-wizard.md`, `configure.md`, and selected provider pages in that category.

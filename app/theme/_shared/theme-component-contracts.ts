@@ -37,6 +37,12 @@ Object.assign(contracts, {
             'send', 'model-change', 'stop-stream', 'pending-prompt-selected', 'resize',
         ],
     },
+    'chat-empty-state': {
+        ...DEFAULT_CONTRACT,
+        requiredProps: ['appearance', 'actions'],
+        requiredEmits: ['action'],
+        accessibility: ['Keep action labels, keyboard activation and visible focus; emit only the requested action ID.'],
+    },
     'workflow-status': {
         ...DEFAULT_CONTRACT,
         accessibility: [
