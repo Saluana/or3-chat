@@ -42,15 +42,15 @@ export default defineConfig({
         url: baseURL,
         timeout: 120 * 1000,
         reuseExistingServer: !process.env.CI,
+        // The supervisor must close its detached Nuxt child before Playwright exits.
+        gracefulShutdown: { signal: 'SIGTERM', timeout: 30_000 },
         ...(process.env.OR3_FILE_BACKUP_E2E_DIR ? {
           env: { CI: '', TEST: '' },
-          gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },
         } : {}),
         ...(process.env.OR3_RESTART_E2E === 'true' ? {
           // Qualify a normal development server, independently of runner hints.
           // The installed Nitro dev worker skips awaited cleanup in CI/test mode.
           env: { CI: '', TEST: '' },
-          gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },
           ignoreHTTPSErrors: Boolean(restartHttps),
           stdout: 'pipe' as const,
         } : {}),
