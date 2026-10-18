@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "4ecc39763fc0ee02150862d218560ee61d2b82a648fd5612a75a22ac053a87e4",
+      "apiSha256": "8e562a745186ab0eeed4abf1f06cfedf42b839a7a7fbe8fb14e44f00c9491cb0",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -4075,7 +4075,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 41,
+              "line": 45,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -7677,7 +7677,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 182,
+                "line": 185,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7686,7 +7686,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 182,
+              "line": 185,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7752,7 +7752,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 47,
+              "line": 51,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
@@ -7766,9 +7766,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 21,
+              "line": 25,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | null>;\n    error: Ref<AppError | null>;\n}"
+              "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
           ]
         },
@@ -7780,7 +7780,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 19,
+              "line": 23,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }
@@ -12460,7 +12460,7 @@
     },
     {
       "source": "server/utils/chat/tool-registry.ts",
-      "apiSha256": "f8bf168a7ebb9a0e308e17e093c7b92fbdcdad9728fd02272f5f9a82d5c6f9c8",
+      "apiSha256": "35c452af105706523f03251ee3cc2f7b86ca56e7b03094aa6b7fb34851e826d2",
       "runtime": "server",
       "publicPaths": [
         "~~/server/utils/chat/tool-registry"
@@ -12481,7 +12481,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 35,
+              "line": 36,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -12498,7 +12498,7 @@
               "resolvedReturnType": "Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 175,
+                "line": 176,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
               }
@@ -12507,7 +12507,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 175,
+              "line": 176,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
             }
@@ -12524,7 +12524,7 @@
               "resolvedReturnType": "RegisteredServerTool | undefined",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 138,
+                "line": 139,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
               }
@@ -12533,7 +12533,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 138,
+              "line": 139,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
             }
@@ -12547,7 +12547,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 32,
+              "line": 33,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -12564,7 +12564,7 @@
               "resolvedReturnType": "RegisteredServerTool[]",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 142,
+                "line": 143,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listServerTools(): RegisteredServerTool[];"
               }
@@ -12573,7 +12573,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 142,
+              "line": 143,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listServerTools(): RegisteredServerTool[];"
             }
@@ -12587,7 +12587,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 43,
+              "line": 44,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredServerTool {\n    definition: ToolDefinition;\n    handler: ContextualToolHandler<Record<string, unknown>>;\n    runtime: ToolRuntime;\n    timeoutMs: number;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    owner: symbol;\n}"
             }
@@ -12604,7 +12604,7 @@
               "resolvedReturnType": "() => boolean",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 92,
+                "line": 93,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
               }
@@ -12613,7 +12613,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 92,
+              "line": 93,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
             }
@@ -12627,7 +12627,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 52,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterServerToolOptions {\n    runtime?: ToolRuntime;\n    timeoutMs?: number;\n    override?: boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
@@ -12641,7 +12641,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 41,
+              "line": 42,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12658,7 +12658,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 133,
+                "line": 134,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterServerTool(name: string): void;"
               }
@@ -12667,7 +12667,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 133,
+              "line": 134,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterServerTool(name: string): void;"
             }
@@ -12684,7 +12684,7 @@
               "resolvedReturnType": "{ valid: true; } | { valid: false; error: string; }",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 147,
+                "line": 148,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
               }
@@ -12693,7 +12693,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 147,
+              "line": 148,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
             }
