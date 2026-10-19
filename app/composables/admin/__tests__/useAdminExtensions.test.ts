@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 import { ADMIN_HEADERS, useFileInput, installExtension, uninstallExtension } from '../useAdminExtensions';
 
 // Mock useConfirmDialog
@@ -93,6 +94,18 @@ describe('useAdminExtensions', () => {
             ).resolves.toEqual(candidate);
             const [, options] = mockFetch.mock.calls[0] as [string, { body: FormData }];
             expect(options.body.get('workspaceId')).toBe('ws-1');
+        });
+
+        it('explains disabled package loading without displaying untrusted admission text', async () => {
+            globalThis.$fetch = vi.fn().mockResolvedValue({
+                ok: false, kind: 'v2-candidate', status: 'blocked', stage: 'loader',
+                codes: ['module-loader-disabled', 'untrusted-detail'],
+            }) as unknown as typeof $fetch;
+            const error = await installExtension({ kind: 'plugin', file: new File([''], 'package.zip') })
+                .catch(error => error);
+            const message = parseErrorMessage(error, 'Failed to install plugin');
+            expect(message).toContain('Package plugin loading is disabled');
+            expect(message).not.toContain('untrusted-detail');
         });
 
         it('surfaces a blocked V2 candidate as an install failure', async () => {

@@ -75,6 +75,7 @@ export interface ClientCanaryReport {
 
 export interface ClientCanaryEvidenceRecord {
     readonly schemaVersion: 1;
+    readonly grantReviewRevision: string;
     readonly pluginId: string;
     readonly packageDigest: Sha256;
     readonly workspaceId: string;

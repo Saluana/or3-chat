@@ -19,7 +19,7 @@ shared by the instance; whether it is enabled is decided per workspace.
 
 **Workspace** contains enablement, configuration, permission grants, development admission, and canary/promotion checks for the explicitly selected workspace. Workspace details link directly here. The URL preserves the target and plugin/rollout links; changing the Chat workspace does not change an admin target. A restricted workspace administrator remains limited to their authorized workspace.
 
-For a V2 ZIP or URL upload, a system administrator first opens **Workspace** and chooses the target workspace. Expand **Advanced source plugins and development admission**, then use **Add from .zip** or **Add from URL**. The upload prepares an inactive candidate for that explicit workspace; review permissions, run its canary, and promote it before activation. The source-install setting must be enabled. Instance uploads remain available for legacy source plugins, and restricted workspace administrators cannot upload site code.
+For a V2 ZIP or URL upload, a system administrator first opens **Workspace** and chooses the target workspace. Expand **Advanced source plugins and development admission**, then use **Add from .zip** or **Add from URL**. The upload prepares an inactive candidate for that explicit workspace; review permissions, run its canary, and promote it before activation. The source-install setting and V2 package loader must both be enabled. If the upload reports that package loading is disabled, the site administrator must enable `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED` and include the target workspace in any configured module-loader allowlist before retrying. Instance uploads remain available for legacy source plugins, and restricted workspace administrators cannot upload site code.
 
 ## Before installing
 
@@ -153,3 +153,9 @@ A member can view a plugin and share its administrator deep link. A member
 with an acquired Library version can also use **Request installation**. The
 administrator reviews that exact version and workspace; the buyer's credential
 stays on the server. See [Your Library](/documentation/plugins/library).
+
+### Trusted-host browser checks
+
+The browser check imports the reviewed candidate and executes its setup with host services denied. Browser evidence is bound to the current permission-review revision; changing that review requires a new check. Command registrations use the same validation and ownership checks as live activation, without publishing commands or invoking their handlers. Setup failures, missing grants, unsupported setup operations, timeouts, and cleanup failures block promotion. A plugin that needs other host services during setup cannot pass this limited check; those contracts require host qualification before promotion. Move secret access and other user operations into command handlers when appropriate.
+
+This check executes trusted code in the host browser; it is not a security sandbox or a substitute for reviewing that code. A pass does not exercise command handlers or prove the whole plugin works. After this validation change, rerun checks for pending candidates: older browser and promotion evidence is no longer accepted.

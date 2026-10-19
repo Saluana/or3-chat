@@ -64,6 +64,11 @@ function acceptedInstallResult(
     result: ExtensionInstallResult | V2CandidateBlockedInstallResult
 ): ExtensionInstallResult {
     if (result.ok) return result;
+    if (result.codes.includes('module-loader-disabled')) {
+        throw Object.assign(new Error('Package plugin loading is disabled'), {
+            code: 'ERR_PLUGIN_LOADER_DISABLED',
+        });
+    }
     throw new Error(result.codes.join(', ') || `V2 candidate blocked during ${result.stage}`);
 }
 

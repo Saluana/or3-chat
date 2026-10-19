@@ -5,6 +5,13 @@ import {
 } from './host-esm-facade';
 import { ModuleV2Loader, type ModuleV2LoaderOptions } from './module-v2-loader';
 
+/** Features implemented by the live trusted V2 host and checked by its canary. */
+export const TRUSTED_HOST_FEATURES = [
+    'or3-trusted-host-v1', 'chat.send.prepare-commit-v1', 'or3-trusted-ui-kit-v1',
+    'or3-trusted-host-v2', 'or3-trusted-chat-records-v1',
+    'or3-trusted-chat-origin-v1', 'or3-workspace-files-v1',
+] as const;
+
 const unproven: HostEsmFacadeEvidence = Object.freeze({
     generatedFacade: false,
     importMap: false,

@@ -36,6 +36,7 @@ export type ErrorCode =
     | 'ERR_TOOL_OUTCOME_UNKNOWN'
     | 'ERR_SYNC_PAYLOAD_TOO_LARGE'
     | 'ERR_CONTEXT_FULL'
+    | 'ERR_PLUGIN_LOADER_DISABLED'
     | 'ERR_MODEL_METADATA_UNAVAILABLE'
     | 'ERR_CONTEXT_LIMIT_INVALID'
     | 'ERR_OUTPUT_LIMIT_INVALID';
@@ -354,6 +355,10 @@ const copy: Record<ErrorCode, [string, string]> = {
         'OpenRouter credits needed',
         'Add credits to your OpenRouter account, then try again.',
     ],
+    ERR_PLUGIN_LOADER_DISABLED: [
+        'Plugin loading disabled',
+        'Package plugin loading is disabled on this host. Ask the site administrator to enable the package loader for this workspace, then retry the upload.',
+    ],
     ERR_FORBIDDEN: [
         'Access denied',
         'You do not have permission for this operation. Check your access or contact your administrator.',
@@ -487,6 +492,7 @@ export function presentError(
             'ERR_SERVER',
             'ERR_PROVIDER',
             'ERR_OVERLOADED',
+            'ERR_PLUGIN_LOADER_DISABLED',
             'ERR_CONTEXT_FULL', 'ERR_MODEL_METADATA_UNAVAILABLE', 'ERR_CONTEXT_LIMIT_INVALID', 'ERR_OUTPUT_LIMIT_INVALID',
         ].includes(e.code)
     ) {

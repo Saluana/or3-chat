@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
     }
     await services.clientCanary.recordEvidence({
         schemaVersion: 1,
+        grantReviewRevision: ticket.grants.revision,
         pluginId: ticket.pluginId,
         packageDigest: ticket.packageDigest,
         workspaceId: ticket.workspaceId,

@@ -1423,7 +1423,9 @@ const emptyAppearance = computed(() => {
     return resolveChatEmptyState(emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState, emptyMode.value);
 });
 const emptyMediaKey = computed(() => emptyTheme.activeTheme.value + ':' + emptyMode.value);
-const emptyActions = computed(() => emptyAppearance.value?.actions.filter(action => action.id === 'start-chat' || emptyActionHost?.available.value.includes(action.id)) ?? []);
+// Workspace authority can hydrate before this async component. Keep its first
+// client render identical to SSR, then expose authorized creation actions.
+const emptyActions = computed(() => emptyAppearance.value?.actions.filter(action => action.id === 'start-chat' || (emptyMounted.value && emptyActionHost?.available.value.includes(action.id))) ?? []);
 async function onEmptyChatAction(id: EmptyChatActionId) {
     // Let the pane click/focus handler select an inactive split before dispatch.
     await nextTick();

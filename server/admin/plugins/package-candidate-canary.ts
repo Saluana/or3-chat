@@ -30,6 +30,7 @@ export interface CandidateClientCanaryContext {
     readonly packageDigest: Sha256;
     readonly packagePath: string;
     readonly clientId: string;
+    readonly grantReviewRevision: string;
     readonly visibility: 'hidden';
     readonly canPublish: false;
 }
@@ -51,7 +52,7 @@ export type CandidateCanaryGrantReview = Pick<
 >;
 
 export interface CandidateCanaryEvidence {
-    readonly schemaVersion: 2;
+    readonly schemaVersion: 3;
     readonly pluginId: string;
     readonly workspaceId: string;
     readonly packageDigest: Sha256;
@@ -295,6 +296,7 @@ export class PluginPackageCandidateCanaryService {
                     packageDigest: input.packageDigest,
                     packagePath: this.packages.packagePath(input.pluginId, input.packageDigest),
                     clientId: input.clientId,
+                    grantReviewRevision: grantReview.revision,
                     visibility: 'hidden',
                     canPublish: false,
                 }));
@@ -307,7 +309,7 @@ export class PluginPackageCandidateCanaryService {
             }
 
             const evidence: CandidateCanaryEvidence = Object.freeze({
-                schemaVersion: 2,
+                schemaVersion: 3,
                 pluginId: input.pluginId,
                 workspaceId: input.workspaceId,
                 packageDigest: input.packageDigest,

@@ -3,6 +3,7 @@
     "modules": [
         "or3-provider-basic-auth/nuxt",
         "or3-provider-fs/nuxt",
-        "or3-provider-sqlite/nuxt"
+        "or3-provider-sqlite/nuxt",
+        "@or3/secrets/nuxt"
     ]
 }

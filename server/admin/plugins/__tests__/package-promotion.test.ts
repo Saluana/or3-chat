@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -346,6 +346,19 @@ describe('PluginPackagePromotionService', () => {
                 { token: 'new-attempt' }
             )
         ).resolves.toBe(1);
+    });
+
+    it('rejects evidence written before setup validation was required', async () => {
+        const { service, canary, candidate, pointers, current } = await setup();
+        const path = canary.evidencePath('alpha', candidate.digest, 'workspace-1');
+        const evidence = JSON.parse(readFileSync(path, 'utf8'));
+        writeFileSync(path, JSON.stringify({ ...evidence, schemaVersion: 2 }));
+        expect(await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1', expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1, snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview, restoreState: vi.fn(),
+        })).toMatchObject({ status: 'blocked', code: 'canary-evidence-invalid' });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
     });
 
     it('rejects stale canary evidence when the workspace state changes', async () => {
