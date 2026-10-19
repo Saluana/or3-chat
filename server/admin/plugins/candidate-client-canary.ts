@@ -47,6 +47,7 @@ const TICKET_ID_PATTERN = /^cct_[a-f0-9]{32}$/;
 const NONCE_PATTERN = /^[a-f0-9]{32}$/;
 
 export interface ClientCanaryTicketRequest {
+    readonly version: string;
     readonly pluginId: string;
     readonly packageDigest: Sha256;
     readonly workspaceId: string;
@@ -305,6 +306,7 @@ export function isClientCanaryTicket(value: unknown): value is ClientCanaryTicke
         typeof ticket.ticketId === 'string' &&
         typeof ticket.nonce === 'string' &&
         typeof ticket.pluginId === 'string' &&
+        typeof ticket.version === 'string' &&
         typeof ticket.packageDigest === 'string' &&
         typeof ticket.workspaceId === 'string' &&
         typeof ticket.expiresAt === 'number' &&

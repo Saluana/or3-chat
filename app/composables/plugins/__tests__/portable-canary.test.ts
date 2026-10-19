@@ -11,11 +11,11 @@ import type { CanaryTicketPayload, runCandidateClientCanary } from '../portable-
 
 // Exercise the real browser-check entry, replacing only browser module delivery.
 // Node cannot import the authenticated browser route; its contents are supplied here.
-async function check(setup: (context: PluginContext) => unknown, approved = ['commands.register']) {
+async function check(setup: (context: PluginContext) => unknown, approved = ['commands.register'], definitionVersion = '1.0.0') {
     const bytes = new TextEncoder().encode('reviewed synthetic candidate');
     const digest = `sha256-${await sha256Hex(bytes)}` as const;
     const ticket: CanaryTicketPayload = {
-        ticketId: 'ticket', nonce: 'nonce', pluginId: 'fixture.canary',
+        version: '1.0.0', ticketId: 'ticket', nonce: 'nonce', pluginId: 'fixture.canary',
         packageDigest: digest, workspaceId: 'workspace', clientId: 'browser',
         profile: 'or3-trusted-host-v2', expiresAt: Date.now() + 60_000,
         clientEntry: { entry: 'client.mjs', isolation: 'host', digest },
@@ -32,7 +32,7 @@ async function check(setup: (context: PluginContext) => unknown, approved = ['co
         '~~/shared/plugins/isolation/containment-policy': {},
         '~~/shared/plugins/isolation/portable-frame-transport': {},
         '/api/admin/plugins/packages/fixture.canary/canary/entry?ticketId=ticket': {
-            default: { manifest: { id: 'fixture.canary', version: '1.0.0', trust: 'trusted-host', manifestVersion: 2, features: { required: [] } }, setup },
+            default: { manifest: { id: 'fixture.canary', version: definitionVersion, trust: 'trusted-host', manifestVersion: 2, features: { required: [] } }, setup },
         },
     };
     const compiled = ts.transpileModule(readFileSync('app/composables/plugins/portable-canary.ts', 'utf8'), {
@@ -48,6 +48,11 @@ async function check(setup: (context: PluginContext) => unknown, approved = ['co
 }
 
 describe('trusted candidate browser check', () => {
+    it('blocks a definition whose version differs from the reviewed package', async () => {
+        const { outcome } = await check(() => {}, [], '9.9.9');
+        expect(outcome).toMatchObject({ status: 'blocked', code: 'client-definition-invalid' });
+    });
+
     it('blocks the dotted command id that previously passed but failed live activation', async () => {
         const { outcome } = await check(context => {
             context.commands.register({ id: 'fixture.canary.save', label: 'Save' }, () => ({ ok: true, value: null }));

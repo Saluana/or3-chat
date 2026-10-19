@@ -26,6 +26,7 @@ const GRANTS = {
 
 function ticketRequest() {
     return {
+        version: '1.0.0',
         pluginId: 'or3.sample-utility',
         packageDigest: DIGEST,
         workspaceId: 'ws-1',

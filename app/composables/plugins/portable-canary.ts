@@ -44,6 +44,7 @@ import {
 } from '~~/shared/plugins/isolation/portable-frame-transport';
 
 export interface CanaryTicketPayload {
+    readonly version: string;
     readonly ticketId: string;
     readonly nonce: string;
     readonly pluginId: string;
@@ -191,11 +192,12 @@ async function runTrustedHostCandidateCanary(
         // and singleton Vue/SDK ABI without publishing candidate contributions.
         const imported = (await import(/* @vite-ignore */ entryUrl)) as { default?: unknown };
         const definition = imported.default as {
-            manifest?: { id?: unknown; trust?: unknown; manifestVersion?: unknown };
+            manifest?: { id?: unknown; version?: unknown; trust?: unknown; manifestVersion?: unknown };
             setup?: unknown;
         } | undefined;
         if (
             definition?.manifest?.id !== ticket.pluginId ||
+            definition.manifest.version !== ticket.version ||
             definition.manifest.trust !== 'trusted-host' ||
             definition.manifest.manifestVersion !== 2 ||
             typeof definition.setup !== 'function'

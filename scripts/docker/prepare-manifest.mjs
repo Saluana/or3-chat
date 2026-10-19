@@ -32,6 +32,16 @@ export function prepareDockerManifest(input) {
         }
     }
 
+    // Basic Auth 0.0.13's published Kit peer still says v3, although its
+    // module supports this Nuxt 4 host. Qualify it against the same pinned Kit.
+    // Keep this npm-only peer correction out of Bun, which ignores nested overrides.
+    if (manifest.dependencies?.['or3-provider-basic-auth'] === '0.0.13') {
+        manifest.overrides = {
+            ...manifest.overrides,
+            'or3-provider-basic-auth': { '@nuxt/kit': '$@nuxt/kit' },
+        };
+    }
+
     for (const name of INACTIVE_FIXED_PROFILE_PROVIDERS) {
         delete manifest.dependencies?.[name];
     }

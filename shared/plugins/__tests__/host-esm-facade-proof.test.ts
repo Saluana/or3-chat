@@ -93,6 +93,9 @@ describe('trusted-host Vue ABI proof', () => {
         expect(JSON.parse(script.innerHTML).imports).toEqual(HOST_ESM_FACADE_IMPORTS);
         const html = `<script type="importmap">${script.innerHTML}</script><script type="module" src="/app.js"></script>`;
         expect(importMapPrecedesModuleScripts(html)).toBe(true);
+        const nuxtMap = '<script type="importmap">{"imports":{"#entry":"/_nuxt/entry.js"}}</script>';
+        expect(importMapPrecedesModuleScripts(`${nuxtMap}${html}`)).toBe(true);
+        expect(importMapPrecedesModuleScripts(`${html}${nuxtMap}`)).toBe(false);
         expect(importMapPrecedesModuleScripts(`<script type="module" src="/app.js"></script>${html}`)).toBe(false);
         const vueSource = readFileSync(resolve(repoRoot, 'public/_plugins/host-vue.mjs'), 'utf8');
         const sdkSource = readFileSync(resolve(repoRoot, 'public/_plugins/host-sdk.mjs'), 'utf8');
