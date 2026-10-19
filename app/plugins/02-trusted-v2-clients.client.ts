@@ -10,7 +10,7 @@ import {
     installTrustedV2ClientManager,
 } from '~/composables/plugins/trusted-v2-manager';
 import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
-import { createProductionModuleV2Loader } from '~~/shared/plugins/host-esm-facade-runtime';
+import { createProductionModuleV2Loader, TRUSTED_HOST_FEATURES } from '~~/shared/plugins/host-esm-facade-runtime';
 import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 
@@ -140,7 +140,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 version: descriptor.version,
                 workspaceId: descriptor.workspaceId,
                 generation, signal,
-                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1', 'or3-trusted-ui-kit-v1', 'or3-trusted-host-v2', 'or3-trusted-chat-records-v1', 'or3-trusted-chat-origin-v1', 'or3-workspace-files-v1'],
+                features: TRUSTED_HOST_FEATURES,
                 requestedFeatures: definition.manifest.features.required,
                 runtimeServices: createTrustedRuntimeServices,
                 settingDefaults: manifestDefaults,

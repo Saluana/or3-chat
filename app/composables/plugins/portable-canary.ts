@@ -8,8 +8,8 @@
  * - The bytes come from the ticket-scoped canary entry route and are re-hashed
  *   by `startPortableWorker`, so the browser proves it ran the candidate digest.
  * - Portable clients activate invisibly in the contained sandbox.
- * - Trusted clients verify the exact entry digest, host ABI, and module import
- *   without running setup or publishing contributions.
+ * - Trusted clients verify the entry digest, host ABI, import, and supported
+ *   setup contracts without publishing contributions or granting host services.
  * - The outcome is posted with the ticket nonce; the host decides what it means.
  *
  * Constraints:
@@ -21,10 +21,14 @@
  * - Promotion. The host requires the recorded evidence and re-checks everything.
  */
 
+import type { Or3PluginDefinition, PluginCommandDefinition } from '@or3/plugin-sdk';
+import { createHostPluginContext, createUnsupportedPluginClients } from '@or3/plugin-sdk/host';
+import { assertPaletteCommandAvailable } from '~/core/search/command-palette/registry';
+import { evaluateReviewedPluginGrant } from '~~/shared/plugins/grant-review';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import { sha256Hex } from '~~/shared/runtime-crypto';
 import type { PackageV2ClientEntry } from '~~/shared/plugins/runtime-descriptor';
-import { getTrustedHostUiDecision } from '~~/shared/plugins/host-esm-facade-runtime';
+import { getTrustedHostUiDecision, TRUSTED_HOST_FEATURES } from '~~/shared/plugins/host-esm-facade-runtime';
 import {
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
@@ -40,6 +44,7 @@ import {
 } from '~~/shared/plugins/isolation/portable-frame-transport';
 
 export interface CanaryTicketPayload {
+    readonly version: string;
     readonly ticketId: string;
     readonly nonce: string;
     readonly pluginId: string;
@@ -72,6 +77,93 @@ function createCanaryFrame(): HostFrameElementPort {
     return frame as unknown as HostFrameElementPort;
 }
 
+/**
+ * Validate setup without granting live host services. Unsupported setup calls
+ * block the check even if the candidate catches the error; they never count as
+ * successful qualification. Trusted code still runs in the host realm, so this
+ * is a compatibility check, not a security sandbox.
+ */
+async function validateTrustedSetup(
+    ticket: CanaryTicketPayload,
+    definition: Or3PluginDefinition
+): Promise<void> {
+    const controller = new AbortController();
+    const cleanups: Array<() => void | Promise<void>> = [];
+    let failure: Error | undefined;
+    function block(): never {
+        failure ??= new Error('Setup could not be validated without live host operations');
+        throw failure;
+    }
+    function noHostCalls<T>(value: T): T {
+        if (typeof value === 'function') return block as T;
+        if (value !== null && typeof value === 'object') {
+            return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, noHostCalls(item)])) as T;
+        }
+        return value;
+    }
+    const clients = noHostCalls(createUnsupportedPluginClients({ workspaceId: ticket.workspaceId }));
+    const register: typeof clients.commands.register = (command: PluginCommandDefinition) => {
+        try {
+            if (controller.signal.aborted || !evaluateReviewedPluginGrant(ticket.grants, 'commands.register').allowed) block();
+            assertPaletteCommandAvailable(command, ticket.pluginId);
+        } catch (error) {
+            failure ??= error instanceof Error ? error : new Error('Invalid command');
+            throw failure;
+        }
+        return { dispose() {} };
+    };
+    const features = new Set<string>(TRUSTED_HOST_FEATURES);
+    const context = createHostPluginContext({
+        identity: { pluginId: ticket.pluginId, version: definition.manifest.version,
+            workspaceId: ticket.workspaceId, generation: 0, trust: 'trusted-host' },
+        grants: ticket.grants.approvedGrants as Or3PluginDefinition['manifest']['requestedGrants'],
+        signal: controller.signal,
+        logger: { debug() {}, info() {}, warn() {}, error() {} },
+        features: {
+            has: feature => features.has(feature), optional: feature => features.has(feature),
+            require(feature) { if (!features.has(feature)) block(); }, available: features,
+        },
+        hooks: { onAction: block, onFilter: block, emitAction: block },
+        contributions: { register: block },
+        clients: {
+            createClients: () => ({ ...clients, commands: { ...clients.commands, register } }),
+            createSettingsClient: () => ({ get: block, set: block, delete: block, list: block }),
+            createStorageClient: () => ({ get: block, set: block, delete: block, list: block, getRecord: block, listPage: block }),
+        },
+        onCleanup(callback) { if (controller.signal.aborted) block(); cleanups.push(callback); },
+        onActivate: block,
+    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        for (const feature of definition.manifest.features.required) context.features.require(feature);
+        await Promise.race([
+            Promise.resolve().then(() => definition.setup(context)),
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => { controller.abort(); reject(new Error('Setup timed out')); }, 5_000);
+            }),
+        ]);
+        if (failure) throw failure;
+    } finally {
+        if (timer) clearTimeout(timer);
+        controller.abort();
+        // Cleanup must also settle before evidence can pass. Attempt every
+        // callback even if one fails, and bound asynchronous cleanup.
+        const cleanup = async () => {
+            let failed = false;
+            for (const callback of cleanups.reverse()) {
+                try { await callback(); } catch { failed = true; }
+            }
+            if (failed) throw new Error('Setup cleanup failed');
+        };
+        try {
+            await Promise.race([cleanup(), new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Cleanup timed out')), 5_000);
+            })]);
+        } finally { if (timer) clearTimeout(timer); }
+    }
+    if (failure) throw failure;
+}
+
 async function runTrustedHostCandidateCanary(
     ticket: CanaryTicketPayload,
     entryUrl: string
@@ -100,26 +192,29 @@ async function runTrustedHostCandidateCanary(
         // and singleton Vue/SDK ABI without publishing candidate contributions.
         const imported = (await import(/* @vite-ignore */ entryUrl)) as { default?: unknown };
         const definition = imported.default as {
-            manifest?: { id?: unknown; trust?: unknown; manifestVersion?: unknown };
+            manifest?: { id?: unknown; version?: unknown; trust?: unknown; manifestVersion?: unknown };
             setup?: unknown;
         } | undefined;
         if (
             definition?.manifest?.id !== ticket.pluginId ||
+            definition.manifest.version !== ticket.version ||
             definition.manifest.trust !== 'trusted-host' ||
             definition.manifest.manifestVersion !== 2 ||
             typeof definition.setup !== 'function'
         ) {
             return { status: 'blocked', code: 'client-definition-invalid', diagnostics: {} };
         }
+        try {
+            await validateTrustedSetup(ticket, definition as Or3PluginDefinition);
+        } catch {
+            return { status: 'blocked', code: 'client-setup-failed', diagnostics: { setupExecuted: true } };
+        }
         return {
             status: 'passed',
-            diagnostics: { profile: ticket.profile, verifiedImport: true, setupExecuted: false },
+            diagnostics: { profile: ticket.profile, verifiedImport: true, setupExecuted: true, setupValidationVersion: 1 },
         };
-    } catch (error) {
-        return {
-            status: 'blocked', code: 'client-import-failed',
-            diagnostics: { message: error instanceof Error ? error.message : String(error) },
-        };
+    } catch {
+        return { status: 'blocked', code: 'client-import-failed', diagnostics: {} };
     }
 }
 

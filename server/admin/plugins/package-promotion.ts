@@ -166,7 +166,7 @@ function isCandidateCanaryEvidence(value: unknown): value is CandidateCanaryEvid
         return status === 'passed' || status === 'skipped' || status === 'blocked';
     };
     return (
-        evidence.schemaVersion === 2 &&
+        evidence.schemaVersion === 3 &&
         typeof evidence.pluginId === 'string' &&
         typeof evidence.workspaceId === 'string' &&
         typeof evidence.packageDigest === 'string' &&
@@ -326,7 +326,7 @@ export class PluginPackagePromotionService {
                     return blockedPromote('canary-evidence', 'canary-evidence-missing', state);
                 }
                 if (
-                    (evidence.schemaVersion as unknown) !== 2 ||
+                    (evidence.schemaVersion as unknown) !== 3 ||
                     evidence.pluginId !== input.pluginId ||
                     evidence.workspaceId !== input.workspaceId ||
                     evidence.packageDigest !== input.expectedCandidateDigest ||
@@ -402,7 +402,7 @@ export class PluginPackagePromotionService {
             const promotionEvidence =
                 evidence ??
                 ({
-                    schemaVersion: 2,
+                    schemaVersion: 3,
                     pluginId: input.pluginId,
                     workspaceId: input.workspaceId,
                     packageDigest: input.expectedCandidateDigest,

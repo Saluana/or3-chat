@@ -379,6 +379,19 @@ export function registerPaletteSource(
     });
 }
 
+/** Read-only admission shared by candidate checks and live registration. */
+export function assertPaletteCommandAvailable(
+    definition: PaletteCommandDefinition,
+    pluginId?: string
+): void {
+    const validated = validatePaletteCommandDefinition(definition);
+    if (!validated.ok) throw new Error(validated.message);
+    assertContributionIdentity({
+        kind: 'command', id: definition.id, pluginId,
+        existingPluginId: findPaletteCommandRaw(definition.id)?.pluginId,
+    });
+}
+
 export function registerPaletteCommand(
     definition: PaletteCommandDefinition,
     handler: PaletteCommandHandler,
@@ -388,8 +401,7 @@ export function registerPaletteCommand(
         access?: PluginGatePolicy;
     }
 ): RegistrationHandle {
-    const validated = validatePaletteCommandDefinition(definition);
-    if (!validated.ok) throw new Error(validated.message);
+    assertPaletteCommandAvailable(definition, options?.pluginId);
 
     const command: RegisteredPaletteCommand = {
         ...definition,
@@ -398,13 +410,6 @@ export function registerPaletteCommand(
         pluginGeneration: options?.pluginGeneration,
         handler,
     };
-    assertContributionIdentity({
-        kind: 'command',
-        id: definition.id,
-        pluginId: options?.pluginId,
-        existingPluginId: findPaletteCommandRaw(definition.id)?.pluginId,
-    });
-
     if (useV2Surface()) {
         return v2Kernel.registry.registerLegacy({
             value: { kind: 'command', command },

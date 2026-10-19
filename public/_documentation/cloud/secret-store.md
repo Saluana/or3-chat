@@ -2,7 +2,9 @@
 
 `@or3/secrets@0.1.1` supplies an optional private Unix-socket vault for remembered secrets in reviewed, package-backed trusted plugins. The service runs on Bun 1.3.14; OR3 uses a Node 24 client. It has no independent security audit or FIPS validation. Qualify the release and deployment security profile before using real credentials.
 
-Install the published package with `bun add --exact @or3/secrets@0.1.1` and add `@or3/secrets/nuxt` to `modules`. Select it through private runtime configuration:
+This checkout includes `@or3/secrets@0.1.1` and registers its Nuxt module through `or3.providers.generated.json` for Cloud/SSR mode. Select it with the private runtime settings below; installing the package alone does not start a vault or enable persistent storage.
+
+For another Nuxt host, install `bun add --exact @or3/secrets@0.1.1` and add `@or3/secrets/nuxt` to `modules`:
 
 ```ts
 export default defineNuxtConfig({

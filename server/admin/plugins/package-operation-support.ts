@@ -306,11 +306,16 @@ export function clientCanaryStepFromEvidence(
             input.packageDigest,
             input.workspaceId
         );
-        if (!evidence || evidence.profile !== expectedProfile) {
+        if (!evidence || evidence.profile !== expectedProfile ||
+            evidence.grantReviewRevision !== context.grantReviewRevision) {
             return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
         }
         if (evidence.status === 'blocked') {
             return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
+        }
+        if (expectedProfile === 'or3-trusted-host-v2' &&
+            (evidence.diagnostics?.setupExecuted !== true || evidence.diagnostics?.setupValidationVersion !== 1)) {
+            return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
         }
         return { status: 'passed' };
     };

@@ -26,6 +26,7 @@ const GRANTS = {
 
 function ticketRequest() {
     return {
+        version: '1.0.0',
         pluginId: 'or3.sample-utility',
         packageDigest: DIGEST,
         workspaceId: 'ws-1',
@@ -159,7 +160,7 @@ describe('client canary evidence', () => {
     it('round-trips evidence and ignores evidence for another digest', async () => {
         const store = new PluginClientCanaryStore(mkdtempSync(resolve(tmpdir(), 'or3-canary-')));
         await store.recordEvidence({
-            schemaVersion: 1,
+            schemaVersion: 1, grantReviewRevision: 'g1',
             pluginId: 'or3.sample-utility',
             packageDigest: DIGEST,
             workspaceId: 'ws-1',
@@ -195,7 +196,7 @@ describe('client canary evidence', () => {
         });
 
         await store.recordEvidence({
-            schemaVersion: 1,
+            schemaVersion: 1, grantReviewRevision: 'g1',
             pluginId: 'or3.sample-utility',
             packageDigest: DIGEST,
             workspaceId: 'ws-1',
@@ -223,7 +224,7 @@ describe('client canary evidence', () => {
             status: 'blocked', code: CLIENT_CANARY_PENDING_CODE,
         });
         await store.recordEvidence({
-            schemaVersion: 1, pluginId: 'or3.sample-utility', packageDigest: DIGEST,
+            schemaVersion: 1, grantReviewRevision: 'g1', pluginId: 'or3.sample-utility', packageDigest: DIGEST,
             workspaceId: 'ws-1', clientId: 'admin-browser-canary',
             profile: 'or3-portable-client-v1', browser: 'chromium', abiVersion: 1,
             status: 'passed', recordedAt: 8,
@@ -232,19 +233,31 @@ describe('client canary evidence', () => {
             status: 'blocked', code: CLIENT_CANARY_PENDING_CODE,
         });
         await store.recordEvidence({
-            schemaVersion: 1, pluginId: 'or3.sample-utility', packageDigest: DIGEST,
+            schemaVersion: 1, grantReviewRevision: 'g1', pluginId: 'or3.sample-utility', packageDigest: DIGEST,
             workspaceId: 'ws-1', clientId: 'admin-browser-canary',
             profile: 'or3-trusted-host-v2', browser: 'chromium', abiVersion: 1,
             status: 'passed', recordedAt: 9,
         });
+        expect(await step(clientContext(packagePath, DIGEST))).toEqual({
+            status: 'blocked', code: CLIENT_CANARY_PENDING_CODE,
+        });
+        await store.recordEvidence({
+            schemaVersion: 1, grantReviewRevision: 'g1', pluginId: 'or3.sample-utility', packageDigest: DIGEST,
+            workspaceId: 'ws-1', clientId: 'admin-browser-canary',
+            profile: 'or3-trusted-host-v2', browser: 'chromium', abiVersion: 1,
+            status: 'passed', recordedAt: 10,
+            diagnostics: { setupExecuted: true, setupValidationVersion: 1 },
+        });
         expect(await step(clientContext(packagePath, DIGEST))).toEqual({ status: 'passed' });
+        const changedReview = { ...clientContext(packagePath, DIGEST), grantReviewRevision: 'g2' };
+        expect(await step(changedReview)).toEqual({ status: 'blocked', code: CLIENT_CANARY_PENDING_CODE });
     });
 
     it('reports a blocked browser run with its code and skips server-only packages', async () => {
         const root = mkdtempSync(resolve(tmpdir(), 'or3-canary-'));
         const store = new PluginClientCanaryStore(root);
         await store.recordEvidence({
-            schemaVersion: 1,
+            schemaVersion: 1, grantReviewRevision: 'g1',
             pluginId: 'or3.sample-utility',
             packageDigest: DIGEST,
             workspaceId: 'ws-1',
@@ -388,6 +401,7 @@ function clientContext(packagePath: string, packageDigest: `sha256-${string}`): 
         packageDigest,
         packagePath,
         clientId: 'admin-browser-canary',
+        grantReviewRevision: 'g1',
         visibility: 'hidden' as const,
         canPublish: false,
     };

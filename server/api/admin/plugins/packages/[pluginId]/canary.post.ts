@@ -89,6 +89,7 @@ export default defineEventHandler(async (event) => {
                 release: null,
             });
             const ticket = await services.clientCanary.issueTicket({
+                version: manifest.version,
                 pluginId,
                 packageDigest,
                 workspaceId,

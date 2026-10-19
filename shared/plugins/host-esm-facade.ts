@@ -51,14 +51,12 @@ export function hostEsmFacadeImportMapScript(): {
     });
 }
 
-/** True when the document has one import map and it appears before any module script. */
+/** All import maps must precede modules; Nuxt also emits its own entry map. */
 export function importMapPrecedesModuleScripts(html: string): boolean {
-    const maps = html.match(/<script\b[^>]*\btype=["']importmap["'][^>]*>/gi) ?? [];
-    if (maps.length !== 1) return false;
-    const importMapAt = html.search(/<script\b[^>]*\btype=["']importmap["'][^>]*>/i);
+    const maps = [...html.matchAll(/<script\b[^>]*\btype=["']importmap["'][^>]*>/gi)];
+    if (maps.length === 0) return false;
     const moduleAt = html.search(/<script\b[^>]*\btype=["']module["'][^>]*>/i);
-    if (moduleAt < 0) return importMapAt >= 0;
-    return importMapAt >= 0 && importMapAt < moduleAt;
+    return moduleAt < 0 || maps.every((map) => map.index < moduleAt);
 }
 
 /**
