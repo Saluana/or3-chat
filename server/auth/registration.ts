@@ -104,7 +104,7 @@ export async function resolveInviteToken(event: H3Event, token: string, secret: 
         const config = useRuntimeConfig();
         const security = config.security as { proxy?: ProxyTrustConfigInput } | undefined;
         const ip = getClientIp(event, normalizeProxyTrustConfig(security?.proxy))
-            || event.node.req.socket?.remoteAddress || 'unknown';
+            || (event.node.req.socket as { remoteAddress?: string } | undefined)?.remoteAddress || 'unknown';
         enforceRateLimit(event, checkSyncRateLimit(ip, 'auth:invite'));
         recordSyncRequest(ip, 'auth:invite');
         if (!store?.findSignupInviteByTokenHash) return { ok: false, reason: 'invite_unsupported' };

@@ -168,7 +168,7 @@ export class RestartController {
             try { await this.persist(); } catch (error) { this.operations.pop(); await release(); throw error; }
             this.releases.set(request.requestId, release); this.starts.push(now);
             const timer = setTimeout(() => { void this.cancel(request.requestId).catch(() => {}); }, 330_000);
-            timer.unref?.(); this.preparationTimers.set(request.requestId, timer);
+            timer.unref(); this.preparationTimers.set(request.requestId, timer);
             return publicOperation(o);
         });
     }

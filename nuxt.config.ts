@@ -13,6 +13,7 @@ import { modulePackageName, resolveModuleEntry } from './shared/config/module-re
 import { buildApplicationPlan } from './shared/config/application-plan';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
 import { compactClientChunksPlugin } from './plugins/vite-compact-client-chunks';
+import { compactGeneratedDataPlugin } from './plugins/vite-compact-generated-data';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
@@ -683,7 +684,7 @@ export default defineNuxtConfig({
             // Share their state and helpers across Nuxt UI, Reka and Nuxt.
             dedupe: [
                 'katex', '@floating-ui/core', '@floating-ui/dom',
-                '@floating-ui/utils', '@vueuse/shared', 'ufo',
+                '@floating-ui/utils', '@vueuse/shared', 'ufo', 'ohash',
             ],
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
@@ -729,6 +730,7 @@ export default defineNuxtConfig({
                 'lru-cache',
                 'mammoth',
                 'pdfjs-dist',
+                'reka-ui',
                 'spark-md5',
                 'streamdown-vue',
                 'tiptap-markdown',
@@ -750,6 +752,7 @@ export default defineNuxtConfig({
         },
         plugins: [
             stripBrokenOpenRouterSourcemapsPlugin(),
+            compactGeneratedDataPlugin(),
             compactClientChunksPlugin(),
             themeCompilerPlugin({
                 failOnError: true,
@@ -758,7 +761,7 @@ export default defineNuxtConfig({
         ],
         worker: {
             format: 'es',
-            plugins: () => [compactClientChunksPlugin()],
+            plugins: () => [compactGeneratedDataPlugin(), compactClientChunksPlugin()],
         },
         build: {
             rolldownOptions: {
@@ -804,6 +807,15 @@ export default defineNuxtConfig({
     hooks: {
         'vite:extendConfig'(config, { isClient }) {
             if (!isClient) return;
+            // Nuxt UI requests server transpilation for Reka. Nuxt also turns
+            // that into a client optimizer exclusion, causing hundreds of
+            // startup requests for its already-compiled ESM. Keep SSR handling
+            // intact while allowing the explicit client prebundle above.
+            if (config.optimizeDeps?.exclude) {
+                config.optimizeDeps.exclude = config.optimizeDeps.exclude.filter(
+                    (dependency) => dependency !== 'reka-ui',
+                );
+            }
             // Terser folds more emitted expressions; Oxc then prints the result
             // compactly (notably tokenizer tables). Keep compression bounded.
             const output = config.build?.rolldownOptions?.output;

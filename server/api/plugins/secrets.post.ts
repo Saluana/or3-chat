@@ -21,7 +21,8 @@ export default defineEventHandler(async event => {
     setResponseHeader(event, 'Cache-Control', 'no-store');
     requirePluginMutation(event);
     const config = useRuntimeConfig();
-    if (!config.auth.enabled || !config.secrets?.provider) refuse(404);
+    const secrets = config.secrets as typeof config.secrets | undefined;
+    if (!config.auth.enabled || !secrets?.provider) refuse(404);
     const session = await resolveSessionContext(event);
     requireSession(session);
     const userId = session.user?.id, workspaceId = session.workspace?.id;
@@ -30,14 +31,14 @@ export default defineEventHandler(async event => {
     if (!await checkRateLimit(`plugin-secrets:${userId}`, { max: 60, window: 60 })) {
         setResponseHeader(event, 'Retry-After', 60); refuse(429);
     }
-    const body = await readLimitedJsonBody<Record<string, unknown>>(event, 256 * 1024);
+    const body = await readLimitedJsonBody<unknown>(event, 256 * 1024);
     if (!body || Array.isArray(body) || typeof body !== 'object' || Object.keys(body).some(key => !['operation', 'pluginId', 'activationId', 'key', 'value'].includes(key))) refuse(400);
-    const { operation, pluginId, activationId, key, value } = body;
+    const { operation, pluginId, activationId, key, value } = body as Record<string, unknown>;
     if (!identifier(pluginId) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId) || pluginId.includes('..') || typeof activationId !== 'string' || !activationId || activationId.length > 512 || typeof operation !== 'string' || !['get', 'set', 'delete', 'ref', 'status', 'unlock'].includes(operation)) refuse(400);
     if (operation !== 'unlock' && (operation !== 'status' || key !== undefined) && !identifier(key)) refuse(400);
     if (operation === 'unlock' && key !== undefined) refuse(400);
     if (operation === 'set' ? typeof value !== 'string' || Buffer.byteLength(value) > 32 * 1024 || Buffer.from(value).toString('utf8') !== value : value !== undefined) refuse(400);
-    if (!identifier(config.secrets.namespace)) refuse(503);
+    if (!identifier(secrets.namespace)) refuse(503);
     // Slow uploads cannot hold a vault slot. Reserve before joining a package's
     // operation queue; all concurrent requests share the same process budget.
     if (inFlight >= 16) { setResponseHeader(event, 'Retry-After', 1); refuse(429); }
@@ -56,7 +57,7 @@ export default defineEventHandler(async event => {
             const live = () => { if (!checkHostActivationLive(activationId).ok) refuse(409); };
             live();
             const context = { requestId: randomUUID(), actorId: userId, activationId: createHash('sha256').update(activationId).digest('hex') };
-            const scope = { namespace: config.secrets.namespace, ownerUserId: userId, workspaceId, consumerId: pluginId };
+            const scope = { namespace: secrets.namespace, ownerUserId: userId, workspaceId, consumerId: pluginId };
             // Fixed fields only; the corresponding vault event records this same request/actor/activation.
             console.info(JSON.stringify({ event: 'plugin_secret_authorized', operation, ...context }));
             try {

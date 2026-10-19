@@ -39,7 +39,7 @@ export async function createManagedLifecycle(directory: string) {
             Config: z.object({ Labels: z.record(z.string(), z.string()).nullish() }).passthrough(),
             Mounts: z.array(z.object({ Destination: z.string(), Name: z.string().optional(), Type: z.string() }).passthrough()),
         }).passthrough()).nonempty().parse(JSON.parse(result.stdout))[0];
-        if (info.Config?.Labels?.['io.or3.cloud.deployment-id'] !== initial.state.deploymentId
+        if (info.Config.Labels?.['io.or3.cloud.deployment-id'] !== initial.state.deploymentId
             || !info.Mounts.some(mount => mount.Destination === '/data' && mount.Type === 'volume' && mount.Name === initial.state.volumeName)) throw new RestartError('deployment_identity_changed');
         return { loaded, imageId: String(info.Image) };
     }

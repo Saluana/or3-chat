@@ -4,7 +4,7 @@ import { FilePolicySchema, type FilePolicy } from '~~/shared/storage/file-policy
 export function isCloudFileStorageEnabled(): boolean {
     try {
         const config = useRuntimeConfig().public;
-        return config.ssrAuthEnabled === true && (config.storage as { enabled?: boolean })?.enabled === true;
+        return config.ssrAuthEnabled === true && (config.storage as { enabled?: boolean } | undefined)?.enabled === true;
     } catch { return false; }
 }
 
@@ -12,7 +12,7 @@ export function isCloudFileStorageEnabled(): boolean {
 export function isCloudWorkspaceBackupEnabled(): boolean {
     try {
         const config = useRuntimeConfig().public;
-        return config.ssrAuthEnabled === true && (config.sync as { enabled?: boolean })?.enabled === true;
+        return config.ssrAuthEnabled === true && (config.sync as { enabled?: boolean } | undefined)?.enabled === true;
     } catch { return false; }
 }
 

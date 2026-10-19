@@ -44,7 +44,8 @@ export default defineEventHandler(async (event) => {
 
     const token = invite.trim();
     setHeader(event, 'Cache-Control', 'no-store');
-    const verified = await resolveInviteToken(event, token, secret, getAuthWorkspaceStore(config.public?.sync?.provider));
+    const provider = (config.public as { sync?: { provider?: string } } | undefined)?.sync?.provider;
+    const verified = await resolveInviteToken(event, token, secret, provider ? getAuthWorkspaceStore(provider) : null);
     if (!verified.ok || (mode === 'open' && !('purpose' in verified.payload))) return;
     const maxAge = Math.floor(verified.payload.exp - Date.now() / 1000);
     if (maxAge <= 0) return;

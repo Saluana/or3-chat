@@ -26,14 +26,14 @@ function isStrictMode(): boolean {
 }
 
 export default defineNitroPlugin(() => {
-    const secrets = useRuntimeConfig().secrets;
+    const completeConfig = useRuntimeConfig();
+    const secrets = completeConfig.secrets as typeof completeConfig.secrets | undefined;
     if (secrets?.provider && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
         throw new Error('[or3-cloud-config] Selected secret provider is missing or invalid.');
     }
     if (!isStrictMode()) return;
 
     // Optional subsystems may be absent in older or partial runtime configurations.
-    const completeConfig = useRuntimeConfig();
     const config = {
         ...completeConfig,
         backgroundJobs: completeConfig.backgroundJobs as typeof completeConfig.backgroundJobs | undefined,
