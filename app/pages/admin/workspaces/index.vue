@@ -3,7 +3,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 class="text-2xl font-semibold">Workspaces</h1>
-                    <p class="text-sm opacity-70">Manage all workspaces in the deployment</p>
+                    <p class="text-sm opacity-70">Find workspaces and manage who can access them.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <UButton
@@ -12,7 +12,7 @@
                         color="neutral"
                         :icon="usersIcon"
                     >
-                        Admin Users
+                        Administrators
                     </UButton>
                     <UButton
                         to="/admin/workspaces/create"
@@ -33,16 +33,14 @@
                     :icon="searchIcon"
                     class="flex-1 min-w-[200px]"
                 />
-                <USelectMenu
+                <USelect
                     v-model="showDeleted"
                     aria-label="Workspace visibility filter"
-                    :options="[
-                        { label: 'Active Only', value: false },
-                        { label: 'Show Deleted', value: true },
+                    :items="[
+                        { label: 'Active only', value: false },
+                        { label: 'Include deleted', value: true },
                     ]"
-                    option-attribute="label"
-                    value-attribute="value"
-                    class="w-40"
+                    class="w-full sm:w-44"
                 />
             </div>
 
@@ -77,7 +75,7 @@
                                     <UBadge v-if="workspace.deleted" color="error" variant="soft">Deleted</UBadge>
                                 </div>
                             <div class="break-words text-sm opacity-70">
-                                {{ workspace.memberCount }} members · Owner: {{ workspace.ownerEmail || workspace.ownerUserId || 'Unknown' }}
+                                {{ workspace.memberCount }} {{ workspace.memberCount === 1 ? 'member' : 'members' }} · Owner: {{ workspace.ownerEmail || workspace.ownerUserId || 'Unknown' }}
                             </div>
                                 <div class="text-xs opacity-50">
                                     Created {{ formatDate(workspace.createdAt) }}
@@ -100,7 +98,7 @@
                 <!-- Pagination -->
                 <div class="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="text-sm opacity-70">
-                        Showing {{ workspaces?.length ?? 0 }} of {{ total }} workspaces
+                        Showing {{ (page - 1) * perPage + 1 }}–{{ (page - 1) * perPage + workspaces.length }} of {{ total }} workspaces
                     </div>
                     <div class="flex gap-2">
                         <UButton

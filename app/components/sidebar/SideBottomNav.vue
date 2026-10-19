@@ -70,7 +70,7 @@
                 </UButton>
             </UTooltip>
             <template #content>
-                <div class="flex flex-col items-start w-[140px]">
+                <div class="or3-action-menu flex flex-col items-start w-[140px] p-1">
                     <UButton
                         v-bind="activityButtonProps"
                         @click="navigateToActivity"

@@ -16,7 +16,7 @@ export default {
     'shell.tab.new': 'blank-solar:add-linear',
     'shell.tabs': 'blank-solar:copy-linear',
     'shell.tabs.search': 'blank-solar:magnifier-linear',
-    'shell.tab.chat': 'blank-solar:chat-round-linear',
+    'shell.tab.chat': 'blank-solar:chat-square-line-linear',
     'shell.tab.document': 'blank-solar:document-text-linear',
     'shell.tab.app': 'blank-solar:panels-top-left-linear',
     'shell.tab.close': 'blank-solar:close-linear',

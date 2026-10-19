@@ -39,6 +39,7 @@ useHead({
         lang: 'en',
     },
     title: appName,
+    link: [{ key: 'site-favicon', rel: 'icon', href: runtimeConfig.public.or3.site.faviconUrl || '/favicon.ico' }],
     meta: [
         {
             name: 'description',

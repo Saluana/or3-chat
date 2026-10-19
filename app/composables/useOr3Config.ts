@@ -219,6 +219,6 @@ export function isWorkflowFeatureEnabled(
  * @returns Whether the source is enabled (also checks master toggle)
  */
 export function isMentionSourceEnabled(source: 'documents' | 'conversations'): boolean {
-    const { mentions } = useOr3Config().features;
-    return mentions.enabled && mentions[source];
+    const { mentions, documents } = useOr3Config().features;
+    return mentions.enabled && mentions[source] && (source !== 'documents' || documents.enabled);
 }

@@ -23,6 +23,7 @@
                 }"
             />
             <span
+                v-title-marquee
                 class="project-child-label truncate text-start flex-1 min-w-0 text-sm font-normal"
                 >{{ child.name || 'Untitled' }}</span
             >
@@ -50,7 +51,7 @@
                     </button>
                     <template #content>
                         <div
-                            class="project-child-menu-content p-1 w-48 space-y-1"
+                            class="or3-action-menu project-child-menu-content p-1 w-48"
                         >
                             <UButton
                                 v-if="canOpenInNewTab"
@@ -100,6 +101,7 @@ import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
 import { isMobile } from '~/state/global';
+import { vTitleMarquee } from '~/utils/title-marquee';
 
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
 const menuOpen = ref(false);

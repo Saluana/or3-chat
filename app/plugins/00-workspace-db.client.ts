@@ -23,7 +23,8 @@ export default defineNuxtPlugin(async () => {
         return;
     }
 
-    const { data, refresh } = useSessionContext();
+    // This plugin validates the session itself below, so skip the automatic load.
+    const { data, refresh } = useSessionContext({ autoLoad: false });
     const nuxtApp = useNuxtApp();
 
     const [{ cleanupCursorManager }, { cleanupHookBridge }, { cleanupSubscriptionManager }] = await Promise.all([

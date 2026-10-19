@@ -4,7 +4,7 @@
             v-if="accessReason === 'session-error'"
             color="error"
             variant="soft"
-            title="Session check failed"
+            title="We couldn't check your session"
             :description="errorDescription"
         />
 
@@ -18,17 +18,20 @@
 
         <!-- Auth surface -->
         <ClientOnly>
+            <!-- Provider authentication can succeed while OR3 registration
+                 rejects the identity. Keep account switching reachable. -->
             <div v-if="authUiComponent" class="space-y-3">
                 <component :is="authUiComponent" />
                 <UButton
                     v-if="showRetry"
+                    block
                     size="lg"
                     color="neutral"
                     variant="outline"
                     :icon="refreshIcon"
                     @click="retrySessionCheck"
                 >
-                    Retry
+                    {{ accessReason === 'session-error' ? 'Try again' : 'Retry' }}
                 </UButton>
             </div>
 

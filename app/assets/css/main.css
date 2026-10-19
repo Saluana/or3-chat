@@ -17,6 +17,7 @@
 
 /* Your Material theme variable files (scoped: .light, .dark, etc.) */
 @import "./theme.css";
+@import "./action-menu.css";
 
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";

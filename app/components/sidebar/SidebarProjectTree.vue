@@ -58,7 +58,7 @@
                             />
                         </span>
                         <template #content>
-                            <div class="p-1 w-48 space-y-1">
+                            <div class="or3-action-menu p-1 w-48">
                                 <template v-if="level === 0">
                                     <UButton
                                         v-bind="renameProjectButtonProps"

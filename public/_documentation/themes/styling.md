@@ -20,6 +20,21 @@ Theme fields and token names are listed in
 keys become `--md-kebab-case` variables. Tokens contain full CSS values; use
 `var(--md-primary)`, not `rgb(var(--md-primary))`.
 
+## Action menus
+
+Host action menus share the `or3-action-menu` recipe in
+`app/assets/css/action-menu.css`: 14px regular text, 20px line height, 18px icons,
+and 36px rows (at least 44px on mobile). Dropdowns, sidebar action popovers,
+and tab menus use it; chat settings and form/model pickers remain separate.
+Colors, destructive states, focus treatments, and surface decoration still come
+from the active theme.
+
+To tune menu density or typography, set `--app-menu-font-size`,
+`--app-menu-font-weight`, `--app-menu-icon-size`, or `--app-menu-row-height` in
+your theme stylesheet. Use these shared variables rather than individual button
+size overrides. Source-owned action popovers should put `or3-action-menu` on
+their content wrapper; Nuxt dropdown menus receive it from app configuration.
+
 ## Style a named control
 
 Merge this JSON fragment into your definition:
@@ -152,7 +167,7 @@ background helper rather than introducing parallel token or URL ownership.
 
 The Blank theme maps semantic tokens to Solar icons through
 `app/theme/blank/icons.config.ts`. Its build-time `icon-collection.ts` selects
-only the used Solar glyphs and increases Linear stroke widths from 1.5 to 2.
+only the used Solar glyphs and increases Linear stroke widths from 1.5 to 2.05.
 The `blank-solar` prefix keeps this change isolated from other themes. Bold
 variants supply filled favorites, checked boxes, and stop/pause controls.
 The sidebar's Chats, Documents, and Projects category badges use Bold Duotone
@@ -167,16 +182,25 @@ The host installs `@iconify-json/solar` and registers the subset with Nuxt Icon'
 it also works in static builds. Solar is by
 [480 Design](https://www.figma.com/community/file/1166831539721848736), licensed
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Blank modifies
-the Linear stroke widths. Main rail icons render at 24px.
+the Linear stroke widths. Main rail icons render at 20px in 90% `onSurface` (`--blank-sb-icon`; full
+`onSurface` on hover and for the active page) with 4px between 40px buttons;
+touch layouts keep 24px.
 
-Blank's sidebar chat and document row icons render at 16px in a muted
-`onSurfaceVariant` (45%) so titles carry the list; hover and keyboard focus
-restore full `onSurfaceVariant`, and active rows retain their primary color.
-Row dates share that muted tone through `--blank-sb-row-muted`. Section
+Outside the sidebar, Blank keeps the same `--blank-sb-icon` tone: header actions
+(split, theme, notifications) render at 18px, the tab strip's new-tab and close
+controls at 16px, the sidebar search field's leading icon at 16px, and the
+composer's attach and settings icons at 16px. Chat tabs use the same
+`chat-square-line` glyph as sidebar rows. Mobile layouts keep their own larger
+sizes.
+
+Blank's sidebar chat and document row icons render at 16px in the same
+90% `onSurface` (`--blank-sb-icon`) so titles carry the list; hover and
+keyboard focus restore full `onSurface`, and active rows retain their primary
+color. Row dates sit a step quieter at 60%. Section
 headers use 12px sentence case, and an open section shows its arrow only on
 hover or focus. On wide hover-capable screens rows are about 36px tall with
 8px above each time section; touch layouts keep 48px rows.
-Project rows use the same 16px muted icons, row "more" menus sit in
+Project rows use the same 16px icons, row "more" menus sit in
 `onSurfaceVariant` until hovered or open, and section actions such as
 "+ New" stay `onSurfaceVariant` until hovered. Branched chat groups show
 `sidebar.chat.branched` in the icon column, and their `ui.chevron.right` /

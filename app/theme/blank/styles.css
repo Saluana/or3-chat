@@ -8,7 +8,7 @@
     --blank-brand-accent: #2a8fd6;
     --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
     --blank-sb-row-icon: 16px;
-    --blank-sb-row-muted: color-mix(in srgb, var(--md-on-surface-variant) 45%, transparent);
+    --blank-sb-icon: color-mix(in srgb, var(--md-on-surface) 90%, transparent);
     --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
     --md-surface-dim: #ececec;
     --md-surface-bright: #ffffff;
@@ -108,22 +108,50 @@
         color: var(--md-on-surface-variant);
     }
 
-    /* Size SVG and CSS-mask icons alike, including the bell's custom slot. */
+    /* Size SVG and CSS-mask icons alike, including the bell's custom slot.
+       Header glyphs sit below the rail's 20px so the tabs lead. */
     :where(
         #top-nav .theme-btn,
         #top-nav .notification-bell-btn,
         .workspace-chrome-actions .workspace-chrome-action
     ) .iconify {
-        width: 20px !important;
-        height: 20px !important;
-        min-width: 20px;
-        min-height: 20px;
-        font-size: 20px !important;
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px;
+        min-height: 18px;
+        font-size: 18px !important;
+        color: var(--blank-sb-icon);
+    }
+
+    :where(
+        #top-nav .theme-btn,
+        #top-nav .notification-bell-btn,
+        .workspace-chrome-actions .workspace-chrome-action
+    ):is(:hover, :focus-visible) .iconify {
+        color: var(--md-on-surface);
     }
 
     .workspace-tab-new:hover {
         background: var(--md-surface-hover);
         color: var(--md-on-surface);
+    }
+
+    /* Tab strip controls: 16px glyphs in the shared icon tone. */
+    :where(.workspace-tab-new, .workspace-tab-close) .iconify {
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px;
+        min-height: 16px;
+        font-size: 16px !important;
+        color: var(--blank-sb-icon);
+    }
+
+    :is(.workspace-tab-new, .workspace-tab-close):is(:hover, :focus-visible) .iconify {
+        color: var(--md-on-surface);
+    }
+
+    .workspace-tab-wrap .workspace-tab-close {
+        opacity: 1;
     }
 
     /* Mobile: blank softens chrome chips into pills. */
@@ -224,7 +252,7 @@
         @apply mx-1;
     }
 
-    /* Row icons stay small and muted so titles carry the list. */
+    /* Row icons stay small so titles carry the list. */
     .unified-sb-item,
     .unified-sb-item > button {
         column-gap: 0.5rem;
@@ -241,20 +269,20 @@
 
     .unified-sb-item .sb-btn-icon:not(.sb-btn-icon-active),
     .sidebar-family-toggle {
-        color: var(--blank-sb-row-muted) !important;
+        color: var(--blank-sb-icon) !important;
     }
 
     .unified-sb-item:is(:hover, :focus-within) .sb-btn-icon:not(.sb-btn-icon-active),
     .sidebar-family-header:hover .sidebar-family-toggle,
     .sidebar-family-toggle:focus-visible {
-        color: var(--md-on-surface-variant) !important;
+        color: var(--md-on-surface) !important;
     }
 
     .sb-btn-icon:not(.sb-btn-icon-active) {
-        color: var(--md-on-surface-variant);
+        color: var(--blank-sb-icon);
     }
 
-    /* Project rows match chat rows: small muted icons and a gray menu button. */
+    /* Project rows match chat rows: small icons in the same tone and a gray menu button. */
     .project-root-toggle .project-icon,
     .project-child-toggle .project-child-icon {
         width: var(--blank-sb-row-icon);
@@ -266,11 +294,11 @@
     }
 
     .project-root-toggle .project-icon {
-        color: var(--blank-sb-row-muted);
+        color: var(--blank-sb-icon);
     }
 
     .project-root-toggle:is(:hover, :focus-within) .project-icon {
-        color: var(--md-on-surface-variant);
+        color: var(--md-on-surface);
     }
 
     .project-child-toggle .project-child-icon {
@@ -364,9 +392,9 @@
         @apply text-[11px] tracking-normal tabular-nums;
     }
 
-    /* Dates share the row icons' muted tone; the hover-hide stays in control. */
+    /* Dates stay a step quieter than the row icons; the hover-hide stays in control. */
     .sb-item-time:not(.sb-item-time-active) {
-        color: var(--blank-sb-row-muted) !important;
+        color: color-mix(in srgb, var(--md-on-surface-variant) 60%, transparent) !important;
         opacity: 1 !important;
     }
 
@@ -410,6 +438,15 @@
     #nav-collapsed-container {
         border-right: 1px solid
             color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+    }
+
+    /* Rail buttons sit 4px apart (44px pitch); this replaces the space-y-2 margins. */
+    :is(#nav-top-section, #nav-pages-section, .profile-navigation-group, #nav-footer-section) {
+        row-gap: 4px;
+    }
+
+    :is(#nav-top-section, #nav-pages-section, .profile-navigation-group, #nav-footer-section) > * {
+        margin-block: 0;
     }
 
     .chat-input-wrapper {
@@ -661,6 +698,13 @@ html[data-theme='blank'].dark,
     /* The container ladder lives in theme.ts; these two are not registered tokens. */
     --md-surface-dim: #171717;
     --md-surface-bright: #2f2f2f;
+
+    /* Match the tab menu's charcoal surface. Target the popover frame too:
+       its inherited dark:bg-black otherwise shows behind the action list. */
+    .or3-action-menu,
+    [data-slot='content']:has(> .or3-action-menu) {
+        background-color: var(--md-surface) !important;
+    }
 
     /*
      * Shadows at light-mode opacity vanish on charcoal, so floating menus and

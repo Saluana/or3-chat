@@ -260,7 +260,7 @@ function forwardResize(payload: ResizePayload) {
     border-radius: 50%;
     background: transparent !important;
     box-shadow: none !important;
-    color: var(--md-on-surface-variant) !important;
+    color: var(--blank-sb-icon) !important;
     /* Owns its press transform; skip the shared button scale. */
     scale: none;
     transition-property: background-color, color, transform;

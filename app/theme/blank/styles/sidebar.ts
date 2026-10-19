@@ -10,13 +10,7 @@ const SidebarPopoverButtonConfig = {
 const SidebarCollapsedTopButtonConfig = {
     variant: 'ghost',
     square: true,
-    class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! bg-transparent! border-0! rounded-full text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    ui: { leadingIcon: 'size-6' },
-};
-
-const SidebarRailUtilityButtonConfig = {
-    ...SidebarCollapsedTopButtonConfig,
-    class: `${SidebarCollapsedTopButtonConfig.class} text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]!`,
+    class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! bg-transparent! border-0! rounded-full text-[var(--blank-sb-icon)]! hover:text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     ui: { leadingIcon: 'size-5' },
 };
 
@@ -31,6 +25,7 @@ export const sidebarOverrides = {
 
     'input#sidebar.search': {
         ui: {
+            leadingIcon: 'size-4 text-[var(--blank-sb-icon)]!',
             base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[var(--app-elevation-low)] max-md:min-h-[44px]! max-md:text-[16px]!',
         },
     },
@@ -76,11 +71,11 @@ export const sidebarOverrides = {
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
     /* --- Bottom nav buttons: clean, borderless --- */
-    'button#sidebar.bottom-nav.info': SidebarRailUtilityButtonConfig,
-    'button#sidebar.bottom-nav.connect': SidebarRailUtilityButtonConfig,
-    'button#sidebar.bottom-nav.auth': SidebarRailUtilityButtonConfig,
-    'button#sidebar.bottom-nav.dashboard': SidebarRailUtilityButtonConfig,
-    'button#sidebar.toggle': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.info': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.bottom-nav.connect': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.bottom-nav.auth': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.bottom-nav.dashboard': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.toggle': SidebarCollapsedTopButtonConfig,
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
@@ -125,7 +120,7 @@ export const sidebarOverrides = {
         ...SidebarCollapsedTopButtonConfig,
         ui: {
             base: 'ring-0! shadow-none!',
-            leadingIcon: 'size-6',
+            leadingIcon: 'size-5',
         },
     },
     'button#sidebar.collapsed-page:active': {
@@ -247,13 +242,13 @@ export const sidebarCssSelectors = {
     },
     '#nav-top-section .iconify': {
         style: {
-            fontSize: '22px',
-            width: '22px',
-            height: '22px',
+            fontSize: '20px',
+            width: '20px',
+            height: '20px',
         },
     },
     '#nav-top-section .app-icon:has(> .iconify)': {
-        style: { width: '22px', height: '22px' },
+        style: { width: '20px', height: '20px' },
     },
     '.bottomnav-root .iconify': {
         style: {
@@ -290,7 +285,7 @@ export const sidebarCssSelectors = {
             borderTop: 'none',
             paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
             paddingTop: '12px',
-            gap: '8px',
+            gap: '4px',
         },
     },
     '#nav-pages-section': {
@@ -298,8 +293,8 @@ export const sidebarCssSelectors = {
             borderTop: 'none',
             alignItems: 'center',
             position: 'relative',
-            marginTop: '12px',
-            paddingTop: '16px',
+            marginTop: '14px',
+            paddingTop: '14px',
         },
     },
     '#nav-pages-section::before': {

@@ -192,6 +192,7 @@ export default defineNuxtConfig({
             script: [hostEsmFacadeImportMapScript()],
             link: [
                 {
+                    key: 'site-favicon',
                     rel: 'icon',
                     href: or3Config.site.faviconUrl || '/favicon.ico',
                 },

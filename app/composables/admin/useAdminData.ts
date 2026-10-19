@@ -93,7 +93,7 @@ export function useAdminExtensions() {
 }
 
 export function useAdminSystemConfigEnriched() {
-    return useFetch<{ entries: EnrichedConfigEntry[]; savedRevision?: string | null }>(
+    return useFetch<{ entries: EnrichedConfigEntry[]; savedRevision?: string | null; siteRevision: string; themes: Array<{label: string; value: string}> }>(
         '/api/admin/system/config/enriched',
         {
             key: 'admin:system:config:enriched',

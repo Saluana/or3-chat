@@ -1,6 +1,7 @@
 <template>
     <div
         ref="el"
+        data-marquee-host
         class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
             'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
@@ -24,6 +25,7 @@
         <!-- Title -->
         <span class="flex-1 min-w-0">
         <span
+            v-title-marquee
             class="block truncate text-sm font-normal leading-tight sb-btn-title"
             :class="
                 active
@@ -64,7 +66,7 @@
                     @keydown="handlePopoverTriggerKey"
                 />
                 <template #content>
-                    <div class="p-1 w-56 max-w-[calc(100vw-2rem)] space-y-1">
+                    <div class="or3-action-menu p-1 w-56 max-w-[calc(100vw-2rem)]">
                         <slot name="family-actions" />
                         <UButton
                             v-if="canOpenInNewTab"
@@ -147,6 +149,7 @@ import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
 import { isMobile } from '~/state/global';
+import { vTitleMarquee } from '~/utils/title-marquee';
 import {
     useThreadHistoryActions,
     type ThreadHistoryAction,

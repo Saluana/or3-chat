@@ -113,8 +113,13 @@
             ]"
             :style="inputWrapperStyle"
         >
-            <component v-if="emptyAppearance" :is="$theme.activeComponents.value['chat-empty-state'] || CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']"
-                :key="emptyMediaKey" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
+            <!-- Keep a real parent around the async theme component while history
+                 replaces the empty state. Its pending Suspense placeholder must
+                 not become an anchor in the chat's outer render block. -->
+            <div v-if="emptyAppearance" class="contents">
+                <component :is="$theme.activeComponents.value['chat-empty-state'] || CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']"
+                    :key="emptyMediaKey" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
+            </div>
             <div
                 v-bind="innerInputContainerProps"
                 :class="[

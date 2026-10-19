@@ -33,7 +33,7 @@ const deleteButtonProps = useSidebarProjectActionButtonProps({
             @click.stop
         />
         <template #content>
-            <div class="project-menu-content p-1 w-48 space-y-1">
+            <div class="or3-action-menu project-menu-content p-1 w-48">
                 <UButton
                     v-bind="renameButtonProps"
                     class="w-full justify-start"

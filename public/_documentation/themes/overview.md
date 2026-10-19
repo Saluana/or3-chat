@@ -11,6 +11,23 @@ app components. You can customize the current theme without creating a package.
 | Replace a Vue surface | [Replace app components](/documentation/themes/component-overrides) |
 | Distribute or install a theme | [Package and install](/documentation/themes/package-install) |
 
+## Preview themes in Admin
+
+Open **Admin → Themes** and choose **Preview here**. The preview is saved in this
+browser and survives reloads; it does not change another user's appearance.
+**Previewing here** identifies your browser's choice, while **Site default** marks
+the starting theme for people who have not chosen one. The site owner can change
+the default or hide bundled themes in **UI & Branding** and save. Reload pages to
+apply these choices; no restart is needed. Installing or removing theme code still
+requires the supported build/update workflow. See [site configuration](/documentation/cloud/configure).
+
+On source installations that allow theme uploads, use **Import from link** for
+a complete HTTP or HTTPS ZIP download link, or **Upload .zip** for a local file.
+Only install from publishers you trust: some themes contain code with access to
+your server and its data. Installation still requires the appropriate development
+restart or production build. Managed installations show their included themes
+and explain why custom uploads are unavailable.
+
 ## Choose an authoring path
 
 **Declarative themes** contain `or3.theme.json`, a manifest, and optional local

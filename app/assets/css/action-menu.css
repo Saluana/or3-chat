@@ -1,0 +1,44 @@
+/* Shared geometry for action popovers, Nuxt dropdowns (including submenus),
+   and custom tab menus. Opt-in keeps settings/forms and model pickers separate.
+   Important component-layer rules beat button size utilities and theme recipes;
+   themes can customize these variables once for every menu. */
+@layer components {
+    .or3-action-menu :is(button, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+        display: flex;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: 100%;
+        height: auto !important;
+        min-height: var(--app-menu-row-height, 36px) !important;
+        padding: 8px 12px !important;
+        gap: 8px !important;
+        font-family: var(--app-font-sans-current) !important;
+        font-size: var(--app-menu-font-size, 14px) !important;
+        font-weight: var(--app-menu-font-weight, 400) !important;
+        line-height: 20px !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        text-align: start;
+    }
+
+    .or3-action-menu :is(button, [role^="menuitem"]) :is([data-slot="label"], [data-slot="itemLabel"]) {
+        font-size: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+        letter-spacing: normal !important;
+    }
+
+    .or3-action-menu :is(button, [role^="menuitem"]) :is(.iconify, .app-icon) {
+        width: var(--app-menu-icon-size, 18px) !important;
+        height: var(--app-menu-icon-size, 18px) !important;
+        font-size: var(--app-menu-icon-size, 18px) !important;
+        flex-shrink: 0;
+        margin-inline: 0 !important;
+    }
+
+    @media (width < 768px) {
+        .or3-action-menu :is(button, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+            min-height: max(44px, var(--app-menu-row-height, 36px)) !important;
+        }
+    }
+}

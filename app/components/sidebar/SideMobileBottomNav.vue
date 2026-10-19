@@ -53,7 +53,7 @@
             </button>
             <template #content>
                 <div
-                    class="mobile-nav-menu flex flex-col gap-0.5 p-1.5 min-w-[190px]"
+                    class="or3-action-menu mobile-nav-menu flex flex-col p-1 min-w-[190px]"
                 >
                     <button
                         v-bind="createItemProps"

@@ -11,7 +11,7 @@
 import { defineEventHandler } from 'h3';
 import { requireAdminApi } from '../../admin/api';
 import { listInstalledExtensions } from '../../admin/extensions/extension-manager';
-import { readConfigEntries } from '../../admin/config/config-manager';
+import { useRuntimeConfig } from '#imports';
 
 /**
  * GET /api/admin/themes-page
@@ -30,21 +30,12 @@ import { readConfigEntries } from '../../admin/config/config-manager';
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event);
     
-    // Parallel fetch instead of sequential
-    const [extensions, configEntries] = await Promise.all([
-        listInstalledExtensions(),
-        readConfigEntries()
-    ]);
-    
-    const defaultThemeEntry = configEntries.find(e => e.key === 'OR3_DEFAULT_THEME');
-    const disabledThemesEntry = configEntries.find(
-        (e) => e.key === 'OR3_DISABLED_THEMES'
-    );
-    
+    const extensions = await listInstalledExtensions();
+    const site = useRuntimeConfig(event).public.or3.site;
     return {
         themes: extensions.filter(i => i.kind === 'theme'),
         role: session.role,
-        defaultTheme: defaultThemeEntry?.value ?? '',
-        disabledThemes: disabledThemesEntry?.value ?? '',
+        defaultTheme: site.defaultTheme,
+        disabledThemes: site.disabledThemes.join(','),
     };
 });

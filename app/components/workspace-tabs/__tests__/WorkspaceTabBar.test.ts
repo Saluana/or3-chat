@@ -221,7 +221,7 @@ describe.each(['bar', 'switcher', 'mobile'] as const)('workspace tab icons in th
             await nextTick();
             const expected = theme === 'retro'
                 ? ['pixelarticons:chat', 'pixelarticons:note', 'pixelarticons:files', 'custom:planet', 'pixelarticons:grid']
-                : ['blank-solar:chat-round-linear', 'blank-solar:document-text-linear', 'blank-solar:documents-linear', 'custom:planet', 'blank-solar:panels-top-left-linear'];
+                : ['blank-solar:chat-square-line-linear', 'blank-solar:document-text-linear', 'blank-solar:documents-linear', 'custom:planet', 'blank-solar:panels-top-left-linear'];
             for (const [index, tab] of iconTabs.entries()) {
                 if (view === 'mobile') await wrapper.setProps({ activeTabId: tab.id });
                 const row = view === 'bar'

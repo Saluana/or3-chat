@@ -397,7 +397,7 @@
                                                 </button>
                                                 <template #content>
                                                     <div
-                                                        class="flex w-52 flex-col p-1"
+                                                        class="or3-action-menu flex w-52 flex-col p-1"
                                                     >
                                                         <UButton
                                                             variant="ghost"

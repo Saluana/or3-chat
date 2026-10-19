@@ -27,10 +27,6 @@ let previewTrigger: HTMLElement | null = null;
 const closeIcon = useIcon('ui.close');
 const menuUi = {
     content: 'min-w-[220px]',
-    item: 'min-h-9! gap-3! px-3! py-2! items-center! justify-start! max-md:min-h-11!',
-    itemLeadingIcon: 'size-5! shrink-0! self-center!',
-    itemWrapper: 'min-w-0 flex-1 text-left',
-    itemLabel: 'text-sm! leading-5! tracking-normal!',
 };
 const pluginFileActions = useWorkspaceFileActions();
 async function closePreview() {

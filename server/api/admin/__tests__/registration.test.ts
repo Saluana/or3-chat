@@ -113,9 +113,9 @@ describe('admin registration settings', () => {
         expect(await readFile(join(fixture.directory, '.env'), 'utf8')).not.toContain('OR3_AUTH_REGISTRATION_MODE');
     });
 
-    it('refuses build settings on the generic write route instead of writing an app-local env', async () => {
-        fixture.readBody.mockResolvedValue({ entries: [{ key: 'OR3_DEFAULT_THEME', value: 'retro' }], expectedRevision: (await fixture.control.status()).savedRevision });
+    it('refuses infrastructure settings on the generic write route instead of writing an app-local env', async () => {
+        fixture.readBody.mockResolvedValue({ entries: [{ key: 'OR3_SYNC_PROVIDER', value: 'sqlite' }], expectedRevision: (await fixture.control.status()).savedRevision });
         await expect(saveConfiguration({} as never)).rejects.toMatchObject({ statusCode: 501 });
-        expect(await readFile(join(fixture.directory, '.env'), 'utf8')).not.toContain('OR3_DEFAULT_THEME');
+        expect(await readFile(join(fixture.directory, '.env'), 'utf8')).not.toContain('OR3_SYNC_PROVIDER');
     });
 });

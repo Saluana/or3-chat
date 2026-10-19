@@ -30,10 +30,25 @@ function getSessionValidationState() {
 }
 
 function extractErrorMessage(error: unknown): string | undefined {
-    if (error instanceof Error && error.message.trim()) {
-        return error.message;
+    if (!(error instanceof Error) || !error.message.trim()) return undefined;
+    const message = error.message;
+    // Raw request errors look like '[GET] "/api/auth/session": 429 …'.
+    const rawRequestError = /^\[[A-Z]+\] "[^"]*": (\d{3})\b/.exec(message);
+    const status = Number((error as { statusCode?: number }).statusCode) || Number(rawRequestError?.[1]);
+    if (status === 429) {
+        const seconds = /Retry after (\d+)s/.exec(message)?.[1];
+        return seconds
+            ? `Too many attempts. Please wait ${seconds} seconds and try again.`
+            : 'Too many attempts. Please wait a minute and try again.';
     }
-    return undefined;
+    if (rawRequestError) {
+        // A 403 carries a sentence written for people ("A valid invite is
+        // required to register."). Other raw request errors mean nothing to a
+        // visitor, so the lock page falls back to its plain-language default.
+        const detail = message.slice(rawRequestError[0].length).trim();
+        return status === 403 && detail ? detail : undefined;
+    }
+    return message;
 }
 
 export function evaluateLockPageAccess(input: {
@@ -106,7 +121,8 @@ export function evaluateLockPageAccess(input: {
 
 export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
     const config = useLockPageRuntimeConfig();
-    const sessionState = useSessionContext();
+    // Refreshes explicitly below when it needs to, so skip the automatic load.
+    const sessionState = useSessionContext({ autoLoad: false });
     const { validatedAt } = getSessionValidationState();
     const cachedPayload = sessionState.data.value;
     const cachedSession = cachedPayload?.session ?? null;

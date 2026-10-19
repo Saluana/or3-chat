@@ -16,7 +16,6 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-3">
-                        <UButton :to="`/admin/plugins?scope=workspace&workspaceId=${encodeURIComponent(workspace.id)}`" size="sm" variant="soft">Manage plugins</UButton>
                         <h1 class="min-w-0 break-words text-2xl font-semibold">{{ workspace.name }}</h1>
                         <UBadge v-if="workspace.deleted" color="error" variant="soft">Deleted</UBadge>
                     </div>
@@ -26,6 +25,7 @@
                 </div>
                 
                 <div class="flex flex-wrap gap-2">
+                    <UButton :to="`/admin/plugins?scope=workspace&workspaceId=${encodeURIComponent(workspace.id)}`" size="sm" variant="soft">Manage plugins</UButton>
                     <UButton
                         v-if="!workspace.deleted"
                         @click="handleSoftDelete"
@@ -34,7 +34,7 @@
                         icon="i-heroicons-trash"
                         :loading="isDeleting"
                     >
-                        Delete
+                        Delete workspace
                     </UButton>
                     <UButton
                         v-else
@@ -71,7 +71,7 @@
                     </div>
                     <div>
                         <div class="opacity-50">Owner</div>
-                        <div>{{ workspace.ownerEmail || workspace.ownerUserId || 'Unknown' }}</div>
+                        <div class="break-all">{{ workspace.ownerEmail || workspace.ownerUserId || 'Unknown' }}</div>
                     </div>
                     <div>
                         <div class="opacity-50">Created</div>
@@ -92,7 +92,10 @@
                 <div>
                     <h2 class="text-lg font-medium">Guest access</h2>
                     <p class="text-sm opacity-70">
-                        Allow people without a workspace account to open explicitly shared resources.
+                        Let people without an account open items shared with guests. This does not make the whole workspace public.
+                    </p>
+                    <p class="mt-1 text-sm opacity-70">
+                        Members can access this workspace through their accounts. Guest access is separate from membership.
                     </p>
                 </div>
                 <USwitch
@@ -108,27 +111,30 @@
 
             <!-- Members Card -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-3 mb-4">
                     <div>
                         <h2 class="text-lg font-medium">Members</h2>
-                        <p class="text-sm opacity-70">{{ workspace.members?.length || 0 }} total</p>
+                        <p class="text-sm opacity-70">Viewers can read. Editors can make changes. Owners manage the workspace and its members.</p>
+                        <p class="mt-1 text-sm opacity-70">Add an account by email or user ID, or use Team invitations below to share an invite link.</p>
                     </div>
                     <div class="flex flex-col gap-2 sm:flex-row">
                         <UInput
                             v-model="newMemberIdentifier"
                             aria-label="Member email or user ID"
                             placeholder="Email or user ID"
-                            class="min-w-0 sm:w-64"
+                            class="min-w-0 flex-1"
+                            :disabled="workspace.deleted || isAddingMember"
                         />
                         <USelect
                             v-model="newMemberRole"
                             aria-label="New member role"
                             :items="memberRoleItems"
                             class="sm:w-32"
+                            :disabled="workspace.deleted || isAddingMember"
                         />
                         <UButton
                             :loading="isAddingMember"
-                            :disabled="!newMemberIdentifier.trim()"
+                            :disabled="workspace.deleted || !newMemberIdentifier.trim()"
                             @click="addMember"
                         >
                             Add member
@@ -150,7 +156,7 @@
                             </div>
                             <div class="min-w-0">
                                 <div class="break-all font-medium">{{ member.email || member.userId }}</div>
-                                <div class="text-xs opacity-50">{{ member.role }}</div>
+                                <div class="text-xs opacity-50">{{ member.role.charAt(0).toUpperCase() + member.role.slice(1) }}</div>
                             </div>
                         </div>
                         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
@@ -159,13 +165,14 @@
                                 :items="memberRoleItems"
                                 :aria-label="`Role for ${member.email || member.userId}`"
                                 class="min-w-32 flex-1 sm:flex-none"
-                                :disabled="memberActionUserId === member.userId"
+                                :disabled="workspace.deleted || memberActionUserId === member.userId || (member.role === 'owner' && ownerCount === 1)"
                                 @update:model-value="updateMemberRole(member, $event)"
                             />
                             <UButton
                                 color="error"
                                 variant="soft"
                                 :loading="memberActionUserId === member.userId"
+                                :disabled="workspace.deleted || (member.role === 'owner' && ownerCount === 1)"
                                 @click="removeMember(member)"
                             >
                                 Remove
@@ -174,68 +181,61 @@
                     </div>
                 </div>
 
-                <div v-else class="text-center py-8 text-sm opacity-50">
+                <p class="mt-3 text-sm opacity-70">At least one owner must stay in this workspace. Add another owner before changing or removing the last one.</p>
+
+                <div v-if="!workspace.members?.length" class="text-center py-8 text-sm opacity-50">
                     No members found
                 </div>
             </div>
 
-            <!-- Actions -->
-            <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 class="text-lg font-medium">Team invites</h2>
-                        <p class="text-sm opacity-70">Invite people to {{ workspace.name }}.</p>
+            <section class="p-4 sm:p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]" aria-label="Team invitations">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                    <div class="min-w-0">
+                        <h2 class="text-lg font-medium">Team invitations</h2>
+                        <p class="text-sm opacity-70">Give someone access to {{ workspace.name }}. They will join this workspace.</p>
+                        <p class="mt-1 text-sm opacity-70">OR3 does not email invitations. Copy the link and send it yourself. It only works for the email you enter.</p>
+                        <NuxtLink to="/admin/registration?tab=invitations" class="mt-2 inline-block text-sm text-[var(--md-primary)] underline">Create a new account with a private workspace instead</NuxtLink>
                     </div>
-                    <UButton size="sm" variant="soft" color="neutral" :loading="isLoadingInvites" @click="loadInvites">
-                        Refresh
-                    </UButton>
+                    <UButton size="sm" variant="soft" color="neutral" :loading="isLoadingInvites" @click="loadInvites">Refresh</UButton>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
-                    <UInput v-model="inviteEmail" placeholder="invitee@example.com" type="email" />
-                    <USelect v-model="inviteRole" :items="inviteRoleItems" />
-                    <UInput v-model.number="inviteTtlHours" type="number" min="1" max="720" placeholder="TTL hours" />
-                    <UButton :loading="isCreatingInvite" @click="createInvite">Create invite</UButton>
-                </div>
-
-                <div v-if="invites.length === 0" class="text-sm opacity-60 py-4">No invites yet.</div>
-
-                <div v-else class="space-y-2">
-                    <div
-                        v-for="invite in invites"
-                        :key="invite.id"
-                        class="p-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] flex items-center justify-between gap-3"
-                    >
-                        <div class="min-w-0">
-                            <div class="font-medium truncate">{{ invite.email }}</div>
-                            <div class="text-xs opacity-70">
-                                {{ invite.role }} · {{ invite.status }} · expires {{ formatDate(invite.expiresAt * 1000, true) }}
+                <form class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 items-end" @submit.prevent="createInvite">
+                    <UFormField label="Recipient email" name="team-invite-email" class="md:col-span-2">
+                        <UInput v-model="inviteEmail" aria-label="Recipient email" placeholder="person@example.com" type="email" required class="w-full" :disabled="workspace.deleted || isCreatingInvite" />
+                    </UFormField>
+                    <UFormField label="Role" name="team-invite-role">
+                        <USelect v-model="inviteRole" aria-label="Invitation role" :items="inviteRoleItems" class="w-full" :disabled="workspace.deleted || isCreatingInvite" />
+                    </UFormField>
+                    <UFormField label="Expires after" name="team-invite-expiry">
+                        <USelect v-model="inviteTtlHours" aria-label="Invitation expires after" :items="expiryOptions" class="w-full" :disabled="workspace.deleted || isCreatingInvite" />
+                    </UFormField>
+                    <UButton type="submit" class="justify-center md:col-span-4 md:justify-self-start" :loading="isCreatingInvite" :disabled="workspace.deleted || !inviteEmail.trim()">Create invite</UButton>
+                </form>
+                <p v-if="isLoadingInvites && !invitesLoaded" role="status" class="text-sm opacity-70 py-4">Loading invitations…</p>
+                <p v-else-if="inviteLoadError" role="alert" class="text-sm text-[var(--md-error)] py-4">{{ inviteLoadError }}</p>
+                <p v-else-if="invitesLoaded && !invites.length" class="text-sm opacity-70 py-4">No team invitations yet.</p>
+                <ul v-if="invites.length" class="space-y-3">
+                    <li v-for="invite in invites" :key="invite.id" class="p-4 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] space-y-3">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0 space-y-1">
+                                <div class="font-medium break-all">{{ invite.email }}</div>
+                                <div class="flex flex-wrap items-center gap-2 text-sm">
+                                    <span>{{ invite.role.charAt(0).toUpperCase() + invite.role.slice(1) }}</span>
+                                    <UBadge :color="invite.status === 'pending' ? 'info' : invite.status === 'accepted' ? 'success' : 'neutral'" variant="soft">{{ invite.status === 'revoked' ? 'Cancelled' : invite.status.charAt(0).toUpperCase() + invite.status.slice(1) }}</UBadge>
+                                </div>
+                                <p v-if="invite.status === 'pending' || invite.status === 'expired'" class="text-sm opacity-70">{{ invite.status === 'expired' ? 'Expired' : 'Expires' }} {{ formatDate(invite.expiresAt * 1000, true) }}</p>
                             </div>
-                            <div v-if="invite.inviteUrl" class="text-xs opacity-70 truncate">{{ invite.inviteUrl }}</div>
+                            <UButton v-if="invite.status === 'pending'" size="sm" color="error" variant="soft" :disabled="workspace.deleted" @click="revokeInvite(invite.id)">Cancel invite</UButton>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <UButton
-                                v-if="invite.inviteUrl"
-                                size="xs"
-                                variant="soft"
-                                color="neutral"
-                                @click="copyInviteUrl(invite.inviteUrl)"
-                            >
-                                Copy URL
-                            </UButton>
-                            <UButton
-                                v-if="invite.status === 'pending'"
-                                size="xs"
-                                color="error"
-                                variant="soft"
-                                @click="revokeInvite(invite.id)"
-                            >
-                                Revoke
-                            </UButton>
+                        <div v-if="invite.inviteUrl && invite.status === 'pending'" class="space-y-2">
+                            <p class="text-sm opacity-70">Copy this link now. It cannot be retrieved after you leave this page.</p>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <UInput :model-value="absoluteInviteUrl(invite.inviteUrl)" :aria-label="`Invitation link for ${invite.email}`" readonly class="min-w-0 flex-1" />
+                                <UButton color="neutral" variant="soft" class="justify-center" @click="copyInviteUrl(invite.inviteUrl)">Copy link</UButton>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </div>
+                    </li>
+                </ul>
+            </section>
 
             <div class="flex gap-2">
                 <UButton to="/admin/workspaces" variant="soft" color="neutral" icon="i-heroicons-arrow-left">
@@ -280,6 +280,9 @@ const newMemberRole = ref<'owner' | 'editor' | 'viewer'>('viewer');
 const inviteEmail = ref('');
 const inviteRole = ref<'owner' | 'editor' | 'viewer'>('viewer');
 const inviteTtlHours = ref(72);
+const expiryOptions = [{ label: '1 day', value: 24 }, { label: '3 days', value: 72 }, { label: '7 days', value: 168 }, { label: '30 days', value: 720 }];
+const invitesLoaded = ref(false);
+const inviteLoadError = ref('');
 const inviteRoleItems = [
     { label: 'Viewer', value: 'viewer' },
     { label: 'Editor', value: 'editor' },
@@ -293,11 +296,10 @@ const memberRoleItems = [
 const invites = ref<Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number; inviteUrl?: string }>>([]);
 
 const workspace = ref<Workspace | null>(null);
-const pending = ref(true);
+const ownerCount = computed(() => workspace.value?.members?.filter(member => member.role === 'owner').length ?? 0);
 const error = ref<Error | null>(null);
 
 async function refreshWorkspace() {
-    pending.value = true;
     error.value = null;
     try {
         workspace.value = await $fetch<Workspace>(
@@ -311,21 +313,19 @@ async function refreshWorkspace() {
         workspace.value = null;
         error.value =
             new Error(getMessage(err, 'Unable to load workspace'));
-    } finally {
-        pending.value = false;
     }
 }
 
 const showSkeleton = computed(() =>
-    pending.value || (!workspace.value && !error.value)
+    !workspace.value && !error.value
 );
 
 async function handleSoftDelete() {
     // Issue 26: Use accessible ConfirmDialog instead of native confirm()
     const confirmed = await confirm({
-        title: 'Delete Workspace',
-        message: 'Are you sure you want to delete this workspace? You can restore it later from the deleted workspaces list.',
-        confirmText: 'Delete',
+        title: 'Delete workspace?',
+        message: `Delete ${workspace.value?.name || 'this workspace'}? Members will lose access. You can restore it later by choosing Include deleted on the Workspaces page.`,
+        confirmText: 'Delete workspace',
         danger: true,
     });
     
@@ -380,7 +380,7 @@ async function handleRestore() {
 
 async function addMember() {
     const identifier = newMemberIdentifier.value.trim();
-    if (!identifier) return;
+    if (!identifier || isAddingMember.value || workspace.value?.deleted) return;
     isAddingMember.value = true;
     try {
         await $fetch('/api/admin/workspace/members/upsert', {
@@ -489,7 +489,7 @@ async function removeMember(member: WorkspaceMemberInfo) {
     const label = member.email || member.userId;
     const confirmed = await confirm({
         title: 'Remove member?',
-        message: `Remove ${label} from ${workspace.value?.name || 'this workspace'}? Their workspace membership will be removed immediately. Shared guest access, when enabled, is controlled separately.`,
+        message: `Remove ${label} from ${workspace.value?.name || 'this workspace'}? They will lose member access immediately. If guest access is on, they may still open items shared with guests.`,
         confirmText: 'Remove member',
         danger: true,
     });
@@ -521,6 +521,7 @@ async function removeMember(member: WorkspaceMemberInfo) {
 
 async function loadInvites() {
     isLoadingInvites.value = true;
+    inviteLoadError.value = '';
     try {
         const response = await $fetch<{
             invites: Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number }>;
@@ -536,30 +537,21 @@ async function loadInvites() {
         invites.value = response.invites ?? [];
 
         if (response.unavailable) {
-            toast.add({
-                title: 'Invites unavailable',
-                description:
-                    response.message ||
-                    'Convex invite functions are not deployed for this backend.',
-                color: 'warning',
-            });
+            inviteLoadError.value = 'Team invitations are not available on this installation. Ask your administrator to check invitation setup.';
         }
-    } catch (err: unknown) {
-        toast.add({
-            title: 'Failed to load invites',
-            description: getMessage(err, 'Unable to load invites'),
-            color: 'error',
-        });
+    } catch {
+        inviteLoadError.value = 'Could not load invitations. Select Refresh to try again.';
     } finally {
         isLoadingInvites.value = false;
+        invitesLoaded.value = true;
     }
 }
 
 async function createInvite() {
-    if (!inviteEmail.value.trim()) return;
+    if (!inviteEmail.value.trim() || isCreatingInvite.value || workspace.value?.deleted) return;
     const confirmed = await confirm({
         title: `Invite to ${workspace.value?.name || 'workspace'}?`,
-        message: `Send ${inviteEmail.value.trim()} an invite as ${inviteRole.value}?`,
+        message: `Create an invitation for ${inviteEmail.value.trim()} to join ${workspace.value?.name || 'this workspace'} as ${inviteRole.value}? OR3 does not email invitations. You will need to copy and send the link.`,
         confirmText: 'Create invite',
     });
     if (!confirmed) return;
@@ -573,7 +565,7 @@ async function createInvite() {
                 credentials: 'include',
                 headers: ADMIN_HEADERS,
                 body: {
-                    email: inviteEmail.value,
+                    email: inviteEmail.value.trim(),
                     role: inviteRole.value,
                     expiresInSeconds: Math.max(1, inviteTtlHours.value) * 60 * 60,
                     workspaceId: workspaceId.value,
@@ -593,10 +585,9 @@ async function createInvite() {
 
         toast.add({
             title: 'Invite created',
-            description: `Invite for ${workspace.value?.name || 'workspace'} copied to clipboard.`,
+            description: 'Copy the link and send it to the recipient.',
             color: 'success',
         });
-        await copyInviteUrl(response.invite.inviteUrl);
     } catch (err: unknown) {
         toast.add({
             title: 'Failed to create invite',
@@ -611,9 +602,9 @@ async function createInvite() {
 async function revokeInvite(inviteId: string) {
     const invite = invites.value.find((item) => item.id === inviteId);
     const confirmed = await confirm({
-        title: 'Revoke invite?',
-        message: `Revoke the invite for ${invite?.email || 'this person'} to ${workspace.value?.name || 'this workspace'}?`,
-        confirmText: 'Revoke invite',
+        title: 'Cancel invitation?',
+        message: `Cancel the invitation for ${invite?.email || 'this person'} to ${workspace.value?.name || 'this workspace'}? The link will stop working.`,
+        confirmText: 'Cancel invitation',
         danger: true,
     });
     if (!confirmed) return;
@@ -630,6 +621,7 @@ async function revokeInvite(inviteId: string) {
                 ? { ...invite, status: 'revoked' }
                 : invite
         );
+        toast.add({ title: 'Invitation cancelled', color: 'success' });
     } catch (err: unknown) {
         toast.add({
             title: 'Failed to revoke invite',
@@ -651,8 +643,9 @@ function absoluteInviteUrl(url: string): string {
 async function copyInviteUrl(url: string) {
     try {
         await navigator.clipboard.writeText(absoluteInviteUrl(url));
+        toast.add({ title: 'Link copied', description: 'Send it to the invited email address.', color: 'success' });
     } catch {
-        // ignore clipboard errors
+        toast.add({ title: 'Could not copy link', description: 'Select the link above and copy it manually.', color: 'warning' });
     }
 }
 

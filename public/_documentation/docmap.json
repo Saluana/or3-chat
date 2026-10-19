@@ -491,7 +491,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose between personal customization, declarative themes, and trusted-code themes."
+                    "summary": "Choose a theme authoring path; preview themes in this browser, save the site default in UI & Branding, and understand trusted uploads and rebuild requirements."
                 },
                 {
                     "name": "customize.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules."
+                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables."
                 },
                 {
                     "name": "package-install.md",
@@ -611,7 +611,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "For a managed deployment, start with setup: the operator creates a coherent configuration and credentials for its fixed Basic Auth + SQLite + filesystem profile. The environment and source configuration described below is for contributors a"
+                    "summary": "Save Branding and Features from the dashboard, understand refresh and persistence behavior, recovery after removed themes, feature dependencies, and build versus restart requirements."
                 },
                 {
                     "name": "auth-system.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions."
+                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions. Workspace discovery, owner selection, readable roles, guest access, and email-bound team invitations."
                 },
                 {
                     "name": "background-execution.md",

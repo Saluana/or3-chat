@@ -1203,6 +1203,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         size="xs"
                                         color="neutral"
                                         variant="ghost"
+                                        :ui="{ leadingIcon: 'size-3.5' }"
                                         class="project-brief-edit shrink-0"
                                         @click="editInlineBrief"
                                     />
@@ -1252,6 +1253,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 :icon="newChatIcon"
                                 :aria-label="`New chat in ${state.project?.name || 'project'}`" label="New chat"
                                 color="neutral"
+                                :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-start theme-btn"
                                 :disabled="busy"
                                 @click="run(newChat)"
@@ -1262,6 +1264,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 :aria-label="`New document in ${state.project?.name || 'project'}`" label="New document"
                                 color="neutral"
                                 variant="ghost"
+                                :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-new-document theme-btn"
                                 :disabled="busy"
                                 @click="emit('add-document-to-project-root', id)"
@@ -1344,7 +1347,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 }"
                             />
                             <template #content>
-                                <div class="p-1 w-56 space-y-1">
+                                <div class="or3-action-menu p-1 w-56">
                                     <UButton
                                         :icon="sourceUploadIcon"
                                         label="Upload files"
@@ -2254,8 +2257,10 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                             color="neutral"
                                             variant="ghost"
                                             class="project-tool-permission shrink-0"
+                                            :content="{ align: 'end' }"
                                             :ui="{
                                                 base: 'border-0! bg-transparent! shadow-none! min-h-8',
+                                                content: 'w-56! max-w-[calc(100vw-2rem)]!',
                                             }"
                                             v-bind="permissionTheme"
                                             v-theme="{

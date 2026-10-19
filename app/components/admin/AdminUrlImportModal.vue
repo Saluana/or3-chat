@@ -1,19 +1,17 @@
 <template>
-    <AppModal v-model:open="open" :title="`Import ${label} from URL`">
+    <AppModal v-model:open="open" :title="`Import ${label} from a link`">
         <template #default>
             <div class="space-y-4">
                 <p class="text-sm opacity-70">
-                    Paste a direct link to a .zip archive. GitHub archive URLs work — e.g.:
-                    <code class="text-xs break-all">https://github.com/user/repo/archive/refs/heads/main.zip</code>
+                    Paste the download link for a .zip file from a publisher you trust.
                 </p>
                 <div
                     v-if="codeTrustWarning"
                     class="p-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
                 >
-                    <div class="text-xs font-semibold">Trusted code warning</div>
-                    <div class="text-xs opacity-80 mt-1">
-                        This archive is application code. It executes with OR3 server privileges
-                        once activated and is not sandboxed. Only install code you trust.
+                    <div class="text-sm font-semibold">Only install from sources you trust</div>
+                    <div class="text-sm opacity-80 mt-1">
+                        This file may contain code that runs as part of OR3, with access to your server and its data.
                     </div>
                 </div>
                 <UInput
@@ -24,7 +22,14 @@
                     variant="modal"
                     autofocus
                     :disabled="loading"
+                    :aria-label="`${label} download link`"
+                    :aria-invalid="Boolean(error)"
+                    :aria-describedby="error ? errorId : undefined"
+                    class="w-full"
+                    @update:model-value="error = ''"
+                    @keydown.enter.prevent="submit"
                 />
+                <p v-if="error" :id="errorId" role="alert" class="text-sm text-[var(--md-error)]">{{ error }}</p>
             </div>
         </template>
         <template #footer>
@@ -62,9 +67,18 @@ const emit = defineEmits<{
 }>();
 
 const url = ref('');
+const error = ref('');
+const errorId = useId();
 
 function submit() {
-    if (!url.value.trim()) return;
+    if (!url.value.trim() || props.loading) return;
+    try {
+        const parsed = new URL(url.value.trim());
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid protocol');
+    } catch {
+        error.value = 'Enter a complete http:// or https:// link to a .zip download.';
+        return;
+    }
     emit('install', url.value.trim());
 }
 
@@ -72,6 +86,7 @@ function submit() {
 watch(open, (isOpen) => {
     if (!isOpen) {
         url.value = '';
+        error.value = '';
     }
 });
 </script>

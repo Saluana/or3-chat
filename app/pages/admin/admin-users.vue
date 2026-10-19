@@ -1,24 +1,26 @@
 <template>
     <div class="space-y-6">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 class="text-2xl font-semibold">Admin Users</h1>
-                    <p class="text-sm opacity-70">Manage deployment admin access</p>
-                </div>
-                <UButton
-                    to="/admin/workspaces"
-                    variant="soft"
-                    color="neutral"
-                    icon="i-heroicons-arrow-left"
-                >
-                    Back to Workspaces
-                </UButton>
+            <div>
+                <h1 class="text-2xl font-semibold">Administrators</h1>
+                <p class="text-sm opacity-70">Manage who has administrator access.</p>
             </div>
 
             <!-- Grant Admin Form -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                <h2 class="text-lg font-medium mb-4">Grant Admin Access</h2>
-                
+                <h2 class="text-lg font-medium mb-1">Grant Admin Access</h2>
+                <UAlert
+                    v-if="grantsEnforced === false"
+                    color="warning"
+                    variant="soft"
+                    class="mb-4"
+                    title="Grants aren't used on this deployment"
+                    description="You can record administrators here, but this deployment doesn't use them to give anyone access. Sign in to this panel with the server's admin username and password."
+                />
+                <p v-else-if="grantsEnforced" class="mb-4 text-sm opacity-70">
+                    People you add can open <strong>Plugins</strong> and <strong>File settings</strong> in this panel once they're signed in to OR3 with their own account.
+                    Everything else here, including this page, needs the server's admin username and password.
+                </p>
+
                 <div class="flex gap-4">
                     <label for="admin-user-search" class="sr-only">Search users by email</label>
                     <UInput
@@ -27,6 +29,7 @@
                         name="admin-user-search"
                         placeholder="Search by email…"
                         icon="i-heroicons-magnifying-glass"
+                        :loading="isSearching"
                         class="flex-1"
                     />
                 </div>
@@ -112,7 +115,7 @@
                         </div>
                         
                         <UButton
-                            @click="() => revokeAdmin(admin.userId)"
+                            @click="() => revokeAdmin(admin.userId, admin.email)"
                             :loading="revokingUserId === admin.userId"
                             color="error"
                             variant="soft"
@@ -124,7 +127,7 @@
                 </div>
 
                 <div v-else class="text-center py-8 text-sm opacity-50">
-                    No admin users configured
+                    No accounts have been granted administrator access. The server's own admin sign-in isn't listed here.
                 </div>
             </div>
         </div>
@@ -171,6 +174,8 @@ const grantingUserId = ref<string | null>(null);
 const revokingUserId = ref<string | null>(null);
 
 const admins = ref<Admin[]>([]);
+// Unknown until the first load; some deployments store grants without using them.
+const grantsEnforced = ref<boolean | null>(null);
 const pending = ref(true);
 const error = ref<Error | null>(null);
 const hasLoadedAdmins = ref(false);
@@ -183,10 +188,11 @@ async function refreshAdmins() {
     pending.value = true;
     error.value = null;
     try {
-        const response = await $fetch<{ admins: Admin[] }>('/api/admin/admin-users', {
+        const response = await $fetch<{ admins: Admin[]; grantsEnforced?: boolean }>('/api/admin/admin-users', {
             credentials: 'include',
         });
         admins.value = response.admins ?? [];
+        grantsEnforced.value = response.grantsEnforced ?? null;
     } catch (err: unknown) {
         admins.value = [];
         error.value =
@@ -201,7 +207,13 @@ onMounted(() => {
     void refreshAdmins();
 });
 
-const searchResults = computed<User[]>(() => lookupResults.value as User[]);
+// Derived from the current admin list so a grant or revoke updates the badges.
+const searchResults = computed<User[]>(() =>
+    lookupResults.value.map((user) => ({
+        ...user,
+        isAdmin: admins.value.some((a) => a.userId === user.userId),
+    }))
+);
 
 // Issue 30: Debounce search query
 const debouncedQuery = refDebounced(searchQuery, 300);
@@ -210,10 +222,6 @@ const debouncedQuery = refDebounced(searchQuery, 300);
 watch(debouncedQuery, (query) => {
     if (query.trim()) {
         void searchUsers(query, {
-            mapResult: (user) => ({
-                ...user,
-                isAdmin: admins.value.some((a) => a.userId === user.userId),
-            }),
             onError: (err) => {
                 toast.add({
                     title: 'Search failed',
@@ -230,7 +238,9 @@ watch(debouncedQuery, (query) => {
 async function grantAdmin(userId: string, email?: string) {
     const confirmed = await confirm({
         title: 'Grant Admin Access',
-        message: `Are you sure you want to grant admin access to ${email || userId}?`,
+        message: grantsEnforced.value === false
+            ? `Record ${email || userId} as an administrator? This deployment doesn't use grants, so it won't give them access.`
+            : `Grant administrator access to ${email || userId}? They'll be able to open Plugins and File settings in this panel. Other admin pages still need the server's admin sign-in.`,
         confirmText: 'Grant',
     });
     
@@ -263,11 +273,11 @@ async function grantAdmin(userId: string, email?: string) {
     }
 }
 
-async function revokeAdmin(userId: string) {
+async function revokeAdmin(userId: string, email?: string) {
     // Issue 26: Use accessible ConfirmDialog instead of native confirm()
     const confirmed = await confirm({
         title: 'Revoke Admin Access',
-        message: 'Are you sure you want to revoke admin access for this user?',
+        message: `Are you sure you want to revoke admin access for ${email || 'this user'}?`,
         confirmText: 'Revoke',
         danger: true,
     });

@@ -135,7 +135,7 @@
                                 </button>
                                 <template #content>
                                     <div
-                                        class="p-1.5 min-w-[180px] flex flex-col gap-0.5"
+                                        class="or3-action-menu p-1 min-w-[180px] flex flex-col"
                                     >
                                         <button
                                             v-for="chip in moreChips"

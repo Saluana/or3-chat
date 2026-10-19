@@ -3,13 +3,7 @@
         <div>
             <h2 class="text-2xl font-semibold mb-1">Themes</h2>
             <p class="text-sm opacity-70">
-                Preview themes in this browser. Site defaults and theme availability are applied through the build or update workflow.
-            </p>
-            <p class="mt-2 text-xs text-[var(--md-warning)]">
-                Trusted-code themes can contain TypeScript and Vue components and
-                are equivalent to installing application code. Install them only
-                from publishers you trust. Declarative themes are schema-validated
-                and cannot include executable files.
+                Try a different look in this browser. Your preview is saved here and does not change anyone else's theme.
             </p>
         </div>
 
@@ -19,7 +13,15 @@
             <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
         </div>
 
+        <UAlert v-else-if="pageError" color="error" title="Could not load themes" description="Try again to see installed themes.">
+            <template #actions><UButton color="neutral" variant="soft" @click="refreshPage()">Try again</UButton></template>
+        </UAlert>
         <template v-else>
+            <section class="rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 space-y-2">
+                <h3 class="font-medium">Changing the site default</h3>
+                <p class="text-sm opacity-70">The site default is the starting theme for users who have not chosen one. Change the default or hide themes in UI & Branding. Saved changes apply when people reload; no restart is needed.</p>
+                <UButton to="/admin/branding" color="neutral" variant="link" class="px-0">Open UI & Branding</UButton>
+            </section>
             <div
                 v-if="rebuildRequired"
                 class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
@@ -42,12 +44,10 @@
                 class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
             >
                 <div class="text-sm">
-                    Custom theme upload and install are disabled on this managed deployment.
-                    This image is immutable and cannot rebuild installed source extensions.
+                    This installation includes a fixed set of themes. Custom theme uploads are not available here.
                 </div>
                 <div class="text-xs opacity-70 mt-1">
-                    Built-in themes remain available above. To install custom themes, deploy OR3
-                    from source and restart the process after installing.
+                    You can preview the included themes below. Custom themes need an installation that can build OR3 from source.
                 </div>
             </div>
 
@@ -74,9 +74,9 @@
             <p v-if="serverRestart.progress.value" role="status" aria-live="polite" class="text-sm">{{ serverRestart.progress.value }}</p>
 
             <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-            <div class="mb-4 flex items-center justify-between">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="text-lg font-medium">Installed</h3>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-2">
                      <!-- Hidden file input -->
                     <input
                         ref="fileInput"
@@ -86,13 +86,14 @@
                         @change="installTheme"
                     />
                     <UButton v-if="extensionInstallEnabled" size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
-                        Import from URL
+                        Import from link
                     </UButton>
                     <UButton v-if="extensionInstallEnabled" size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
-                        Install .zip
+                        Upload .zip
                     </UButton>
                 </div>
             </div>
+            <p v-if="extensionInstallEnabled" class="mb-4 text-sm opacity-70">Only install themes from people you trust. Some themes include code with access to your server and its data.</p>
 
             <!-- URL Import Modal -->
             <AdminUrlImportModal v-model="showUrlModal" label="Theme" :loading="urlInstalling" :code-trust-warning="true" @install="installThemeFromUrl" />
@@ -102,15 +103,16 @@
             </div>
 
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div
+                <article
                     v-for="theme in adminThemes"
                     :key="theme.id"
+                    :aria-label="theme.name"
                     class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors flex flex-col"
                 >
                     <!-- Header -->
-                    <div class="flex items-start justify-between gap-2 mb-1">
-                        <h4 class="font-semibold text-base leading-tight">{{ theme.name }}</h4>
-                        <div class="flex items-center gap-1 shrink-0">
+                    <div class="space-y-2 mb-2">
+                        <h4 class="font-semibold text-base leading-tight break-words">{{ theme.name }}</h4>
+                        <div class="flex flex-wrap items-center gap-2">
                             <UBadge v-if="activeTheme === theme.id" color="success" variant="subtle" size="xs">Previewing here</UBadge>
                             <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle" size="xs">Site default</UBadge>
                             <UBadge v-if="disabledThemes.has(theme.id)" color="error" variant="subtle" size="xs">Disabled</UBadge>
@@ -124,7 +126,7 @@
                     </div>
 
                     <!-- Description -->
-                    <p v-if="theme.description" class="text-sm opacity-70 line-clamp-2 mb-0 flex-1">
+                    <p v-if="theme.description" class="text-sm opacity-70 mb-0 flex-1 break-words">
                         {{ theme.description }}
                     </p>
                     <div v-else class="flex-1" />
@@ -132,33 +134,13 @@
                     <!-- Actions -->
                     <div class="pt-3 mt-3 border-t border-[var(--md-outline-variant)]/30 flex flex-wrap items-center gap-2">
                         <UButton
-                            size="xs"
-                            class="w-fit px-1.5!"
+                            size="sm"
                             color="neutral"
                             variant="soft"
                             :disabled="activeTheme === theme.id || disabledThemes.has(theme.id)"
                             @click="activateTheme(theme.id)"
                         >
                             Preview here
-                        </UButton>
-                        <UButton
-                            size="xs"
-                            class="w-fit px-1.5!"
-                            variant="soft"
-                            :disabled="true" title="Requires a source build or managed update"
-
-                        >
-                            Make site default
-                        </UButton>
-                        <UButton
-                            size="xs"
-                            class="w-fit px-1.5!"
-                            :color="disabledThemes.has(theme.id) ? 'success' : 'warning'"
-                            variant="soft"
-                            :disabled="true" title="Requires a source build or managed update"
-
-                        >
-                            {{ disabledThemes.has(theme.id) ? 'Show to users' : 'Hide from users' }}
                         </UButton>
                         <div class="flex-1" />
                         <UButton
@@ -173,7 +155,7 @@
                             @click="uninstallTheme(theme.id)"
                         />
                     </div>
-                </div>
+                </article>
             </div>
             </div>
         </template>
@@ -198,6 +180,7 @@ definePageMeta({
 const {
     data: pageData,
     status: pageStatus,
+    error: pageError,
     refresh: refreshPage,
 } = useFetch<{
     themes: ExtensionItem[];
@@ -211,7 +194,7 @@ const {
 });
 const { data: statusData } = useAdminSystemStatus();
 
-const pending = computed(() => pageStatus.value === 'pending');
+const pending = computed(() => !pageData.value && pageStatus.value !== 'error');
 
 const themes = computed(
     () => pageData.value?.themes ?? []
@@ -396,7 +379,7 @@ async function uninstallTheme(themeId: string) {
             await themeApi.setActiveTheme(fallback);
         }
 
-        if (defaultTheme.value === themeId) throw new Error("Choose a different site default through the build or update workflow before removing this theme.");
+        if (defaultTheme.value === themeId) throw new Error("Choose a different site default in UI & Branding before removing this theme.");
 
         await $fetch('/api/admin/extensions/uninstall', {
             method: 'POST',

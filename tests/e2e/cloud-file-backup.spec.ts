@@ -108,18 +108,21 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
     const path = info.outputPath('retention-receipt.json'); await writeFile(path, JSON.stringify({ interruption, receipt, concurrentTabCacheBytes: cacheBytes }, null, 2));
     await info.attach('retention-receipt', { path, contentType: 'application/json' });
     await page.goto(`/admin/workspaces/${workspaceId}`);
-    await expect(page.getByRole('heading', { name: 'Cloud files and browser cache' })).toBeVisible();
-    await expect(page.getByRole('spinbutton', { name: 'Cache retention (days)' })).toHaveValue('14');
-    await page.getByRole('spinbutton', { name: 'Cache retention (days)' }).fill('21');
+    await expect(page.getByRole('heading', { name: 'Files and device storage' })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: 'Keep unused copies (days)' })).toHaveValue('14');
+    await page.getByRole('spinbutton', { name: 'Keep unused copies (days)' }).fill('21');
     await page.getByRole('button', { name: 'Save file settings' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'No restart required.' })).toBeVisible();
     expect((await (await page.request.get(`/api/storage/policy?workspaceId=${workspaceId}`)).json()).retentionDays).toBe(21);
+    await page.getByRole('spinbutton', { name: 'Keep unused copies (days)' }).fill('22');
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'No restart required.' })).toHaveCount(0);
     // Another tab's active-workspace change must not retarget this visible form.
     await page.goto('/admin/workspace');
-    await expect(page.getByRole('spinbutton', { name: 'Cache retention (days)' })).toHaveValue('21');
+    await expect(page.getByRole('spinbutton', { name: 'Keep unused copies (days)' })).toHaveValue('21');
     const otherWorkspace = await (await page.request.post('/api/workspaces', { headers, data: { name: 'Other settings target' } })).json();
     expect((await page.request.post('/api/workspaces/active', { headers, data: { id: otherWorkspace.id } })).ok()).toBe(true);
-    await page.getByRole('spinbutton', { name: 'Cache retention (days)' }).fill('22');
+    await page.getByRole('spinbutton', { name: 'Keep unused copies (days)' }).fill('22');
     const saving = page.waitForRequest(request => request.url().endsWith('/api/admin/workspace/file-policy') && request.method() === 'POST');
     await page.getByRole('button', { name: 'Save file settings' }).click();
     expect((await saving).postDataJSON().workspaceId).toBe(workspaceId);

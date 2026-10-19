@@ -137,3 +137,25 @@ A Nitro server plugin registers a factory with `registerAuthProvider({ id, creat
 5. For the admin panel, verify the separate super-admin session.
 
 Use [Troubleshooting](/documentation/cloud/troubleshooting) for session, provisioning, and workspace-scope symptoms.
+
+## Managing a workspace in Admin
+
+Use **Workspaces** to search by name, open workspace details, or choose
+**Include deleted** to find workspaces that can be restored. **Create Workspace**
+requires a name and an existing owner account; owner search also works with Enter
+and explains when no accounts match.
+
+Workspace details distinguish member access from guest access. Viewers can read,
+editors can make changes, and owners manage the workspace and its members. The
+last owner's role and removal controls are disabled until another owner is added.
+Guest access applies to items shared with guests, rather than making the entire
+workspace public. Deleted workspaces must be restored before changing members or
+creating team invitations.
+
+**Team invitations** join the workspace named on the page. Enter a recipient's
+email, choose a role and expiry (1, 3, 7, or 30 days), then create the invitation.
+OR3 does not send the email: copy the link and send it to the recipient yourself.
+The invitation only works with that email. Copy the link before leaving the page;
+history does not return the original secret link. Cancelling an invitation stops
+its link from working. **Registration → Invitations** creates accounts with their
+own private workspaces instead.

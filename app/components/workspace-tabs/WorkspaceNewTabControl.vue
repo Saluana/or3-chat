@@ -28,7 +28,7 @@
                 v-if="menu"
                 id="workspace-new-tab-menu"
                 ref="menuElement"
-                class="workspace-tab-context workspace-new-tab-menu"
+                class="or3-action-menu workspace-tab-context workspace-new-tab-menu"
                 :style="menuStyle"
                 role="menu"
                 aria-label="Create new tab"
@@ -77,6 +77,8 @@ const emit = defineEmits<{
 }>();
 
 const plusIcon = useIcon('shell.tab.new');
+const newChatIcon = useIcon('sidebar.new_chat');
+const newDocumentIcon = useIcon('sidebar.new_note');
 const menu = ref<{ x: number; y: number } | null>(null);
 const menuElement = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
@@ -89,13 +91,13 @@ const tooltip = computed(() =>
 
 const items = computed(() => {
     const next: WorkspaceNewTabItem[] = [
-        { id: 'chat', label: 'New chat', icon: 'i-lucide-message-square' },
+        { id: 'chat', label: 'New chat', icon: newChatIcon.value },
     ];
     if (props.canCreateDocument) {
         next.push({
             id: 'document',
             label: 'New document',
-            icon: 'i-lucide-file-plus',
+            icon: newDocumentIcon.value,
         });
     }
     next.push(...props.pluginItems);

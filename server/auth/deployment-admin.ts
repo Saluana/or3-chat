@@ -45,6 +45,17 @@ export function registerDeploymentAdminChecker(
     registry.set(id, create);
 }
 
+/**
+ * Purpose:
+ * Whether the active sync provider honors deployment-admin grants. Providers
+ * without a registered checker fall back to deny-all, so a stored grant has
+ * no effect there.
+ */
+export function hasDeploymentAdminChecker(event?: H3Event): boolean {
+    const config = useRuntimeConfig(event);
+    return registry.has(config.sync.provider || CONVEX_PROVIDER_ID);
+}
+
 function getRegistryChecker(providerId: string): DeploymentAdminChecker | null {
     return registry.get(providerId)?.() ?? null;
 }

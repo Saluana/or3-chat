@@ -172,7 +172,7 @@ for (const [label, viewport] of [
             // the form. Rejected attempts must leave this invitation usable.
             for (const [code, message] of [
                 [token, 'This invitation is for a different email address. Check for typos or use the email that received the invite.'],
-                [`${token}x`, 'This invite code is invalid or has expired. Check your invite link or ask for a new invitation.'],
+                [`${token}x`, 'This invite code isn\'t valid. It may be mistyped, already used, or cancelled. Check your invite link or ask for a new invitation.'],
             ] as const) {
                 await inviteCode.fill(code);
                 const rejected = page.waitForResponse(response =>
@@ -806,4 +806,207 @@ test('plugin workspace target stays explicit while instance controls have no sel
     expect(marketplaceResponse.ok()).toBe(true);
     expect(new URL(marketplaceResponse.url()).searchParams.get('workspaceId')).toBe(chat.workspace.id);
     await saveEvidence(info, 'plugin-scope-receipt', { body: JSON.stringify({ explicitTarget: targets[1].id, chatWorkspace: chat.workspace.id, preservedDeepLink: true, instanceNeedsNoWorkspace: true }), contentType: 'application/json' });
+});
+
+test('admin workspace walkthrough supports discovery, owner search and invitation validation', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    expect((await page.request.post('/api/basic-auth/sign-in', {
+        headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: credentials,
+    })).ok()).toBe(true);
+    const session = await (await page.request.get('/api/auth/session')).json();
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers, data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    await page.goto('/admin/workspaces');
+    await expect(page.getByText(/Showing 1–/)).toBeVisible();
+    await page.getByLabel('Workspace visibility filter').click();
+    await expect(page.getByRole('option', { name: 'Include deleted', exact: true })).toBeVisible();
+    await page.getByRole('option', { name: 'Active only', exact: true }).click();
+    await page.getByLabel('Search workspaces', { exact: true }).fill('no-such-workspace-ux');
+    await expect(page.getByText('No workspaces found', { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Create Workspace', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Create Workspace', exact: true })).toBeDisabled();
+    await page.getByLabel('Owner', { exact: true }).fill('no-such-owner-ux@example.test');
+    await page.getByLabel('Owner', { exact: true }).press('Enter');
+    await expect(page.getByText('No matching accounts. The owner needs to create an account first.', { exact: true })).toBeVisible();
+    await page.getByLabel('Owner', { exact: true }).fill(credentials.email);
+    await page.getByLabel('Owner', { exact: true }).press('Enter');
+    await page.getByRole('button', { name: new RegExp(credentials.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
+    await page.getByLabel('Workspace name', { exact: true }).fill('UX walkthrough workspace');
+    await page.getByRole('button', { name: 'Create Workspace', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'UX walkthrough workspace', exact: true })).toBeVisible();
+    const workspaceId = new URL(page.url()).pathname.split('/').at(-1)!;
+    await expect(page.getByText(credentials.email, { exact: true }).first()).toBeVisible();
+    await page.getByLabel('Recipient email', { exact: true }).fill('not-an-email');
+    let creates = 0;
+    page.on('request', request => { if (request.url().endsWith('/api/admin/workspace/invites/create')) creates++; });
+    await page.getByRole('button', { name: 'Create invite', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(creates).toBe(0);
+    await page.getByLabel('Recipient email', { exact: true }).fill('team-ux@example.test');
+    await page.getByRole('button', { name: 'Create invite', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('OR3 does not email invitations');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(creates).toBe(0);
+    await page.getByRole('button', { name: 'Delete workspace', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete workspace', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Create invite', exact: true })).toBeDisabled();
+    await page.getByRole('link', { name: 'Back to Workspaces', exact: true }).click();
+    await page.getByLabel('Search workspaces', { exact: true }).fill('UX walkthrough workspace');
+    await expect(page.getByText('No workspaces found', { exact: true })).toBeVisible();
+    await page.getByLabel('Workspace visibility filter').click();
+    await page.getByRole('option', { name: 'Include deleted', exact: true }).click();
+    await expect(page.getByText('UX walkthrough workspace', { exact: false })).toBeVisible();
+    await expect(page.getByText('Deleted', { exact: true })).toBeVisible();
+    for (let index = 0; index < 21; index++) {
+        const created = await page.request.post('/api/admin/workspaces', { headers, data: {
+            name: `Pagination UX ${index + 1}`, ownerUserId: session.session.user.id,
+        } });
+        expect(created.ok(), await created.text()).toBe(true);
+    }
+    await page.getByLabel('Search workspaces', { exact: true }).fill('Pagination UX');
+    await expect(page.getByText('Showing 1–20 of 21 workspaces', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByText('Showing 21–21 of 21 workspaces', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Previous', exact: true }).click();
+    await expect(page.getByText('Showing 1–20 of 21 workspaces', { exact: true })).toBeVisible();
+    await saveEvidence(info, 'workspace-ux', { body: await page.screenshot(), contentType: 'image/png' });
+    await saveEvidence(info, 'workspace-ux-receipt', { body: JSON.stringify({ workspaceId, owner: session.session.user.id, deletedFilter: true, invalidInviteSubmitted: creates !== 0 }), contentType: 'application/json' });
+});
+
+test('admin experience settings save and apply with validation and browser theme previews', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    const readSettings = async () => (await page.request.get('/api/admin/system/config/enriched')).json();
+    const initial = await readSettings();
+    await page.goto('/admin/branding');
+    const siteName = page.getByRole('textbox', { name: 'Site Name', exact: true });
+    await expect(siteName).toBeEnabled();
+    const initialName = await siteName.inputValue();
+    await siteName.fill('Walkthrough Chat');
+    await page.getByRole('textbox', { name: 'Site Description', exact: true }).fill('A simple place to chat.');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
+    await page.reload();
+    await expect(siteName).toHaveValue('Walkthrough Chat');
+    await expect(page).toHaveTitle('Walkthrough Chat');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'A simple place to chat.');
+    await expect(page.getByText('No restart needed.', { exact: false })).toBeVisible();
+    let saved = await readSettings();
+    await page.getByRole('spinbutton', { name: 'Starting chat panels', exact: true }).fill('2');
+    await page.getByRole('spinbutton', { name: 'Maximum chat panels', exact: true }).fill('1');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Changes were not saved' })).toContainText('Starting chat panels cannot exceed Maximum chat panels.');
+    await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+    const write = (entries: {key: string; value: string | null}[], revision = saved.siteRevision) =>
+        page.request.post('/api/admin/system/config/write', { headers, data: { entries, expectedRevision: revision } });
+    for (const entries of [
+        [{ key: 'OR3_SITE_NAME', value: 'Must not be partially saved' }, { key: 'OR3_LOGO_URL', value: 'javascript:alert(1)' }],
+        [{ key: 'OR3_DEFAULT_PANE_COUNT', value: '4' }, { key: 'OR3_MAX_PANES', value: '2' }],
+        [{ key: 'OR3_DEFAULT_THEME', value: 'missing-theme' }],
+        [{ key: 'OR3_DEFAULT_THEME', value: 'blank' }, { key: 'OR3_DISABLED_THEMES', value: 'blank' }],
+        [{ key: 'OR3_DOCUMENTS_ENABLED', value: 'maybe' }],
+        [{ key: 'OR3_SITE_NAME', value: 'First' }, { key: 'OR3_SITE_NAME', value: 'Second' }],
+    ]) expect((await write(entries)).status()).toBe(400);
+    expect((await readSettings()).siteRevision).toBe(saved.siteRevision);
+    expect((await write([{ key: 'OR3_SITE_NAME', value: 'Stale overwrite' }], initial.siteRevision)).status()).toBe(409);
+    expect((await page.request.post('/api/admin/system/config/write', {
+        headers: { origin: 'https://other.example' }, data: { entries: [{ key: 'OR3_SITE_NAME', value: 'CSRF' }], expectedRevision: saved.siteRevision },
+    })).status()).toBe(403);
+    expect((await write([{ key: 'OR3_SITE_DESCRIPTION', value: 'Saved in another tab.' }])).ok()).toBe(true);
+    await siteName.fill('Keep my unsaved draft');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Changes were not saved' })).toContainText('Someone else saved settings');
+    await expect(siteName).toHaveValue('Keep my unsaved draft');
+    await page.getByRole('button', { name: 'Reload saved settings', exact: true }).click();
+    await expect(siteName).toHaveValue('Walkthrough Chat');
+    await expect(page.getByRole('textbox', { name: 'Site Description', exact: true })).toHaveValue('Saved in another tab.');
+    saved = await readSettings();
+    const visitor = await page.context().browser()!.newContext({ baseURL: origin });
+    expect((await visitor.request.post('/api/admin/system/config/write', {
+        headers, data: { entries: [{ key: 'OR3_SITE_NAME', value: 'Unauthorized' }], expectedRevision: saved.siteRevision },
+    })).status()).toBe(401);
+    expect((await write([{ key: 'OR3_DEFAULT_PANE_COUNT', value: '2' }, { key: 'OR3_SIDEBAR_COLLAPSED', value: 'true' }])).ok()).toBe(true);
+    expect((await visitor.request.post('/api/basic-auth/sign-in', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: credentials })).ok()).toBe(true);
+    const visitorPage = await visitor.newPage();
+    await visitorPage.goto('/');
+    await expect(visitorPage).toHaveTitle('Walkthrough Chat');
+    await expect(visitorPage.getByLabel('Message input', { exact: true })).toHaveCount(2);
+    await expect(visitorPage.locator('#sidebar-container-collapsed')).toBeVisible();
+    await visitor.close();
+    const afterLayout = await readSettings();
+    expect((await write([{ key: 'OR3_DEFAULT_PANE_COUNT', value: '1' }, { key: 'OR3_SIDEBAR_COLLAPSED', value: 'false' }], afterLayout.siteRevision)).ok()).toBe(true);
+    // Real application navigation must change, not just the editor's saved badge.
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: credentials })).ok()).toBe(true);
+    await page.goto('/admin/features');
+    const documents = page.getByRole('switch', { name: 'Documents', exact: true });
+    await expect(documents).toBeChecked();
+    await documents.click();
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
+    await openComposer(page);
+    await expect(page.getByRole('button', { name: 'Create document', exact: true })).toHaveCount(0);
+    await page.goto('/admin/features');
+    await expect(documents).not.toBeChecked();
+    await documents.click();
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
+    await openComposer(page);
+    await expect(page.getByRole('button', { name: 'Create document', exact: true })).toBeVisible();
+    // Restore this disposable site's branding before the theme preview checks.
+    const current = await readSettings();
+    expect((await write(initial.entries.filter((entry: {application: string}) => entry.application === 'runtime')
+        .map((entry: {key: string; value: string | null}) => ({ key: entry.key, value: entry.value })), current.siteRevision)).ok()).toBe(true);
+    await page.goto('/admin/branding');
+    await expect(siteName).toHaveValue(initialName);
+    await saveEvidence(info, 'branding-editable', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.getByRole('link', { name: 'Themes', exact: true }).click();
+    const retro = page.getByRole('article', { name: 'Retro theme', exact: true });
+    const blank = page.getByRole('article', { name: 'Blank theme', exact: true });
+    await expect(blank.getByText('Site default', { exact: true })).toBeVisible();
+    if (await retro.getByRole('button', { name: 'Preview here', exact: true }).isEnabled()) {
+        await retro.getByRole('button', { name: 'Preview here', exact: true }).click();
+    }
+    await expect(retro.getByText('Previewing here', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(retro.getByText('Previewing here', { exact: true })).toBeVisible();
+    await expect(blank.getByText('Site default', { exact: true })).toBeVisible();
+    await blank.getByRole('button', { name: 'Preview here', exact: true }).click();
+    await page.getByRole('button', { name: 'Import from link', exact: true }).click();
+    await page.getByLabel('Theme download link', { exact: true }).fill('not-a-link');
+    await page.getByRole('dialog').getByRole('button', { name: 'Install', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Enter a complete http:// or https:// link');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await saveEvidence(info, 'experience-ux-mobile', { body: await page.screenshot(), contentType: 'image/png' });
+    if (process.env.OR3_SITE_SETTINGS_RESTART_E2E === 'true') {
+        const current = await readSettings();
+        expect((await write([{ key: 'OR3_SITE_NAME', value: 'Persisted across restart' }, { key: 'OR3_DOCUMENTS_ENABLED', value: 'false' }], current.siteRevision)).ok()).toBe(true);
+    }
+});
+
+
+test('admin settings persistence after restart', async ({ page }, info) => {
+    test.skip(process.env.OR3_SITE_SETTINGS_RESTART_STAGE !== 'true', 'Second process of the site settings lifecycle harness');
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/admin/auth/login', {
+        headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD },
+    })).ok()).toBe(true);
+    await page.goto('/admin/branding');
+    await expect(page.getByRole('textbox', { name: 'Site Name', exact: true })).toHaveValue('Persisted across restart');
+    await expect(page).toHaveTitle('Persisted across restart');
+    await page.goto('/admin/features');
+    await expect(page.getByRole('switch', { name: 'Documents', exact: true })).not.toBeChecked();
+    await saveEvidence(info, 'settings-after-restart', { body: await page.screenshot(), contentType: 'image/png' });
 });

@@ -305,6 +305,7 @@ export async function acknowledgeInitialPanes(token: number): Promise<void> {
 }
 
 export async function reloadWorkspaceProfile(): Promise<void> {
+  const or3Config = useOr3Config();
   const state = getRuntimeState();
   const generation = ++state.loadGeneration;
   const workspaceId = getActiveWorkspaceId();
@@ -336,7 +337,9 @@ export async function reloadWorkspaceProfile(): Promise<void> {
           token: ++state.requestToken,
           workspaceId,
           profileId: registration.profile.id,
-          panes: registration.profile.workspace?.initialPanes ?? [],
+          panes: selected === STANDARD_OR3_PROFILE_ID
+            ? Array.from({ length: or3Config.ui.defaultPaneCount }, () => ({ id: "chat" }))
+            : registration.profile.workspace?.initialPanes ?? [],
           replaceExisting: false,
           reason: "new-workspace",
         };

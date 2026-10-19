@@ -87,14 +87,14 @@
 }
 
 [data-theme="blank"] #nav-top-section .iconify {
-  font-size: 22px;
-  width: 22px;
-  height: 22px;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 [data-theme="blank"] #nav-top-section .app-icon:has(> .iconify) {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 [data-theme="blank"] .bottomnav-root .iconify {
@@ -126,15 +126,15 @@
   border-top: none;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   padding-top: 12px;
-  gap: 8px;
+  gap: 4px;
 }
 
 [data-theme="blank"] #nav-pages-section {
   border-top: none;
   align-items: center;
   position: relative;
-  margin-top: 12px;
-  padding-top: 16px;
+  margin-top: 14px;
+  padding-top: 14px;
 }
 
 [data-theme="blank"] #nav-pages-section::before {

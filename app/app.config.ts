@@ -4,6 +4,11 @@ export default defineAppConfig({
         maxToasts: 5,
     },
     ui: {
+        dropdownMenu: {
+            slots: {
+                content: 'or3-action-menu',
+            },
+        },
         tree: {
             slots: {
                 root: '',

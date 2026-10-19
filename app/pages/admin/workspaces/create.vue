@@ -11,16 +11,19 @@
                 </UButton>
                 <h1 class="text-2xl font-semibold">Create Workspace</h1>
             </div>
+            <p class="text-sm opacity-70">Give a team its own space for chats, documents, and files. Choose an existing account to own it.</p>
 
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <form @submit.prevent="handleSubmit" class="space-y-6">
                     <div>
-                        <label for="workspace-name" class="block text-sm font-medium mb-2">Workspace Name *</label>
+                        <label for="workspace-name" class="block text-sm font-medium mb-2">Workspace name</label>
                         <UInput
                             v-model="form.name"
                             id="workspace-name"
                             name="workspace-name"
                             placeholder="Enter workspace name"
+                            class="w-full"
+                            required
                             :disabled="isSubmitting"
                         />
                     </div>
@@ -34,11 +37,13 @@
                             placeholder="Enter workspace description"
                             :disabled="isSubmitting"
                             :rows="3"
+                            class="w-full"
                         />
                     </div>
 
                     <div>
-                        <label for="workspace-owner-search" class="block text-sm font-medium mb-2">Owner *</label>
+                        <label for="workspace-owner-search" class="block text-sm font-medium mb-2">Owner</label>
+                        <p class="mb-2 text-sm opacity-70">Search for the person who will manage this workspace. Name and owner are required.</p>
                         <div class="flex gap-2">
                             <UInput
                                 v-model="ownerSearch"
@@ -48,16 +53,21 @@
                                 icon="i-heroicons-magnifying-glass"
                                 class="flex-1"
                                 :disabled="isSubmitting"
+                                @keydown.enter.prevent="searchOwner"
                             />
                             <UButton
                                 @click="searchOwner"
+                                type="button"
                                 :loading="isSearching"
                                 color="primary"
-                                :disabled="isSubmitting"
+                                :disabled="isSubmitting || !ownerSearch.trim()"
                             >
                                 Search
                             </UButton>
                         </div>
+                        <p v-if="hasSearched && !isSearching && !ownerSearchFailed && !ownerResults.length && !selectedOwner" role="status" class="mt-2 text-sm opacity-70">
+                            No matching accounts. The owner needs to create an account first.
+                        </p>
 
                         <!-- Owner Selection -->
                         <div v-if="ownerResults.length > 0" class="mt-2 space-y-1">
@@ -75,15 +85,15 @@
                                         {{ (user.email || user.userId).substring(0, 2).toUpperCase() }}
                                     </span>
                                 </div>
-                                <div>
-                                    <div class="font-medium">{{ user.email || user.userId }}</div>
+                                <div class="min-w-0">
+                                    <div class="break-all font-medium">{{ user.email || user.userId }}</div>
                                     <div v-if="user.displayName" class="text-xs opacity-50">{{ user.displayName }}</div>
                                 </div>
                             </button>
                         </div>
 
                         <div v-if="selectedOwner" class="mt-2 p-3 rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)]">
-                            <div class="flex items-center gap-2 text-sm">
+                            <div class="flex items-center gap-2 text-sm break-all">
                                 <UIcon name="i-heroicons-check" class="text-[var(--md-on-primary-container)]" />
                                 <span class="text-[var(--md-on-primary-container)]">
                                     Selected: {{ selectedOwner.email || selectedOwner.userId }}
@@ -92,7 +102,7 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-end gap-2">
+                    <div class="flex flex-wrap justify-end gap-2">
                         <UButton
                             to="/admin/workspaces"
                             variant="soft"
@@ -150,10 +160,12 @@ const ownerSearch = ref('');
 const {
     results: ownerResults,
     isSearching,
+    hasSearched,
     searchUsers,
     clearResults,
 } = useAdminUserLookup();
 const selectedOwner = ref<User | null>(null);
+const ownerSearchFailed = ref(false);
 const isSubmitting = ref(false);
 
 const isValid = computed(() => {
@@ -162,8 +174,10 @@ const isValid = computed(() => {
 
 async function searchOwner() {
     if (!ownerSearch.value.trim()) return;
+    ownerSearchFailed.value = false;
     await searchUsers(ownerSearch.value, {
         onError: (err) => {
+            ownerSearchFailed.value = true;
             toast.add({
                 title: 'Search failed',
                 description: getMessage(err, 'Unable to search users'),

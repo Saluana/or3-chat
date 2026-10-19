@@ -246,6 +246,7 @@ if (import.meta.client) {
 const props = defineProps({
     modelValue: { type: Boolean, default: undefined },
     defaultOpen: { type: Boolean, default: true },
+    initialCollapsed: { type: Boolean, default: false },
     side: { type: String as () => Side, default: 'left' },
     minWidth: { type: Number, default: 320 },
     maxWidth: { type: Number, default: 480 },
@@ -408,8 +409,11 @@ onMounted(() => {
     if (props.defaultOpen && isDesktop.value) {
         openState.value = true;
     }
-    // Restore persisted width (after hydration for parity)
+    collapsed.value = props.initialCollapsed;
+    // Restore persisted width and sidebar choice after hydration.
     try {
+        const savedCollapsed = localStorage.getItem(`${props.storageKey}:collapsed`);
+        collapsed.value = savedCollapsed === null ? props.initialCollapsed : savedCollapsed === 'true';
         const saved = localStorage.getItem(props.storageKey);
         const savedWidth = saved ? parseInt(saved, 10) : NaN;
         if (Number.isFinite(savedWidth)) width.value = clamp(savedWidth);
@@ -421,6 +425,10 @@ onMounted(() => {
             initialized.value = true;
         });
     });
+});
+
+watch(collapsed, value => {
+    try { localStorage.setItem(`${props.storageKey}:collapsed`, String(value)); } catch { /* Browser preferences are optional. */ }
 });
 
 watch(width, (w) => {

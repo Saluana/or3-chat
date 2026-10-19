@@ -61,7 +61,7 @@
                         :icon="resourceIcon(tab)"
                         class="workspace-tab-icon"
                     />
-                    <span class="workspace-tab-title">{{ workspaceTabTitle(tab, props.tabs) }}</span>
+                    <span v-title-marquee class="workspace-tab-title">{{ workspaceTabTitle(tab, props.tabs) }}</span>
                     <span
                         v-if="statusFor(tab.id) !== 'idle'"
                         class="workspace-tab-status"
@@ -105,7 +105,7 @@
             <div
                 v-if="contextMenu"
                 ref="contextMenuElement"
-                class="workspace-tab-context"
+                class="or3-action-menu workspace-tab-context"
                 :style="contextMenuStyle"
                 role="menu"
                 :aria-label="`Actions for ${contextMenuTitle}`"
@@ -144,6 +144,7 @@ import WorkspaceNewTabControl, {
     type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
 import AppIcon from '~/components/ui/AppIcon.vue';
+import { vTitleMarquee } from '~/utils/title-marquee';
 
 const props = withDefaults(
     defineProps<{

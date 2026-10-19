@@ -27,6 +27,7 @@ async function reservePort(): Promise<number> {
 // guest access off) with no OpenRouter key. Every database, storage root, and
 // the bootstrap user live in a disposable directory.
 const dataDir = await mkdtemp(join(tmpdir(), 'or3-sign-in-gate-e2e-'));
+const siteSettings = process.argv.includes('--site-settings');
 const waitlist = process.argv.includes('--waitlist');
 const withoutExtension = process.argv.includes('--without-extension');
 try {
@@ -36,9 +37,9 @@ try {
         'bunx', 'playwright', 'test',
         waitlist ? 'tests/e2e/cloud-waitlist.spec.ts' : 'tests/e2e/cloud-sign-in-gate.spec.ts',
         '--workers=1', '--reporter=line', '--trace=off',
-        ...(waitlist ? ['--grep', 'optional waitlist:'] : []),
+        ...(waitlist ? ['--grep', 'optional waitlist:'] : siteSettings ? ['--grep', 'admin experience settings', '--output', 'test-results/admin-settings'] : []),
         ...(waitlist ? ['--output', withoutExtension ? 'test-results/waitlist-absent' : 'test-results/waitlist-enabled'] : []),
-        ...process.argv.slice(2).filter(arg => !['--waitlist', '--without-extension'].includes(arg)),
+        ...process.argv.slice(2).filter(arg => !['--waitlist', '--without-extension', '--site-settings'].includes(arg)),
     ];
     const options = {
         cwd: process.cwd(),
@@ -46,6 +47,8 @@ try {
         stderr: 'inherit' as const,
         env: {
             ...process.env,
+            // This host-only journey must not rebuild sibling dist folders used by a live dev server.
+            ...(siteSettings ? { OR3_LOCAL_PROVIDERS: 'false' } : {}),
             SSR_AUTH_ENABLED: 'true',
             AUTH_PROVIDER: 'basic-auth',
             OR3_AUTH_PROVIDER: 'basic-auth',
@@ -84,12 +87,21 @@ try {
             OR3_OPENROUTER_API_KEY: '',
             NUXT_OPENROUTER_API_KEY: '',
             OR3_SIGN_IN_GATE_E2E_HARNESS: 'true',
+            OR3_SITE_SETTINGS_RESTART_E2E: String(siteSettings),
             OR3_DEV_HTTPS_PORT: String(httpsPort),
             PW_PORT: String(port),
             PW_SKIP_WEB_SERVER: 'false',
         },
     };
     process.exitCode = await Bun.spawn(args, options).exited;
+    if (process.exitCode === 0 && siteSettings) {
+        const restartArgs = args.map(arg => arg === 'admin experience settings' ? 'admin settings persistence after restart'
+            : arg === 'test-results/admin-settings' ? 'test-results/admin-settings-restart' : arg);
+        process.exitCode = await Bun.spawn(restartArgs, {
+            ...options,
+            env: { ...options.env, OR3_SITE_SETTINGS_RESTART_STAGE: 'true', PW_PORT: String(await reservePort()), OR3_DEV_HTTPS_PORT: String(await reservePort()) },
+        }).exited;
+    }
     if (process.exitCode === 0 && waitlist && !withoutExtension) {
         // A second Playwright-owned server opens the same database on fresh ports.
         // This proves persistence across process shutdown, without touching the user's server.

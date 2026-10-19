@@ -2,6 +2,44 @@
 
 For a managed deployment, start with [Set up Cloud](/documentation/cloud/setup): the operator creates a coherent configuration and credentials for its fixed Basic Auth + SQLite + filesystem profile. The environment and source configuration described below is for contributors and advanced operators. Selecting other providers is an editable-source path.
 
+## Settings in the admin dashboard
+
+The site owner can edit **UI & Branding** and **Features** directly. Make changes,
+then choose **Save changes**. The dashboard validates the whole save, keeps drafts
+on failure, and asks you to reload saved settings if someone else saved first.
+**Discard changes** returns to the latest loaded values.
+
+These settings apply to newly loaded pages. **No server restart or rebuild is
+needed.** Use **Reload this page** after saving, and refresh other open tabs.
+Changing the site default theme affects people without a personal theme choice;
+existing previews remain personal. Starting panels apply to new Standard OR3
+workspace layouts, within the layout's panel limit and screen size. The sidebar
+setting is a starting preference; a person's saved choice wins.
+
+Dashboard values are stored in `site-settings.json` under `OR3_ADMIN_DATA_DIR`
+(default `.data`). Keep this directory persistent and include it in backups.
+Saved values override the built-in values from `config.or3.ts` and the environment
+for these public app settings. Keep secrets out of these fields. Static exports
+have no settings server and continue to use their build configuration.
+
+Only bundled themes are selectable. Installing or removing theme code still
+requires the supported build/update workflow. If a saved theme is removed by a
+later build, the site uses its build default and ignores hidden themes that are
+no longer available. The next settings save removes those obsolete choices.
+Installed app (PWA) names and icons are build assets; the browser title, site
+logo, and tab icon can change live.
+Infrastructure, provider credentials, and security configuration remain outside
+these editors. Feature switches control app tools; they do not replace access
+checks or install plugins.
+
+Workflow tools need the Workflows plugin installed and enabled for the workspace.
+The workflow editor, shortcuts, and running workflows also require Workflows.
+Document references require both Documents and Chat references; conversation
+references require Chat references.
+
+Use **Registration → Settings** to change who can create an account. Its saved
+mode takes effect after the verified restart described on that page.
+
 ## Two configuration objects
 
 | Object | File | Responsibility |

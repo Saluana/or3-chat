@@ -4,6 +4,7 @@
         :data-project-id="project.id"
     >
         <div
+            data-marquee-host
             class="project-root-toggle relative group w-full flex items-center hover:bg-[var(--md-surface-hover)] px-3 gap-2 h-10 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
         >
             <button type="button" class="inline-flex items-center justify-center shrink-0 size-[18px] focus-visible:outline-2 focus-visible:outline-(--md-focus-ring)" :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${project.name} shortcuts`" :aria-expanded="expanded" @click.stop="emit('toggle-expand')"><UIcon
@@ -11,9 +12,9 @@
                 class="project-icon shrink-0 w-[18px] h-[18px] text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80 transition-colors"
                 active-class="text-[color:var(--md-primary)]"
             /></button>
-            <button type="button" @click="openHome" :aria-label="`Open project ${project.name}`" class="project-label h-full focus-visible:outline-2 focus-visible:outline-(--md-focus-ring) truncate text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
+            <button type="button" @click="openHome" :aria-label="`Open project ${project.name}`" class="project-label h-full focus-visible:outline-2 focus-visible:outline-(--md-focus-ring) text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]"><span v-title-marquee class="block truncate">{{
                 project.name
-            }}</button>
+            }}</span></button>
             <span
                 class="project-actions-container ms-auto inline-flex gap-1 items-center"
             >
@@ -55,6 +56,7 @@ import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
 import SidebarProjectActions from './SidebarProjectActions.vue';
+import { vTitleMarquee } from '~/utils/title-marquee';
 const { openProjectSidebar } = useProjectSidebar();
 const toast = useToast();
 async function openHome() {

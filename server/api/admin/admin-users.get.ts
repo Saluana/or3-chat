@@ -8,6 +8,7 @@ import { defineEventHandler, createError } from 'h3';
 import { requireAdminApiContext } from '../../admin/api';
 import { getAdminUserStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
+import { hasDeploymentAdminChecker } from '../../auth/deployment-admin';
 
 /**
  * GET /api/admin/admin-users
@@ -37,5 +38,6 @@ export default defineEventHandler(async (event) => {
     // List admins
     const admins = await store.listAdmins();
 
-    return { admins };
+    // Grants are stored for every provider but only some honor them.
+    return { admins, grantsEnforced: hasDeploymentAdminChecker(event) };
 });

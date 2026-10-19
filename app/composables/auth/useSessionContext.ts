@@ -26,6 +26,16 @@ type SessionContextState = {
 // refresh supersedes older network work even when responses arrive out of order.
 let latestRefreshGeneration = 0;
 
+// Dozens of plugins and components call useSessionContext() while the app
+// starts. When no session is cached yet they must share one automatic fetch,
+// and after any failed check wait before trying again: otherwise a single
+// failing check (a 403, or a 429 from the endpoint's own limit) is repeated by
+// every caller and the burst itself exhausts the rate limit. Explicit
+// refresh() calls always go through.
+const AUTO_LOAD_COOLDOWN_MS = 10_000;
+let autoLoadInFlight = false;
+let lastSessionFailureAt = 0;
+
 /** True when SSR auth is disabled — blocks all network requests. */
 function isAuthDisabled(): boolean {
     try {
@@ -43,8 +53,14 @@ function isAuthDisabled(): boolean {
  *
  * Safety: when `ssrAuthEnabled` is false the composable returns static
  * unauthenticated state and never hits the network.
+ *
+ * On the client, a caller that finds no cached session starts one shared
+ * fetch. Pass `autoLoad: false` when the caller will `refresh()` right away
+ * anyway, so the same request isn't sent twice.
  */
-export function useSessionContext(): SessionContextState {
+export function useSessionContext(
+    options: { autoLoad?: boolean } = {}
+): SessionContextState {
     const state = useState<SessionPayload | null>('auth-session', () => null);
     const pending = ref(false);
     const error = ref<Error | null>(null);
@@ -69,6 +85,9 @@ export function useSessionContext(): SessionContextState {
             $fetch<SessionPayload>('/api/auth/session', {
                 // Always bypass caches; workspace switching depends on fresh session reads.
                 cache: 'no-store',
+                // ofetch resends failed GETs once, immediately, even after a 429,
+                // which only repeats the request into the same rate limit.
+                retry: 0,
             });
 
         return (async () => {
@@ -91,6 +110,7 @@ export function useSessionContext(): SessionContextState {
                 state.value = res;
                 return res;
             } catch (err) {
+                lastSessionFailureAt = Date.now();
                 if (refreshGeneration === latestRefreshGeneration) {
                     error.value = err instanceof Error ? err : new Error(String(err));
                 }
@@ -112,6 +132,7 @@ export function useSessionContext(): SessionContextState {
         const asyncData = useFetch<SessionPayload>('/api/auth/session', {
             key: 'auth-session',
             dedupe: 'defer',
+            retry: 0,
         });
 
         watchEffect(() => {
@@ -128,8 +149,18 @@ export function useSessionContext(): SessionContextState {
         };
     }
 
-    if (!state.value) {
-        void refresh().catch(() => undefined);
+    if (
+        options.autoLoad !== false &&
+        !state.value &&
+        !autoLoadInFlight &&
+        Date.now() - lastSessionFailureAt > AUTO_LOAD_COOLDOWN_MS
+    ) {
+        autoLoadInFlight = true;
+        void refresh()
+            .catch(() => undefined)
+            .finally(() => {
+                autoLoadInFlight = false;
+            });
     }
 
     return {

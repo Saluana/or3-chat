@@ -34,8 +34,26 @@
                 <div class="h-64 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] bg-[var(--md-surface-container-highest)]" />
             </div>
 
+            <UAlert v-else-if="configError" color="error" title="Could not load settings" description="Try again to load the current settings.">
+                <template #actions><UButton color="neutral" variant="soft" @click="refreshConfig()">Try again</UButton></template>
+            </UAlert>
             <template v-else>
-                <p class="text-sm opacity-70">Settings marked Build or Deployment are read-only here. Apply them through your source build or managed deployment workflow. Registration is managed on its own page.</p>
+                <UAlert v-if="variant !== 'advanced' && hasEditableEntries" color="neutral" variant="soft" title="No restart needed." description="Save to apply these settings to newly loaded pages. Refresh other open tabs to see the changes." />
+                <UAlert v-if="!isOwner && hasEditableEntries" color="neutral" title="Only the site owner can save these settings." />
+                <UAlert v-if="saveError" role="alert" color="error" title="Changes were not saved" :description="saveError">
+                    <template v-if="saveConflict" #actions>
+                        <UButton color="neutral" variant="soft" :disabled="isSaving" @click="reloadSavedSettings">Reload saved settings</UButton>
+                    </template>
+                </UAlert>
+                <UAlert v-if="savedMessage" role="status" color="success" title="Changes saved" :description="savedMessage">
+                    <template v-if="variant !== 'advanced'" #actions><UButton color="neutral" variant="soft" @click="reloadNuxtApp({ force: true })">Reload this page</UButton></template>
+                </UAlert>
+                <section v-if="variant !== 'advanced' && entries.length && !hasEditableEntries" class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 space-y-2">
+                    <h3 class="font-medium">Managed outside the dashboard</h3>
+                    <p class="text-sm opacity-70">You can review these settings here. To change them, the person who maintains your OR3 installation needs to update the site configuration and rebuild the app. Restarting alone will not apply the changes.</p>
+                    <UButton to="/documentation/cloud/configure" color="neutral" variant="link" class="px-0">How to change site settings</UButton>
+                </section>
+                <p v-else-if="variant === 'advanced'" class="text-sm opacity-70">Infrastructure settings marked View only cannot be saved here. Use UI & Branding, Features, or Registration to edit those settings.</p>
                 <div
                     v-if="restartRequired"
                     class="flex flex-col gap-3 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)] sm:flex-row sm:items-center sm:justify-between"
@@ -109,10 +127,11 @@
                                 :class="variant === 'features' ? 'sm:flex sm:items-center sm:justify-between sm:gap-6' : ''"
                             >
                                 <div :class="variant === 'features' ? 'min-w-0 flex-1' : 'mb-2'">
-                                    <div class="text-sm font-medium">{{ entry.label }} <UBadge size="xs" color="neutral" variant="subtle">{{ entry.application === 'unsupported' ? 'Deployment' : entry.application }}</UBadge></div>
-                                    <p class="mt-0.5 text-xs leading-relaxed opacity-60">
+                                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium">{{ entry.label }} <UBadge v-if="variant === 'advanced'" size="xs" color="neutral" variant="subtle">{{ applicationLabels[entry.application] }}</UBadge></div>
+                                    <p :id="`help-${entry.key}`" class="mt-1 text-sm leading-relaxed opacity-70">
                                         {{ entry.description }}
                                     </p>
+                                    <p v-if="dependencyMessage(entry.key)" class="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">{{ dependencyMessage(entry.key) }}</p>
                                     <code
                                         v-if="variant === 'advanced'"
                                         class="mt-1.5 inline-block font-mono text-[11px] opacity-40"
@@ -121,13 +140,30 @@
                                     </code>
                                 </div>
 
+                                <UBadge v-if="variant === 'features' && entry.valueType === 'boolean' && !entry.editable" :color="entry.value === 'true' ? 'success' : 'neutral'" variant="subtle" class="mt-3 shrink-0 sm:mt-0">
+                                    {{ entry.value === null ? 'Not configured' : entry.value === 'true' ? 'Enabled' : 'Disabled' }}
+                                </UBadge>
                                 <USwitch
-                                    v-if="variant === 'features' && entry.valueType === 'boolean' && !entry.masked"
+                                    v-else-if="variant === 'features' && entry.valueType === 'boolean' && !entry.masked"
                                     :model-value="entry.value === 'true'"
-                                    :disabled="!isOwner || !entry.editable"
+                                    :disabled="isSaving || !isOwner || !entry.editable"
                                     :aria-label="entry.label"
+                                    :aria-describedby="`help-${entry.key}`"
                                     class="mt-3 sm:mt-0"
                                     @update:model-value="entry.value = $event ? 'true' : 'false'"
+                                />
+                                <USelectMenu
+                                    v-else-if="entry.key === 'OR3_DEFAULT_THEME' || entry.key === 'OR3_DISABLED_THEMES'"
+                                    :model-value="entry.key === 'OR3_DISABLED_THEMES' ? (entry.value?.split(',').filter(Boolean) ?? []) : entry.value ?? undefined"
+                                    :multiple="entry.key === 'OR3_DISABLED_THEMES'"
+                                    :items="configData?.themes ?? []"
+                                    value-key="value"
+                                    :placeholder="entry.key === 'OR3_DISABLED_THEMES' ? 'No hidden themes' : 'Choose a theme'"
+                                    :disabled="isSaving || !isOwner || !entry.editable"
+                                    :aria-label="entry.label"
+                                    :aria-describedby="`help-${entry.key}`"
+                                    class="w-full sm:max-w-xl"
+                                    @update:model-value="entry.value = Array.isArray($event) ? $event.join(',') : $event ?? null"
                                 />
                                 <USelectMenu
                                     v-else-if="entry.valueType === 'boolean' && !entry.masked"
@@ -135,21 +171,26 @@
                                     :items="booleanItems"
                                     value-key="value"
                                     size="sm"
-                                    :disabled="!isOwner || !entry.editable"
+                                    :disabled="isSaving || !isOwner || !entry.editable"
                                     :aria-label="entry.label"
+                                    :aria-describedby="`help-${entry.key}`"
                                     class="w-full"
-                                    @update:model-value="entry.value = $event ?? null"
+                                    @update:model-value="entry.value = $event == null ? null : String($event)"
                                 />
                                 <UInput
                                     v-else
                                     :model-value="entry.value ?? undefined"
                                     :type="entry.valueType === 'number' ? 'number' : 'text'"
+                                    :min="entry.valueType === 'number' ? 1 : undefined"
+                                    :max="entry.key === 'OR3_DEFAULT_PANE_COUNT' ? 4 : entry.key === 'OR3_MAX_PANES' ? 8 : undefined"
+                                    :step="entry.valueType === 'number' ? 1 : undefined"
                                     :placeholder="entry.masked ? 'Leave unchanged' : ''"
                                     size="sm"
-                                    :disabled="!isOwner || !entry.editable"
+                                    :disabled="isSaving || !isOwner || !entry.editable"
                                     :aria-label="entry.label"
+                                    :aria-describedby="`help-${entry.key}`"
                                     class="w-full"
-                                    @update:model-value="entry.value = $event ?? null"
+                                    @update:model-value="entry.value = $event == null ? null : String($event)"
                                 >
                                     <template v-if="entry.masked" #trailing>
                                         <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
@@ -169,7 +210,7 @@
                     <p class="mt-1 text-xs opacity-60">Try a different search term.</p>
                 </div>
 
-                <div class="sticky bottom-0 z-10 -mx-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:flex sm:items-center sm:justify-between sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+                <div v-if="hasEditableEntries" class="sticky bottom-0 z-10 -mx-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:flex sm:items-center sm:justify-between sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                     <p class="mb-3 text-xs opacity-60 sm:mb-0">
                         <template v-if="changedCount">
                             {{ changedCount }} unsaved {{ changedCount === 1 ? 'change' : 'changes' }}
@@ -201,6 +242,7 @@
 </template>
 
 <script setup lang="ts">
+import { reloadNuxtApp } from '#app';
 import type { ConfigGroup, EnrichedConfigEntry } from '~/composables/admin/useAdminTypes';
 import { useAdminSystemConfigEnriched, useAdminSystemStatus } from '~/composables/admin/useAdminData';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
@@ -225,11 +267,14 @@ const props = withDefaults(
 
 const toast = useToast();
 const { data: statusData } = useAdminSystemStatus();
-const { data: configData, status: configFetchStatus } = useAdminSystemConfigEnriched();
+const { data: configData, status: configFetchStatus, error: configError, refresh: refreshConfig } = useAdminSystemConfigEnriched();
 
 const entries = ref<EnrichedConfigEntryUi[]>([]);
 const originalValues = ref<Record<string, string | null | undefined>>({});
 const restartRequired = ref(false);
+const saveError = ref('');
+const saveConflict = ref(false);
+const savedMessage = ref('');
 const isSaving = ref(false);
 const searchQuery = ref('');
 const editingRevision = ref<string | null>(null);
@@ -237,7 +282,9 @@ const draftKey = `or3:admin:config-draft:${props.variant}:${props.groups.join(',
 let restoredDraft = false;
 
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
-const pending = computed(() => configFetchStatus.value === 'pending' && !configData.value);
+const pending = computed(() => !configData.value && configFetchStatus.value !== 'error');
+const hasEditableEntries = computed(() => entries.value.some(entry => entry.editable));
+const applicationLabels = { runtime: 'Applies immediately', restart: 'Restart required', build: 'New build required', unsupported: 'View only' };
 
 const booleanItems: Array<{ label: string; value: string }> = [
     { label: 'Enabled', value: 'true' },
@@ -260,8 +307,8 @@ const GROUP_DESCRIPTIONS: Record<ConfigGroup, string> = {
     Auth: 'Authentication providers, credentials, and session behavior',
     Sync: 'Database provider and synchronization internals',
     Storage: 'File providers, quotas, retention, and upload limits',
-    'UI & Branding': 'Identity, appearance defaults, layout, and legal links',
-    Features: 'Choose which product capabilities are available',
+    'UI & Branding': 'Site name, appearance, layout, and policy links',
+    Features: 'Choose what people can use. Turning a tool off keeps existing content.',
     'Limits & Security': 'Network trust, rate limits, and usage controls',
     'Background Processing': 'Job providers, concurrency, and timeouts',
     Admin: 'Admin routing, lifecycle controls, and extension safety',
@@ -276,6 +323,7 @@ function applyEntries(next: EnrichedConfigEntry[] | undefined, discard = false) 
             .map((entry) => ({
                 ...entry,
                 value: normalizeUiValue(entry),
+                editable: entry.editable && !(props.variant === 'advanced' && entry.application === 'runtime'),
             }))
             .sort((a, b) => {
                 const groupOrder =
@@ -287,7 +335,7 @@ function applyEntries(next: EnrichedConfigEntry[] | undefined, discard = false) 
         originalValues.value = Object.fromEntries(
             selected.map((entry) => [entry.key, entry.value])
         );
-        editingRevision.value = configData.value?.savedRevision ?? null;
+        editingRevision.value = props.variant === 'advanced' ? configData.value?.savedRevision ?? null : configData.value?.siteRevision ?? null;
         if (!restoredDraft && typeof sessionStorage !== 'undefined') {
             restoredDraft = true;
             try {
@@ -307,6 +355,9 @@ watch(
     { immediate: true }
 );
 watch(() => entries.value.map(entry => entry.value), () => {
+    savedMessage.value = '';
+    saveError.value = '';
+    saveConflict.value = false;
     if (!restoredDraft || typeof sessionStorage === 'undefined') return;
     const entry = entries.value.find(entry => entry.key === 'OR3_ADMIN_ALLOW_RESTART' && entry.editable);
     try {
@@ -337,6 +388,7 @@ const visibleGroups = computed(() =>
 
 const changedEntries = computed(() =>
     entries.value
+        .filter(entry => entry.editable)
         .map((entry) => {
             const previous = normalizeForSave(
                 originalValues.value[entry.key],
@@ -376,9 +428,27 @@ function getGroupDescription(group: ConfigGroup): string {
     return GROUP_DESCRIPTIONS[group];
 }
 
+async function reloadSavedSettings() {
+    await refreshConfig();
+    discardChanges();
+    saveError.value = '';
+    saveConflict.value = false;
+}
+
+function dependencyMessage(key: string): string {
+    const off = (setting: string) => entries.value.find(entry => entry.key === setting)?.value === 'false';
+    if (key.startsWith('OR3_WORKFLOWS_') && key !== 'OR3_WORKFLOWS_ENABLED' && off('OR3_WORKFLOWS_ENABLED')) return 'Available when Workflows is turned on. Your choice is kept.';
+    if (key.startsWith('OR3_MENTIONS_') && key !== 'OR3_MENTIONS_ENABLED' && off('OR3_MENTIONS_ENABLED')) return 'Available when Chat references is turned on. Your choice is kept.';
+    if (key === 'OR3_MENTIONS_DOCUMENTS' && off('OR3_DOCUMENTS_ENABLED')) return 'Available when Documents is turned on. Your choice is kept.';
+    return '';
+}
+
 async function saveConfig() {
     if (!changedEntries.value.length || isSaving.value) return;
     isSaving.value = true;
+    saveError.value = '';
+    savedMessage.value = '';
+    saveConflict.value = false;
     try {
         const response = await $fetch<{ ok: boolean; restartRequired?: boolean; savedRevision: string }>(
             '/api/admin/system/config/write',
@@ -395,17 +465,30 @@ async function saveConfig() {
         );
         editingRevision.value = response.savedRevision;
         try { sessionStorage.removeItem(draftKey); } catch { /* Optional browser draft. */ }
+        await refreshConfig();
+        savedMessage.value = response.restartRequired
+            ? 'Restart OR3 when you are ready to apply them.'
+            : 'Your settings will appear when pages reload. No restart needed.';
         toast.add({
             title: 'Changes saved',
             description: response.restartRequired
                 ? 'Restart OR3 when you are ready to apply them.'
-                : 'Your settings are now up to date.',
+                : 'Reload this page or other open tabs to see your changes.',
             color: 'success',
         });
     } catch (error: unknown) {
+        const failure = error as { status?: number; data?: { statusMessage?: string; data?: { code?: string } } };
+        const code = failure.data?.data?.code;
+        saveConflict.value = code === 'stale_revision';
+        saveError.value = code === 'invalid_setting' && failure.data?.statusMessage
+            ? failure.data.statusMessage
+            : code === 'stale_revision'
+                ? 'Someone else saved settings while you were editing. Reload saved settings to review their changes, then try again. Your draft is still here until you reload.'
+                : code === 'settings_busy' ? 'Another save is in progress. Try again.'
+                : parseErrorMessage(error, 'Please try again. Your changes are still here.');
         toast.add({
             title: 'Unable to save changes',
-            description: parseErrorMessage(error, 'Failed to save configuration'),
+            description: saveError.value,
             color: 'error',
         });
     } finally {

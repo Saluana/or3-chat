@@ -1,5 +1,5 @@
 <template>
-    <resizable-sidebar-layout :collapsed-width="64" ref="layoutRef">
+    <resizable-sidebar-layout :collapsed-width="64" :initial-collapsed="or3Config.ui.sidebarCollapsedByDefault" ref="layoutRef">
         <template #sidebar-expanded>
             <component
                 :is="sidebarExpandedComponent"

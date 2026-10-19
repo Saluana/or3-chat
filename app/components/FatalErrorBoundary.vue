@@ -91,7 +91,17 @@ function reload() {
     } catch {}
 }
 
-onErrorCaptured((e) => {
+onErrorCaptured((e, instance, info) => {
+    // Normalized reports intentionally omit causes. Keep lifecycle diagnostics
+    // local to development so the first failure survives boundary teardown.
+    if (import.meta.dev) {
+        console.error(
+            '[FatalErrorBoundary] original exception',
+            instance?.$options.name ?? instance?.$options.__name,
+            info,
+            e,
+        );
+    }
     if (fatal.value) return false; // already captured
     const appErr = reportError(e, { code: 'ERR_INTERNAL', toast: true });
     // promote to fatal boundary only if severity fatal OR generic internal unexpected
