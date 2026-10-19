@@ -730,6 +730,7 @@ export default defineNuxtConfig({
                 'lru-cache',
                 'mammoth',
                 'pdfjs-dist',
+                'reka-ui',
                 'spark-md5',
                 'streamdown-vue',
                 'tiptap-markdown',
@@ -806,6 +807,15 @@ export default defineNuxtConfig({
     hooks: {
         'vite:extendConfig'(config, { isClient }) {
             if (!isClient) return;
+            // Nuxt UI requests server transpilation for Reka. Nuxt also turns
+            // that into a client optimizer exclusion, causing hundreds of
+            // startup requests for its already-compiled ESM. Keep SSR handling
+            // intact while allowing the explicit client prebundle above.
+            if (config.optimizeDeps?.exclude) {
+                config.optimizeDeps.exclude = config.optimizeDeps.exclude.filter(
+                    (dependency) => dependency !== 'reka-ui',
+                );
+            }
             // Terser folds more emitted expressions; Oxc then prints the result
             // compactly (notably tokenizer tables). Keep compression bounded.
             const output = config.build?.rolldownOptions?.output;
