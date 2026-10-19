@@ -94,7 +94,26 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
         await page.setViewportSize({ width: 390, height: 844 });
         // The saved choice must win over the device setting before first paint.
         await page.emulateMedia({ colorScheme: mode === 'dark' ? 'light' : 'dark' });
-        await page.addInitScript(mode => localStorage.setItem('theme', mode), mode);
+        const colorFrames: Array<{ dark: boolean; classes: string }> = [];
+        // Keep evidence outside the document: Vite can replace it when newly
+        // discovered dependencies finish optimizing during the first startup.
+        await page.exposeFunction('__recordStartupColorFrame', (frame: { dark: boolean; classes: string }) => {
+            colorFrames.push(frame);
+        });
+        await page.addInitScript(mode => {
+            if (window !== window.top) return;
+            localStorage.setItem('theme', mode);
+            const sample = () => {
+                void (window as typeof window & {
+                    __recordStartupColorFrame: (frame: { dark: boolean; classes: string }) => Promise<void>;
+                }).__recordStartupColorFrame({
+                    dark: document.documentElement.classList.contains('dark'),
+                    classes: document.documentElement.className,
+                });
+                if (!(window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__) requestAnimationFrame(sample);
+            };
+            requestAnimationFrame(sample);
+        }, mode);
         await context.addCookies([
             { name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' },
         ]);
@@ -136,17 +155,8 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             ));
             const initial = await geometry();
             await testInfo.attach('before-javascript', { body: await page.screenshot({ path: testInfo.outputPath('before-javascript.png') }), contentType: 'image/png' });
-            // Endpoint snapshots miss a flash between Nuxt plugin startup and mount.
-            await page.evaluate(() => {
-                const frames: Array<{ dark: boolean; classes: string }> = [];
-                (window as typeof window & { __startupColorFrames?: typeof frames }).__startupColorFrames = frames;
-                const sample = () => {
-                    frames.push({ dark: document.documentElement.classList.contains('dark'), classes: document.documentElement.className });
-                    if (!(window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__) requestAnimationFrame(sample);
-                };
-                sample();
-                return new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            });
+            // Require live paint samples before releasing the application.
+            await expect.poll(() => colorFrames.length).toBeGreaterThan(0);
             resumeScripts();
             await page.waitForFunction(() => (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true);
             await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
@@ -161,7 +171,6 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             });
             expect(initial.dark, 'saved color scheme applies before JavaScript bundles').toBe(mode === 'dark');
             expect(ready.dark).toBe(initial.dark);
-            const colorFrames = await page.evaluate(() => (window as typeof window & { __startupColorFrames?: Array<{ dark: boolean; classes: string }> }).__startupColorFrames ?? []);
             await testInfo.attach('hydration-color-frames', { body: Buffer.from(JSON.stringify(colorFrames, null, 2)), contentType: 'application/json' });
             expect(colorFrames.length).toBeGreaterThan(0);
             expect(colorFrames.filter(frame => frame.dark !== initial.dark), 'saved color scheme stays stable throughout hydration').toEqual([]);
