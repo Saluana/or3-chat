@@ -314,7 +314,7 @@ export function clientCanaryStepFromEvidence(
             return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
         }
         if (expectedProfile === 'or3-trusted-host-v2' &&
-            (evidence.diagnostics?.setupExecuted !== true || evidence.diagnostics?.setupValidationVersion !== 1)) {
+            (evidence.diagnostics?.setupExecuted !== true || evidence.diagnostics.setupValidationVersion !== 1)) {
             return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
         }
         return { status: 'passed' };

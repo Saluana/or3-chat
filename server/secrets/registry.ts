@@ -15,12 +15,12 @@ export interface ServerSecretStore {
 }
 const registry = createRuntimeConfigRegistry<ServerSecretStore, RuntimeConfigRegistryItem<ServerSecretStore>>({
     warnLabel: 'secrets:registry', cacheInstances: true,
-    resolveActiveId: config => config.secrets?.provider,
+    resolveActiveId: config => config.secrets.provider,
 });
 export const registerSecretStore = registry.register;
 export const listSecretStoreIds = registry.listIds;
 export function getActiveSecretStore(): ServerSecretStore | null {
     const store = registry.getActive();
-    if (!store && useRuntimeConfig().secrets?.provider) throw createError({ statusCode: 503, statusMessage: 'Secret provider unavailable' });
+    if (!store && useRuntimeConfig().secrets.provider) throw createError({ statusCode: 503, statusMessage: 'Secret provider unavailable' });
     return store;
 }

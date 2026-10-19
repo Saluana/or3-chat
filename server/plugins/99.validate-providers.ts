@@ -27,7 +27,7 @@ function isStrictMode(): boolean {
 
 export default defineNitroPlugin(() => {
     const secrets = useRuntimeConfig().secrets;
-    if (secrets?.provider && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
+    if (secrets.provider && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
         throw new Error('[or3-cloud-config] Selected secret provider is missing or invalid.');
     }
     if (!isStrictMode()) return;

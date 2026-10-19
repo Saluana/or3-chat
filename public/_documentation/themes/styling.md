@@ -323,7 +323,7 @@ regions and wrapping.
 
 ## Empty chat appearance
 
-Enable `chatEmptyState` in the theme definition, or set it to `false` to opt out. Blank is the only bundled theme that enables it. Copy, assets, action order, and color-mode overrides are documented in the [theme reference](/documentation/themes/api-reference#empty-chat-panes).
+Enable `chatEmptyState` in the theme definition, or set it to `false` to opt out. Blank is the only bundled theme that enables it. The first-run welcome dialog overlays the empty pane without changing its layout, so the composer stays in place while account settings hydrate. Copy, assets, action order, and color-mode overrides are documented in the [theme reference](/documentation/themes/api-reference#empty-chat-panes).
 
 Use these stable hooks in a theme-local stylesheet scoped to your theme:
 

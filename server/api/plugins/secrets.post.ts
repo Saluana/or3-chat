@@ -21,7 +21,7 @@ export default defineEventHandler(async event => {
     setResponseHeader(event, 'Cache-Control', 'no-store');
     requirePluginMutation(event);
     const config = useRuntimeConfig();
-    if (!config.auth.enabled || !config.secrets?.provider) refuse(404);
+    if (!config.auth.enabled || !config.secrets.provider) refuse(404);
     const session = await resolveSessionContext(event);
     requireSession(session);
     const userId = session.user?.id, workspaceId = session.workspace?.id;
@@ -30,9 +30,9 @@ export default defineEventHandler(async event => {
     if (!await checkRateLimit(`plugin-secrets:${userId}`, { max: 60, window: 60 })) {
         setResponseHeader(event, 'Retry-After', 60); refuse(429);
     }
-    const body = await readLimitedJsonBody<Record<string, unknown>>(event, 256 * 1024);
+    const body = await readLimitedJsonBody<unknown>(event, 256 * 1024);
     if (!body || Array.isArray(body) || typeof body !== 'object' || Object.keys(body).some(key => !['operation', 'pluginId', 'activationId', 'key', 'value'].includes(key))) refuse(400);
-    const { operation, pluginId, activationId, key, value } = body;
+    const { operation, pluginId, activationId, key, value } = body as Record<string, unknown>;
     if (!identifier(pluginId) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId) || pluginId.includes('..') || typeof activationId !== 'string' || !activationId || activationId.length > 512 || typeof operation !== 'string' || !['get', 'set', 'delete', 'ref', 'status', 'unlock'].includes(operation)) refuse(400);
     if (operation !== 'unlock' && (operation !== 'status' || key !== undefined) && !identifier(key)) refuse(400);
     if (operation === 'unlock' && key !== undefined) refuse(400);

@@ -16,7 +16,7 @@ export default defineEventHandler(async event => {
     if (!parsed.success) throw createError({ statusCode: 400, statusMessage: 'Choose a valid registration mode.' });
     const config = useRuntimeConfig(event);
     const currentMode = resolveRegistrationMode(config);
-    const inviteSigningConfigured = Boolean(config.auth.invite.tokenSecret?.trim());
+    const inviteSigningConfigured = Boolean(config.auth.invite.tokenSecret.trim());
     if (parsed.data.mode === 'invite_only' && !inviteSigningConfigured) {
         throw createError({ statusCode: 400, statusMessage: 'Set up invitations before choosing Invite only.' });
     }

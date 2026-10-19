@@ -1423,7 +1423,7 @@ const emptyInitialMode = useState('chat-empty-initial-mode', () => emptyTheme.cu
 const emptyMode = computed(() => emptyMounted.value ? emptyTheme.current.value : emptyInitialMode.value);
 onMounted(() => { emptyMounted.value = true; });
 const emptyAppearance = computed(() => {
-    if (props.threadId || currentThreadId.value || allMessages.value.length || inputLoading.value || streamingActive.value || compaction.active.value || showWelcomeCard.value) return null;
+    if (props.threadId || currentThreadId.value || allMessages.value.length || inputLoading.value || streamingActive.value || compaction.active.value) return null;
     void emptyTheme.resolversVersion.value;
     return resolveChatEmptyState(emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState, emptyMode.value);
 });

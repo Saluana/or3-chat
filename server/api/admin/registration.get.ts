@@ -17,7 +17,7 @@ export default defineEventHandler(async event => {
         currentMode,
         savedMode,
         restartRequired: savedMode !== currentMode,
-        inviteSigningConfigured: Boolean(config.auth.invite.tokenSecret?.trim()),
+        inviteSigningConfigured: Boolean(config.auth.invite.tokenSecret.trim()),
         savedRevision: lifecycle?.savedRevision ?? null,
         application: lifecycle?.capability.applySaved ? 'restart' : 'unsupported',
     };

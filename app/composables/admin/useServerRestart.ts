@@ -72,7 +72,7 @@ export function useServerRestart(isOwner: Ref<boolean> | ComputedRef<boolean>, a
                 message.value = 'Observation timed out. Recheck Operations; no additional restart was submitted.';
             }
         } catch (error: unknown) {
-            const code = (error as { statusCode?: number })?.statusCode;
+            const code = (error as { statusCode?: number } | null | undefined)?.statusCode;
             message.value = code === 401 || code === 403 ? 'Sign in again to observe this restart.'
                 : observation.value ? 'Waiting for the server to reconnect…' : 'Restart status is unavailable.';
             if (code !== 401 && code !== 403 && observation.value && Date.now() - observation.value.startedAt > 9 * 60_000) {
@@ -104,7 +104,7 @@ export function useServerRestart(isOwner: Ref<boolean> | ComputedRef<boolean>, a
             });
             status.value = { ...status.value, operation: result.operation };
         } catch (error: unknown) {
-            const code = (error as { statusCode?: number })?.statusCode;
+            const code = (error as { statusCode?: number } | null | undefined)?.statusCode;
             const refusal = code && code >= 400 && code < 500 ? parseErrorMessage(error, 'Restart was refused. Refresh Operations and try again.') : null;
             if (refusal) remember(null);
             // A transport failure can follow durable acceptance. Read with the same
@@ -139,8 +139,12 @@ export function useServerRestart(isOwner: Ref<boolean> | ComputedRef<boolean>, a
             if (disposed) return;
             await refresh();
             const observing = busy.value && observation.value && Date.now() - observation.value.startedAt <= 9 * 60_000;
-            if (!disposed) timer = setTimeout(poll, (observing ? 1_000 : 5_000) + Math.random() * 500);
+            schedulePoll((observing ? 1_000 : 5_000) + Math.random() * 500);
         };
+        function schedulePoll(delay: number) {
+            // Unmount can run while refresh() is awaiting its response.
+            if (!disposed) timer = setTimeout(poll, delay);
+        }
         const changed = (event: StorageEvent) => { if (event.key === observationKey) { observation.value = null; restore(); void refresh(); } };
         onMounted(() => { void poll(); window.addEventListener('storage', changed); });
         watch(isOwner, value => { if (value) void refresh(); });

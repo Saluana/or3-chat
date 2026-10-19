@@ -260,8 +260,10 @@ export async function createOrRefFile(
     if (direct && !(typeof File !== 'undefined' && file instanceof File)) {
         throw new Error('Save this large generated file to disk, then select it for Cloud upload.');
     }
-    if (!direct && typeof navigator !== 'undefined' && navigator.storage?.estimate) {
-        const storage = await navigator.storage.estimate();
+    const browserStorage = typeof navigator === 'undefined'
+        ? undefined : navigator.storage as Partial<StorageManager> | undefined;
+    if (!direct && typeof browserStorage?.estimate === 'function') {
+        const storage = await browserStorage.estimate();
         if (storage.quota && (storage.usage ?? 0) + file.size > storage.quota) {
             throw new Error('Browser storage is full. Save your local originals before freeing space, or use Cloud upload.');
         }

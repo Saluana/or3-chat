@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables."
+                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables. Empty-pane layout remains stable beneath the first-run welcome dialog."
                 },
                 {
                     "name": "package-install.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions. Workspace discovery, owner selection, readable roles, guest access, and email-bound team invitations."
+                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions. Workspace discovery, owner selection, readable roles, guest access, and email-bound team invitations. Includes the coordinated Basic Auth source and published-package dependency."
                 },
                 {
                     "name": "background-execution.md",

@@ -144,7 +144,8 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
                     frames.push({ dark: document.documentElement.classList.contains('dark'), classes: document.documentElement.className });
                     if (!(window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__) requestAnimationFrame(sample);
                 };
-                requestAnimationFrame(sample);
+                sample();
+                return new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
             });
             resumeScripts();
             await page.waitForFunction(() => (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true);

@@ -48,7 +48,7 @@ export function attachTitleMarquee(el: HTMLElement): TitleMarquee {
     const start = () => {
         stop();
         active = true;
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         timer = window.setTimeout(() => {
             timer = undefined;
             const distance = el.scrollWidth - el.clientWidth;

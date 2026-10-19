@@ -9,7 +9,7 @@ export default defineNuxtModule({
         if (config.authProvider !== 'basic-auth') {
             throw new Error('[cloud-waitlist] This extension requires the Basic Auth provider.');
         }
-        const lockPage = config.lockPage as { enabled: boolean; adapter: string };
+        const lockPage = config.lockPage as { enabled: boolean; adapter: string } | undefined;
         if (!lockPage?.enabled || lockPage.adapter !== 'default') {
             throw new Error('[cloud-waitlist] Enable the lock page with its default adapter.');
         }

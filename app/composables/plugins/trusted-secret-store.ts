@@ -41,9 +41,9 @@ export function createServerSecretStore(input: {
         async delete(key) { await call('delete', key); },
         async has(key) { return await status(key) === 'available'; },
         async ref(key) {
-            const value = await call('ref', key) as PluginSecretRef;
-            if (!value || typeof value.id !== 'string' || !Number.isSafeInteger(value.revision) || value.revision < 0 || !['available', 'missing'].includes(value.state ?? '')) refuse();
-            return value;
+            const value = await call('ref', key) as Partial<PluginSecretRef> | null | undefined;
+            if (!value || typeof value.id !== 'string' || typeof value.revision !== 'number' || !Number.isSafeInteger(value.revision) || value.revision < 0 || !['available', 'missing'].includes(value.state ?? '')) refuse();
+            return value as PluginSecretRef;
         },
         status,
         async unlock() { await call('unlock'); },

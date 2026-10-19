@@ -142,7 +142,7 @@ async function validateTrustedSetup(
                 timer = setTimeout(() => { controller.abort(); reject(new Error('Setup timed out')); }, 5_000);
             }),
         ]);
-        if (failure) throw failure;
+        throwIfBlocked();
     } finally {
         if (timer) clearTimeout(timer);
         controller.abort();
@@ -161,7 +161,12 @@ async function validateTrustedSetup(
             })]);
         } finally { if (timer) clearTimeout(timer); }
     }
-    if (failure) throw failure;
+    throwIfBlocked();
+
+    function throwIfBlocked(): void {
+        // Setup and cleanup callbacks can record a failure even when they catch it.
+        if (failure) throw failure;
+    }
 }
 
 async function runTrustedHostCandidateCanary(
