@@ -50,6 +50,7 @@ export default defineEventHandler(async (event) => {
 
     // Get proxy-safe client IP
     const config = useRuntimeConfig();
+    const secrets = config.secrets as typeof config.secrets | undefined;
     const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
     
     const clientIP = getClientIp(event, proxyConfig) || 
@@ -87,7 +88,7 @@ export default defineEventHandler(async (event) => {
     return {
         session: clientSession,
         appAccessAllowed,
-        ...(config.secrets.provider ? { secretStoreEnabled: true } : {}),
+        ...(secrets?.provider ? { secretStoreEnabled: true } : {}),
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
     };
 });
