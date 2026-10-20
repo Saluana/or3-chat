@@ -1,21 +1,27 @@
 <template>
     <section
-        class="grid h-full min-h-[22rem] grid-cols-[minmax(0,1fr)] md:grid-cols-[20rem_minmax(0,1fr)] lg:grid-cols-[22rem_minmax(0,1fr)]"
+        :class="[
+            'grid h-full min-h-[22rem] grid-cols-[minmax(0,1fr)]',
+            showDetailPane && 'md:grid-cols-[20rem_minmax(0,1fr)] lg:grid-cols-[22rem_minmax(0,1fr)]',
+        ]"
         aria-label="Activity Center"
     >
         <aside
             :class="[
-                'min-h-0 md:border-r md:border-[color:var(--md-border-color)]',
+                'min-h-0',
+                showDetailPane && 'md:border-r md:border-[color:var(--md-border-color)]',
                 selectedRecordId ? 'hidden md:block' : 'block',
             ]"
         >
             <ActivityRunList
                 :selected-record-id="selectedRecordId"
                 @select="selectedRecordId = $event"
+                @update:empty="listEmpty = $event"
             />
         </aside>
 
         <main
+            v-if="showDetailPane"
             :class="[
                 'min-h-0 bg-[var(--md-surface)]',
                 selectedRecordId ? 'flex flex-col' : 'hidden md:flex md:flex-col',
@@ -68,11 +74,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import ActivityDetailPane from './ActivityDetailPane.vue';
 import ActivityRunList from './ActivityRunList.vue';
 
 defineOptions({ name: 'or3-activity-dashboard-page' });
 
 const selectedRecordId = ref<string | null>(null);
+// With nothing listed the run list's own empty state spans the page; the
+// detail pane only appears once there is something to select.
+const listEmpty = ref(false);
+const showDetailPane = computed(() => !listEmpty.value || selectedRecordId.value !== null);
 </script>

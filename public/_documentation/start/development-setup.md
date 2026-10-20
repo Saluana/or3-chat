@@ -22,6 +22,8 @@ Open the URL printed by the startup banner. Local-first development needs no acc
 
 The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
 
+The dashboard's **Dev Tools** tile (the hook inspector) is hidden by default and never ships in production builds. Start the dev server with `OR3_DEV_TOOLS=true bun run dev` to show it.
+
 PDF and DOCX extraction dependencies are pre-bundled for development. This prevents
 the first knowledge upload from triggering a dependency-optimization page reload
 that interrupts extraction and clears the selected project. Extraction still loads

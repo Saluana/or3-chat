@@ -25,6 +25,11 @@ Core built-ins include Standard OR3, Minimal Chat, and Document Workspace.
 The External Agents plugin registers Coding Workspace while installed; removing
 that registration makes a saved selection fall back to Standard OR3.
 
+The Workspace Profile dashboard page summarizes the selected profile in plain
+language before you apply it: the sidebar pages and dashboard tools it shows or
+hides, the panes it opens with, and the commands it pins. **Apply profile** is the
+primary action; **Reset to Standard OR3** is a separate, lower-emphasis action.
+
 ## Selection, themes, and lifecycle
 
 Selection lives in workspace-scoped KV and is independent from theme choice.

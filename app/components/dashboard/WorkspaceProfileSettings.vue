@@ -35,27 +35,30 @@
           </p>
         </div>
 
-        <div
-          class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"
-          aria-label="Resolved profile summary"
-        >
-          <div class="rounded border border-[var(--md-border-color)] p-2">
-            <div class="opacity-60">Navigation</div>
-            <strong>{{ draftSummary.navigation }}</strong>
-          </div>
-          <div class="rounded border border-[var(--md-border-color)] p-2">
-            <div class="opacity-60">Dashboard</div>
-            <strong>{{ draftSummary.dashboard }}</strong>
-          </div>
-          <div class="rounded border border-[var(--md-border-color)] p-2">
-            <div class="opacity-60">Initial panes</div>
-            <strong>{{ draftSummary.panes }}</strong>
-          </div>
-          <div class="rounded border border-[var(--md-border-color)] p-2">
-            <div class="opacity-60">Pinned commands</div>
-            <strong>{{ draftSummary.commands }}</strong>
-          </div>
-        </div>
+        <section aria-labelledby="profile-effect-heading" class="space-y-2">
+          <h3 id="profile-effect-heading" class="text-xs font-semibold">
+            {{
+              draftProfileId === selectedProfileId
+                ? "Active in this workspace"
+                : "Applying this profile will set"
+            }}
+          </h3>
+          <dl class="profile-effect-list">
+            <div
+              v-for="row in summaryRows"
+              :key="row.label"
+              class="profile-effect-row"
+            >
+              <dt>{{ row.label }}</dt>
+              <dd>
+                {{ row.value }}
+                <span v-if="row.hidden" class="block opacity-70">
+                  Hidden: {{ row.hidden }}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </section>
 
         <div
           v-if="draftResolved.diagnostics.length"
@@ -72,7 +75,7 @@
           </ul>
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <UButton
             color="primary"
             :loading="saving"
@@ -81,11 +84,12 @@
             "
             @click="save"
           >
-            Apply
+            Apply profile
           </UButton>
           <UButton
             color="neutral"
-            variant="soft"
+            variant="ghost"
+            size="sm"
             :disabled="saving"
             @click="showResetConfirmation = true"
           >
@@ -192,12 +196,54 @@ const draftResolved = computed(() => {
       })
     : resolvedProfile.value;
 });
-const draftSummary = computed(() => ({
-  navigation: draftResolved.value.navigation.items.length,
-  dashboard: draftResolved.value.dashboard.items.length,
-  panes: draftResolved.value.workspace.initialPanes.length,
-  commands: draftResolved.value.commands.pinned.length,
-}));
+const summaryRows = computed(() => {
+  const resolved = draftResolved.value;
+  // Ids the workspace does not offer are skipped (the notes below name them).
+  const names = (
+    requested: readonly string[],
+    items: readonly { id: string; label?: string }[],
+    noun: string,
+  ) => {
+    const byId = new Map(items.map((item) => [item.id, item.label]));
+    const ids = requested.filter((id) => byId.has(id));
+    const label = (id: string) =>
+      byId.get(id) ||
+      id.replace(/^[a-z0-9]+:/, "").replace(/[-_.]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+    if (ids.length === items.length && ids.length > 5) {
+      return `All ${ids.length} ${noun}`;
+    }
+    const shown = ids.slice(0, 5).map(label).join(", ");
+    return ids.length > 5 ? `${shown} +${ids.length - 5} more` : shown;
+  };
+  const { navigation, dashboard, panes, commands } = inventory.value;
+  return [
+    {
+      label: "Sidebar pages",
+      value: names(resolved.navigation.items, navigation, "pages") || "None",
+      hidden: names(resolved.navigation.hidden, navigation, "pages"),
+    },
+    {
+      label: "Dashboard tools",
+      value: names(resolved.dashboard.items, dashboard, "tools") || "None",
+      hidden: names(resolved.dashboard.hidden, dashboard, "tools"),
+    },
+    {
+      label: "Opens with",
+      value: `${
+        names(
+          resolved.workspace.initialPanes.map((pane) => pane.id),
+          panes,
+          "panes",
+        ) || "Chat"
+      } · up to ${resolved.workspace.desktopPaneLimit} side by side`,
+    },
+    {
+      label: "Pinned commands",
+      value: names(resolved.commands.pinned, commands, "commands") || "None",
+      hidden: names(resolved.commands.hidden, commands, "commands"),
+    },
+  ];
+});
 const recommendedRegistration = computed(() => {
   const recommendation = activeThemeProfileRecommendation.value;
   if (!recommendation) return undefined;
@@ -259,3 +305,32 @@ async function reset() {
   }
 }
 </script>
+
+<style scoped>
+.profile-effect-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  background: var(--md-surface-container-low, var(--md-surface-variant));
+  border-radius: var(--md-border-radius-small, var(--md-border-radius));
+}
+.profile-effect-row {
+  display: grid;
+  gap: 0.15rem 1rem;
+}
+.profile-effect-row dt {
+  color: var(--md-on-surface-variant, var(--md-on-surface));
+  font-weight: 600;
+}
+.profile-effect-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+  .profile-effect-row {
+    grid-template-columns: 9rem minmax(0, 1fr);
+  }
+}
+</style>

@@ -138,6 +138,7 @@ defineProps<{
 
 const emit = defineEmits<{
     select: [recordId: string];
+    'update:empty': [empty: boolean];
 }>();
 
 type ActivityFilter =
@@ -191,6 +192,7 @@ async function load() {
     runs.value = [...result.runs];
     degradedSources.value = result.degradedSources;
     loading.value = false;
+    emit('update:empty', !runs.value.length);
 }
 
 function scheduleLoad() {

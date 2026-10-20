@@ -58,10 +58,13 @@ vi.mock("~/composables/workspace-profiles/useWorkspaceProfiles", async () => {
       }),
       pending: ref(false),
       inventory: ref({
-        navigation: [{ id: "sidebar-home" }],
-        dashboard: [{ id: "core:settings" }],
-        panes: [{ id: "chat" }],
-        commands: [{ id: "new-chat" }],
+        navigation: [
+          { id: "sidebar-home", label: "Home" },
+          { id: "sidebar-docs", label: "Docs" },
+        ],
+        dashboard: [{ id: "core:settings", label: "Settings" }],
+        panes: [{ id: "chat", label: "Chat" }],
+        commands: [{ id: "new-chat", label: "New chat" }],
       }),
       applyProfile: mocks.applyProfile,
       resetToStandard: mocks.resetToStandard,
@@ -94,7 +97,11 @@ describe("WorkspaceProfileSettings", () => {
     expect(wrapper.text()).toContain("Standard OR3");
     expect(wrapper.text()).toContain("Built in");
     expect(wrapper.text()).toContain("Complete workspace");
-    expect(wrapper.text()).toContain("Apply");
+    expect(wrapper.text()).toContain("Active in this workspace");
+    expect(wrapper.text()).toContain("Home, Docs");
+    expect(wrapper.text()).toContain("Chat · up to 4 side by side");
+    expect(wrapper.text()).toContain("New chat");
+    expect(wrapper.text()).toContain("Apply profile");
 
     const resetButton = wrapper
       .findAll("button")
