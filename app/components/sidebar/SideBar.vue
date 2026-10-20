@@ -9,7 +9,7 @@
             id="sidebar-content-collapsed"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
-            @new-document="openCreateDocumentModal"
+            @new-document="createDocument"
             @new-project="openCreateProject"
             @focus-search="openCommandPalette"
             @toggle-dashboard="emit('toggleDashboard')"
@@ -38,7 +38,7 @@
             @update:active-sections="activeSections = $event"
             @update:expanded-projects="expandedProjects = $event"
             @new-chat="onNewChat"
-            @new-document="openCreateDocumentModal"
+            @new-document="createDocument"
             @new-project="openCreateProject"
             @open-rename="openRename"
             @open-rename-project="openRenameProject"
@@ -66,7 +66,7 @@
         <SidebarSideMobileBottomNav
             v-if="isMobile"
             @new-chat="onNewChat"
-            @new-document="openCreateDocumentModal"
+            @new-document="createDocument"
             @new-project="openCreateProject"
             @focus-search="openCommandPalette"
             @toggle-dashboard="emit('toggleDashboard')"
@@ -150,24 +150,6 @@
         @close="closeAddToProject"
         @submit="submitAddToProject"
     />
-
-    <SidebarCreateDocumentModal
-        v-if="documentsEnabled && createDocumentModalActivated"
-        :modal-props="createDocumentModalProps"
-        :open="showCreateDocumentModal"
-        title="New Document"
-        :value="newDocumentState.title"
-        :error="newDocumentErrors.title"
-        placeholder="Document title"
-        :icon="iconNote"
-        :loading-icon="iconLoading"
-        :loading="creatingDocument"
-        :form-field-props="sidebarFormFieldProps"
-        @update:open="showCreateDocumentModal = $event"
-        @update:value="newDocumentState.title = $event"
-        @close="closeCreateDocumentModal"
-        @submit="submitCreateDocument"
-    />
 </template>
 
 <script setup lang="ts">
@@ -219,7 +201,6 @@ import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
 const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
-const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
 const SidebarCreateProjectModal = defineAsyncComponent(() => import('./SidebarCreateProjectModal.vue'));
 import {
     isDocumentPost,
@@ -234,7 +215,6 @@ const { data: workspaceSession } = useSessionContext();
 const documentTrashEnabled = computed(() => !useRuntimeConfig().public.ssrAuthEnabled
     || (workspaceSession.value?.appAccessAllowed === true && workspaceSession.value.workspaceItemCapability === 'v1'));
 const iconFolder = useIcon('sidebar.folder');
-const iconNote = useIcon('sidebar.note');
 const iconLoading = useIcon('ui.loading');
 
 // (Temporarily removed virtualization for chats — use simple list for now)
@@ -1122,44 +1102,9 @@ async function submitAddToProject() {
     }
 }
 
-// ---- New Document Flow (naming modal) ----
-const showCreateDocumentModal = ref(false);
-const createDocumentModalActivated = ref(false);
-watch(showCreateDocumentModal, open => { if (open) createDocumentModalActivated.value = true; });
-const creatingDocument = ref(false);
-const newDocumentState = ref<{ title: string }>({ title: '' });
-const newDocumentErrors = ref<{ title?: string }>({});
-const createDocumentModalProps = createSidebarModalProps(
-    'sidebar.create-document',
-    {
-        ui: { footer: 'justify-end' },
-    }
-);
-
-function openCreateDocumentModal() {
-    if (!documentsEnabled.value) return;
-    showCreateDocumentModal.value = true;
-    newDocumentState.value = { title: '' };
-    newDocumentErrors.value = {};
-}
-function closeCreateDocumentModal() {
-    showCreateDocumentModal.value = false;
-}
-async function submitCreateDocument() {
-    if (!showCreateDocumentModal.value || creatingDocument.value) return;
-    if (!documentsEnabled.value) return;
-    const title = newDocumentState.value.title.trim();
-    if (!title) {
-        newDocumentErrors.value.title = 'Title required';
-        return;
-    }
-    creatingDocument.value = true;
-    try {
-        emit('newDocument', { title });
-        closeCreateDocumentModal();
-    } finally {
-        creatingDocument.value = false;
-    }
+// New documents start as "Untitled"; the editor focuses the title for naming.
+function createDocument() {
+    if (documentsEnabled.value) emit('newDocument');
 }
 
 // Expose focusSearchInput to parent components
@@ -1185,7 +1130,7 @@ async function activateDefaultPage() {
 
 defineExpose({
     focusSearchInput,
-    openCreateDocumentModal,
+    createDocument,
     openCreateProject,
     activateDefaultPage,
 });

@@ -213,9 +213,11 @@ function emptyDocJSON(): TipTapDocument {
     return { type: 'doc', content: [] };
 }
 
+export const DEFAULT_DOCUMENT_TITLE = 'Untitled';
+
 function normalizeTitle(title?: string | null): string {
     const t = (title ?? '').trim();
-    return t.length ? t : 'Untitled';
+    return t.length ? t : DEFAULT_DOCUMENT_TITLE;
 }
 
 interface TitleFilterContext {
