@@ -30,14 +30,16 @@
                 @click="selectTheme(theme.name)"
             >
                 <span class="flex min-w-0 w-full flex-1 items-center gap-3 text-left">
-                    <span class="theme-option-mark" aria-hidden="true">
-                        <UIcon
-                            :name="
-                                theme.name === activeTheme
-                                    ? useIcon('ui.check').value
-                                    : useIcon('dashboard.settings').value
-                            "
-                            class="h-4 w-4"
+                    <span
+                        class="theme-swatch"
+                        aria-hidden="true"
+                        :style="{ background: swatches[theme.name]?.surface }"
+                    >
+                        <span
+                            v-for="(color, index) in swatches[theme.name]?.accents"
+                            :key="index"
+                            class="theme-swatch-dot"
+                            :style="{ background: color }"
                         />
                     </span>
                     <span class="min-w-0 flex-1">
@@ -64,8 +66,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useNuxtApp, useIcon, useRuntimeConfig } from '#imports';
+import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 interface ThemeInfo {
@@ -94,6 +97,35 @@ const availableThemes = computed(() =>
     allThemes.value.filter((t) => !disabledThemes.value.has(t.name))
 );
 
+// Compiled variable blocks per theme: the light block first, then `.dark` overrides.
+const themeVariables = ref<Record<string, string>>({});
+const activeMode = useUserThemeOverrides().activeMode;
+const SWATCH_TOKENS = ['--md-primary', '--md-secondary', '--md-tertiary'];
+
+const swatches = computed(() =>
+    Object.fromEntries(
+        Object.entries(themeVariables.value).map(([name, css]) => {
+            const colors: Record<string, string> = {};
+            for (const block of css.split('}')) {
+                const [selector = '', body = ''] = block.split('{');
+                if (selector.includes('.dark') && activeMode.value !== 'dark') continue;
+                for (const [, token = '', value = ''] of body.matchAll(
+                    /(--md-(?:primary|secondary|tertiary|surface)):\s*([^;]+);/g
+                )) {
+                    colors[token] = value.trim();
+                }
+            }
+            return [
+                name,
+                {
+                    surface: colors['--md-surface'],
+                    accents: SWATCH_TOKENS.flatMap((token) => colors[token] ?? []),
+                },
+            ];
+        })
+    )
+);
+
 onMounted(() => {
     if (themePlugin?.availableThemes) {
         allThemes.value = themePlugin.availableThemes.map((entry) => ({
@@ -108,6 +140,19 @@ onMounted(() => {
             { name: 'retro', displayName: 'Retro' },
             { name: 'blank', displayName: 'Blank' },
         ];
+    }
+    for (const { name } of allThemes.value) {
+        void themePlugin
+            ?.loadTheme?.(name)
+            .then((compiled) => {
+                if (compiled?.cssVariables) {
+                    themeVariables.value = {
+                        ...themeVariables.value,
+                        [name]: compiled.cssVariables,
+                    };
+                }
+            })
+            .catch(() => undefined);
     }
 });
 
@@ -209,29 +254,29 @@ const themeButtonProps = computed(() => {
         var(--md-focus-ring, var(--md-primary));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }
-.theme-option-mark {
-    display: grid;
-    width: 2rem;
-    height: 2rem;
+.theme-swatch {
+    display: flex;
+    width: 2.75rem;
+    height: 2.75rem;
     flex: 0 0 auto;
-    place-items: center;
-    color: var(--md-primary);
-    background: var(--md-surface-container-high);
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    background: var(--md-surface-container-high, var(--md-surface-variant));
+    border: var(--md-border-width, 1px) solid var(--md-border-color);
     border-radius: var(--md-border-radius);
 }
-.theme-option-btn.active .theme-option-mark {
-    color: var(--md-on-primary);
-    background: var(--md-primary);
+.theme-swatch-dot {
+    width: 0.55rem;
+    height: 1.4rem;
+    border-radius: var(--md-border-radius-small, 0.25rem);
 }
 .theme-option-description {
-    display: -webkit-box;
+    display: block;
     margin-top: 0.2rem;
-    overflow: hidden;
     color: color-mix(in srgb, var(--md-on-surface) 82%, var(--md-surface));
     font-size: 0.75rem;
     line-height: 1.35;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
 }
 .theme-current-badge {
     flex: 0 0 auto;
