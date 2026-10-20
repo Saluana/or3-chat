@@ -900,6 +900,11 @@ watch(
     }
 );
 const workspaceTabMetadata = useWorkspaceTabMetadata();
+watch(() => [...workspaceTabMetadata.metadata], () => {
+    for (const [tabId, metadata] of workspaceTabMetadata.metadata) {
+        workspaceTabs.updateCachedTitle(tabId, metadata.title);
+    }
+});
 const workspaceTabIcons = computed(
     () =>
         new Map(

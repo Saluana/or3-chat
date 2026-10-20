@@ -16,7 +16,8 @@ import { createSubscriptionManager, cleanupSubscriptionManager } from '~/core/sy
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { createWorkspaceDb, type Or3DB } from '~/db/client';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
+import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { watch } from 'vue';
@@ -30,6 +31,7 @@ interface SyncEngineState {
     hookBridge: ReturnType<typeof getHookBridge>;
     outboxManager: OutboxManager;
     subscriptionManager: ReturnType<typeof createSubscriptionManager>;
+    stopSubscription: () => Promise<void>;
     gcManager: GcManager;
 }
 
@@ -137,7 +139,15 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         hookBridge.start();
 
         const subscriptionManager = createSubscriptionManager(db, resolvedProvider, scope);
-        await subscriptionManager.start();
+        const stopSubscription = resolvedProvider.mode === 'gateway'
+            ? await startCoordinatedSubscription(JSON.stringify([
+                db.name, resolvedProvider.id, scope,
+                getCachedSessionContext()?.user?.id ?? null,
+            ]), subscriptionManager)
+            : await (async () => {
+                await subscriptionManager.start();
+                return () => subscriptionManager.stop();
+            })();
 
         const outboxManager = new OutboxManager(db, resolvedProvider, scope);
         outboxManager.start();
@@ -152,6 +162,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
             hookBridge,
             outboxManager,
             subscriptionManager,
+            stopSubscription,
             gcManager,
         };
 
@@ -194,7 +205,7 @@ async function stopSyncEngine(): Promise<void> {
         // Stop outbox
         readEngineState()?.outboxManager.stop();
         readEngineState()?.hookBridge.stop();
-        await readEngineState()?.subscriptionManager.stop();
+        await readEngineState()?.stopSubscription();
         readEngineState()?.gcManager.stop();
 
         // Dispose provider

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     PendingOp,
     PullRequest,
@@ -14,6 +14,7 @@ import { Or3DB } from '~/db/client';
 import { createMemoryTable, createMockDb, createPendingOpsTable, testUuid } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
 import { markRecentOpId } from '../recent-op-cache';
+import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 
 const hookState = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -207,10 +208,75 @@ function buildChange(version: number): SyncChange {
 }
 
 describe('SubscriptionManager', () => {
+    afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
     beforeEach(() => {
         vi.useFakeTimers();
         hookState.doAction.mockClear();
         hookBridgeState.markSyncTransaction.mockClear();
+    });
+
+    it.each([false, true])('applies complete gateway pages without confirming pulls or subscription churn (pagination: %s)', async hasMore => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 100;
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const calls: { path: string; cursor?: number; version?: number }[] = [];
+        let remoteChangesAvailable = false;
+        const messages = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') });
+        vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+            const body = JSON.parse(init.body as string);
+            calls.push({ path, cursor: body.cursor, version: body.version });
+            if (path.endsWith('/update-cursor')) return new Response('{}');
+            const item = buildChange(body.cursor === 100 ? 101 : 103);
+            item.stamp.opId = testUuid(String(item.serverVersion));
+            return new Response(JSON.stringify({
+                ...FULL_HISTORY_PULL_RETENTION,
+                changes: !remoteChangesAvailable || (body.cursor !== 100 && !hasMore) ? [] : [item],
+                nextCursor: !remoteChangesAvailable ? 100 : body.cursor === 100 ? 102 : hasMore ? 103 : 102,
+                hasMore: remoteChangesAvailable && body.cursor === 100 && hasMore,
+            }));
+        }));
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const subscribe = vi.spyOn(provider, 'subscribe');
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+        try {
+            remoteChangesAvailable = true;
+            await vi.advanceTimersByTimeAsync(100);
+            const pulls = calls.filter(call => call.path.endsWith('/pull'));
+            expect(pulls.map(call => call.cursor)).toEqual(hasMore ? [100, 100, 102] : [100, 100]);
+            expect(subscribe).toHaveBeenCalledTimes(1);
+            expect(await messages.get('m-101')).toBeDefined();
+            if (hasMore) expect(await messages.get('m-103')).toBeDefined();
+            expect(await cursorManagerModule.getCursorManager(db as any, { workspaceId: 'ws-1' }).getCursor()).toBe(hasMore ? 103 : 102);
+            expect(calls.filter(call => call.path.endsWith('/update-cursor'))).toHaveLength(1);
+            const callCount = calls.length;
+            await vi.advanceTimersByTimeAsync(99);
+            expect(calls).toHaveLength(callCount);
+        } finally { await manager.stop(); await provider.dispose(); }
+    });
+
+    it('rejects a cursor-complete page with a missing preceding range before applying or acknowledging it', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 100;
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const provider = Object.assign(new SubscriptionProvider(), { capabilities: { subscriptionPages: 'v1' as const } });
+        vi.spyOn(provider, 'pull').mockResolvedValue({
+            ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 100, hasMore: false,
+        });
+        const update = vi.spyOn(provider, 'updateCursor');
+        const messages = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') });
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+        try {
+            const item = buildChange(102);
+            item.stamp.opId = testUuid('gap-page');
+            await expect(provider.subscribe.mock.calls[0]![3]!.onPage!(101, {
+                ...FULL_HISTORY_PULL_RETENTION, changes: [item], nextCursor: 102, hasMore: false,
+            })).rejects.toThrow('skipped the durable cursor');
+            expect(await messages.get('m-102')).toBeUndefined();
+            expect(await cursorManagerModule.getCursorManager(db as any, { workspaceId: 'ws-1' }).getCursor()).toBe(100);
+            expect(update).not.toHaveBeenCalled();
+        } finally { await manager.stop(); }
     });
 
     it('re-subscribes when cursor advances', async () => {
@@ -951,6 +1017,31 @@ describe('SubscriptionManager', () => {
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
         expect(manager.getStatus()).toBe('connected');
         await manager.stop();
+    });
+
+    it('finishes an in-flight local apply before stop releases the shared subscription', async () => {
+        const provider = new SubscriptionProvider();
+        const messages = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') });
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 100;
+        let release!: () => void;
+        const barrier = new Promise<void>(resolve => { release = resolve; });
+        const put = messages.put.bind(messages);
+        const writing = vi.spyOn(messages, 'put').mockImplementation(async row => { await barrier; return put(row); });
+        await manager.start();
+        const applying = (provider.subscribe.mock.calls[0]![2] as (changes: SyncChange[]) => Promise<void>)([buildChange(121)]);
+        for (let i = 0; i < 50 && !writing.mock.calls.length; i++) await Promise.resolve();
+        expect(writing).toHaveBeenCalledTimes(1);
+        let stopped = false;
+        const stopping = manager.stop().then(() => { stopped = true; });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(stopped).toBe(false);
+        release();
+        await Promise.all([applying, stopping]);
+        expect(await messages.get('m-121')).toBeDefined();
+        expect(manager.getStatus()).toBe('disconnected');
     });
 
     it('ignores callbacks captured by a stopped lifecycle after restart', async () => {

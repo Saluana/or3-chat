@@ -45,31 +45,18 @@ async function getPluginManifestAccess(
     pluginId: string
 ): Promise<PluginManifestAccess> {
     const cacheKey = '__or3_plugin_defaults_manifest';
-    const cached = event.context[cacheKey] as Map<string, PluginManifestAccess> | undefined;
-    if (cached?.has(pluginId)) {
-        return (
-            cached.get(pluginId) ?? {
-                exists: false,
-                defaults: null,
-            }
-        );
+    let inventory = event.context[cacheKey] as Promise<Map<string, PluginManifestAccess>> | undefined;
+    if (!inventory) {
+        inventory = listInstalledExtensions().then(installed => new Map(
+            installed.filter(entry => entry.kind === 'plugin').map(entry => [
+                entry.id,
+                { exists: true, defaults: (entry.access ?? null) as PluginGatePolicy | null },
+            ])
+        ));
+        event.context[cacheKey] = inventory;
     }
-
-    const map = cached ?? new Map<string, PluginManifestAccess>();
-    if (!cached) {
-        event.context[cacheKey] = map;
-    }
-
-    const installed = await listInstalledExtensions();
-    const plugin = installed.find(
-        (entry) => entry.kind === 'plugin' && entry.id === pluginId
-    );
-    const entry: PluginManifestAccess = {
-        exists: Boolean(plugin),
-        defaults: (plugin?.access ?? null) as PluginGatePolicy | null,
-    };
-    map.set(pluginId, entry);
-    return entry;
+    const map = await inventory;
+    return map.get(pluginId) ?? { exists: false, defaults: null };
 }
 
 export async function checkPluginAccess(
@@ -91,8 +78,12 @@ export async function checkPluginAccess(
     if (workspaceId) {
         const settingsStore = getWorkspaceSettingsStore(event);
         if (manifestAccess.exists) {
+            const enabledCacheKey = `__or3_plugin_access_enabled_${workspaceId}`;
+            const enabledPlugins = event.context[enabledCacheKey] as Promise<string[]> | undefined;
+            const enabledRequest = enabledPlugins ?? getEnabledPlugins(settingsStore, workspaceId);
+            event.context[enabledCacheKey] = enabledRequest;
             const [enabled, settings] = await Promise.all([
-                getEnabledPlugins(settingsStore, workspaceId),
+                enabledRequest,
                 getPluginSettings(settingsStore, workspaceId, context.pluginId),
             ]);
             pluginEnabled = enabled.includes(context.pluginId);

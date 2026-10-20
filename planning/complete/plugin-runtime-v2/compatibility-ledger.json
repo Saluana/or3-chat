@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 603,
-    "callableExportCount": 278,
+    "exportCount": 604,
+    "callableExportCount": 279,
     "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "8e562a745186ab0eeed4abf1f06cfedf42b839a7a7fbe8fb14e44f00c9491cb0",
+      "apiSha256": "9f0aff9ebc1ef5300f4c22a30c66828c689a7a39661666ef4e31560b047530b4",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2832,7 +2832,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 454,
+                "line": 466,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2841,7 +2841,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 454,
+              "line": 466,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2858,7 +2858,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | \"unavailable\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 479,
+                "line": 491,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2867,7 +2867,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 479,
+              "line": 491,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -2884,7 +2884,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 275,
+                "line": 287,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
               }
@@ -2893,7 +2893,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 275,
+              "line": 287,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
             }
@@ -3698,7 +3698,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 117,
+                "line": 118,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function flush(id: string, db = getDb());"
               }
@@ -3707,7 +3707,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 117,
+              "line": 118,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function flush(id: string, db = getDb());"
             }
@@ -4600,7 +4600,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 247,
+                "line": 248,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadDocument(id: string, db = getDb());"
               }
@@ -4609,7 +4609,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 247,
+              "line": 248,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadDocument(id: string, db = getDb());"
             }
@@ -4719,9 +4719,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 40,
+              "line": 41,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n};"
+              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n    pending?: boolean;\n    error?: string | null;\n};"
             }
           ]
         },
@@ -4733,7 +4733,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 53,
+              "line": 56,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4750,7 +4750,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 306,
+                "line": 318,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4759,7 +4759,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 306,
+              "line": 318,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -4801,7 +4801,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 37,
+              "line": 38,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });"
             }
@@ -4815,7 +4815,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 53,
+              "line": 56,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -5020,6 +5020,32 @@
               "line": 30,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
+            }
+          ]
+        },
+        {
+          "name": "refreshDocument",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "export async function refreshDocument(id: string, db = getDb());",
+              "declaredReturnType": null,
+              "resolvedReturnType": null,
+              "declaration": {
+                "source": "app/composables/documents/useDocumentsStore.ts",
+                "line": 253,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export async function refreshDocument(id: string, db = getDb());"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/documents/useDocumentsStore.ts",
+              "line": 253,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export async function refreshDocument(id: string, db = getDb());"
             }
           ]
         },
@@ -5539,7 +5565,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 506,
+                "line": 518,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
               }
@@ -5548,7 +5574,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 506,
+              "line": 518,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
             }
@@ -5775,7 +5801,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 369,
+                "line": 381,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
               }
@@ -5784,7 +5810,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 369,
+              "line": 381,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
             }
@@ -5801,7 +5827,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 380,
+                "line": 392,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
               }
@@ -5810,7 +5836,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 380,
+              "line": 392,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
             }
@@ -5827,7 +5853,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 341,
+                "line": 353,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
               }
@@ -5836,7 +5862,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 341,
+              "line": 353,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
             }
@@ -6605,7 +6631,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 433,
+                "line": 445,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6614,7 +6640,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 433,
+              "line": 445,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -6957,7 +6983,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 411,
+                "line": 423,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentState(id: string, db = getDb());"
               }
@@ -6966,7 +6992,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 411,
+              "line": 423,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentState(id: string, db = getDb());"
             }
@@ -7191,7 +7217,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 286,
+                "line": 292,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -7200,7 +7226,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 286,
+              "line": 292,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -7214,7 +7240,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 75,
+              "line": 78,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
@@ -7228,7 +7254,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 64,
+              "line": 67,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneOptions {\n    initialThreadId?: string;\n    maxPanes?: MaybeRefOrGetter<number>; // default 3\n    onFlushDocument?: (id: string) => void | Promise<void>;\n    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests\n    minPaneWidth?: number; // minimum width per pane in pixels (default 280)\n    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)\n    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')\n    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard\n}"
             }

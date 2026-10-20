@@ -14,6 +14,16 @@ History synchronization and background-job recovery use browser-local storage.
 They must remain client-only even when a native chat route renders its shell on
 the server. Server rendering must never start IndexedDB reads or stream recovery.
 
+Open chat panes observe their indexed conversation rows in the active workspace's
+Dexie database. Incoming user turns, completed replies, edits, and deletes update
+the open view without reopening it or adding network polls. Observers release on
+pane/thread changes, workspace switches, and disposal. Active foreground streams
+retain their in-memory reply; a saved terminal history received during streaming
+can apply after it settles only when it includes that completed reply from the
+same stream generation, including replies held in the separate foreground tail.
+Foreground token fragments remain local to the sending client; peers receive
+the saved reply.
+
 ## Streaming, stopping, and teardown
 
 The default message renderer loads through the theme registry when a message

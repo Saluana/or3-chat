@@ -42,6 +42,7 @@ import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
 import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { getPullResponseContractError, PullResponseSchema } from '~~/shared/sync/schemas';
 import { SnapshotStager, applyPendingOp } from './snapshot-applier';
 import { QUARANTINE_SUPPORT_TABLES, collectReplayableOps, pruneResolvedQuarantineBestEffort } from './sync-quarantine';
 
@@ -108,6 +109,7 @@ export class SubscriptionManager {
     private changeQueue: Promise<void> = Promise.resolve();
     /** Invalidates every async continuation created by an older lifecycle. */
     private lifecycleGeneration = 0;
+    private pendingCursorAcknowledgement: number | null = null;
 
     constructor(
         db: Or3DB,
@@ -165,7 +167,7 @@ export class SubscriptionManager {
                 if (needsBootstrap) {
                     await this.bootstrap(generation);
                 } else {
-                    const recovered = await this.recoverIfHistoryExpired(generation);
+                    const recovered = await this.catchUpOrCheckRetention(generation);
                     if (!recovered) {
                         const cursorExpired =
                             await this.cursorManager.isCursorPotentiallyExpired();
@@ -219,6 +221,9 @@ export class SubscriptionManager {
         }
 
         this.setStatus('disconnected');
+        // Ownership may move to another window as soon as stop resolves. Fence
+        // queued callbacks above, then finish any transaction already applying.
+        await this.changeQueue;
     }
 
     /**
@@ -488,9 +493,26 @@ export class SubscriptionManager {
         }
     }
 
-    private async recoverIfHistoryExpired(generation: number): Promise<boolean> {
-        const cursor = await this.cursorManager.getCursor();
+    private async catchUpOrCheckRetention(generation: number): Promise<boolean> {
+        let cursor = await this.cursorManager.getCursor();
         if (!this.isCurrentGeneration(generation)) return true;
+        if (this.provider.capabilities?.subscriptionPages === 'v1') {
+            // Ownership is reacquired on return to a visible/online tab. Use
+            // this first request to apply the backlog immediately, instead of
+            // discarding a one-row probe and waiting for the next poll timer.
+            while (this.isCurrentGeneration(generation)) {
+                const page = await this.provider.pull({
+                    scope: this.scope, cursor,
+                    limit: this.config.bootstrapPageSize,
+                    tables: this.config.tables,
+                });
+                if (!this.isCurrentGeneration(generation)) return true;
+                await this.enqueuePage(cursor, page, generation);
+                if (page.requiresSnapshot || !page.hasMore) return true;
+                cursor = page.nextCursor;
+            }
+            return true;
+        }
         try {
             const probe = await this.provider.pull({
                 scope: this.scope,
@@ -676,7 +698,12 @@ export class SubscriptionManager {
             this.scope,
             this.config.tables,
             (changes) => this.enqueueChanges(changes, generation),
-            { cursor, limit: this.config.bootstrapPageSize }
+            {
+                cursor, limit: this.config.bootstrapPageSize,
+                ...(this.provider.capabilities?.subscriptionPages === 'v1' ? {
+                    onPage: (fromCursor: number, page: PullResponse) => this.enqueuePage(fromCursor, page, generation),
+                } : {}),
+            }
         );
         if (!this.isCurrentGeneration(generation)) {
             unsubscribe();
@@ -684,6 +711,66 @@ export class SubscriptionManager {
         }
         this.lastSubscriptionCursor = cursor;
         this.unsubscribe = unsubscribe;
+    }
+
+    private enqueuePage(fromCursor: number, page: PullResponse, generation: number): Promise<void> {
+        const apply = this.changeQueue.then(() => this.handlePage(fromCursor, page, generation));
+        // Keep the queue usable after a failure, but reject this page's receipt
+        // so the transport cannot advance past an unsuccessful apply.
+        this.changeQueue = apply.catch(error => {
+            if (this.isCurrentGeneration(generation) && !isAbortLikeError(error)) this.handleError(error, generation);
+        });
+        return apply;
+    }
+
+    private async handlePage(fromCursor: number, page: PullResponse, generation: number): Promise<void> {
+        if (!this.isCurrentGeneration(generation)) return;
+        const parsed = PullResponseSchema.parse(page);
+        const error = getPullResponseContractError({
+            scope: this.scope, cursor: fromCursor, limit: this.config.bootstrapPageSize,
+            tables: this.config.tables,
+        }, parsed);
+        if (error) throw new Error(error);
+        if (await this.honorRequiresSnapshot(parsed, generation)) {
+            if (this.isCurrentGeneration(generation)) await this.subscribe(generation);
+            return;
+        }
+        const cursor = await this.cursorManager.getCursor();
+        if (!this.isCurrentGeneration(generation)) return;
+        if (!Number.isSafeInteger(fromCursor) || fromCursor < 0 || fromCursor > cursor) {
+            throw new Error('Subscription page skipped the durable cursor');
+        }
+        const changes = parsed.changes.filter(change => change.serverVersion > cursor);
+        const filtered = this.filterRecentOps(changes);
+        if (changes.length) {
+            await useHooks().doAction('sync.pull:action:received', { scope: this.scope, changeCount: changes.length });
+            if (!this.isCurrentGeneration(generation)) return;
+        }
+        const result = filtered.length
+            ? await this.applyChanges(filtered)
+            : { applied: 0, skipped: 0, conflicts: 0 };
+        if (!this.isCurrentGeneration(generation)) return;
+        if (parsed.nextCursor > cursor) {
+            // nextCursor covers the full validated window, including rows
+            // filtered by notification ownership or table selection.
+            await this.cursorManager.setCursor(parsed.nextCursor);
+            if (!this.isCurrentGeneration(generation)) return;
+            await this.cursorManager.markSyncComplete();
+            this.pendingCursorAcknowledgement = parsed.nextCursor;
+        }
+        if (!this.isCurrentGeneration(generation)) return;
+        if (!parsed.hasMore && this.pendingCursorAcknowledgement !== null) {
+            await this.provider.updateCursor(this.scope, this.cursorManager.getDeviceId(), this.pendingCursorAcknowledgement);
+            if (!this.isCurrentGeneration(generation)) return;
+            this.pendingCursorAcknowledgement = null;
+        }
+        if (changes.length) {
+            await useHooks().doAction('sync.pull:action:applied', {
+                scope: this.scope, applied: result.applied, skipped: result.skipped, conflicts: result.conflicts,
+            });
+        }
+        // The provider owns the next page and cursor. No confirming pull or
+        // unsubscribe/resubscribe cycle is needed after an acknowledged page.
     }
 
     private enqueueChanges(changes: SyncChange[], generation: number): Promise<void> {

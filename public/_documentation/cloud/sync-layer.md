@@ -41,6 +41,86 @@ server has already garbage-collected. Clients must snapshot-recover instead of
 advancing across that gap. Wall-clock cursor age (24h) is only a fallback when
 the retention fields are absent.
 
+## Gateway polling and request volume
+
+Open chat panes, document editors, and tab titles refresh from workspace-local
+Dexie observations after incoming sync writes. They add no network polling or
+outbox writes. Clean document buffers follow remote changes; unsaved buffers keep
+their conflict baseline. Foreground peers receive durable user turns and finalized
+assistant replies, while token streaming remains on the originating client.
+
+The SSR gateway subscription polls `/api/sync/pull` every two seconds plus
+0–500 ms of jitter after each completed poll. Empty responses still perform
+authentication and provider reads. At roughly 25 requests per minute, one
+continuously visible tab can generate about 1.08 million pull requests in
+30 days. Local Dexie reads do not contact the sync backend.
+
+Gateway subscriptions pause scheduled pulls while the document is hidden or
+the browser reports that it is offline. Returning to a visible, online page
+checks for changes immediately using the retained cursor. An in-flight page
+still finishes applying before another pull starts. Local edits remain captured
+in the durable outbox. Hidden pages may still send pending writes; when the
+browser reports offline, the outbox skips pushes without consuming retry
+attempts. Its existing heartbeat resumes sending when connectivity returns.
+Foreground polling keeps its existing cadence.
+
+Repeated failures back off exponentially from the configured polling interval
+to 60 seconds (or the interval itself when configured higher). Successful
+polling resets the delay. Server `Retry-After` delays remain bounded by the
+configured maximum (five minutes by default), including across visibility and
+connectivity changes. Pull cooldowns also survive subscription ownership changes
+within the provider instance, including startup history probes. HTTP 401/403
+ends the subscription through the existing session recovery flow.
+
+Capacity planning must include visible tabs, provider reads per pull, cold
+bootstrap pages, and real changes. Pausing hidden tabs reduces idle traffic;
+it does not remove the cost of frequent foreground gateway reads.
+
+### Shared foreground subscriptions
+
+With Web Locks available, windows on the same origin share one incoming gateway
+subscription per local workspace database, provider, scope, and account. The
+owner applies remote changes to the shared Dexie database; its existing
+cross-window live queries update the other windows. No sync payload or
+credential is broadcast by the coordinator. Each window keeps its own outbox,
+so local edits/uploads do not wait for subscription ownership. An initial owner
+completes bootstrap before starting its outbox, as before.
+
+Hidden/offline owners relinquish ownership after fencing and finishing any
+in-flight startup and local apply; queued visible windows can take over and
+read the durable cursor. Page hide, sign-out, workspace changes, and teardown cancel queued
+requests and release ownership. Browsers that lack or refuse Web Locks retain
+the per-window gateway behavior. This coordination does not combine different
+devices, origins, accounts, databases, or providers.
+
+The owner keeps the existing two-second foreground interval. Sharing prevents
+multiple visible windows from multiplying that traffic; a single visible owner
+can still produce the request volume described above.
+
+### Cursor-complete subscription pages
+
+`SyncProvider.capabilities.subscriptionPages: 'v1'` opts into
+`SyncSubscribeOptions.onPage(fromCursor, page)`. The provider delivers every
+validated `PullResponse`, including empty/filtered windows, awaits successful
+application, and owns pagination from `nextCursor`. The gateway implements this
+contract. Providers without the capability retain the legacy change callback
+and backlog recovery behavior.
+
+The subscription manager applies a covered page and advances the durable cursor
+through its full window, including filtered versions. It does not issue a
+confirming backlog pull or rebuild the subscription after each page. A cursor
+acknowledgement is sent after the final page of a burst; unchanged idle polls do
+not produce acknowledgements. Failed application rejects the page receipt,
+preceding-range gaps are refused, and `requiresSnapshot` uses the existing
+snapshot recovery path. This preserves cursor/data safety while removing
+redundant reads during foreground updates.
+
+On startup and after reacquiring subscription ownership, page-capable providers
+apply the first pull and drain any remaining pages immediately. This replaces
+the discarded retention probe, so returning to a visible, online tab does not
+wait for the next polling timer. The same validation, snapshot recovery, and
+final-page acknowledgement rules apply to this catch-up.
+
 ## Notification scoping
 
 SQLite push/pull/snapshot bind `notifications.user_id` to the session user.

@@ -147,6 +147,7 @@ const authTokenBrokerMock = {
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({ data: sessionState }),
+    getCachedSessionContext: () => sessionState.value.session,
 }));
 
 vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({
@@ -329,7 +330,31 @@ describe('sync engine plugin', () => {
     });
 
     afterEach(() => {
+        vi.unstubAllGlobals();
         vi.useRealTimers();
+    });
+
+    it('keeps local uploads running while incoming sync waits for another window, and cancels ownership on sign-out', async () => {
+        let signal: AbortSignal | undefined;
+        const request = vi.fn((_name: string, options: { signal: AbortSignal; ifAvailable?: boolean }, callback: (lock: null) => Promise<void>) => {
+            if (options.ifAvailable) return callback(null);
+            return new Promise<void>((_resolve, reject) => {
+                signal = options.signal;
+                signal.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+            });
+        });
+        vi.stubGlobal('navigator', { locks: { request }, onLine: true });
+        await (await import('~/plugins/convex-sync.client')).default;
+        await flushPluginAsyncWork();
+
+        expect(subscriptionInstances[0]?.start).not.toHaveBeenCalled();
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+        expect(request).toHaveBeenCalledTimes(2);
+        sessionState.value = { session: { authenticated: false, workspace: { id: 'ws-1' } } };
+        await triggerWatchers();
+        await flushPluginAsyncWork();
+        expect(signal?.aborted).toBe(true);
+        expect(subscriptionInstances[0]?.start).not.toHaveBeenCalled();
     });
 
     it('starts sync engine when provider and workspace are available', async () => {

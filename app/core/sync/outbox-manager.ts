@@ -296,6 +296,10 @@ export class OutboxManager {
     async flush(generation = this.lifecycleGeneration): Promise<boolean> {
         if (generation !== this.lifecycleGeneration || this.flushOwner) return false;
 
+        // Offline time must not consume the retry budget of durable local edits.
+        // The existing heartbeat sends the retained queue once connectivity returns.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+
         // E2E Test Hook: Allow tests to simulate offline mode (dev only)
         if (import.meta.dev && (globalThis as { __OR3_TEST_OFFLINE?: boolean }).__OR3_TEST_OFFLINE) {
             return false;

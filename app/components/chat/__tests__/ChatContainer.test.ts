@@ -5,6 +5,7 @@ import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
 import { defineComponent, nextTick, reactive, ref, toRaw } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
+import type { ChatRequestState } from '~/utils/chat/types';
 
 // ChatContainer rendering coverage uses the real scroller so the revision
 // contract is exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
@@ -79,6 +80,7 @@ const makeChatInstance = vi.hoisted(
             messages,
             rawMessages: ref<Record<string, unknown>[]>([]),
             loading: ref(false),
+            requestState: ref<ChatRequestState>({ status: 'idle' }),
             threadId,
             streamId,
             streamState,
@@ -149,10 +151,7 @@ const createThemeMock = () => ({
 });
 
 describe('ChatContainer', () => {
-    // A reload can seed a pending row before background admission has a job ID.
-    // Synced completion must replace it; active generation must retain its
-    // in-memory text, then accept the latest saved projection after settling.
-    it('accepts synced completion for a pending turn without replacing a stream with stale parent history', async () => {
+    it('accepts synced completion for a reloaded pending turn without a local request', async () => {
         const replace = vi.fn();
         const instance = makeChatInstance({ replaceCanonicalHistory: replace });
         instance.messages.value = [{ id: 'reply', role: 'assistant', text: '', pending: true }];
@@ -160,22 +159,56 @@ describe('ChatContainer', () => {
         const completed = [{ id: 'reply', role: 'assistant' as const, content: 'Saved reply', pending: false }];
         await wrapper.setProps({ messageHistory: completed });
         expect(replace).toHaveBeenCalledWith(completed);
-        replace.mockClear();
-        instance.loading.value = true;
-        await wrapper.setProps({ messageHistory: [{ ...completed[0]!, content: 'Latest saved reply' }] });
-        expect(replace).not.toHaveBeenCalled();
-        instance.loading.value = false;
-        await nextTick();
-        expect(replace).not.toHaveBeenCalled();
-        await wrapper.setProps({ messageHistory: [{ ...completed[0]!, content: 'Latest saved reply' }] });
-        expect(replace).toHaveBeenCalledWith([{ ...completed[0]!, content: 'Latest saved reply' }]);
-        replace.mockClear();
-        instance.loading.value = true;
-        await nextTick();
-        instance.loading.value = false;
-        await nextTick();
-        expect(replace).not.toHaveBeenCalled();
     });
+
+    it('accepts messages arriving during a foreground stream after its separate tail settles', async () => {
+        const instance = makeStreamingInstance();
+        const replace = vi.fn();
+        Object.assign(instance, { replaceCanonicalHistory: replace });
+        instance.loading.value = true;
+        instance.requestState.value = { status: 'streaming', requestId: 'request-1', userMessageId: 'stable-1', assistantMessageId: 'tail-1' };
+        // useChat hides the empty loader on the first token; the tail still
+        // belongs to the request and is deliberately absent from messages[].
+        instance.tailAssistant.value!.pending = false;
+        instance.streamState.text = 'Live response';
+        const wrapper = mountChatInstance(instance);
+        const history = [
+            { id: 'stable-1', role: 'user' as const, content: 'First question', pending: false },
+            { id: 'tail-1', role: 'assistant' as const, content: 'Saved response', stream_id: 'stream-1', pending: false },
+            { id: 'remote-user', role: 'user' as const, content: 'Message from the other browser', pending: false },
+        ];
+        await wrapper.setProps({ messageHistory: history });
+        expect(replace).not.toHaveBeenCalled();
+        expect(rowFor(wrapper, 'tail-1').find('.test-text').text()).toBe('Live response');
+        instance.loading.value = false;
+        await nextTick();
+        expect(replace).toHaveBeenCalledExactlyOnceWith(history);
+    });
+
+    it.each(['missing reply', 'unfinished reply', 'older generation', 'another thread'] as const)(
+        'retains local output when deferred history contains %s', async reason => {
+            const instance = makeStreamingInstance();
+            const replace = vi.fn();
+            Object.assign(instance, { replaceCanonicalHistory: replace });
+            instance.loading.value = true;
+            instance.requestState.value = { status: 'streaming', requestId: 'request-1', userMessageId: 'stable-1', assistantMessageId: 'tail-1' };
+            instance.tailAssistant.value!.pending = false;
+            instance.streamState.text = 'Local output';
+            const wrapper = mountChatInstance(instance);
+            await wrapper.setProps({ messageHistory: reason === 'missing reply' ? [] : [{
+                id: 'tail-1', role: 'assistant', content: 'Stale response',
+                stream_id: reason === 'older generation' ? 'previous-stream' : 'stream-1',
+                pending: reason === 'unfinished reply',
+            }] });
+            if (reason === 'another thread') await wrapper.setProps({ threadId: 'thread-2' });
+            instance.loading.value = false;
+            await nextTick();
+            expect(replace).not.toHaveBeenCalled();
+            if (reason !== 'another thread') {
+                expect(rowFor(wrapper, 'tail-1').find('.test-text').text()).toBe('Local output');
+            }
+        });
+
     const defaultProps = {
         threadId: 'thread-1',
         messageHistory: [],
@@ -339,7 +372,10 @@ describe('ChatContainer', () => {
         id: string
     ) => wrapper.find(`.or3-scroll-item [data-msg-id="${id}"]`);
 
-    it('renders scroll to bottom button when scrolled up', async () => {
+    it('renders scroll to bottom button when scrolled up with null background job refs', async () => {
+        useChatMock.mockImplementationOnce(() => makeChatInstance({
+            backgroundJobId: null, backgroundJobMode: null,
+        }));
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
@@ -393,9 +429,6 @@ describe('ChatContainer', () => {
         });
         await nextTick();
 
-        // Debug
-        // console.log(wrapper.html());
-
         // distanceFromBottom = 1800 - 500 - 800 = 500
         buttonContainer = wrapper.find('.absolute.bottom-full');
 
@@ -419,36 +452,6 @@ describe('ChatContainer', () => {
 
         // Opacity: 75 / 150 = 0.5
         expect(buttonContainer.attributes('style')).toContain('opacity: 0.5');
-    });
-
-    it('does not throw when background job refs are null', async () => {
-        useChatMock.mockImplementationOnce(() =>
-            makeChatInstance({
-                backgroundJobId: null,
-                backgroundJobMode: null,
-            })
-        );
-
-        const wrapper = mount(ChatContainer, {
-            props: defaultProps,
-            global: {
-                mocks: {
-                    $theme: createThemeMock(),
-                },
-                stubs: {
-                    LazyChatMessage,
-                    LazyChatInputDropper,
-                    ClientOnly: { template: '<div><slot /></div>' },
-                    UButton: {
-                        template:
-                            '<button class="u-button" @click="$emit(\'click\')"></button>',
-                    },
-                },
-            },
-        });
-
-        await nextTick();
-        expect(wrapper.exists()).toBe(true);
     });
 
     it('calls scrollToBottom when button is clicked', async () => {

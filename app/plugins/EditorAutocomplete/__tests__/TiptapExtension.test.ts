@@ -5,12 +5,17 @@ import { Placeholder } from '@tiptap/extensions/placeholder';
 import { AutocompleteExtension } from '../TiptapExtension';
 import AutocompleteState from '../state';
 import { state as globalState } from '~/state/global';
+import { testRuntimeConfig } from '~~/tests/setup';
 
-const { openRouterStream } = vi.hoisted(() => ({
+const { openRouterStream, session } = vi.hoisted(() => ({
     openRouterStream: vi.fn(),
+    session: { signedIn: false },
 }));
 
 vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream }));
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    getCachedSessionContext: () => session.signedIn ? { user: { id: 'autocomplete-user' } } : null,
+}));
 
 let editor: Editor | undefined;
 
@@ -20,6 +25,9 @@ afterEach(() => {
     openRouterStream.mockReset();
     globalState.value.openrouterKey = null;
     localStorage.removeItem('openrouter_api_key');
+    session.signedIn = false;
+    testRuntimeConfig.value.public.openRouter.hasInstanceKey = false;
+    testRuntimeConfig.value.public.openRouter.requireUserKey = false;
 });
 
 function makeEditor() {
@@ -38,6 +46,42 @@ function makeEditor() {
 }
 
 describe('AutocompleteExtension decorations', () => {
+    it.each([
+        { name: 'signed in without any key', signedIn: true, instanceKey: false, userKey: null, requiresUserKey: false, calls: 0 },
+        { name: 'guest with only an instance key', signedIn: false, instanceKey: true, userKey: null, requiresUserKey: false, calls: 0 },
+        { name: 'required user key missing', signedIn: true, instanceKey: true, userKey: null, requiresUserKey: true, calls: 0 },
+        { name: 'signed in with an instance key', signedIn: true, instanceKey: true, userKey: null, requiresUserKey: false, calls: 1 },
+        { name: 'user key available', signedIn: false, instanceKey: false, userKey: 'synthetic-key', requiresUserKey: false, calls: 1 },
+    ])('requests suggestions only with usable credentials: $name', async ({ signedIn, instanceKey, userKey, requiresUserKey, calls }) => {
+        session.signedIn = signedIn;
+        testRuntimeConfig.value.public.openRouter.hasInstanceKey = instanceKey;
+        testRuntimeConfig.value.public.openRouter.requireUserKey = requiresUserKey;
+        globalState.value.openrouterKey = userKey;
+        AutocompleteState.value.isEnabled = true;
+        openRouterStream.mockImplementation(async function* () {
+            yield { type: 'text', text: '<next_line> continuation</next_line>' };
+        });
+        const current = makeEditor();
+        current.commands.setTextSelection(current.state.doc.content.size - 1);
+        current.view.focus();
+        current.commands.insertContent('A');
+        await new Promise(resolve => setTimeout(resolve, 750));
+        expect(openRouterStream).toHaveBeenCalledTimes(calls);
+        if (calls) expect(current.view.dom.querySelector('.autocomplete-suggestion')).not.toBeNull();
+    });
+
+    it('does not request suggestions when saved or synced content is restored into a focused editor', async () => {
+        globalState.value.openrouterKey = 'synthetic-key';
+        AutocompleteState.value.isEnabled = true;
+        openRouterStream.mockImplementation(async function* () {});
+        const current = makeEditor();
+        current.view.focus();
+        current.commands.setContent('<p>Restored content</p>', { emitUpdate: false });
+        current.commands.setTextSelection(current.state.doc.content.size - 1);
+        await new Promise(resolve => setTimeout(resolve, 750));
+        expect(openRouterStream).not.toHaveBeenCalled();
+    });
+
     it('replaces the empty-node placeholder with one caret-anchored suggestion', () => {
         const current = makeEditor();
         current.commands.setTextSelection(current.state.doc.content.size - 1);

@@ -99,6 +99,26 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    it.each(['clean', 'dirty'] as const)('reconciles a synced document while preserving a %s editor buffer', async (mode) => {
+        const { dbA, editor } = await mountedWorkspaces();
+        if (mode === 'dirty') {
+            editor.commands.setContent(content('Unsent local edit'), { emitUpdate: true });
+        }
+        // Incoming sync writes Dexie directly, without a document CRUD hook.
+        await dbA.posts.update(documentId, {
+            title: 'Remote title', content: JSON.stringify(content('Remote body')), clock: 20,
+        });
+        if (mode === 'clean') {
+            await vi.waitFor(() => expect(wrapper!.getComponent(Title).props('modelValue')).toBe('Remote title'));
+            expect(editor.getText()).toBe('Remote body');
+        } else {
+            const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+            await expect(getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!.ensureLocalDurability()).rejects.toThrow();
+            expect(editor.getText()).toBe('Unsent local edit');
+            expect((await dbA.posts.get(documentId))?.content).toContain('Remote body');
+        }
+    });
+
     // Shared store state must not let a stale split pane replace another pane's
     // committed content, or acknowledge an independently changed editor buffer.
     it.each(['clean', 'dirty', 'retained'] as const)('keeps a %s same-document split pane safe after its peer saves', async (mode) => {
