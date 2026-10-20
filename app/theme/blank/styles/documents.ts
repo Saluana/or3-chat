@@ -122,12 +122,6 @@ export const documentsStyles = {
             borderRadius: 'var(--md-border-radius)',
         },
     },
-    '.document-editor-root .info-grid > div': {
-        style: {
-            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
-            borderRadius: 'var(--md-border-radius-large)',
-        },
-    },
     '.document-editor-root .outline-empty': {
         style: {
             border: '1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent)',

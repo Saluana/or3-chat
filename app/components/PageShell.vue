@@ -18,7 +18,7 @@
                 :active-thread="activeChatThreadId"
                 class="w-[64px]"
                 @new-chat="onNewChat"
-                @new-document="openCollapsedCreateDocumentModal"
+                @new-document="createCollapsedDocument"
                 @new-project="openCollapsedCreateProjectModal"
                 @focus-search="openCommandPalette"
                 @toggle-dashboard="toggleDashboard"
@@ -2343,8 +2343,8 @@ function expandSidebar() {
     layout?.expand?.();
 }
 
-function openCollapsedCreateDocumentModal() {
-    sideNavExpandedRef.value?.openCreateDocumentModal?.();
+function createCollapsedDocument() {
+    sideNavExpandedRef.value?.createDocument?.();
 }
 
 function openCollapsedCreateProjectModal() {

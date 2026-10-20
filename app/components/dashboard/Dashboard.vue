@@ -2,7 +2,7 @@
     <AppModal
         id="dashboard-modal-shell"
         v-bind="dashboardModalOverrides"
-        :size="state.view === 'dashboard' ? 'md' : 'lg'"
+        size="lg"
         v-model:open="open"
         :modal="true"
         :title="state.view === 'dashboard' ? 'Dashboard' : activePageTitle || headerPluginLabel"
@@ -89,36 +89,39 @@
                 <div
                     v-if="!state.activePageId && landingPages.length > 1"
                     id="dashboard-landing-grid"
-                    class="min-h-0 overflow-y-auto p-4 sm:p-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                    class="grid min-h-0 grid-cols-1 content-start gap-3 overflow-y-auto"
                 >
                     <button
                         v-for="p in landingPages"
                         :key="p.id"
                         v-bind="landingPageButtonProps"
                         :class="[
-                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 text-left',
+                            'dashboard-landing-item group flex w-full items-center gap-3 p-3 text-left sm:gap-4 sm:p-4',
                             (landingPageButtonProps as any)?.class || '',
                         ]"
                         @click="handleLandingPageClick(p.id)"
                     >
-                        <div class="flex items-center gap-2">
-                            <AppIcon
-                                v-if="p.image || p.icon || p.iconToken"
-                                :image="p.image"
-                                :icon="p.icon"
-                                :icon-token="p.iconToken"
-                                class="w-5 h-5 opacity-80 group-hover:opacity-100"
-                            />
-                            <span class="font-medium text-sm">{{
-                                p.title
-                            }}</span>
-                        </div>
-                        <p
-                            v-if="p.description"
-                            class="text-xs opacity-70 leading-snug line-clamp-3"
-                        >
-                            {{ p.description }}
-                        </p>
+                        <AppIcon
+                            v-if="p.image || p.icon || p.iconToken"
+                            :image="p.image"
+                            :icon="p.icon"
+                            :icon-token="p.iconToken"
+                            class="size-6 shrink-0 opacity-80 group-hover:opacity-100"
+                        />
+                        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span class="font-medium text-sm">{{ p.title }}</span>
+                            <span
+                                v-if="p.description"
+                                class="text-xs opacity-70 leading-snug"
+                            >
+                                {{ p.description }}
+                            </span>
+                        </span>
+                        <UIcon
+                            :name="useIcon('ui.chevron.right').value"
+                            class="size-5 shrink-0 opacity-50 group-hover:opacity-100"
+                            aria-hidden="true"
+                        />
                     </button>
                 </div>
                 <!-- Single page or chosen page -->
@@ -308,6 +311,11 @@ const landingPageButtonProps = computed(() => {
     #dashboard-plugin-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
+    }
+
+    /* An odd tile count would leave a half-empty last row. */
+    #dashboard-plugin-grid > :last-child:nth-child(odd) {
+        grid-column: 1 / -1;
     }
 }
 

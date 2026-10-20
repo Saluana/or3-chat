@@ -227,11 +227,6 @@ export const sidebarCssSelectors = {
             marginBottom: '0.25rem',
         },
     },
-    '.project-empty-state': {
-        style: {
-            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
-        },
-    },
     /* Soft brand blue — pairs with docs green, echoes logo #2a8fd6 */
     '.page-link-accent-chats .page-link-icon-container': {
         style: {

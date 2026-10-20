@@ -89,7 +89,9 @@
                 <div class="settings-intro">
                     <div>
                         <span>If you select text, the AI focuses on it. Otherwise, it starts near your cursor and can read the surrounding document.</span>
-                        <span class="settings-context-summary">{{ contextSummary }}</span>
+                        <ul class="settings-context" aria-label="Context for the next request">
+                            <li v-for="part in contextSummary" :key="part">{{ part }}</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -120,14 +122,6 @@
                         </p>
                     </section>
 
-                    <section class="setting-card instruction-card">
-                        <div class="setting-card-copy">
-                            <strong>System instruction</strong>
-                            <span>Guide how the AI changes your writing.</span>
-                        </div>
-                        <UTextarea :model-value="settings.systemInstruction" :rows="2" :maxrows="5" autoresize aria-label="Document AI system instruction" @change="setInstruction" />
-                    </section>
-
                     <section class="setting-card autocomplete-card">
                         <div class="setting-card-copy">
                             <strong>Autocomplete</strong>
@@ -136,91 +130,14 @@
                         <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="readOnly || autocomplete.loading" @update:model-value="setAutocomplete" />
                     </section>
 
-                    <section class="setting-card">
+                    <section class="setting-card instruction-card">
                         <div class="setting-card-copy">
-                            <strong>Max steps</strong>
-                            <span>How many steps the AI can take for one request ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
+                            <strong>System instruction</strong>
+                            <span>Guide how the AI changes your writing.</span>
                         </div>
-                        <UInput
-                            type="number"
-                            :model-value="settings.maxIterations"
-                            :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
-                            :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
-                            class="w-full"
-                            aria-label="Document AI maximum steps"
-                            @change="setMaxIterations"
-                        />
-                    </section>
-
-                    <section class="setting-card">
-                        <div class="setting-card-copy">
-                            <strong>Words per read</strong>
-                            <span>About how much of the document the AI reads at once (default 5,000 words).</span>
-                        </div>
-                        <UInput
-                            type="number"
-                            :model-value="settings.chunkWordLimit"
-                            :min="MIN_DOCUMENT_AI_CHUNK_WORDS"
-                            :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
-                            step="500"
-                            class="w-full"
-                            aria-label="Document AI words per read"
-                            @change="setChunkWordLimit"
-                        />
+                        <UTextarea :model-value="settings.systemInstruction" :rows="2" :maxrows="5" autoresize aria-label="Document AI system instruction" @change="setInstruction" />
                     </section>
                 </div>
-
-                <section class="tool-settings">
-                    <div class="settings-heading">
-                        <div>
-                            <strong>Tools</strong>
-                            <span>Choose what the document AI can do. You can also enable tools you use in chat.</span>
-                        </div>
-                    </div>
-
-                    <div
-                        v-for="group in toolToggleGroups"
-                        :key="group.key"
-                        class="tool-group"
-                    >
-                        <UButton
-                            color="neutral"
-                            variant="ghost"
-                            class="tool-group-header"
-                            :aria-expanded="!isToolGroupCollapsed(group.key)"
-                            @click="toggleToolGroup(group.key)"
-                        >
-                            <div class="tool-group-copy">
-                                <strong>{{ group.label }}</strong>
-                                <span>{{ group.hint }}</span>
-                            </div>
-                            <span class="tool-group-count">{{ group.tools.length }}</span>
-                        </UButton>
-                        <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
-                            <div
-                                v-for="tool in group.tools"
-                                :key="tool.name"
-                                class="tool-row"
-                            >
-                                <div class="tool-row-main">
-                                    <USwitch
-                                        :model-value="tool.enabled"
-                                        :label="tool.label"
-                                        :disabled="readOnly || status === 'streaming'"
-                                        @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
-                                    />
-                                    <UIcon
-                                        v-if="tool.icon"
-                                        :name="tool.icon"
-                                        class="tool-row-icon"
-                                    />
-                                </div>
-                                <p v-if="tool.description" class="tool-row-desc">{{ tool.description }}</p>
-                            </div>
-                            <p v-if="!group.tools.length" class="tool-group-empty">{{ group.empty }}</p>
-                        </div>
-                    </div>
-                </section>
 
                 <section class="quick-action-settings">
                     <div class="settings-heading">
@@ -298,6 +215,98 @@
                         <UButton v-for="action in pluginActions" :key="action.id" :label="action.label" color="neutral" variant="soft" size="xs" @click="runAction(action)" />
                     </div>
                 </section>
+
+                <details class="advanced-settings">
+                    <summary>Advanced</summary>
+                    <div class="advanced-body">
+                        <div class="settings-grid">
+                            <section class="setting-card">
+                                <div class="setting-card-copy">
+                                    <strong>Max steps</strong>
+                                    <span>How many steps the AI can take for one request ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
+                                </div>
+                                <UInput
+                                    type="number"
+                                    :model-value="settings.maxIterations"
+                                    :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
+                                    :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
+                                    class="w-full"
+                                    aria-label="Document AI maximum steps"
+                                    @change="setMaxIterations"
+                                />
+                            </section>
+
+                            <section class="setting-card">
+                                <div class="setting-card-copy">
+                                    <strong>Words per read</strong>
+                                    <span>About how much of the document the AI reads at once (default 5,000 words).</span>
+                                </div>
+                                <UInput
+                                    type="number"
+                                    :model-value="settings.chunkWordLimit"
+                                    :min="MIN_DOCUMENT_AI_CHUNK_WORDS"
+                                    :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
+                                    step="500"
+                                    class="w-full"
+                                    aria-label="Document AI words per read"
+                                    @change="setChunkWordLimit"
+                                />
+                            </section>
+                        </div>
+
+                        <section class="tool-settings">
+                            <div class="settings-heading">
+                                <div>
+                                    <strong>Tools</strong>
+                                    <span>Choose what the document AI can do. You can also enable tools you use in chat.</span>
+                                </div>
+                            </div>
+
+                            <div
+                                v-for="group in toolToggleGroups"
+                                :key="group.key"
+                                class="tool-group"
+                            >
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    class="tool-group-header"
+                                    :aria-expanded="!isToolGroupCollapsed(group.key)"
+                                    @click="toggleToolGroup(group.key)"
+                                >
+                                    <div class="tool-group-copy">
+                                        <strong>{{ group.label }}</strong>
+                                        <span>{{ group.hint }}</span>
+                                    </div>
+                                    <span class="tool-group-count">{{ group.tools.length }}</span>
+                                </UButton>
+                                <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
+                                    <div
+                                        v-for="tool in group.tools"
+                                        :key="tool.name"
+                                        class="tool-row"
+                                    >
+                                        <div class="tool-row-main">
+                                            <USwitch
+                                                :model-value="tool.enabled"
+                                                :label="tool.label"
+                                                :disabled="readOnly || status === 'streaming'"
+                                                @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
+                                            />
+                                            <UIcon
+                                                v-if="tool.icon"
+                                                :name="tool.icon"
+                                                class="tool-row-icon"
+                                            />
+                                        </div>
+                                        <p v-if="tool.description" class="tool-row-desc">{{ tool.description }}</p>
+                                    </div>
+                                    <p v-if="!group.tools.length" class="tool-group-empty">{{ group.empty }}</p>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </details>
 
                 <p class="settings-note">Document AI preferences sync with this workspace.</p>
             </div>
@@ -500,7 +509,7 @@ const contextSummary = computed(() => {
     const target = props.selectionAvailable
         ? `Selected text${props.selectedText.trim() ? `: “${props.selectedText.trim().replace(/\s+/gu, ' ').slice(0, 90)}${props.selectedText.trim().length > 90 ? '…' : ''}”` : ''}`
         : 'Text near cursor';
-    return `${target} · surrounding document available · ${tokenLabel.value}`;
+    return [target, 'Surrounding document available', tokenLabel.value];
 });
 const pendingHunks = computed(() =>
     (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'pending'),

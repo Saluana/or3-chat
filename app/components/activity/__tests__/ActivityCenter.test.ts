@@ -158,6 +158,26 @@ describe('Activity Center components', () => {
         expect(mocks.subscriptionDispose).toHaveBeenCalled();
     });
 
+    it('shows one empty state across the page until there is something to select', async () => {
+        mocks.listRuns.mockResolvedValue({ runs: [], degradedSources: [] });
+        const wrapper = mount(ActivityDashboardPage, {
+            global: { ...global, stubs: { ...global.stubs, ActivityDetailPane: DetailStub } },
+        });
+        await flushPromises();
+        expect(wrapper.text()).toContain('No running activity');
+        expect(wrapper.text()).not.toContain('Choose an activity');
+        expect(wrapper.find('main').exists()).toBe(false);
+
+        mocks.listRuns.mockResolvedValue({ runs: [run()], degradedSources: [] });
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text() === 'Completed')
+            ?.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).toContain('Choose an activity');
+        wrapper.unmount();
+    });
+
     it('renders approval and degraded states', async () => {
         mocks.listRuns.mockResolvedValue({
             runs: [

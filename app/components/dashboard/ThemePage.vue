@@ -90,7 +90,7 @@ const sections: Array<{
     {
         id: 'theme',
         label: 'Theme',
-        icon: useIcon('dashboard.settings').value,
+        icon: useIcon('ui.sparkles').value,
     },
     { id: 'colors', label: 'Colors', icon: useIcon('ui.view').value },
     {
@@ -111,7 +111,7 @@ const sections: Array<{
     {
         id: 'advanced',
         label: 'Advanced',
-        icon: useIcon('ui.settings').value,
+        icon: useIcon('chat.tool.wrench').value,
     },
 ];
 

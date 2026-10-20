@@ -431,11 +431,6 @@
   border-radius: var(--md-border-radius);
 }
 
-[data-theme="retro"] .document-editor-root .info-grid > div {
-  border: var(--md-border-width) solid var(--md-border-color);
-  border-radius: var(--md-border-radius);
-}
-
 [data-theme="retro"] .document-editor-root .outline-empty {
   border: var(--md-border-width) dashed var(--md-border-color);
   border-radius: var(--md-border-radius);

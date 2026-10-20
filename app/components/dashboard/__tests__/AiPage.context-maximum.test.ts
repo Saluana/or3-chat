@@ -31,6 +31,10 @@ const input = () => wrapper!.get<HTMLInputElement>('#dashboard-ai-max-context-in
 async function savedMaximum() {
     return JSON.parse((await getKvByName('ai_settings'))!.value!).maxContextTokens;
 }
+const prompt = () => wrapper!.get<HTMLTextAreaElement>('#dashboard-ai-master-textarea');
+async function savedPrompt() {
+    return JSON.parse((await getKvByName('ai_settings'))!.value!).masterSystemPrompt;
+}
 async function openPage() {
     wrapper = mount(AiPage, { global: { stubs: {
         UInput: Input, UTextarea: { template: '<textarea />' },
@@ -41,9 +45,10 @@ async function openPage() {
     await vi.waitFor(async () => expect(await getKvByName(MODELS_CACHE_KEY)).toBeTruthy());
     return wrapper;
 }
+// The maximum saves when the field loses focus.
 async function save(value: string) {
     await input().setValue(value);
-    await wrapper!.get('#dashboard-ai-save-context-btn').trigger('click');
+    await input().trigger('blur');
 }
 beforeEach(async () => {
     workspace = `dashboard-context-${crypto.randomUUID()}`;
@@ -175,7 +180,7 @@ describe('Dashboard context maximum through real KV', () => {
         expect(input().element.value).toBe('250000');
         expect(await savedMaximum()).toBe(100_000);
         failure.mockRestore();
-        await wrapper!.get('#dashboard-ai-save-context-btn').trigger('click');
+        await input().trigger('blur');
         await vi.waitFor(async () => expect(await savedMaximum()).toBe(250_000));
         expect(wrapper!.find('#ai-max-context-error').exists()).toBe(false);
     });
@@ -201,9 +206,54 @@ describe('Dashboard context maximum through real KV', () => {
             await vi.waitFor(() => expect(input().element.value).toBe('900000'));
             release();
             await flushPromises();
-            expect(wrapper!.get('#dashboard-ai-save-context-btn').text()).not.toContain('Saving');
+            expect(wrapper!.get('#ai-context-status').text()).not.toContain('Saving');
             expect(wrapper!.find('#ai-max-context-error').exists()).toBe(false);
             expect(await savedMaximum()).toBe(900_000);
         } finally { release(); }
+    });
+
+    it('autosaves the master prompt after a pause without rewriting what is being typed', async () => {
+        await openPage();
+        expect(prompt().attributes('maxlength')).toBe('4000');
+        await prompt().setValue('  Be brief  ');
+        expect(wrapper!.get('#ai-prompt-status').text()).toContain('Saving');
+        expect(useAiSettings().settings.value.masterSystemPrompt).toBe('');
+        await vi.waitFor(() => expect(wrapper!.get('#ai-prompt-status').text()).toContain('Saved'), { timeout: 3000 });
+        expect(await savedPrompt()).toBe('Be brief');
+        expect(prompt().element.value).toBe('  Be brief  ');
+        await prompt().trigger('blur');
+        expect(prompt().element.value).toBe('Be brief');
+    });
+
+    it('flushes the master prompt on blur and when the page closes', async () => {
+        await openPage();
+        await prompt().setValue('first');
+        await prompt().trigger('blur');
+        await vi.waitFor(async () => expect(await savedPrompt()).toBe('first'));
+        await prompt().setValue('second');
+        wrapper!.unmount(); wrapper = undefined;
+        await vi.waitFor(async () => expect(await savedPrompt()).toBe('second'));
+    });
+
+    it('keeps the typed prompt when a save fails and saves it on retry', async () => {
+        await openPage();
+        const failure = vi.spyOn(getDb().kv, 'put').mockRejectedValueOnce(new Error('Scripted preferences write failure'));
+        await prompt().setValue('keep me');
+        await prompt().trigger('blur');
+        await vi.waitFor(() => expect(wrapper!.get('#ai-prompt-status').text()).toContain('Not saved'));
+        expect(failure).toHaveBeenCalled();
+        expect(prompt().element.value).toBe('keep me');
+        expect(useAiSettings().settings.value.masterSystemPrompt).toBe('');
+        failure.mockRestore();
+        await wrapper!.get('#ai-prompt-status button').trigger('click');
+        await vi.waitFor(async () => expect(await savedPrompt()).toBe('keep me'));
+        await vi.waitFor(() => expect(wrapper!.get('#ai-prompt-status').text()).toContain('Saved'));
+    });
+
+    it('saves a model default immediately and reports it', async () => {
+        await openPage();
+        await wrapper!.get('#dashboard-ai-model-fixed-btn').trigger('click');
+        await vi.waitFor(() => expect(wrapper!.get('#ai-model-status').text()).toContain('Saved'));
+        expect(useAiSettings().settings.value.defaultModelMode).toBe('fixed');
     });
 });

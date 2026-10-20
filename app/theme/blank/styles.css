@@ -398,14 +398,6 @@
         opacity: 1 !important;
     }
 
-    .project-empty-state {
-        background: color-mix(
-            in srgb,
-            var(--md-surface-variant) 70%,
-            var(--md-surface)
-        ) !important;
-    }
-
     /* Soft circles leave room for the category badges' duotone fills. */
     .page-link-accent-chats .page-link-icon-container {
         background: color-mix(in srgb, var(--blank-brand-accent) 10%, var(--md-surface)) !important;
@@ -458,6 +450,17 @@
         padding-bottom: 0 !important;
     }
 
+    /* Fade the thread out behind the floating composer so text never shows
+       through the gaps around it. The empty state keeps its own backdrop. */
+    .chat-container-root:not(.chat-container--empty) .chat-input-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: -32px 0 0;
+        z-index: -1;
+        pointer-events: none;
+        background: linear-gradient(to bottom, transparent, var(--md-surface) 32px);
+    }
+
     .chat-input {
         margin-bottom: 0 !important;
     }
@@ -487,6 +490,25 @@
         border: var(--md-border-width) solid var(--md-border-color) !important;
         box-shadow: var(--app-elevation-low) !important;
         border-radius: var(--md-border-radius-small) !important;
+    }
+
+    /* Assistant replies have no bubble, so anchor their actions to the text
+       edge and the user's to the bubble edge. Narrow panes and touch devices
+       keep the shared in-flow layout. */
+    @media (pointer: fine) {
+        @container chat-pane (width >= 768px) {
+            .cm-actions.cm-actions-assistant {
+                /* Message padding (0.5rem) plus the reply's own inset (1.25rem). */
+                left: 1.75rem;
+                transform: translateY(50%);
+            }
+
+            .cm-actions.cm-actions-user {
+                left: auto;
+                right: 0.5rem;
+                transform: translateY(50%);
+            }
+        }
     }
 
     /* ── Markdown prose: match ChatGPT text rendering ── */
@@ -1073,27 +1095,6 @@ html[data-theme='blank']
     html[data-theme="blank"] .page-link-icon-container {
         width: 38px;
         height: 38px;
-    }
-
-    html[data-theme="blank"] .project-empty-icon {
-        width: 40px;
-        height: 40px;
-    }
-
-    html[data-theme="blank"] .project-empty-icon > .iconify {
-        width: 20px !important;
-        height: 20px !important;
-        font-size: 20px !important;
-    }
-
-    html[data-theme="blank"] .project-empty-title {
-        font-size: 16px !important;
-        line-height: 1.3;
-    }
-
-    html[data-theme="blank"] .project-empty-description {
-        font-size: var(--blank-mobile-label-text) !important;
-        line-height: 1.4;
     }
 
     html[data-theme="blank"] :where(
@@ -2204,4 +2205,124 @@ html[data-theme='blank'].dark .chat-empty-hero {
             padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
         }
     }
+}
+
+/* Section labels use sentence case in this theme. */
+html[data-theme='blank'] :is(
+    .dashboard-section-title,
+    .chat-settings-heading,
+    .slash-menu-label,
+    .theme-mode-option,
+    .theme-current-badge
+) {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+html[data-theme='blank'] :is(.chat-settings-heading, .slash-menu-label) {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Toolbar buttons rest flat and only fill on hover, so the row reads as one
+   control strip. Pressed states and the block-style select keep their fill. */
+html[data-theme='blank'] .editor-toolbar button:not([aria-pressed='true'], [role='combobox']) {
+    background-color: transparent;
+}
+
+html[data-theme='blank'] .editor-toolbar button:not([aria-pressed='true'], [role='combobox']):hover:not(:disabled) {
+    background-color: var(--md-surface-hover);
+}
+
+/* Settings sections sit directly on the modal surface and are divided by a
+   hairline, so the controls inside them are the only boxes. */
+html[data-theme='blank'] .dashboard-page-frame .section-card {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 20px 0 !important;
+}
+
+html[data-theme='blank'] .dashboard-page-frame .section-card [data-slot='body'] {
+    padding: 0 !important;
+}
+
+html[data-theme='blank'] .dashboard-page-frame .section-card + .section-card {
+    border-top: var(--md-border-width) solid var(--md-border-color) !important;
+}
+
+/* Text fields in modals show focus with a soft halo instead of a heavy 2px ring.
+   Layered like the Nuxt UI utilities it overrides: their !important wins over
+   unlayered !important. */
+@layer utilities {
+    html[data-theme='blank'] .app-modal :is(input, textarea):not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']):is(:focus, :focus-visible) {
+        border-color: color-mix(in srgb, var(--md-on-surface) 55%, transparent) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-on-surface) 10%, transparent) !important;
+        outline: none !important;
+    }
+}
+
+/* ── Document AI settings: flat sections ──
+   Sections sit directly on the modal surface and are divided by a hairline, so
+   the controls inside them (selects, fields, quick-action rows) are the only
+   boxes. */
+html[data-theme='blank'] .document-ai-dialog-settings {
+    gap: 0;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .settings-intro {
+    padding-bottom: 20px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings :is(.setting-card, .tool-group) {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .settings-grid {
+    gap: 20px 24px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings > :is(.settings-grid, .quick-action-settings, .advanced-settings) {
+    padding: 20px 0;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .instruction-card {
+    padding-top: 20px;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .advanced-body {
+    gap: 20px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .advanced-body > * + * {
+    padding-top: 20px;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .tool-group + .tool-group {
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+/* Keep the header text on the section edge; its hover fill extends past it. */
+html[data-theme='blank'] .document-ai-dialog-settings .tool-group-header {
+    width: calc(100% + 1rem);
+    margin-inline: -0.5rem;
+}
+
+/* Layered like the Nuxt UI button padding utilities it overrides. */
+@layer utilities {
+    html[data-theme='blank'] .document-ai-dialog-settings .tool-group-header {
+        padding-inline: 0.5rem !important;
+    }
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings :is(.tool-group-list, .tool-row) {
+    padding-inline: 0;
 }

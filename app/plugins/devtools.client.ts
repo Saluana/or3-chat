@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
-    // Only register devtools in development mode
-    if (import.meta.env.PROD) {
+    // Developer-only: hidden unless OR3_DEV_TOOLS=true in a non-production run.
+    if (import.meta.env.PROD || !useRuntimeConfig().public.devTools) {
         return;
     }
 
