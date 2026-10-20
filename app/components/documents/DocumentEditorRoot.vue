@@ -24,6 +24,7 @@
             :class="{
                 'editor-toolbar--compact': isCompactToolbar,
                 'editor-toolbar--mobile': isMobile,
+                'editor-toolbar--with-inspector': inspectorOpen && !isCompactToolbar,
             }"
             role="toolbar"
             :inert="itemReadOnly"

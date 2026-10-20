@@ -76,31 +76,6 @@
                         </div>
                     </div>
                 </div>
-                <div
-                    v-else
-                    class="mx-1 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/35 px-3 py-3.5 project-empty-state"
-                >
-                    <div class="flex items-start gap-3">
-                        <div
-                            class="project-empty-icon shrink-0 w-9 h-9 rounded-[var(--md-border-radius-small,0.5rem)] border-[length:var(--md-border-width)] border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
-                        >
-                            <UIcon :name="iconPlus" class="w-4 h-4" />
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div
-                                class="project-empty-title text-[13px] font-semibold text-[color:var(--md-on-surface)]"
-                            >
-                                No projects yet
-                            </div>
-                            <p
-                                class="project-empty-description mt-0.5 text-[11px] leading-snug text-[color:var(--md-on-surface-variant)]"
-                            >
-                                Create your first project to organize chats and
-                                documents.
-                            </p>
-                        </div>
-                    </div>
-                </div>
                 <UButton
                     v-if="hasMore"
                     label="Show more"
@@ -141,7 +116,6 @@ import type {
 import SidebarProjectRoot from './SidebarProjectRoot.vue';
 import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
-import { useIcon } from '~/composables/useIcon';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type ProjectEntryPayload = {
@@ -159,7 +133,6 @@ const props = defineProps<{
     activeDocumentIds: string[];
 }>();
 
-const iconPlus = useIcon('ui.plus');
 
 const emit = defineEmits<{
     (e: 'toggle-collapse'): void;

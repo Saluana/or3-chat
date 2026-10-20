@@ -90,7 +90,7 @@ describe("WorkspaceProfileSettings", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("Workspace Profile");
+    expect(wrapper.text()).toContain("Arrange existing OR3 surfaces");
     expect(wrapper.text()).toContain("Standard OR3");
     expect(wrapper.text()).toContain("Built in");
     expect(wrapper.text()).toContain("Complete workspace");

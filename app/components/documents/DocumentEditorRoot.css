@@ -24,6 +24,11 @@
     background: var(--doc-toolbar-surface);
     box-shadow: 0 5px 18px rgb(0 0 0 / 3%);
 }
+/* A docked inspector narrows the document column; keep the rail aligned with
+   the canvas inside it instead of the full toolbar width. */
+.editor-toolbar--with-inspector {
+    padding-inline-start: max(calc(var(--or3-pane-chrome-left-clearance, 0px) + 0.65rem), calc(var(--or3-pane-chrome-left-clearance, 0px) + (100% - 320px - var(--editor-canvas)) / 2));
+}
 /*
  * Pane-safe layout: the formatting rail may scroll; trailing chrome never
  * shrinks or overlays the rail (critical for multi-pane desktop widths).
@@ -249,11 +254,11 @@
 .selection-menu { display: flex; gap: 0.12rem; padding: 0.3rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius-large, var(--md-border-radius)); background: var(--md-surface); box-shadow: 0 10px 30px rgb(0 0 0 / 16%); }
 .selection-menu button { width: 2.25rem; height: 2.25rem; display: grid; place-items: center; border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
 .selection-menu button:hover, .selection-menu button.active { color: var(--md-primary); background: var(--md-primary-container); }
-.slash-menu { position: sticky; z-index: 20; bottom: 1.5rem; width: min(21rem, calc(100vw - 2rem)); max-height: 25rem; overflow-y: auto; margin: 1rem 0; padding: 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius-large, var(--md-border-radius)); background: var(--md-surface); box-shadow: 0 18px 50px rgb(0 0 0 / 18%); }
+.slash-menu { position: sticky; z-index: 20; bottom: 6rem; width: min(21rem, calc(100vw - 2rem)); max-height: 25rem; overflow-y: auto; margin: 1rem 0; padding: 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius-large, var(--md-border-radius)); background: var(--md-surface); box-shadow: 0 18px 50px rgb(0 0 0 / 18%); }
 .slash-menu-header { position: sticky; z-index: 1; top: -0.4rem; display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.2rem 0.2rem; background: var(--md-surface); }
 .slash-menu-label { padding: 0.3rem 0.45rem; color: var(--md-on-surface-variant); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .slash-menu .slash-menu-header button { width: 2rem; min-height: 2rem; display: grid; grid-template-columns: 1fr; place-items: center; gap: 0; padding: 0; border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
-.slash-command { width: 100%; min-height: 3.25rem; justify-content: flex-start; border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
+.slash-command { width: 100%; min-height: 2.75rem; justify-content: flex-start; border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
 .slash-command-icon { width: 2rem; height: 2rem; flex: 0 0 auto; display: grid; place-items: center; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
 .slash-command-copy { min-width: 0; display: grid; text-align: left; }
 .slash-menu small { color: var(--md-on-surface-variant); font-size: 0.67rem; }

@@ -77,10 +77,6 @@
   margin-bottom: 0.25rem;
 }
 
-[data-theme="blank"] .project-empty-state {
-  border-radius: var(--md-border-radius-small, var(--md-border-radius));
-}
-
 [data-theme="blank"] .page-link-accent-chats .page-link-icon-container {
   background: color-mix(in srgb, var(--blank-brand-accent) 10%, var(--md-surface));
   color: var(--blank-brand-accent);

@@ -1,14 +1,10 @@
 <template>
   <div class="dashboard-page-frame">
     <header class="dashboard-page-intro">
-      <div>
-      <p class="dashboard-page-eyebrow">Settings</p>
-      <h2 class="dashboard-page-title">Workspace Profile</h2>
       <p class="dashboard-page-description">
         Arrange existing OR3 surfaces without changing your theme, plugins, or
         workspace data.
       </p>
-      </div>
     </header>
 
     <UCard class="section-card">

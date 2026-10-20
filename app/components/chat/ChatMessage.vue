@@ -194,14 +194,21 @@
                 ]"
                 ref="contentEl"
             >
-                <p
+                <div
                     v-if="responseError"
                     role="alert"
                     aria-label="Response failed"
-                    class="mb-3 text-sm text-error whitespace-pre-wrap wrap-anywhere"
+                    class="mb-3 flex items-start gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border border-(--md-error)/30 bg-(--md-error-container)/40 px-3 py-2 text-sm text-(--md-on-error-container)"
                 >
-                    {{ responseError }}
-                </p>
+                    <UIcon
+                        :name="warningIcon"
+                        class="mt-0.5 size-4 shrink-0 text-(--md-error)"
+                        aria-hidden="true"
+                    />
+                    <p class="m-0! min-w-0 whitespace-pre-wrap wrap-anywhere">
+                        {{ responseError }}
+                    </p>
+                </div>
                 <p
                     v-else-if="responseStopped"
                     role="status"
@@ -588,6 +595,7 @@ const emit = defineEmits<{
     (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
 }>();
 
+const warningIcon = useIcon('ui.warning');
 const copyIcon = useIcon('chat.message.copy');
 const retryIcon = useIcon('chat.message.retry');
 const continueIcon = useIcon('chat.message.continue');

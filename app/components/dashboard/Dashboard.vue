@@ -2,7 +2,7 @@
     <AppModal
         id="dashboard-modal-shell"
         v-bind="dashboardModalOverrides"
-        :size="state.view === 'dashboard' ? 'md' : 'lg'"
+        size="lg"
         v-model:open="open"
         :modal="true"
         :title="state.view === 'dashboard' ? 'Dashboard' : activePageTitle || headerPluginLabel"
