@@ -157,12 +157,6 @@ export const documentsStyles = {
             borderRadius: 'var(--md-border-radius)',
         },
     },
-    '.document-editor-root .info-grid > div': {
-        style: {
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
-        },
-    },
     '.document-editor-root .outline-empty': {
         style: {
             border: 'var(--md-border-width) dashed var(--md-border-color)',

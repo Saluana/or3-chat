@@ -187,8 +187,10 @@
 .editor-scroll { position: relative; flex: 1; min-width: 0; overflow-y: auto; scroll-behavior: smooth; }
 .document-content--readonly :deep(.image-controls) { display: none; }
 .document-canvas { position: relative; width: min(var(--editor-canvas), calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: clamp(2.5rem, 7cqw, 5.5rem) 0 12rem; }
-.document-title-field { width: 100%; }
-.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-size: clamp(2rem, 5cqw, 3rem); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
+.document-title-field { width: 100%; font-size: clamp(2rem, 5cqw, 3rem); }
+/* Themes floor every textarea at 16px with !important; the title inherits its larger size from the field. */
+.document-title-field :deep(#document-title) { font-size: inherit !important; }
+.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
 .document-title-field :deep(textarea:focus-visible), .document-content :deep(.ProseMirror:focus-visible) { outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary)); outline-offset: var(--app-focus-ring-offset, 2px); }
 .document-title-field :deep(textarea::placeholder) { color: color-mix(in oklab, var(--md-on-surface-variant), transparent 55%); }
 .document-byline { display: flex; gap: 0.8rem; margin: 0.85rem 0 3rem; color: var(--md-on-surface-variant); font-size: 0.72rem; }
@@ -304,7 +306,7 @@
 .document-canvas,
 .ai-composer-dock { width: calc(100% - 2rem); }
 .document-canvas { padding-top: 2.25rem; }
-.document-title-field :deep(textarea) { font-size: 2rem; }
+.document-title-field { font-size: 2rem; }
 .document-byline { margin-bottom: 2.3rem; }
 .find-bar { overflow-x: auto; }
 .find-input { min-width: 9rem; }

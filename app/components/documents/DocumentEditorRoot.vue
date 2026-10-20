@@ -185,7 +185,7 @@
         <div class="editor-layout">
             <main ref="editorScroll" class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
-                    <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
+                    <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :ui="{ base: 'max-lg:text-[length:inherit]!' }" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" @keydown.enter="onTitleEnter" />
                     <p class="document-byline">
                         <span>{{ stats.words.toLocaleString() }} {{ stats.words === 1 ? 'word' : 'words' }}</span>
                         <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
@@ -350,6 +350,7 @@ import {
 } from '~/composables/editor/useEditorToolbar';
 import { useHooks } from '~/core/hooks/useHooks';
 import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-schema';
+import { DEFAULT_DOCUMENT_TITLE } from '~/db/documents';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
 import type { TipTapDocument } from '~/types/database';
@@ -974,23 +975,50 @@ async function loadActiveDocument(id: string) {
         capturedContent.value = normalizedContent(editor.value?.getJSON() ?? capturedContent.value);
     }
     loadedDocumentId = id;
+    if (inspectorDefaultApplied.value) inspectorOpen.value = inspectorOpensByDefault();
     documentLoaded.value = true;
     loadingDocument.value = false;
     registerActiveSession(id);
-    focusIfJustCreated();
+    void focusIfJustCreated();
     emit('ready', id);
 }
 
-// A document created moments ago with nothing in it: put the caret in the body
-// so the user can start typing, unless they're already typing somewhere else.
-function focusIfJustCreated(): void {
+// The outline only earns its space once the document has headings to list.
+function inspectorOpensByDefault(): boolean {
+    const current = editor.value;
+    if (!current || isCompactToolbar.value) return false;
+    let headings = false;
+    current.state.doc.descendants((node) => {
+        if (node.type.name === 'heading' && Number(node.attrs.level) <= 3) headings = true;
+        return !headings;
+    });
+    return headings;
+}
+
+// A document created moments ago with nothing in it: let the user start typing,
+// unless they're already typing somewhere else. A still-untitled document gets
+// its title selected for naming; a named one puts the caret in the body.
+async function focusIfJustCreated(): Promise<void> {
     const record = state.value.record;
     const current = editor.value;
     if (!record || !current || itemReadOnly.value || !current.isEmpty) return;
     if (Date.now() / 1000 - record.created_at > 10) return;
     const active = document.activeElement as HTMLElement | null;
     if (active?.isContentEditable || active?.matches?.('input, textarea, select')) return;
-    current.commands.focus('start');
+    if (record.title !== DEFAULT_DOCUMENT_TITLE) {
+        current.commands.focus('start');
+        return;
+    }
+    await nextTick();
+    const title = rootElement.value?.querySelector<HTMLTextAreaElement>('.document-title-field textarea');
+    title?.focus();
+    title?.select();
+}
+
+function onTitleEnter(event: KeyboardEvent) {
+    if (event.isComposing) return;
+    event.preventDefault();
+    editor.value?.commands.focus('start');
 }
 
 watch(documentId, async (id, previous) => {
@@ -1002,8 +1030,7 @@ watch(documentId, async (id, previous) => {
     if (revisionTimer) clearTimeout(revisionTimer);
     revisionTimer = undefined;
     lastAutomaticRevisionAt = 0;
-    inspectorOpen.value =
-        responsiveHydrated.value && !isCompactToolbar.value;
+    inspectorOpen.value = false;
     inspectorTab.value = 'outline';
     findOpen.value = false;
     findQuery.value = '';
@@ -1076,7 +1103,7 @@ watch(
         // don't inherit the wide-layout "inspector open" default.
         if (!isMobile.value && paneWidthPx.value <= 0) return;
         inspectorDefaultApplied.value = true;
-        inspectorOpen.value = !isCompactToolbar.value;
+        inspectorOpen.value = inspectorOpensByDefault();
         await nextTick();
         inspectorTransitionsReady.value = true;
     },

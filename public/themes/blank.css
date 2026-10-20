@@ -488,11 +488,6 @@
   border-radius: var(--md-border-radius);
 }
 
-[data-theme="blank"] .document-editor-root .info-grid > div {
-  border: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
-  border-radius: var(--md-border-radius-large);
-}
-
 [data-theme="blank"] .document-editor-root .outline-empty {
   border: 1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent);
   border-radius: var(--md-border-radius-large);

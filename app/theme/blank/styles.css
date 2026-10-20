@@ -2262,3 +2262,67 @@ html[data-theme='blank'] .dashboard-page-frame .section-card + .section-card {
         outline: none !important;
     }
 }
+
+/* ── Document AI settings: flat sections ──
+   Sections sit directly on the modal surface and are divided by a hairline, so
+   the controls inside them (selects, fields, quick-action rows) are the only
+   boxes. */
+html[data-theme='blank'] .document-ai-dialog-settings {
+    gap: 0;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .settings-intro {
+    padding-bottom: 20px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings :is(.setting-card, .tool-group) {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .settings-grid {
+    gap: 20px 24px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings > :is(.settings-grid, .quick-action-settings, .advanced-settings) {
+    padding: 20px 0;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .instruction-card {
+    padding-top: 20px;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .advanced-body {
+    gap: 20px;
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .advanced-body > * + * {
+    padding-top: 20px;
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings .tool-group + .tool-group {
+    border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+/* Keep the header text on the section edge; its hover fill extends past it. */
+html[data-theme='blank'] .document-ai-dialog-settings .tool-group-header {
+    width: calc(100% + 1rem);
+    margin-inline: -0.5rem;
+}
+
+/* Layered like the Nuxt UI button padding utilities it overrides. */
+@layer utilities {
+    html[data-theme='blank'] .document-ai-dialog-settings .tool-group-header {
+        padding-inline: 0.5rem !important;
+    }
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings :is(.tool-group-list, .tool-row) {
+    padding-inline: 0;
+}
