@@ -230,6 +230,38 @@ describe('OutboxManager', () => {
         }
     );
 
+    it('retains queued edits without consuming attempts offline and sends them after reconnect', async () => {
+        const pendingOp = createPendingOp();
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async (batch: PushBatch) => ({
+            results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })),
+            serverVersion: 1,
+        }));
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            provider,
+            { workspaceId: 'workspace-1' }
+        );
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+        try {
+            await outbox.flush();
+            await outbox.flush();
+
+            expect(provider.push).not.toHaveBeenCalled();
+            expect(pendingOps.__rows.get(pendingOp.id)).toEqual(pendingOp);
+
+            online.mockReturnValue(true);
+            await outbox.flush();
+
+            expect(provider.push).toHaveBeenCalledTimes(1);
+            expect(provider.push.mock.calls[0]![0].ops[0]!.payload).toMatchObject(pendingOp.payload!);
+            expect(pendingOps.__rows.has(pendingOp.id)).toBe(false);
+        } finally {
+            online.mockRestore();
+        }
+    });
+
     it('schedules retry with exponential backoff on failure', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-retry',

@@ -7,6 +7,8 @@ import { openRouterStream } from '~/utils/chat/openrouterStream';
 import AutocompleteState from './state';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { normalizeAutocompleteSuggestion } from './suggestion-utils';
+import { useRuntimeConfig } from '#imports';
+import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 
 interface AutocompletePluginState {
     suggestion: string;
@@ -34,9 +36,12 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     // localStorage reads could resurrect a key after logout and bypass the
     // canonical KV/state lifecycle.
     const orKey = state.value.openrouterKey || null;
-    // Optional suggestions must stay local for guests without credentials.
-    // Signed-in users can still use the instance key through the server route.
-    if (!orKey && !getCachedSessionContext()?.user?.id) return { completion: '' };
+    const config = useRuntimeConfig();
+    const availability = resolveOpenRouterKeyAvailability(config.public.openRouter);
+    if (!availability.hasUsableKey(orKey)
+        || (!orKey && (config.public.ssrAuthEnabled !== true || !getCachedSessionContext()?.user?.id))) {
+        return { completion: '' };
+    }
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);
@@ -200,13 +205,14 @@ export const AutocompleteExtension = Extension.create<{}>({
         }
 
         // Use standard debounce for initial setup
-        const debouncedFetchAndDispatch = useDebounceFn(async () => {
+        const debouncedFetchAndDispatch = useDebounceFn(async (typedDocument: EditorState['doc']) => {
             // Check if autocomplete is enabled
             if (!AutocompleteState.value.isEnabled) {
                 return;
             }
 
-            if (!editorView) {
+            if (!editorView || editorView.isDestroyed || !editorView.hasFocus() || !editorView.editable
+                || editorView.state.doc !== typedDocument) {
                 return;
             }
 
@@ -483,6 +489,12 @@ export const AutocompleteExtension = Extension.create<{}>({
                         oldState: EditorState,
                         newState: EditorState
                     ): AutocompletePluginState {
+                        // Hydration and incoming sync are replacements, not typing.
+                        // Cancel any queued request's context as well as its result.
+                        if (tr.docChanged && tr.getMeta('preventUpdate')) {
+                            abortCurrentRequest();
+                            return { suggestion: '', loading: false, recentlyBackspace: false };
+                        }
                         // Don't make suggestions if the editor is empty
                         if (tr.doc.content.size <= 2) {
                             // size is 2 for an empty paragraph
@@ -645,7 +657,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             !suggestionAccepted &&
                             !suggestionCleared
                         ) {
-                            debouncedFetchAndDispatch();
+                            debouncedFetchAndDispatch(newState.doc);
                         }
 
                         return nextState;

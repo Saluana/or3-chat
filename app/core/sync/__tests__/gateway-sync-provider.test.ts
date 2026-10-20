@@ -112,9 +112,108 @@ describe('GatewaySyncProvider', () => {
     });
 
     afterEach(() => {
+        vi.unstubAllGlobals();
         vi.useRealTimers();
         vi.restoreAllMocks();
         (globalThis as unknown as { fetch?: unknown }).fetch = originalFetch;
+    });
+
+    it('retries an unacknowledged subscription page from the same cursor before fetching more', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+            const cursor = JSON.parse(init!.body as string).cursor;
+            return makeOkResponse({ changes: [change(cursor + 1, 'op-1')], nextCursor: cursor + 1, hasMore: cursor === 0 });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const onPage = vi.fn().mockRejectedValueOnce(new Error('Local apply failed')).mockResolvedValue(undefined);
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined, { cursor: 0, onPage });
+        try {
+            await vi.advanceTimersByTimeAsync(100);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(100);
+            expect(fetchMock.mock.calls.map(call => JSON.parse(call[1]!.body as string).cursor)).toEqual([0, 0, 1]);
+            expect(onPage.mock.calls.map(call => call[0])).toEqual([0, 0, 1]);
+        } finally { unsubscribe(); }
+    });
+
+    it.each(['hidden', 'offline'] as const)(
+        'pauses %s subscription reads and catches up immediately on resume',
+        async (reason) => {
+            vi.spyOn(Math, 'random').mockReturnValue(0);
+            let hidden = reason === 'hidden';
+            let online = reason !== 'offline';
+            vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => hidden ? 'hidden' : 'visible');
+            vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online);
+            const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => makeOkResponse({ changes: [], nextCursor: 5, hasMore: false }));
+            vi.stubGlobal('fetch', fetchMock);
+            const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+            const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined, { cursor: 5 });
+
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(fetchMock.mock.calls.length).toBe(0);
+            hidden = false;
+            online = true;
+            if (reason === 'hidden') document.dispatchEvent(new Event('visibilitychange'));
+            else window.dispatchEvent(new Event('online'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).cursor).toBe(5);
+
+            await vi.advanceTimersByTimeAsync(100);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            unsubscribe();
+            document.dispatchEvent(new Event('visibilitychange'));
+            window.dispatchEvent(new Event('online'));
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        }
+    );
+
+    it('backs off repeated outages and keeps the retry deadline across resume', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn(async () => makeErrorResponse(503, 'Unavailable'));
+        vi.stubGlobal('fetch', fetchMock);
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined);
+
+        await vi.advanceTimersByTimeAsync(200);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        window.dispatchEvent(new Event('online'));
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(199);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        unsubscribe();
+    });
+
+    it('finishes an in-flight page without overlapping reads when hidden and resumed', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        let hidden = false;
+        vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => hidden ? 'hidden' : 'visible');
+        let release!: (response: Response) => void;
+        const fetchMock = vi.fn<typeof fetch>().mockImplementationOnce(() => new Promise(resolve => { release = resolve; }))
+            .mockImplementation(async () => makeOkResponse({ changes: [], nextCursor: 1, hasMore: false }));
+        vi.stubGlobal('fetch', fetchMock);
+        const onChanges = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], onChanges);
+        await vi.advanceTimersByTimeAsync(100);
+        hidden = true;
+        document.dispatchEvent(new Event('visibilitychange'));
+        release(makeOkResponse({ changes: [change(1, 'op-1')], nextCursor: 1, hasMore: false }));
+        await vi.advanceTimersByTimeAsync(500);
+        expect(onChanges).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        hidden = false;
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string).cursor).toBe(1);
+        unsubscribe();
     });
 
     it.each([
@@ -491,7 +590,7 @@ describe('GatewaySyncProvider', () => {
         );
     });
 
-    it('honors Retry-After seconds before the next subscription pull', async () => {
+    it.each([false, true])('honors Retry-After seconds across subscription ownership changes (restart: %s)', async restart => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const fetchMock = vi
@@ -505,7 +604,7 @@ describe('GatewaySyncProvider', () => {
         (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
-        const unsubscribe = await provider.subscribe(
+        let unsubscribe = await provider.subscribe(
             { workspaceId: 'ws-1' },
             ['messages'],
             () => undefined,
@@ -514,6 +613,13 @@ describe('GatewaySyncProvider', () => {
 
         await vi.advanceTimersByTimeAsync(100);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+        if (restart) {
+            unsubscribe();
+            await expect(provider.pull({ scope: { workspaceId: 'ws-1' }, cursor: 0, limit: 1 }))
+                .rejects.toMatchObject({ status: 429, retryAfterMs: 4000 });
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined, { cursor: 0 });
+        }
         await vi.advanceTimersByTimeAsync(3999);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         await vi.advanceTimersByTimeAsync(1);

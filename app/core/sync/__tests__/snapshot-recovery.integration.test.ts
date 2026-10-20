@@ -119,6 +119,7 @@ class ExpiredCursorSnapshotProvider implements SyncProvider {
     pullCursors: number[] = [];
     snapshotRequests: SnapshotRequest[] = [];
     subscribeCursors: number[] = [];
+    onPage?: SyncSubscribeOptions['onPage'];
 
     async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
         this.snapshotRequests.push(request);
@@ -207,6 +208,7 @@ class ExpiredCursorSnapshotProvider implements SyncProvider {
         options?: SyncSubscribeOptions
     ): Promise<() => void> {
         this.subscribeCursors.push(options?.cursor ?? 0);
+        this.onPage = options?.onPage;
         return () => undefined;
     }
 
@@ -239,7 +241,7 @@ describe('expired-cursor snapshot recovery', () => {
         await db.delete();
     });
 
-    it('replaces stale materialized state, reapplies pending work, and resumes after the snapshot watermark', async () => {
+    it.each(['legacy startup', 'startup', 'subscription page'] as const)('replaces stale state, preserves pending work, and resumes after expiration discovered by %s', async trigger => {
         await db.messages.bulkPut([
             messagePayload('canonical', 'stale local value', 2, 'local'),
             messagePayload('stale-only', 'not on the server', 3, 'local'),
@@ -266,16 +268,29 @@ describe('expired-cursor snapshot recovery', () => {
         });
 
         const provider = new ExpiredCursorSnapshotProvider();
+        if (trigger !== 'legacy startup') {
+            Object.assign(provider, { capabilities: { subscriptionPages: 'v1' } });
+            vi.spyOn(provider, 'pull').mockResolvedValueOnce({
+                ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 7, hasMore: false,
+                ...(trigger === 'startup' ? { oldestRetainedVersion: 40, requiresSnapshot: true } : {}),
+            });
+        }
         manager = new SubscriptionManager(db, provider, scope, {
             tables: ['messages'],
             bootstrapPageSize: 20,
         });
 
         await manager.start();
+        if (trigger === 'subscription page') {
+            await provider.onPage!(7, {
+                changes: [], nextCursor: 7, hasMore: false,
+                oldestRetainedVersion: 40, requiresSnapshot: true,
+            });
+        }
 
         expect(provider.snapshotRequests).toHaveLength(1);
         expect(provider.pullCursors.filter((cursor) => cursor >= 50)).toEqual([50]);
-        expect(provider.subscribeCursors).toEqual([51]);
+        expect(provider.subscribeCursors).toEqual(trigger === 'subscription page' ? [7, 51] : [51]);
         expect(await db.sync_state.get(
             'sync_state:workspace-expired-snapshot:default'
         )).toMatchObject({ cursor: 51 });

@@ -319,7 +319,7 @@ import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, refreshDocument, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { liveQuery } from 'dexie';
@@ -478,6 +478,10 @@ watch([documentId, editorDb], ([id, db]) => {
         if (availability.value === 'active' && (previous === 'trashed' || previous === 'unavailable')
             && !documentLoaded.value && state.value.status !== 'loading') {
             void loadActiveDocument(id);
+        } else if (availability.value === 'active' && documentLoaded.value) {
+            // Sync writes bypass document CRUD hooks. Refresh the shared record;
+            // the store and syncCleanBuffers retain dirty buffers and baselines.
+            void refreshDocument(id, db);
         }
         if (itemReadOnly.value) ai.abort();
     } });

@@ -47,6 +47,24 @@ an empty allowlist means no approved models. Containers map model/secret values
 to their `NUXT_ADMIN_*` runtime overrides at startup. Provider charges belong
 to the configured account and are attributed to the acting plugin.
 
+## Host access checks
+
+In SSR mode, host UI registries coalesce plugin access checks from the same
+render into requests containing at most 50 plugin IDs. The host endpoint
+accepts repeated `pluginIds` query parameters and returns
+`{ decisions: { [pluginId]: decision } }`. The existing single `pluginId`
+request continues to return one decision. Responses use `Cache-Control:
+no-store`.
+
+Each plugin still passes the existing server access policy. Installed-plugin
+inventory and the workspace enabled-plugin list are shared only within that
+request; plugin settings are checked individually. Client decisions remain
+scoped to the current user, workspace, role, and entitlements. A failed or
+incomplete response applies a ten-second retry cooldown per unresolved plugin
+so reactive UI updates cannot create a request loop. Local gate evaluation
+remains immediate, and protected server operations enforce their own access
+checks.
+
 ## Packages and permission review
 
 Acquisition resolves a plugin and exact release from the configured registry;

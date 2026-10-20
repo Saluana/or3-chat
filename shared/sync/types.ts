@@ -255,6 +255,11 @@ export interface SyncProviderAuth {
 export interface SyncSubscribeOptions {
     cursor?: number;
     limit?: number;
+    /** Supported only with capabilities.subscriptionPages v1. The provider
+     * delivers every validated page (including filtered/empty windows), awaits
+     * acknowledgement, and owns pagination from that page's nextCursor.
+     */
+    onPage?: (fromCursor: number, page: PullResponse) => Promise<void>;
 }
 
 /**
@@ -268,6 +273,8 @@ export interface SyncProvider {
     capabilities?: {
         snapshotBootstrap?: 'snapshot-v1';
         historyRetention?: 'snapshot-v1';
+        /** Cursor-complete pages with acknowledged, provider-owned pagination. */
+        subscriptionPages?: 'v1';
     };
 
     /**

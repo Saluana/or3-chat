@@ -52,6 +52,14 @@ import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
 const DEFAULT_MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
+const MAX_OUTAGE_BACKOFF_MS = 60_000;
+
+// This transport is also imported by server-side sync error handling. Keep
+// browser activity access structural so the server type graph needs no DOM lib.
+type ActivityEventTarget = {
+    addEventListener(type: string, listener: () => void): void;
+    removeEventListener(type: string, listener: () => void): void;
+};
 
 /**
  * Purpose:
@@ -285,6 +293,40 @@ export function createGatewaySyncProvider(
         config.maxRetryAfterMs ?? DEFAULT_MAX_RETRY_AFTER_MS
     );
     const subscriptions = new Set<() => void>();
+    const pullRetries = new Map<string, { failures: number; notBefore: number; status: number }>();
+    const retryFor = (scope: SyncScope) => {
+        const key = JSON.stringify([scope.workspaceId, scope.projectId ?? null]);
+        let state = pullRetries.get(key);
+        if (!state) {
+            if (pullRetries.size >= 50) pullRetries.delete(pullRetries.keys().next().value!);
+            state = { failures: 0, notBefore: 0, status: 503 };
+            pullRetries.set(key, state);
+        }
+        return state;
+    };
+    const requestPull = async (request: PullRequest, signal?: AbortSignal): Promise<PullResponse> => {
+        const retry = retryFor(request.scope);
+        // Ownership changes recreate subscriptions and probe history. Neither
+        // may bypass a previous server deferral or transport outage cooldown.
+        if (retry.notBefore > Date.now()) {
+            throw new GatewaySyncRequestError('/api/sync/pull', retry.status, 'Pull deferred', retry.notBefore - Date.now());
+        }
+        try {
+            const response = await requestJson<PullResponse>(
+                '/api/sync/pull',
+                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                baseUrl, { signal, schema: PullResponseSchema }
+            );
+            assertGatewayResponseContract('/api/sync/pull', getPullResponseContractError(request, response));
+            return response;
+        } catch (error) {
+            if (error instanceof GatewaySyncRequestError && error.retryAfterMs !== undefined) {
+                retry.notBefore = Date.now() + Math.min(Math.max(error.retryAfterMs, pollIntervalMs), maxRetryAfterMs);
+                retry.status = error.status;
+            }
+            throw error;
+        }
+    };
 
     return {
         id: config.id ?? 'gateway',
@@ -292,6 +334,7 @@ export function createGatewaySyncProvider(
         capabilities: {
             snapshotBootstrap: 'snapshot-v1',
             historyRetention: 'snapshot-v1',
+            subscriptionPages: 'v1',
         },
 
         async subscribe(
@@ -305,11 +348,37 @@ export function createGatewaySyncProvider(
             const limit = options?.limit ?? pullLimit;
             let timeout: ReturnType<typeof setTimeout> | null = null;
             let running = false;
+            const retry = retryFor(scope);
             const pollAbortController = new AbortController();
+            const activity = globalThis as {
+                document?: ActivityEventTarget & { visibilityState: string };
+                window?: ActivityEventTarget;
+                navigator?: { onLine?: boolean };
+            };
+            const canPoll = () =>
+                activity.document?.visibilityState !== 'hidden' &&
+                activity.navigator?.onLine !== false;
+
+            const clearScheduledPoll = () => {
+                if (timeout !== null) clearTimeout(timeout);
+                timeout = null;
+            };
+
+            const schedule = (delay: number) => {
+                clearScheduledPoll();
+                if (active && canPoll()) timeout = setTimeout(run, delay);
+            };
+
+            const handleActivityChange = () => {
+                clearScheduledPoll();
+                // Keep the cursor and any in-flight apply. Resuming catches up
+                // immediately, without a snapshot or a longer foreground interval.
+                if (active && canPoll()) void run();
+            };
 
             const poll = async () => {
                 let hasMore = true;
-                while (active && hasMore) {
+                while (active && canPoll() && hasMore) {
                     const previousCursor = cursor;
                     const request: PullRequest = {
                         scope,
@@ -318,28 +387,16 @@ export function createGatewaySyncProvider(
                         tables,
                         workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY,
                     };
-                    const response = await requestJson<PullResponse>(
-                        '/api/sync/pull',
-                        request,
-                        baseUrl,
-                        {
-                            signal: pollAbortController.signal,
-                            schema: PullResponseSchema,
-                        }
-                    );
-                    assertGatewayResponseContract(
-                        '/api/sync/pull',
-                        getPullResponseContractError(request, response)
-                    );
+                    const response = await requestPull(request, pollAbortController.signal);
 
-                    if (response.requiresSnapshot) {
+                    if (options?.onPage) {
+                        await options.onPage(previousCursor, response);
+                    } else if (response.requiresSnapshot) {
                         throw Object.assign(
                             new Error('Remote history no longer covers this cursor'),
                             { code: 'REQUIRES_SNAPSHOT' }
                         );
-                    }
-
-                    if (response.changes.length) {
+                    } else if (response.changes.length) {
                         // Allow async handlers (SubscriptionManager) to provide backpressure.
                         // This prevents overlapping apply cycles which can break cursor accounting.
                         await Promise.resolve(onChanges(response.changes));
@@ -361,27 +418,39 @@ export function createGatewaySyncProvider(
             };
 
             const run = async () => {
-                if (!active || running) return;
+                if (!active || running || !canPoll()) return;
+                if (Date.now() < retry.notBefore) {
+                    schedule(retry.notBefore - Date.now());
+                    return;
+                }
                 running = true;
-                let retryAfterMs: number | undefined;
                 try {
                     await poll();
+                    retry.failures = 0;
+                    retry.notBefore = 0;
                 } catch (error) {
                     if (isAbortLikeError(error)) return;
                     if (
                         error instanceof GatewaySyncRequestError &&
                         (error.status === 401 || error.status === 403)
                     ) {
-                        active = false;
+                        unsubscribe();
                     } else if (
                         error instanceof GatewaySyncRequestError &&
                         error.retryAfterMs !== undefined
                     ) {
-                        retryAfterMs = Math.min(
+                        retry.status = error.status;
+                        retry.notBefore = Date.now() + Math.min(
                             Math.max(error.retryAfterMs, pollIntervalMs),
                             maxRetryAfterMs
                         );
                     } else {
+                        retry.status = error instanceof GatewaySyncRequestError ? error.status : 503;
+                        retry.failures = Math.min(retry.failures + 1, 16);
+                        retry.notBefore = Date.now() + Math.min(
+                            pollIntervalMs * 2 ** (retry.failures - 1),
+                            Math.max(pollIntervalMs, MAX_OUTAGE_BACKOFF_MS)
+                        );
                         console.error('[gateway-sync] Poll failed:', error);
                     }
                 } finally {
@@ -390,9 +459,10 @@ export function createGatewaySyncProvider(
                 if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);
-                timeout = setTimeout(
-                    run,
-                    retryAfterMs ?? pollIntervalMs + jitter
+                schedule(
+                    retry.notBefore > Date.now()
+                        ? retry.notBefore - Date.now()
+                        : pollIntervalMs + jitter
                 );
             };
 
@@ -400,36 +470,31 @@ export function createGatewaySyncProvider(
             // This avoids a wasted round-trip immediately after bootstrap when the cursor
             // is already up-to-date. Callers still get the unsubscribe handle synchronously.
             const initialJitter = Math.floor(Math.random() * 500);
-            timeout = setTimeout(run, pollIntervalMs + initialJitter);
+            schedule(pollIntervalMs + initialJitter);
+            activity.document?.addEventListener('visibilitychange', handleActivityChange);
+            activity.window?.addEventListener('online', handleActivityChange);
+            activity.window?.addEventListener('offline', handleActivityChange);
 
             const unsubscribe = () => {
                 active = false;
                 pollAbortController.abort();
-                if (timeout) {
-                    clearTimeout(timeout);
-                    timeout = null;
-                }
+                clearScheduledPoll();
+                activity.document?.removeEventListener('visibilitychange', handleActivityChange);
+                activity.window?.removeEventListener('online', handleActivityChange);
+                activity.window?.removeEventListener('offline', handleActivityChange);
+                subscriptions.delete(unsubscribe);
             };
 
             subscriptions.add(unsubscribe);
 
-            return () => {
-                unsubscribe();
-                subscriptions.delete(unsubscribe);
-            };
+            return unsubscribe;
         },
 
         async pull(request: PullRequest): Promise<PullResponse> {
-            const response = await requestJson<PullResponse>(
-                '/api/sync/pull',
-                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
-                baseUrl,
-                { schema: PullResponseSchema }
-            );
-            assertGatewayResponseContract(
-                '/api/sync/pull',
-                getPullResponseContractError(request, response)
-            );
+            const response = await requestPull(request);
+            const retry = retryFor(request.scope);
+            retry.failures = 0;
+            retry.notBefore = 0;
             return response;
         },
 
@@ -491,6 +556,7 @@ export function createGatewaySyncProvider(
         async dispose(): Promise<void> {
             subscriptions.forEach((cleanup) => cleanup());
             subscriptions.clear();
+            pullRetries.clear();
         },
     };
 }

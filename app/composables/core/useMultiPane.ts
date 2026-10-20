@@ -7,14 +7,15 @@ import {
     onScopeDispose,
     getCurrentScope,
     markRaw,
+    watch,
     toValue,
     type Ref,
     type ComputedRef,
     type MaybeRefOrGetter,
 } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import Dexie from 'dexie';
-import { getDb } from '~/db/client';
+import Dexie, { liveQuery, type Subscription } from 'dexie';
+import { getDb, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import type { Message } from '~/db/schema';
 import { compareMessageOrder } from '~/db/messages';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -48,6 +49,8 @@ export type MultiPaneMessage = {
     index?: number | null;
     order_key?: string | null;
     created_at?: number | null;
+    pending?: boolean;
+    error?: string | null;
 };
 
 export interface PaneState {
@@ -147,104 +150,107 @@ function isValidMessageRow(msg: unknown): msg is DbMessageRow {
 }
 
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
-    if (!id) return [];
     try {
-        const db = getDb();
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m) => !m.deleted)
-            .toArray();
-        
-        const validRows: DbMessageRow[] = [];
-        let skippedCount = 0;
-        
-        for (const msg of msgs) {
-            // Fast structural validation
-            if (!isValidMessageRow(msg)) {
-                skippedCount++;
-                if (import.meta.dev) {
-                    console.warn(
-                        '[useMultiPane] Skipping invalid message row:',
-                        msg
-                    );
-                }
-                continue;
-            }
-            
-            // Superseded retry turns remain in Dexie for sync/audit, but
-            // must not reappear when a pane reloads its conversation.
-            if (msg.deleted || isSupersededMessage(msg)) continue;
-            validRows.push(msg);
-        }
-
-        validRows.sort((left, right) =>
-            compareMessageOrder(
-                { id: left.id, index: Number.isFinite(left.index) ? left.index : 0, order_key: left.order_key ?? '' },
-                { id: right.id, index: Number.isFinite(right.index) ? right.index : 0, order_key: right.order_key ?? '' }
-            )
-        );
-        // Pane seeds skip the controller's history reload. Reconcile their
-        // separate tool rows through the same canonical projection first.
-        const canonicalById = new Map(
-            projectTranscriptForOpenRouter(
-                storedMessagesToCanonicalTranscript(validRows)
-            ).map((message) => [message.id, message])
-        );
-        const result: MultiPaneMessage[] = [];
-        for (const row of validRows) {
-            const canonicalCalls = canonicalById.get(row.id)?.data?.tool_calls;
-            const storedCalls = new Map<string, Record<string, unknown>>();
-            const rawCalls: unknown = row.data?.tool_calls;
-            if (Array.isArray(rawCalls)) {
-                for (const rawCall of rawCalls as unknown[]) {
-                    if (!rawCall || typeof rawCall !== 'object' || Array.isArray(rawCall)) continue;
-                    const call = rawCall as Record<string, unknown>;
-                    if (typeof call.id === 'string' && call.id) storedCalls.set(call.id, call);
-                }
-            }
-            // Keep presentation/plugin metadata by stable ID. Canonical result,
-            // error and status must override stale embedded execution fields.
-            const data = Array.isArray(canonicalCalls) && canonicalCalls.length
-                ? { ...row.data, tool_calls: canonicalCalls.map((call) => ({
-                    ...(call.id ? storedCalls.get(call.id) : undefined),
-                    ...call,
-                })) }
-                : row.data;
-            const content = deriveMessageContent({
-                content: row.content,
-                data,
-            });
-            
-            result.push({
-                role: row.role as 'user' | 'assistant' | 'system' | 'tool',
-                content,
-                file_hashes: row.file_hashes,
-                id: row.id,
-                stream_id: row.stream_id ?? undefined,
-                data: data ?? undefined,
-                reasoning_text: data?.reasoning_text || null,
-                index: typeof row.index === 'number' ? row.index : null,
-                order_key: row.order_key ?? null,
-                created_at:
-                    typeof row.created_at === 'number' ? row.created_at : null,
-            } as MultiPaneMessage);
-        }
-        
-        // Dev-only diagnostics
-        if (import.meta.dev && skippedCount > 0) {
-            console.warn(
-                `[useMultiPane] Skipped ${skippedCount} invalid message(s) for thread ${id}`
-            );
-        }
-        
-        return result;
+        return await loadMessagesInDb(id, getDb());
     } catch (error) {
-        if (import.meta.dev) {
-            console.error('[useMultiPane] Failed to load messages:', error);
-        }
+        if (import.meta.dev) console.error('[useMultiPane] Failed to load messages:', error);
         return [];
     }
+}
+
+async function loadMessagesInDb(id: string, db: Or3DB): Promise<MultiPaneMessage[]> {
+    if (!id) return [];
+    const msgs = await db.messages
+        .where('[thread_id+index]')
+        .between([id, Dexie.minKey], [id, Dexie.maxKey])
+        .filter((m) => !m.deleted)
+        .toArray();
+
+    const validRows: DbMessageRow[] = [];
+    let skippedCount = 0;
+
+    for (const msg of msgs) {
+        // Fast structural validation
+        if (!isValidMessageRow(msg)) {
+            skippedCount++;
+            if (import.meta.dev) {
+                console.warn(
+                    '[useMultiPane] Skipping invalid message row:',
+                    msg
+                );
+            }
+            continue;
+        }
+
+        // Superseded retry turns remain in Dexie for sync/audit, but
+        // must not reappear when a pane reloads its conversation.
+        if (msg.deleted || isSupersededMessage(msg)) continue;
+        validRows.push(msg);
+    }
+
+    validRows.sort((left, right) =>
+        compareMessageOrder(
+            { id: left.id, index: Number.isFinite(left.index) ? left.index : 0, order_key: left.order_key ?? '' },
+            { id: right.id, index: Number.isFinite(right.index) ? right.index : 0, order_key: right.order_key ?? '' }
+        )
+    );
+    // Pane seeds skip the controller's history reload. Reconcile their
+    // separate tool rows through the same canonical projection first.
+    const canonicalById = new Map(
+        projectTranscriptForOpenRouter(
+            storedMessagesToCanonicalTranscript(validRows)
+        ).map((message) => [message.id, message])
+    );
+    const result: MultiPaneMessage[] = [];
+    for (const row of validRows) {
+        const canonicalCalls = canonicalById.get(row.id)?.data?.tool_calls;
+        const storedCalls = new Map<string, Record<string, unknown>>();
+        const rawCalls: unknown = row.data?.tool_calls;
+        if (Array.isArray(rawCalls)) {
+            for (const rawCall of rawCalls as unknown[]) {
+                if (!rawCall || typeof rawCall !== 'object' || Array.isArray(rawCall)) continue;
+                const call = rawCall as Record<string, unknown>;
+                if (typeof call.id === 'string' && call.id) storedCalls.set(call.id, call);
+            }
+        }
+        // Keep presentation/plugin metadata by stable ID. Canonical result,
+        // error and status must override stale embedded execution fields.
+        const data = Array.isArray(canonicalCalls) && canonicalCalls.length
+            ? { ...row.data, tool_calls: canonicalCalls.map((call) => ({
+                ...(call.id ? storedCalls.get(call.id) : undefined),
+                ...call,
+            })) }
+            : row.data;
+        const content = deriveMessageContent({
+            content: row.content,
+            data,
+        });
+
+        result.push({
+            role: row.role as 'user' | 'assistant' | 'system' | 'tool',
+            content,
+            file_hashes: row.file_hashes,
+            id: row.id,
+            stream_id: row.stream_id ?? undefined,
+            pending: row.pending === true,
+            error: row.error ?? null,
+            data: data ?? undefined,
+            reasoning_text: data?.reasoning_text || null,
+            index: typeof row.index === 'number' ? row.index : null,
+            order_key: row.order_key ?? null,
+            created_at:
+                typeof row.created_at === 'number' ? row.created_at : null,
+        } as MultiPaneMessage);
+    }
+
+    // Dev-only diagnostics
+    if (import.meta.dev && skippedCount > 0) {
+        console.warn(
+            `[useMultiPane] Skipped ${skippedCount} invalid message(s) for thread ${id}`
+        );
+    }
+
+    return result;
 }
 
 let cachedPaneAppGetter: PaneAppGetter | null = null;
@@ -301,6 +307,7 @@ export function useMultiPane(
     );
     const hooks = useHooks();
     const threadLoadGenerations = new Map<string, number>();
+    let workspaceReadGeneration = 0;
     const closingPaneIds = new Set<string>();
     const pendingPaneCreations = ref(0);
 
@@ -351,6 +358,54 @@ export function useMultiPane(
     });
 
     const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
+
+    if (getCurrentScope() && typeof (globalThis as { window?: unknown }).window !== 'undefined' && !options.loadMessagesFor) {
+        // Observe only open conversations in the captured local workspace. Sync
+        // already delivers rows to Dexie; refreshing views needs no HTTP polling.
+        const workspaceRevision = ref(0);
+        let subscription: Subscription | undefined;
+        let revision = 0;
+        const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+            workspaceReadGeneration++;
+            revision++;
+            subscription?.unsubscribe();
+            for (const pane of panes.value) pane.messages = [];
+            workspaceRevision.value++;
+        });
+        const stopWatching = watch(
+            () => [workspaceRevision.value, ...panes.value.map(pane => `${pane.id}\0${pane.mode}\0${pane.threadId}`)],
+            () => {
+                subscription?.unsubscribe();
+                const generation = ++revision;
+                const db = getDb();
+                const ids = [...new Set(panes.value.filter(pane => pane.mode === 'chat' && pane.threadId).map(pane => pane.threadId))];
+                if (!ids.length) return;
+                subscription = liveQuery(() => Promise.all(ids.map(async id =>
+                    [id, await loadMessagesInDb(id, db)] as const
+                ))).subscribe({
+                    next: histories => {
+                        if (generation !== revision || getDb() !== db) return;
+                        const byId = new Map(histories);
+                        for (const pane of panes.value) {
+                            const messages = pane.mode === 'chat' ? byId.get(pane.threadId) : undefined;
+                            if (messages) pane.messages = markRaw(messages);
+                        }
+                    },
+                    error: error => {
+                        if (import.meta.dev) console.warn('[useMultiPane] History observation failed:', error);
+                    },
+                });
+            },
+            { immediate: true }
+        );
+        onScopeDispose(() => {
+            workspaceReadGeneration++;
+            revision++;
+            stopWatching();
+            stopWorkspace();
+            subscription?.unsubscribe();
+        });
+    }
 
     // -------- Width Management Functions --------
 
@@ -620,6 +675,7 @@ export function useMultiPane(
     async function setPaneThread(index: number, threadId: string) {
         const pane = panes.value[index];
         if (!pane) return;
+        const workspaceGeneration = workspaceReadGeneration;
         const loadGeneration =
             (threadLoadGenerations.get(pane.id) ?? 0) + 1;
         threadLoadGenerations.set(pane.id, loadGeneration);
@@ -647,7 +703,7 @@ export function useMultiPane(
         } catch {
             /* intentionally empty */
         }
-        if (threadLoadGenerations.get(pane.id) !== loadGeneration) return;
+        if (threadLoadGenerations.get(pane.id) !== loadGeneration || workspaceGeneration !== workspaceReadGeneration) return;
         if (requested === false) return; // veto
         // Clear association
         if (requested === '') {
@@ -677,6 +733,7 @@ export function useMultiPane(
         const loadedMessages = await loadMessagesFor(requested);
         if (
             threadLoadGenerations.get(pane.id) !== loadGeneration ||
+            workspaceGeneration !== workspaceReadGeneration ||
             pane.threadId !== requested ||
             !panes.value.includes(pane)
         ) {
@@ -785,10 +842,10 @@ export function useMultiPane(
         }
 
         panes.value.push(pane);
-        
+
         // Normalize widths after adding pane
         normalizeStoredWidths(panes.value.length);
-        
+
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
         setActive(newIndex);

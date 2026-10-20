@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { createApp, toWebHandler } from 'h3';
 import type { InstalledExtensionRecord } from '../../../../admin/extensions/types';
 
 const resolveSessionContextMock = vi.fn();
@@ -28,6 +29,9 @@ vi.mock('../../../../admin/plugins/workspace-plugin-store', () => ({
 
 vi.mock('../../../../admin/stores/registry', () => ({
     getWorkspaceSettingsStore: () => ({}) as any,
+}));
+vi.mock('../../../../utils/auth/is-ssr-auth-enabled', () => ({
+    isSsrAuthEnabled: () => true,
 }));
 
 function makeEvent(): H3Event {
@@ -63,6 +67,45 @@ describe('checkPluginAccess', () => {
         getEnabledPluginsMock.mockReset().mockResolvedValue([]);
         getPluginSettingsMock.mockReset().mockResolvedValue({});
         readPluginAccessPolicyMock.mockReset().mockReturnValue(null);
+    });
+
+    it('serves independent batched HTTP decisions with shared request reads', async () => {
+        listInstalledExtensionsMock.mockResolvedValue([
+            installedPlugin('plugin.one'), installedPlugin('plugin.two'),
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['plugin.one']);
+        const route = (await import('../../../../api/plugins/access.get')).default;
+        const request = toWebHandler(createApp().use(route));
+        const response = await request(new Request('http://fixture.test/api/plugins/access?pluginIds=plugin.one&pluginIds=plugin.two&pluginIds=plugin.one'));
+        expect(response.status).toBe(200);
+        expect(response.headers.get('cache-control')).toBe('no-store');
+        const body = await response.json();
+        expect(Object.keys(body.decisions)).toEqual(['plugin.one', 'plugin.two']);
+        expect(body.decisions['plugin.one'].allowed).toBe(true);
+        expect(body.decisions['plugin.two'].reasons).toContain('plugin-disabled');
+        expect(listInstalledExtensionsMock).toHaveBeenCalledTimes(1);
+        expect(getEnabledPluginsMock).toHaveBeenCalledTimes(1);
+        expect(getPluginSettingsMock).toHaveBeenCalledTimes(2);
+
+        // A new request must see policy changes; no cross-request auth cache.
+        getEnabledPluginsMock.mockResolvedValue([]);
+        const legacy = await request(new Request('http://fixture.test/api/plugins/access?pluginId=plugin.one'));
+        expect((await legacy.json()).reasons).toContain('plugin-disabled');
+        expect(listInstalledExtensionsMock).toHaveBeenCalledTimes(2);
+        const singleBatch = await request(new Request('http://fixture.test/api/plugins/access?pluginIds=plugin.one'));
+        expect((await singleBatch.json()).decisions['plugin.one'].allowed).toBe(false);
+    });
+
+    it.each([
+        '',
+        'pluginId=plugin.one&pluginIds=plugin.two',
+        Array.from({ length: 51 }, (_, i) => `pluginIds=plugin.${i}`).join('&'),
+    ])('rejects invalid or oversized access batches before provider work: %s', async query => {
+        const route = (await import('../../../../api/plugins/access.get')).default;
+        const response = await toWebHandler(createApp().use(route))(new Request(`http://fixture.test/api/plugins/access?${query}`));
+        expect(response.status).toBe(400);
+        expect(resolveSessionContextMock).not.toHaveBeenCalled();
+        expect(getPluginSettingsMock).not.toHaveBeenCalled();
     });
 
     it('does not apply extension enabled-list gating to non-extension plugin ids', async () => {

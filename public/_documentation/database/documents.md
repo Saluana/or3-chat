@@ -12,6 +12,12 @@ Moving an open document to Trash hides its selection toolbar and disables editin
 without an editor error. Restoring it re-enables editing and the selection toolbar
 with the saved content intact.
 
+Open editors observe their document in the workspace's local database. Incoming
+sync updates refresh a clean title and body without reopening; dirty buffers keep
+their existing conflict baseline. Open tab titles also follow stored renames.
+Autocomplete requires a usable user key or an authenticated instance-key path,
+and saved-content restoration never starts a suggestion request.
+
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 
 ---

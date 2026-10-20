@@ -438,10 +438,16 @@ const chat = shallowRef<ChatInstance>(
 );
 // Ensure history + background job reattachment on initial load
 void chat.value?.ensureHistorySynced?.();
+let deferredHistory: {
+    messages: ChatMessageType[];
+    replies: Map<string, string | undefined>;
+    threadId: string | undefined;
+} | undefined;
 
 watch(
     () => props.threadId,
     async (newId) => {
+        deferredHistory = undefined;
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
@@ -470,8 +476,28 @@ watch(
         if (!chat.value) return;
         // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
         if (chat.value.loading.value) {
+            const replies = new Map(chat.value.messages.value
+                .filter(message => message.role === 'assistant' && message.pending)
+                .map(message => [message.id, message.stream_id] as const));
+            const request = chat.value.requestState?.value;
+            if (request?.status === 'streaming') {
+                // Foreground replies live outside messages[], and pending is
+                // cleared on the first token rather than at stream completion.
+                replies.set(request.assistantMessageId, chat.value.streamId.value);
+            } else {
+                const tail = chat.value.tailAssistant?.value;
+                if (tail?.stream_id && tail.stream_id === chat.value.streamId.value) {
+                    replies.set(tail.id, tail.stream_id);
+                }
+            }
+            deferredHistory = {
+                threadId: props.threadId,
+                messages: mh || [],
+                replies,
+            };
             return;
         }
+        deferredHistory = undefined;
         // A reload may see admission before the job ID arrives. That view has
         // no tracker to settle its placeholder; accept the synced terminal row.
         // A stale snapshot missing an unfinished reply must never erase it.
@@ -481,6 +507,22 @@ watch(
         chat.value.replaceCanonicalHistory?.(mh || []);
     }
 );
+
+watch(() => chat.value.loading.value, loading => {
+    if (loading || !deferredHistory) return;
+    const deferred = deferredHistory;
+    deferredHistory = undefined;
+    // The final DB write can arrive before the local stream settles. Apply
+    // that saved history afterward only if it contains our completed reply.
+    const saved = new Map(deferred.messages.map(message => [message.id, message]));
+    if (deferred.threadId === props.threadId && deferred.replies.size
+        && [...deferred.replies].every(([id, streamId]) => {
+            const reply = saved.get(id);
+            return reply?.pending === false && (!streamId || reply.stream_id === streamId);
+        })) {
+        chat.value.replaceCanonicalHistory?.(deferred.messages);
+    }
+});
 
 // When a new thread id is created internally (first send), propagate upward once
 watch(

@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, accurate statistics, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
+                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, accurate statistics, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
                 },
                 {
                     "name": "prompts.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Offline-first synchronization, consistent snapshots, device-only KV admission, transactional cursor advancement, invalid-payload recovery, conflict resolution, and configured rate limits."
+                    "summary": "Offline-first synchronization, live local view refresh for incoming chats/documents, snapshots, cursor-complete subscription pages, shared foreground gateway subscriptions, polling volume and activity pauses, offline outbox retry preservation, outage backoff, and rate limits."
                 },
                 {
                     "name": "storage-layer.md",
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, tabs and quiet draft autosave, with refresh guards and scoped retry after interrupted storage."
+                    "summary": "Preserve durable sends, native admission, tool policy, live incoming history, tabs and quiet draft autosave, with stream-safe refresh guards and scoped retry after interrupted storage."
                 },
                 {
                     "name": "ai-preferences.md",
@@ -973,7 +973,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery."
+                    "summary": "Operator configuration, batched host access checks, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery."
                 },
                 {
                     "name": "admin-plugins.md",

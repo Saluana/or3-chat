@@ -30,6 +30,7 @@ interface DocState {
     pendingContentGeneration?: number;
     editorConflicts?: Map<string, EditorConflictDraft>;
     nextGeneration: number;
+    readGeneration?: number;
     flushPromise?: Promise<void>; // Track active flush operation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     debouncedSave?: any;
@@ -245,14 +246,25 @@ async function flushInDb(db: Or3DB, id: string) {
  * ```
  */
 export async function loadDocument(id: string, db = getDb()) {
+    return readDocument(id, db, false);
+}
+
+/** Refresh an open record without flashing its initial loading/saved status. */
+export async function refreshDocument(id: string, db = getDb()) {
+    return readDocument(id, db, true);
+}
+
+async function readDocument(id: string, db: Or3DB, background: boolean) {
     const st = ensure(id, db);
+    const previousStatus = st.status;
+    const readGeneration = st.readGeneration = (st.readGeneration ?? 0) + 1;
     const recordAtStart = st.record;
     const generationAtStart = st.nextGeneration;
     const hasPendingSave = () => st.pendingTitle !== undefined ||
         st.pendingContent !== undefined || !!st.flushPromise;
-    const canAcceptRead = () => st.record === recordAtStart &&
+    const canAcceptRead = () => st.readGeneration === readGeneration && st.record === recordAtStart &&
         st.nextGeneration === generationAtStart && !hasPendingSave();
-    if (!hasPendingSave()) st.status = 'loading';
+    if (!background && !hasPendingSave()) st.status = 'loading';
     try {
         const rec = await getDocumentInDb(db, id);
         // A read is not permission to acknowledge or rebase an unsaved edit.
@@ -260,7 +272,7 @@ export async function loadDocument(id: string, db = getDb()) {
         // or a new edit made while storage was being read.
         if (!canAcceptRead()) return st.record;
         st.record = rec || null;
-        st.status = rec ? 'idle' : 'unavailable';
+        st.status = rec ? (background && previousStatus === 'saved' ? 'saved' : 'idle') : 'unavailable';
         st.lastError = undefined;
     } catch (e) {
         if (!canAcceptRead()) return st.record;

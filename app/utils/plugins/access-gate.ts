@@ -12,6 +12,7 @@ import {
 interface GateState {
     decisions: Record<string, PluginGateDecision>;
     pending: Record<string, boolean>;
+    retryAt: Record<string, number>;
     scopeKey: string;
 }
 
@@ -26,11 +27,17 @@ const state: GateState =
     (g.__or3PluginGateState = reactive<GateState>({
         decisions: {},
         pending: {},
+        retryAt: {},
         scopeKey: '__init__',
     }));
 const gateListeners =
     g.__or3PluginGateListeners ??
     (g.__or3PluginGateListeners = new Set<() => void>());
+// Existing HMR state can predate the retry field.
+state.retryAt ??= {};
+const MAX_GATE_BATCH_SIZE = 50;
+const GATE_RETRY_COOLDOWN_MS = 10_000;
+let queuedBatch: { scopeKey: string; pluginIds: string[] } | null = null;
 
 function notifyGateChange(): void {
     for (const listener of [...gateListeners]) {
@@ -61,6 +68,7 @@ function buildScopeKey(): string {
 function resetDecisionCache(): void {
     state.decisions = {};
     state.pending = {};
+    state.retryAt = {};
     notifyGateChange();
 }
 
@@ -96,32 +104,51 @@ function getLocalDecision(policy?: PluginGatePolicy | null): PluginGateDecision 
     });
 }
 
-async function hydrateServerDecision(pluginId: string): Promise<void> {
+function hydrateServerDecision(pluginId: string): void {
     if (!shouldUseServerDecision()) return;
     if (getCachedSessionContext()?.authenticated !== true) return;
     if (state.pending[pluginId]) return;
+    if ((state.retryAt[pluginId] ?? 0) > Date.now()) return;
     const requestScopeKey = state.scopeKey;
 
     state.pending[pluginId] = true;
-    try {
-        const result = await $fetch<PluginGateDecision>('/api/plugins/access', {
-            query: { pluginId },
-            cache: 'no-store',
-        });
-        if (state.scopeKey !== requestScopeKey) {
-            return;
-        }
-        state.decisions[pluginId] = result;
-        notifyGateChange();
-    } catch {
-        // Keep local fallback decision when server endpoint is unavailable.
-    } finally {
-        if (state.scopeKey !== requestScopeKey) {
-            return;
-        }
-        state.pending[pluginId] = false;
-        notifyGateChange();
+    if (queuedBatch?.scopeKey === requestScopeKey && queuedBatch.pluginIds.length < MAX_GATE_BATCH_SIZE) {
+        queuedBatch.pluginIds.push(pluginId);
+        return;
     }
+    const batch = { scopeKey: requestScopeKey, pluginIds: [pluginId] };
+    queuedBatch = batch;
+    // Registries evaluate many distinct plugin gates in the same render. Join
+    // them before sending one bounded request; local decisions remain immediate.
+    void Promise.resolve().then(async () => {
+        if (queuedBatch === batch) queuedBatch = null;
+        if (state.scopeKey !== requestScopeKey) return;
+        try {
+            const result = await $fetch<{ decisions: Record<string, PluginGateDecision> }>('/api/plugins/access', {
+                query: { pluginIds: batch.pluginIds },
+                cache: 'no-store',
+                retry: 0,
+            });
+            if (state.scopeKey !== requestScopeKey) return;
+            for (const id of batch.pluginIds) {
+                if (Object.hasOwn(result.decisions, id)) {
+                    state.decisions[id] = result.decisions[id]!;
+                } else {
+                    state.retryAt[id] = Date.now() + GATE_RETRY_COOLDOWN_MS;
+                }
+            }
+        } catch {
+            if (state.scopeKey !== requestScopeKey) return;
+            for (const id of batch.pluginIds) {
+                state.retryAt[id] = Date.now() + GATE_RETRY_COOLDOWN_MS;
+            }
+        } finally {
+            if (state.scopeKey === requestScopeKey) {
+                for (const id of batch.pluginIds) state.pending[id] = false;
+                notifyGateChange();
+            }
+        }
+    });
 }
 
 function combineGateDecisions(
