@@ -2,7 +2,23 @@
 
 Authenticated Cloud selects `@or3/secrets@0.1.1` by default. The managed single-host Docker installer provisions a separate vault container automatically. Installing the npm package alone does **not** initialize or start a vault. The standard build launcher excludes vault access during prerender; custody is required at application runtime. Static/local BYOK deployments keep their existing browser credential flow.
 
-The vault uses Bun 1.3.14, encrypted SQLite and a local Unix socket. It has no replication. Automatic provisioning supports one persistent Docker host, including multiple Node workers sharing that host's socket. Stateless serverless instances and independent hosts cannot share this vault. Use an appropriate replacement provider or explicitly disable it; a platform's Node preset alone does not establish persistent custody. Source/development deployments must provision the service separately or explicitly opt out.
+The vault uses Bun 1.3.14, encrypted SQLite and a local Unix socket. It has no replication. Automatic provisioning supports one persistent Docker host, including multiple Node workers sharing that host's socket. Stateless serverless instances and independent hosts cannot share this vault. Use an appropriate replacement provider or explicitly disable it; a platform's Node preset alone does not establish persistent custody. Source launches offer local development provisioning, attachment to an existing service, or an explicit opt-out before Nuxt starts.
+
+## Source launch setup and upgrades
+
+After updating a source checkout, run `bun install`, then `bun run dev`. With authentication enabled and vault settings missing, an interactive launch prompts before Nuxt starts:
+
+1. Automatically create or reuse a **local development vault**.
+2. Manually attach an existing vault using its socket path, token file, namespace, initialized vault ID and numeric service UID.
+3. Explicitly use instance billing only, without personal keys, OAuth or remembered plugin secrets.
+
+`bun start` reaches the same development launcher. `bun run preview` also checks runtime custody. Configure ahead of time with `bun run setup:secrets`, or use `--auto`, `--manual` or `--disable`. With `--manual`, values already supplied through the environment or dotenv file can be verified without a terminal. Unattended launches never guess, initialize custody or silently opt out: incomplete settings stop with a setup command instead of a browser `invalid_configuration` error. Builds and type checks do not provision vaults. Explicit `bun run dev -- --or3-offline` bypasses the secret store for that launch without changing saved custody. Direct `nuxt dev` and direct `.output/server/index.mjs` execution bypass source setup; configure an external supervisor before launching them.
+
+Automatic setup runs the installed provider's initialization command, creates private custody in `.or3/secrets` and saves only connection settings in the selected dotenv file (normally `.env`). Existing comments and unrelated settings survive; changed files receive a private backup. The Unix socket lives in a short, private directory under the system temporary directory. The source launcher starts its owned service, verifies identity and token access, renews its seven-day service token at startup and daily, and stops the owned service when it exits. Keep one source launcher per local vault; use an independently supervised service for shared launches. Restart the whole source launcher after changing vault settings.
+
+Custody survives source updates and normal restarts. Existing `.env` credentials are **not imported**: instance keys and signing credentials retain their roles, while personal keys remain account-scoped. A second setup never replaces an existing master key, vault ID or database. An incomplete custody directory refuses regeneration. Preserve it and restore the matching key/configuration from backup. Manual attachment verifies the running service before saving any settings.
+
+The local vault runs as your OS user and is for macOS/Linux development. It does not provide the separate-user custody of managed Docker. Automatic initialization refuses `NODE_ENV=production`; production source deployments must attach a separately provisioned service. Installing the package remains distinct from provisioning a running vault. Back up the entire private custody directory securely; deleting it loses access to its saved credentials.
 
 ## Connect once
 

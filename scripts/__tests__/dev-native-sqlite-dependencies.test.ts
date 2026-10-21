@@ -146,6 +146,7 @@ describe('dev launcher runtime', () => {
                 OR3_CLOUD_SYNC_ENABLED: 'false', OR3_SQLITE_DRIVER: driver,
                 NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
                 OR3_LOCAL_PROVIDERS: 'false', NODE_OPTIONS: '',
+                NUXT_SECRETS_PROVIDER: args.includes('--or3-offline') ? 'or3-secrets' : '',
             },
         });
     }

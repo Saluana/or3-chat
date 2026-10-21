@@ -23,6 +23,8 @@
         "preview:static": "npx --yes serve .output/public -l 4173",
         "postinstall": "nuxt prepare",
         "setup": "tsx scripts/cli/or3-cloud.ts init",
+        "setup:secrets": "tsx scripts/cli/secrets.ts",
+        "test:e2e:source-secrets": "bun scripts/test/run-source-secrets-e2e.ts",
         "doctor": "tsx scripts/cli/or3-cloud.ts doctor",
         "docker:up": "docker compose -f compose.yaml up --build -d --wait --wait-timeout 120",
         "docker:up:public": "docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120",

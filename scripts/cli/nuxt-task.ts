@@ -9,6 +9,7 @@ import {
     execPackageCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import { nuxtRuntime } from '../../shared/dev/nuxt-runtime';
+import { prepareSourceSecrets } from '../../shared/dev/secrets';
 import { prepareConvexBackend } from '../../shared/dev/convex-backend';
 
 type Task = 'build' | 'generate-static' | 'type-check' | 'preview';
@@ -23,8 +24,14 @@ function run(
             stdio: 'inherit',
             env,
         });
-        child.once('error', rejectPromise);
+        const interrupt = () => { child.kill('SIGINT'); };
+        const terminate = () => { child.kill('SIGTERM'); };
+        const cleanup = () => { process.off('SIGINT', interrupt); process.off('SIGTERM', terminate); };
+        process.once('SIGINT', interrupt);
+        process.once('SIGTERM', terminate);
+        child.once('error', error => { cleanup(); rejectPromise(error); });
         child.once('exit', (code, signal) => {
+            cleanup();
             if (code === 0) {
                 resolvePromise();
             } else {
@@ -86,10 +93,16 @@ export async function runNuxtTask(
     const runtime = task === 'type-check'
         ? (process.versions.bun ? 'node' : process.execPath)
         : nuxtRuntime(taskEnv);
-    const startupEnv = task === 'preview'
-        ? await prepareConvexBackend(process.cwd(), taskEnv)
-        : taskEnv;
-    await run(runtime, [nuxtEntry, ...nuxtArgs], startupEnv);
+    const secrets = task === 'preview'
+        ? await prepareSourceSecrets(process.cwd(), taskEnv)
+        : undefined;
+    try {
+        const startupEnv = task === 'preview'
+            ? await prepareConvexBackend(process.cwd(), secrets!.env)
+            : taskEnv;
+        await run(runtime, [nuxtEntry, ...nuxtArgs], startupEnv);
+    }
+    finally { await secrets?.close(); }
 
     if (task === 'build' || task === 'generate-static') {
         const check = execPackageCommand(packageManager, [

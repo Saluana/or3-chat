@@ -50,6 +50,7 @@ export function buildCheatSheetLines(context: NextStepsContext = {}): string[] {
     ];
     if (context.ssrAuthEnabled) {
         lines.push(`Admin dashboard:  ${appUrl}/admin`);
+        lines.push(`Secret store:     first launch prompts for a local vault or manual attachment; ${packageManager} run setup:secrets to configure now`);
     }
     if (context.connectEnabled) {
         lines.push('Connect a computer: npx @or3/connect');
@@ -67,5 +68,5 @@ export function buildApplyOnlySuccessBody(
     const connectMessage = connectEnabled
         ? ' After OR3 is running publicly, connect a computer with npx @or3/connect.'
         : '';
-    return `Your .env and provider modules were written. Start the app with ${formatStartCommand(packageManager)} when you are ready.${connectMessage}`;
+    return `Your .env and provider modules were written. Start the app with ${formatStartCommand(packageManager)} when you are ready. Authenticated source launches prompt for secret-store setup in the terminal; run ${packageManager} run setup:secrets to configure it first.${connectMessage}`;
 }
