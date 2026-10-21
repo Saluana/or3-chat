@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createApp, toWebHandler } from 'h3';
 const fixture = vi.hoisted(() => ({ userId: 'account-a', saved: vi.fn(), fetch: vi.fn() }));
 vi.mock('#imports', () => ({ useRuntimeConfig: () => ({ auth: { enabled: true }, secrets: { provider: 'or3-secrets' }, security: { proxy: {}, allowedOrigins: [] } }) }));
-vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => ({ authenticated: true, user: { id: fixture.userId }, workspace: { id: 'workspace' } }) }));
+vi.mock('../../../auth/session', () => ({ resolveSessionContext: async () => ({ authenticated: true, provider: 'basic-auth', user: { id: fixture.userId }, workspace: { id: 'workspace' } }) }));
 vi.mock('../../../auth/can', () => ({ requireCan: () => {} }));
 vi.mock('../../../secrets/openrouter', () => ({ openRouterCredentialOperation: (...args: unknown[]) => fixture.saved(...args) }));
 import handler from '../oauth';
@@ -13,12 +13,29 @@ beforeEach(() => {
     vi.stubGlobal('fetch', fixture.fetch);
 });
 async function start() {
-    const response = await request(new Request('http://localhost/api/openrouter/oauth', { method: 'POST', headers: { host: 'localhost', origin: 'http://localhost', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' }));
+    const response = await request(new Request('http://localhost/api/openrouter/oauth', { method: 'POST', headers: { host: 'localhost', origin: 'http://localhost', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': JSON.stringify(['basic-auth', fixture.userId]) }, body: '{}' }));
     expect(response.status).toBe(200);
     const url = new URL((await response.json()).url);
     expect(url.origin).toBe('https://openrouter.ai');
     return { state: url.searchParams.get('state')!, cookie: response.headers.get('set-cookie')!.split(';')[0]! };
 }
+it.each([undefined, JSON.stringify(['basic-auth', 'other-account'])])('refuses OAuth initiation for a missing or stale tab account (%s)', async account => {
+    const response = await request(new Request('http://localhost/api/openrouter/oauth', { method: 'POST', headers: {
+        host: 'localhost', origin: 'http://localhost', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation',
+        ...(account ? { 'x-or3-account': account } : {}),
+    }, body: '{}' }));
+    expect(response.status).toBe(409);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(fixture.fetch).not.toHaveBeenCalled();
+});
+it('refuses an OAuth callback origin derived only from a Referer', async () => {
+    const response = await request(new Request('http://localhost/api/openrouter/oauth', { method: 'POST', headers: {
+        host: 'localhost', referer: 'http://localhost/', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation',
+        'x-or3-account': JSON.stringify(['basic-auth', fixture.userId]),
+    }, body: '{}' }));
+    expect(response.status).toBe(400);
+    expect(response.headers.get('set-cookie')).toBeNull();
+});
 it('exchanges and persists on the server, returning only a clean status redirect', async () => {
     const attempt = await start();
     const response = await request(new Request(`http://localhost/api/openrouter/oauth?code=one-use-code&state=${attempt.state}`, { headers: { host: 'localhost', cookie: attempt.cookie } }));

@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-const fixture = vi.hoisted(() => ({ config: { public: { ssrAuthEnabled: true } }, owner: 'account-a', status: { connected: false, persisted: false }, requests: [] as any[], rows: [] as any[], retained: [] as any[], fail: false }));
+const fixture = vi.hoisted(() => ({ config: { public: { ssrAuthEnabled: true } }, owner: 'account-a', status: { connected: false, persisted: false }, requests: [] as any[], rows: [] as any[], retained: [] as any[], fail: false, retainedUnavailable: false }));
 vi.mock('#imports', () => ({ useRuntimeConfig: () => fixture.config, useState: () => ({ value: { session: { authenticated: true, provider: 'basic-auth', user: { id: fixture.owner } } } }) }));
 vi.mock('~/db/client', () => ({ getWorkspaceGeneration: () => 0, getDb: () => {
     const table = { where: () => ({ equals: () => ({ first: async () => fixture.rows[0], toArray: async () => fixture.rows }) }), delete: async () => { fixture.rows = []; } };
@@ -10,7 +10,7 @@ vi.mock('~/db', () => ({ kv: { set: vi.fn(), delete: async () => { fixture.rows 
 vi.mock('dexie', () => ({ default: class {
     tables = [{ name: 'kv' }];
     static getDatabaseNames = async () => fixture.retained.length ? ['or3-db-retained'] : [];
-    open = async () => this; close() {}
+    open = async () => { if (fixture.retainedUnavailable) throw new Error('Retained browser database unavailable'); return this; }; close() {}
     table = () => ({ where: () => ({ equals: () => ({ first: async () => fixture.retained[0], toArray: async () => fixture.retained }) }), delete: async () => { fixture.retained = []; } });
     transaction = async (_mode: string, _table: unknown, callback: () => unknown) => callback();
 } }));
@@ -19,7 +19,8 @@ vi.mock('~/state/global', () => ({ state: memory }));
 let auth: typeof import('../useUserApiKey');
 beforeEach(async () => {
     vi.resetModules(); fixture.owner = 'account-a'; fixture.config.public.ssrAuthEnabled = true; memory.value.openrouterKey = null;
-    fixture.status = { connected: false, persisted: false }; fixture.requests = []; fixture.fail = false; fixture.retained = [];
+    fixture.status = { connected: false, persisted: false }; fixture.requests = []; fixture.fail = false; fixture.retained = []; fixture.retainedUnavailable = false;
+    localStorage.clear();
     fixture.rows = [{ id: 'key-row', name: 'openrouter_api_key', value: JSON.stringify({ owner: JSON.stringify(['basic-auth', 'account-a']), key: 'sk-or-v1-legacy-canary' }) }];
     vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
         const body = JSON.parse(init.body); fixture.requests.push(body);
@@ -27,6 +28,40 @@ beforeEach(async () => {
         return new Response(JSON.stringify(body.operation === 'status' ? fixture.status : { connected: true, persisted: true }));
     }));
     auth = await import('../useUserApiKey');
+});
+it.each(['before', 'during'])('does not restore connected state from a status read started %s disconnect', async timing => {
+    fixture.status = { connected: true, persisted: true };
+    await auth.refreshOpenRouterConnection();
+    let status!: (response: Response) => void;
+    let deleted!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => new Promise<Response>(resolve => {
+        if (JSON.parse(init.body).operation === 'status') status = resolve;
+        else deleted = resolve;
+    })));
+    let refresh: Promise<void>;
+    let disconnect: Promise<void>;
+    if (timing === 'before') { refresh = auth.refreshOpenRouterConnection(); disconnect = auth.disconnectOpenRouterConnection(); }
+    else { disconnect = auth.disconnectOpenRouterConnection(); refresh = auth.refreshOpenRouterConnection(); }
+    const observedRefresh = refresh.catch(() => undefined);
+    deleted(new Response(JSON.stringify({ connected: false, persisted: true })));
+    await disconnect;
+    status(new Response(JSON.stringify({ connected: true, persisted: true })));
+    await observedRefresh;
+    expect(auth.useUserApiKey().connected.value).toBe(false);
+});
+it('keeps a verified server save successful when retained storage is unavailable, and retries cleanup on reconnect', async () => {
+    fixture.retained = [...fixture.rows]; fixture.retainedUnavailable = true;
+    localStorage.setItem('openrouter_api_key', fixture.rows[0].value);
+    await expect(auth.persistUserApiKey('sk-or-v1-new-key-canary')).resolves.toBeUndefined();
+    expect(auth.useUserApiKey().connected.value).toBe(true);
+    expect(fixture.rows).toHaveLength(0);
+    expect(localStorage.getItem('openrouter_api_key')).toBeNull();
+    expect(fixture.retained).toHaveLength(1);
+    fixture.status = { connected: true, persisted: true };
+    await auth.refreshOpenRouterConnection();
+    fixture.retainedUnavailable = false;
+    await auth.refreshOpenRouterConnection();
+    expect(fixture.retained).toHaveLength(0);
 });
 it('does not hydrate Cloud keys and exposes only connection metadata', async () => {
     await auth.hydrateUserApiKeyFromKv();

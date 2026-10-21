@@ -15,8 +15,9 @@ let pendingConnection: { owner: string; promise: Promise<void> } | null = null;
 
 async function credentialRequest(operation: string, key?: string) {
     const owner = currentKeyOwner();
-    const generation = kvHydrationGeneration;
     if (owner === 'guest' || owner === 'local') throw new Error('Sign in to connect OpenRouter.');
+    // A mutation fences status reads both before it starts and while it runs.
+    const generation = operation === 'status' ? kvHydrationGeneration : ++kvHydrationGeneration;
     const response = await fetch('/api/openrouter/credentials', {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
         headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': owner },
@@ -25,7 +26,8 @@ async function credentialRequest(operation: string, key?: string) {
     if (!response.ok) throw new Error(response.status === 409 ? 'The server connection changed. Refresh and try again.' : 'OpenRouter credential storage is unavailable. Try again or contact the administrator.');
     const result = await response.json() as { connected?: unknown; persisted?: unknown };
     if (typeof result.connected !== 'boolean' || typeof result.persisted !== 'boolean') throw new Error('Invalid connection response.');
-    if (owner !== currentKeyOwner() || generation !== kvHydrationGeneration) throw new Error('The signed-in account changed.');
+    if (owner !== currentKeyOwner() || generation !== kvHydrationGeneration) throw new Error('The connection or signed-in account changed.');
+    if (operation !== 'status') ++kvHydrationGeneration;
     state.value.openrouterKey = null;
     cloudConnection.value = { owner, connected: result.connected };
     return { owner, connected: result.connected, persisted: result.persisted };
@@ -61,8 +63,9 @@ async function legacyKey(owner: string): Promise<string | null> {
 }
 
 /** Only called after persistence or an existing server tombstone has been verified. */
-async function discardLegacyKeys(owner: string): Promise<void> {
+async function discardLegacyKeys(owner: string): Promise<boolean> {
     const current = () => owner === currentKeyOwner();
+    let complete = true;
     const clean = async (db: Dexie) => {
         if (!hasKvTable(db)) return;
         const table = db.table<KvApiKeyRow, string>('kv');
@@ -71,17 +74,24 @@ async function discardLegacyKeys(owner: string): Promise<void> {
             for (const row of rows) if (current() && typeof row.value === 'string' && storedKey(row.value, owner) !== null) await table.delete(row.id);
         });
     };
-    const db = getDb();
-    await clean(db);
-    const names = await Dexie.getDatabaseNames();
-    await Promise.all(names.filter(name => (name === 'or3-db' || name.startsWith('or3-db-')) && name !== db.name).map(async name => {
-        const retained = new Dexie(name);
-        try { await retained.open(); await clean(retained); } finally { retained.close(); }
-    }));
+    let activeName: string | undefined;
+    try { const db = getDb(); activeName = db.name; await clean(db); }
+    catch { complete = false; }
+    try {
+        const names = await Dexie.getDatabaseNames();
+        await Promise.all(names.filter(name => (name === 'or3-db' || name.startsWith('or3-db-')) && name !== activeName).map(async name => {
+            const retained = new Dexie(name);
+            try { await retained.open(); await clean(retained); }
+            catch { complete = false; }
+            finally { retained.close(); }
+        }));
+    } catch { complete = false; }
     try {
         const value = localStorage.getItem('openrouter_api_key');
         if (current() && value && storedKey(value, owner) !== null) localStorage.removeItem('openrouter_api_key');
-    } catch { /* Cleanup on inaccessible browsers is best-effort; Cloud never hydrates these values. */ }
+    } catch { complete = false; }
+    // Inaccessible copies cannot invalidate a verified save. Retry on reconnect.
+    return complete && current();
 }
 
 export async function refreshOpenRouterConnection(): Promise<void> {
@@ -91,8 +101,7 @@ export async function refreshOpenRouterConnection(): Promise<void> {
     const promise = (async () => {
         const result = await credentialRequest('status');
         if (result.persisted && !cleanedOwners.has(owner)) {
-            await discardLegacyKeys(owner);
-            if (owner === currentKeyOwner()) cleanedOwners.add(owner);
+            if (await discardLegacyKeys(owner)) cleanedOwners.add(owner);
         }
     })().finally(() => { if (pendingConnection?.promise === promise) pendingConnection = null; });
     pendingConnection = { owner, promise };
@@ -172,7 +181,6 @@ export async function persistUserApiKey(key: string): Promise<void> {
         );
     }
     if (cloudMode()) {
-        ++kvHydrationGeneration;
         const result = await credentialRequest('save', trimmed);
         if (result.persisted) await discardLegacyKeys(result.owner);
         window.dispatchEvent(new CustomEvent('openrouter:connected'));

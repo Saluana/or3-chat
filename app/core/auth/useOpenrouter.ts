@@ -97,14 +97,18 @@ export function useOpenRouterAuth() {
         isLoggingIn.value = true;
         if (rc.public.ssrAuthEnabled === true) {
             try {
+                const session = sessionContext?.data.value?.session;
                 const response = await fetch('/api/openrouter/oauth', { method: 'POST', credentials: 'same-origin', redirect: 'error',
-                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
+                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': JSON.stringify([session?.provider, session?.user?.id]) }, body: '{}' });
                 if (!response.ok) throw new Error('OpenRouter connection is unavailable. Contact the administrator.');
                 const { url } = await response.json();
                 const destination = new URL(url);
                 if (destination.origin !== 'https://openrouter.ai') throw new Error('Invalid OpenRouter authorization URL.');
                 window.location.assign(destination.toString());
-            } catch (error) { isLoggingIn.value = false; throw error; }
+            } catch {
+                isLoggingIn.value = false;
+                toast.add({ title: 'OpenRouter connection unavailable', description: 'Refresh your session and try again, or contact the administrator.', color: 'error' });
+            }
             return;
         }
         const codeVerifier = Array.from(
@@ -185,7 +189,11 @@ export function useOpenRouterAuth() {
 
     const logoutOpenRouter = async () => {
         if (runtimeConfig.public.ssrAuthEnabled === true) {
-            await disconnectOpenRouterConnection();
+            try { await disconnectOpenRouterConnection(); }
+            catch {
+                toast.add({ title: 'OpenRouter disconnect failed', description: 'The server could not confirm removal. Try again or contact the administrator.', color: 'error' });
+                return;
+            }
         } else {
             // Invalidate memory before the IndexedDB delete settles.
             const cleared = disconnectOpenRouterConnection();

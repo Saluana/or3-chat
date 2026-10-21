@@ -58,3 +58,16 @@ The lifecycle script uses the actual published `@or3/cloud@0.1.90` and published
 - Application rollback preserves the live vault and revocations. Disaster recovery is an explicit fresh-key restore into new custody, with separately protected master-key recovery material; the managed app backup deliberately excludes that key.
 
 The complete repository-wide test suite and full release/publish gate were not run: this PR neither consumes a release version nor deploys production. Relevant checks above and repeatable local service evidence define the present validation boundary.
+
+## Review follow-up
+
+Reviewed the entire PR diff and connected authorization, billing, storage, plugin and deployment paths. Fixed these findings:
+
+- OAuth initiation now checks the tab's expected account, closing the same cookie/account-switch race already guarded by key writes. A missing browser Origin receives a deliberate 400 instead of an unhandled URL error.
+- The paste-key form clears entered bytes when dismissed or when the account changes, preventing a previous account's pending form from being submitted under the next account.
+- Credential mutations invalidate status reads started before or during them, so a delayed response cannot restore the connected UI after disconnect.
+- An inaccessible retained browser database no longer turns a verified server save into an apparent failure or prevents independent localStorage cleanup. Incomplete cleanup is retried on reconnect.
+- Failed Cloud connection/disconnection actions now show actionable errors without unhandled promises or a false success event.
+- The container custody harness records resource cleanup separately from temporary-directory cleanup and fails when cleanup is unverified. Its regression uses a fake Docker executable and never contacts the Docker engine.
+
+Each new regression was observed failing before its corresponding repair. The follow-up affected suite passed **492 tests, 1 skipped, across 27 files**. Initial sandbox-denied HTTP/IPC fixtures were rerun with local access and passed. Cloud CLI typecheck/build passed; its suite passed 241 tests with 4 skips, then the six sandbox-denied HTTP fixtures passed on a focused local-access rerun. The real Unix-vault Cloud browser scenario passed again (38.9 seconds), and all four static/local browser scenarios passed (27.2 seconds). The application typecheck, production-profile build, documentation check and diff check passed. Docker was left alone as requested; the prior final Docker/lifecycle rerun and interrupted-fixture cleanup remain blocked/unverified.

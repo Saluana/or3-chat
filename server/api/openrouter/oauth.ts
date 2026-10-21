@@ -20,11 +20,15 @@ export default defineEventHandler(async event => {
     if (event.method === 'POST') {
         requireCloudMutation(event);
         if (!session.authenticated || !session.user?.id || !session.workspace?.id) throw createError({ statusCode: 401 });
+        if (getHeader(event, 'x-or3-account') !== JSON.stringify([session.provider, session.user.id]))
+            throw createError({ statusCode: 409, statusMessage: 'The signed-in account changed. Refresh before trying again.' });
         requireCan(session, 'workspace.write', { kind: 'workspace', id: session.workspace.id });
         if (!useRuntimeConfig().secrets?.provider) throw createError({ statusCode: 503, statusMessage: 'OpenRouter credential storage unavailable.' });
         if (!await checkRateLimit(`openrouter-oauth:${session.user.id}`, { max: 10, window: 60 })) throw createError({ statusCode: 429 });
         // The origin has just passed the proxy-aware same-origin guard. Never accept a callback URL from the body.
-        const origin = new URL(getHeader(event, 'origin')!);
+        const originHeader = getHeader(event, 'origin');
+        if (!originHeader) throw createError({ statusCode: 400, statusMessage: 'A browser Origin is required.' });
+        const origin = new URL(originHeader);
         if (origin.protocol !== 'https:' && !local) throw createError({ statusCode: 400, statusMessage: 'HTTPS is required.' });
         const verifier = randomBytes(32).toString('base64url');
         const state = randomBytes(32).toString('base64url');

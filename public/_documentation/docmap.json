@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, account OpenRouter connections, billing policy, owner-safe browser migration, governed plugin AI, separate custody and encrypted recovery."
+                    "summary": "Default single-host vault, account-bound OpenRouter OAuth, billing policy, owner-safe browser migration and cleanup retries, governed plugin AI, separate custody and encrypted recovery."
                 }
             ]
         },

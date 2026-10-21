@@ -109,14 +109,16 @@ ENTRYPOINT ["/nodejs/bin/node","/app/vault/entrypoint.mjs"]
     record('Incomplete custody refuses startup without reinitializing');
     exitCode = 0;
 } finally {
-    for (const container of containers) docker(['rm', '-f', container], true);
-    for (const volume of volumes) docker(['volume', 'rm', volume], true);
-    docker(['image', 'rm', image], true);
+    let resourcesRemoved = true;
+    for (const container of containers) if (docker(['rm', '-f', container], true).code) resourcesRemoved = false;
+    for (const volume of volumes) if (docker(['volume', 'rm', volume], true).code) resourcesRemoved = false;
+    if (docker(['image', 'rm', image], true).code) resourcesRemoved = false;
+    if (!resourcesRemoved) exitCode = 1;
     await rm(dir, { recursive: true, force: true });
     await mkdir('test-results/cloud-vault', { recursive: true });
     await writeFile('test-results/cloud-vault/receipt.json', JSON.stringify({
         commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-        command: 'bun scripts/test/run-cloud-vault-e2e.ts', checks, exitCode, syntheticFixturesRemoved: true,
+        command: 'bun scripts/test/run-cloud-vault-e2e.ts', checks, exitCode, fixtureDirectoryRemoved: true, resourcesRemoved,
         profile: 'Pinned production distroless Node + Bun 1.3.14, single Docker host; no production qualification claim',
     }, null, 2));
 }
