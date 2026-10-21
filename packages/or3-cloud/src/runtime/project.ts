@@ -1,11 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Mode } from '../deployment/contracts';
-import { secretValues } from '../deployment/env';
+import { parseEnv, secretValues } from '../deployment/env';
 import { run } from './command-runner';
 import { assertRunningAppImage, assertSafeComposeBinding, compose, composeArgs } from './compose';
 import { waitForDeepHealth } from './health';
 
+export function managedVaultEnabled(directory: string, env?: Record<string, string>) {
+  const selected = env ?? parseEnv(readFileSync(join(directory, '.env'), 'utf8'));
+  return selected.SSR_AUTH_ENABLED === 'true' && (selected.NUXT_SECRETS_PROVIDER ?? 'or3-secrets') === 'or3-secrets'
+    && readFileSync(join(directory, 'compose.yaml'), 'utf8').includes('\n  or3-vault:\n');
+}
+
 export async function stopProject(directory: string, mode: Mode) {
-  await compose(directory, mode, ['stop', 'or3']);
+  await compose(directory, mode, ['stop', 'or3', ...(managedVaultEnabled(directory) ? ['or3-vault'] : [])]);
 }
 
 export async function projectServiceRunning(directory: string, mode: Mode) {

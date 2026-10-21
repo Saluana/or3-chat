@@ -58,7 +58,8 @@ describe('useOpenRouterAuth', () => {
         expect(sessionStorage.getItem('openrouter_code_verifier')).toBeNull();
     });
 
-    it('clears canonical reactive state before waiting for persisted-key deletion', async () => {
+    it('clears static canonical state before waiting for persisted-key deletion', async () => {
+        runtimeConfig.public.ssrAuthEnabled = false;
         let resolveDelete!: () => void;
         kvDelete.mockImplementation(
             () => new Promise<void>((resolve) => (resolveDelete = resolve))

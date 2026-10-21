@@ -28,7 +28,7 @@
 import { ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { clearPersistedUserApiKey } from './useUserApiKey';
+import { disconnectOpenRouterConnection } from './useUserApiKey';
 import { sha256Bytes } from '~~/shared/runtime-crypto';
 
 function base64urlencode(str: ArrayBuffer) {
@@ -95,6 +95,18 @@ export function useOpenRouterAuth() {
             }
         }
         isLoggingIn.value = true;
+        if (rc.public.ssrAuthEnabled === true) {
+            try {
+                const response = await fetch('/api/openrouter/oauth', { method: 'POST', credentials: 'same-origin', redirect: 'error',
+                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
+                if (!response.ok) throw new Error('OpenRouter connection is unavailable. Contact the administrator.');
+                const { url } = await response.json();
+                const destination = new URL(url);
+                if (destination.origin !== 'https://openrouter.ai') throw new Error('Invalid OpenRouter authorization URL.');
+                window.location.assign(destination.toString());
+            } catch (error) { isLoggingIn.value = false; throw error; }
+            return;
+        }
         const codeVerifier = Array.from(
             crypto.getRandomValues(new Uint8Array(64))
         )
@@ -172,27 +184,15 @@ export function useOpenRouterAuth() {
     };
 
     const logoutOpenRouter = async () => {
-        // Clear the canonical reactive state before awaiting IndexedDB so a
-        // slow storage operation can never leave a usable in-memory key.
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('openrouter_api_key');
+        if (runtimeConfig.public.ssrAuthEnabled === true) {
+            await disconnectOpenRouterConnection();
+        } else {
+            // Invalidate memory before the IndexedDB delete settles.
+            const cleared = disconnectOpenRouterConnection();
+            try { localStorage.removeItem('openrouter_api_key'); } catch { /* Storage unavailable. */ }
+            try { await cleared; } catch { /* Memory is already cleared. */ }
         }
-        try {
-            await clearPersistedUserApiKey();
-        } catch {
-            // Keep logout responsive even if IndexedDB is unavailable. The
-            // in-memory state was already cleared by the helper.
-        }
-        try {
-            // Notify UI listeners (Sidebar, etc.) to recompute state
-            try {
-                window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            } catch {
-                // Event dispatch may fail in SSR - non-critical
-            }
-        } catch (e) {
-            console.error('OpenRouter logout failed', e);
-        }
+        try { window.dispatchEvent(new CustomEvent('openrouter:connected')); } catch { /* SSR. */ }
     };
 
     return { startLogin, logoutOpenRouter, isLoggingIn };

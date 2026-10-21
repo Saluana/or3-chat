@@ -70,7 +70,7 @@
 import { useToast } from '#imports';
 import { reportError, err } from '~/utils/errors';
 import { exchangeOpenRouterCode } from '~/core/auth/openrouter-auth';
-import { persistUserApiKey } from '~/core/auth/useUserApiKey';
+import { persistUserApiKey, refreshOpenRouterConnection } from '~/core/auth/useUserApiKey';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 
 const route = useRoute();
@@ -181,7 +181,18 @@ async function goHome() {
 }
 
 onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    if (useRuntimeConfig().public.ssrAuthEnabled === true) {
+        try {
+            if (route.query.connection !== 'connected') throw new Error('Connection failed');
+            await refreshOpenRouterConnection();
+            loading.value = false; ready.value = true;
+            await router.replace('/');
+        } catch {
+            loading.value = false; ready.value = true;
+            errorMessage.value = 'The connection could not be saved. Start the connection again or contact the administrator.';
+        }
+        return;
+    }
     document.addEventListener('securitypolicyviolation', onSecurityPolicyViolation);
     const code =
         route.query.code ||

@@ -109,6 +109,7 @@ export async function exchangeOpenRouterCode(
     const runtimeConfig = useRuntimeConfig() as {
         public?: { openRouter?: { baseUrl?: string } };
     };
+    if (useRuntimeConfig().public.ssrAuthEnabled === true) return { ok: false, status: 403, reason: 'bad-response', errorCode: 'ERR_AUTH' };
     try {
         const { createOpenRouterClient } = await import('~~/shared/openrouter/client');
         const client = createOpenRouterClient({

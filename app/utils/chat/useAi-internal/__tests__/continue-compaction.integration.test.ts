@@ -39,7 +39,7 @@ async function prepare(owner: string, target: string, cancelDuringRead = false) 
     const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
         threadIdRef: ref(owner), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
         streamAcc: accumulator, streamState: accumulator.state, hooks: { applyFilters: async (_name, value) => value },
-        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
         useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn() };
     const cancel = (value: unknown) => { if (cancelDuringRead) request.cancelled = true; return value; };
     const before = await db.messages.toArray();

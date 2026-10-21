@@ -42,7 +42,7 @@ vi.mock('#imports', async load => ({
     useHooks: (await import('~/core/hooks/useHooks')).useHooks,
 }));
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), favoriteModels: ref([]) }) }));
-vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: ref('fixture') }) }));
+vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: ref('fixture'), connected: ref(false) }) }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({ data: ref(null) }),
     getCachedSessionContext: () => session.current,
@@ -167,6 +167,21 @@ const write = (kind: 'message' | 'image') => kind === 'message'
     : bridge.executionPorts.persistGeneratedImage('execution', png);
 
 describe('workflow host write authorization', () => {
+    it('refuses Cloud raw SDK disclosure and sends completion through authenticated host admission', async () => {
+        authenticate('editor');
+        const fetcher = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ ok: true, result: { text: 'hello', model: 'fixture/model' } })));
+        vi.stubGlobal('fetch', fetcher);
+        const services = createTrustedRuntimeServices({ db, pluginId: 'fixture', activationId: 'activation-fixture',
+            allow() {}, current: () => true, cleanup() {} });
+        expect(await services.ai.provider()).toMatchObject({ ok: false, error: { code: 'unsupported' } });
+        expect(fetcher).not.toHaveBeenCalled();
+        expect(await services.ai.complete({ model: 'fixture/model', prompt: 'hello' })).toMatchObject({ ok: true, value: { text: 'hello' } });
+        expect(fetcher).toHaveBeenCalledWith('/api/plugins/isolation/capability', expect.objectContaining({ redirect: 'error', credentials: 'same-origin' }));
+        const request = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
+        expect(request).toMatchObject({ activationId: 'activation-fixture', method: 'ai.complete', params: { model: 'fixture/model', prompt: 'hello' } });
+        expect(request.apiKey).toBeUndefined();
+    });
+
     it.each(['missing', 'project', 'deleted', 'ordinary', 'moved', 'revoked'] as const)('fences model and caption dispatch against their originating message (%s)', async kind => {
         const origin = { threadId: kind === 'project' ? 'foreign' : 'ordinary', messageId: 'execution', streamId: 'run' };
         await db.messages.put(message({ thread_id: origin.threadId, deleted: kind === 'deleted' }));
@@ -174,6 +189,11 @@ describe('workflow host write authorization', () => {
         // Passing a second argument exercises the package/host contract without
         // replacing the real authorization, ownership or message readers.
         const configuration = Reflect.apply(bridge.executionPorts.createOpenRouterClient, null, ['fixture', kind === 'missing' ? undefined : origin]);
+        if (kind === 'revoked') {
+            await expect(configuration).rejects.toThrow(/Cloud credentials/);
+            expect(inference.send).not.toHaveBeenCalled();
+            return;
+        }
         if (kind === 'project' || kind === 'deleted') {
             await expect(configuration).rejects.toThrow();
             expect(inference.send).not.toHaveBeenCalled();
@@ -181,16 +201,8 @@ describe('workflow host write authorization', () => {
         }
         const config = await configuration;
         if (kind === 'moved') await db.threads.update('ordinary', { project_id: 'project' });
-        if (kind === 'revoked') session.current = { ...session.current!, authorizationRevision: 2 };
         const model = () => config.client.chat.send({ chatRequest: { model: 'model', messages: [], stream: false } });
         const caption = () => {
-            if (kind === 'revoked') {
-                const get = db.messages.get.bind(db.messages);
-                vi.spyOn(db.messages, 'get').mockImplementation((...args: Parameters<typeof get>) => {
-                    session.current = { ...session.current!, authorizationRevision: 3 };
-                    return get(...args);
-                });
-            }
             return bridge.sendPorts.completeCaption({ modelId: 'model', apiKey: 'fixture', imageUrls: [png], ...(kind === 'missing' ? {} : { origin }) });
         };
         if (kind === 'ordinary') {
@@ -255,7 +267,7 @@ describe('workflow host write authorization', () => {
         const original = message();
         await db.messages.put(original);
         authenticate('viewer');
-        await expect(write(kind)).rejects.toThrow(/read-only/i);
+        await expect(write(kind)).rejects.toThrow(kind === 'image' ? /Cloud credentials/ : /read-only/i);
         expect(await db.messages.get(original.id)).toEqual(original);
         expect(await db.file_meta.count()).toBe(0);
     });
@@ -265,14 +277,21 @@ describe('workflow host write authorization', () => {
         await db.messages.put(original);
         authenticate('editor');
         beforeMessageTransaction(() => { session.current = { ...session.current!, role: 'viewer', authorizationRevision: 2 }; });
-        await expect(write(kind)).rejects.toThrow(/access changed/i);
+        await expect(write(kind)).rejects.toThrow(kind === 'image' ? /Cloud credentials/ : /access changed/i);
         expect(await db.messages.get(original.id)).toEqual(original);
         expect((await db.file_meta.toArray()).every(meta => meta.ref_count === 0)).toBe(true);
     });
 
-    it.each(['message', 'image'] as const)('allows an unchanged editor %s write', async kind => {
+    it.each(['message', 'image'] as const)('applies the Cloud compatibility boundary to an editor %s write', async kind => {
         await db.messages.put(message());
         authenticate('editor');
+        if (kind === 'image') {
+            // The legacy caption adapter requires a raw SDK client. Cloud now
+            // refuses it explicitly before generating or persisting an image.
+            await expect(write(kind)).rejects.toThrow(/Cloud credentials/);
+            expect(await db.file_meta.count()).toBe(0);
+            return;
+        }
         await write(kind);
         const result = await db.messages.get('execution');
         if (kind === 'message') expect(result?.pending).toBe(false);

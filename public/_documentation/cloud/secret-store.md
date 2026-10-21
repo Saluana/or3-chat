@@ -1,43 +1,60 @@
-# Optional secret store
+# Cloud credentials and the secret store
 
-`@or3/secrets@0.1.1` supplies an optional private Unix-socket vault for remembered secrets in reviewed, package-backed trusted plugins. The service runs on Bun 1.3.14; OR3 uses a Node 24 client. It has no independent security audit or FIPS validation. Qualify the release and deployment security profile before using real credentials.
+Authenticated Cloud selects `@or3/secrets@0.1.1` by default. The managed single-host Docker installer provisions a separate vault container automatically. Installing the npm package alone does **not** initialize or start a vault. The standard build launcher excludes vault access during prerender; custody is required at application runtime. Static/local BYOK deployments keep their existing browser credential flow.
 
-This checkout includes `@or3/secrets@0.1.1` and registers its Nuxt module through `or3.providers.generated.json` for Cloud/SSR mode. Select it with the private runtime settings below; installing the package alone does not start a vault or enable persistent storage.
+The vault uses Bun 1.3.14, encrypted SQLite and a local Unix socket. It has no replication. Automatic provisioning supports one persistent Docker host, including multiple Node workers sharing that host's socket. Stateless serverless instances and independent hosts cannot share this vault. Use an appropriate replacement provider or explicitly disable it; a platform's Node preset alone does not establish persistent custody. Source/development deployments must provision the service separately or explicitly opt out.
 
-For another Nuxt host, install `bun add --exact @or3/secrets@0.1.1` and add `@or3/secrets/nuxt` to `modules`:
+## Connect once
 
-```ts
-export default defineNuxtConfig({
-  modules: ['@or3/secrets/nuxt'],
-  runtimeConfig: { secrets: {
-    provider: 'or3-secrets', namespace: 'deployment',
-    socketPath: '/run/or3-secrets/api.sock',
-    tokenFile: '/run/or3/credentials/secrets.token',
-    vaultId: 'REPLACE_WITH_INITIALIZATION_VAULT_ID',
-  } },
-});
-```
+After signing in, paste an OpenRouter key or connect through OAuth. Cloud stores it under the authenticated internal user ID, with reserved account scope `@account` / `@or3.openrouter`. Workspace write authorization is still required for use. The same account can use it across authorized workspaces and devices; another account cannot inherit it. Connection/status APIs return only `connected` and `persisted` booleans. OAuth PKCE is in an account-bound HttpOnly transaction cookie; exchange and storage happen on the server. The callback receives status only.
 
-Runtime environment overrides are `NUXT_SECRETS_PROVIDER`, `NUXT_SECRETS_NAMESPACE`, `NUXT_SECRETS_SOCKET_PATH`, `NUXT_SECRETS_TOKEN_FILE` and `NUXT_SECRETS_VAULT_ID`. These hold paths and vault identity, never raw credentials or the master key. None belongs in `runtimeConfig.public`. Session bootstrap advertises only a selection boolean. A selected missing/invalid provider fails closed; static generation and `ssr: false` skip the module.
+One server policy selects credentials for chat, background chat, memory classification, model catalogs, governed plugin completion and trusted workflow preparation:
 
-Provision a dedicated vault UID distinct from OR3. The service exclusively owns its `0700` vault/key directories and `0600` database, key and operator files. OR3 receives only a scoped expiring service-token file in its own private credential directory and permission to connect to a deliberately shared `0750` socket directory/`0660` socket. Do not mount the database or master key into OR3. Use `serve --socket-group NUMERIC_GID` after provisioning matching directory/group ownership. Namespace-bound OR3 tokens need `metadata,read,write,delete`; restrict owner/workspace/consumer further when suitable. Maintain separate operator/audit credentials, external MFA-protected administration, monitoring and recovery-key custody.
+- `requireUserKey: true`: use the user's key, regardless of override configuration; absence never bills the instance.
+- Otherwise, `allowUserOverride: true`: prefer the user's key, then the instance key when no user record is available.
+- `allowUserOverride: false`: use the configured instance key.
 
-`host.secrets.set(key,value,{persistence:'session'})` stays in activation memory and clears on disposal. Default/`remember` writes use the selected provider. OR3 validates the current session, internal user ID, workspace write permission, exact selected trusted package, sealed live activation and current approved `secrets.read/write/use` grant. It constructs namespace/owner/workspace/plugin scope server-side and uses one compare-and-set attempt. Refs report actual revisions; reads after a context change are discarded. A request already admitted to the service can commit during teardown; it never delivers a stale result into a replacement context. Activation handles expire after 30 minutes or host restart; restart the plugin to obtain new authority after expiry.
+A selected vault outage fails closed whenever selection needs a personal key. Cloud ignores browser credential headers and has no direct-browser inference fallback. Instance calls retain existing rate, concurrency and usage limits; governed plugin calls retain their existing budgets. Background jobs retain their existing encrypted execution custody and authorization; the vault is not a new job scheduler.
 
-`secrets.read` gives trusted code plaintext. `secrets.write` permits set/delete, and `secrets.use` permits refs/unlock availability probes. Unlock reports availability; it does not fetch a master key into the browser. Missing provider, invalid identity, service outage, wrong vault and unsupported activations return errors without falling back to browser storage. The host and vault correlate request/acting-user/hashed-activation fields; these are application assertions, not human MFA or proof of individual operator identity.
+## Existing browser keys
 
-The browser refuses redirects for secret requests. OR3 limits this route to 60 requests per minute per internal user across all plugins and 16 concurrent package/vault operations per process. Saturation returns `429` with `Retry-After`; mutations are never automatically retried. Keep normal HTTP upload/time limits at the host ingress. Client/provider filesystem paths must be absolute and normalized, without symlinks or `.`/`..` components.
+Cloud never hydrates a legacy browser key into usable application state. On sign-in/reconnect, it offers a one-time import only for a legacy key tagged with the **same provider and internal account ID**. Unowned older values cannot prove ownership and require explicit re-entry. Declining or failing import preserves the source; it cannot be used directly by new Cloud code.
 
-Vault startup reconciles authenticated audit mutations against current secret revisions/tombstones, token issuance/revocation and the wrapping count, rejecting selective replay or removal of otherwise valid database rows. Independently retained audit receipts remain necessary to detect a complete consistent rollback. Early unpublished vault fixtures without this evidence must be recreated in new disposable directories; there is no automatic migration or overwrite.
+Credential requests include the tab's expected account, which the server checks against its session cookie before accessing storage. A stale tab cannot import into a newly signed-in account. Import uses compare-and-set and removes owned browser copies only after server persistence is verified. A saved/deleted account record prevents another device from re-importing stale credentials. Reconnecting devices discard their matching copies; clearing offline or inaccessible devices is best-effort. No credentials enter session payloads, workspace synchronization or Cloud workspace exports. Device-local plugin values are not automatically imported. Explicit workspace cache deletion policies still apply independently.
 
-Selecting the provider does not import/delete old localStorage secrets or Dexie OpenRouter keys. Old remembered plugin values require explicit re-entry. Connection, webhook, Connect and background-job credential storage remains under its existing owners. With no provider selected, existing device-local remembered-plugin behavior remains. No automatic migration is performed.
+## Managed single-host custody
 
-Use the package's `docs/operations.md` for exact stdin/private output commands, credential renewal/revocation, bounded audit collection, stopped-vault encrypted backup and fresh-key restore/rekey. Recovery revokes every copied credential, preserves revisions and requires newly issued consumers. Retain independent audit receipts and old backup keys separately. Process-crash and disk-full tests do not qualify power-loss durability or your deployment's RPO/RTO.
+The release image contains both runtimes, but they run in separate containers:
 
-For CLI setup, use `or3-secrets --help`, `put --help`, or `help token issue`: each command lists required flags and a complete example. Terminal errors identify missing options and give a next step without echoing supplied values; scripts receive `{error:{code,message,hint}}` on stderr. Existing output files return `output_exists` (exit 64) and are preserved. Use a new private output path; plaintext still requires `get --stdout` or `get --out-file`, and values enter through stdin.
+| Container | Identity / mounts |
+| --- | --- |
+| OR3 application | UID/GID 65532; app data plus read-only socket and service-token volumes |
+| Vault | Confined root supervisor; actual service/CLI UID 1000, socket group 65532; private data and master/operator volumes; no network |
 
-Ctrl-C or SIGTERM stops the foreground vault service gracefully. Successful cleanup closes the vault, removes its socket and exits 0; failures retain a nonzero status.
+The application never receives the database, master key or operator token. The supervisor initializes only completely empty custody, verifies ownership, starts the service and issues a namespace-scoped service token with `metadata,read,write,delete`. Tokens last seven days and renew at startup and daily. Token files are atomically replaced; renewal failure stops the vault. Namespace-wide application authority is deliberate: OR3 enforces user/workspace/plugin grants, while the vault enforces exact supplied scopes.
 
-The reviewed client pins the socket service UID through private `NUXT_SECRETS_SERVICE_UID` (or Node `serviceUid` / CLI `--service-uid`). It defaults to the client UID, so a separate service account needs its explicit numeric UID and a service-owned run directory. Foreign-owned leaf sockets are refused before credential transmission.
+Compose waits for vault readiness before starting OR3. Deep health/`doctor` probes selected vault availability; ordinary liveness does not. Volumes persist through upgrades/restarts. An incomplete initialization, wrong ownership, missing master key or different vault identity refuses startup. **Never delete custody volumes or generate a replacement key to repair an existing vault.**
 
-Full SQLite index/table integrity is checked at admission. Invalid credentials are refused before acquiring a slow-body slot, and audit-reader limits cover all audit-producing routes. Live work stops before the 960 MiB high-water mark, reserving space below the 1 GiB encrypted backup ceiling. Offline row-wise rekey can rotate oversized sources; an inventory that remains oversized stays unavailable until a reviewed capacity change. Backup outputs and recovery custody artifacts must stay outside managed vaults; raw backup staging stays on live custody storage. The compatible host commit is declared by the provider package's `host-compatibility.json`.
+## Configuration and explicit opt-out
+
+The private Nuxt settings are `NUXT_SECRETS_PROVIDER`, `NUXT_SECRETS_NAMESPACE`, `NUXT_SECRETS_SOCKET_PATH`, `NUXT_SECRETS_TOKEN_FILE`, `NUXT_SECRETS_VAULT_ID`, and `NUXT_SECRETS_SERVICE_UID`. They contain selection, paths and identity, never the master key. The module is registered automatically for authenticated Cloud. A missing selected provider fails startup; unavailable storage returns sanitized errors.
+
+Managed defaults are namespace `or3`, socket `/run/or3-secrets/api.sock`, token `/run/or3-secrets-client/service.token`, service UID `1000`; a private generated metadata file supplies the vault ID. External supervisors must configure all these values and persist custody securely. A separately provisioned vault requires service-owned `0700` data/key directories, `0600` files, a `0750` shared socket directory and `0660` socket; pin its numeric service UID.
+
+Set `NUXT_SECRETS_PROVIDER=` explicitly to disable it. Stop the managed deployment before changing this setting, then use `start` to apply saved configuration; `restart` alone retains the existing container environment. The managed CLI omits the vault profile. Cloud then supports instance billing only; user-key saves, OAuth and remembered plugin secrets fail closed. There is no browser-storage downgrade. An administrator may register/select a different `ServerSecretStore` using the existing provider contract. Replacing a provider does not automatically move its data.
+
+## Plugin boundary
+
+Reviewed trusted plugins use existing `context.secrets.set/get/delete/ref` methods for **their own** namespace/user/workspace/plugin scope. Session-only secrets remain activation memory. Server routes enforce the selected package, approved grants, sealed live activation, owner and workspace before/after operations; revoked, stale or expired activations fail. `secrets.read` deliberately delivers that plugin's plaintext to trusted code. Portable/isolated runtimes retain their current unsupported private-secret behavior; no shared OpenRouter-key lookup is added.
+
+Cloud `context.ai.complete()` uses existing governed server admission. Trusted packages require `ai.provider`; portable packages retain `network.http`. No raw credential is returned. Cloud browser `context.ai.provider()` explicitly returns `unsupported`; use completion or a suitable host action. Static trusted SDK access remains compatible. Arbitrary trusted-host code is **not sandboxed**: it runs with substantial host privileges, including access to its own secrets. Approved trusted server workflow adapters retain server-side SDK/raw-key compatibility, prepare credentials through the central policy, require a live authorized origin per request and cannot select a different billing key through the adapter.
+
+## Backup and recovery
+
+Managed backup/update stops the application and vault, captures the app archive plus an **encrypted** `vault.backup`, verifies its SHA-256 in the authenticated manifest, then restarts when appropriate. Export includes that encrypted artifact. Master/operator files are deliberately excluded. Keep separately protected, independently recoverable copies of the master key and audit receipts; an app backup without the matching key cannot recover credentials. Account for vault backup bytes when planning disk capacity.
+
+Application rollback/restore preserves the live vault and its newer revocations; it does not replay old upstream credentials. Rollback to an older release may stop using the vault, but its volumes and encrypted backups remain. To recover a lost vault, stop admission and follow the package's [operations procedure](https://github.com/Saluana/or3-secrets/blob/main/docs/operations.md): restore the verified encrypted backup with its separately held old key into **new empty custody**, generate a fresh key/operator token with `restore`, then provision fresh application tokens. Restore revokes copied credentials and preserves secret revisions. Never restore over the source or automatically initialize over damaged custody. Reattach the explicitly recovered volumes only after verifying identity and records; retain the source for investigation.
+
+`bun scripts/test/run-cloud-vault-e2e.ts` repeats initialization, UID/mount isolation, scoped access, crash restart, outage, encrypted backup, fresh-key recovery and partial-custody refusal with disposable containers. `bun scripts/test/run-cloud-credentials-e2e.ts` exercises real-service browser migration and second-device cleanup. Receipts are under `test-results/`.
+
+This integration is not independent production qualification. The pinned vault runtime still requires the provider's advisory review, independent security review, target-host power-loss/durability qualification and measured recovery objectives. No FIPS validation is claimed. See the provider's operations/security documents before importing real credentials.

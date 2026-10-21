@@ -264,6 +264,8 @@ describe('normalized application plan', () => {
         expect(ready.ok).toBe(true);
         if (ready.ok) {
             expect(ready.plan.runtimeConfig.auth.enabled).toBe(true);
+            // Nitro freezes shared runtime config: defaults must be concrete.
+            expect(ready.plan.runtimeConfig.secrets.provider).toBe('or3-secrets');
             expect(ready.plan.runtimeConfig.sync.enabled).toBe(false);
             expect(ready.plan.modules).toContain('/fixture/sqlite.mjs');
         }
@@ -283,6 +285,7 @@ describe('normalized application plan', () => {
         if (result.ok) {
             expect(result.plan.modules).toEqual([]);
             expect(result.plan.runtimeConfig.public.ssrAuthEnabled).toBe(false);
+            expect(result.plan.runtimeConfig.secrets.provider).toBe('');
             expect(
                 JSON.stringify(result.plan.runtimeConfig.public),
             ).not.toContain('private-sentinel');

@@ -652,7 +652,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
     });
 
     it.each(['workflow:background', 'workflow:hitl'] as const)('reserves %s before package work without counting its completion twice', async (rateKey) => {
-        vi.stubGlobal('useRuntimeConfig', () => ({ limits: { operationRateLimits: { [rateKey]: { maxRequests: 2 } } } }));
+        vi.stubGlobal('useRuntimeConfig', () => ({ auth: { enabled: true }, secrets: { provider: '' }, openrouterAllowUserOverride: false, limits: { operationRateLimits: { [rateKey]: { maxRequests: 2 } } } }));
         let release!: () => void;
         const work = new Promise<void>((resolve) => { release = resolve; });
         let entered = 0;
@@ -676,7 +676,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
     });
 
     it('does not count a workflow package completion callback twice', async () => {
-        vi.stubGlobal('useRuntimeConfig', () => ({ limits: { operationRateLimits: { 'workflow:background': { maxRequests: 2 } } } }));
+        vi.stubGlobal('useRuntimeConfig', () => ({ auth: { enabled: true }, secrets: { provider: '' }, openrouterAllowUserOverride: false, limits: { operationRateLimits: { 'workflow:background': { maxRequests: 2 } } } }));
         const send = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async (event) => {
             const bridge = createTrustedPluginServerServices(event, new Set(['jobs.background', 'ai.provider', 'tools.use']));
             const session = await bridge.authorize(event, 'workflow:background');

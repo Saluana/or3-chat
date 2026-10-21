@@ -71,7 +71,7 @@ test('credentials reset rotates both credentials, restarts, verifies, and leaves
   // Reset, then a clean restart, then credential verification against the restarted app.
   const sequence = calls.map((args) => args.join(' '));
   const reset = sequence.findIndex((call) => call.includes('basic_auth_accounts'));
-  const stopped = sequence.findIndex((call, index) => index > reset && / stop or3$/.test(call));
+  const stopped = sequence.findIndex((call, index) => index > reset && / stop or3(?: or3-vault)?$/.test(call));
   const started = sequence.findIndex((call, index) => index > stopped && / up -d/.test(call));
   const verified = sequence.findIndex((call, index) => index > started && call.includes('Credential verification failed'));
   expect(reset).toBeGreaterThan(-1);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 
@@ -50,6 +51,16 @@ const adminJwtSecret = firstDefined(
     env.OR3_BASIC_AUTH_JWT_SECRET && createHash('sha256').update(`or3-admin:${env.OR3_BASIC_AUTH_JWT_SECRET}`).digest('hex')
 );
 const adminJwtExpiry = firstDefined(env.OR3_ADMIN_JWT_EXPIRY, '24h');
+
+setDefault('NUXT_SECRETS_PROVIDER', authEnabled === 'true' ? 'or3-secrets' : '');
+if (authEnabled === 'true' && (env.NUXT_SECRETS_PROVIDER ?? 'or3-secrets') === 'or3-secrets' && env.OR3_MANAGED_VAULT_CONFIG) {
+    try {
+        const metadata = JSON.parse(readFileSync(env.OR3_MANAGED_VAULT_CONFIG, 'utf8'));
+        if (!/^[a-f0-9]{32}$/.test(metadata.vaultId) || typeof metadata.namespace !== 'string') throw new Error('Invalid vault metadata');
+        setDefault('NUXT_SECRETS_VAULT_ID', metadata.vaultId);
+        setDefault('NUXT_SECRETS_NAMESPACE', metadata.namespace);
+    } catch { throw new Error('Managed vault is not ready. Preserve custody volumes and inspect the vault service.'); }
+}
 
 setDefault('NUXT_AUTH_ENABLED', authEnabled);
 setDefault('NUXT_AUTH_PROVIDER', authProvider);

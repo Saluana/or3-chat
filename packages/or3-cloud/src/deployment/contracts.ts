@@ -81,6 +81,8 @@ export type BackupManifest = {
   image: string;
   imageDigest: string;
   dataSha256: string;
+  /** Encrypted vault snapshot; master key remains in separate operator custody. */
+  vaultSha256?: string;
   /** Uncompressed live-volume bytes measured immediately before archiving. */
   dataBytes?: number;
   configSha256?: string;

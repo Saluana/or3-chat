@@ -1,8 +1,8 @@
+import { resolveOpenRouterCredential } from '../../secrets/openrouter';
 import { z } from 'zod';
 import {
     createError,
     defineEventHandler,
-    getHeader,
     setResponseHeader,
 } from 'h3';
 import { useRuntimeConfig } from '#imports';
@@ -72,17 +72,7 @@ export default defineEventHandler(async (event) => {
     )
         throw createError({ statusCode: 403 });
     const config = useRuntimeConfig(event);
-    const clientKey = getHeader(event, 'x-or3-openrouter-key')?.trim();
-    const selectedKey =
-        config.openrouterRequireUserKey === true ||
-        config.openrouterAllowUserOverride !== false
-            ? clientKey
-            : undefined;
-    const key =
-        selectedKey ||
-        (config.openrouterRequireUserKey !== true
-            ? config.openrouterApiKey || process.env.OPENROUTER_API_KEY
-            : undefined);
+    const { apiKey: key } = await resolveOpenRouterCredential(event, session);
     if (!key)
         throw createError({
             statusCode: 400,

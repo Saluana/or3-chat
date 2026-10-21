@@ -265,7 +265,7 @@ describe('plugin AI invocation (4.11)', () => {
         expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
         expect((init.headers as Record<string, string>).authorization).toBe('Bearer sk-or-host-key');
         expect(JSON.parse(String(init.body))).toMatchObject({ max_tokens: 64 });
-        expect(init.redirect).toBeUndefined();
+        expect(init.redirect).toBe('error');
     });
 
     it('refuses to spend on a model with no trusted price', async () => {

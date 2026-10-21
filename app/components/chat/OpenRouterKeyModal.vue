@@ -7,9 +7,7 @@
         <template #default>
             <div class="space-y-4">
                 <p class="text-sm text-[var(--md-on-surface-variant)]">
-                    Your key is stored locally in this browser (IndexedDB) and
-                    is only ever sent to OpenRouter. It survives reloads — you
-                    only need to do this once.
+                    {{ cloud ? 'Your key is stored securely on the server for your account and works across devices.' : 'Your key is stored in this browser (IndexedDB) and sent to OpenRouter when used.' }}
                 </p>
                 <UFormField
                     label="API key"
@@ -61,7 +59,8 @@
 import { presentError } from '~~/shared/errors';
 import AppModal from '~/components/ui/AppModal.vue';
 import { ref } from 'vue';
-import { useToast } from '#imports';
+import { useToast, useRuntimeConfig } from '#imports';
+const cloud = useRuntimeConfig().public.ssrAuthEnabled === true;
 import { useIcon } from '~/composables/useIcon';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
 
@@ -81,6 +80,7 @@ const errorMessage = ref('');
 const isSaving = ref(false);
 
 function onCancel(): void {
+    keyValue.value = '';
     emit('update:open', false);
 }
 

@@ -24,6 +24,7 @@ export type HostRpcMethodGrant =
     | 'settings.read'
     | 'settings.write'
     | 'network.http'
+    | 'ai.provider'
     | 'ui.dashboard.register'
     | 'ui.command-palette.register'
     | 'documents.read'

@@ -823,10 +823,10 @@
                 {
                     "name": "secret-store.md",
                     "path": "/cloud/secret-store",
-                    "title": "Optional secret store",
+                    "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Private Bun vault provider for remembered trusted-plugin secrets, separate custody, scoped activation grants, replay detection, pinned socket identity, bounded admission and explicit recovery."
+                    "summary": "Default single-host vault, account OpenRouter connections, billing policy, owner-safe browser migration, governed plugin AI, separate custody and encrypted recovery."
                 }
             ]
         },

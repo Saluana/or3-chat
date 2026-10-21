@@ -11,6 +11,7 @@
  */
 import { defineEventHandler, getQuery, type H3Event } from 'h3';
 import { useRuntimeConfig } from '#imports';
+import { getActiveSecretStore } from '../secrets/registry';
 import { getProviderAdminAdapter } from '../admin/providers/registry';
 import { createStubProviderAdapter } from '../admin/providers/adapters/stub';
 
@@ -19,6 +20,7 @@ export interface HealthResponse {
     timestamp: string;
     uptime: number;
     providers?: {
+        secrets?: { available: boolean };
         sync?: {
             available: boolean;
             provider?: string;
@@ -145,13 +147,26 @@ export default defineEventHandler(async (event): Promise<HealthResponse> => {
             ),
         ]);
 
-        response.providers = { sync, storage, auth };
+        let secrets: { available: boolean } | undefined;
+        if (config.secrets?.provider) {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+                const store = getActiveSecretStore();
+                if (!store) throw new Error('Unavailable');
+                await Promise.race([store.available(), new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error('Unavailable')), 1500);
+                })]);
+                secrets = { available: true };
+            } catch { secrets = { available: false }; }
+            finally { clearTimeout(timer); }
+        }
+        response.providers = { sync, storage, auth, ...(secrets ? { secrets } : {}) };
 
         // If any provider is expected but not configured, mark as degraded
         const anyProviderDown = 
             (config.sync.enabled && !sync.available) ||
             (config.storage.enabled && !storage.available) ||
-            (config.auth.enabled && !auth.available);
+            (config.auth.enabled && !auth.available) || secrets?.available === false;
 
         if (anyProviderDown) {
             response.status = 'degraded';

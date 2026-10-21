@@ -19,6 +19,7 @@
  * - Auth provider logout flows
  */
 
+import { useRuntimeConfig } from '#imports';
 import type { NuxtApp } from 'nuxt/app';
 import { kv } from '~/db';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
@@ -102,7 +103,7 @@ export async function logoutCleanup(
     // Clear local/session storage auth remnants and transient caches
     if (typeof localStorage !== 'undefined') {
         const keys = [
-            'openrouter_api_key',
+            ...(useRuntimeConfig().public.ssrAuthEnabled === true ? [] : ['openrouter_api_key']),
             'or3:server-route-available',
             'or3:background-streaming-available',
             'or3.tools.enabled',

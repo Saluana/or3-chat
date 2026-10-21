@@ -964,7 +964,8 @@ describe('POST /api/plugins/isolation/capability', () => {
         });
         readBodyMock.mockResolvedValue({
             activationId: record.activationId,
-            method: 'ai.models',
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
             requestId: 'rpc-race-prep',
         });
 

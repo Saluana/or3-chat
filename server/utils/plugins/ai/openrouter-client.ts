@@ -87,6 +87,7 @@ export function createOpenRouterPluginProvider(
                     `${options.baseUrl.replace(/\/$/, '')}/chat/completions`,
                     {
                         method: 'POST',
+                        redirect: 'error',
                         headers: {
                             authorization: `Bearer ${options.apiKey}`,
                             'content-type': 'application/json',
