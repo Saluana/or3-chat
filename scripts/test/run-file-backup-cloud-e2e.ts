@@ -28,6 +28,8 @@ try {
             OR3_STORAGE_FS_ROOT: join(directory, 'files'), OR3_STORAGE_FS_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
             OR3_MAX_CLOUD_FILE_SIZE_BYTES: String(64 * 1024 * 1024), OR3_STORAGE_ALLOW_ANY_FILE_TYPE: 'true',
             OR3_BACKGROUND_STREAMING_ENABLED: 'false',
+            // File-backup qualification does not store account model credentials.
+            NUXT_SECRETS_PROVIDER: '',
             OR3_ADMIN_DATA_DIR: join(directory, 'admin'), OR3_ADMIN_USERNAME: 'backup-audit', OR3_ADMIN_PASSWORD: 'DisposableAdminSuite!123',
             OR3_ADMIN_ALLOW_RESTART: 'true', OR3_DEV_RESTART_STATE_DIR: join(directory, 'lifecycle'),
             OR3_FILE_BACKUP_E2E_DIR: directory,
