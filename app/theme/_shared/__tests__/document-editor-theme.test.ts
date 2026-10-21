@@ -6,6 +6,7 @@ import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 import blankIcons from '../../blank/icons.config';
 import blankTheme from '../../blank/theme';
 import { documentsStyles as blankDocumentStyles } from '../../blank/styles/documents';
+import { documentsStyles as cyberpunkDocumentStyles } from '../../cyberpunk/styles/documents';
 import { documentsStyles as retroDocumentStyles } from '../../retro/styles/documents';
 import retroTheme from '../../retro/theme';
 
@@ -18,6 +19,7 @@ const editorIconTokens = [
     'editor.search',
     'editor.inspector',
     'editor.ai',
+    'editor.selection',
     'editor.outline',
     'editor.history',
     'editor.format.bold',
@@ -78,13 +80,15 @@ describe('document editor theme contract', () => {
         );
     });
 
-    it.each([
-        ['blank', blankDocumentStyles],
-        ['retro', retroDocumentStyles],
-    ])('%s document editor does not draw a focus border around the writing canvas', (_name, styles) => {
-        const editor =
-            styles['.document-editor-root .document-content .ProseMirror:focus-visible']?.style;
-        expect(editor?.outline).toBe('none');
+    it('no theme draws a focus border around the writing canvas', () => {
+        const editorCss = readFileSync(
+            resolve(THEME_ROOT, '..', 'components', 'documents', 'DocumentEditorRoot.css'),
+            'utf8',
+        );
+        expect(editorCss).not.toMatch(/ProseMirror:focus-visible/);
+        for (const styles of [blankDocumentStyles, retroDocumentStyles, cyberpunkDocumentStyles]) {
+            expect(Object.keys(styles).some((selector) => selector.includes('ProseMirror:focus'))).toBe(false);
+        }
     });
 
     it('retro polishes the document formatting toolbar without touching blank', () => {

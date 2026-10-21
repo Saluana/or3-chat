@@ -119,6 +119,89 @@
                         @navigate="emit('select-thread', $event)"
                     />
 
+                    <!-- First run: no chats, documents, or projects yet -->
+                    <div
+                        v-else-if="item.type === 'empty-state' && showWelcome"
+                        class="sb-welcome pt-3 pb-4"
+                    >
+                        <div
+                            class="sb-welcome-card relative px-4 pt-6 pb-4 text-center"
+                        >
+                            <div
+                                class="relative mx-auto size-[84px]"
+                                aria-hidden="true"
+                            >
+                                <span
+                                    class="sb-welcome-halo absolute inset-0 rounded-full"
+                                />
+                                <span
+                                    class="sb-welcome-icon absolute inset-[8px] rounded-full flex items-center justify-center"
+                                >
+                                    <UIcon
+                                        name="lucide:ghost"
+                                        class="sb-welcome-ghost size-8"
+                                    />
+                                </span>
+                                <svg
+                                    v-for="spark in welcomeSparkles"
+                                    :key="spark.key"
+                                    class="sb-welcome-spark absolute"
+                                    :style="spark.style"
+                                    viewBox="0 0 16 16"
+                                >
+                                    <path
+                                        d="M8 0C8.6 4.6 11.4 7.4 16 8C11.4 8.6 8.6 11.4 8 16C7.4 11.4 4.6 8.6 0 8C4.6 7.4 7.4 4.6 8 0Z"
+                                        fill="currentColor"
+                                    />
+                                </svg>
+                            </div>
+                            <h3
+                                class="mt-4 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[var(--md-on-surface)]"
+                            >
+                                Nothing here yet
+                            </h3>
+                            <p
+                                class="mt-2 text-[13px] leading-[1.5] text-balance text-[var(--md-on-surface-variant)]"
+                            >
+                                {{ welcomeDescription }}
+                            </p>
+                            <div class="mt-5 flex flex-col gap-2">
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    :icon="iconNewProject"
+                                    :trailing-icon="iconChevronRight"
+                                    class="sb-welcome-primary theme-btn group w-full h-11 justify-start! gap-2.5 px-3.5 rounded-[var(--md-border-radius,12px)] border-0 whitespace-nowrap text-[14px] font-semibold bg-[var(--sb-welcome-primary-bg)]! text-[var(--sb-welcome-primary-fg)]! hover:bg-[var(--sb-welcome-primary-hover)]!"
+                                    :ui="welcomeButtonUi"
+                                    @click="emit('new-project')"
+                                >
+                                    Create a project
+                                </UButton>
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    :icon="iconNewChat"
+                                    class="sb-welcome-secondary theme-btn w-full h-11 justify-start! gap-2.5 px-3.5 rounded-[var(--md-border-radius,12px)] border-0 whitespace-nowrap text-[14px] font-medium bg-[color-mix(in_srgb,var(--sb-welcome-accent)_6%,var(--md-surface))]! text-[var(--md-on-surface)]! hover:bg-[color-mix(in_srgb,var(--sb-welcome-accent)_11%,var(--md-surface))]!"
+                                    :ui="{ ...welcomeButtonUi, leadingIcon: `${welcomeButtonUi.leadingIcon} text-[var(--sb-welcome-accent)]` }"
+                                    @click="emit('new-chat')"
+                                >
+                                    Start a chat
+                                </UButton>
+                                <UButton
+                                    v-if="documentsEnabled"
+                                    color="neutral"
+                                    variant="ghost"
+                                    :icon="iconNewDocument"
+                                    class="sb-welcome-secondary theme-btn w-full h-11 justify-start! gap-2.5 px-3.5 rounded-[var(--md-border-radius,12px)] border-0 whitespace-nowrap text-[14px] font-medium bg-[color-mix(in_srgb,var(--sb-welcome-accent)_6%,var(--md-surface))]! text-[var(--md-on-surface)]! hover:bg-[color-mix(in_srgb,var(--sb-welcome-accent)_11%,var(--md-surface))]!"
+                                    :ui="{ ...welcomeButtonUi, leadingIcon: `${welcomeButtonUi.leadingIcon} text-[var(--md-success)]` }"
+                                    @click="emit('new-document')"
+                                >
+                                    Create a document
+                                </UButton>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Empty State -->
                     <SidebarEmptyState
                         v-else-if="item.type === 'empty-state'"
@@ -413,6 +496,10 @@ async function goToLatestCompaction(rootId: string) {
 const iconChats = useIcon('sidebar.category.chats');
 const iconDocs = useIcon('sidebar.category.documents');
 const iconProjects = useIcon('sidebar.category.projects');
+const iconNewProject = useIcon('sidebar.new_folder');
+const iconNewChat = useIcon('sidebar.new_chat');
+const iconNewDocument = useIcon('sidebar.new_note');
+const iconChevronRight = useIcon('ui.chevron.right');
 const { openProjectsSidebar } = useProjectSidebar();
 const { listSidebarPages } = useSidebarPages();
 
@@ -443,6 +530,27 @@ const showEmptyState = computed(
 const isCompletelyEmpty = computed(
     () => showEmptyState.value && props.displayProjects.length === 0
 );
+// A first-time user (nothing saved, not searching) gets the welcome card.
+const showWelcome = computed(
+    () => isCompletelyEmpty.value && !sidebarQuery.value
+);
+const welcomeDescription = computed(() =>
+    documentsEnabled.value
+        ? 'Get started by creating a project, starting a chat, or creating a document.'
+        : 'Get started by creating a project or starting a chat.'
+);
+const welcomeButtonUi = {
+    label: 'truncate',
+    leadingIcon: 'size-[18px] shrink-0',
+    trailingIcon:
+        'size-4 ms-auto shrink-0 transition-transform duration-150 group-hover:translate-x-0.5',
+};
+// Decorative sparkles around the welcome illustration.
+const welcomeSparkles = [
+    { key: 'a', style: { top: '2px', right: '0', width: '12px', height: '12px', animationDelay: '0s' } },
+    { key: 'b', style: { top: '40px', left: '-6px', width: '8px', height: '8px', animationDelay: '1.2s' } },
+    { key: 'c', style: { bottom: '6px', right: '-6px', width: '7px', height: '7px', animationDelay: '2.1s' } },
+];
 
 // Build combined items list for Or3Scroll
 const combinedItems = computed(() => {
@@ -613,5 +721,58 @@ onUnmounted(() => {
 /* Reserve the existing horizontal inset before client-only list content mounts. */
 .sidebar-home-page {
     padding-inline: 0.5rem;
+}
+
+/* First-run welcome card. Themes recolor it through these variables. */
+.sb-welcome {
+    --sb-welcome-accent: var(--md-primary);
+    --sb-welcome-on-accent: var(--md-on-primary);
+    --sb-welcome-primary-bg: var(--sb-welcome-accent);
+    --sb-welcome-primary-fg: var(--sb-welcome-on-accent);
+    --sb-welcome-primary-hover: color-mix(in srgb, var(--sb-welcome-accent) 88%, black);
+}
+
+.sb-welcome-halo {
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--sb-welcome-accent) 16%, transparent) 0%,
+        transparent 70%
+    );
+}
+
+.sb-welcome-icon {
+    background: var(--md-surface-hover, var(--md-surface-variant));
+    color: var(--md-on-surface);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--sb-welcome-accent) 5%, transparent);
+}
+
+.sb-welcome-ghost {
+    animation: sb-welcome-float 4s ease-in-out infinite;
+}
+
+.sb-welcome-spark {
+    color: var(--sb-welcome-accent);
+    animation: sb-welcome-twinkle 3.2s ease-in-out infinite;
+}
+
+@keyframes sb-welcome-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+@keyframes sb-welcome-twinkle {
+    0%, 100% { opacity: 0.25; transform: scale(0.8); }
+    50% { opacity: 0.7; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sb-welcome-ghost,
+    .sb-welcome-spark {
+        animation: none;
+    }
+
+    .sb-welcome-spark {
+        opacity: 0.5;
+    }
 }
 </style>

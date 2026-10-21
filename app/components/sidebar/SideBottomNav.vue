@@ -7,34 +7,7 @@
         "
         class="bottomnav-root w-[63.5px] bg-transparent px-1 flex flex-col items-center justify-between"
     >
-        <!-- DASHBOARD -->
-        <UTooltip
-            v-if="dashboardEnabled"
-            id="tooltip-dashboard"
-            :delay-duration="0"
-            :content="{
-                side: 'right',
-            }"
-            text="Dashboard"
-        >
-            <UButton
-                v-bind="dashboardButtonProps"
-                @click="emit('toggleDashboard')"
-                type="button"
-                aria-label="Dashboard"
-            >
-                <template #default>
-                    <span class="flex flex-col items-center gap-1 w-full">
-                        <UIcon
-                            class="w-[24px] h-[24px]"
-                            :name="iconDashboard"
-                        />
-                    </span>
-                </template>
-            </UButton>
-        </UTooltip>
-
-        <!-- Visual separator between app tools and personal section -->
+        <!-- Visual separator between app navigation and personal section -->
         <div
             class="w-[40px] h-[var(--md-border-width-subtle,var(--md-border-width,1px))] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
         />
@@ -55,12 +28,12 @@
                 :content="{
                     side: 'right',
                 }"
-                text="My Info"
+                text="Account"
             >
                 <UButton
                     v-bind="infoButtonProps"
                     type="button"
-                    aria-label="My Info"
+                    aria-label="Account"
                 >
                     <template #default>
                         <span class="flex flex-col items-center gap-1 w-full">
@@ -102,15 +75,11 @@ import { computed, defineAsyncComponent, ref, useAttrs, watch } from 'vue';
 import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useOr3Config } from '~/composables/useOr3Config';
 import SidebarAuthButton from '~/components/sidebar/SidebarAuthButton.vue';
 
 const iconUser = useIcon('sidebar.user');
 const iconActivity = useIcon('sidebar.activity');
 const iconCredits = useIcon('sidebar.credits');
-const iconDashboard = useIcon('dashboard.home');
-const or3Config = useOr3Config();
-const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 const themePlugin = useNuxtApp().$theme;
 const modelCatalogModalDefault = defineAsyncComponent(
     () => import('~/components/modal/ModelCatalog.vue')
@@ -143,29 +112,12 @@ const rootAttrs = computed(() => {
     ) as Record<string, unknown>;
 });
 
-const emit = defineEmits(['toggleDashboard']);
-
 // Theme-integrated button props
 const infoButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
         context: 'sidebar',
         identifier: 'sidebar.bottom-nav.info',
-        isNuxtUI: true,
-    });
-    return {
-        variant: 'soft' as const,
-        color: 'neutral' as const,
-        block: true,
-        ...overrides.value,
-    };
-});
-
-const dashboardButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.bottom-nav.dashboard',
         isNuxtUI: true,
     });
     return {

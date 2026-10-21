@@ -182,9 +182,20 @@ The host installs `@iconify-json/solar` and registers the subset with Nuxt Icon'
 it also works in static builds. Solar is by
 [480 Design](https://www.figma.com/community/file/1166831539721848736), licensed
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Blank modifies
-the Linear stroke widths. Main rail icons render at 20px in 90% `onSurface` (`--blank-sb-icon`; full
-`onSurface` on hover and for the active page) with 4px between 40px buttons;
-touch layouts keep 24px.
+the Linear stroke widths. Main rail icons render at 22px in `onSurfaceVariant` inside 40px
+hit areas with 12px corners and 8px between them, turning full `onSurface` on hover and for the
+selected item; touch layouts keep 24px. Hover fills with `--md-surface-hover`, the selected item
+with `--md-surface-active`, and the rail's **+** create button keeps a brand tint that matches the
+Chats icon, with a short divider under it. The rail sits on `--blank-rail-bg` (2% `onSurface`
+over the surface) and, on desktop, runs the full sidebar height: the header's first 64px is the
+rail's top slot and holds the collapse toggle, and the logo starts on the panel's content edge.
+The monochrome OpenRouter mark renders at 20px.
+
+A first-time user with no chats, documents, or projects sees a welcome card on the sidebar Home
+page (`.sb-welcome`). Themes recolor it with `--sb-welcome-accent` and `--sb-welcome-on-accent`
+(default `primary`/`onPrimary`), and the main button with `--sb-welcome-primary-bg`,
+`--sb-welcome-primary-fg`, and `--sb-welcome-primary-hover`. Blank uses its brand blue, with a
+tonal button in dark mode.
 
 Outside the sidebar, Blank keeps the same `--blank-sb-icon` tone: header actions
 (split, theme, notifications) render at 18px, the tab strip's new-tab and close

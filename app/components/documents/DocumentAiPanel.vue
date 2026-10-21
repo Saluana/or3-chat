@@ -43,11 +43,23 @@
         </div>
 
         <template v-else>
+            <div v-if="selectionAvailable || references.length" class="context-chips" aria-label="AI context">
+                <div v-if="selectionAvailable" class="context-chip selection-chip" :title="selectionExcerpt || undefined">
+                    <UIcon :name="icons.selection" />
+                    <span class="chip-text"><span class="sr-only">Selected text: </span>{{ selectionExcerpt || 'Selected content' }}</span>
+                    <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square :class="chipRemoveClass" aria-label="Clear selection" @click="clearSelection" />
+                </div>
+                <div v-for="reference in references" :key="`${reference.source}:${reference.id}`" class="context-chip">
+                    <UIcon :name="reference.source === 'document' ? icons.document : icons.chat" />
+                    <span class="chip-text">{{ reference.label }}</span>
+                    <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square :class="chipRemoveClass" :aria-label="`Remove ${reference.label} context`" @click="promptInput?.removeReference(reference)" />
+                </div>
+            </div>
             <div class="composer-row">
                 <input ref="attachmentInput" hidden tabindex="-1" aria-hidden="true" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
                 <div class="composer-actions composer-actions-leading">
-                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
-                    <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
+                    <UButton :icon="icons.attach" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
+                    <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
                 </div>
                 <DocumentAiPromptEditor
                     ref="promptInput"
@@ -62,8 +74,8 @@
                     @submit="send"
                 />
                 <div class="composer-actions composer-actions-trailing">
-                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
-                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Send to document AI" :disabled="readOnly || !prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
+                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Send to document AI" :disabled="readOnly || !prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
                 </div>
             </div>
 
@@ -399,6 +411,10 @@ const icons = reactive({
     stop: useIcon('editor.stop'),
     send: useIcon('editor.send'),
     settings: useIcon('editor.settings'),
+    attach: useIcon('chat.attach'),
+    selection: useIcon('editor.selection'),
+    document: useIcon('ui.notes'),
+    chat: useIcon('ui.chat'),
     plus: useIcon('ui.plus'),
     edit: useIcon('ui.edit'),
     copy: useIcon('ui.copy'),
@@ -417,10 +433,10 @@ const emit = defineEmits<{
     reject: [];
     abort: [];
     'toggle-autocomplete': [];
-    'clear-scope-highlight': [];
+    'clear-selection': [];
 }>();
 
-const promptInput = ref<{ focus: () => void }>();
+const promptInput = ref<{ focus: () => void; removeReference: (reference: DocumentAiContextReference) => void }>();
 const attachmentInput = ref<HTMLInputElement>();
 const prompt = ref('');
 const references = ref<DocumentAiContextReference[]>([]);
@@ -428,6 +444,9 @@ const attachments = ref<PendingDocumentAiAttachment[]>([]);
 const customizeOpen = ref(false);
 const editingActionId = ref<string | null>(null);
 const { isMobile } = useResponsiveState();
+const selectionExcerpt = computed(() => props.selectedText.replace(/\s+/gu, ' ').trim().slice(0, 200));
+// Keep the chip's close button chip-sized on phones; ::before restores the 44px hit area.
+const chipRemoveClass = 'chip-remove max-md:min-h-6! max-md:min-w-6! max-md:h-6! max-md:w-6! max-md:p-0!';
 const automaticScope = computed<DocumentAiScope>(() =>
     props.selectionAvailable ? 'selection' : 'document'
 );
@@ -577,15 +596,17 @@ function discardActiveHunk() {
 function scheduleEstimate() {
     if (props.readOnly) return;
     if (estimateTimer) clearTimeout(estimateTimer);
-    if (!prompt.value.trim()) {
-        emit('clear-scope-highlight');
-        return;
-    }
+    if (!prompt.value.trim()) return;
     estimateTimer = setTimeout(() => emit('estimate', {
         prompt: prompt.value,
         scope: automaticScope.value,
         references: references.value,
     }), 250);
+}
+// Focus the prompt first; the chip (and its button) unmounts once cleared.
+function clearSelection() {
+    promptInput.value?.focus();
+    emit('clear-selection');
 }
 function send() {
     if (props.readOnly) return;

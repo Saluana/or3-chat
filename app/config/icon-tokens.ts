@@ -180,6 +180,7 @@ export const DEFAULT_ICONS = {
     'editor.previous': 'pixelarticons:chevron-up',
     'editor.next': 'pixelarticons:chevron-down',
     'editor.ai': 'pixel:sparkles',
+    'editor.selection': 'pixelarticons:text-start-a',
     'editor.outline': 'pixelarticons:list',
     'editor.history': 'pixelarticons:clock',
     'editor.info': 'pixelarticons:info-box',

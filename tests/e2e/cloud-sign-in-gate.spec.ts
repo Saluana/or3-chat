@@ -998,14 +998,18 @@ test('admin experience settings save and apply with validation and browser theme
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
     await openComposer(page);
-    await expect(page.getByRole('button', { name: 'Create document', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New document', exact: true })).toHaveCount(0);
     await page.goto('/admin/features');
     await expect(documents).not.toBeChecked();
     await documents.click();
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
     await openComposer(page);
-    await expect(page.getByRole('button', { name: 'Create document', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'New document', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     // Restore this disposable site's branding before the theme preview checks.
     const current = await readSettings();
     expect((await write(initial.entries.filter((entry: {application: string}) => entry.application === 'runtime')

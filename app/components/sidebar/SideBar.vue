@@ -11,7 +11,6 @@
             @new-chat="onNewChat"
             @new-document="createDocument"
             @new-project="openCreateProject"
-            @focus-search="openCommandPalette"
             @toggle-dashboard="emit('toggleDashboard')"
             @expand-sidebar="() => {}"
         />

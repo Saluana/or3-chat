@@ -7,77 +7,54 @@
             <div
                 class="new-chat-wrapper flex items-center justify-center w-full pr-0.5"
             >
-                <UTooltip
-                    :delay-duration="0"
-                    :content="{
-                        side: 'right',
-                    }"
-                    text="New workspace chat"
+                <UPopover
+                    v-model:open="createOpen"
+                    :content="{ side: 'right', align: 'start', sideOffset: 8 }"
                 >
-                    <UButton
-                        v-bind="newChatButtonProps"
-                        id="btn-new-chat"
-                        aria-label="New workspace chat"
-                        class="flex items-center justify-center"
-                        @click="emit('new-chat')"
-                    ></UButton>
-                </UTooltip>
+                    <UTooltip
+                        :delay-duration="0"
+                        :disabled="createOpen"
+                        :content="{
+                            side: 'right',
+                        }"
+                        text="New"
+                    >
+                        <UButton
+                            v-bind="newChatButtonProps"
+                            id="btn-create"
+                            aria-label="New"
+                            class="flex items-center justify-center"
+                        ></UButton>
+                    </UTooltip>
+                    <template #content>
+                        <div
+                            id="rail-create-menu"
+                            class="or3-action-menu flex flex-col gap-0.5 p-1.5 min-w-[200px]"
+                        >
+                            <button
+                                v-for="item in createItems"
+                                :id="`rail-create-${item.kind}`"
+                                :key="item.kind"
+                                type="button"
+                                class="rail-create-item flex items-center gap-3 w-full min-h-[44px] pl-1.5 pr-3 py-1 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] font-medium text-left text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
+                                :class="`page-link-accent-${item.accent}`"
+                                @click="onCreate(item.kind)"
+                            >
+                                <span
+                                    class="page-link-icon-container shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
+                                    :class="item.tone"
+                                >
+                                    <UIcon
+                                        :name="item.icon"
+                                        class="w-[18px] h-[18px]"
+                                    />
+                                </span>
+                                <span>{{ item.label }}</span>
+                            </button>
+                        </div>
+                    </template>
+                </UPopover>
             </div>
-            <UTooltip
-                id="tooltip-search"
-                :delay-duration="0"
-                :content="{
-                    side: 'right',
-                }"
-                text="Search everything"
-            >
-                <UButton
-                    v-bind="searchButtonProps"
-                    id="btn-search"
-                    aria-label="Open command palette"
-                    class="flex items-center justify-center"
-                    @click="emit('focus-search')"
-                >
-                    <span class="sr-only">Open command palette</span>
-                </UButton>
-            </UTooltip>
-            <UTooltip
-                v-if="documentsEnabled"
-                id="tooltip-doc"
-                :delay-duration="0"
-                :content="{
-                    side: 'right',
-                }"
-                text="Create document"
-            >
-                <UButton
-                    v-bind="newDocButtonProps"
-                    id="btn-new-doc"
-                    aria-label="Create document"
-                    class="flex items-center justify-center"
-                    @click="emit('new-document')"
-                >
-                    <span class="sr-only">Create document</span>
-                </UButton>
-            </UTooltip>
-            <UTooltip
-                id="tooltip-project"
-                :delay-duration="0"
-                :content="{
-                    side: 'right',
-                }"
-                text="Create project"
-            >
-                <UButton
-                    v-bind="newProjectButtonProps"
-                    id="btn-new-project"
-                    aria-label="Create project"
-                    class="flex items-center justify-center"
-                    @click="emit('new-project')"
-                >
-                    <span class="sr-only">Create project</span>
-                </UButton>
-            </UTooltip>
 
             <ClientOnly>
                 <div
@@ -95,14 +72,14 @@
                     >
                         <UButton
                             v-bind="
-                                activePageId === DEFAULT_PAGE_ID
+                                activeRailItem === DEFAULT_PAGE_ID
                                     ? pageButtonActiveProps
                                     : pageButtonProps
                             "
                             id="btn-home"
                             class="flex items-center justify-center"
                             :icon="iconPageHome"
-                            :aria-pressed="activePageId === DEFAULT_PAGE_ID"
+                            :aria-pressed="activeRailItem === DEFAULT_PAGE_ID"
                             aria-label="Home"
                             @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
                             @keydown.enter="
@@ -111,6 +88,29 @@
                             @keydown.space.prevent="
                                 () => handlePageSelect(DEFAULT_PAGE_ID)
                             "
+                        />
+                    </UTooltip>
+                    <UTooltip
+                        v-if="dashboardEnabled"
+                        id="tooltip-dashboard"
+                        :delay-duration="0"
+                        :content="{
+                            side: 'right',
+                        }"
+                        text="Dashboard"
+                    >
+                        <UButton
+                            v-bind="
+                                activeRailItem === DASHBOARD_RAIL_ID
+                                    ? pageButtonActiveProps
+                                    : pageButtonProps
+                            "
+                            id="btn-dashboard"
+                            class="flex items-center justify-center"
+                            :icon="iconDashboard"
+                            :aria-pressed="activeRailItem === DASHBOARD_RAIL_ID"
+                            aria-label="Dashboard"
+                            @click="emit('toggle-dashboard')"
                         />
                     </UTooltip>
                     <div
@@ -132,13 +132,13 @@
                         >
                             <UButton
                                 v-bind="
-                                    activePageId === page.id
+                                    activeRailItem === page.id
                                         ? pageButtonActiveProps
                                         : pageButtonProps
                                 "
                                 :id="`btn-page-${page.id}`"
                                 class="flex items-center justify-center"
-                                :aria-pressed="activePageId === page.id"
+                                :aria-pressed="activeRailItem === page.id"
                                 :aria-label="page.label"
                                 @click="() => handlePageSelect(page.id)"
                                 @keydown.enter="() => handlePageSelect(page.id)"
@@ -200,16 +200,13 @@
                 </UTooltip>
             </div>
             <ClientOnly>
-                <SideBottomNav
-                    id="bottom-nav"
-                    @toggle-dashboard="emit('toggle-dashboard')"
-                />
+                <SideBottomNav id="bottom-nav" />
             </ClientOnly>
         </div>
     </div>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject, ref, type Ref } from 'vue';
 import { useToast, navigateTo } from '#imports';
 import {
     useSidebarFooterActions,
@@ -230,21 +227,70 @@ import {
 } from '~/core/workspace-profiles/projection';
 import { isMobile } from '~/state/global';
 
+const iconPlus = useIcon('ui.plus');
 const iconNewChat = useIcon('sidebar.new_chat');
-const iconSearch = useIcon('sidebar.search');
 const iconNewNote = useIcon('sidebar.new_note');
 const iconNewFolder = useIcon('sidebar.new_folder');
 const iconPageHome = useIcon('sidebar.page.home');
 const iconPageDefault = useIcon('sidebar.page.default');
 const iconPageFiles = useIcon('sidebar.page.files');
+const iconDashboard = useIcon('dashboard.home');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 
 const props = defineProps<{
     activeThread?: string;
 }>();
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
+const DASHBOARD_RAIL_ID = 'dashboard';
+
+type CreateKind = 'chat' | 'document' | 'project';
+
+const createOpen = ref(false);
+// Tones match the Chats/Documents/Projects page links in the expanded sidebar.
+const createItems = computed(() => [
+    {
+        kind: 'chat' as const,
+        label: 'New chat',
+        icon: iconNewChat.value,
+        accent: 'chats',
+        tone: 'bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)]',
+    },
+    ...(documentsEnabled.value
+        ? [
+              {
+                  kind: 'document' as const,
+                  label: 'New document',
+                  icon: iconNewNote.value,
+                  accent: 'docs',
+                  tone: 'bg-[color:var(--md-success)]/12 text-[color:var(--md-success)]',
+              },
+          ]
+        : []),
+    {
+        kind: 'project' as const,
+        label: 'New project',
+        icon: iconNewFolder.value,
+        accent: 'projects',
+        tone: 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-on-surface-variant)]',
+    },
+]);
+
+function onCreate(kind: CreateKind) {
+    createOpen.value = false;
+    if (kind === 'chat') emit('new-chat');
+    else if (kind === 'document') emit('new-document');
+    else emit('new-project');
+}
+
+// The dashboard opens as a modal over the current page, so it takes the
+// selected state while open.
+const dashboardOpen = inject<Ref<boolean>>(
+    'or3:dashboard-modal-open',
+    ref(false)
+);
 
 // Theme overrides for collapsed sidebar buttons
 const newChatButtonProps = computed(() => {
@@ -261,70 +307,7 @@ const newChatButtonProps = computed(() => {
 
     return {
         size: 'sb-square' as const,
-        icon: iconNewChat.value,
-        ...(overrides.value as any),
-        ui: mergedUi,
-    };
-});
-
-const searchButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.collapsed-search',
-        isNuxtUI: true,
-    });
-
-    const themeUi = (overrides.value as any)?.ui || {};
-    const mergedUi = { ...themeUi };
-
-    return {
-        size: 'sb-base' as const,
-        color: 'on-surface' as const,
-        square: false as const,
-        icon: iconSearch.value,
-        ...(overrides.value as any),
-        ui: mergedUi,
-    };
-});
-
-const newDocButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.new-document',
-        isNuxtUI: true,
-    });
-
-    const themeUi = (overrides.value as any)?.ui || {};
-
-    const mergedUi = { ...themeUi };
-
-    return {
-        icon: iconNewNote.value,
-        size: 'sb-base' as const,
-        color: 'on-surface' as const,
-        ...(overrides.value as any),
-        ui: mergedUi,
-    };
-});
-
-const newProjectButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.new-project',
-        isNuxtUI: true,
-    });
-
-    const themeUi = (overrides.value as any)?.ui || {};
-
-    const mergedUi = { ...themeUi };
-
-    return {
-        icon: iconNewFolder.value,
-        size: 'sb-base' as const,
-        color: 'on-surface' as const,
+        icon: iconPlus.value,
         ...(overrides.value as any),
         ui: mergedUi,
     };
@@ -374,6 +357,9 @@ const pageButtonActiveProps = createCollapsedPageButtonProps('active');
 
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();
+const activeRailItem = computed(() =>
+    dashboardOpen.value ? DASHBOARD_RAIL_ID : activePageId.value
+);
 
 const projectedPages = computed(() => {
     void resolvedWorkspaceProfile.value;
@@ -515,7 +501,6 @@ const emit = defineEmits<{
     (e: 'new-chat'): void;
     (e: 'new-document'): void;
     (e: 'new-project'): void;
-    (e: 'focus-search'): void;
     (e: 'toggle-dashboard'): void;
     (e: 'expand-sidebar'): void;
 }>();

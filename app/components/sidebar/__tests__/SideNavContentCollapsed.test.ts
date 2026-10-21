@@ -95,28 +95,36 @@ describe('SideNavContentCollapsed', () => {
         );
     });
 
-    it('renders built-in controls', () => {
+    it('renders built-in controls', async () => {
         const wrapper = mount(SideNavContentCollapsed, {
             global: {
                 stubs: {
                     UIcon: { template: '<span><slot /></span>' },
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
+                    UPopover: {
+                        template: '<div><slot /><slot name="content" /></div>',
+                    },
                     SideBottomNav: { template: '<nav />' },
                     ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
-        // Should render built-in buttons - check by their click handlers
-        const buttons = wrapper.findAll('button');
-        expect(buttons.length).toBeGreaterThan(5); // Should have at least the built-in controls
+        // One "+" replaces the separate new chat/search/document/project buttons.
+        expect(wrapper.find('#btn-create').attributes('aria-label')).toBe('New');
+        expect(wrapper.find('#btn-search').exists()).toBe(false);
+        expect(
+            wrapper.findAll('#rail-create-menu button').map((b) => b.text())
+        ).toEqual(['New chat', 'New document', 'New project']);
 
-        // The creation control names the destination of the new chat.
-        expect(wrapper.find('#btn-new-chat').attributes('aria-label')).toBe('New workspace chat');
-        expect(wrapper.html()).toContain('Search');
-        expect(wrapper.html()).toContain('Create document');
-        expect(wrapper.html()).toContain('Create project');
+        await wrapper.find('#rail-create-document').trigger('click');
+        expect(wrapper.emitted('new-document')).toHaveLength(1);
+        expect(wrapper.emitted('new-chat')).toBeUndefined();
+
+        // Dashboard now sits with Home at the top of the rail.
+        await wrapper.find('#btn-dashboard').trigger('click');
+        expect(wrapper.emitted('toggle-dashboard')).toHaveLength(1);
     });
 
     it('highlights active page', () => {
