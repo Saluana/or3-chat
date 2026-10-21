@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, saved color schemes, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
+                    "summary": "Run and verify source builds, interactive secret-store setup before authenticated launches, phone development over LAN or Tailscale, native development HTTPS and module-loading troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, saved color schemes, bounded sidebar layout, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -800,7 +800,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "Advanced source CLI and browser setup with private atomic persistence, concurrent preset safety, bounded OR3 health verification, provider selection, and deployment."
+                    "summary": "Advanced source CLI and browser setup with first-launch local-vault/manual-attachment guidance, private atomic persistence, concurrent preset safety, bounded OR3 health verification, provider selection, and deployment."
                 },
                 {
                     "name": "or3-connect.md",
@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, account-bound OpenRouter OAuth, billing policy, owner-safe browser migration and cleanup retries, governed plugin AI, separate custody and encrypted recovery."
+                    "summary": "Default single-host vault, source launch provisioning and manual attachment, custody-preserving upgrades, account-bound OpenRouter OAuth, billing policy, owner-safe browser migration and cleanup retries, governed plugin AI, separate custody and encrypted recovery."
                 }
             ]
         },

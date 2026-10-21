@@ -20,6 +20,16 @@ bun run dev
 
 Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect OpenRouter through the app when you want to generate a response.
 
+After pulling updates, run `bun install` again. Authenticated source launches now
+check the secret store before starting Nuxt. If vault settings are missing, the
+terminal offers automatic local development setup, manual attachment to an
+existing vault, or explicit instance-billing-only mode. You can configure it first
+with `bun run setup:secrets`; `bun run setup:secrets --auto` provisions a local
+vault without questions. Unattended launches require configuration and never
+silently opt out. Existing `.env` secrets stay in place. Preserve `.or3/secrets`
+and its master key across upgrades; see [secret-store setup](/documentation/cloud/secret-store)
+for custody, production attachment and recovery details.
+
 The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
 
 The dashboard's **Dev Tools** tile (the hook inspector) is hidden by default and never ships in production builds. Start the dev server with `OR3_DEV_TOOLS=true bun run dev` to show it.

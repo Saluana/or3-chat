@@ -205,6 +205,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Verify source secret-store setup and custody lifecycle
+        run: bun run test:e2e:source-secrets
       - name: Run script tests
         run: bun run test:scripts
       - name: Run release policy tests

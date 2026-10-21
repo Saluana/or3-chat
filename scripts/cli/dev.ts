@@ -28,6 +28,7 @@ import {
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 import { prepareLocalProviders } from '../../shared/dev/local-providers';
 import { prepareConvexBackend } from '../../shared/dev/convex-backend';
+import { prepareSourceSecrets } from '../../shared/dev/secrets';
 import { nuxtRuntime, usesBunSqlite, usesSqliteProvider } from '../../shared/dev/nuxt-runtime';
 import { createDevelopmentEnvironment, developmentEnvFile } from '../../shared/dev/environment';
 import { superviseDevelopment, createDevelopmentPrerequisiteCheck } from '../../shared/dev/restart-supervisor';
@@ -311,28 +312,37 @@ export function nuxtDevEnvironment(
 
 async function runNuxtDev(argv: string[]): Promise<number> {
     const localProviders = await prepareLocalProviders(process.cwd());
-    const startupEnv = await prepareConvexBackend(process.cwd(), nuxtDevEnvironment(), localProviders, { loadEnv: false });
-    const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
-    const entry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
-    if (process.platform === 'win32') {
-        await runForegroundCommand({ command: nuxtRuntime(startupEnv), args: [entry, 'dev', ...argv] }, {
-            cwd: process.cwd(), env: startupEnv, label: 'Nuxt development',
-        });
-        return 0;
-    }
-    const host = parseHost(argv);
-    const preparedArtifacts = [entry, ...Object.values(localProviders)];
-    const manifest = requireFromProject('./package.json') as { dependencies?: Record<string, string> };
-    for (const name of Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith('or3-provider-'))) {
-        try { preparedArtifacts.push(requireFromProject.resolve(`${name}/nuxt`)); } catch { /* Unselected optional provider. */ }
-    }
-    return await superviseDevelopment({
-        root: process.cwd(), runtime: nuxtRuntime(startupEnv), args: [resolve(process.cwd(), 'shared/dev/nuxt-child.mjs'), ...argv],
-        origin: `http://${host === '0.0.0.0' ? '127.0.0.1' : host === '::' ? '[::1]' : host.includes(':') ? `[${host}]` : host}:${parsePort(argv)}`,
+    const secrets = await prepareSourceSecrets(process.cwd(), nuxtDevEnvironment(), {
         envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
-        environment: async () => ({ ...nuxtDevEnvironment(await reloadEnvironment()), OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders) }),
-        prerequisites: createDevelopmentPrerequisiteCheck(process.cwd(), preparedArtifacts),
     });
+    try {
+        const startupEnv = await prepareConvexBackend(process.cwd(), secrets.env, localProviders, { loadEnv: false });
+        const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
+        const entry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
+        if (process.platform === 'win32') {
+            await runForegroundCommand({ command: nuxtRuntime(startupEnv), args: [entry, 'dev', ...argv] }, {
+                cwd: process.cwd(), env: startupEnv, label: 'Nuxt development',
+            });
+            return 0;
+        }
+        const host = parseHost(argv);
+        const preparedArtifacts = [entry, ...Object.values(localProviders)];
+        const manifest = requireFromProject('./package.json') as { dependencies?: Record<string, string> };
+        for (const name of Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith('or3-provider-'))) {
+            try { preparedArtifacts.push(requireFromProject.resolve(`${name}/nuxt`)); } catch { /* Unselected optional provider. */ }
+        }
+        return await superviseDevelopment({
+            root: process.cwd(), runtime: nuxtRuntime(startupEnv), args: [resolve(process.cwd(), 'shared/dev/nuxt-child.mjs'), ...argv],
+            origin: `http://${host === '0.0.0.0' ? '127.0.0.1' : host === '::' ? '[::1]' : host.includes(':') ? `[${host}]` : host}:${parsePort(argv)}`,
+            envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
+            environment: async () => ({
+                ...nuxtDevEnvironment(await reloadEnvironment()),
+                ...Object.fromEntries(Object.entries(secrets.env).filter(([key]) => key.startsWith('NUXT_SECRETS_'))),
+                OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders),
+            }),
+            prerequisites: createDevelopmentPrerequisiteCheck(process.cwd(), preparedArtifacts),
+        });
+    } finally { await secrets.close(); }
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -342,13 +352,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         (arg) => arg !== '--or3-offline' && arg !== '--or3-ssr'
     );
     const sourceOverrides = { ...inheritedEnvironment };
-    if (offline) Object.assign(sourceOverrides, { SSR_AUTH_ENABLED: 'false', OR3_SYNC_ENABLED: 'false', OR3_CLOUD_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false', OR3_CLOUD_STORAGE_ENABLED: 'false', OR3_BACKGROUND_STREAMING_ENABLED: 'false' });
+    if (offline) Object.assign(sourceOverrides, { SSR_AUTH_ENABLED: 'false', NUXT_SECRETS_PROVIDER: '', OR3_SYNC_ENABLED: 'false', OR3_CLOUD_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false', OR3_CLOUD_STORAGE_ENABLED: 'false', OR3_BACKGROUND_STREAMING_ENABLED: 'false' });
     else if (ssr) sourceOverrides.SSR_AUTH_ENABLED = 'true';
     reloadEnvironment = createDevelopmentEnvironment(process.cwd(), nuxtArgs, sourceOverrides);
     Object.assign(process.env, await reloadEnvironment());
     if (offline) {
         Object.assign(process.env, {
             SSR_AUTH_ENABLED: 'false',
+            NUXT_SECRETS_PROVIDER: '',
             OR3_SYNC_ENABLED: 'false',
             OR3_CLOUD_SYNC_ENABLED: 'false',
             OR3_STORAGE_ENABLED: 'false',

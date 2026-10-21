@@ -92,7 +92,7 @@ describe('Nuxt task launcher', () => {
             env: {
                 PATH: [bin, process.env.PATH].join(delimiter),
                 npm_config_user_agent: 'bun/1.3.14', npm_config_cache: join(root, 'npm-cache'),
-                NODE_ENV: 'development', OR3_STRICT_CONFIG: 'false',
+                NODE_ENV: 'development', OR3_STRICT_CONFIG: 'false', NUXT_SECRETS_PROVIDER: '',
                 ...(!options.envFile && {
                     NODE_OPTIONS: '', SSR_AUTH_ENABLED: 'true', OR3_AUTH_PROVIDER: 'clerk',
                     OR3_SYNC_PROVIDER: 'sqlite', OR3_SYNC_ENABLED: 'false',
@@ -147,9 +147,19 @@ describe('Nuxt task launcher', () => {
         expect(result.stdout).not.toContain('BACKEND_CHECK=');
     });
 
-    it.each(['build', 'preview'])('uses vault custody only at runtime during %s', task => {
-        const result = receipts(launch(task, { NUXT_SECRETS_PROVIDER: 'or3-secrets' }));
-        expect(result[0]).toMatchObject({ secretsProvider: task === 'build' ? '' : 'or3-secrets' });
+    it('keeps vault custody out of builds', () => {
+        const result = receipts(launch('build', { NUXT_SECRETS_PROVIDER: 'or3-secrets' }));
+        expect(result[0]).toMatchObject({ secretsProvider: '' });
+    });
+
+    it('stops unattended preview before Nuxt when the selected vault is unconfigured', () => {
+        const result = launch('preview', { NUXT_SECRETS_PROVIDER: 'or3-secrets' });
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).not.toContain('RECEIPT=');
+        expect(result.stderr).toContain('bun install');
+        const root = roots.at(-1)!;
+        expect(() => readFileSync(join(root, '.env'))).toThrow();
+        expect(() => readFileSync(join(root, '.or3/secrets/master.key'))).toThrow();
     });
 
     it('starts SQLite preview without a Convex package', () => {
