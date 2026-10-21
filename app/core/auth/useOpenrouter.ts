@@ -101,7 +101,9 @@ export function useOpenRouterAuth() {
                 const response = await fetch('/api/openrouter/oauth', { method: 'POST', credentials: 'same-origin', redirect: 'error',
                     headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': JSON.stringify([session?.provider, session?.user?.id]) }, body: '{}' });
                 if (!response.ok) throw new Error('OpenRouter connection is unavailable. Contact the administrator.');
-                const { url } = await response.json();
+                const payload: unknown = await response.json();
+                if (!payload || typeof payload !== 'object' || !('url' in payload) || typeof payload.url !== 'string') throw new Error('Invalid OpenRouter authorization response.');
+                const { url } = payload;
                 const destination = new URL(url);
                 if (destination.origin !== 'https://openrouter.ai') throw new Error('Invalid OpenRouter authorization URL.');
                 window.location.assign(destination.toString());

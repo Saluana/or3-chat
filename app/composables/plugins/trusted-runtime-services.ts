@@ -3,7 +3,7 @@ import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
 import { useAppConfig, useRuntimeConfig, useToast } from '#imports';
-import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue } from '@or3/plugin-sdk';
+import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue, type PluginCompletion } from '@or3/plugin-sdk';
 import { createTrustedUiKit } from './trusted-ui-kit';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
@@ -125,7 +125,7 @@ export function createTrustedRuntimeServices(input: {
             });
             if (!input.current()) throw Object.assign(new Error('Plugin activation ended'), { code: 'stale-context' });
             if (!response.ok) throw Object.assign(new Error('Plugin AI call was refused. Check the connection, approved models and grants.'), { code: 'host-unavailable' });
-            const payload = await response.json();
+            const payload = await response.json() as { ok?: boolean; result?: PluginCompletion };
             if (payload.ok !== true || !payload.result) throw new Error('Invalid AI response');
             return payload.result;
         }),

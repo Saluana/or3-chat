@@ -43,10 +43,12 @@ export default defineEventHandler(async event => {
     deleteCookie(event, name, options);
     let connected = false;
     try {
-        const transaction = JSON.parse(cookie ?? 'null');
+        const transaction: unknown = JSON.parse(cookie ?? 'null');
         const query = getQuery(event);
         if (!session.authenticated || !session.user?.id || !session.workspace?.id
-            || !transaction || transaction.userId !== session.user.id || !Number.isFinite(transaction.expires) || transaction.expires < Date.now()
+            || !transaction || typeof transaction !== 'object'
+            || !('userId' in transaction) || !('expires' in transaction) || !('verifier' in transaction) || !('state' in transaction)
+            || typeof transaction.expires !== 'number' || transaction.userId !== session.user.id || !Number.isFinite(transaction.expires) || transaction.expires < Date.now()
             || typeof transaction.verifier !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(transaction.verifier)
             || typeof query.code !== 'string' || query.code.length > 2048 || !query.code
             || typeof query.state !== 'string' || typeof transaction.state !== 'string'
@@ -61,7 +63,9 @@ export default defineEventHandler(async event => {
         const { readBoundedBody } = await import('../../utils/plugins/connections/bounded-body');
         const body = await readBoundedBody(response, { maxBytes: 2048 });
         if (!body.ok) throw new Error('Invalid response');
-        const result = await openRouterCredentialOperation(session, { operation: 'save', key: JSON.parse(body.text).key });
+        const payload: unknown = JSON.parse(body.text);
+        if (!payload || typeof payload !== 'object' || !('key' in payload) || typeof payload.key !== 'string') throw new Error('Invalid response');
+        const result = await openRouterCredentialOperation(session, { operation: 'save', key: payload.key });
         connected = result.connected;
     } catch { /* Fixed redirect only: provider errors and credentials never reach the browser. */ }
     return sendRedirect(event, `/openrouter-callback?connection=${connected ? 'connected' : 'failed'}`, 302);
