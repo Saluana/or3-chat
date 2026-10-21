@@ -60,6 +60,7 @@ describe('Nuxt task launcher', () => {
             ssr: process.env.SSR_AUTH_ENABLED,
             auth: process.env.OR3_AUTH_PROVIDER,
             driver: process.env.OR3_SQLITE_DRIVER,
+            secretsProvider: process.env.NUXT_SECRETS_PROVIDER,
             args: process.argv.slice(2),
         }));`;
         const entry = join(nuxt, 'bin/nuxt.mjs');
@@ -144,6 +145,11 @@ describe('Nuxt task launcher', () => {
         const result = launch('build', { SSR_AUTH_ENABLED: 'true', OR3_SYNC_PROVIDER: 'convex' }, undefined, { providerExitCode: 1 });
         receipts(result);
         expect(result.stdout).not.toContain('BACKEND_CHECK=');
+    });
+
+    it.each(['build', 'preview'])('uses vault custody only at runtime during %s', task => {
+        const result = receipts(launch(task, { NUXT_SECRETS_PROVIDER: 'or3-secrets' }));
+        expect(result[0]).toMatchObject({ secretsProvider: task === 'build' ? '' : 'or3-secrets' });
     });
 
     it('starts SQLite preview without a Convex package', () => {

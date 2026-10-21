@@ -128,11 +128,18 @@ export async function fetchModelCatalog(opts?: {
 
     const { apiKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig() as {
-        public?: { openRouter?: { baseUrl?: string } };
+        public?: { ssrAuthEnabled?: boolean; openRouter?: { baseUrl?: string } };
     };
     await hydrateUserApiKeyFromKv();
     const key = apiKey.value;
     try {
+        if (runtimeConfig.public?.ssrAuthEnabled === true) {
+            const response = await fetch('/api/openrouter/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
+            if (!response.ok) throw new Error('OpenRouter model catalog unavailable.');
+            const data = openRouterModelListSchema.parse(await response.json());
+            const fetchedAt = Date.now(); saveCache(data, fetchedAt);
+            return { data, fetchedAt, source: 'openrouter-live' };
+        }
         const { Models } = await import('@openrouter/sdk/sdk/models.js');
         const client = {
             models: new Models({

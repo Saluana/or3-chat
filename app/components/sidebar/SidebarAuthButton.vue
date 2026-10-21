@@ -70,7 +70,7 @@
     <ConfirmDialog
         v-model="confirmDisconnectOpen"
         title="Disconnect OpenRouter?"
-        message="Your OpenRouter key will be removed from this browser. You'll need to connect again before you can keep chatting."
+        :message="isSsrAuthEnabled ? 'Your OpenRouter connection will be removed from your account on every device.' : 'Your OpenRouter key will be removed from this browser.'"
         confirm-text="Disconnect"
         danger
         @confirm="disconnectOpenRouter"
@@ -81,6 +81,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { state } from '~/state/global';
+import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarAuthButtonFallback from './SidebarAuthButtonFallback.client.vue';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
@@ -115,7 +116,7 @@ onMounted(() => {
 
 // OpenRouter state - needed in both SSR and non-SSR modes for user override
 const openrouter = useOpenRouterAuth();
-const isConnected = computed(() => Boolean(state.value.openrouterKey));
+const { connected: isConnected } = useUserApiKey();
 const usingInstanceKey = computed(
     () => hasInstanceKey.value && (!allowUserOverride.value || !isConnected.value)
 );

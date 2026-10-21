@@ -164,6 +164,21 @@ jobs:
           CMD ["/nodejs/bin/node", "-e", "process.exit(1)"]
           EOF
           docker build -f "$RUNNER_TEMP/Dockerfile.unhealthy" -t or3-cloud-unhealthy .
+      - name: Verify vault upgrade from the published Cloud release
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          # The unversioned source still identifies as 0.1.90: preserve its
+          # candidate image before pulling the distinct published baseline.
+          docker tag "ghcr.io/saluana/or3-chat:$version" or3-cloud-credentials-qualification:local
+          docker pull ghcr.io/saluana/or3-chat:0.1.90
+          bun scripts/test/run-cloud-vault-lifecycle-e2e.ts
+          docker tag or3-cloud-credentials-qualification:local "ghcr.io/saluana/or3-chat:$version"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cloud-vault-lifecycle
+          path: test-results/cloud-vault-lifecycle
+          if-no-files-found: ignore
       - name: Prove the base Compose file stays valid without dashboard variables
         run: |
           set -euo pipefail
@@ -323,7 +338,7 @@ jobs:
           grep -E '^OR3_(BASIC_AUTH_BOOTSTRAP_(EMAIL|PASSWORD)|ADMIN_(USERNAME|PASSWORD))=' \
             "$smoke/.env" > "$smoke/.or3-initial-credentials"
           chmod 600 "$smoke/.env" "$smoke/.or3-initial-credentials"
-          docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" up -d --wait --wait-timeout 180
+          docker compose --profile or3-vault --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" up -d --wait --wait-timeout 180
           for attempt in $(seq 1 30); do
             curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
             sleep 1
@@ -331,7 +346,7 @@ jobs:
           curl --insecure --fail "https://localhost/api/health?deep=true"
           (cd "$smoke" && OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
             node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
-          docker compose --project-directory "$smoke" --env-file "$smoke/.env" \
+          docker compose --profile or3-vault --project-directory "$smoke" --env-file "$smoke/.env" \
             -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" restart or3
           for attempt in $(seq 1 60); do
             curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
@@ -345,13 +360,13 @@ jobs:
           adopted="$RUNNER_TEMP/or3-cloud-adopted"
           public="$RUNNER_TEMP/or3-cloud-public"
           if [ -d "$managed" ]; then
-            docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" down --volumes 2>/dev/null || true
+            docker compose --profile or3-vault --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" down --volumes 2>/dev/null || true
           fi
           if [ -d "$public" ]; then
-            docker compose --project-directory "$public" --env-file "$public/.env" -f "$public/compose.yaml" -f "$public/compose.public.yaml" down --volumes 2>/dev/null || true
+            docker compose --profile or3-vault --project-directory "$public" --env-file "$public/.env" -f "$public/compose.yaml" -f "$public/compose.public.yaml" down --volumes 2>/dev/null || true
           fi
           if [ -d "$adopted" ]; then
-            docker compose --project-directory "$adopted" --env-file "$adopted/.env" -f "$adopted/compose.yaml" down --volumes 2>/dev/null || true
+            docker compose --profile or3-vault --project-directory "$adopted" --env-file "$adopted/.env" -f "$adopted/compose.yaml" down --volumes 2>/dev/null || true
           fi
 
   dashboard-fault-injection:

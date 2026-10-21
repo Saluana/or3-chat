@@ -161,7 +161,7 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
       };
     }
     let bytes = 0;
-    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth']) {
+    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth', ...(manifest.vaultSha256 ? ['vault.backup'] : [])]) {
       bytes += (await lstat(join(path, file))).size;
     }
     return {
@@ -295,6 +295,7 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
     !/^sha256:[0-9a-f]{64}$/i.test(manifest.imageDigest) ||
     !/^[0-9a-f]{64}$/i.test(manifest.dataSha256) ||
     !/^[0-9a-f]{64}$/i.test(manifest.configSha256 ?? '') ||
+    (manifest.vaultSha256 !== undefined && !/^[0-9a-f]{64}$/i.test(manifest.vaultSha256)) ||
     (manifest.dataBytes !== undefined && (!Number.isSafeInteger(manifest.dataBytes) || manifest.dataBytes < 0))
   ) {
     throw new Error(`Invalid backup manifest at ${backupPath}.`);
@@ -305,6 +306,7 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
     const configActual = await sha256File(join(backupPath, 'config.env'));
     if (configActual !== manifest.configSha256) throw new Error(`Backup configuration checksum mismatch for ${manifest.backupId}.`);
   }
+  if (manifest.vaultSha256 && await sha256File(join(backupPath, 'vault.backup')) !== manifest.vaultSha256) throw new Error(`Vault backup checksum mismatch for ${manifest.backupId}.`);
   await verifiedManagedAssetContents(backupPath, manifest);
   return manifest;
 }

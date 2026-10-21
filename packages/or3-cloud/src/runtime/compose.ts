@@ -21,6 +21,7 @@ export function composeArgs(directory: string, mode: Mode, command: string[] = [
   }
   return [
     'compose',
+    ...((env.SSR_AUTH_ENABLED === 'true' && (env.NUXT_SECRETS_PROVIDER ?? 'or3-secrets') === 'or3-secrets') ? ['--profile', 'or3-vault'] : []),
     '--project-name',
     project,
     '--project-directory',

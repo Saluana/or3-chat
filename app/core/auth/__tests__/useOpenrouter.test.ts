@@ -4,7 +4,7 @@ import { ref } from 'vue';
 
 const toastAdd = vi.fn();
 const refresh = vi.fn();
-const sessionData = ref({ session: null as { authenticated: boolean } | null });
+const sessionData = ref({ session: null as { authenticated: boolean; provider?: string; user?: { id: string } } | null });
 const runtimeConfig = { public: { ssrAuthEnabled: true } };
 
 describe('useOpenRouterAuth', () => {
@@ -15,6 +15,7 @@ describe('useOpenRouterAuth', () => {
         sessionStorage.clear();
         localStorage.clear();
         vi.resetModules();
+        vi.doUnmock('~/core/auth/useUserApiKey');
         toastAdd.mockClear();
         refresh.mockReset().mockResolvedValue({ session: null });
         sessionData.value = { session: null };
@@ -58,7 +59,43 @@ describe('useOpenRouterAuth', () => {
         expect(sessionStorage.getItem('openrouter_code_verifier')).toBeNull();
     });
 
-    it('clears canonical reactive state before waiting for persisted-key deletion', async () => {
+    it('binds Cloud OAuth initiation to the account displayed by the tab', async () => {
+        sessionData.value = { session: { authenticated: true, provider: 'basic-auth', user: { id: 'account-a' } } };
+        const assign = vi.fn();
+        vi.stubGlobal('window', { location: { assign } });
+        const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ url: 'https://openrouter.ai/auth' })));
+        vi.stubGlobal('fetch', fetch);
+        const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+        await useOpenRouterAuth().startLogin();
+        expect(new Headers(fetch.mock.calls[0]![1].headers).get('x-or3-account')).toBe(JSON.stringify(['basic-auth', 'account-a']));
+        expect(assign).toHaveBeenCalledWith('https://openrouter.ai/auth');
+    });
+
+    it('shows an actionable connection error when Cloud OAuth cannot start', async () => {
+        sessionData.value = { session: { authenticated: true, provider: 'basic-auth', user: { id: 'account-a' } } };
+        const assign = vi.fn();
+        vi.stubGlobal('window', { location: { assign } });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
+        const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+        const auth = useOpenRouterAuth();
+        await expect(auth.startLogin()).resolves.toBeUndefined();
+        expect(auth.isLoggingIn.value).toBe(false);
+        expect(assign).not.toHaveBeenCalled();
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'OpenRouter connection unavailable', color: 'error' }));
+    });
+
+    it('shows a failed Cloud disconnect without emitting a connection-success event', async () => {
+        vi.doMock('~/core/auth/useUserApiKey', () => ({ disconnectOpenRouterConnection: vi.fn().mockRejectedValue(new Error('Vault unavailable')) }));
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal('window', { dispatchEvent });
+        const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+        await expect(useOpenRouterAuth().logoutOpenRouter()).resolves.toBeUndefined();
+        expect(dispatchEvent).not.toHaveBeenCalled();
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'OpenRouter disconnect failed', color: 'error' }));
+    });
+
+    it('clears static canonical state before waiting for persisted-key deletion', async () => {
+        runtimeConfig.public.ssrAuthEnabled = false;
         let resolveDelete!: () => void;
         kvDelete.mockImplementation(
             () => new Promise<void>((resolve) => (resolveDelete = resolve))

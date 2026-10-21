@@ -247,9 +247,12 @@ const allowUserOverride = computed(
 const hasInstanceKey = computed(
     () => openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
 );
-const { apiKey } = useUserApiKey();
+const { apiKey, connected } = useUserApiKey();
 const effectiveApiKey = computed(() =>
     allowUserOverride.value ? apiKey.value : null
+);
+const hasUsableKey = computed(() =>
+    Boolean(effectiveApiKey.value) || hasInstanceKey.value || (allowUserOverride.value && connected.value)
 );
 const toast = useToast();
 const { $theme } = useNuxtApp();
@@ -339,12 +342,12 @@ const messages = ref<HelpChatMessage[]>([
 const canSend = computed(() =>
     Boolean(
         message.value.trim().length &&
-            (effectiveApiKey.value || hasInstanceKey.value) &&
+            hasUsableKey.value &&
             !isSending.value
     )
 );
 const showKeyHint = computed(
-    () => !effectiveApiKey.value && !hasInstanceKey.value
+    () => !hasUsableKey.value
 );
 const keyHintText = computed(() =>
     allowUserOverride.value
@@ -472,7 +475,7 @@ async function sendMessage() {
 
     if (!trimmed || isSending.value) return;
 
-    if (!effectiveApiKey.value && !hasInstanceKey.value) {
+    if (!hasUsableKey.value) {
         toast.add({
             title: allowUserOverride.value
                 ? 'OpenRouter key required'

@@ -24,7 +24,7 @@ vi.mock('~~/shared/openrouter', async load => ({
 // workflow may outlive its permission, owning project, message or input object.
 beforeEach(() => {
     clearAllJobs(); resetJobProvider(); fixture.role = 'owner'; fixture.projectId = null; fixture.deleted = false; fixture.send.mockClear();
-    const config = { public: { sync: { provider: 'workflow-dispatch' } }, sync: { provider: 'workflow-dispatch' }, backgroundJobs: { storageProvider: 'memory' } };
+    const config = { auth: { enabled: false }, openrouterBaseUrl: 'https://provider.example.test', public: { sync: { provider: 'workflow-dispatch' } }, sync: { provider: 'workflow-dispatch' }, backgroundJobs: { storageProvider: 'memory' } };
     vi.stubGlobal('useRuntimeConfig', () => config);
     vi.mocked(useRuntimeConfig).mockReturnValue(config as ReturnType<typeof useRuntimeConfig>);
     registerAuthWorkspaceStore({ id: 'workflow-dispatch', create: () => ({ listUserWorkspaces: async () => fixture.role ? [{ id: 'workspace', name: 'Fixture', role: fixture.role }] : [] }) as unknown as AuthWorkspaceStore });
@@ -42,6 +42,17 @@ async function client() {
     return { origin, bridge, config: bridge.createOpenRouterClient({ apiKey: 'fixture', origin }) };
 }
 describe('workflow server provider boundary', () => {
+    it('Cloud clients require authorization and cannot override the selected billing credential', async () => {
+        const config = useRuntimeConfig() as unknown as Record<string, unknown>;
+        Object.assign(config, { auth: { enabled: true }, secrets: { provider: '' }, openrouterApiKey: 'instance-fixture', openrouterAllowUserOverride: false });
+        const event = { context: {}, node: { req: { headers: {} }, res: {} } } as H3Event;
+        const bridge = createTrustedPluginServerServices(event, new Set(['ai.provider', 'jobs.background']));
+        expect(() => bridge.createOpenRouterClient({ apiKey: 'plugin-choice' })).toThrow();
+        await bridge.authorize(event, 'workflow:background');
+        expect(bridge.resolveApiKey(event)).toBe('instance-fixture');
+        expect(bridge.createOpenRouterClient({ apiKey: 'plugin-choice' }).apiKey).toBe('instance-fixture');
+    });
+
     it.each(['project', 'viewer', 'deleted', 'ordinary'] as const)('rechecks persisted run authorization before inference (%s)', async kind => {
         const { config } = await client();
         if (kind === 'project') fixture.projectId = 'project';

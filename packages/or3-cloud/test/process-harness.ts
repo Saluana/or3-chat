@@ -134,6 +134,7 @@ if (args[0] === 'volume') {
 }
 
 const containerScript = () => {
+  if (joined.includes('/app/vault/entrypoint.mjs backup')) return out('encrypted-fixture-vault-backup');
   if (joined.includes('stat -c')) return out('65532:65532');
   if (joined.includes('du -sb')) return out((config.volumeApparentBytes ?? 1000) + '\t/data');
   if (joined.includes('du -sk')) return out((config.volumeAllocatedKiB ?? 1) + '\t/data');
@@ -159,7 +160,7 @@ if (args[0] === 'exec') {
 
 if (args[0] === 'compose') {
   let index = 1;
-  while (['--project-name', '--project-directory', '--env-file', '-f'].includes(args[index])) index += 2;
+  while (['--profile', '--project-name', '--project-directory', '--env-file', '-f'].includes(args[index])) index += 2;
   const sub = args[index];
   const rest = args.slice(index + 1);
   const envFile = args[args.indexOf('--env-file') + 1];

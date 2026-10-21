@@ -1,3 +1,4 @@
+import { resolveOpenRouterCredential } from '../../secrets/openrouter';
 import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module server/api/openrouter/stream.post
@@ -133,80 +134,18 @@ export default defineEventHandler(async (event) => {
     const openRouterUrl = getOpenRouterChatCompletionsUrl(
         config.openrouterBaseUrl
     );
-    const allowUserOverride = config.openrouterAllowUserOverride !== false;
-    const requireUserKey = config.openrouterRequireUserKey === true;
-    const authHeader = getHeader(event, 'authorization');
-    const keyHeader = getHeader(event, 'x-or3-openrouter-key');
-    const clientKey =
-        (typeof keyHeader === 'string' && keyHeader.trim().length > 0
-            ? keyHeader.trim()
-            : undefined) ||
-        (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
-
-    let sessionLoaded = false;
-    let cachedSession: Awaited<
-        ReturnType<typeof resolveSessionContext>
-    > | null = null;
+    let cachedSession: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     const getSession = async () => {
         if (!isSsrAuthEnabled(event)) return null;
-        if (!sessionLoaded) {
-            cachedSession = await resolveSessionContext(event);
-            sessionLoaded = true;
-        }
-        return cachedSession;
+        return cachedSession ??= await resolveSessionContext(event);
     };
-
-    const managedKey =
-        config.openrouterApiKey || process.env.OPENROUTER_API_KEY;
-    const selectedClientKey = requireUserKey
-        ? clientKey
-        : allowUserOverride
-          ? clientKey
-          : undefined;
-
-    // Caller-owned foreground requests remain usable without a cookie session.
-    // Managed credentials and persisted background jobs require mutation intent.
-    if (backgroundRequested || (!selectedClientKey && managedKey && !requireUserKey)) {
-        requireCloudMutation(event);
-    }
-
-    let apiKey = selectedClientKey;
-    if (!apiKey && managedKey && !requireUserKey) {
-        const session = await getSession();
-        requireCan(
-            session,
-            'workspace.write',
-            session?.workspace?.id
-                ? { kind: 'workspace', id: session.workspace.id }
-                : undefined
-        );
-        apiKey = managedKey;
-    }
-
-    if (!apiKey && process.env.NODE_ENV !== 'production') {
-        console.warn('[openrouter][stream] missing api key', {
-            hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
-            hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
-            allowUserOverride,
-            requireUserKey,
-            hasAuthHeader: Boolean(authHeader),
-        });
-        warnBgStream('api-stream-missing-api-key', {
-            hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
-            hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
-            allowUserOverride,
-            requireUserKey,
-            hasAuthHeader: Boolean(authHeader),
-            hasClientKey: Boolean(clientKey),
-        });
-    }
+    if (isSsrAuthEnabled(event)) requireCloudMutation(event);
+    const selected = await resolveOpenRouterCredential(event, await getSession());
+    const apiKey = selected.apiKey;
+    if (backgroundRequested) requireCloudMutation(event);
     if (!apiKey) {
-        if (requireUserKey) {
-            setResponseStatus(event, 400);
-            return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: 'personal', retryable: false });
-        }
         setResponseStatus(event, 400);
-        return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: 'server', retryable: false });
+        return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: selected.source, retryable: false });
     }
 
     const limits = config.limits;
@@ -370,7 +309,7 @@ export default defineEventHandler(async (event) => {
                 body,
                 contextPolicy,
                 apiKey,
-                credentialSource: selectedClientKey ? 'personal' : 'server',
+                credentialSource: selected.source,
                 userId,
                 workspaceId,
                 threadId: validation.threadId!,
@@ -589,10 +528,10 @@ export default defineEventHandler(async (event) => {
             const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
             if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
             return publicErrorEnvelope({ ...normalizeProviderResponseError(respText, upstream.status, {
-                credentialSource: selectedClientKey ? 'personal' : 'server' }), retryAfterMs });
+                credentialSource: selected.source }), retryAfterMs });
         }
 
-        setHeader(event, 'X-OR3-Credential-Source', selectedClientKey ? 'personal' : 'server');
+        setHeader(event, 'X-OR3-Credential-Source', selected.source);
         // Req 6: Set SSE headers
         setHeader(event, 'Content-Type', 'text/event-stream');
         setHeader(event, 'Cache-Control', 'no-cache, no-transform');

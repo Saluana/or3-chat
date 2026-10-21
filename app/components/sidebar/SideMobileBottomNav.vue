@@ -479,7 +479,7 @@
         <ConfirmDialog
             v-model="confirmDisconnectOpen"
             title="Disconnect OpenRouter?"
-            message="Your OpenRouter key will be removed from this browser. You'll need to connect again before you can keep chatting."
+            :message="isSsrAuthEnabled ? 'Your OpenRouter connection will be removed from your account on every device.' : 'Your OpenRouter key will be removed from this browser.'"
             confirm-text="Disconnect"
             danger
             @confirm="disconnectOpenRouter"
@@ -508,6 +508,7 @@ import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { state } from '~/state/global';
+import { useUserApiKey } from '~/core/auth/useUserApiKey';
 
 /** Keep nested auth menus on-screen inside the mobile More sheet. */
 provide('or3:auth-ui-popover-content', {
@@ -577,7 +578,7 @@ const showConnectRow = computed(
 );
 
 const openrouter = useOpenRouterAuth();
-const isConnected = computed(() => Boolean(state.value.openrouterKey));
+const { connected: isConnected } = useUserApiKey();
 const usingInstanceKey = computed(
     () =>
         hasInstanceKey.value &&

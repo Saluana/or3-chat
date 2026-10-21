@@ -27,10 +27,13 @@ function isStrictMode(): boolean {
 
 export default defineNitroPlugin(() => {
     const completeConfig = useRuntimeConfig();
+    if (import.meta.prerender) return;
     const secrets = completeConfig.secrets as typeof completeConfig.secrets | undefined;
-    if (secrets?.provider && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
-        throw new Error('[or3-cloud-config] Selected secret provider is missing or invalid.');
+    if (secrets?.provider === 'or3-secrets' && process.env.NITRO_PRESET && !['node-server', 'node', 'node-cluster'].includes(process.env.NITRO_PRESET)) throw new Error('[or3-cloud-config] The Unix secret vault requires a stateful single host. Configure a suitable replacement provider or explicitly disable secrets for server-managed-only billing.');
+    if (secrets?.provider === 'or3-secrets' && (!listSecretStoreIds().includes(secrets.provider) || !secrets.namespace || !isAbsolute(secrets.socketPath) || !isAbsolute(secrets.tokenFile) || !/^[a-f0-9]{32}$/.test(secrets.vaultId))) {
+        throw new Error('[or3-cloud-config] Selected secret provider is missing or invalid. Provision the single-host vault and configure NUXT_SECRETS_SOCKET_PATH, TOKEN_FILE, NAMESPACE, VAULT_ID and SERVICE_UID; or explicitly set NUXT_SECRETS_PROVIDER to an empty value for server-managed-only billing.');
     }
+    if (secrets?.provider && !listSecretStoreIds().includes(secrets.provider)) throw new Error('[or3-cloud-config] Selected secret provider is not registered.');
     if (!isStrictMode()) return;
 
     // Optional subsystems may be absent in older or partial runtime configurations.

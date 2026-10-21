@@ -2,12 +2,13 @@ import { Extension, Editor } from '@tiptap/core';
 import { Plugin, PluginKey, EditorState, Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, EditorView } from '@tiptap/pm/view';
 import { useDebounceFn } from '@vueuse/core';
-import { state, isMobile } from '~/state/global';
+import { isMobile } from '~/state/global';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import AutocompleteState from './state';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { normalizeAutocompleteSuggestion } from './suggestion-utils';
 import { useRuntimeConfig } from '#imports';
+import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 
 interface AutocompletePluginState {
@@ -32,16 +33,14 @@ function isMissingKeyError(error: unknown): boolean {
 }
 
 async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
-    // The reactive key is the sole autocomplete credential source. Legacy
-    // localStorage reads could resurrect a key after logout and bypass the
-    // canonical KV/state lifecycle.
-    const orKey = state.value.openrouterKey || null;
     const config = useRuntimeConfig();
+    const cloud = config.public.ssrAuthEnabled === true;
+    const { apiKey, connected } = useUserApiKey();
+    const orKey = cloud ? null : apiKey.value;
     const availability = resolveOpenRouterKeyAvailability(config.public.openRouter);
-    if (!availability.hasUsableKey(orKey)
-        || (!orKey && (config.public.ssrAuthEnabled !== true || !getCachedSessionContext()?.user?.id))) {
-        return { completion: '' };
-    }
+    const accountKey = cloud && availability.allowUserOverride && connected.value;
+    if ((!accountKey && !availability.hasUsableKey(orKey))
+        || (cloud && !getCachedSessionContext()?.user?.id)) return { completion: '' };
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);

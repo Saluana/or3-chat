@@ -246,7 +246,7 @@ export function useChat(
     // Cancellation may change while an awaited operation is pending.
     const isRequestCancelled = (scope: ChatRequestScope): boolean => scope.cancelled;
     const aborted = ref<boolean>(false);
-    const { apiKey, setKey } = useUserApiKey();
+    const { apiKey, connected, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
     // Nuxt UI resolves its toast service through Vue injection. Capture it
     // while useChat is still running inside setup; calling useToast() later
@@ -1939,7 +1939,7 @@ export function useChat(
         const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
         const masterPrompt = useAiSettings().settings.value.masterSystemPrompt;
 
-        const hasKey = Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        const hasKey = (allowUserOverride.value && connected.value) || Boolean(effectiveApiKey.value) || hasInstanceKey.value;
         if (!hasKey) {
             if (allowUserOverride.value && guestAccessEnabled.value) {
                 // Guest access enabled - trigger OpenRouter login
@@ -3728,6 +3728,7 @@ export function useChat(
                     hooks,
                     effectiveApiKey,
                     hasInstanceKey,
+                    hasUserKey: computed(() => allowUserOverride.value && connected.value),
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,

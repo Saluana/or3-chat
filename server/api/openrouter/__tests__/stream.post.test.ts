@@ -347,26 +347,11 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
-    it('allows a guest foreground request with caller-supplied credentials', async () => {
+    it('rejects Cloud guest credentials before contacting OpenRouter', async () => {
         runtimeConfig.openrouterApiKey = 'managed-key';
         resolveSessionContextMock.mockResolvedValue({ authenticated: false });
-
-        await handler(
-            makeEvent({
-                'x-or3-openrouter-key': 'caller-key',
-                host: 'chat.test',
-            })
-        );
-
-        expect(requireCanMock).not.toHaveBeenCalled();
-        expect(fetch).toHaveBeenCalledWith(
-            'https://openrouter.test/api/v1/chat/completions',
-            expect.objectContaining({
-                headers: expect.objectContaining({
-                    Authorization: 'Bearer caller-key',
-                }),
-            })
-        );
+        await expect(handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key', host: 'chat.test' }))).rejects.toMatchObject({ statusCode: 401 });
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('requires workspace.write before starting background work', async () => {
@@ -524,7 +509,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         { label: 'untrusted origin with intent', origin: 'https://untrusted.example.test', intent: true, callerKey: false, trusted: false, status: 403 },
         { label: 'same-origin managed request', origin: 'https://chat.example.test', intent: true, callerKey: false, trusted: false, status: 200 },
         { label: 'configured browser origin', origin: 'https://trusted.example.test', intent: true, callerKey: false, trusted: true, status: 200 },
-        { label: 'originless guest with personal key', origin: '', intent: false, callerKey: true, trusted: false, status: 200 },
+        { label: 'Cloud originless guest is refused', origin: '', intent: false, callerKey: true, trusted: false, status: 403 },
     ])('enforces mutation protection without breaking $label', async ({ origin, intent, callerKey, trusted, status }) => {
         const h3 = await vi.importActual<typeof import('h3')>('h3');
         const auth = await vi.importActual<typeof import('../../../auth/can')>('../../../auth/can');

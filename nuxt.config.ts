@@ -121,6 +121,7 @@ const moduleIds = [
     ...new Set(
         [
             ...providerMetadata.modules,
+            ...(shouldLoadCloudProviderModules ? ['@or3/secrets/nuxt'] : []),
             ...requiredProviderModules(or3CloudConfig, env).map(
                 ({ moduleId }) => moduleId,
             ),

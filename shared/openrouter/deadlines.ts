@@ -62,7 +62,7 @@ export async function fetchWithResponseDeadline(
         if (callerSignal?.aborted) onAbort();
         else callerSignal?.addEventListener('abort', onAbort, { once: true });
         return await Promise.race([
-            fetch(input, { ...init, signal: controller.signal }),
+            fetch(input, { ...init, redirect: 'error', signal: controller.signal }),
             boundary,
         ]);
     } catch (error) {

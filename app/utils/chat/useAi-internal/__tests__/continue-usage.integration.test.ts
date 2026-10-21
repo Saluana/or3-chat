@@ -44,7 +44,7 @@ it.each([false, true])('persists measured continuation usage through canonical r
     const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
         threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
         streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
-        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
         useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
         resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 },
             userMaxContextTokens: null, source: 'openrouter-live' }) };
@@ -67,7 +67,7 @@ it('refuses an unbound continuation without model policy before any target mutat
     const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
         threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
         streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(), effectiveApiKey: ref('scripted'),
-        hasInstanceKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
         useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn() };
     await continueMessageImpl(ctx, 'assistant');
     expect(await db.messages.toArray()).toEqual(before);
@@ -89,7 +89,7 @@ it('preserves canonical continuation state when admission recovery is uncertain'
         request, loading: ref(false), aborted: ref(false), abortController: ref(null),
         threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
         streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
-        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), defaultModelId: 'model',
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model',
         getSystemPromptContent: async () => null, useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
         resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 }, userMaxContextTokens: null, source: 'openrouter-live' }),
         backgroundStreamingAllowed: true, workspaceId: workspace, userId: 'user',

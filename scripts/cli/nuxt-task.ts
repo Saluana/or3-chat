@@ -51,6 +51,9 @@ export async function runNuxtTask(
         loadDotenv({ processEnv: fileEnv, quiet: true });
     }
     const taskEnv = { ...fileEnv, ...env };
+    // Prerender has no account credentials. Keep custody out of the build
+    // process; application-plan still emits the concrete runtime selection.
+    if (task === 'build') taskEnv.NUXT_SECRETS_PROVIDER = '';
     const nuxtArgs =
         task === 'build'
             ? ['build']

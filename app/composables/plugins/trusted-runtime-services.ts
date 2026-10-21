@@ -3,7 +3,7 @@ import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { buildPluginSettingDefaults } from '~~/server/admin/config/plugin-setting-defaults';
 import { watch } from 'vue';
 import { useAppConfig, useRuntimeConfig, useToast } from '#imports';
-import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue } from '@or3/plugin-sdk';
+import { pluginError, pluginOk, type PluginHostClients, type PluginGrant, type PluginJsonValue, type PluginCompletion } from '@or3/plugin-sdk';
 import { createTrustedUiKit } from './trusted-ui-kit';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
@@ -28,10 +28,10 @@ export function createTrustedRuntimeServices(input: {
     cleanup(callback: () => void): void;
 }) {
     const runtime = useRuntimeConfig(); const config = useOr3Config();
-    const toast = useToast(); const session = useSessionContext(); const { apiKey } = useUserApiKey();
+    const toast = useToast(); const session = useSessionContext(); const { apiKey, connected } = useUserApiKey();
     const owner = session.data.value?.session?.user?.id;
     const workspace = session.data.value?.session?.workspace?.id;
-    const secrets = session.data.value?.secretStoreEnabled === true ? createServerSecretStore({
+    const secrets = runtime.public.ssrAuthEnabled === true ? createServerSecretStore({
         pluginId: input.pluginId, activationId: input.activationId,
         current: () => input.current() && !!owner && !!workspace && session.data.value?.session?.authenticated === true &&
             session.data.value.session.user?.id === owner && session.data.value.session.workspace?.id === workspace,
@@ -66,9 +66,10 @@ export function createTrustedRuntimeServices(input: {
         models: () => run('ai.models', async () => {
             if (!models.catalog.value.length) await models.fetchModels({ ttlMs: 60 * 60 * 1000 });
             const favorites = new Set(models.favoriteModels.value.map(model => model.id));
-            return { configured: Boolean(apiKey.value), models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
+            return { configured: connected.value || runtime.public.openRouter?.hasInstanceKey === true, models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
         }),
         provider: originInput => run('ai.provider', async () => {
+            if (runtime.public.ssrAuthEnabled === true) throw Object.assign(new Error('Cloud credentials are server-owned. Use context.ai.complete().'), { code: 'unsupported' });
             if (!apiKey.value) throw Object.assign(new Error('Sign in to OpenRouter'), { code: 'not-signed-in' });
             const origin = originInput && Object.freeze({ ...originInput });
             if (origin && [origin.threadId, origin.messageId, origin.streamId].some(id => typeof id !== 'string' || !id))
@@ -113,7 +114,21 @@ export function createTrustedRuntimeServices(input: {
         }),
         requestSignIn() { input.allow('ai.provider'); window.dispatchEvent(new CustomEvent('openrouter:login')); return pluginOk(undefined); },
         onModelsChange(listener) { input.allow('ai.models'); const stop = watch([models.favoriteModels, models.catalog], () => { if (input.current()) listener(); }, { deep: true }); input.cleanup(stop); return { dispose: stop }; },
-        complete: async () => pluginError('unsupported', 'Use the trusted provider client'),
+        complete: value => run('ai.provider', async () => {
+            if (runtime.public.ssrAuthEnabled !== true) throw Object.assign(new Error('Use ai.provider() in local deployments.'), { code: 'unsupported' });
+            if (!input.activationId || !input.current()) throw Object.assign(new Error('Plugin activation ended'), { code: 'stale-context' });
+            const controller = new AbortController(); input.cleanup(() => controller.abort());
+            const response = await fetch('/api/plugins/isolation/capability', {
+                method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
+                headers: { 'content-type': 'application/json', 'x-or3-plugin-intent': 'plugin' },
+                body: JSON.stringify({ activationId: input.activationId, method: 'ai.complete', params: value, requestId: createRuntimeUuid() }),
+            });
+            if (!input.current()) throw Object.assign(new Error('Plugin activation ended'), { code: 'stale-context' });
+            if (!response.ok) throw Object.assign(new Error('Plugin AI call was refused. Check the connection, approved models and grants.'), { code: 'host-unavailable' });
+            const payload = await response.json() as { ok?: boolean; result?: PluginCompletion };
+            if (payload.ok !== true || !payload.result) throw new Error('Invalid AI response');
+            return payload.result;
+        }),
     };
     const tools: PluginHostClients['tools'] = {
         list: () => run('tools.use', async () => registry.listTools.value.map(tool => ({ definition: tool.definition, enabled: tool.enabled.value, workflowPolicy: tool.workflowPolicy }))),

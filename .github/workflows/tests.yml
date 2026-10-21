@@ -403,7 +403,10 @@ jobs:
           for secret in "$jwt" "$refresh" "$storage" "$admin" "$password"; do
             echo "::add-mask::$secret"
           done
+          # This single-container smoke selects server-managed billing; the
+          # complete deployment lane qualifies the separate managed vault.
           cat > "$smoke/.env" <<EOF
+          NUXT_SECRETS_PROVIDER=
           SSR_AUTH_ENABLED=true
           AUTH_PROVIDER=basic-auth
           OR3_AUTH_PROVIDER=basic-auth

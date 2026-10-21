@@ -530,7 +530,7 @@ const runtimeConfig = useRuntimeConfig();
 // after the component's setup context has gone away, especially after a slow
 // network response or a plugin hook, and must not call inject-backed composables.
 const toast = useToast();
-const { apiKey } = useUserApiKey();
+const { apiKey, connected } = useUserApiKey();
 const { startLogin } = useOpenRouterAuth();
 const { signInRequired, promptSignIn } = useSignInGate();
 const hooks = useHooks();
@@ -787,7 +787,7 @@ const {
     armNewChatSelection,
 } = useChatModelSelection({
     threadId: () => props.threadId,
-    shouldFetchCatalog: () => Boolean(props.threadId || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
+    shouldFetchCatalog: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
     onChange: (modelId) => emit('model-change', modelId),
 });
 
@@ -904,7 +904,7 @@ const previewReasoning = computed(() => {
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
-    enabled: () => Boolean(props.threadId || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
+    enabled: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
@@ -1284,7 +1284,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         return { status: 'rejected', reason: 'client_limit' };
     }
     // Require OpenRouter connection (api key) before sending
-    if (!apiKey.value && !hasInstanceKey.value) {
+    if (!connected.value && !apiKey.value && !hasInstanceKey.value) {
         if (!allowUserOverride.value) {
             toast.add({
                 title: 'Instance key required',
