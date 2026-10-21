@@ -1,5 +1,9 @@
 # Deployment and Operations Guide
 
+The current filesystem backup inspector qualifies SQLite 0.0.19 and filesystem
+0.0.13. It accepts completed migration histories through 024 (previous published
+backups) or 026 (retained quota accounting), and refuses incomplete upgrades.
+
 Operational runbook for OR3 Cloud SSR deployments.
 
 ## Start with the right operator

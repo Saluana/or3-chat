@@ -1,7 +1,7 @@
 import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { closeSync, existsSync, openSync, readSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createSandbox, sha256 } from './process-harness';
@@ -24,12 +24,20 @@ afterEach(async () => {
 
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
 
+class OfflineDatabase {
+  private readonly db: Database;
+  constructor(file: string) { this.db = new Database(file, { readonly: true }); }
+  pragma(sql: string, options?: { simple: boolean }) { return options?.simple ? this.db.query(`PRAGMA ${sql}`).values()[0]?.[0] : this.db.exec(`PRAGMA ${sql}`); }
+  prepare(sql: string) { return this.db.query(sql); }
+  close() { this.db.close(); }
+}
+
 test('offline canonical inspection detects missing pairs by workspace and preserves legacy, pending and deleted metadata', async () => {
   const fixture = await sandbox();
   const path = join(fixture.root, 'canonical.sqlite');
   const db = new Database(path);
   db.exec('CREATE TABLE kysely_migration(name TEXT PRIMARY KEY); CREATE TABLE s_file_meta(workspace_id TEXT NOT NULL,id TEXT NOT NULL,data_json TEXT NOT NULL,deleted INTEGER NOT NULL,PRIMARY KEY(workspace_id,id));');
-  for (const name of QUALIFIED_MIGRATIONS) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
+  for (const name of QUALIFIED_MIGRATIONS.slice(0, 24)) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
   const sha = 'a'.repeat(64);
   const md5 = 'b'.repeat(32);
   const insert = (workspace: string, hash: string, payload: unknown, deleted = 0) => db.query('INSERT OR REPLACE INTO s_file_meta VALUES(?,?,?,?)').run(workspace, hash, JSON.stringify(payload), deleted);
@@ -45,13 +53,6 @@ test('offline canonical inspection detects missing pairs by workspace and preser
   const legacy = object('first', 'md5', md5, 0);
   // The adapter is exercised against Bun's real SQLite engine. Only the
   // driver's pragma method is adapted; inspection/query logic is production.
-  class OfflineDatabase {
-    private readonly db: Database;
-    constructor(file: string) { this.db = new Database(file, { readonly: true }); }
-    pragma(sql: string, options?: { simple: boolean }) { return options?.simple ? this.db.query(`PRAGMA ${sql}`).values()[0]?.[0] : this.db.exec(`PRAGMA ${sql}`); }
-    prepare(sql: string) { return this.db.query(sql); }
-    close() { this.db.close(); }
-  }
   const inspect = (text: string) => inspectCanonicalReferences(OfflineDatabase, path, readBackupInventory(text), '/data/storage');
   expect(inspect(header + first + second + legacy)).toMatchObject({ complete: true, liveAttachments: 3, inspectedMetadata: 4 });
   expect(() => inspect(header + first + legacy)).toThrow('required by live canonical attachment metadata');
@@ -66,14 +67,33 @@ test('offline canonical inspection detects missing pairs by workspace and preser
   db.query('INSERT INTO kysely_migration VALUES(?)').run('999_unqualified_future_migration');
   expect(() => inspect(header + first + second + legacy)).toThrow('migration history');
   db.query('DELETE FROM kysely_migration WHERE name=?').run('999_unqualified_future_migration');
-  db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
+  db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS[23]!);
   expect(() => inspect(header + first + second + legacy)).toThrow('migration history');
   db.close();
 });
 
+test('offline inspection accepts the installed provider migration history and rejects a partial upgrade', async () => {
+  const fixture = await sandbox();
+  const path = join(fixture.root, 'migrated.sqlite');
+  const providerRoot = new URL('../../../node_modules/or3-provider-sqlite/dist/runtime/server/db/', import.meta.url);
+  const { initializeSqliteDb, destroySqliteDb } = await import(new URL('kysely.js', providerRoot).href);
+  const { runMigrations } = await import(new URL('migrate.js', providerRoot).href);
+  try {
+    await runMigrations(await initializeSqliteDb({ path, driver: 'bun' }));
+  } finally { await destroySqliteDb(); }
+  const inventory = readBackupInventory(`-rw------- nonroot/nonroot ${statSync(path).size} 2026-10-20 20:00:00 ./sync.sqlite\n`);
+  expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true, liveAttachments: 0 });
+  const db = new Database(path);
+  try {
+    expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all()).toEqual(QUALIFIED_MIGRATIONS.map(name => ({ name })));
+    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
+    expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
+  } finally { db.close(); }
+});
+
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.18', filesystem: '0.0.11' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.18', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.15', filesystem: '0.0.11' }, { contract: 1, sqlite: '0.0.18', filesystem: '0.0.10' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.19', filesystem: '0.0.13' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.19', filesystem: '0.0.13' }, { contract: 1, sqlite: '0.0.18', filesystem: '0.0.13' }, { contract: 1, sqlite: '0.0.19', filesystem: '0.0.12' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

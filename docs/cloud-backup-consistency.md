@@ -252,8 +252,9 @@ capacity/refusal tests, not host-reboot durability or disk-hardware qualificatio
 ### Offline canonical attachment inspection
 
 The app-owned offline inspection contract v1 qualifies exactly SQLite provider
-0.0.15 and FS provider 0.0.11 with the known 001–023 migration history and
-canonical metadata columns. It is a new compatibility adapter, not an exported
+0.0.19 and FS provider 0.0.13 with the known 001–026 migration history and
+canonical metadata columns. Archived 001–024 histories from SQLite 0.0.18
+remain supported; an incomplete upgrade ending at 025 is refused. It is a new compatibility adapter, not an exported
 provider API. The image build records installed provider versions beside the
 standalone trusted `scripts/docker/backup-inspect.mjs`; the CLI never boots Nitro,
 runs migrations, imports provider internals or executes archived code.

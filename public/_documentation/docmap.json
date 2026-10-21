@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including qualified SQLite backup histories and incomplete-upgrade refusal."
                 },
                 {
                     "name": "troubleshooting.md",
