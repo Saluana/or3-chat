@@ -74,7 +74,8 @@ required reserve and free space available before retrying a capacity refusal.
   If the owner password changed after bootstrap, supply the current credential
   with `--verification-email` and `--verification-password-file`; it is used
   only for that run. Verification requires same-origin fixed-profile storage
-  grants, deletes the probe, and revokes the temporary session in `finally`.
+  grants, commits the reserved upload intent, deletes the probe, and revokes the
+  temporary session in `finally`.
   Before the one-time credential handoff is deleted, verification can read its
   initial owner password directly from that protected file without restoring
   it to `.env` or container metadata.

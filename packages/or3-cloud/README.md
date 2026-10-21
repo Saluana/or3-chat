@@ -107,9 +107,9 @@ Until the one-time handoff file is deleted, `verify` may read its initial owner
 credential from that protected file; it is never restored to `.env` or Docker
 container metadata.
 Verification rejects cross-origin filesystem grants and unexpected methods or
-headers, validates the storage ID before uploading, tombstones its probe before
-requesting physical deletion, and revokes its temporary session even when a later
-check fails. When the provider explicitly requires deletion coordination,
+headers, validates the storage ID before uploading, commits the presigned upload
+intent, tombstones its probe before requesting physical deletion, and revokes
+its temporary session even when a later check fails. When the provider explicitly requires deletion coordination,
 verification reports physical cleanup as deferred; retained probe bytes remain
 subject to the provider retention policy. Other deletion failures still fail verification.
 

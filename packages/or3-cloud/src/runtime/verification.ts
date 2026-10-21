@@ -162,6 +162,7 @@ export async function verifyPublicApplication(baseUrl: URL, credentials: { email
           workspace_id: workspaceId,
           hash,
           storage_id: storageId,
+          intent_id: presign.intentId,
           storage_provider_id: 'fs',
           mime_type: 'image/png',
           size_bytes: probeBytes.length,
