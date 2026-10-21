@@ -32,6 +32,8 @@ function browserCache(fetchedAt: number, model = sdkModel()) {
 }
 let workspace: string;
 beforeEach(async () => {
+    // This suite scripts the local SDK catalog transport.
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
     workspace = `catalog-readiness-${crypto.randomUUID()}`;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb(workspace).open();
@@ -41,6 +43,7 @@ beforeEach(async () => {
     useModelStore().favoriteModels.value = [];
 });
 afterEach(async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = true;
     const name = getDb().name;
     setActiveWorkspaceDb(null);
     evictWorkspaceDb(workspace);
