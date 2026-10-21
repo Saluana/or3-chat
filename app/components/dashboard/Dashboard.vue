@@ -264,12 +264,13 @@ const landingPageButtonProps = computed(() => {
 </script>
 
 <style scoped>
-/* Dashboard pages own scrolling; the modal body must not add a second inset viewport. */
 @layer utilities {
-    :global(.app-modal:has(#dashboard-page-view)) {
+    /* Keep the grid, landing lists, and pages in the same viewport-sized shell. */
+    :global(.app-modal:has(#dashboard-grid-view, #dashboard-page-view)) {
         height: min(800px, calc(100dvh - 2rem));
     }
 
+    /* Pages own scrolling; the modal body must not add a second inset viewport. */
     :global(.app-modal:has(#dashboard-page-view) > [data-slot='body']) {
         display: flex;
         flex-direction: column;
