@@ -183,7 +183,7 @@ it also works in static builds. Solar is by
 [480 Design](https://www.figma.com/community/file/1166831539721848736), licensed
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Blank modifies
 the Linear stroke widths. Main rail icons render at 22px in `onSurfaceVariant` inside 40px
-hit areas with 12px corners and 8px between them, turning full `onSurface` on hover and for the
+hit areas with 10px corners and 8px between them, turning full `onSurface` on hover and for the
 selected item; touch layouts keep 24px. Hover fills with `--md-surface-hover`, the selected item
 with `--md-surface-active`, and the rail's **+** create button keeps a brand tint that matches the
 Chats icon, with a short divider under it. The rail sits on `--blank-rail-bg` (2% `onSurface`
@@ -203,6 +203,20 @@ controls at 16px, the sidebar search field's leading icon at 16px, and the
 composer's attach and settings icons at 16px. Chat tabs use the same
 `chat-square-line` glyph as sidebar rows. Mobile layouts keep their own larger
 sizes.
+
+Blank follows one design scale, defined as `--blank-*` variables at the top of
+`app/theme/blank/styles.css` so no size appears as a stray literal. Type has four
+steps: caption 12px, body 14px, message 16px, and title 20px, with weights 400, 500
+and 600 only. Code is 13px and prose headings run 24 / 20 / 18 / 16px; touch layouts
+raise labels and controls through the `--blank-mobile-*` variables and never go
+below 12px. Radii are 6 (chips), 8 (controls), 10 (rail, tabs), 14 (cards, dialogs),
+20 (message bubble, empty-state cards) and 28px (composer); an inner radius equals
+its container's radius minus the gap between them. Controls are 32, 36 and 44px
+(the density tokens) plus the 40px rail slot, and every sidebar section shares a
+14px content inset so labels, page-link icons and row icons share one left edge.
+Text fields use a single 12px horizontal inset and form labels are 14px / 500 over
+12px help text. Every rule hangs off `html[data-theme='blank']`, which keeps it
+ahead of component-scoped CSS regardless of stylesheet load order.
 
 Blank's sidebar chat and document row icons render at 16px in the same
 90% `onSurface` (`--blank-sb-icon`) so titles carry the list; hover and

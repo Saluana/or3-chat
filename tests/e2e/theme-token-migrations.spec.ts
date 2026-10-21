@@ -758,12 +758,13 @@ async function cssVariable(page: Page, name: string): Promise<string> {
 
 async function expectWorkspaceTabTextFits(
     page: Page,
-    expectedHeight: string
+    expectedHeight: string,
+    expectedLineHeight = '16.25px'
 ): Promise<void> {
     const tab = page.locator('.workspace-tab').first();
     const title = tab.locator('.workspace-tab-title');
     await expect(tab).toHaveCSS('height', expectedHeight);
-    await expect(title).toHaveCSS('line-height', '16.25px');
+    await expect(title).toHaveCSS('line-height', expectedLineHeight);
 
     const bounds = await tab.evaluate((element) => {
         const title = element.querySelector<HTMLElement>('.workspace-tab-title');
@@ -1058,6 +1059,9 @@ test.describe('chat responsive layout', () => {
 });
 
 for (const theme of themes) {
+    // Blank sets tab titles on its 14px/20px body step; the other themes keep
+    // the shared 13px * 1.25 line height.
+    const tabLineHeight = theme === 'blank' ? '20px' : '16.25px';
     for (const mode of modes) {
         for (const viewport of viewports) {
             test.describe(`${theme} ${mode} ${viewport.name}`, () => {
@@ -1079,7 +1083,11 @@ for (const theme of themes) {
                         await selectThemeAndMode(page, theme, mode);
 
                         if (!viewport.mobile) {
-                            await expectWorkspaceTabTextFits(page, '32px');
+                            await expectWorkspaceTabTextFits(
+                                page,
+                                '32px',
+                                tabLineHeight
+                            );
                         }
 
                         await page.getByRole('tab', { name: 'Shape' }).click();
@@ -1116,7 +1124,7 @@ for (const theme of themes) {
                         );
 
                         if (!viewport.mobile) {
-                            await expectWorkspaceTabTextFits(page, '28px');
+                            await expectWorkspaceTabTextFits(page, '28px', tabLineHeight);
                             await expect(
                                 page.locator('.workspace-chrome').first()
                             ).toHaveCSS('padding-top', '4px');
@@ -1127,7 +1135,7 @@ for (const theme of themes) {
                             await appearance
                                 .locator('#theme-density-preset')
                                 .selectOption('spacious');
-                            await expectWorkspaceTabTextFits(page, '36px');
+                            await expectWorkspaceTabTextFits(page, '36px', tabLineHeight);
                         }
 
                         await toggles.nth(1).check();

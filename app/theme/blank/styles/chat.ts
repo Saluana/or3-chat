@@ -2,7 +2,7 @@
 const chatInputButtonConfig = {
     variant: 'ghost' as const,
     size: 'sm' as const,
-    class: 'min-h-[36px] w-[36px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    class: 'min-h-[32px] w-[32px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 max-md:min-h-[44px]! max-md:min-w-[44px]!',
 };
 
 export const chatOverrides = {
@@ -66,7 +66,7 @@ export const chatOverrides = {
         },
     },
     'div#message.user-container': {
-        class: 'px-4! py-3! bg-[var(--md-surface-hover)] rounded-[var(--md-border-radius)]',
+        class: 'px-4! py-3! bg-[var(--md-surface-hover)] rounded-[var(--blank-radius-xl,20px)]',
     },
 };
 
@@ -92,7 +92,6 @@ export const chatCssSelectors = {
     },
     '.cm-text-user': {
         style: {
-            fontSize: '16px',
             color: 'var(--md-on-surface)',
         },
     },
@@ -203,10 +202,10 @@ export const chatCssSelectors = {
     },
     '.tool-call-header-text:nth-of-type(2)': {
         style: {
-            fontSize: '10px !important',
-            fontWeight: '600',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
+            fontSize: '12px !important',
+            fontWeight: '500',
+            textTransform: 'none',
+            letterSpacing: 'normal',
             backgroundColor: 'var(--md-surface-active)',
             color: 'var(--md-on-surface) !important',
             padding: '2px 8px',
@@ -224,6 +223,12 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary-icon .iconify': {
         style: {
             color: 'var(--md-on-surface-variant) !important',
+        },
+    },
+    // Expanded tool output sits on the caption step like the other detail text.
+    '.tool-call-detail-value': {
+        style: {
+            fontSize: '12px',
         },
     },
     '.cm-actions-user': {

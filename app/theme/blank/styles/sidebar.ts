@@ -7,10 +7,10 @@ const SidebarPopoverButtonConfig = {
     },
 };
 
-// Rail buttons: 40px hit areas with 22px muted icons on a 12px-radius square.
+// Rail buttons: --blank-control-rail hit areas with 22px muted icons on a medium-radius square.
 // Only hover (darker) and the selected item get a soft neutral fill.
 const RailButtonClass =
-    'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! border-0! rounded-[12px]! transition-colors duration-[var(--app-motion-duration-fast,150ms)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)]! focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]! focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]! max-md:min-h-[44px]! max-md:min-w-[44px]!';
+    'h-[var(--blank-control-rail,40px)] w-[var(--blank-control-rail,40px)] shrink-0 flex items-center justify-center p-0! border-0! rounded-[var(--md-border-radius)]! transition-colors duration-[var(--app-motion-duration-fast,150ms)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)]! focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]! focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]! max-md:min-h-[44px]! max-md:min-w-[44px]!';
 const SidebarRailButtonConfig = {
     variant: 'ghost',
     square: true,
@@ -30,7 +30,7 @@ export const sidebarOverrides = {
     'input#sidebar.search': {
         ui: {
             leadingIcon: 'size-4 text-[var(--blank-sb-icon)]!',
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[var(--app-elevation-low)] max-md:min-h-[44px]! max-md:text-[16px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[var(--blank-control-rail,40px)]! shadow-[var(--app-elevation-low)] max-md:min-h-[44px]! max-md:text-[16px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
@@ -182,12 +182,13 @@ export const sidebarCssSelectors = {
             backgroundColor: 'var(--md-surface)',
         },
     },
+    // Same voice as the time-group labels: caption size, sentence case.
     '.sidebar-section-heading': {
         style: {
-            fontSize: '11px',
-            fontWeight: '600',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
+            fontSize: '12px',
+            fontWeight: '500',
+            textTransform: 'none',
+            letterSpacing: 'normal',
             color: 'var(--md-on-surface-variant)',
         },
     },
@@ -196,7 +197,7 @@ export const sidebarCssSelectors = {
             border: '0',
             boxShadow: 'none',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
-            minHeight: '54px',
+            minHeight: '56px',
             marginBottom: '0.5rem',
         },
     },
@@ -204,15 +205,13 @@ export const sidebarCssSelectors = {
         style: {
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             marginInline: '0',
-            border: 'var(--md-border-width) solid transparent',
+            border: '0',
         },
     },
     '.unified-sb-item-active': {
         style: {
             background:
                 'color-mix(in srgb, var(--md-primary) 8%, var(--md-surface))',
-            borderColor:
-                'color-mix(in srgb, var(--md-primary) 12%, transparent)',
         },
     },
     '.sb-group-header-label': {

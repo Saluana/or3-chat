@@ -1,0 +1,69 @@
+## Scale summary (24 screens, same capture script on base commit vs change)
+screens 24 → 24
+distinct font sizes   20 → 9
+  before: 10px(31) 10.4px(1) 10.5px(20) 11px(44) 11.2px(12) 11.5px(16) 11.52px(2) 12px(96) 12.48px(19) 12.8px(8) 13px(53) 13.12px(4) 13.5px(19) 14px(266) 14.4px(14) 15px(6) 16px(95) 20px(12) 21.6px(1) 24px(4)
+  after : 11px(2) 11.2px(8) 11.52px(2) 12px(218) 13px(108) 14px(256) 16px(112) 18px(4) 20px(13)
+distinct font weights 6 → 3
+  before: 400(429) 500(134) 550(7) 600(132) 650(2) 700(19)
+  after : 400(423) 500(191) 600(109)
+distinct radii        15 → 14
+  before: 4.5px(1) 6px(2) 7px(1) 7.5px(11) 8px(413) 10px(60) 12px(72) 14px(8) 18px(12) 20px(6) 26px(1) 28px(11) 50%(25) 999px(6) 9999px(2)
+  after : 4px(7) 4.5px(1) 6px(2) 7px(1) 7.5px(11) 8px(412) 10px(130) 14px(14) 20px(15) 26px(1) 28px(11) 50%(25) 999px(6) 9999px(2)
+elements with fractional height 703 → 159
+text runs with fractional line-height 400 → 27
+
+## Computed-style changes that are not typography or geometry (every one reviewed)
+compared 3095 elements across 24 screens (flips)
+
+== borderTopColor: 33
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  rgba(0, 0, 0, 0) → rgb(13, 13, 13)
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  rgba(0, 0, 0, 0) → rgb(13, 13, 13)
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  rgba(0, 0, 0, 0) → rgb(13, 13, 13)
+
+== borderTopStyle: 26
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  solid → none
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  solid → none
+   account-menu div.min-w-0.mb-0.5#1>div.flex.min-w-0#1>div.min-w-0.group  solid → none
+
+== backgroundColor: 8
+   account-menu div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  color(srgb 0.988706 0.988706 0.988706) → color(srgb 0.990118 0.990118 0.990118)
+   chat-conversation div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  color(srgb 0.988706 0.988706 0.988706) → color(srgb 0.990118 0.990118 0.990118)
+   chat-settings-popover div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  color(srgb 0.988706 0.988706 0.988706) → color(srgb 0.990118 0.990118 0.990118)
+
+== color: 7
+   account-menu div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  rgb(13, 13, 13) → rgb(102, 102, 102)
+   chat-conversation div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  rgb(13, 13, 13) → rgb(102, 102, 102)
+   chat-settings-popover div.workspace-tab-bar-shell#3>div.workspace-tab-new-wrap#1>button.workspace-tab-new  rgb(13, 13, 13) → rgb(102, 102, 102)
+
+== borderTopWidth: 8
+   chat-conversation div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+   chat-conversation div.flex.items-center#1>div.flex.items-center#2>button.opacity-80.p-1  1px → 0px
+   chat-settings-popover div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+
+== borderRightWidth: 8
+   chat-conversation div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+   chat-conversation div.flex.items-center#1>div.flex.items-center#2>button.opacity-80.p-1  1px → 0px
+   chat-settings-popover div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+
+== borderBottomWidth: 8
+   chat-conversation div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+   chat-conversation div.flex.items-center#1>div.flex.items-center#2>button.opacity-80.p-1  1px → 0px
+   chat-settings-popover div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+
+== borderLeftWidth: 8
+   chat-conversation div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+   chat-conversation div.flex.items-center#1>div.flex.items-center#2>button.opacity-80.p-1  1px → 0px
+   chat-settings-popover div.flex.items-center#1>div.flex.items-center#1>button.opacity-80.p-1  1px → 0px
+
+== opacity: 1
+   d23-sidebar-documents div.Today-header.w-full#1>button.min-w-0.flex-1#2>span.w-3.5.h-3.5  1 → 0
+
+== overflowX: 10
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#1>button.mobile-nav-item.group#2>span.mobile-nav-label  hidden → visible
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#2>button.mobile-nav-item.group#2>span.mobile-nav-label  hidden → visible
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#3>button.mobile-nav-item.mobile-nav-create#2>span.mobi  hidden → visible
+
+== overflowY: 10
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#1>button.mobile-nav-item.group#2>span.mobile-nav-label  hidden → visible
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#2>button.mobile-nav-item.group#2>span.mobile-nav-label  hidden → visible
+   mobile-drawer nav.mobile-bottom-nav-root.shrink-0#3>button.mobile-nav-item.mobile-nav-create#2>span.mobi  hidden → visible

@@ -12,6 +12,11 @@ import { documentsOverrides, documentsStyles } from './styles/documents';
 import { paletteOverrides, paletteCssSelectors } from './styles/palette';
 import { shellOverrides } from './styles/shell';
 
+// Every text field family shares one horizontal inset (12px); the leading and
+// trailing icon slots move with it so icons and text keep the same edges.
+const fieldInset = { base: 'px-3', leading: 'ps-3', trailing: 'pe-3' };
+const fieldSizes = { sm: fieldInset, md: fieldInset };
+
 export default defineTheme({
     name: 'blank',
     displayName: 'Blank theme',
@@ -192,13 +197,6 @@ export default defineTheme({
     },
 
     overrides: {
-        formField: {
-            ui: {
-                base: 'flex flex-col',
-                label: 'text-xs font-medium px-1 text-[var(--md-on-surface)]/70 -mb-0.5! max-md:text-[16px]!',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1! max-md:text-[13px]!',
-            },
-        },
         input: {
             ui: {
                 root: '',
@@ -208,7 +206,7 @@ export default defineTheme({
                             'text-highlighted bg-default ring-0 border-[color:var(--md-border-color)] focus-visible:ring-1 focus-visible:ring-[color:var(--md-on-surface)]/20',
                     },
                     size: {
-                        sm: { base: 'h-[32px] text-[13px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
+                        sm: { base: 'h-[32px] text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
                         md: { base: 'h-[36px] text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
                         lg: { base: 'h-[44px] text-[16px]!' },
                     },
@@ -252,18 +250,12 @@ export default defineTheme({
                 minWidth: '36px',
             },
         },
-        '#top-nav .theme-btn .iconify': {
-            style: {
-                width: '20px',
-                height: '20px',
-            },
-        },
     },
     ui: {
         tooltip: {
             slots: {
                 content:
-                    'border-0 ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] h-auto min-h-[28px] px-2.5 py-1 text-[13px] leading-5 font-medium',
+                    'border-0 ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] h-auto min-h-[28px] px-2.5 py-1.5 text-[12px] leading-4 font-medium',
             },
         },
         tree: {
@@ -279,11 +271,11 @@ export default defineTheme({
                     'fixed inset-0 bg-black/30 backdrop-blur-[1px]',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[var(--app-elevation-high,0_12px_28px_rgba(0,0,0,0.12))] overflow-hidden bg-[var(--md-surface)]',
-                body: 'p-5',
+                body: 'px-6 py-6',
                 header: 'relative flex shrink-0 items-center justify-between gap-4 px-6 py-5 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
-                title: 'text-[var(--md-on-surface)] font-normal text-lg!',
+                title: 'text-[var(--md-on-surface)] font-semibold text-[20px]! leading-7',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[var(--app-control-height-medium,36px)] w-[var(--app-control-height-medium,36px)] p-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none size-[44px] p-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]!',
             },
         },
         button: {
@@ -320,7 +312,7 @@ export default defineTheme({
                     error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 size: {
-                    xs: { base: 'h-[24px] px-[8px]! text-[13px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[12px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!' },
                     sm: {
                         base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[14px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!',
                         leadingIcon: 'shrink-0 h-4 w-4',
@@ -359,8 +351,8 @@ export default defineTheme({
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
                 size: {
-                    sm: { base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!' },
-                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-[14px]! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!' },
+                    sm: { base: 'h-[var(--app-control-height-small,32px)] px-3! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
+                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-3! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
                 },
             },
         },
@@ -370,6 +362,7 @@ export default defineTheme({
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] dark:border-[rgba(255,255,255,0.08)]',
                 item: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
+            variants: { size: fieldSizes },
         },
         tabs: {
             slots: {
@@ -398,8 +391,8 @@ export default defineTheme({
         formField: {
             slots: {
                 base: 'flex flex-col',
-                label: 'text-sm font-medium -mb-1 px-1 max-md:text-[16px]!',
-                help: 'mt-[4px] text-xs text-[var(--md-on-surface-variant)] px-1! max-md:text-[13px]!',
+                label: 'text-[14px] leading-5 font-medium text-[var(--md-on-surface)] -mb-1 px-0 max-md:text-[16px]!',
+                help: 'mt-1 text-[12px] leading-4 text-[var(--md-on-surface-variant)] px-0! max-md:text-[13px]!',
             },
         },
         fieldGroup: {
@@ -467,6 +460,7 @@ export default defineTheme({
             slots: {
                 base: 'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent ring-0! focus:outline-none! focus-visible:outline-none! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent max-lg:text-[16px]!',
             },
+            variants: { size: { sm: { base: 'px-3 py-2' }, md: { base: 'px-3 py-2' } } },
         },
         selectMenu: {
             slots: {
@@ -478,6 +472,7 @@ export default defineTheme({
                 item: 'max-md:min-h-[44px]! max-md:text-[16px]!',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },
+            variants: { size: fieldSizes },
         },
     },
 });

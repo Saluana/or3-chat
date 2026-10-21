@@ -49,7 +49,7 @@ export const dashboardStyles = {
     },
     '.dashboard-plugin-icon-label': {
         style: {
-            fontSize: '12px',
+            fontSize: '14px',
         },
     },
     '.dashboard-plugin-icon-button': {
