@@ -32,7 +32,7 @@
 Delivery: [draft PR #270](https://github.com/Saluana/or3-chat/pull/270). Implementation is committed; the Docker qualification limit below remains open.
 
 ## Qualification limit
-The final Docker/lifecycle rerun is blocked by the local Docker Desktop engine failure; force-quit approval is pending. See `qualification.md` for actual results and the corrected explicit-disable test still requiring a rerun.
+The final Docker/lifecycle rerun is blocked by the local Docker Desktop engine failure. The user explicitly chose to leave Docker alone; no recovery or interrupted-fixture cleanup is being attempted. The corrected explicit-disable case and final Docker rerun remain unqualified, and fixture cleanup is unverified. This decision does not waive the remaining release or production qualification gates. See `qualification.md` for actual results.
 
 ## Definition of Done
 All acceptance criteria have executable evidence or an explicitly stated environmental/production blocker; relevant checks have actual recorded outcomes; final diff is reviewed; no production mutation or publication; implementation PR is open. Unfinished work is reported, never described as complete.
