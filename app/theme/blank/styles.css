@@ -9,6 +9,7 @@
     --blank-scrollbar-thumb: color-mix(in srgb, var(--md-on-surface) 15%, transparent);
     --blank-sb-row-icon: 16px;
     --blank-sb-icon: color-mix(in srgb, var(--md-on-surface) 90%, transparent);
+    --blank-rail-bg: color-mix(in srgb, var(--md-on-surface) 2%, var(--md-surface));
     --blank-scrollbar-thumb-hover: color-mix(in srgb, var(--md-on-surface) 28%, transparent);
     --md-surface-dim: #ececec;
     --md-surface-bright: #ffffff;
@@ -421,7 +422,7 @@
 
     /* Collapsed: header is the rail top — same edge as the icon column */
     #top-header[data-sidebar-state='collapsed'] {
-        background-color: var(--md-surface) !important;
+        background-color: var(--blank-rail-bg) !important;
         border-right: 1px solid
             color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
         box-sizing: border-box;
@@ -432,9 +433,9 @@
             color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
     }
 
-    /* Rail buttons sit 4px apart (44px pitch); this replaces the space-y-2 margins. */
+    /* Rail buttons sit 8px apart (48px pitch); this replaces the space-y-2 margins. */
     :is(#nav-top-section, #nav-pages-section, .profile-navigation-group, #nav-footer-section) {
-        row-gap: 4px;
+        row-gap: 8px;
     }
 
     :is(#nav-top-section, #nav-pages-section, .profile-navigation-group, #nav-footer-section) > * {
@@ -2325,4 +2326,54 @@ html[data-theme='blank'] .document-ai-dialog-settings .tool-group-header {
 
 html[data-theme='blank'] .document-ai-dialog-settings :is(.tool-group-list, .tool-row) {
     padding-inline: 0;
+}
+
+/* Blank's primary is black/white; the sidebar welcome card uses the brand blue. */
+html[data-theme='blank'] .sb-welcome {
+    --sb-welcome-accent: var(--blank-brand-accent);
+    --sb-welcome-on-accent: #ffffff;
+}
+
+/* A solid blue block glares on dark surfaces; use the same tonal fill as the rail's "+". */
+html.dark[data-theme='blank'] .sb-welcome {
+    --sb-welcome-primary-bg: color-mix(in srgb, var(--blank-brand-accent) 24%, var(--md-surface));
+    --sb-welcome-primary-fg: color-mix(in srgb, var(--blank-brand-accent) 50%, #ffffff);
+    --sb-welcome-primary-hover: color-mix(in srgb, var(--blank-brand-accent) 32%, var(--md-surface));
+}
+
+/* Desktop: the icon rail runs the full sidebar height. The header's first 64px
+   is the rail's top slot and holds the collapse toggle, so the toggle stays put
+   when the panel collapses; the logo starts on the panel's content edge. */
+@media (min-width: 768px) {
+    html[data-theme='blank'] #top-header[data-sidebar-state='expanded'] {
+        position: relative;
+        justify-content: flex-start;
+        padding-left: 0;
+    }
+
+    html[data-theme='blank'] #top-header[data-sidebar-state='expanded']::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 64px;
+        box-sizing: border-box;
+        background-color: var(--blank-rail-bg);
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent);
+    }
+
+    /* z-index: flex `order` also reorders painting, which would put the
+       tinted ::before above the reordered toggle. */
+    html[data-theme='blank'] #top-header[data-sidebar-state='expanded'] > button {
+        position: relative;
+        z-index: 1;
+        order: -1;
+        margin-inline: 12px;
+    }
+
+    html[data-theme='blank'] #top-header[data-sidebar-state='expanded'] > div {
+        position: relative;
+        z-index: 1;
+        margin-left: 2px;
+    }
 }

@@ -65,7 +65,7 @@ export default {
     'sidebar.chat.branched': 'blank-solar:git-branch-linear',
     'sidebar.note': 'blank-solar:document-text-linear',
     'sidebar.settings': 'blank-solar:tuning-linear',
-    'sidebar.user': 'blank-solar:user-rounded-linear',
+    'sidebar.user': 'blank-solar:user-circle-linear',
     'sidebar.activity': 'blank-solar:pulse-linear',
     'sidebar.credits': 'blank-solar:money-roll-linear',
     'sidebar.project.root': 'blank-solar:home-linear',

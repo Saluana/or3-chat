@@ -87,13 +87,7 @@ export const sidebarOverrides = {
 
     'button#sidebar.toggle': SidebarRailUtilityButtonConfig,
 
-    /* --- Collapsed sidebar action buttons (search, new doc, new project) --- */
-    'button#sidebar.collapsed-search': SidebarRailButtonConfig,
-    'button#sidebar.new-document': SidebarRailButtonConfig,
-    'button#sidebar.new-project': SidebarRailButtonConfig,
-
     /* --- Sidebar bottom nav buttons --- */
-    'button#sidebar.bottom-nav.dashboard': SidebarRailUtilityButtonConfig,
     'button#sidebar.bottom-nav.info': SidebarRailUtilityButtonConfig,
     'button#sidebar.bottom-nav.connect': SidebarRailUtilityButtonConfig,
     'button#sidebar.bottom-nav.auth': SidebarRailUtilityButtonConfig,

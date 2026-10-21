@@ -10,7 +10,6 @@ keyboard.
 - Press **Cmd+K** (macOS) or **Ctrl+K** (Windows/Linux) anywhere in the
   workspace.
 - Click the **⌘K** badge in the sidebar search field.
-- Click the magnifier in the collapsed sidebar rail.
 
 Pressing the shortcut while the palette is already open reselects the query
 instead of stacking a second overlay. Closing the palette restores focus to

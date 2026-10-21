@@ -20,7 +20,6 @@
                 @new-chat="onNewChat"
                 @new-document="createCollapsedDocument"
                 @new-project="openCollapsedCreateProjectModal"
-                @focus-search="openCommandPalette"
                 @toggle-dashboard="toggleDashboard"
                 @expand-sidebar="expandSidebar"
             />
@@ -2024,7 +2023,6 @@ const coreDashboardItems = dashboardEnabled.value
 registerCoreDashboardPages(coreDashboardItems);
 const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
-    open: openCommandPalette,
     close: closeCommandPalette,
     getCoordinator: getPaletteCoordinator,
 } = useCommandPalette();

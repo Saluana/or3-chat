@@ -25,7 +25,7 @@
 }
 
 [data-theme="blank"] #top-header[data-sidebar-state="collapsed"] {
-  background-color: var(--md-surface);
+  background-color: var(--blank-rail-bg);
   border-bottom: none;
   width: 64px;
   box-sizing: border-box;
@@ -83,18 +83,23 @@
 }
 
 [data-theme="blank"] #nav-top-section .iconify {
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
+  font-size: 22px;
+  width: 22px;
+  height: 22px;
 }
 
 [data-theme="blank"] #nav-top-section .app-icon:has(> .iconify) {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 [data-theme="blank"] .bottomnav-root .iconify {
-  font-size: 20px !important;
+  font-size: 22px !important;
+  width: 22px;
+  height: 22px;
+}
+
+[data-theme="blank"] .bottomnav-root [data-connection-state] svg {
   width: 20px;
   height: 20px;
 }
@@ -103,7 +108,7 @@
   min-width: 64px !important;
   max-width: 64px !important;
   width: 64px !important;
-  background-color: var(--md-surface);
+  background-color: var(--blank-rail-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -115,31 +120,34 @@
   width: 64px !important;
   min-width: 64px !important;
   max-width: 64px !important;
+  background-color: var(--blank-rail-bg);
+  border-right: 1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent);
+  box-sizing: border-box;
 }
 
 [data-theme="blank"] .bottomnav-root {
-  width: 64px !important;
+  width: 100% !important;
   border-top: none;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   padding-top: 12px;
-  gap: 4px;
+  gap: 8px !important;
 }
 
 [data-theme="blank"] #nav-pages-section {
   border-top: none;
   align-items: center;
   position: relative;
-  margin-top: 14px;
-  padding-top: 14px;
+  padding-top: 9px;
 }
 
 [data-theme="blank"] #nav-pages-section::before {
   content: "";
   position: absolute;
   top: 0;
-  left: 8px;
-  right: 8px;
+  left: 50%;
+  width: 24px;
   height: 1px;
+  transform: translateX(-50%);
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
 
@@ -182,8 +190,8 @@
 [data-theme="blank"] .bottomnav-root [data-connection-state="connected"] .sidebar-connection-status-bar {
   display: block;
   position: absolute;
-  right: 7px;
-  bottom: 7px;
+  right: 5px;
+  bottom: 5px;
   width: 5px;
   height: 5px;
   border-radius: 50%;

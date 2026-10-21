@@ -1,7 +1,7 @@
 <template>
     <UTooltip
         v-if="!isSsrAuthEnabled || allowUserOverride"
-        :text="ariaLabel"
+        text="OpenRouter"
         :delay-duration="0"
         :content="{ side: 'right' }"
     >

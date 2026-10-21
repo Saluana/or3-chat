@@ -7,11 +7,15 @@ const SidebarPopoverButtonConfig = {
     },
 };
 
-const SidebarCollapsedTopButtonConfig = {
+// Rail buttons: 40px hit areas with 22px muted icons on a 12px-radius square.
+// Only hover (darker) and the selected item get a soft neutral fill.
+const RailButtonClass =
+    'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! border-0! rounded-[12px]! transition-colors duration-[var(--app-motion-duration-fast,150ms)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)]! focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]! focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]! max-md:min-h-[44px]! max-md:min-w-[44px]!';
+const SidebarRailButtonConfig = {
     variant: 'ghost',
     square: true,
-    class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! bg-transparent! border-0! rounded-full text-[var(--blank-sb-icon)]! hover:text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    ui: { leadingIcon: 'size-5' },
+    class: `${RailButtonClass} bg-transparent! text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!`,
+    ui: { leadingIcon: 'size-[22px]' },
 };
 
 export const sidebarOverrides = {
@@ -49,10 +53,12 @@ export const sidebarOverrides = {
     'div#sidebar.project-group-container': {
         class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
-    'button#sidebar.new-chat': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.collapsed-search': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.new-project': SidebarCollapsedTopButtonConfig,
+    // Rail "+" (opens the create menu): subtly blue, matching the Chats icon tint.
+    // Dark surfaces need a stronger mix for the same visible tint.
+    'button#sidebar.new-chat': {
+        ...SidebarRailButtonConfig,
+        class: `${RailButtonClass} bg-[color-mix(in_srgb,var(--blank-brand-accent)_10%,var(--md-surface))]! text-[var(--blank-brand-accent)]! hover:bg-[color-mix(in_srgb,var(--blank-brand-accent)_16%,var(--md-surface))]! active:bg-[color-mix(in_srgb,var(--blank-brand-accent)_22%,var(--md-surface))]! dark:bg-[color-mix(in_srgb,var(--blank-brand-accent)_22%,var(--md-surface))]! dark:hover:bg-[color-mix(in_srgb,var(--blank-brand-accent)_30%,var(--md-surface))]! dark:active:bg-[color-mix(in_srgb,var(--blank-brand-accent)_36%,var(--md-surface))]!`,
+    },
 
     // Row "more" menu: same gray as row icons, darker when hovered or open.
     'button#sidebar.unified-item.trigger': {
@@ -71,11 +77,11 @@ export const sidebarOverrides = {
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
     /* --- Bottom nav buttons: clean, borderless --- */
-    'button#sidebar.bottom-nav.info': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.bottom-nav.connect': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.bottom-nav.auth': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.bottom-nav.dashboard': SidebarCollapsedTopButtonConfig,
-    'button#sidebar.toggle': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.bottom-nav.info': SidebarRailButtonConfig,
+    'button#sidebar.bottom-nav.connect': SidebarRailButtonConfig,
+    'button#sidebar.bottom-nav.auth': SidebarRailButtonConfig,
+    // On desktop the toggle sits in the rail's top slot, so it matches the rail buttons.
+    'button#sidebar.toggle': SidebarRailButtonConfig,
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
@@ -117,14 +123,14 @@ export const sidebarOverrides = {
 
     /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
-        ...SidebarCollapsedTopButtonConfig,
+        ...SidebarRailButtonConfig,
         ui: {
             base: 'ring-0! shadow-none!',
-            leadingIcon: 'size-5',
+            leadingIcon: 'size-[22px]',
         },
     },
     'button#sidebar.collapsed-page:active': {
-        class: 'bg-[var(--md-surface-hover)]!',
+        class: 'bg-[var(--md-surface-active)]! hover:bg-[var(--md-surface-active)]! text-[var(--md-on-surface)]!',
     },
 };
 
@@ -165,7 +171,7 @@ export const sidebarCssSelectors = {
     },
     '#top-header[data-sidebar-state="collapsed"]': {
         style: {
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'var(--blank-rail-bg)',
             borderBottom: 'none',
             width: '64px',
             boxSizing: 'border-box',
@@ -237,29 +243,35 @@ export const sidebarCssSelectors = {
     },
     '#nav-top-section .iconify': {
         style: {
-            fontSize: '20px',
-            width: '20px',
-            height: '20px',
+            fontSize: '22px',
+            width: '22px',
+            height: '22px',
         },
     },
     '#nav-top-section .app-icon:has(> .iconify)': {
-        style: { width: '20px', height: '20px' },
+        style: { width: '22px', height: '22px' },
     },
     '.bottomnav-root .iconify': {
         style: {
-            fontSize: '20px !important',
-            width: '20px',
-            height: '20px',
+            fontSize: '22px !important',
+            width: '22px',
+            height: '22px',
         },
+    },
+    // The filled OpenRouter mark reads heavier than linear icons, so it sits a size down.
+    '.bottomnav-root [data-connection-state] svg': {
+        style: { width: '20px', height: '20px' },
     },
     // Always-visible 64px icon rail (expanded SideBar AND collapsed layout).
     // Do NOT set width:100% — that collapses the expanded panel.
+    // The collapsed layout renders the rail with this id; the expanded one
+    // renders it as #sidebar-content-collapsed (below).
     '#nav-collapsed-container': {
         style: {
             minWidth: '64px !important',
             maxWidth: '64px !important',
             width: '64px !important',
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'var(--blank-rail-bg)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -267,29 +279,36 @@ export const sidebarCssSelectors = {
             backdropFilter: 'none',
         },
     },
+    // SideBar passes this id to the rail root, so rail-wide rules belong here.
     '#sidebar-content-collapsed': {
         style: {
             width: '64px !important',
             minWidth: '64px !important',
             maxWidth: '64px !important',
+            // A barely-there tint (#FAFAFA on white) separates the rail from the panel.
+            backgroundColor: 'var(--blank-rail-bg)',
+            borderRight:
+                '1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
+            boxSizing: 'border-box',
         },
     },
+    // Full rail width so bottom icons share the top icons' center line.
     '.bottomnav-root': {
         style: {
-            width: '64px !important',
+            width: '100% !important',
             borderTop: 'none',
             paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
             paddingTop: '12px',
-            gap: '4px',
+            gap: '8px !important',
         },
     },
+    // A short divider under "+" separates creating from navigating, with 8px either side.
     '#nav-pages-section': {
         style: {
             borderTop: 'none',
             alignItems: 'center',
             position: 'relative',
-            marginTop: '14px',
-            paddingTop: '14px',
+            paddingTop: '9px',
         },
     },
     '#nav-pages-section::before': {
@@ -297,9 +316,10 @@ export const sidebarCssSelectors = {
             content: '""',
             position: 'absolute',
             top: '0',
-            left: '8px',
-            right: '8px',
+            left: '50%',
+            width: '24px',
             height: '1px',
+            transform: 'translateX(-50%)',
             background: 'color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
         },
     },
@@ -344,8 +364,8 @@ export const sidebarCssSelectors = {
         style: {
             display: 'block',
             position: 'absolute',
-            right: '7px',
-            bottom: '7px',
+            right: '5px',
+            bottom: '5px',
             width: '5px',
             height: '5px',
             borderRadius: '50%',

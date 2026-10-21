@@ -151,9 +151,6 @@ export const sidebarOverrides = {
         class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur theme-shadow',
     },
     'button#sidebar.new-chat': SidebarRailButtonConfig,
-    'button#sidebar.collapsed-search': SidebarRailButtonConfig,
-    'button#sidebar.new-document': SidebarRailButtonConfig,
-    'button#sidebar.new-project': SidebarRailButtonConfig,
 
     //Sidebar popover buttons for threads, documents, projects
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
@@ -173,7 +170,6 @@ export const sidebarOverrides = {
     'button#sidebar.bottom-nav.info': SidebarRailUtilityButtonConfig,
     'button#sidebar.bottom-nav.connect': SidebarRailUtilityButtonConfig,
     'button#sidebar.bottom-nav.auth': SidebarRailUtilityButtonConfig,
-    'button#sidebar.bottom-nav.dashboard': SidebarRailUtilityButtonConfig,
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
 
