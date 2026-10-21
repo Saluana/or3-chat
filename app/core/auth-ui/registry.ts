@@ -4,6 +4,8 @@ import type { Component } from 'vue';
 export interface AuthUiAdapter {
     id: string;
     component: Component;
+    signInComponent?: Component;
+    openSignIn?: () => void;
 }
 
 const authUiAdapterRegistry = reactive(new Map<string, AuthUiAdapter>());
@@ -18,6 +20,8 @@ export function registerAuthUiAdapter(input: AuthUiAdapter): void {
     authUiAdapterRegistry.set(id, {
         id,
         component: markRaw(input.component),
+        signInComponent: input.signInComponent ? markRaw(input.signInComponent) : undefined,
+        openSignIn: input.openSignIn,
     });
 }
 

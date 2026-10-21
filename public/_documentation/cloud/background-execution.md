@@ -106,6 +106,31 @@ The server response also carries `historyVersion: 1`. A missing/mismatched
 version or a gateway without `backgroundGenerationHistory: 'v1'` fails closed
 with `background_history_unsupported` before model execution.
 
+### Persistence and idle maintenance costs
+
+Live SSE deltas still reach attached viewers immediately. Durable content and
+reasoning checkpoints coalesce tiny chunks until 16,384 buffered characters or
+the existing 500 ms checkpoint interval; tool state transitions and terminal results
+force their required writes. This removes the extra write every 50
+small chunks without extending the time checkpoint interval.
+
+Convex progress mutations atomically check abort/lease state and avoid a second
+full job read after each checkpoint. Viewers reconcile a small owner-scoped
+control record (status, attempt, lease identity and monotonic progress revision).
+Same-process producers deliver live deltas immediately. Remote viewers keep the
+existing polling cadence but fetch growing response bodies only when their
+revision changes; a revision is captured before reading the snapshot so
+concurrent progress cannot be hidden. Terminal and changed output still use the
+full snapshot recovery path. Deploy the updated `background_job_controls` schema and
+`backgroundJobs:getControl` together; legacy jobs use the existing full-row
+fallback.
+
+Recovery scans back off from 5 to 60 seconds while idle. Useful work resets the
+interval; cleanup runs at most once per minute per process. Newly admitted jobs
+still start immediately through their admission path. This changes idle recovery
+cost, not token delivery; an abandoned job on another process can take up to the
+recovery interval to be discovered. Shutdown cancels scheduled work.
+
 ### Cancelling before the job ID exists
 
 `POST /api/jobs/admission-abort` accepts `{ admissionId, workspaceId }`; the browser

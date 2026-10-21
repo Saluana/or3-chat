@@ -41,6 +41,7 @@ const BodySchema = z.object({
     workspace_id: z.string().trim().min(1).max(256),
     hash: z.string().trim().min(1).max(256),
     storage_id: z.string().optional(),
+    verify_content: z.boolean().optional(),
     mime_type: z.string().min(1).optional(),
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
@@ -198,6 +199,7 @@ export default defineEventHandler(async (event) => {
         // provider object. This prevents stale or cross-object storage IDs
         // from becoming an authority.
         storageId: liveFile.storageId,
+        verifyContent: body.data.verify_content,
         mimeType: downloadPolicy.mimeType,
         expiresInMs: body.data.expires_in_ms,
         disposition: downloadPolicy.disposition,
@@ -215,6 +217,7 @@ export default defineEventHandler(async (event) => {
         url: result.url,
         expiresAt,
         disposition: downloadPolicy.disposition,
+        ...(body.data.verify_content && result.verifiedContent ? { verifiedContent: result.verifiedContent } : {}),
         ...(typeof result.method === 'string' ? { method: result.method } : {}),
         ...(result.headers ? { headers: result.headers } : {}),
         storageId: typeof result.storageId === 'string' ? result.storageId : liveFile.storageId,

@@ -30,6 +30,8 @@ export interface PresignedUrlResult {
     storageId?: string;
     intentId?: string;
     method?: string;
+    /** Fresh provider verification of the committed object's actual checksum. */
+    verifiedContent?: { hash: string; sizeBytes: number };
 }
 
 /**
@@ -67,6 +69,7 @@ export interface ObjectStorageProvider {
     }): Promise<PresignedUrlResult>;
 
     getPresignedDownloadUrl(input: {
+        verifyContent?: boolean;
         workspaceId: string;
         hash: string;
         storageId?: string;

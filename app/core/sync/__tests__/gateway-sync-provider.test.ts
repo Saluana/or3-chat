@@ -118,6 +118,67 @@ describe('GatewaySyncProvider', () => {
         (globalThis as unknown as { fetch?: unknown }).fetch = originalFetch;
     });
 
+    // A live version channel should eliminate idle HTTP pulls, retain cursor
+    // ordering, and fall back promptly if the channel disconnects.
+    it('pulls on version notifications and resumes polling on channel failure', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        let source: any;
+        vi.stubGlobal('EventSource', class {
+            onopen?: () => void; onmessage?: (event: { data: string }) => void; onerror?: () => void;
+            close = vi.fn();
+            constructor() { source = this; }
+        });
+        let version = 0;
+        const fetchMock = vi.fn(async () => makeOkResponse({ changes: [change(version, String(version))],
+            nextCursor: version, hasMore: false }));
+        vi.stubGlobal('fetch', fetchMock);
+        const apply = vi.fn(async () => {});
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { cursor: 0 });
+        try {
+            expect(source).toBeDefined();
+            source.onopen();
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(fetchMock).not.toHaveBeenCalled();
+            version = 3;
+            source.onmessage({ data: JSON.stringify({ version }) });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(apply).toHaveBeenCalledTimes(1);
+            source.onmessage({ data: JSON.stringify({ version }) });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            source.onerror();
+            version = 4;
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        } finally { unsubscribe(); }
+        expect(source.close).toHaveBeenCalled();
+    });
+
+    it('keeps the safety pull deadline across notification channel refreshes', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        let source: any;
+        vi.stubGlobal('EventSource', class {
+            onopen?: () => void; onmessage?: (event: { data: string }) => void;
+            close = vi.fn();
+            constructor() { source = this; }
+        });
+        const fetchMock = vi.fn(async () => makeOkResponse({ changes: [change(1, 'missed-hint')], nextCursor: 1, hasMore: false }));
+        vi.stubGlobal('fetch', fetchMock);
+        const apply = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply);
+        try {
+            source.onopen();
+            await vi.advanceTimersByTimeAsync(59_000);
+            source.onmessage({ data: JSON.stringify({ refresh: true }) });
+            source.onopen();
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(apply).toHaveBeenCalledWith([change(1, 'missed-hint')]);
+        } finally { unsubscribe(); }
+    });
+
     it('retries an unacknowledged subscription page from the same cursor before fetching more', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         vi.spyOn(console, 'error').mockImplementation(() => undefined);

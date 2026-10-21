@@ -176,6 +176,12 @@ const hasArtwork = computed(() =>
     text-align: start;
     border-radius: var(--md-border-radius-large, 14px);
 }
+/* Cards grow with their copy instead of inheriting a control's fixed height. */
+@layer utilities {
+    .chat-empty-action {
+        height: auto !important;
+    }
+}
 .chat-empty-action:focus-visible {
     outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--md-primary));
@@ -223,6 +229,15 @@ const hasArtwork = computed(() =>
 }
 .chat-empty-state[data-layout='compact'] .chat-empty-action-description {
     display: none;
+}
+@container chat-pane (width < 900px) and (height > 420px) {
+    .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+        grid-template-columns: 1fr;
+    }
+    .chat-empty-state[data-layout='cards'] .chat-empty-action {
+        align-items: center;
+        min-height: 64px;
+    }
 }
 @container chat-pane (max-width: 620px) {
     .chat-empty-actions {

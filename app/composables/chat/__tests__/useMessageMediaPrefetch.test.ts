@@ -35,6 +35,16 @@ function createCache() {
 }
 
 describe('message media prefetch controller', () => {
+    it.each(['user', 'assistant'] as const)('warms the visible images for a %s message', async role => {
+        const cache = createCache();
+        const controller = createController({ cache, loadMeta: async () => ({ kind: 'image' }),
+            loadBlob: async () => new Blob(['image'], { type: 'image/png' }) });
+        const hashes = Array.from({ length: 7 }, (_, index) => `hash-${index}`);
+        controller.updateRange([{ role, file_hashes: hashes }], { startIndex: 0, endIndex: 0 });
+        await controller.whenIdle();
+        expect(cache.ensure.mock.calls.map(call => call[0])).toEqual(role === 'assistant' ? hashes : hashes.slice(0, 4));
+    });
+
     it('limits image work to four concurrent loads', async () => {
         const cache = createCache();
         let active = 0;

@@ -18,7 +18,7 @@ export default defineNitroPlugin(nitro => {
             return;
         }
         if (controller.countsRequest(path, method)) admitted.set(event, path);
-        if (method === 'GET' && /^\/api\/jobs\/[^/?]+\/stream(?:\?|$)/.test(path)) {
+        if (method === 'GET' && /^\/api\/(?:jobs\/[^/?]+\/stream|sync\/events)(?:\?|$)/.test(path)) {
             const dispose = controller.observe(() => event.node.res.end());
             event.node.res.once('close', dispose);
         }

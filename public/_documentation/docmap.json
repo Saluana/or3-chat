@@ -287,7 +287,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 0,
-                    "summary": "Active workspace databases, tables, local derived indexes, and migrations."
+                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, and additive migrations."
                 },
                 {
                     "name": "schema.md",
@@ -536,7 +536,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 0,
-                    "summary": "Theme fields, tokens, component targets, and customizable empty chat panes with action and light/dark controls."
+                    "summary": "Theme fields, tokens, component targets, and customizable empty chat panes that adapt to split-pane width and height, with direct sign-in dialogs, action permissions, and light/dark controls."
                 },
                 {
                     "name": "troubleshooting.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Registration Settings and Invitations tabs, saved versus active modes, Restart now, invitation setup, eight-character codes and clickable links, and distinct email-mismatch versus invalid-code errors, account identities, team membership, credentials, and admin sessions. Workspace discovery, owner selection, readable roles, guest access, and email-bound team invitations. Includes the coordinated Basic Auth source and published-package dependency."
+                    "summary": "Direct provider sign-in dialogs from signed-out chat cards and sends, auth UI adapter entry points, Registration Settings and Invitations, saved versus active modes, Restart now, invitation setup and codes, account identities, team membership, credentials, admin sessions, workspace discovery, readable roles, and guest access. Includes coordinated auth provider dependencies."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, recovery, cancellation, browser-tool approvals, retention, and safe dashboard drain accounting for Memory, SQLite and Convex."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, cancellation, recovery, coalesced checkpoints, small viewer controls, idle maintenance backoff, retention and safe dashboard drains."
                 },
                 {
                     "name": "notifications.md",
@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including reserved upload verification, qualified SQLite backup histories, and incomplete-upgrade refusal."
                 },
                 {
                     "name": "troubleshooting.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Offline-first synchronization, live local view refresh for incoming chats/documents, snapshots, cursor-complete subscription pages, shared foreground gateway subscriptions, polling volume and activity pauses, offline outbox retry preservation, outage backoff, and rate limits."
+                    "summary": "Sync authorization, content-free notifications, polling recovery, and graceful notification closure during managed restart."
                 },
                 {
                     "name": "storage-layer.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Configure Cloud upload limits and bounded browser caching in admin, protect local originals and unfinished uploads, and implement authorized transfers and server-only retained-original backup reads."
+                    "summary": "Configure upload and retained storage quotas, indexed browser cache budgeting, verified redundancy proofs, bounded thumbnail loading, authorized transfers and retained-original backup reads."
                 },
                 {
                     "name": "plugin-access-gating.md",

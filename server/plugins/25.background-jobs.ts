@@ -12,15 +12,14 @@ import { reconcilePendingBackgroundHistory } from '../utils/background-jobs/hist
 import { getShutdownRuntime } from '../utils/shutdown/runtime';
 
 const RECONCILE_INTERVAL_MS = 5_000;
-let activeInterval: ReturnType<typeof setInterval> | null = null;
-let activeStartup: ReturnType<typeof setTimeout> | null = null;
+const MAX_IDLE_INTERVAL_MS = 60_000;
+const CLEANUP_INTERVAL_MS = 60_000;
+let stopActive: (() => void) | undefined;
 
 export default defineNitroPlugin((nitroApp) => {
-    if (activeInterval) clearInterval(activeInterval);
-    if (activeStartup) clearTimeout(activeStartup);
-    activeInterval = null;
-    activeStartup = null;
-
+    stopActive?.();
+    let activeInterval: ReturnType<typeof setTimeout> | undefined;
+    let activeStartup: ReturnType<typeof setTimeout> | undefined;
     if (!isBackgroundStreamingEnabled()) return;
     const encryptionKey = getBackgroundJobEncryptionKey();
     if (encryptionKey.length < 32) {
@@ -31,22 +30,28 @@ export default defineNitroPlugin((nitroApp) => {
 
     const workerId = randomUUID();
     let scanning = false;
+    let stopped = false;
+    let delay = RECONCILE_INTERVAL_MS;
+    let nextCleanupAt = 0;
     const reconcile = async () => {
         const { controller } = getShutdownRuntime();
         if (scanning || controller.phase() === 'draining' || controller.phase() === 'closed') return;
         scanning = true;
         try {
             const provider = await getJobProvider();
-            if (controller.canStartWork()) await provider.cleanupExpired();
+            if (controller.canStartWork() && Date.now() >= nextCleanupAt) {
+                await provider.cleanupExpired();
+                nextCleanupAt = Date.now() + CLEANUP_INTERVAL_MS;
+            }
             // Pending delivery is existing work and must finish while preparing.
             // Pausing it along with new claims would make its own drain blocker
             // impossible to clear after a transient canonical-history failure.
-            await reconcilePendingBackgroundHistory(
+            const delivered = await reconcilePendingBackgroundHistory(
                 provider,
                 getJobConfig().maxConcurrentJobs
             );
             if (!controller.canStartWork()) return;
-            await reconcileBackgroundJobs(
+            const claimed = await reconcileBackgroundJobs(
                 {
                     provider,
                     encryptionKey,
@@ -55,7 +60,10 @@ export default defineNitroPlugin((nitroApp) => {
                 },
                 getJobConfig().maxConcurrentJobs
             );
+            delay = delivered || claimed ? RECONCILE_INTERVAL_MS
+                : Math.min(delay * 2, MAX_IDLE_INTERVAL_MS);
         } catch (error) {
+            delay = RECONCILE_INTERVAL_MS;
             console.warn(
                 '[background-jobs] Recovery scan failed:',
                 error instanceof Error ? error.message : 'Unknown error'
@@ -67,16 +75,21 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Provider modules register during Nitro startup; defer the first scan so
     // provider selection cannot be cached before registration completes.
-    const scan = () => { void getShutdownRuntime().controller.track(reconcile()); };
-    activeStartup = setTimeout(scan, 1_000);
-    if (typeof activeStartup.unref === 'function') activeStartup.unref();
-    activeInterval = setInterval(scan, RECONCILE_INTERVAL_MS);
-    if (typeof activeInterval.unref === 'function') activeInterval.unref();
+    const scan = async () => {
+        await getShutdownRuntime().controller.track(reconcile());
+        if (stopped) return;
+        activeInterval = setTimeout(() => { void scan(); }, delay);
+        activeInterval.unref?.();
+    };
+    activeStartup = setTimeout(() => { void scan(); }, 1_000);
+    activeStartup.unref?.();
 
-    nitroApp.hooks.hook('close', () => {
+    const stop = () => {
+        stopped = true;
         if (activeStartup) clearTimeout(activeStartup);
-        if (activeInterval) clearInterval(activeInterval);
-        activeStartup = null;
-        activeInterval = null;
-    });
+        if (activeInterval) clearTimeout(activeInterval);
+        if (stopActive === stop) stopActive = undefined;
+    };
+    stopActive = stop;
+    nitroApp.hooks.hook('close', stop);
 });

@@ -20,6 +20,7 @@
 import type { H3Event } from 'h3';
 import type { CanonicalChatReader } from '~~/shared/chat/history-reader';
 import type {
+    SyncScope,
     PullRequest,
     PullResponse,
     PushBatch,
@@ -175,8 +176,16 @@ export interface SyncGatewayAdapter {
     consumeUploadIntent?(event: H3Event, input: UploadIntentConsumptionRequest): Promise<void>;
     /** Release an active reservation after a failed/cancelled upload. */
     cancelUploadIntent?(event: H3Event, input: { workspaceId: string; intentId: string }): Promise<void>;
+    /** Optional server notification channel. Emits only the committed workspace
+     * version; callers still use authorized pull/snapshot for all content.
+     * Must release timers/connections after unsubscribe and report stream errors.
+     */
+    watchVersion?(event: H3Event, scope: SyncScope, onVersion: (version: number) => void,
+        onError: (error: unknown) => void): Promise<() => void>;
     /** Explicit protocol contracts implemented by this adapter. Missing is fail-closed. */
     capabilities?: {
+        /** reserveUploadIntent serializes retained bytes and active digest holds. */
+        atomicUploadQuota?: 'retained-v1';
         snapshotBootstrap?: 'snapshot-v1';
         historyRetention?: 'snapshot-v1';
         /** Atomic canonical chat admission/finalization and durable receipts. */

@@ -431,6 +431,8 @@ export class Or3DB extends Dexie {
 
         // Index only verified redundant copies; no migration classifies legacy originals.
         this.version(29).stores({ file_blobs: 'hash, cache_accessed_at' });
+        // Sparse metadata index: origin-wide budgeting never needs Blob values.
+        this.version(30).stores({ file_blobs: 'hash, cache_accessed_at, [cache_accessed_at+cache_bytes+hash]' });
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

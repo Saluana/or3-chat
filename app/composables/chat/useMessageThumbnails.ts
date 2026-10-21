@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue';
 import { parseHashes } from '~/utils/files/attachments';
-import { getFileMeta } from '~/db/files';
+import { getFileBlob, getFileMeta } from '~/db/files';
 import {
     useThumbnailUrlCache,
     type ThumbState,
@@ -10,6 +10,7 @@ import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client'
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type MessageWithAttachments = {
+    role?: string;
     file_hashes?: unknown;
     _expanded?: boolean;
 };
@@ -25,6 +26,9 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     const maxDisplayedThumbs = 4;
     const displayedHashes = computed(() =>
         hashList.value.slice(0, maxDisplayedThumbs)
+    );
+    const thumbnailHashes = computed(() =>
+        message.value.role === 'assistant' ? hashList.value : displayedHashes.value
     );
 
     function getAttachmentName(hash: string): string {
@@ -87,9 +91,8 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
 
         try {
             const state = await thumbUrlCache.ensure(hash, async () => {
-                const files = await import('~/db/files');
                 if (generation !== getWorkspaceGeneration()) return null;
-                const blob = await files.getFileBlob(hash);
+                const blob = await getFileBlob(hash);
                 if (generation !== getWorkspaceGeneration()) return null;
                 thumbUrlCache.setIntrinsicSize(
                     hash,
@@ -153,14 +156,16 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
             }
         }
     }
-    watch(hashList, syncHashes, { immediate: true });
+    // Assistant inline images all use this cache. User attachment rows own
+    // only four previews; the expanded gallery loads the remaining files.
+    watch(thumbnailHashes, syncHashes, { immediate: true });
 
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
         for (const key of Object.keys(thumbnails)) delete thumbnails[key];
         for (const key of Object.keys(pdfMeta)) delete pdfMeta[key];
         for (const key of Object.keys(imageNames)) delete imageNames[key];
         currentHashes.clear();
-        void syncHashes(hashList.value);
+        void syncHashes(thumbnailHashes.value);
     });
 
     onBeforeUnmount(() => {

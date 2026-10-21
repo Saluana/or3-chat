@@ -162,11 +162,17 @@ export default defineEventHandler(async (event) => {
 
     recordSyncRequest(userId, 'storage:upload');
 
+    // Get storage gateway adapter from registry
+    const adapter = getActiveStorageGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
+    }
+
     // Optional per-workspace storage quota enforcement
     const workspaceQuotaBytes = toPositiveFiniteNumber(
         storageConfig?.workspaceQuotaBytes
     );
-    if (workspaceQuotaBytes !== undefined) {
+    if (workspaceQuotaBytes !== undefined && adapter.atomicUploadQuota !== 'retained-v1') {
         const usage = await getWorkspaceStorageUsageSnapshot(
             event,
             body.data.workspace_id
@@ -185,12 +191,6 @@ export default defineEventHandler(async (event) => {
                     `${projectedBytes} > ${workspaceQuotaBytes} bytes)`,
             });
         }
-    }
-
-    // Get storage gateway adapter from registry
-    const adapter = getActiveStorageGatewayAdapter();
-    if (!adapter) {
-        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
     // Quota reads can suspend beyond a cached request session's membership.

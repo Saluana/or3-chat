@@ -1272,9 +1272,12 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
         if (path === '/api/basic-auth/sign-in') return Response.json({}, {headers:{'set-cookie':'session=synthetic; HttpOnly'}});
         if (path === '/api/auth/session') return json({session:{user:{email:'fixture@example.test'},workspace:{id:'synthetic-workspace'}}});
         if (path === '/api/sync/pull') return json({changes:[],nextCursor:0});
-        if (path === '/api/storage/presign-upload') return json({storageId:'synthetic-probe',url:new URL('/upload',request.url).href,method:'PUT'});
+        if (path === '/api/storage/presign-upload') return json({storageId:'synthetic-probe',intentId:'synthetic-upload-intent',url:new URL('/upload',request.url).href,method:'PUT'});
         if (path === '/upload') { bytes = new Uint8Array(await request.arrayBuffer()); return json({}); }
-        if (path === '/api/storage/commit') { events.push('commit'); live = true; return scenario === 'commit-failure' ? json({statusMessage:'Synthetic commit response failure'},500) : json({}); }
+        if (path === '/api/storage/commit') {
+          const body = await request.json() as { intent_id?: string };
+          if (body.intent_id !== 'synthetic-upload-intent') return json({statusMessage:'Invalid upload intent commit'},400);
+          events.push('commit'); live = true; return scenario === 'commit-failure' ? json({statusMessage:'Synthetic commit response failure'},500) : json({}); }
         if (path === '/api/sync/push') {
           const body = await request.json() as {ops:{operation:string}[]};
           const operation = body.ops[0]!.operation;

@@ -51,7 +51,23 @@ In **Admin → Workspaces → select workspace → Cloud files and browser cache
 
 Defaults: 10 MiB per cached file, 250 MiB reusable cache across this browser origin, and 14 days since successful upload or use. The initial upload limit comes from `OR3_MAX_CLOUD_FILE_SIZE_BYTES` (100 MiB by default); a saved admin setting overrides it, up to 1 GiB. Provider limits and workspace/server storage quotas still apply. A workspace’s budget counts cache bytes in other workspaces too, but cleanup only touches authorized copies in the active workspace.
 
-Cleanup runs in bounded passes at startup and after transfers. Each pass advances past protected or unavailable entries so they cannot permanently block later expired copies; the scan wraps after reaching the end. It considers old or over-budget copies, proves that a current matching original can be read from the same workspace and provider, verifies its hash, then rechecks eligibility atomically before removing **only local blob bytes**. It never deletes remote files, metadata, or references. Use refreshes the last-access time. IndexedDB quota failures do not discard protected data. If cross-tab locks or origin inventory are unavailable, downloads skip cache admission.
+Cleanup runs in bounded passes at startup and after transfers. Each pass advances past protected or unavailable entries so they cannot permanently block later expired copies; the scan wraps after reaching the end. It considers old or over-budget copies, proves that a current matching original exists in the same workspace and provider, then rechecks eligibility atomically before removing **only local blob bytes**. It never deletes remote files, metadata, or references. Use refreshes the last-access time. IndexedDB quota failures do not discard protected data. If cross-tab locks or origin inventory are unavailable, downloads skip cache admission.
+
+Concurrent cleanup requests share one pass per workspace database. Dexie v30
+adds a metadata-only cache-size index, so budgeting avoids loading every Blob;
+missing or invalid inventory remains fail-closed. Each transfer obtains one fresh
+file-policy response and reuses it for download admission and cleanup.
+
+Cleanup asks presign-download for `verify_content: true`. An optional
+`verifiedContent: { hash, sizeBytes }` must match the exact canonical storage ID,
+full SHA-256 and local byte length. Convex uses its actual storage system checksum,
+S3 requests the actual object's SHA-256 on HEAD, and filesystem storage securely
+opens and hashes the original on the server. This avoids downloading an original
+merely to prove it is redundant. Missing or mismatched proofs retain full-byte
+verification; failed verification keeps the local copy. Ordinary downloads still
+verify their received bytes. Collapsed message attachment loading and prefetch
+stop at the four visible thumbnails; opening the full list loads further files.
+Assistant replies still load and prefetch every inline image.
 
 Local-only originals, unknown legacy blobs, and files with unfinished uploads or metadata sync remain protected. Failed upload history stays until a successful retry resolves it. Protected staging can exceed the cache budget: cleanup cannot turn the budget into a reason to delete the only copy. Existing legacy bytes are retained conservatively. Static builds keep the configured 20 MiB default, impose a 50 MiB per-file ceiling on new intake/restore, preflight available storage, and never expire originals automatically.
 
@@ -273,13 +289,33 @@ opaque-cursor pages for these views:
 - deleted materialized metadata when the provider advertises
   `capabilities.retainedStorageMetadata: 'v1'` (read-only accounting).
 
-Quota is the sum of canonical live metadata plus unexpired upload authorization
-charges. SQLite keeps a consumed upload charged until its original expiry or
-canonical metadata admission and rejects consumed-receipt replay after expiry.
-It deduplicates pending charges by hash and admits
-reservations atomically on native SQLite and D1. If the active
-sync provider does not implement this query, quota enforcement fails closed instead
-of undercounting from incomplete history.
+First-party updated adapters enforce retained quota atomically: distinct committed
+hashes remain charged after Trash, metadata deletion and upload-intent expiry,
+plus the maximum unexpired reservation for each new hash. Re-uploading the same
+retained hash does not double-charge; an upload larger than the retained size
+reserves the difference, including when old metadata understated its size.
+SQLite migration 026 backfills a retained
+hash ledger and indexed usage total, including consumed receipts, and maintains
+it transactionally for native SQLite and D1. Convex backfills metadata in
+200-row mutation pages before issuing upload authority, then uses indexed totals
+and active-intent expiry ranges. A large unfinished backfill returns retryable
+503 instead of bypassing the budget. Quota exhaustion returns non-retryable
+HTTP 413. Coordinated Convex physical deletion and GC release a
+charge only when no metadata alias remains for that hash, including legacy hash
+casing and metadata synced directly into Trash.
+
+The server skips its full metadata quota scan only when the adapter advertises
+`atomicUploadQuota: 'retained-v1'`; other adapters retain the existing host
+preflight and must still reserve atomically. Deploy the matching Convex schema,
+`storageUsage.ts`, storage and sync authoring helpers together. With a configured
+quota, stale Convex templates fail closed until upgraded.
+
+Set `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` to an explicit positive byte budget in
+production. Its existing default remains unlimited; the per-file upload limit
+is not a total storage cap. Retained quota is conservative admission accounting,
+not an exact physical inventory or a provider billing cap: incomplete uploads,
+unclassified objects, database history, egress and function usage can still cost
+money. Use the provider's own spend controls and usage alerts as well.
 
 Filesystem and S3 destructive GC remain disabled until they own deletion coordination
 with the canonical backend. Canonical queries and pre-delete rechecks alone cannot
@@ -312,11 +348,11 @@ ambiguous, unsupported, and malformed results stay explicit. A bounded scan may
 leave files unclassified; unknown is not zero. An observation is not an atomic
 inventory and must never authorize deletion.
 
-Quota policy remains logical live metadata plus reservations. Deleting metadata
-can release logical quota while the bytes remain on disk. Quota traversal rejects
-malformed pages, repeated cursors, conflicting aliases/identities, and unsafe
-integer totals instead of returning an understated value. It does not introduce a
-cross-provider transactional snapshot or replace provider-owned atomic admission.
+Usage observations remain read-only and distinct from retained admission totals.
+Deleting logical metadata does not release a retained charge on SQLite or the
+filesystem/S3 pairing. The generic legacy quota traversal rejects malformed
+pages, repeated cursors, conflicting aliases/identities and unsafe integer totals.
+It does not replace the provider's transactional admission check.
 
 ### Physical cleanup remains incomplete
 

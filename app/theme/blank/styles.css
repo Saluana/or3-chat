@@ -2009,9 +2009,8 @@ html[data-theme='blank'].dark .chat-empty-hero {
 }
 
 /*
- * Phone empty panes: open sky edge to edge, the bird above one group of roomy
- * actions, and the composer parked where the chat composer sits once a thread
- * starts, so sending the first message does not move it.
+ * Narrow empty panes share the phone layout, including desktop splits.
+ * Keep the bird above readable rows and the composer at the bottom.
  */
 @media (max-width: 767px) {
     /*
@@ -2037,133 +2036,172 @@ html[data-theme='blank'].dark .chat-empty-hero {
         background-color: transparent !important;
         opacity: 1 !important;
     }
-    @container chat-pane (min-height: 421px) {
-        html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
-            justify-content: flex-start;
-            gap: 14px;
-            padding: 12px 16px 28px !important;
-        }
-        html[data-theme='blank'] .chat-container--empty .chat-empty-state[data-layout='cards'] {
-            flex: 1 0 auto;
-            justify-content: flex-end;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork {
-            flex: 1 0 auto;
-            flex-direction: column;
-            align-items: center;
-            height: auto;
-            max-height: none;
-            margin-bottom: 0;
-        }
-        /* Weight free space above the bird so it floats in the sky. */
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::before,
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
-            content: '';
-            flex: 3 1 0;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
-            flex-grow: 1;
-            min-height: 12px;
-            max-height: 40px;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
-            flex: none;
-            height: clamp(150px, 26cqh, 230px);
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
-            grid-template-columns: 1fr;
-            /* Narrow phones wrap some descriptions; keep the rows even. */
-            grid-auto-rows: 1fr;
-            gap: 9px;
-            margin-top: 0;
-            padding: 12px;
-            border: 1px solid color-mix(in srgb, var(--md-outline) 50%, transparent);
-            border-radius: 26px;
-            background: color-mix(in srgb, var(--md-surface) 72%, transparent);
-            box-shadow: 0 12px 36px rgb(0 0 0 / 0.05);
-            -webkit-backdrop-filter: blur(14px);
-            backdrop-filter: blur(14px);
-        }
+}
+@container chat-pane (width < 900px) and (height > 420px) {
+    html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+        justify-content: flex-start;
+        gap: 14px;
+        padding: 12px 16px 28px !important;
+    }
+    html[data-theme='blank'] .chat-container--empty .chat-empty-state[data-layout='cards'] {
+        flex: 1 1 0;
+        min-height: 0;
+        max-width: 520px;
+        justify-content: flex-end;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork {
+        flex: 1 1 0;
+        min-height: 0;
+        flex-direction: column;
+        align-items: center;
+        height: auto;
+        max-height: none;
+        margin-bottom: 0;
+    }
+    /* Weight free space above the bird so it floats in the sky. */
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::before,
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
+        content: '';
+        flex: 3 1 0;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-artwork::after {
+        flex-grow: 1;
+        min-height: 12px;
+        max-height: 40px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
+        flex: 0 1 auto;
+        min-height: 0;
+        height: clamp(150px, 26cqh, 230px);
+        max-height: calc((100cqw - 64px) * 2 / 3);
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+        grid-template-columns: 1fr;
+        /* Narrow phones wrap some descriptions; keep the rows even. */
+        grid-auto-rows: 1fr;
+        gap: 9px;
+        margin-top: 0;
+        padding: 12px;
+        border: 1px solid color-mix(in srgb, var(--md-outline) 50%, transparent);
+        border-radius: 26px;
+        background: color-mix(in srgb, var(--md-surface) 72%, transparent);
+        box-shadow: 0 12px 36px rgb(0 0 0 / 0.05);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+        align-items: center;
+        gap: 14px;
+        border-radius: 18px;
+        background: var(--md-surface);
+    }
+    /* Override the theme's important touch minimum and button padding. */
+    @layer utilities {
         html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
-            align-items: center;
-            gap: 14px;
-            border-radius: 18px;
-            background: var(--md-surface);
-        }
-        /* Override Nuxt UI's fixed control height and important touch minimum. */
-        @layer utilities {
-            html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
-                height: auto !important;
-                min-height: 66px !important;
-                padding: 10px 16px 10px 12px !important;
-            }
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
-            display: grid;
-            flex-basis: 46px;
-            height: 46px;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon .iconify {
-            width: 24px;
-            height: 24px;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-copy {
-            flex: 1;
-            gap: 3px;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-label {
-            font-size: 14px;
-            line-height: 20px;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
-            display: block;
-            font-size: 12px;
-            line-height: 17px;
-            text-wrap: pretty;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-chevron {
-            display: block;
-            flex: 0 0 18px;
-            width: 18px;
-            height: 18px;
-            color: var(--md-on-surface-variant);
-        }
-        /* The mockup's composer rests in a soft bezel; focus keeps its own ring. */
-        html[data-theme='blank'] .chat-container--empty .chat-inner-input-container .blank2-chat-dropper.chat-input-main:not(:focus-within) {
-            box-shadow:
-                0 0 0 5px color-mix(in srgb, var(--md-outline) 45%, transparent),
-                0 10px 30px rgb(0 0 0 / 0.06);
+            min-height: 66px !important;
+            padding: 10px 16px 10px 12px !important;
         }
     }
-    @container chat-pane (421px <= height <= 600px) {
-        html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
-            gap: 10px;
-            padding-top: 8px !important;
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
-            height: clamp(72px, 18cqh, 110px);
-        }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
-            gap: 6px;
-            padding: 8px;
-            border-radius: 22px;
-        }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+        display: grid;
+        flex-basis: 46px;
+        height: 46px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon .iconify {
+        width: 24px;
+        height: 24px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-copy {
+        flex: 1;
+        gap: 3px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-label {
+        font-size: 14px;
+        line-height: 20px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
+        display: block;
+        font-size: 12px;
+        line-height: 17px;
+        text-wrap: pretty;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-chevron {
+        display: block;
+        flex: 0 0 18px;
+        width: 18px;
+        height: 18px;
+        color: var(--md-on-surface-variant);
+    }
+    /* The mockup's composer rests in a soft bezel; focus keeps its own ring. */
+    html[data-theme='blank'] .chat-container--empty .chat-inner-input-container .blank2-chat-dropper.chat-input-main:not(:focus-within) {
+        box-shadow:
+            0 0 0 5px color-mix(in srgb, var(--md-outline) 45%, transparent),
+            0 10px 30px rgb(0 0 0 / 0.06);
+    }
+}
+@container chat-pane (width < 340px) and (height > 420px) {
+    html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+        padding-inline: 12px !important;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+        padding: 8px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+        gap: 10px;
+    }
+    @layer utilities {
         html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
-            gap: 10px;
+            padding-inline: 10px 12px !important;
         }
-        @layer utilities {
-            html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
-                min-height: 60px !important;
-                padding: 8px 14px 8px 10px !important;
-            }
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+        flex-basis: 36px;
+        height: 36px;
+    }
+}
+@container chat-pane (width < 900px) and (420px < height <= 600px) {
+    html[data-theme='blank'] .chat-container--empty .chat-input-wrapper {
+        gap: 10px;
+        padding-top: 8px !important;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-hero {
+        height: clamp(72px, 18cqh, 110px);
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-actions {
+        gap: 6px;
+        padding: 8px;
+        border-radius: 22px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+        gap: 10px;
+    }
+    @layer utilities {
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+            min-height: 60px !important;
+            padding: 8px 14px 8px 10px !important;
         }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
-            flex-basis: 38px;
-            height: 38px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+        flex-basis: 38px;
+        height: 38px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
+        line-height: 16px;
+    }
+}
+/* Short panes keep all three actions while giving the composer room. */
+@container chat-pane (width < 900px) and (420px < height <= 500px) {
+    @layer utilities {
+        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action {
+            min-height: 48px !important;
         }
-        html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
-            line-height: 16px;
-        }
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-icon {
+        flex-basis: 32px;
+        height: 32px;
+    }
+    html[data-theme='blank'] .chat-empty-state[data-layout='cards'] .chat-empty-action-description {
+        display: none;
     }
 }
 @media (max-width: 767px) and (display-mode: standalone) {

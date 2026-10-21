@@ -4,7 +4,7 @@ import { parseHashes } from '~/utils/files/attachments';
 import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
-type MessageWithFiles = { file_hashes?: unknown };
+type MessageWithFiles = { role?: string; file_hashes?: unknown };
 type PrefetchRange = { startIndex: number; endIndex: number };
 
 type ThumbnailCache = Pick<
@@ -123,7 +123,9 @@ export function createMessageMediaPrefetchController(
         );
         const next = new Set<string>();
         for (let index = start; index <= end; index++) {
-            for (const hash of parseHashes(messages[index]?.file_hashes)) {
+            const message = messages[index];
+            const hashes = parseHashes(message?.file_hashes);
+            for (const hash of message?.role === 'assistant' ? hashes : hashes.slice(0, 4)) {
                 next.add(hash);
             }
         }

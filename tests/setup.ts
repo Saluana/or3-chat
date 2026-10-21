@@ -127,6 +127,7 @@ vi.mock('#app', async () => {
             },
         }),
         defineNuxtPlugin: (plugin: unknown) => plugin,
+        useState: (_key: string, init?: () => unknown) => ref(init?.()),
     };
 });
 

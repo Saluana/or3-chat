@@ -215,7 +215,7 @@ describe('durable workspace tab drafts', () => {
         await old.table('file_blobs').put({ hash: 'legacy-blob', blob: new NodeBlob(['synthetic legacy bytes']) as unknown as Blob });
         old.close();
         try {
-            await template.open(); expect(template.verno).toBe(29);
+            await template.open(); expect(template.verno).toBe(30);
             expect((await template.workspace_tab_drafts.get('local\u0000legacy-tab'))?.draft).toEqual(value);
             expect((await template.kv.get('legacy-sentinel'))?.value).toBe('unchanged');
             expect(await template.pending_ops.get('legacy-op')).toMatchObject({ id: 'legacy-op', status: 'pending', createdAt: 1, readyAt: 0, payload: { synthetic: true } });

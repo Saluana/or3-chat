@@ -121,6 +121,7 @@ export function createGatewayStorageProvider(
 
         async getPresignedDownloadUrl(input): Promise<PresignedUrlResult> {
             const result = await requestJson<{
+                verifiedContent?: PresignedUrlResult['verifiedContent'];
                 url: string;
                 expiresAt: number;
                 headers?: Record<string, string>;
@@ -128,6 +129,7 @@ export function createGatewayStorageProvider(
                 storageId?: string;
             }>('/api/storage/presign-download', {
                 workspace_id: input.workspaceId,
+                verify_content: input.verifyContent,
                 hash: input.hash,
                 storage_id: input.storageId,
                 mime_type: input.mimeType,
@@ -142,6 +144,7 @@ export function createGatewayStorageProvider(
                 headers: result.headers,
                 method: result.method,
                 storageId: result.storageId,
+                verifiedContent: result.verifiedContent,
             };
         },
 

@@ -31,6 +31,7 @@ const jobViewers = new Map<string, number>();
 const LIVE_JOB_RETENTION_MS = 30_000;
 
 type LiveJobState = {
+    producing?: boolean;
     content: string;
     reasoning: string;
     status: BackgroundJob['status'];
@@ -80,7 +81,7 @@ const JOB_RECONCILE_LIVE_MS = 1_000;
 const JOB_RECONCILE_FALLBACK_MS = 300;
 
 type JobReconciler = {
-    poll: () => Promise<BackgroundJob | null>;
+    poll: () => Promise<BackgroundJob | null | undefined>;
     listeners: Set<(job: BackgroundJob | null, error?: Error) => void>;
     timer: ReturnType<typeof setTimeout> | null;
     running: boolean;
@@ -91,7 +92,7 @@ const jobReconcilers = new Map<string, JobReconciler>();
 /** One adaptive provider poller per job, shared by every SSE viewer. */
 export function registerJobReconciler(
     jobId: string,
-    poll: () => Promise<BackgroundJob | null>,
+    poll: () => Promise<BackgroundJob | null | undefined>,
     listener: (job: BackgroundJob | null, error?: Error) => void
 ): () => void {
     let reconciler = jobReconcilers.get(jobId);
@@ -108,8 +109,8 @@ export function registerJobReconciler(
         let terminal = false;
         try {
             const job = await current.poll();
-            terminal = job !== null && job.status !== 'streaming';
-            for (const subscriber of [...current.listeners]) {
+            terminal = job != null && job.status !== 'streaming';
+            if (job !== undefined) for (const subscriber of [...current.listeners]) {
                 try { subscriber(job); } catch { /* isolate viewers */ }
             }
         } catch (error) {
@@ -269,6 +270,7 @@ export function initJobLiveState(
 ): void {
     const state = ensureJobLiveState(jobId);
     if (isStaleAttempt(state, options?.attempt)) return;
+    state.producing = true;
     updateLiveUsage(state, options?.usage, options?.attempt);
     if (options?.attempt !== undefined) state.attempt = options.attempt;
     if (options?.contentBase !== undefined) {
@@ -403,6 +405,7 @@ export function emitJobStatus(
         state.reasoning = meta.reasoning;
     }
     state.status = status;
+    if (status !== 'streaming') state.producing = false;
     state.chunksReceived = meta.chunksReceived;
     state.completedAt = meta.completedAt;
     state.error = meta.error;

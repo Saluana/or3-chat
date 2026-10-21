@@ -12,9 +12,15 @@ vi.mock('~/core/hooks/useHooks', () => ({
     }),
 }));
 
+const policyState = vi.hoisted(() => ({ cloud: false }));
+vi.mock('../file-policy', async importOriginal => ({
+    ...await importOriginal<typeof import('../file-policy')>(),
+    isCloudFileStorageEnabled: () => policyState.cloud,
+}));
 const databases: Or3DB[] = [];
 
 afterEach(async () => {
+    policyState.cloud = false;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     await Promise.all(databases.splice(0).map((db) => db.delete()));
@@ -135,4 +141,41 @@ describe('transfer lease claims', () => {
         expect(await db.file_transfers.get(claimed.id)).toMatchObject({ state: 'done' });
         expect((await db.file_meta.get(hash))?.storage_id).toBe('recovered-storage');
     });
+});
+
+// A completed download used to fetch policy once for admission and again for
+// eviction. Check the real queue boundary, including a fresh next operation.
+it('reads current policy once per completed Cloud download', async () => {
+    policyState.cloud = true;
+    const { Blob: NodeBlob } = await import('node:buffer');
+    const { DEFAULT_FILE_POLICY } = await import('~~/shared/storage/file-policy');
+    vi.stubGlobal('Blob', NodeBlob);
+    const policyRequests = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.startsWith('/api/storage/policy')) {
+            policyRequests();
+            return new Response(JSON.stringify(DEFAULT_FILE_POLICY));
+        }
+        return new Response('original', { headers: { 'content-type': 'text/plain' } });
+    }));
+    const db = new Or3DB(`transfer-policy-${crypto.randomUUID()}`);
+    databases.push(db);
+    await db.open();
+    const hash = 'sha256:0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5';
+    await db.file_meta.put({ hash, storage_id: 'remote', mime_type: 'text/plain', kind: 'file', name: 'original.txt',
+        size_bytes: 8, ref_count: 1, created_at: 1, updated_at: 1, clock: 1, deleted: false });
+    const queue = new FileTransferQueue(db, provider(), { dbResolver: () => db, workspaceDbResolver: () => db });
+    (queue as any).scheduleProcessQueue = vi.fn();
+    queue.setWorkspaceId('ws-1');
+    try {
+        for (let operation = 1; operation <= 2; operation++) {
+            const transfer: FileTransfer = { id: `download-${operation}`, hash, workspace_id: 'ws-1',
+                direction: 'download', state: 'queued', bytes_total: 0, bytes_done: 0, attempts: 0, created_at: 1, updated_at: 1 };
+            await db.file_transfers.put(transfer);
+            await (queue as any).processTransfer(transfer, { workspaceId: 'ws-1', dbName: db.name, db });
+            expect((await db.file_transfers.get(transfer.id))?.state).toBe('done');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            expect(policyRequests).toHaveBeenCalledTimes(operation);
+        }
+    } finally { queue.dispose(); }
 });
