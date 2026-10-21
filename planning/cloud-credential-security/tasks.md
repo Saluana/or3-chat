@@ -18,7 +18,7 @@
 
 ## 5. Qualification and delivery
 - [x] 5.1 Run focused suites, broader high-risk validation, types/builds and real-service/browser smokes; record actual evidence. Requirements: R5. Done when receipt distinguishes failures/blockers.
-- [ ] 5.2 Review/simplify full diff, update public documentation/docmap/provider guidance and open PR. Requirements: R1–R5. Done when PR links and limitations are delivered.
+- [x] 5.2 Review/simplify full diff, update public documentation/docmap/provider guidance and open PR. Requirements: R1–R5. Done when PR links and limitations are delivered.
 
 ## Traceability Matrix
 | Requirement | Component | Task |
@@ -28,6 +28,8 @@
 | R3 | Browser credential composable/UI | 1.2, 3.1, 5.2 |
 | R4 | Existing plugin admission/services | 1.2, 3.2, 5.2 |
 | R5 | Qualification receipt | 1.1, 5.1, 5.2 |
+
+Delivery: [draft PR #270](https://github.com/Saluana/or3-chat/pull/270). Implementation is committed; the Docker qualification limit below remains open.
 
 ## Qualification limit
 The final Docker/lifecycle rerun is blocked by the local Docker Desktop engine failure; force-quit approval is pending. See `qualification.md` for actual results and the corrected explicit-disable test still requiring a rerun.

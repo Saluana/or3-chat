@@ -4,7 +4,7 @@
 
 Reviewed fetched defaults: Chat `or3-cloud` at `c302859545cff5fa5794825adbe77b6dbac6ce8f`, Secrets `main` at `5be25045eea086593ac539a0cd7e6963bd150a97`. Implementation is isolated in `codex/cloud-credential-security`. The existing published `@or3/secrets@0.1.1` protocol/client/CLI suffices; no Secrets source or immutable package version was changed.
 
-All service credentials and account keys used below are disposable synthetic fixtures. No production vault, credentials, deployment, publication or paid inference was used.
+All service credentials and account keys used below are disposable synthetic fixtures. No production vault, credentials, deployment, publication or paid inference was used. Delivery: [draft PR #270](https://github.com/Saluana/or3-chat/pull/270), implementation commit `5d982c91`.
 
 ## Executed checks
 
@@ -41,7 +41,7 @@ The lifecycle script uses the actual published `@or3/cloud@0.1.90` and published
 ## Review and negative controls
 
 - Billing matrix covers required BYOK (including override disabled), optional user override, instance-only, absent keys, disabled provider and provider outage. A selected outage cannot silently switch billing to the instance. Cloud never consumes browser key headers.
-- Real browser negative control reproduced importing into the current cookie account without matching the tab's expected account; the route now rejects missing/mismatched account bindings before storage. Tests also reproduced the non-concrete default provider; selection no longer mutates frozen Nitro config.
+- Real browser negative control reproduced importing into the current cookie account without matching the tab's expected account; the route now rejects missing/mismatched account bindings before storage. Tests also reproduced the non-concrete default provider; selection no longer mutates frozen Nitro config. The final built Nitro output was inspected and retains `or3-secrets` as its runtime default even though the build subprocess disables access during prerender.
 - Existing secret route/capability suites retain sealed activation, approved grants, selected package, user/workspace and revocation checks. No new grant framework or shared-secret lookup was introduced.
 - Raw credentials remain in server-only resolution/execution. OAuth uses a fixed destination, account-bound PKCE and sanitized status redirects. Credential-bearing fetches refuse redirects. Browser status/session payloads contain no raw key.
 - Simplification retained the published vault protocol, existing registry, account/workspace authorization, billing settings, plugin admission and backup machinery. No new dependency, application table, general proxy, or permission layer.
