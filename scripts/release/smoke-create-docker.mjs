@@ -227,6 +227,7 @@ async function writeFixture(cookie, workspaceId) {
             workspace_id: workspaceId,
             hash: qualifiedHash,
             storage_id: presign.storageId,
+            intent_id: presign.intentId,
             storage_provider_id: 'fs',
             mime_type: 'image/png',
             size_bytes: uploadBytes.length,
