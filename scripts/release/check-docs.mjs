@@ -319,7 +319,8 @@ function main() {
     if (!start.includes(required)) errors.push(`docs/start-here.md: missing canonical route ${required}`);
   }
   const cloudReadme = readFileSync(resolve(root, 'packages/or3-cloud/README.md'), 'utf8');
-  if (!cloudReadme.includes('Node.js 20 or later') || cloudReadme.includes('Node.js 24')) {
+  const nodeVersion = readFileSync(resolve(root, '.node-version'), 'utf8').trim();
+  if (!cloudReadme.includes(`Node.js ${nodeVersion} or later in the 24.x line`)) {
     errors.push('packages/or3-cloud/README.md: Node requirement is stale');
   }
   if (/prints a\s+bootstrap password/i.test(cloudReadme)) {

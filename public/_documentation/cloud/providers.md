@@ -66,6 +66,8 @@ separate cloud database. Relay selection is independent and configured with
 
 ## Install Providers
 
+The host and all six first-party providers require Node.js 24.22.1 or newer on the 24.x line. Their `.node-version` files and CI pin 24.22.1. Providers run in the host process; updating an npm provider alone does not update Node or the container image.
+
 For an editable source checkout, install only the packages selected by your configuration. Each provider page explains its credentials and persistent data paths:
 
 ```bash

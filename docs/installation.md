@@ -17,7 +17,7 @@ are advanced/source paths rather than setup steps for a managed deployment.
 
 ## Prerequisites
 
-Install Docker Engine and Docker Compose v2. Node.js 20+ is needed only for
+Install Docker Engine and Docker Compose v2. Node.js 24.22.1+ on the 24.x line is needed only for
 `npx` to download and invoke the operator CLI. Verify:
 
 ```bash

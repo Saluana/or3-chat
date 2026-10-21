@@ -10,7 +10,7 @@
     "directory": "packages/or3-cloud"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^24.22.1"
   },
   "bin": {
     "or3": "./dist/cli.mjs"

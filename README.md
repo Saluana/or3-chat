@@ -63,7 +63,7 @@ walkthrough. OpenRouter access and an OR3 Cloud account are separate.
 
 ### Host your own Cloud
 
-The supported installer needs **Node.js 20+**, **Docker**, and **Docker Compose
+The supported installer needs **Node.js 24.22.1+ (24.x)**, **Docker**, and **Docker Compose
 v2**. Run it from an empty directory.
 
 For a private instance on your computer:
@@ -90,7 +90,7 @@ and [Updating OR3](docs/cloud-updates.md) for updates.
 ### Run from source
 
 Use this path to change the app or build custom extensions. You need **Git**,
-**Node.js 24+**, and the **Bun version pinned in [package.json](package.json)**.
+**Node.js 24.22.1+ on the 24.x line**, and the **Bun version pinned in [package.json](package.json)**.
 
 ```bash
 git clone https://github.com/Saluana/or3-chat.git

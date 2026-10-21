@@ -22,6 +22,7 @@ export const FIRST_PARTY_VERSIONS = JSON.parse(
 );
 
 const TOP_LEVEL_FILES = [
+    '.node-version',
     '.dockerignore',
     '.gitignore',
     'Caddyfile',
@@ -178,7 +179,7 @@ export function rewriteTemplateManifest(manifest) {
         private: true,
         type: 'module',
         license: manifest.license,
-        engines: { node: '>=24' },
+        engines: { ...manifest.engines },
         scripts: {
             build: 'nuxt build',
             start: 'node scripts/cli/start.mjs',

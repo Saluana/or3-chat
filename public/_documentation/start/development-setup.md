@@ -9,7 +9,7 @@ Use this path to change OR3 itself or work on a trusted source extension. To run
 
 ## Install and start
 
-The repository requires Git, Node.js 24 or newer, and Bun. The package manager version is pinned in `package.json` (currently Bun 1.3.14). Use Bun for repository commands.
+The repository requires Git, Node.js 24.22.1 or newer on the 24.x line, and Bun. The package manager version is pinned in `package.json` (currently Bun 1.3.14). Use Bun for repository commands. Development and CI pin Node.js 24.22.1 in `.node-version`; the application, provider packages, Cloud installer, and container images share this patched Node 24 baseline.
 
 ```bash
 git clone https://github.com/Saluana/or3-chat.git
