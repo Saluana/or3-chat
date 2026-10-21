@@ -8,6 +8,8 @@ import { computed, watch } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { isMobile } from '~/state/global';
+import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
+import { useOverlay } from '@nuxt/ui/composables/useOverlay';
 
 export const SIGN_IN_PROMPT = 'Sign in to start chatting';
 export const INVITE_PROMPT = "You're invited";
@@ -18,6 +20,7 @@ export function useSignInGate() {
     const config = useRuntimeConfig();
     // Resolve while setup is active; send handlers can run after it ends.
     const toast = useToast();
+    const overlay = useOverlay();
     const { data } = useSessionContext();
 
     // Stays false until the session payload has loaded, so a slow fetch never
@@ -49,15 +52,16 @@ export function useSignInGate() {
     }
 
     function promptSignIn(): void {
-        toast.add({
-            id: 'need-sign-in',
-            title: SIGN_IN_PROMPT,
-            description: isMobile.value
-                ? 'Open the menu, tap More, then Login.'
-                : 'Use Login in the sidebar.',
-            color: 'primary',
-            duration: 6000,
-        });
+        const adapter = resolveAuthUiAdapter(String(config.public.authProvider));
+        if (adapter?.openSignIn) {
+            adapter.openSignIn();
+        } else if (adapter?.signInComponent) {
+            const dialog = overlay.create(adapter.signInComponent, {
+                props: { modalOnly: true },
+                destroyOnClose: true,
+            });
+            void dialog.open();
+        }
     }
 
     return { signInRequired, promptSignIn };

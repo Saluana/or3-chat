@@ -1714,8 +1714,10 @@ watch(
 const emptySession = useState<SessionPayload | null>('auth-session', () => null);
 const emptyAvailable = computed<readonly EmptyChatActionId[]>(() => {
     const role = emptySession.value?.session?.role;
-    const writable = runtimeConfig.public.ssrAuthEnabled !== true || role === 'owner' || role === 'editor';
-    return writable ? ['start-chat', 'start-project', ...(documentsEnabled.value ? ['create-document' as const] : [])] : ['start-chat'];
+    const showCreation = runtimeConfig.public.ssrAuthEnabled !== true
+        || emptySession.value?.session?.authenticated !== true
+        || role === 'owner' || role === 'editor';
+    return showCreation ? ['start-chat', 'start-project', ...(documentsEnabled.value ? ['create-document' as const] : [])] : ['start-chat'];
 });
 const { openProjectSidebar: openEmptyProject } = useProjectSidebar();
 const emptyProjectIcon = useIcon('sidebar.folder');

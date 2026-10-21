@@ -245,7 +245,13 @@ function forwardResize(payload: ResizePayload) {
      */
     position: static;
     float: left;
-    height: 0;
+    /* Keep a paintable line for ellipsis without adding a second line box. */
+    height: auto;
+    margin-block-end: -1lh;
+    max-inline-size: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     inset: auto;
     margin-inline-start: -2px;
 }

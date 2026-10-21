@@ -49,32 +49,46 @@ outbox writes. Clean document buffers follow remote changes; unsaved buffers kee
 their conflict baseline. Foreground peers receive durable user turns and finalized
 assistant replies, while token streaming remains on the originating client.
 
-The SSR gateway subscription polls `/api/sync/pull` every two seconds plus
-0–500 ms of jitter after each completed poll. Empty responses still perform
-authentication and provider reads. At roughly 25 requests per minute, one
-continuously visible tab can generate about 1.08 million pull requests in
-30 days. Local Dexie reads do not contact the sync backend.
+The SSR gateway subscribes to content-free version notifications at
+`/api/sync/events` when the adapter supports `watchVersion`. A changed version
+wakes the ordinary pull/apply path immediately; it never advances a cursor by
+itself. While the channel is healthy, a safety pull runs once per minute;
+session refreshes do not reset that deadline.
+Older adapters, unavailable channels, and browsers without EventSource retain
+the two-second polling fallback with jitter. Reconnection is attempted after a
+minute. Duplicate version hints do not generate pulls.
 
-Gateway subscriptions pause scheduled pulls while the document is hidden or
-the browser reports that it is offline. Returning to a visible, online page
-checks for changes immediately using the retained cursor. An in-flight page
-still finishes applying before another pull starts. Local edits remain captured
-in the durable outbox. Hidden pages may still send pending writes; when the
-browser reports offline, the outbox skips pushes without consuming retry
-attempts. Its existing heartbeat resumes sending when connectivity returns.
-Foreground polling keeps its existing cadence.
+SQLite shares one indexed version-counter check every two seconds per watched
+workspace and server process, regardless of its listener count. Convex shares a
+server-only reactive client across listeners and watches its small workspace
+version counter. Deploy the matching Convex templates, including `sync:watchVersion`,
+to enable notifications. A stale backend falls back to polling.
 
-Repeated failures back off exponentially from the configured polling interval
-to 60 seconds (or the interval itself when configured higher). Successful
-polling resets the delay. Server `Retry-After` delays remain bounded by the
-configured maximum (five minutes by default), including across visibility and
-connectivity changes. Pull cooldowns also survive subscription ownership changes
-within the provider instance, including startup history probes. HTTP 401/403
-ends the subscription through the existing session recovery flow.
+Notifications require current workspace read access before subscribing, before
+every delivery, and at 30-second heartbeats. Connections refresh after a minute
+to revalidate the auth session, including during a stalled permission check.
+There are at most eight open notification
+connections per user per server process. Messages contain only the version;
+canonical data, retention recovery and acknowledgements still use normal sync.
 
-Capacity planning must include visible tabs, provider reads per pull, cold
-bootstrap pages, and real changes. Pausing hidden tabs reduces idle traffic;
-it does not remove the cost of frequent foreground gateway reads.
+Gateway subscriptions pause pulls and close notifications while the document is
+hidden or offline. Returning to a visible, online page checks immediately using
+the retained cursor. An in-flight page finishes applying before another starts.
+Local edits remain captured in the durable outbox. Hidden pages may still send
+pending writes; offline pushes do not consume retry attempts.
+
+Repeated pull failures back off to 60 seconds. Bounded `Retry-After` cooldowns
+survive visibility and ownership changes. HTTP 401/403 retains the existing
+session recovery flow. Notification failures never disable the pull fallback.
+
+At the previous roughly 25 empty pulls per minute, a continuously visible owner
+could issue about 1.08 million pulls in 30 days. A healthy channel reduces safety
+pulls to about 43,200 over that period, plus actual changes, bootstrap and session
+refresh requests. Authentication and heartbeat checks still cost reads. These
+are request counts, not a dollar estimate: SSE holds an HTTP connection, and
+hosts that bill connection duration can cost more despite fewer invocations.
+Measure the selected host's duration, memory, database and egress charges before
+choosing a deployment profile. Local Dexie reads do not contact the backend.
 
 ### Shared foreground subscriptions
 
@@ -93,9 +107,9 @@ requests and release ownership. Browsers that lack or refuse Web Locks retain
 the per-window gateway behavior. This coordination does not combine different
 devices, origins, accounts, databases, or providers.
 
-The owner keeps the existing two-second foreground interval. Sharing prevents
-multiple visible windows from multiplying that traffic; a single visible owner
-can still produce the request volume described above.
+The owner owns the notification channel or fallback polling loop. Sharing
+prevents multiple visible windows from multiplying that traffic; it does not
+combine different devices or server processes.
 
 ### Cursor-complete subscription pages
 

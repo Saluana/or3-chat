@@ -300,6 +300,14 @@ export interface JobUpdate {
 export interface BackgroundJobProvider {
     /** Provider name for logging and diagnostics */
     readonly name: string;
+    /** A rejected atomic progress write throws instead of silently ignoring abort. */
+    readonly progressWritesCheckAbort?: boolean;
+    /** Small lifecycle projection; ownership is enforced exactly like getJob. */
+    getJobControl?(jobId: string, userId: string): Promise<{
+        status: BackgroundJob['status']; attempts: number; leaseOwner?: string; workspaceId?: string;
+        /** Monotonic revision of all viewer-visible fields; absent on legacy jobs. */
+        revision?: number;
+    } | null>;
 
     /**
      * Create a new background job.

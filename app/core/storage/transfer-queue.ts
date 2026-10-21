@@ -25,6 +25,7 @@ import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
 import { cacheDownloadedFile, cleanupFileCache, markUploadedFileCached, touchFileCache } from './file-cache';
 import { isCloudFileStorageEnabled, loadFilePolicy } from './file-policy';
+import type { FilePolicy } from '~~/shared/storage/file-policy';
 import {
     DEFAULT_BACKOFF_BASE_MS,
     DEFAULT_BACKOFF_MAX_MS,
@@ -448,12 +449,16 @@ export class FileTransferQueue {
             return;
         }
         this.startLeaseRenewal(transfer.id, context.db);
+        // One fresh policy read per operation, shared by admission and maintenance.
+        // Start it alongside I/O; policy failure cannot fail verified file bytes.
+        const policy = isCloudFileStorageEnabled()
+            ? loadFilePolicy(context.workspaceId).catch(() => null) : undefined;
 
         try {
             if (transfer.direction === 'upload') {
                 await this.doUpload(transfer, controller.signal, context);
             } else {
-                const blob = await this.doDownload(transfer, controller.signal, context);
+                const blob = await this.doDownload(transfer, controller.signal, context, policy);
                 this.completedDownloads.set(transfer.id, blob);
             }
 
@@ -473,9 +478,10 @@ export class FileTransferQueue {
                 if (transfer.direction === 'upload' && this.provider.commitUpload) {
                     await markUploadedFileCached(context.db, context.workspaceId, this.provider.id, transfer.hash);
                 }
-                const policy = await loadFilePolicy(context.workspaceId);
+                const settings = await policy;
+                if (!settings) return;
                 this.assertBoundContext(context);
-                await cleanupFileCache(context.db, context.workspaceId, this.provider, policy);
+                await cleanupFileCache(context.db, context.workspaceId, this.provider, settings);
             })().catch(() => {}); // Cache maintenance cannot fail a committed transfer.
         } catch (error) {
             if (this.isDatabaseClosedError(error)) {
@@ -840,7 +846,8 @@ export class FileTransferQueue {
             workspaceId: transfer.workspace_id,
             dbName: this.db.name,
             db: this.db,
-        }
+        },
+        policy?: Promise<FilePolicy | null>
     ): Promise<Blob> {
         const meta = await context.db.file_meta.get(transfer.hash);
         if (!meta?.storage_id) {
@@ -968,9 +975,9 @@ export class FileTransferQueue {
 
         if (isCloudFileStorageEnabled()) {
             try {
-                const policy = await loadFilePolicy(context.workspaceId);
+                const settings = await (policy ?? loadFilePolicy(context.workspaceId));
                 this.assertBoundContext(context);
-                await cacheDownloadedFile(context.db, context.workspaceId, this.provider.id, meta.hash, meta.storage_id, blob, policy);
+                if (settings) await cacheDownloadedFile(context.db, context.workspaceId, this.provider.id, meta.hash, meta.storage_id, blob, settings);
             } catch { /* The verified download is usable even when cache admission fails. */ }
         } else {
             await context.db.file_blobs.put({ hash: meta.hash, blob });

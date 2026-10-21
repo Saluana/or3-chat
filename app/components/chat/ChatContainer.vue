@@ -224,6 +224,7 @@ import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
 import ChatEmptyStateMedia from './ChatEmptyStateMedia.vue';
 import { resolveChatEmptyState, type EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 import { useEmptyChatActionHost } from '~/composables/chat/useEmptyChatActions';
+import { useSignInGate } from '~/composables/auth/useSignInGate';
 import { focusPaneInput } from '~/composables/chat/useChatInputBridge';
 import { useNuxtApp } from '#app';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
@@ -1457,6 +1458,7 @@ onBeforeUnmount(() => {
 });
 
 const emptyActionHost = useEmptyChatActionHost();
+const { signInRequired: emptySignInRequired, promptSignIn: promptEmptySignIn } = useSignInGate();
 const emptyTheme = useNuxtApp().$theme;
 // The server cannot read a localStorage color preference. Hydrate text with
 // its emitted mode, then select artwork only once the client mode is applied.
@@ -1477,6 +1479,11 @@ async function onEmptyChatAction(id: EmptyChatActionId) {
     // Let the pane click/focus handler select an inactive split before dispatch.
     await nextTick();
     if (!emptyAppearance.value || !emptyActions.value.some(action => action.id === id) || !props.paneId) return;
+    if (emptySignInRequired.value || (id !== 'start-chat' && runtimeConfig.public.ssrAuthEnabled === true
+        && authSessionState.value !== null && authSessionState.value.session?.authenticated !== true)) {
+        promptEmptySignIn();
+        return;
+    }
     if (id === 'start-chat') focusPaneInput(props.paneId);
     else emptyActionHost?.request(id, { paneId: props.paneId, tabId: props.tabId });
 }

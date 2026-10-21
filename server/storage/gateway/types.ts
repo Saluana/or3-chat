@@ -76,6 +76,8 @@ export interface PresignUploadResponse {
  * - `storageId`: Optional backend-specific identifier (from upload response)
  */
 export interface PresignDownloadRequest {
+    /** Request a fresh checksum of actual committed content, never metadata alone. */
+    verifyContent?: boolean;
     workspaceId: string;
     hash: string;
     storageId?: string;
@@ -101,6 +103,7 @@ export interface PresignDownloadRequest {
  * - `storageId`: Optional backend-specific storage identifier
  */
 export interface PresignDownloadResponse {
+    verifiedContent?: { hash: string; sizeBytes: number };
     url: string;
     expiresAt?: number;
     headers?: Record<string, string>;
@@ -132,6 +135,10 @@ export interface DeleteObjectRequest {
  */
 export interface StorageGatewayAdapter {
     id: string;
+    /** Presign must atomically reserve retained + active bytes before returning
+     * any upload authority. Logical deletion/receipt expiry cannot release bytes.
+     */
+    atomicUploadQuota?: 'retained-v1';
     /** Dormant external immutable-generation pairing. Never set solely because
      * canonical queries or native-provider deletion coordination are present. */
     externalStorageGenerations?: { version: 1; syncProviderId: string };

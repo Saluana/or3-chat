@@ -3,7 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import Dexie from 'dexie';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Or3DB } from '~/db/client';
-import { cleanupFileCache } from '../file-cache';
+import { cleanupFileCache, originCacheBytes } from '../file-cache';
 import { DEFAULT_FILE_POLICY } from '~~/shared/storage/file-policy';
 
 // Failure inventory: an old done marker can outlive its remote object; queued,
@@ -54,6 +54,20 @@ it('reclaims only verified redundant bytes and preserves canonical metadata', as
     expect(await db.file_blobs.get(hash)).toBeUndefined();
     expect((await db.file_meta.get(hash))?.storage_id).toBe('object-1');
 });
+// Concurrent transfer completions must share one eviction verification. Remote
+// I/O is held open to expose duplicate full-original reads before either deletes.
+it('joins overlapping cleanup passes for the same workspace and provider', async () => {
+    let release!: (response: Response) => void;
+    vi.mocked(fetch).mockReturnValue(new Promise(resolve => { release = resolve; }));
+    const passes = [cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY),
+        cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY)];
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    const requests = vi.mocked(fetch).mock.calls.length;
+    release(new Response(bytes));
+    await Promise.all(passes);
+    expect(requests).toBe(1);
+    expect(await db.file_blobs.get(hash)).toBeUndefined();
+});
 it('keeps a v28 legacy original unclassified and protected after upgrade and reopen', async () => {
     const metadata = (await db.file_meta.get(hash))!;
     const name = db.name;
@@ -68,7 +82,7 @@ it('keeps a v28 legacy original unclassified and protected after upgrade and reo
 
     db = new Or3DB(name);
     await db.open();
-    expect(db.verno).toBe(29);
+    expect(db.verno).toBe(30);
     expect(await db.file_blobs.get(hash)).toEqual({ hash, blob: expect.any(NodeBlob) });
     // The new sparse index exists, but migrating must not enroll legacy bytes.
     expect(await db.file_blobs.where('cache_accessed_at').aboveOrEqual(1).count()).toBe(0);
@@ -103,4 +117,31 @@ it.each(['trash', 'upload', 'unavailable'] as const)('advances past protected %s
     expect(await db.file_blobs.get(hash)).toBeUndefined();
     expect(await db.file_blobs.count()).toBe(50);
     expect(await db.file_transfers.count()).toBe(protection === 'upload' ? 50 : 0);
+});
+
+// Cache admission must count bytes across workspaces without materializing Blob
+// values; the existing eviction cases use a non-origin test DB and cannot catch it.
+it.each([bytes.length, undefined, NaN, -1])('counts cache metadata conservatively without reading originals (%s)', async cacheBytes => {
+    const inventoryDb = new Or3DB(`or3-db-cache-inventory-${crypto.randomUUID()}`);
+    await inventoryDb.open();
+    try {
+        await inventoryDb.file_blobs.put({ ...(await db.file_blobs.get(hash))!, cache_bytes: cacheBytes });
+        const reads = vi.spyOn(IDBIndex.prototype, 'openCursor');
+        expect(await originCacheBytes()).toBe(cacheBytes === bytes.length ? bytes.length : Infinity);
+        expect(reads).not.toHaveBeenCalled();
+        reads.mockRestore();
+    } finally { await inventoryDb.delete(); }
+});
+
+// Provider-attested checksum/size proves the actual committed object without
+// transferring its bytes. A mismatched receipt must never authorize eviction.
+it.each([true, false])('uses an exact provider content proof (valid=%s)', async valid => {
+    const proofProvider = { ...provider, getPresignedDownloadUrl: vi.fn(async () => ({
+        url: 'https://storage.test/original', storageId: 'object-1',
+        verifiedContent: { hash: valid ? hash : `sha256:${'0'.repeat(64)}`, sizeBytes: bytes.length },
+    })) };
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 404 }));
+    await cleanupFileCache(db, 'workspace', proofProvider as any, DEFAULT_FILE_POLICY);
+    expect(Boolean(await db.file_blobs.get(hash))).toBe(!valid);
+    if (valid) expect(fetch).not.toHaveBeenCalled();
 });

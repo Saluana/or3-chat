@@ -13,6 +13,7 @@ import {
     resetJobViewersForTests,
 } from '../../../utils/background-jobs/viewers';
 import type {
+    BackgroundJobProvider,
     BackgroundJobExecution,
     BackgroundJob,
 } from '../../../utils/background-jobs/types';
@@ -776,6 +777,35 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         expect(stream.done).toBe(true);
         await stream.reader.cancel();
         await stream.consumed;
+    });
+
+    it('skips unchanged remote snapshots without delaying changed or terminal output', async () => {
+        const provider: BackgroundJobProvider = memoryJobProvider;
+        const control = { status: 'streaming' as BackgroundJob['status'], attempts: 0,
+            workspaceId: 'workspace', revision: 0 };
+        provider.getJobControl = vi.fn(async () => ({ ...control }));
+        const fullReads = vi.spyOn(memoryJobProvider, 'getJob');
+        const stream = await attach();
+        try {
+            await vi.advanceTimersByTimeAsync(1500);
+            const reads = fullReads.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(3000);
+            expect(fullReads).toHaveBeenCalledTimes(reads);
+            await memoryJobProvider.updateJob(stream.jobId, { contentChunk: 'remote progress', chunksReceived: 1 });
+            control.revision++;
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(stream.content).toBe('remote progress');
+            expect(fullReads).toHaveBeenCalledTimes(reads + 1);
+            await memoryJobProvider.completeJob(stream.jobId, 'remote progress');
+            control.status = 'complete'; control.revision++;
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(stream.done).toBe(true);
+            expect(stream.frames.at(-1)?.status.status).toBe('complete');
+        } finally {
+            delete provider.getJobControl;
+            await stream.reader.cancel();
+            await stream.consumed;
+        }
     });
 
     it('delivers a full canonical terminal when completion is learned only by reconciliation', async () => {

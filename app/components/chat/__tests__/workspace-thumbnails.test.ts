@@ -45,6 +45,34 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    // A collapsed message must not spend bandwidth decoding hidden originals.
+    // Existing workspace cases exercise one image and cannot catch this fan-out.
+    it('loads only the four displayed image originals in a collapsed message', async () => {
+        const hashes = Array.from({ length: 7 }, (_, index) => `sha256:${index.toString(16).padStart(64, '0')}`);
+        wrappers.push(mount(defineComponent({ setup() {
+            useMessageThumbnails(ref({ file_hashes: hashes }));
+            return () => h('div');
+        } })));
+        await flushPromises();
+        expect(files.meta.mock.calls.map(call => call[0])).toEqual(hashes.slice(0, 4));
+        expect(files.blob.mock.calls.every(call => hashes.slice(0, 4).includes(call[0]))).toBe(true);
+    });
+
+    // Assistant inline images use this same cache, without the collapsed
+    // attachment row's four-image limit.
+    it('loads every assistant inline image beyond the fourth attachment', async () => {
+        const hashes = Array.from({ length: 7 }, (_, index) => `sha256:${index.toString(16).padStart(64, '0')}`);
+        let state!: ReturnType<typeof useMessageThumbnails>;
+        wrappers.push(mount(defineComponent({ setup() {
+            state = useMessageThumbnails(ref({ role: 'assistant', file_hashes: hashes }));
+            return () => h('div');
+        } })));
+        await flushPromises();
+        expect(files.meta.mock.calls.map(call => call[0])).toEqual(hashes);
+        await vi.waitFor(() => expect(files.blob.mock.calls.map(call => call[0])).toEqual(hashes));
+        await vi.waitFor(() => expect(state.thumbnails[hashes[6]!]?.status).toBe('ready'));
+    });
+
     it.each(['palette-first', 'prefetch-first'] as const)('does not release a current palette retention when default prefetch resets (%s)', async order => {
         vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:prefetch-palette-origin').mockReturnValue('blob:prefetch-palette-target');
         const createPrefetch = () => createMessageMediaPrefetchController({

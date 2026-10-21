@@ -301,6 +301,19 @@ describe('POST /api/storage/presign-upload', () => {
         });
     });
 
+    // An atomic provider owns the quota decision in its reservation mutation.
+    // A second host scan is both redundant and stale before concurrent uploads.
+    it('delegates quota atomically without enumerating the catalog and preserves rejection', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        useRuntimeConfigMock.mockReturnValue({ storage: { workspaceQuotaBytes: 1_500 } });
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), size_bytes: 600 });
+        getActiveStorageGatewayAdapterMock.mockReturnValue({ id: 'atomic', atomicUploadQuota: 'retained-v1', presignUpload: presignUploadMock });
+        presignUploadMock.mockRejectedValue(Object.assign(new Error('quota exceeded'), { statusCode: 413 }));
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 413 });
+        expect(getWorkspaceStorageUsageSnapshotMock).not.toHaveBeenCalled();
+        expect(presignUploadMock.mock.calls[0]?.[1].workspaceQuotaBytes).toBe(1_500);
+    });
+
     it('returns 413 when workspace quota would be exceeded', async () => {
         const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
         useRuntimeConfigMock.mockReturnValue({

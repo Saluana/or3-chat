@@ -6,6 +6,7 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 
 type CacheProvider = Pick<ObjectStorageProvider, 'id' | 'getPresignedDownloadUrl'>;
 const cleanupCursors = new WeakMap<Or3DB, { workspaceId: string; providerId: string; accessedAt: number; hash: string }>();
+const cleanupPasses = new WeakMap<Or3DB, Promise<void>>();
 
 /** Count cache bytes across this origin without upgrading/opening other app DBs. */
 export async function originCacheBytes(): Promise<number> {
@@ -25,15 +26,25 @@ export async function originCacheBytes(): Promise<number> {
                 const store = tx.objectStore('file_blobs');
                 if (!store.indexNames.contains('cache_accessed_at')) { db.close(); resolve(0); return; }
                 let total = 0;
-                const cursor = store.index('cache_accessed_at').openCursor();
+                let cacheRows = 0, indexedRows = 0;
+                const count = store.index('cache_accessed_at').count();
+                count.onsuccess = () => { cacheRows = count.result; };
+                const metadataIndex = '[cache_accessed_at+cache_bytes+hash]';
+                const keysOnly = store.indexNames.contains(metadataIndex);
+                // Older unopened workspaces retain their v29 value-cursor fallback.
+                const cursor = keysOnly
+                    ? store.index(metadataIndex).openKeyCursor()
+                    : store.index('cache_accessed_at').openCursor();
                 cursor.onsuccess = () => {
                     const item = cursor.result;
                     if (!item) return;
-                    const size = (item.value as FileBlobRow).cache_bytes;
+                    indexedRows++;
+                    const size: unknown = keysOnly ? (item.key as IDBValidKey[])[1]
+                        : (item as IDBCursorWithValue).value.cache_bytes;
                     total += typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : Infinity;
                     item.continue();
                 };
-                tx.oncomplete = () => { db.close(); resolve(total); };
+                tx.oncomplete = () => { db.close(); resolve(keysOnly && indexedRows !== cacheRows ? Infinity : total); };
                 tx.onerror = () => { db.close(); reject(tx.error); };
             };
         });
@@ -101,8 +112,9 @@ async function eligible(db: Or3DB, row: FileBlobRow, workspaceId: string, provid
 /** Verify actual current remote bytes, never just a metadata pointer or old receipt. */
 async function verifyRemote(row: FileBlobRow, workspaceId: string, provider: CacheProvider): Promise<boolean> {
     if (!/^sha256:[a-f0-9]{64}$/.test(row.hash)) return false;
-    const presign = await provider.getPresignedDownloadUrl({ workspaceId, hash: row.hash, storageId: row.cache_storage_id });
+    const presign = await provider.getPresignedDownloadUrl({ workspaceId, hash: row.hash, storageId: row.cache_storage_id, verifyContent: true });
     if (presign.storageId !== row.cache_storage_id) return false;
+    if (presign.verifiedContent?.hash === row.hash && presign.verifiedContent.sizeBytes === row.blob.size) return true;
     const response = await fetch(presign.url, { headers: presign.headers, signal: AbortSignal.timeout(15_000), cache: 'no-store' });
     if (!response.ok || !response.body) return false;
     const reader = response.body.getReader();
@@ -121,7 +133,17 @@ async function verifyRemote(row: FileBlobRow, workspaceId: string, provider: Cac
 }
 
 /** Consider 50 candidates and verify at most five per pass, advancing past protected originals. */
-export async function cleanupFileCache(db: Or3DB, workspaceId: string, provider: CacheProvider, policy: FilePolicy): Promise<void> {
+export function cleanupFileCache(db: Or3DB, workspaceId: string, provider: CacheProvider, policy: FilePolicy): Promise<void> {
+    const active = cleanupPasses.get(db);
+    if (active) return active;
+    const pass = runCleanupFileCache(db, workspaceId, provider, policy).finally(() => {
+        if (cleanupPasses.get(db) === pass) cleanupPasses.delete(db);
+    });
+    cleanupPasses.set(db, pass);
+    return pass;
+}
+
+async function runCleanupFileCache(db: Or3DB, workspaceId: string, provider: CacheProvider, policy: FilePolicy): Promise<void> {
     const cutoff = Date.now() - policy.retentionDays * 86_400_000;
     let usage = await originCacheBytes();
     const previous = cleanupCursors.get(db);

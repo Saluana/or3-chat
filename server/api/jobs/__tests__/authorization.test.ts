@@ -921,7 +921,9 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             query: () => ({ withIndex: (_name: string, filter: (q: { eq: (field: string, value: string) => void }) => void) => {
                 let status = ''; filter({ eq: (_field, value) => { status = value; } });
                 const rows = () => [...documents.values()].filter((doc) => doc.status === status);
-                return { collect: async () => rows(), take: async (limit: number) => rows().slice(0, limit) };
+                return { first: async () => rows()[0] ?? null, collect: async () => rows(),
+                    take: async (limit: number) => rows().slice(0, limit),
+                    async *[Symbol.asyncIterator]() { yield* rows(); } };
             } }),
         } };
         const args = { lease_owner: 'chat-worker', lease_ms: 30_000 };

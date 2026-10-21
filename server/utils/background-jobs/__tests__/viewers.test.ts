@@ -130,6 +130,22 @@ describe('job reconciliation', () => {
         expect(getJobLiveState('job-1')).toMatchObject({ content: 'checkpoint', attempt: 4, usage });
     });
 
+    // A status-only read can confirm the producer is still authoritative
+    // without loading/delivering its full response; terminal state still wins.
+    it('keeps listening after an unchanged control read and delivers the terminal snapshot', async () => {
+        vi.useFakeTimers();
+        initJobLiveState('job-1');
+        const poll = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValue({ ...streamingJob(), status: 'complete', content: 'done' });
+        const listener = vi.fn();
+        const stop = registerJobReconciler('job-1', poll, listener);
+        try {
+            await vi.advanceTimersByTimeAsync(0);
+            expect(listener).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(listener).toHaveBeenCalledWith(expect.objectContaining({ status: 'complete', content: 'done' }));
+        } finally { stop(); }
+    });
+
     it('shares one adaptive provider poller across all viewers', async () => {
         vi.useFakeTimers();
         initJobLiveState('job-1');

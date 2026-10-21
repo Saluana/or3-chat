@@ -602,7 +602,7 @@ export async function consumeBackgroundStream(params: {
             outputLimitBytes: remainingOutputBytes,
         })
     );
-    const UPDATE_INTERVAL = 50;
+    const UPDATE_BUFFER_CHARS = 16 * 1024;
     const UPDATE_INTERVAL_MS = 500;
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
@@ -618,7 +618,7 @@ export async function consumeBackgroundStream(params: {
         userId: params.context.userId,
         workspaceId: params.context.workspaceId,
         threadId: params.context.threadId,
-        updateInterval: UPDATE_INTERVAL,
+        updateBufferChars: UPDATE_BUFFER_CHARS,
         updateIntervalMs: UPDATE_INTERVAL_MS,
     });
 
@@ -643,10 +643,10 @@ export async function consumeBackgroundStream(params: {
 
     const maybeScheduleProgressFlush = () => {
         const now = Date.now();
-        const shouldFlushByChunk = chunks % UPDATE_INTERVAL === 0;
+        const shouldFlushBySize = pendingChunk.length + pendingReasoning.length >= UPDATE_BUFFER_CHARS;
         const shouldFlushByTime = now - lastUpdateAt >= UPDATE_INTERVAL_MS;
         if (!pendingChunk && !pendingReasoning) return;
-        if (shouldFlushByChunk || shouldFlushByTime) {
+        if (shouldFlushBySize || shouldFlushByTime) {
             void flushPending();
         } else {
             const remaining = UPDATE_INTERVAL_MS - (now - lastUpdateAt);
@@ -669,7 +669,7 @@ export async function consumeBackgroundStream(params: {
             });
             lastUpdateAt = Date.now();
 
-            if (params.provider.checkJobAborted) {
+            if (!params.provider.progressWritesCheckAbort && params.provider.checkJobAborted) {
                 const aborted = await params.provider.checkJobAborted(params.jobId);
                 if (aborted) {
                     const abortErr = new Error('Job aborted by user');
@@ -1102,8 +1102,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         if (providerDirtyEvents === 0) return;
         if (
             !force &&
-            providerDirtyEvents < 50 &&
-            pendingProviderContent.length < 16 * 1024 &&
+            pendingProviderContent.length + pendingProviderReasoning.length < 16 * 1024 &&
             Date.now() - lastProviderFlushAt < 500
         ) return;
         const contentChunk = pendingProviderContent;

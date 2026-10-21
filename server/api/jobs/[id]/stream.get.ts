@@ -1009,9 +1009,23 @@ export default defineEventHandler(async (event) => {
                 controller.enqueue(ping);
             }, KEEPALIVE_INTERVAL_MS);
 
+            let observedControlRevision: number | undefined;
             disposeReconciler = registerJobReconciler(
                 jobId,
-                () => provider.getJob(jobId, userId),
+                async () => {
+                    const live = getJobLiveState(jobId);
+                    const control = provider.getJobControl ? await provider.getJobControl(jobId, userId) : undefined;
+                    if (control?.status === 'streaming' && control.workspaceId === initialJob.execution?.workspaceId) {
+                        if (live?.producing && live.status === 'streaming' &&
+                            control.attempts === (live.attempt ?? initialJob.attempts ?? 0)) return undefined;
+                        if (control.revision !== undefined && control.revision === observedControlRevision) return undefined;
+                    }
+                    const job = await provider.getJob(jobId, userId);
+                    // Capture the revision read before the snapshot. A concurrent
+                    // update can cause an extra refresh, never hide newer output.
+                    observedControlRevision = control?.revision;
+                    return job;
+                },
                 (job, pollError) => {
                     if (pollError || !job) {
                         onReconciledJob(job, pollError);

@@ -1244,6 +1244,80 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
 
 
 // Primary production boundary for empty-state eligibility, appearance and actions.
+for (const mode of modes) test('empty chat: Blank ' + mode + ' cards fit continuously resized panes', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await openResponsiveChat(page, 'blank', mode);
+    const panes = page.locator('.chat-container-root');
+    const frames: unknown[] = [];
+    const inspect = async (name: string, screenshot = false) => {
+        await expectComposerFits(page);
+        await expect.poll(() => panes.evaluateAll(elements => elements.every(pane => {
+            const bounds = pane.getBoundingClientRect();
+            const cards = [...pane.querySelectorAll<HTMLElement>('.chat-empty-action')];
+            const composer = pane.querySelector('.chat-input-main')!.getBoundingClientRect();
+            const wrapper = pane.querySelector('.chat-input-wrapper')!;
+            if (cards.length !== 3 || wrapper.scrollHeight > wrapper.clientHeight + 1) return false;
+            return cards.every((card, i) => {
+                const r = card.getBoundingClientRect();
+                const copy = card.querySelector('.chat-empty-action-copy')!.getBoundingClientRect();
+                const previous = cards[i - 1]?.getBoundingClientRect();
+                const rows = bounds.width < 900 && bounds.height > 420;
+                return r.height >= 44 && r.left >= bounds.left && r.right <= bounds.right &&
+                    r.top >= bounds.top && r.bottom <= composer.top - 6 &&
+                    copy.top >= r.top + 6 && copy.bottom <= r.bottom - 6 &&
+                    copy.left >= r.left + 6 && copy.right <= r.right - 6 &&
+                    (!rows || (r.height <= 110 && (!previous ||
+                        (Math.abs(r.x - previous.x) < 1 && r.y >= previous.bottom))));
+            });
+        })), name + ': readable cards stay inside their pane, above the composer, without excess height or scrolling').toBe(true);
+        frames.push({ name, panes: await panes.evaluateAll(elements => elements.map(pane => ({
+            width: pane.clientWidth, height: pane.clientHeight,
+            cards: [...pane.querySelectorAll('.chat-empty-action')].map(card => card.getBoundingClientRect().toJSON()),
+        }))) });
+        if (screenshot) await captureChat(page, info, 'empty-pane-' + mode + '-' + name);
+    };
+    const draft = 'Keep my draft while resizing';
+    await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
+    await page.getByRole('button', { name: 'New split', exact: true }).click();
+    await expect(panes).toHaveCount(2);
+    const handle = page.getByRole('separator', { name: 'Resize pane 1', exact: true });
+    // Exercise the actual splitter on a wide window: viewport media queries
+    // cannot stand in for the width of an individual chat pane.
+    for (const width of [700, 280, 320, 350, 440, 500, 620, 780, 899, 900, 1000]) {
+        const first = (await panes.first().boundingBox())!;
+        const grip = (await handle.boundingBox())!;
+        // The swap button occupies the middle of this same separator.
+        await page.mouse.move(grip.x + grip.width / 2, grip.y + 40);
+        await page.mouse.down();
+        await page.mouse.move(first.x + width, grip.y + 40, { steps: 8 });
+        await page.mouse.up();
+        await expect.poll(async () => Math.abs((await panes.first().boundingBox())!.width - width)).toBeLessThan(3);
+        await inspect('split-' + width, [280, 350, 700, 1000].includes(width));
+    }
+    for (const height of [705, 660, 645, 600, 480, 465, 464, 390, 320]) {
+        await page.setViewportSize({ width: 1920, height });
+        await inspect('short-split-' + height, [480, 320].includes(height));
+    }
+    await expect(panes.first().getByRole('textbox', { name: 'Message input' })).toHaveText(draft);
+    // Close the split so phone checks don't depend on which pane the mobile
+    // tab switcher currently displays.
+    await page.getByRole('button', { name: 'Close split', exact: true }).click();
+    await expect(panes).toHaveCount(1);
+    for (const viewport of [
+        { width: 1140, height: 900 }, { width: 1024, height: 768 },
+        { width: 820, height: 1180 }, { width: 768, height: 1024 },
+        { width: 767, height: 1024 }, { width: 620, height: 800 },
+        { width: 440, height: 900 }, { width: 390, height: 844 },
+        { width: 320, height: 568 }, { width: 390, height: 480 },
+        { width: 390, height: 320 }, { width: 844, height: 390 },
+    ]) {
+        await page.setViewportSize(viewport);
+        await inspect(viewport.width + 'x' + viewport.height, true);
+    }
+    await info.attach('empty-pane-geometry-' + mode, { body: JSON.stringify(frames, null, 2), contentType: 'application/json' });
+});
+
 for (const mode of modes) test('empty chat: Blank ' + mode + ' artwork, focus, and responsive controls', async ({ page }, info) => {
     const assets: string[] = [];
     page.on('request', request => { if (/bird-on-cloud|blank-chat-(?:background|bg)/.test(request.url())) assets.push(request.url()); });

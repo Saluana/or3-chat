@@ -90,6 +90,13 @@ Workspace Backup includes it; backup Replace deliberately clears all tables.
 Older application builds cannot open a v28 database: retained v27 row shapes
 are backward readable, but executable downgrade compatibility is not promised.
 
+Version 29 marks verified reusable file cache rows with a sparse access-time
+index. Version 30 adds `[cache_accessed_at+cache_bytes+hash]`, allowing origin-wide
+budgeting with key cursors instead of reading Blob values. Neither upgrade
+classifies legacy originals as expendable. Unopened older workspace databases
+retain the previous value-cursor accounting path; incomplete inventory prevents
+new cache admission.
+
 ---
 
 ## Usage

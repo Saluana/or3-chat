@@ -206,13 +206,13 @@ describe('consumeBackgroundStreamWithTools', () => {
         resetJobViewersForTests();
     });
 
-    it('coalesces 500 provider text updates without losing terminal content', async () => {
+    it.each([['plain', consumeBackgroundStream], ['tools', consumeBackgroundStreamWithTools]] as const)('coalesces 500 tiny %s updates without losing terminal content', async (_kind, consume) => {
         const statusRef = { status: 'streaming' as const };
         const { provider, updateJob, completeJob } = createProvider(statusRef);
         vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(makeManyTextResponse(500)));
 
-        await consumeBackgroundStreamWithTools({
-            jobId: 'job-1',
+        await consume({
+            jobId: 'job-1', stream: makeManyTextResponse(500).body!,
             body: { model: 'test-model', messages: [], tools: [] },
             apiKey: 'key', referer: 'http://localhost:3000', provider,
             context: {
@@ -221,7 +221,7 @@ describe('consumeBackgroundStreamWithTools', () => {
             },
         });
 
-        expect(updateJob.mock.calls.length).toBeLessThanOrEqual(10);
+        expect(updateJob.mock.calls.length).toBeLessThanOrEqual(3);
         expect(completeJob).toHaveBeenCalledWith('job-1', 'x'.repeat(500));
         const persisted = updateJob.mock.calls
             .map((call) => (call[1] as { contentChunk?: string }).contentChunk ?? '')

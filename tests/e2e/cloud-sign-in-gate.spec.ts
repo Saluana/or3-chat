@@ -73,6 +73,49 @@ for (const [label, viewport] of [
     test.describe(label, () => {
         test.use({ viewport });
 
+        test('signed-out empty chat shows all creation cards and opens sign-in without creating anything', async ({ page, context }, info) => {
+            await context.addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+            const mutations: string[] = [];
+            page.on('request', request => {
+                if (request.method() === 'POST' && /\/api\/(?:sync\/push|storage\/presign-upload|openrouter\/stream)/.test(request.url())) mutations.push(request.url());
+            });
+            await openComposer(page);
+            await expect(page.locator('.ProseMirror p.is-editor-empty')).toHaveAttribute('data-placeholder', SIGN_IN_PROMPT);
+            const cards = page.locator('.chat-empty-state');
+            await expect(cards.getByRole('button')).toHaveCount(3);
+            for (const name of ['Start a chat', 'Start a project', 'Create a document']) {
+                await cards.getByRole('button', { name, exact: true }).click();
+                const dialog = page.getByRole('dialog', { name: 'Welcome back', exact: true });
+                await expect(dialog).toBeVisible();
+                await expect(dialog.getByRole('textbox', { name: 'Email', exact: true })).toBeVisible();
+                await expect(dialog.getByLabel('Password', { exact: true })).toBeVisible();
+                await expect(page.getByText(SIGN_IN_PROMPT, { exact: true })).toHaveCount(0);
+                await saveEvidence(info, `signed-out-empty-cards-${label}-${name.toLowerCase().replaceAll(' ', '-')}`, { body: await page.screenshot(), contentType: 'image/png' });
+                await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+                await expect(dialog).not.toBeVisible();
+            }
+            expect(mutations).toEqual([]);
+
+            // The same modal must complete login and release its overlay so the
+            // authenticated owner can reach the existing creation forms.
+            await cards.getByRole('button', { name: 'Start a project', exact: true }).click();
+            const signIn = page.getByRole('dialog', { name: 'Welcome back', exact: true });
+            await signIn.getByRole('textbox', { name: 'Email', exact: true }).fill(credentials.email);
+            await signIn.getByLabel('Password', { exact: true }).fill(credentials.password);
+            await signIn.getByRole('button', { name: 'Sign in', exact: true }).click();
+            await expect(signIn).not.toBeVisible();
+            await openComposer(page);
+            await expect(cards.getByRole('button')).toHaveCount(3);
+            for (const name of ['Start a project', 'Create a document']) {
+                await cards.getByRole('button', { name, exact: true }).click();
+                const create = page.getByRole('dialog', { name, exact: true });
+                await expect(create.getByRole('textbox', { name: 'Title', exact: true })).toBeVisible();
+                await create.getByRole('button', { name: 'Cancel', exact: true }).click();
+                await expect(create).not.toBeVisible();
+            }
+            await saveEvidence(info, `signed-in-empty-cards-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+        });
+
         test('signed-out send asks for sign-in, not an OpenRouter key, and sends nothing', async ({ page }, info) => {
             const sent: string[] = [];
             page.on('request', (request) => {
@@ -85,7 +128,8 @@ for (const [label, viewport] of [
             const urlBeforeSend = page.url();
             await typeAndSend(page, composer, 'hello from a signed-out visitor');
 
-            await expect(page.getByText(SIGN_IN_PROMPT, { exact: true }).last()).toBeVisible();
+            await expect(page.getByRole('dialog', { name: 'Welcome back', exact: true })).toBeVisible();
+            await expect(page.getByText(SIGN_IN_PROMPT, { exact: true })).toHaveCount(0);
             await expect(page.getByText('Connect to OpenRouter')).toHaveCount(0);
             // Nothing was sent: the draft is still in the composer, no thread
             // was created, and no provider request left the page.

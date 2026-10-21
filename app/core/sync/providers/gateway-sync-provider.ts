@@ -61,6 +61,13 @@ type ActivityEventTarget = {
     removeEventListener(type: string, listener: () => void): void;
 };
 
+type VersionChannel = {
+    onopen: (() => void) | null;
+    onmessage: ((event: { data: string }) => void) | null;
+    onerror: (() => void) | null;
+    close(): void;
+};
+
 /**
  * Purpose:
  * Configuration for the gateway (SSR-proxied) sync provider.
@@ -355,6 +362,48 @@ export function createGatewaySyncProvider(
                 window?: ActivityEventTarget;
                 navigator?: { onLine?: boolean };
             };
+            let channel: VersionChannel | undefined;
+            let channelLive = false;
+            let lastSuccessfulPollAt = Date.now();
+            let notifiedVersion: number | undefined;
+            let reconnect: ReturnType<typeof setTimeout> | undefined;
+            const closeChannel = () => {
+                channelLive = false;
+                channel?.close(); channel = undefined;
+                if (reconnect) clearTimeout(reconnect);
+                reconnect = undefined;
+            };
+            const connectChannel = () => {
+                const EventSourceClass = (globalThis as { EventSource?: new (url: string, options: { withCredentials: boolean }) => VersionChannel }).EventSource;
+                if (!EventSourceClass || channel || !active || !canPoll()) return;
+                const current = new EventSourceClass(`${baseUrl}/api/sync/events?workspaceId=${encodeURIComponent(scope.workspaceId)}`, { withCredentials: true });
+                channel = current;
+                current.onopen = () => {
+                    if (channel !== current || !active) return;
+                    channelLive = true;
+                    // Rotating the auth session must not postpone recovery of
+                    // a missed notification indefinitely.
+                    schedule(Math.max(0, lastSuccessfulPollAt + Math.max(60_000, pollIntervalMs) - Date.now()));
+                };
+                current.onmessage = event => {
+                    if (channel !== current || !active || !canPoll()) return;
+                    try {
+                        const message: unknown = JSON.parse(event.data);
+                        if (!message || typeof message !== 'object') return;
+                        if ('refresh' in message && message.refresh === true) { closeChannel(); connectChannel(); return; }
+                        const version: unknown = 'version' in message ? message.version : undefined;
+                        if (!Number.isSafeInteger(version) || (version as number) < 0) return;
+                        notifiedVersion = version as number;
+                        if (notifiedVersion !== cursor) void run();
+                    } catch { /* Invalid hints cannot move the durable cursor. */ }
+                };
+                current.onerror = () => {
+                    if (channel !== current) return;
+                    closeChannel();
+                    schedule(pollIntervalMs);
+                    reconnect = setTimeout(connectChannel, 60_000);
+                };
+            };
             const canPoll = () =>
                 activity.document?.visibilityState !== 'hidden' &&
                 activity.navigator?.onLine !== false;
@@ -371,6 +420,8 @@ export function createGatewaySyncProvider(
 
             const handleActivityChange = () => {
                 clearScheduledPoll();
+                if (!canPoll()) closeChannel();
+                else connectChannel();
                 // Keep the cursor and any in-flight apply. Resuming catches up
                 // immediately, without a snapshot or a longer foreground interval.
                 if (active && canPoll()) void run();
@@ -425,7 +476,10 @@ export function createGatewaySyncProvider(
                 }
                 running = true;
                 try {
+                    const hint = notifiedVersion;
                     await poll();
+                    lastSuccessfulPollAt = Date.now();
+                    if (notifiedVersion === hint) notifiedVersion = undefined;
                     retry.failures = 0;
                     retry.notBefore = 0;
                 } catch (error) {
@@ -462,7 +516,8 @@ export function createGatewaySyncProvider(
                 schedule(
                     retry.notBefore > Date.now()
                         ? retry.notBefore - Date.now()
-                        : pollIntervalMs + jitter
+                        : notifiedVersion !== undefined && notifiedVersion !== cursor ? 0
+                        : channelLive ? Math.max(60_000, pollIntervalMs) : pollIntervalMs + jitter
                 );
             };
 
@@ -477,6 +532,7 @@ export function createGatewaySyncProvider(
 
             const unsubscribe = () => {
                 active = false;
+                closeChannel();
                 pollAbortController.abort();
                 clearScheduledPoll();
                 activity.document?.removeEventListener('visibilitychange', handleActivityChange);
@@ -485,6 +541,7 @@ export function createGatewaySyncProvider(
                 subscriptions.delete(unsubscribe);
             };
 
+            connectChannel();
             subscriptions.add(unsubscribe);
 
             return unsubscribe;
