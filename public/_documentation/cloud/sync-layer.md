@@ -54,6 +54,8 @@ The SSR gateway subscribes to content-free version notifications at
 wakes the ordinary pull/apply path immediately; it never advances a cursor by
 itself. While the channel is healthy, a safety pull runs once per minute;
 session refreshes do not reset that deadline.
+Managed restart and shutdown close these read-only notification streams before
+draining writes. Clients reconnect through the normal notification or polling path.
 Older adapters, unavailable channels, and browsers without EventSource retain
 the two-second polling fallback with jitter. Reconnection is attempted after a
 minute. Duplicate version hints do not generate pulls.

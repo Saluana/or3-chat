@@ -95,7 +95,7 @@ export function createShutdownController(options: Options) {
         },
         countsRequest(url: string, method = 'GET'): boolean {
             const path = url.split('?')[0] ?? '/';
-            return !(method === 'GET' && /^\/api\/jobs\/[^/]+\/stream$/.test(path)) && !(['/api/health', '/api/healthz', '/api/ready'].includes(path)
+            return !(method === 'GET' && /^\/api\/(?:jobs\/[^/]+\/stream|sync\/events)$/.test(path)) && !(['/api/health', '/api/healthz', '/api/ready'].includes(path)
                 || (path.startsWith('/api/admin/system/restart') && (method === 'GET' || ['/api/admin/system/restart-cancel', '/api/admin/system/restart-reconcile'].includes(path))));
         },
         endRequest(url?: string): void {

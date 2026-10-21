@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Offline-first sync, atomic snapshots, cursor-complete pages, shared version notifications with polling fallback, session revalidation, idle request costs, activity pauses, outage backoff and rate limits."
+                    "summary": "Sync authorization, content-free notifications, polling recovery, and graceful notification closure during managed restart."
                 },
                 {
                     "name": "storage-layer.md",
