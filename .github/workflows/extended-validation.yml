@@ -167,9 +167,12 @@ jobs:
       - name: Verify vault upgrade from the published Cloud release
         run: |
           version="$(node -p "require('./package.json').version")"
-          docker pull ghcr.io/saluana/or3-chat:0.1.90
+          # The unversioned source still identifies as 0.1.90: preserve its
+          # candidate image before pulling the distinct published baseline.
           docker tag "ghcr.io/saluana/or3-chat:$version" or3-cloud-credentials-qualification:local
+          docker pull ghcr.io/saluana/or3-chat:0.1.90
           bun scripts/test/run-cloud-vault-lifecycle-e2e.ts
+          docker tag or3-cloud-credentials-qualification:local "ghcr.io/saluana/or3-chat:$version"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
