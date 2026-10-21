@@ -366,7 +366,7 @@ const authSessionState = useState<{ session?: { authenticated?: boolean } } | nu
     'auth-session',
     () => null,
 );
-const { apiKey } = useUserApiKey();
+const { apiKey, connected } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
 // Start the independent reads while this component is being set up. Commit only
@@ -394,7 +394,7 @@ const showWelcomeCard = computed(
             ? !welcomePreviewDismissed.value
             : !welcomeDismissed.value &&
               openRouterAvailability.value.canAcceptUserKey &&
-              !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
+              !connected.value && !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
               allMessages.value.length === 0)
 );
 

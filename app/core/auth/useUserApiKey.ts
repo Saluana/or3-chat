@@ -1,36 +1,133 @@
 import { err } from '~/utils/errors';
-/**
- * @module app/core/auth/useUserApiKey
- *
- * Purpose:
- * Vue composable that exposes the user's OpenRouter API key as a reactive
- * computed ref. On first call, hydrates the key from the Dexie KV store
- * into the global reactive state.
- *
- * Behavior:
- * - Reads `openrouter_api_key` from Dexie on initial client-side mount
- * - Returns a reactive `apiKey` computed ref backed by `state.openrouterKey`
- * - `setKey()` / `clearKey()` mutate the shared global state immediately
- *
- * Constraints:
- * - Client-only (Dexie read is guarded by `import.meta.client`)
- * - `setKey()` / `clearKey()` are in-memory only; use `persistUserApiKey()`
- *   for the canonical paste-key path that writes Dexie KV
- * - Relies on `~/state/global` singleton for cross-component reactivity
- *
- * Non-goals:
- * - Does not handle the OAuth flow (see useOpenrouter)
- *
- * @see core/auth/useOpenrouter for login/logout flow
- * @see state/global for the reactive state singleton
- */
+/** Cloud exposes connection metadata; static deployments retain device-local BYOK. */
 import Dexie from 'dexie';
 import { useRuntimeConfig, useState } from '#imports';
 import type { SessionPayload } from '~/composables/auth/useSessionContext';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { kv } from '~/db';
 import { state } from '~/state/global';
+
+const cloudConnection = ref<{ owner: string; connected: boolean } | null>(null);
+const cleanedOwners = new Set<string>();
+const cloudMode = () => useRuntimeConfig().public.ssrAuthEnabled === true;
+let pendingConnection: { owner: string; promise: Promise<void> } | null = null;
+
+async function credentialRequest(operation: string, key?: string) {
+    const owner = currentKeyOwner();
+    if (owner === 'guest' || owner === 'local') throw new Error('Sign in to connect OpenRouter.');
+    // A mutation fences status reads both before it starts and while it runs.
+    const generation = operation === 'status' ? kvHydrationGeneration : ++kvHydrationGeneration;
+    const response = await fetch('/api/openrouter/credentials', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': owner },
+        body: JSON.stringify({ operation, ...(key === undefined ? {} : { key }) }),
+    });
+    if (!response.ok) throw new Error(response.status === 409 ? 'The server connection changed. Refresh and try again.' : 'OpenRouter credential storage is unavailable. Try again or contact the administrator.');
+    const result = await response.json() as { connected?: unknown; persisted?: unknown };
+    if (typeof result.connected !== 'boolean' || typeof result.persisted !== 'boolean') throw new Error('Invalid connection response.');
+    if (owner !== currentKeyOwner() || generation !== kvHydrationGeneration) throw new Error('The connection or signed-in account changed.');
+    if (operation !== 'status') ++kvHydrationGeneration;
+    state.value.openrouterKey = null;
+    cloudConnection.value = { owner, connected: result.connected };
+    return { owner, connected: result.connected, persisted: result.persisted };
+}
+
+/** Read only owner-tagged legacy values; an unowned key can never prove account ownership. */
+async function legacyKey(owner: string): Promise<string | null> {
+    const read = async (db: Dexie) => {
+        if (!hasKvTable(db)) return null;
+        const rows = await db.table<KvApiKeyRow, string>('kv').where('name').equals('openrouter_api_key').toArray();
+        for (const row of rows) {
+            const key = typeof row.value === 'string' ? storedKey(row.value, owner) : null;
+            if (key && isValidOpenRouterKeyFormat(key)) return key;
+        }
+        return null;
+    };
+    const db = getDb();
+    const active = await read(db);
+    if (active) return active;
+    try {
+        const value = localStorage.getItem('openrouter_api_key');
+        const key = value ? storedKey(value, owner) : null;
+        if (key && isValidOpenRouterKeyFormat(key)) return key;
+    } catch { /* Storage may be unavailable. */ }
+    for (const name of await Dexie.getDatabaseNames()) {
+        if (!(name === 'or3-db' || name.startsWith('or3-db-')) || name === db.name) continue;
+        const retained = new Dexie(name);
+        try { await retained.open(); const key = await read(retained); if (key) return key; }
+        catch { /* Preserve inaccessible legacy databases. */ }
+        finally { retained.close(); }
+    }
+    return null;
+}
+
+/** Only called after persistence or an existing server tombstone has been verified. */
+async function discardLegacyKeys(owner: string): Promise<boolean> {
+    const current = () => owner === currentKeyOwner();
+    let complete = true;
+    const clean = async (db: Dexie) => {
+        if (!hasKvTable(db)) return;
+        const table = db.table<KvApiKeyRow, string>('kv');
+        await db.transaction('rw', table, async () => {
+            const rows = await table.where('name').equals('openrouter_api_key').toArray();
+            for (const row of rows) if (current() && typeof row.value === 'string' && storedKey(row.value, owner) !== null) await table.delete(row.id);
+        });
+    };
+    let activeName: string | undefined;
+    try { const db = getDb(); activeName = db.name; await clean(db); }
+    catch { complete = false; }
+    try {
+        const names = await Dexie.getDatabaseNames();
+        await Promise.all(names.filter(name => (name === 'or3-db' || name.startsWith('or3-db-')) && name !== activeName).map(async name => {
+            const retained = new Dexie(name);
+            try { await retained.open(); await clean(retained); }
+            catch { complete = false; }
+            finally { retained.close(); }
+        }));
+    } catch { complete = false; }
+    try {
+        const value = localStorage.getItem('openrouter_api_key');
+        if (current() && value && storedKey(value, owner) !== null) localStorage.removeItem('openrouter_api_key');
+    } catch { complete = false; }
+    // Inaccessible copies cannot invalidate a verified save. Retry on reconnect.
+    return complete && current();
+}
+
+export async function refreshOpenRouterConnection(): Promise<void> {
+    if (!cloudMode() || currentKeyOwner() === 'guest') return;
+    const owner = currentKeyOwner();
+    if (pendingConnection?.owner === owner) return pendingConnection.promise;
+    const promise = (async () => {
+        const result = await credentialRequest('status');
+        if (result.persisted && !cleanedOwners.has(owner)) {
+            if (await discardLegacyKeys(owner)) cleanedOwners.add(owner);
+        }
+    })().finally(() => { if (pendingConnection?.promise === promise) pendingConnection = null; });
+    pendingConnection = { owner, promise };
+    return promise;
+}
+
+export async function findLegacyOpenRouterKey(): Promise<boolean> {
+    if (!cloudMode() || currentKeyOwner() === 'guest') return false;
+    const owner = currentKeyOwner();
+    return Boolean(await legacyKey(owner)) && owner === currentKeyOwner();
+}
+
+export async function migrateLegacyOpenRouterKey(): Promise<void> {
+    const owner = currentKeyOwner();
+    const key = await legacyKey(owner);
+    if (!cloudMode() || !key || owner === 'guest' || owner !== currentKeyOwner()) throw new Error('No legacy key belongs to this account.');
+    const result = await credentialRequest('migrate', key);
+    if (result.persisted) await discardLegacyKeys(owner);
+}
+
+export async function disconnectOpenRouterConnection(): Promise<void> {
+    if (cloudMode()) {
+        const result = await credentialRequest('delete');
+        if (result.persisted) await discardLegacyKeys(result.owner);
+    } else await clearPersistedUserApiKey();
+}
 
 let kvHydrationStarted = false;
 let kvHydrationGeneration = 0;
@@ -75,22 +172,19 @@ export function isValidOpenRouterKeyFormat(key: string): boolean {
     );
 }
 
-/**
- * Persists an OpenRouter API key the same way the OAuth callback does:
- * writes it to the Dexie `kv` table (survives reloads), updates the global
- * reactive state, and notifies listeners via `openrouter:connected`.
- *
- * This is the canonical "paste a key" path — callers must use this instead
- * of only mutating in-memory state (which loses the key on reload).
- *
- * @throws Error when the key fails format validation.
- */
+/** Save in the account vault on Cloud, or device-local KV on static deployments. */
 export async function persistUserApiKey(key: string): Promise<void> {
     const trimmed = key.trim();
     if (!isValidOpenRouterKeyFormat(trimmed)) {
         throw err('ERR_VALIDATION',
             `That doesn't look like an OpenRouter API key. Keys start with "${OPENROUTER_KEY_PREFIX}" — get yours at openrouter.ai/keys.`
         );
+    }
+    if (cloudMode()) {
+        const result = await credentialRequest('save', trimmed);
+        if (result.persisted) await discardLegacyKeys(result.owner);
+        window.dispatchEvent(new CustomEvent('openrouter:connected'));
+        return;
     }
     // Invalidate an in-flight initial read so an older persisted value cannot
     // overwrite the key the user just supplied.
@@ -123,6 +217,7 @@ function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
 }
 
 export function hydrateUserApiKeyFromKv(): Promise<void> {
+    if (cloudMode()) { state.value.openrouterKey = null; return Promise.resolve(); }
     const owner = currentKeyOwner();
     const hydrationGeneration = kvHydrationGeneration;
     const workspaceGeneration = getWorkspaceGeneration();
@@ -147,7 +242,7 @@ export function hydrateUserApiKeyFromKv(): Promise<void> {
             const kv = db.table<KvApiKeyRow, string>('kv');
             const rec = await kv.where('name').equals('openrouter_api_key').first();
             if (
-                hydrationGeneration !== kvHydrationGeneration ||
+                cloudMode() || hydrationGeneration !== kvHydrationGeneration ||
                 workspaceGeneration !== getWorkspaceGeneration()
             ) {
                 return;
@@ -179,6 +274,8 @@ export function hydrateUserApiKeyFromKv(): Promise<void> {
 export async function clearPersistedUserApiKey(): Promise<void> {
     const generation = ++kvHydrationGeneration;
     state.value.openrouterKey = null;
+    cloudConnection.value = null;
+    if (cloudMode()) return; // Logout never deletes a server credential or an unverified migration source.
     const db = getDb();
     await kv.delete('openrouter_api_key', db, {
         isValid: () => generation === kvHydrationGeneration,
@@ -220,7 +317,7 @@ export function useUserApiKey() {
 
     function setKey(key: string) {
         kvHydrationGeneration += 1;
-        state.value.openrouterKey = key;
+        state.value.openrouterKey = cloudMode() ? null : key;
     }
 
     function clearKey() {
@@ -230,12 +327,13 @@ export function useUserApiKey() {
 
     // Return a computed ref so callers can read `apiKey.value` and
     // still observe changes made to the shared state.
-    const apiKey = computed(() => state.value.openrouterKey) as {
+    const apiKey = computed(() => cloudMode() ? null : state.value.openrouterKey) as {
         readonly value: string | null;
     };
 
     return {
         apiKey,
+        connected: computed(() => cloudMode() ? cloudConnection.value?.owner === currentKeyOwner() && cloudConnection.value.connected : Boolean(state.value.openrouterKey)),
         setKey,
         clearKey,
     };

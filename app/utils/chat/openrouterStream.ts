@@ -321,10 +321,10 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     const openRouterChatUrl = getOpenRouterChatCompletionsUrl(
         runtimeConfig.public.openRouter?.baseUrl
     );
-    const allowClientFallback = hasApiKey === true;
+    const allowClientFallback = hasApiKey === true && runtimeConfig.public.ssrAuthEnabled !== true;
     const isSsrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const forceServerRoute = Boolean(
-        isSsrAuthEnabled && !allowClientFallback
+        isSsrAuthEnabled
     );
 
     const body = await prepareOpenRouterRequest(params);
@@ -470,7 +470,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 'Content-Type': 'application/json',
                 'x-or3-cloud-intent': 'mutation',
             };
-            if (hasApiKey) {
+            if (hasApiKey && !isSsrAuthEnabled) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
             serverResp = await transportRequest('/api/openrouter/stream', {
@@ -980,7 +980,7 @@ export async function startBackgroundStream(params: {
         'Content-Type': 'application/json',
         'x-or3-cloud-intent': 'mutation',
     };
-    if (params.apiKey) {
+    if (params.apiKey && useRuntimeConfig().public.ssrAuthEnabled !== true) {
         headers['x-or3-openrouter-key'] = params.apiKey;
     }
 

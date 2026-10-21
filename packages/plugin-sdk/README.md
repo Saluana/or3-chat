@@ -19,7 +19,16 @@ Registrations are disposed with their activation. Portable hosts return
 `unsupported`. See the host's [Saved Files SDK guide](../../public/_documentation/plugins/plugin-sdk.md#saved-files)
 for examples and exact event semantics.
 
-Trusted plugins can require `or3-trusted-chat-origin-v1` and call
+On authenticated Cloud, `context.ai.complete({ model, prompt })` uses OR3's
+server-selected account/instance credential and existing governed limits.
+Trusted packages need `ai.provider`; portable packages retain `network.http`.
+Cloud browser `ai.provider()` returns `unsupported` because its legacy SDK
+contract includes a raw key. Static/local trusted SDK behavior remains available.
+Private secret APIs retain plugin/user/workspace ownership and existing runtime
+support; they cannot retrieve OR3's OpenRouter account credential. See the
+[credential boundary](../../public/_documentation/cloud/secret-store.md).
+
+In static/local deployments, trusted plugins can require `or3-trusted-chat-origin-v1` and call
 `context.ai.provider({ threadId, messageId, streamId })`. Each model request and
 retry rechecks the captured workspace, registered assistant message, stream,
 write permission and canonical project ownership. Message writes and file

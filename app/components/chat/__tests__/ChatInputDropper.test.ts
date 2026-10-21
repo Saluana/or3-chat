@@ -63,7 +63,7 @@ vi.mock('#imports', () => ({
             limits: {},
         },
     }),
-    useUserApiKey: () => ({ apiKey: ref('test-key') }),
+    useUserApiKey: () => ({ apiKey: ref('test-key'), connected: ref(true) }),
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
     useComposerActions: () => ref([]),
     useModelStore: () => ({ 

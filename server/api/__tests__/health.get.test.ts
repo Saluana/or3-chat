@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockH3Event } from '../../../tests/utils/mock-h3';
 import type { H3Event } from 'h3';
 
+const secretStore = vi.hoisted(() => ({ available: vi.fn(), enabled: false }));
+vi.mock('../../secrets/registry', () => ({ getActiveSecretStore: () => secretStore.enabled ? secretStore : null }));
 const getProviderAdminAdapterMock = vi.hoisted(() => vi.fn());
 const createStubProviderAdapterMock = vi.hoisted(() =>
     vi.fn((kind: 'auth' | 'sync' | 'storage', provider: string) => ({
@@ -26,6 +28,7 @@ type RuntimeConfigMock = {
         gcCooldownMs?: number;
     };
     auth: { enabled: boolean; provider: string };
+    secrets?: { provider: string };
 };
 
 const runtimeConfigMock: RuntimeConfigMock = {
@@ -67,6 +70,7 @@ describe('Health check endpoint', () => {
 
     beforeEach(async () => {
         vi.resetModules();
+        runtimeConfigMock.secrets = undefined; secretStore.enabled = false; secretStore.available.mockReset().mockResolvedValue(undefined);
         getProviderAdminAdapterMock.mockReset().mockReturnValue(null);
         createStubProviderAdapterMock.mockClear();
         runtimeConfigMock.sync = { enabled: true, provider: 'convex' };
@@ -75,6 +79,17 @@ describe('Health check endpoint', () => {
 
         const module = await import('../health.get');
         handler = module.default;
+    });
+
+    it('reports vault outage without disclosing its error or probing on liveness', async () => {
+        runtimeConfigMock.secrets = { provider: 'or3-secrets' }; secretStore.enabled = true;
+        secretStore.available.mockRejectedValue(new Error('synthetic-private-key'));
+        const liveness = await handler(createMockH3Event({ method: 'GET', path: '/api/health' }));
+        expect(liveness.status).toBe('ok'); expect(secretStore.available).not.toHaveBeenCalled();
+        const readiness = await handler(createMockH3Event({ method: 'GET', path: '/api/ready' }));
+        expect(readiness.status).toBe('degraded');
+        expect(readiness.providers.secrets).toEqual({ available: false });
+        expect(JSON.stringify(readiness)).not.toContain('synthetic-private-key');
     });
 
     it('returns basic health status', async () => {

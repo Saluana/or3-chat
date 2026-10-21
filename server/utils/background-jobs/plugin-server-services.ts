@@ -1,5 +1,6 @@
+import { resolveOpenRouterCredential } from '../../secrets/openrouter';
 import type { H3Event } from 'h3';
-import { createError, getHeader, readBody, setResponseHeader } from 'h3';
+import { createError, readBody, setResponseHeader } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { HTTPClient } from '@openrouter/sdk';
 import { resolveSessionContext } from '../../auth/session';
@@ -27,6 +28,8 @@ interface WorkflowJobOrigin { jobId: string; userId: string; workspaceId: string
 export function createTrustedPluginServerServices(requestEvent: H3Event, grants: ReadonlySet<string>) {
     const allow = (grant: string) => { if (!grants.has(grant)) throw createError({ statusCode: 403, statusMessage: 'Plugin grant required' }); };
     const reservedRequests = new Set<string>();
+    let credential: string | undefined;
+    let credentialPrepared = false;
     const authorizeWorkflowOrigin = async (origin: WorkflowJobOrigin, signal: AbortSignal) => {
         const session = await resolveSessionContext(requestEvent);
         if (!session.authenticated || session.user?.id !== origin.userId)
@@ -70,19 +73,13 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
             enforceRateLimit(event, checkSyncRateLimit(session.user.id, rateKey));
             recordSyncRequest(session.user.id, rateKey);
             reservedRequests.add(JSON.stringify([session.user.id, rateKey]));
+            if (rateKey === 'workflow:background' && grants.has('ai.provider')) { credential = (await resolveOpenRouterCredential(event, session)).apiKey; credentialPrepared = true; }
             return { userId: session.user.id, workspaceId: session.workspace.id };
         },
         resolveApiKey(event: H3Event) {
             allow('ai.provider');
-            const config = useRuntimeConfig(event);
-            const allowUserOverride = config.openrouterAllowUserOverride !== false;
-            const requireUserKey = config.openrouterRequireUserKey === true;
-            const authHeader = getHeader(event, 'authorization');
-            const keyHeader = getHeader(event, 'x-or3-openrouter-key');
-            const clientKey = (typeof keyHeader === 'string' && keyHeader.trim() ? keyHeader.trim() : undefined) ||
-                (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
-            return requireUserKey ? clientKey :
-                (allowUserOverride ? clientKey : undefined) || config.openrouterApiKey || process.env.OPENROUTER_API_KEY;
+            if (event !== requestEvent || !credentialPrepared) throw createError({ statusCode: 403, statusMessage: 'Authorize the workflow before resolving credentials.' });
+            return credential;
         },
         async getJobProvider() {
             allow('jobs.background');
@@ -158,6 +155,10 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
         emitWebhook: emitBackgroundJobWebhookEvent,
         createOpenRouterClient(input: { apiKey: string; origin?: WorkflowJobOrigin }) {
             allow('ai.provider');
+            const cloud = isSsrAuthEnabled(requestEvent);
+            if (cloud && !credentialPrepared) throw createError({ statusCode: 403, statusMessage: 'Authorize the workflow before creating its provider.' });
+            const apiKey = cloud ? credential : input.apiKey;
+            if (!apiKey) throw createError({ statusCode: 401, statusMessage: 'OpenRouter credentials unavailable.' });
             const serverURL = normalizeOpenRouterBaseUrl(useRuntimeConfig().openrouterBaseUrl);
             const origin = input.origin && { ...input.origin };
             const httpClient = new HTTPClient({ fetcher: async (request, init) => {
@@ -169,12 +170,15 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
                     ...(init?.signal ? [init.signal] : []),
                 ]);
                 const signal = await authorizeWorkflowOrigin(origin, requestSignal);
-                return fetch(request, { ...init, signal });
+                const target = new URL(request instanceof Request ? request.url : String(request));
+                const base = new URL(serverURL);
+                if (target.origin !== base.origin || !target.pathname.startsWith(base.pathname.replace(/\/$/, '') + '/')) throw new Error('Provider destination refused.');
+                return fetch(request, { ...init, signal, redirect: 'error' });
             } });
             return {
-                client: buildOpenRouterClient({ apiKey: input.apiKey, serverURL, httpClient }),
+                client: buildOpenRouterClient({ apiKey, serverURL, httpClient }),
                 headers: DEFAULT_HEADERS,
-                apiKey: input.apiKey,
+                apiKey,
                 serverURL,
                 metadata: 'disabled' as const,
             };

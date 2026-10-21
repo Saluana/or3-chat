@@ -51,7 +51,7 @@ A namespace in the SDK type definitions does not prove the operation is supporte
 | `commands.register(definition, handler)` | `commands.register` | No generic adapter | Yes |
 | Post-source contribution | `ui.command-palette.register` | Not via `createPortablePlugin().contributions` | Yes |
 | Chat tools via `runtime.tools` / `runtime.tool` | `tools.register.client` | Yes | Use the package's qualified tool surface |
-| `ai.models()`, `ai.complete({ model, prompt, maxOutputTokens? })` | `network.http` on this host | Yes, governed calls | Not a general trusted-host AI adapter |
+| `ai.models()`, `ai.complete({ model, prompt, maxOutputTokens? })` | Portable `network.http`; trusted completion `ai.provider` | Yes, governed calls | Cloud completion uses server-selected billing; local trusted code uses `ai.provider()` |
 | `hooks.onAction()` / `onFilter()` | `hooks.register` | No | Yes |
 | `activity.registerSource()` | `activity.register` | No | Yes |
 | Chat renderer / editor contribution | `chat.message.renderer` / `chat.editor.extension` | No Vue objects | Yes |
@@ -258,7 +258,7 @@ remain with the caller. Failures arriving after the transition return the
 generic stale-context message; active reads keep their normal error and retry
 behavior.
 
-`secrets` supports an [optional private secret provider](/documentation/cloud/secret-store) for remembered values in reviewed package-backed trusted plugins. Default/`remember` values use that provider when selected; explicit `session` values stay in activation memory and clear on teardown. The host derives ownership and checks current activation/grants server-side; refs carry real revisions, and stale results are discarded. A selected unavailable provider fails closed. Without a provider, remembered values retain device-local `or3.plugin.<id>.secret.<key>` storage; observed sign-out clears those keys, while stale-session startup preserves them. Secrets never enter workspace KV, and existing values are not migrated. `secrets.read` permits plaintext delivery to trusted code.
+`secrets` supports the [Cloud secret provider](/documentation/cloud/secret-store) for remembered values in reviewed package-backed trusted plugins. Cloud defaults to its separately provisioned vault; default/`remember` never falls back to browser storage when disabled or unavailable. Explicit `session` values stay in activation memory. Existing server authorization derives plugin/user/workspace scope and checks current grants/activation. Static/local deployments retain device-local remembered values. Plugin values are not automatically migrated, never enter workspace KV, and cannot address the reserved OpenRouter account credential. `secrets.read` permits plaintext delivery to trusted code. Portable private-secret support remains unchanged.
 
 `network.requestAccess({ origins, purpose })` requests one host-owned approval for previously unapproved origins; `revokeAccess` removes approvals immediately. Only HTTPS or loopback HTTP origins without credentials, paths, queries or fragments are accepted. The host keeps approvals outside plugin storage. A plugin can use its own `/api/plugins/<id>/` routes and current Connect endpoints; other same-host routes are denied. Redirects are refused. Multipart bodies support file references plus `{ name, filename, mimeType, data: Uint8Array }` parts, enforce `files.limits()`, and honor cancellation.
 
@@ -306,7 +306,7 @@ Additional reviewed grants:
 | Grant | Access |
 | --- | --- |
 | `ui.workspace-profile.register` | Register a workspace layout/navigation profile with host-derived ownership. |
-| `ai.provider` | Receive the configured provider client, headers and **raw API key**. Missing credentials return `not-signed-in`; `ai.requestSignIn` opens sign-in. |
+| `ai.provider` | Static/local trusted SDK access includes the **raw API key**. Cloud browser SDK access returns `unsupported`; use governed `ai.complete()` under this existing grant. Approved trusted server workflow adapters retain their explicit server-side compatibility boundary. |
 | `tools.use` | List and execute enabled tools through their existing approval policy and cancellation. |
 | `jobs.background` | Track, inspect and abort workspace background jobs. |
 | `hooks.emit` | Emit `workflow.execution:action:start`, `:complete`, `:state_update` and `:node_complete`. |

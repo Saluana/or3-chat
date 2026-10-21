@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { computed } from 'vue';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
@@ -9,9 +10,10 @@ import { testRuntimeConfig } from '~~/tests/setup';
 
 const { openRouterStream, session } = vi.hoisted(() => ({
     openRouterStream: vi.fn(),
-    session: { signedIn: false },
+    session: { signedIn: false, connected: false },
 }));
 
+vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: computed(() => globalState.value.openrouterKey), connected: computed(() => session.connected) }) }));
 vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
     getCachedSessionContext: () => session.signedIn ? { user: { id: 'autocomplete-user' } } : null,
@@ -25,7 +27,8 @@ afterEach(() => {
     openRouterStream.mockReset();
     globalState.value.openrouterKey = null;
     localStorage.removeItem('openrouter_api_key');
-    session.signedIn = false;
+    session.signedIn = false; session.connected = false;
+    testRuntimeConfig.value.public.ssrAuthEnabled = true;
     testRuntimeConfig.value.public.openRouter.hasInstanceKey = false;
     testRuntimeConfig.value.public.openRouter.requireUserKey = false;
 });
@@ -51,9 +54,11 @@ describe('AutocompleteExtension decorations', () => {
         { name: 'guest with only an instance key', signedIn: false, instanceKey: true, userKey: null, requiresUserKey: false, calls: 0 },
         { name: 'required user key missing', signedIn: true, instanceKey: true, userKey: null, requiresUserKey: true, calls: 0 },
         { name: 'signed in with an instance key', signedIn: true, instanceKey: true, userKey: null, requiresUserKey: false, calls: 1 },
+        { name: 'Cloud account connected', signedIn: true, instanceKey: false, userKey: null, requiresUserKey: true, connected: true, calls: 1 },
         { name: 'user key available', signedIn: false, instanceKey: false, userKey: 'synthetic-key', requiresUserKey: false, calls: 1 },
-    ])('requests suggestions only with usable credentials: $name', async ({ signedIn, instanceKey, userKey, requiresUserKey, calls }) => {
-        session.signedIn = signedIn;
+    ])('requests suggestions only with usable credentials: $name', async ({ signedIn, instanceKey, userKey, requiresUserKey, calls, connected }) => {
+        session.signedIn = signedIn; session.connected = connected === true;
+        testRuntimeConfig.value.public.ssrAuthEnabled = userKey === null;
         testRuntimeConfig.value.public.openRouter.hasInstanceKey = instanceKey;
         testRuntimeConfig.value.public.openRouter.requireUserKey = requiresUserKey;
         globalState.value.openrouterKey = userKey;

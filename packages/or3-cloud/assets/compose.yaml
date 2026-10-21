@@ -19,10 +19,21 @@ services:
       OR3_STORAGE_FS_ROOT: /data/storage
       OR3_EXTENSIONS_ROOT: /data/extensions
       OR3_ADMIN_DATA_DIR: /data/admin
+      NUXT_SECRETS_PROVIDER: "${NUXT_SECRETS_PROVIDER-or3-secrets}"
+      NUXT_SECRETS_SOCKET_PATH: /run/or3-secrets/api.sock
+      NUXT_SECRETS_TOKEN_FILE: /run/or3-secrets-client/service.token
+      NUXT_SECRETS_SERVICE_UID: "1000"
+      OR3_MANAGED_VAULT_CONFIG: /run/or3-secrets-client/config.json
     ports:
       - "127.0.0.1:${OR3_PORT}:3000"
     volumes:
       - or3-data:/data
+      - or3-vault-run:/run/or3-secrets:ro
+      - or3-vault-client:/run/or3-secrets-client:ro
+    depends_on:
+      or3-vault:
+        condition: service_healthy
+        required: false
     restart: unless-stopped
     # Leave enough time for Nuxt to close SSE responses and upstream provider
     # connections before Docker sends SIGKILL.
@@ -69,8 +80,51 @@ services:
       retries: 12
       start_period: 30s
 
+  or3-vault:
+    image: ${OR3_IMAGE}
+    profiles: [or3-vault]
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
+    user: "0:0"
+    entrypoint: [/nodejs/bin/node, /app/vault/entrypoint.mjs]
+    environment:
+      OR3_VAULT_NAMESPACE: "${NUXT_SECRETS_NAMESPACE:-or3}"
+    network_mode: none
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # The confined supervisor provisions identities and atomically renews the
+    # app-owned token. Actual vault CLI/service processes run as UID 1000.
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID]
+    tmpfs: [/tmp:size=16m]
+    volumes:
+      - or3-vault-data:/vault-data
+      - or3-vault-key:/vault-key
+      - or3-vault-run:/run/or3-secrets
+      - or3-vault-client:/run/or3-secrets-client
+    restart: unless-stopped
+    stop_grace_period: 25s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    healthcheck:
+      test: [CMD, /nodejs/bin/node, /app/vault/entrypoint.mjs, health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
 volumes:
   or3-data:
     name: ${OR3_VOLUME_NAME}
     labels:
       io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
+
+  or3-vault-data:
+    name: ${OR3_VOLUME_NAME}-vault-data
+  or3-vault-key:
+    name: ${OR3_VOLUME_NAME}-vault-key
+  or3-vault-run:
+    name: ${OR3_VOLUME_NAME}-vault-run
+  or3-vault-client:
+    name: ${OR3_VOLUME_NAME}-vault-client

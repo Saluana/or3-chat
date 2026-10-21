@@ -26,6 +26,28 @@ Basic Auth + SQLite + filesystem storage. The CLI checks the image manifest,
 source/version labels, and then writes a digest-qualified image reference; it
 also verifies the image of the running container before committing state.
 
+## Default credential vault
+
+Authenticated managed deployments provision a separate `or3-vault` container
+from the same image, using private persistent data/master-key volumes and a
+shared local socket. The application receives only an expiring scoped token;
+it never mounts vault data, master keys or operator credentials. Setup refuses
+partial or lost custody instead of reinitializing. This supports one persistent
+Docker host; it does not provide serverless storage or multi-host replication.
+
+`NUXT_SECRETS_PROVIDER=` explicitly disables the vault for instance-billed-only
+operation; stop before changing this setting, then start to apply it. A restart
+alone retains the container environment. Cloud never falls back to browser credentials. Keep master-key
+recovery copies separate from application backups. Managed snapshots/exports
+include a checksummed encrypted `vault.backup`; application rollback preserves
+the live vault. Disaster recovery requires an explicit fresh-key vault restore
+and fresh service tokens. Preserve custody volumes during cleanup.
+
+See [Cloud credentials and recovery](../../public/_documentation/cloud/secret-store.md)
+for configuration, migration, plugin compatibility and outstanding production
+qualification requirements. Run `bun scripts/test/run-cloud-vault-e2e.ts` from
+the repository root for the disposable container custody/recovery drill.
+
 ## Run it publicly on a VPS
 
 Before starting, point a domain at the VPS and allow inbound TCP ports `80`

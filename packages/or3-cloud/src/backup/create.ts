@@ -5,7 +5,10 @@ import type { BackupManifest, BackupProgress, ManagedState } from '../deployment
 import { imageAtDigest } from '../deployment/identity';
 import { backupDirectory, deploymentPaths } from '../deployment/paths';
 import { requireImageDigest } from '../runtime/images';
-import { projectServiceRunning, startProject, stopProject } from '../runtime/project';
+import { managedVaultEnabled, projectServiceRunning, startProject, stopProject } from '../runtime/project';
+import { secretValues } from '../deployment/env';
+import { composeArgs } from '../runtime/compose';
+import { streamCommandToFile } from '../runtime/command-runner';
 import { dataVolumeSize } from '../runtime/volumes';
 import { copySecure, sha256File, writeSecure } from '../util/fs';
 import { id, now } from '../util/primitives';
@@ -100,6 +103,11 @@ export async function createBackup(
     capturedAt = now();
     await report('capturing', `Backup capture: OR3 is stopped; writing ${backupDir}.`);
     await volumeArchive(directory, state.mode, env, backupDir);
+    if (managedVaultEnabled(directory, env)) {
+      await streamCommandToFile('docker', composeArgs(directory, state.mode, [
+        'run', '--rm', '-T', '--no-deps', '--entrypoint', '/nodejs/bin/node', 'or3-vault', '/app/vault/entrypoint.mjs', 'backup',
+      ]), join(backupDir, 'vault.backup'), directory, secretValues(env));
+    }
     await copySecure(deploymentPaths(directory).env, join(backupDir, 'config.env'));
     managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);
     artifact = 'captured';
@@ -136,6 +144,7 @@ export async function createBackup(
         image: state.image,
         imageDigest: state.imageDigest,
         dataSha256: await sha256File(join(backupDir, 'data.tgz')),
+        ...(managedVaultEnabled(directory, env) ? { vaultSha256: await sha256File(join(backupDir, 'vault.backup')) } : {}),
         dataBytes: volumeSize,
         configSha256: await sha256File(join(backupDir, 'config.env')),
         managedAssetSha256,

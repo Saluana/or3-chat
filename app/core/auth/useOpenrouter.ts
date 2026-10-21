@@ -28,7 +28,7 @@
 import { ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { clearPersistedUserApiKey } from './useUserApiKey';
+import { disconnectOpenRouterConnection } from './useUserApiKey';
 import { sha256Bytes } from '~~/shared/runtime-crypto';
 
 function base64urlencode(str: ArrayBuffer) {
@@ -95,6 +95,24 @@ export function useOpenRouterAuth() {
             }
         }
         isLoggingIn.value = true;
+        if (rc.public.ssrAuthEnabled === true) {
+            try {
+                const session = sessionContext?.data.value?.session;
+                const response = await fetch('/api/openrouter/oauth', { method: 'POST', credentials: 'same-origin', redirect: 'error',
+                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': JSON.stringify([session?.provider, session?.user?.id]) }, body: '{}' });
+                if (!response.ok) throw new Error('OpenRouter connection is unavailable. Contact the administrator.');
+                const payload: unknown = await response.json();
+                if (!payload || typeof payload !== 'object' || !('url' in payload) || typeof payload.url !== 'string') throw new Error('Invalid OpenRouter authorization response.');
+                const { url } = payload;
+                const destination = new URL(url);
+                if (destination.origin !== 'https://openrouter.ai') throw new Error('Invalid OpenRouter authorization URL.');
+                window.location.assign(destination.toString());
+            } catch {
+                isLoggingIn.value = false;
+                toast.add({ title: 'OpenRouter connection unavailable', description: 'Refresh your session and try again, or contact the administrator.', color: 'error' });
+            }
+            return;
+        }
         const codeVerifier = Array.from(
             crypto.getRandomValues(new Uint8Array(64))
         )
@@ -172,27 +190,19 @@ export function useOpenRouterAuth() {
     };
 
     const logoutOpenRouter = async () => {
-        // Clear the canonical reactive state before awaiting IndexedDB so a
-        // slow storage operation can never leave a usable in-memory key.
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('openrouter_api_key');
-        }
-        try {
-            await clearPersistedUserApiKey();
-        } catch {
-            // Keep logout responsive even if IndexedDB is unavailable. The
-            // in-memory state was already cleared by the helper.
-        }
-        try {
-            // Notify UI listeners (Sidebar, etc.) to recompute state
-            try {
-                window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            } catch {
-                // Event dispatch may fail in SSR - non-critical
+        if (runtimeConfig.public.ssrAuthEnabled === true) {
+            try { await disconnectOpenRouterConnection(); }
+            catch {
+                toast.add({ title: 'OpenRouter disconnect failed', description: 'The server could not confirm removal. Try again or contact the administrator.', color: 'error' });
+                return;
             }
-        } catch (e) {
-            console.error('OpenRouter logout failed', e);
+        } else {
+            // Invalidate memory before the IndexedDB delete settles.
+            const cleared = disconnectOpenRouterConnection();
+            try { localStorage.removeItem('openrouter_api_key'); } catch { /* Storage unavailable. */ }
+            try { await cleared; } catch { /* Memory is already cleared. */ }
         }
+        try { window.dispatchEvent(new CustomEvent('openrouter:connected')); } catch { /* SSR. */ }
     };
 
     return { startLogin, logoutOpenRouter, isLoggingIn };

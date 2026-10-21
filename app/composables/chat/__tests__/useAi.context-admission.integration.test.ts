@@ -36,7 +36,7 @@ vi.mock('#imports', async (original) => ({
         backgroundStreaming: { enabled: external.background }, limits: { enabled: false },
         openRouter: { allowUserOverride: true, hasInstanceKey: false, requireUserKey: false } } }),
     useToast: () => ({ add() {} }), useAppConfig: () => ({}),
-    useUserApiKey: () => ({ apiKey: ref('scripted-key'), setKey() {} }),
+    useUserApiKey: () => ({ apiKey: ref('scripted-key'), connected: ref(true), setKey() {} }),
     useActivePrompt: () => ({ activePromptContent: ref(null) }),
     useHooks: () => useHooks(),
 }));
@@ -56,6 +56,14 @@ vi.mock('@openrouter/sdk/sdk/models.js', () => ({
 }));
 import { useChat } from '../useAi';
 
+async function scriptedCloudCatalog() {
+    external.catalogEntered?.(); await external.catalogGate;
+    return Response.json([{ id: 'fixture/model', name: 'Fixture', canonical_slug: 'fixture/model', context_length: external.capacity,
+        architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+        top_provider: { context_length: external.capacity, max_completion_tokens: 4096, is_moderated: false },
+        pricing: { prompt: '0', completion: '0' }, supported_parameters: ['tools'] }]);
+}
+
 let workspace: string; let scope: EffectScope | undefined;
 beforeEach(async () => {
     workspace = `native-context-${crypto.randomUUID()}`; external.workspace = workspace;
@@ -67,6 +75,7 @@ beforeEach(async () => {
     await useModelStore().invalidate();
     await useAiSettings().ensureLoaded();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
         external.bodies.push(JSON.parse(init?.body as string));
         const body = external.toolCall && external.bodies.length === 1
             ? 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"accepted-call","type":"function","function":{"name":"fixture_context_output","arguments":"{}"}}]}}]}\n\n'
@@ -829,6 +838,7 @@ describe('native context admission at the actual durable boundary', () => {
         } finally { registration.dispose(); }
         scope?.stop(); external.toolCall = false; external.background = true; external.bodies = [];
         vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             return Response.json({ code: 'context_full', error: 'Scripted background refusal before job', retryable: false }, { status: 400 });
         }));
@@ -861,6 +871,7 @@ describe('native context admission at the actual durable boundary', () => {
             }); vi.stubGlobal('$fetch', readiness);
             let bridgeChecks = 0;
             vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+                if (url === '/api/openrouter/models') return scriptedCloudCatalog();
                 if (url === '/api/jobs/client-tool/capability') { bridgeChecks++; return Response.json({ available: scenario.bridge }); }
                 external.bodies.push(JSON.parse(init?.body as string));
                 return scenario.background ? Response.json({ code: 'context_full', error: 'Scripted refusal before job', retryable: false }, { status: 400 })
@@ -879,6 +890,7 @@ describe('native context admission at the actual durable boundary', () => {
         external.background = true;
         const final = vi.fn((request) => request); useHooks().addFilter('ai.chat.messages:filter:before_send', final);
         vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             return Response.json({ code: 'context_full', error: 'Independent server capacity rejected this request', retryable: false }, { status: 400 });
         }));
@@ -892,6 +904,7 @@ describe('native context admission at the actual durable boundary', () => {
             top_provider: { max_completion_tokens: 4096 }, supported_parameters: ['tools'],
             architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
         vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             return new Response('data: {"choices":[{"delta":{"content":"Recovered background request"}}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
         }));
@@ -918,6 +931,7 @@ describe('native context admission at the actual durable boundary', () => {
         const outgoing = vi.fn(() => 'Explain nebulacode');
         useHooks().addFilter('ui.chat.message:filter:outgoing', outgoing);
         vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             if (external.bodies.length === 1) return Response.json({ error: {
                 code: 'context_length_exceeded', message: 'Scripted initial refusal',
@@ -946,6 +960,7 @@ describe('native context admission at the actual durable boundary', () => {
         const owner = chat(); const filters = vi.fn((request) => request);
         useHooks().addFilter('ai.chat.messages:filter:before_send', filters);
         vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             return Response.json({ error: { code: 'context_length_exceeded', message: 'Scripted initial refusal' } }, { status: 400 });
         }));
@@ -989,6 +1004,7 @@ describe('native context admission at the actual durable boundary', () => {
     });
     it('reports provider context overflow as context_full while retaining the full durable turn and never replaying it', async () => {
         const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+            if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             external.bodies.push(JSON.parse(init?.body as string));
             return new Response(JSON.stringify({ error: { code: 'context_length_exceeded', message: 'private upstream' } }),
                 { status: 400, headers: { 'Content-Type': 'application/json' } });

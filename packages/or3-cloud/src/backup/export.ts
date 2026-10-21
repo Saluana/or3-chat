@@ -30,7 +30,7 @@ export async function exportBackup(directory: string, backupId: string, destinat
       throw new Error('Backup export destination changed while it was being created. Refusing to write an export through an unexpected path.');
     }
     await chmod(dest, 0o700);
-    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth']) {
+    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth', ...(manifest.vaultSha256 ? ['vault.backup'] : [])]) {
       await copySecure(join(backupPath, file), join(dest, file));
     }
     if (manifest.managedAssetSha256) {
@@ -61,7 +61,7 @@ export async function exportBackup(directory: string, backupId: string, destinat
       configSha256: manifest.configSha256,
     };
     await writeSecure(join(deploymentPaths(directory).exports, `${manifest.backupId}.json`), `${JSON.stringify(receipt, null, 2)}\n`);
-    let bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size + (await stat(join(dest, 'manifest.auth'))).size;
+    let bytes = (manifest.vaultSha256 ? (await stat(join(dest, 'vault.backup'))).size : 0) + (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size + (await stat(join(dest, 'manifest.auth'))).size;
     if (manifest.managedAssetSha256) {
       for (const name of managedAssetNamesForInventory(manifest.mode, manifest.managedAssetInventoryVersion)) {
         bytes += (await stat(join(dest, 'managed-assets', name))).size;

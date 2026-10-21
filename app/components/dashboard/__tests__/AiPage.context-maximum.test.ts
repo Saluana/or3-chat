@@ -1,3 +1,4 @@
+import { testRuntimeConfig } from '../../../../tests/setup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { defineComponent, nextTick } from 'vue';
@@ -51,6 +52,8 @@ async function save(value: string) {
     await input().trigger('blur');
 }
 beforeEach(async () => {
+    // This suite scripts the local SDK catalog transport.
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
     workspace = `dashboard-context-${crypto.randomUUID()}`;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb(workspace).open();
@@ -59,6 +62,7 @@ beforeEach(async () => {
     await useAiSettings().ensureLoaded();
 });
 afterEach(async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = true;
     wrapper?.unmount(); wrapper = undefined;
     dispose?.(); dispose = undefined;
     vi.restoreAllMocks();

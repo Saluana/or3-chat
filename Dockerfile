@@ -111,6 +111,10 @@ RUN mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime
     OR3_STORAGE_FS_TOKEN_SECRET=or3-build-only-storage-token-not-for-runtime \
     npm run build
 
+# The separately mounted vault uses the same immutable release image. Only its
+# container receives database/master/operator volumes. No target-platform build.
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS vault-runtime
+
 # The distroless runtime keeps only Node, its required libraries, and the
 # pinned static multicall tool above. Both bases are pinned multi-arch
 # OCI indexes and the resulting architectures are scanned during release.
@@ -123,6 +127,9 @@ ENV NODE_ENV=production \
     OR3_ADMIN_DATA_DIR=/data/admin
 WORKDIR /app
 
+COPY --from=vault-runtime /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=build /app/node_modules/@or3/secrets/dist/cli.js /app/vault/cli.js
+COPY scripts/docker/vault-entrypoint.mjs /app/vault/entrypoint.mjs
 COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
 COPY --from=build --chown=65532:65532 /app/scripts/docker/backup-inspect.mjs /app/scripts/docker/backup-inspection-profile.json ./scripts/docker/

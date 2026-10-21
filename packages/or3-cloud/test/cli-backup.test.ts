@@ -233,7 +233,7 @@ test('backup creates an authenticated, checksummed snapshot and restarts a runni
   const state = await fixture.readState();
   expect(state.incompleteOperation).toBeUndefined();
   const calls = (await fixture.trace()).map((args) => args.join(' '));
-  const stopped = calls.findIndex((call) => /compose .* stop or3$/.test(call));
+  const stopped = calls.findIndex((call) => /compose .* stop or3(?: or3-vault)?$/.test(call));
   const archived = calls.findIndex((call) => call.includes('tar czf'));
   const restarted = calls.findIndex((call) => /compose .* up -d/.test(call));
   expect(stopped).toBeGreaterThan(-1);

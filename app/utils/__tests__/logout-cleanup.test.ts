@@ -1,3 +1,4 @@
+import { testRuntimeConfig } from '~~/tests/setup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clearWorkspaceDbsOnLogout = vi.fn(async () => undefined);
@@ -5,7 +6,7 @@ vi.mock('~/utils/workspace-db-logout', () => ({
     clearWorkspaceDbsOnLogout,
 }));
 
-const kvDelete = vi.fn(async () => undefined);
+const kvDelete = vi.fn(async (_name: string, ..._options: unknown[]) => undefined);
 vi.mock('~/db', () => ({
     kv: { delete: kvDelete },
 }));
@@ -67,7 +68,10 @@ describe('logoutCleanup', () => {
         sessionStorageMock.clear();
     });
 
-    it('clears sync, workspace DBs, and auth-scoped KV', async () => {
+    it('clears static sync, workspace DBs, and auth-scoped KV', async () => {
+        const previous = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        try {
         const stop = vi.fn(async () => undefined);
         localStorage.setItem('openrouter_api_key', 'sk-test');
         localStorage.setItem('openrouter_state', 'state');
@@ -100,6 +104,20 @@ describe('logoutCleanup', () => {
         expect(localStorage.getItem('or3.plugin.secret.old')).toBeNull();
         expect(localStorage.getItem('last_selected_model')).toBeNull();
         expect(sessionStorage.getItem('openrouter_state')).toBeNull();
+        } finally { testRuntimeConfig.value.public.ssrAuthEnabled = previous; }
+    });
+
+    it('retains unverified Cloud browser credentials on logout', async () => {
+        const previous = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = true;
+        try {
+            localStorage.setItem('openrouter_api_key', 'unverified-legacy-value');
+            const { logoutCleanup } = await import('~/utils/logout-cleanup');
+            await logoutCleanup();
+            expect(state.value.openrouterKey).toBeNull();
+            expect(localStorage.getItem('openrouter_api_key')).toBe('unverified-legacy-value');
+            expect(kvDelete.mock.calls.some(call => call[0] === 'openrouter_api_key')).toBe(false);
+        } finally { testRuntimeConfig.value.public.ssrAuthEnabled = previous; }
     });
 
     it('preserves device-encrypted agent credentials during startup reconciliation', async () => {

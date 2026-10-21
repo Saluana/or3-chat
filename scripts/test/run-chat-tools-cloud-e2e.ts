@@ -39,6 +39,8 @@ try {
             OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS: 'true',
             OR3_BACKGROUND_ENCRYPTION_KEY: crypto.randomUUID() + crypto.randomUUID(),
             OR3_ADMIN_DATA_DIR: join(directory, 'admin'),
+            // This harness uses only the server-managed fixture key.
+            NUXT_SECRETS_PROVIDER: '',
             OPENROUTER_API_KEY: 'disposable-fixture-key', OR3_OPENROUTER_API_KEY: 'disposable-fixture-key', NUXT_OPENROUTER_API_KEY: 'disposable-fixture-key',
             NUXT_OPENROUTER_BASE_URL: `http://127.0.0.1:${provider.port}/api/v1`,
             PW_PORT: String(port), PW_SKIP_WEB_SERVER: 'false',

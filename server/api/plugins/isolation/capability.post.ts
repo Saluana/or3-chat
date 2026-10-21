@@ -1,3 +1,6 @@
+import { readPackageManifest } from '../../../admin/plugins/package-operation-support';
+import { evaluateReviewedPluginGrant } from '~~/shared/plugins/grant-review';
+import { resolveOpenRouterCredential } from '../../../secrets/openrouter';
 /**
  * Authenticated capability bridge for portable plugins.
  *
@@ -351,6 +354,8 @@ export default defineEventHandler(async (event) => {
         // this request fails closed here, and its rejection is observed so it
         // cannot surface as an unhandled rejection.
         const preparation = buildCapabilityMethods({
+            event,
+            method,
             config,
             record,
             installedPath: selected.path,
@@ -503,6 +508,8 @@ export default defineEventHandler(async (event) => {
 });
 
 async function buildCapabilityMethods(input: {
+    readonly event: H3Event;
+    readonly method: string;
     readonly config: ReturnType<typeof useRuntimeConfig>;
     readonly record: HostActivationRecord;
     readonly installedPath: string;
@@ -524,7 +531,12 @@ async function buildCapabilityMethods(input: {
             }),
     });
 
-    const apiKey = config.openrouterApiKey || process.env.OPENROUTER_API_KEY || '';
+    const trusted = input.method === PLUGIN_AI_COMPLETE_METHOD
+        && (await readPackageManifest(input.installedPath)).trust === 'trusted-host';
+    const aiGrant = trusted ? 'ai.provider' : 'network.http';
+    const mayComplete = input.method === PLUGIN_AI_COMPLETE_METHOD
+        && evaluateReviewedPluginGrant(record.grants, aiGrant).allowed;
+    const apiKey = mayComplete ? (await resolveOpenRouterCredential(input.event)).apiKey : undefined;
     let aiComplete: HostRpcMethodSpec;
     if (!apiKey) {
         aiComplete = {
@@ -606,7 +618,7 @@ async function buildCapabilityMethods(input: {
             aiComplete = governed;
         }
     }
-    methods.push(aiComplete);
+    methods.push({ ...aiComplete, grant: aiGrant });
 
     methods.push({
         method: CONNECTIONS_DISPATCH_METHOD,

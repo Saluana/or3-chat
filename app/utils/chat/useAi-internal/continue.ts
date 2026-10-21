@@ -112,6 +112,7 @@ export type ContinueMessageContext = {
     hooks: HooksLike;
     effectiveApiKey: Ref<string | null>;
     hasInstanceKey: Ref<boolean>;
+    hasUserKey: Ref<boolean>;
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
@@ -223,7 +224,7 @@ export async function continueMessageImpl(
 ): Promise<void> {
     if (ctx.request.phase.value !== 'admitted' || !ctx.threadIdRef.value)
         return;
-    const hasKey = Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
+    const hasKey = ctx.hasUserKey.value || Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
     // Request scoping: capture ownership before the first await. Every later
     // stage re-verifies it so a thread switch during setup cannot resume the
