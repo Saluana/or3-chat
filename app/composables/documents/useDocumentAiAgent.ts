@@ -700,9 +700,6 @@ export function useDocumentAiAgent(options: {
             await ensureLoaded();
             const scope = resolveAutomaticDocumentAiScope(editor);
             lastScope.value = scope;
-            // Do not paint scope chrome while typing — the composer already labels
-            // the active scope; block highlights made the whole section look selected.
-            clearScopeHighlight();
             const chunkWordLimit = settings.value.chunkWordLimit;
             const version = options.contentVersion.value;
             const documentId = options.documentId.value;

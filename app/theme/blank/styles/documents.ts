@@ -9,11 +9,6 @@ export const documentsStyles = {
             fontFamily: 'var(--font-sans)',
         },
     },
-    '.document-editor-root .document-content .ProseMirror:focus-visible': {
-        style: {
-            outline: 'none',
-        },
-    },
     '.document-editor-root .editor-topbar': {
         style: {
             borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
@@ -33,11 +28,18 @@ export const documentsStyles = {
             boxShadow: 'none',
         },
     },
+    // Same outline and focus ring as the blank chat composer.
     '.document-editor-root .document-ai-composer': {
         style: {
-            border: 'var(--md-border-width) solid var(--md-border-color)',
+            border: 'var(--md-border-width) solid var(--md-outline)',
             borderRadius: 'var(--chat-composer-border-radius, 28px)',
             boxShadow: 'var(--app-elevation-medium)',
+        },
+    },
+    '.document-editor-root .document-ai-composer:focus-within': {
+        style: {
+            borderColor: 'var(--md-outline)',
+            boxShadow: '0 0 0 4px color-mix(in srgb, var(--md-outline) 60%, transparent), var(--app-elevation-medium)',
         },
     },
     '.document-editor-root .toolbar-overflow': {
@@ -132,12 +134,6 @@ export const documentsStyles = {
         style: {
             borderRadius: '999px',
             boxShadow: 'none',
-        },
-    },
-    '.document-editor-root .attachment-button': {
-        style: {
-            border: '1px solid color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
-            borderRadius: '999px',
         },
     },
     '.document-editor-shell:not(:last-child)': {

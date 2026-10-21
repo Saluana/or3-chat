@@ -218,7 +218,7 @@
                     </div>
                 </article>
 
-                <div class="ai-composer-dock">
+                <div class="ai-composer-dock" @focusin="aiComposerFocused = true" @focusout="onAiComposerFocusOut">
                     <Suspense>
                         <DocumentAiPanel
                             v-bind="aiPanelState"
@@ -239,7 +239,7 @@
                             @reject="ai.reject"
                             @abort="ai.abort"
                             @toggle-autocomplete="toggleAutocomplete"
-                            @clear-scope-highlight="ai.clearScopeHighlight"
+                            @clear-selection="clearAiSelection"
                         />
                         <template #fallback><div class="ai-composer-loading">Loading document AI…</div></template>
                     </Suspense>
@@ -431,6 +431,7 @@ let paneResizeObserver: ResizeObserver | undefined;
 const inspectorOpen = ref(false);
 const inspectorTab = ref('outline');
 const aiFocusNonce = ref(0);
+const aiComposerFocused = ref(false);
 const overflowOpen = ref(false);
 const slashMenu = ref<HTMLElement>();
 const imageInput = ref<HTMLInputElement>();
@@ -1697,6 +1698,27 @@ async function onInspectorRestore(revision: CompleteDocumentRevision) {
 
 function openAiForSelection() {
     aiFocusNonce.value += 1;
+}
+
+function onAiComposerFocusOut(event: FocusEvent) {
+    const dock = event.currentTarget as HTMLElement;
+    if (!dock.contains(event.relatedTarget as Node | null)) aiComposerFocused.value = false;
+}
+
+// The browser drops its selection highlight once focus moves to the AI input,
+// so tint the text the AI will edit while the composer has focus.
+const aiBusy = computed(() =>
+    ai.status.value === 'streaming' || ai.status.value === 'preview' || Boolean(ai.proposal.value)
+);
+watch([aiComposerFocused, selectionAvailable, aiBusy], ([focused, hasSelection]) => {
+    if (focused && hasSelection) ai.syncScopeHighlight('selection', 'show');
+    else ai.syncScopeHighlight(undefined, 'clear');
+}, { flush: 'post' });
+
+function clearAiSelection() {
+    const current = editor.value;
+    if (!current || current.state.selection.empty) return;
+    current.commands.setTextSelection(current.state.selection.to);
 }
 
 function toggleAutocomplete() {

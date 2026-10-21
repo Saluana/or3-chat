@@ -183,6 +183,7 @@ export default {
     'editor.previous': 'blank-solar:alt-arrow-up-linear',
     'editor.next': 'blank-solar:alt-arrow-down-linear',
     'editor.ai': 'blank-solar:stars-linear',
+    'editor.selection': 'blank-solar:text-selection-linear',
     'editor.outline': 'blank-solar:list-linear',
     'editor.history': 'blank-solar:history-linear',
     'editor.info': 'blank-solar:info-circle-linear',

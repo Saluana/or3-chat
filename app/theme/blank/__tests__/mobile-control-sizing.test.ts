@@ -91,23 +91,11 @@ describe('blank theme mobile control sizing', () => {
             'padding-bottom: max(34px, env(safe-area-inset-bottom)) !important',
         );
         expect(blankStyles).toContain('.document-ai-composer');
-        expect(blankStyles).toContain(
-            'html[data-theme="blank"] .document-ai-composer :is(\n        .attachment-button,\n        .settings-button\n    )',
-        );
-        expect(blankStyles).toContain(
-            'html[data-theme="blank"] .document-ai-composer .send-button',
+        expect(blankStyles).toMatch(
+            /\.document-ai-composer \{\s*padding: 0\.375rem 0\.5rem !important/,
         );
         expect(blankStyles).toMatch(
-            /\.document-ai-composer[\s\S]*?padding: 0\.45rem 0\.5rem !important/,
-        );
-        expect(blankStyles).toMatch(
-            /\.document-ai-composer[\s\S]*?width: 1\.75rem !important/,
-        );
-        expect(blankStyles).toMatch(
-            /\.document-ai-composer[\s\S]*?\.send-button[\s\S]*?width: 1\.875rem !important/,
-        );
-        expect(blankStyles).toMatch(
-            /\.document-ai-composer[\s\S]*?max-height: 1\.875rem !important/,
+            /\.document-ai-composer :is\(\.prompt-editor, \.ProseMirror, \.ProseMirror p\) \{\s*line-height: 1\.25 !important/,
         );
     });
 

@@ -1290,59 +1290,25 @@ html[data-theme='blank']
     }
 
     /*
-     * Document AI composer: crush Nuxt UI / blank max-md:min-h-[44px]! so the
-     * pill height collapses. Paint ~28–30px controls; recover 44px hits via
-     * ::before (also defined in DocumentAiPanel.css).
+     * Document AI composer: same single-line pill as the mobile chat composer
+     * (ChatInput.vue): 3rem tall, 8px insets, 32px controls whose 44px hit
+     * areas come from DocumentAiPanel.css pseudo-elements.
      */
     html[data-theme="blank"] .document-ai-composer {
-        padding: 0.45rem 0.5rem !important;
-        min-height: 0 !important;
-        --chat-composer-editor-min-height: 1.75rem;
+        padding: 0.375rem 0.5rem !important;
     }
 
-    html[data-theme="blank"] .document-ai-composer .composer-row {
-        min-height: 1.875rem !important;
-        gap: 0.25rem !important;
+    html[data-theme="blank"] .document-ai-composer .composer-actions {
+        height: 2.25rem;
     }
 
-    html[data-theme="blank"] .document-ai-composer :is(
-        .attachment-button,
-        .settings-button
-    ) {
-        position: relative;
-        width: 1.75rem !important;
-        height: 1.75rem !important;
-        min-width: 1.75rem !important;
-        min-height: 1.75rem !important;
-        max-width: 1.75rem !important;
-        max-height: 1.75rem !important;
-        padding: 0 !important;
+    /* iOS paints the caret at the full line height; keep it at 20px as chat does. */
+    html[data-theme="blank"] .document-ai-composer .prompt-editor {
+        min-height: 2.25rem;
     }
 
-    html[data-theme="blank"] .document-ai-composer :is(
-        .attachment-button,
-        .settings-button
-    )::before {
-        content: '';
-        position: absolute;
-        inset: -0.5rem;
-    }
-
-    html[data-theme="blank"] .document-ai-composer .send-button {
-        position: relative;
-        width: 1.875rem !important;
-        height: 1.875rem !important;
-        min-width: 1.875rem !important;
-        min-height: 1.875rem !important;
-        max-width: 1.875rem !important;
-        max-height: 1.875rem !important;
-        padding: 0 !important;
-    }
-
-    html[data-theme="blank"] .document-ai-composer .send-button::before {
-        content: '';
-        position: absolute;
-        inset: -0.4rem;
+    html[data-theme="blank"] .document-ai-composer :is(.prompt-editor, .ProseMirror, .ProseMirror p) {
+        line-height: 1.25 !important;
     }
 
     html[data-theme="blank"] .document-ai-composer :is(
@@ -1350,11 +1316,11 @@ html[data-theme='blank']
         .settings-button,
         .send-button
     ) .iconify {
-        width: 0.95rem !important;
-        height: 0.95rem !important;
-        min-width: 0.95rem;
-        min-height: 0.95rem;
-        font-size: 0.95rem !important;
+        width: 1.125rem !important;
+        height: 1.125rem !important;
+        min-width: 1.125rem;
+        min-height: 1.125rem;
+        font-size: 1.125rem !important;
     }
 }
 
@@ -2268,6 +2234,18 @@ html[data-theme='blank'] .dashboard-page-frame .section-card + .section-card {
    Sections sit directly on the modal surface and are divided by a hairline, so
    the controls inside them (selects, fields, quick-action rows) are the only
    boxes. */
+/* Document AI composer sits like the chat composer: 688px pill, 28px up. */
+html[data-theme='blank'] .ai-composer-dock {
+    max-width: 688px;
+    bottom: 28px;
+    margin-bottom: 28px;
+}
+
+/* Same icon tone as the chat composer's attach/settings buttons. */
+html[data-theme='blank'] .document-ai-composer :is(.attachment-button, .settings-button) {
+    color: var(--blank-sb-icon) !important;
+}
+
 html[data-theme='blank'] .document-ai-dialog-settings {
     gap: 0;
 }
