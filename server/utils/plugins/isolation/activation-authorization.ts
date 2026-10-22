@@ -22,6 +22,9 @@
  */
 
 import type { H3Event } from 'h3';
+import { useRuntimeConfig } from '#imports';
+import { isNonCorePluginDiscoveryDisabled } from '~~/shared/plugins/safe-mode';
+import { createModuleV2RuntimePolicy } from '~~/shared/plugins/module-v2-runtime-policy';
 import type { WorkspaceSettingsStore } from '../../../admin/stores/types';
 import {
     getEnabledPlugins,
@@ -73,8 +76,39 @@ function refusal(
     statusCode: number,
     code: string,
     message: string
-): ActivationAuthorizationResult {
+): Extract<ActivationAuthorizationResult, { ok: false }> {
     return { ok: false, statusCode, code, message };
+}
+
+/** Match discovery and package execution policy before minting or using any
+ * server capability. Package integrity and approved grants do not override an
+ * operator's runtime restrictions.
+ */
+export function checkPluginRuntimePolicy(input: {
+    workspaceId: string;
+    packageDigest: string | null;
+    manifestVersion?: unknown;
+}): Extract<ActivationAuthorizationResult, { ok: false }> | null {
+    const admin = useRuntimeConfig().admin as {
+        disableNonCorePlugins?: boolean;
+        pluginRuntimeLoaderEnabled?: boolean;
+        pluginModuleLoaderV2Enabled?: boolean;
+        pluginModuleLoaderV2WorkspaceIds?: string[];
+    } | undefined;
+    if (isNonCorePluginDiscoveryDisabled(admin) || admin?.pluginRuntimeLoaderEnabled === false) {
+        return refusal(403, 'plugin-runtime-disabled', 'Plugin execution is disabled by the operator');
+    }
+    if (input.packageDigest !== null || input.manifestVersion === 2) {
+        const decision = createModuleV2RuntimePolicy({
+            enabled: admin?.pluginModuleLoaderV2Enabled === true,
+            ssrHost: true,
+            workspaceIds: admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
+        })(input.workspaceId);
+        if (!decision.allowed) {
+            return refusal(403, decision.code, 'Plugin execution is disabled for this workspace');
+        }
+    }
+    return null;
 }
 
 export type HostActivationLiveness =
@@ -136,6 +170,15 @@ export async function authorizeHostActivation(
             'activation-stale',
             'The selected plugin package is unreadable.'
         );
+    }
+    const runtimeRefusal = checkPluginRuntimePolicy({
+        workspaceId: input.workspaceId,
+        packageDigest: input.packageDigest,
+        manifestVersion: manifest.manifestVersion,
+    });
+    if (runtimeRefusal) {
+        revokeHostActivation(input.activationId, runtimeRefusal.code);
+        return runtimeRefusal;
     }
     const access = await checkPluginAccess(input.event, {
         pluginId: input.pluginId,

@@ -397,3 +397,25 @@ This feature requires provider artifacts built from the updated source. Normal d
 Persistent Projects reuses opaque internal posts and workspace-scoped original/extraction references. The project-aware `readChatHistory` scaffold resolves explicit and legacy folder membership inside its authorized transaction and returns `project_ownership: resolved | conflict`; the adapter declares `capabilities.projectOwnership: 'v1'`. The host refuses server-owned execution for project or conflicting chats, and for unresolved ownership when the provider declares the contract. Older providers keep ordinary-chat server execution with a one-time warning that legacy membership is not enforced. Deploy the updated scaffold when upgrading the provider; changing only the host cannot add the server ownership check. This change is in the Projects review branch and is not a published provider version yet.
 
 In the provider repository, `bun run type-check` checks every bundled Convex template against its schema-derived generated declarations, as well as the provider source. Development checks use the sibling `or3-chat` checkout for host contracts. After editing templates or their declarations, run `bun run build:templates` to refresh the distributable pack. The installed project's Convex codegen regenerates its own `_generated` files.
+
+## Enrollment and native object ownership
+
+The host admits new canonical accounts after enforcing registration policy.
+Public `workspaces.ensure` may maintain an already admitted account, but only
+the trusted server bridge can create its user/auth-account mapping and supply
+its verified email. Public `workspaces.create` requires an existing mapping.
+A direct Convex identity token alone cannot enroll a new account.
+
+Native object ownership comes from the persisted consumed upload receipt,
+scoped to the workspace and normalized content hash. Sync cannot introduce
+another workspace's native storage ID, including in deleted metadata. Commit
+refuses an ID already owned or referenced by another workspace. Physical
+single-object deletion and GC require that same receipt; expired authorization
+windows do not erase ownership. Legacy originals without a receipt remain
+readable but cannot be physically collected or republished through sync with
+that ID; re-upload through the normal host gateway to establish a verified
+receipt. No automatic metadata-based ownership backfill is performed.
+
+Deploy the matching backend templates, including the storage-ID indexes on
+`file_meta` and `upload_intents`, with the rebuilt provider. Host-only changes
+do not secure the public functions of an older deployed backend.

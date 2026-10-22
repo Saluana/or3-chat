@@ -49,6 +49,13 @@ to the configured account and are attributed to the acting plugin.
 
 ## Host access checks
 
+Operator runtime restrictions also gate server activation and capability calls.
+Safe mode and a disabled runtime loader prevent activation. Immutable packages
+and legacy V2 manifests additionally require the V2 module loader and an allowed
+workspace. Every capability/settings authorization rechecks these restrictions;
+a denied existing activation is revoked before dispatch. Approved grants do
+not override these operator settings.
+
 In SSR mode, host UI registries coalesce plugin access checks from the same
 render into requests containing at most 50 plugin IDs. The host endpoint
 accepts repeated `pluginIds` query parameters and returns

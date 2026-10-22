@@ -63,6 +63,17 @@ function runLookup(
 }
 
 describe('ssrf-safe webhook lookup', () => {
+    it.each(['64:ff9b::7f00:1', '64:ff9b:1::a00:1', '::ffff:0:7f00:1', '2002:7f00:1::1'])(
+        'blocks translation destinations returned by DNS before connect: %s', async address => {
+            await expect(runLookup({ addresses: [{ address, family: 6 }] })).rejects.toMatchObject({ code: 'EPRIVATEIP' });
+        },
+    );
+
+    it('allows ordinary public IPv6', async () => {
+        await expect(runLookup({ addresses: [{ address: '2606:4700:4700::1111', family: 6 }] }))
+            .resolves.toMatchObject({ address: '2606:4700:4700::1111', family: 6 });
+    });
+
     it('allows public IPs', async () => {
         const result = await runLookup({
             addresses: [{ address: '8.8.8.8', family: 4 }],

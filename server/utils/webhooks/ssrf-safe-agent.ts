@@ -162,6 +162,16 @@ export function isPrivateIpv6Address(value: string): boolean {
         return true;
     }
 
+    // Translation/tunneling ranges are not direct public destinations. Their
+    // effective IPv4 destination depends on operator routing, so reject the
+    // whole special-use prefix rather than guessing an embedding algorithm.
+    const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && (
+        words[2] === 0x0001 || words.slice(2, 6).every(word => word === 0)
+    );
+    const translated = words.slice(0, 4).every(word => word === 0)
+        && words[4] === 0xffff && words[5] === 0;
+    if (nat64 || translated || words[0] === 0x2002) return true;
+
     const embeddedIpv4 = extractEmbeddedIpv4(words);
     if (embeddedIpv4) {
         return isBlockedIpv4Address(embeddedIpv4);

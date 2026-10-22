@@ -647,7 +647,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Signed webhook delivery with guarded JSON mutations, current membership checks, atomic provider registration quotas, deferred rate limits, bounded response streams, retries, and SSRF protection."
+                    "summary": "Signed webhook delivery with guarded JSON mutations, current membership checks, atomic provider registration quotas, deferred rate limits, bounded response streams, retries, and SSRF protection. Private-address blocking also denies IPv6 translation and tunnel prefixes at admission and connection."
                 },
                 {
                     "name": "providers.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained Trash archive snapshots, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
+                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained Trash archive snapshots, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits. Verified commit receipts own quota accounting; device acknowledgements are scoped by workspace, user and device."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations with short codes."
+                    "summary": "Convex setup, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations with short codes. Host-controlled enrollment and receipt-bound native object ownership prevent direct-token enrollment and cross-workspace storage aliases."
                 },
                 {
                     "name": "provider-s3.md",
@@ -973,7 +973,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, batched host access checks, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery."
+                    "summary": "Operator configuration, batched host access checks, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery. Server activations and capabilities enforce operator safe mode, runtime loaders and workspace rollout policy."
                 },
                 {
                     "name": "admin-plugins.md",
