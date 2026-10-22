@@ -4,7 +4,7 @@ Use the managed `@or3/cloud` distribution for normal local or single-VPS deploym
 
 ## Before you start
 
-Install Docker Engine and Docker Compose v2. The operator CLI requires Node.js 20 or later to run through `npx`; the container owns the application dependencies. Supported container architectures are Linux amd64 and arm64, including those architectures through Docker on a local machine.
+Install Docker Engine and Docker Compose v2. The operator CLI requires Node.js 24.22.1 or later in the 24.x line to run through `npx`; the container owns the application dependencies. Supported container architectures are Linux amd64 and arm64, including those architectures through Docker on a local machine.
 
 `init` creates an `or3-cloud` folder for the deployment; run later operator commands from inside it. Do not install application dependencies or build OR3 source in that folder.
 

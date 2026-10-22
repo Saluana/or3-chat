@@ -11,6 +11,23 @@ const source = await readFile(resolve(root, 'packages/or3-cloud/src/package-info
 const versionMatch = source.match(/PACKAGE_VERSION\s*=\s*'([^']+)'/);
 const verifyRegistry = process.argv.includes('--registry');
 const qualifiedVersions = JSON.parse(await readFile(resolve(root, 'packages/create-or3-chat/first-party-versions.json'), 'utf8'));
+const nodeVersion = (await readFile(resolve(root, '.node-version'), 'utf8')).trim();
+if (!/^24\.\d+\.\d+$/.test(nodeVersion) || rootManifest.engines?.node !== `^${nodeVersion}`) {
+  throw new Error('The application engine must match the exact Node 24 baseline in .node-version.');
+}
+for (const packagePath of [
+  'packages/or3-cloud',
+  'packages/create-or3-chat',
+  'packages/or3-skills',
+  'packages/plugin-sdk',
+  'packages/plugin-sdk/templates/minimal-v2',
+  'packages/plugin-sdk/templates/portable-v1',
+]) {
+  const manifest = JSON.parse(await readFile(resolve(root, packagePath, 'package.json'), 'utf8'));
+  if (manifest.engines?.node !== rootManifest.engines.node) {
+    throw new Error(`${packagePath}: Node engine differs from the application (${rootManifest.engines.node}).`);
+  }
+}
 
 if (!versionMatch) throw new Error('Cloud CLI source must declare PACKAGE_VERSION.');
 if (rootManifest.version !== cloudManifest.version || cloudManifest.version !== versionMatch[1]) {

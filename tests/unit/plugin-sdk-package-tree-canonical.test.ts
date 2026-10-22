@@ -20,7 +20,7 @@ const GOLDEN_FIXTURES = [
     },
     {
         root: 'packages/plugin-sdk/templates/minimal-v2',
-        digest: 'sha256-c33cf020e185f050689916619ed399cc75ffa2341b91d8d58bbb6958577a4b8a',
+        digest: 'sha256-2ff2056d16d01319ce6e5419ac8781098abd3927ce3a07a5ea885ef0703a5774',
         manifestDigest: 'sha256-a4f070a7d5e8e26fa91c73a757538415550c1c9c36ef831a50848f20414bfb8d',
     },
 ] as const;

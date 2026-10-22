@@ -11,6 +11,21 @@ import { StreamMarkdown } from 'streamdown-vue';
 const SAMPLE_MD = `Here is some text before\n\n<or3-image hash="abc123def4567890abc123def4567890" alt="first"></or3-image>\n\nAnd another one: <or3-image hash="ffffffffffffffffffffffffffffffff" alt="second" data-extra="1"></or3-image>\n\nRegular **bold** markdown still works.`;
 
 describe('StreamMarkdown XML / custom element handling', () => {
+    it('renders inline and block math with the shared KaTeX renderer', async () => {
+        const wrapper = mount(StreamMarkdown, {
+            props: { content: 'Inline $$x^2$$.\n\n$$\n\\frac{1}{2}\n$$', parseIncompleteMarkdown: false },
+        });
+        try {
+            await expect.poll(() => wrapper.findAll('.katex').length).toBe(2);
+            expect(wrapper.findAll('math')).toHaveLength(2);
+            expect(wrapper.find('.katex-display .katex').exists()).toBe(true);
+            expect(wrapper.find('.katex-error').exists()).toBe(false);
+            expect(wrapper.find('.katex-base').exists()).toBe(true);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('currently strips custom <or3-image> tags (document baseline)', () => {
         const wrapper = mount({
             render() {

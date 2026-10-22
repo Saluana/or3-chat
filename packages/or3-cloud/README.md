@@ -5,7 +5,7 @@ application repository or installing its dependencies on the host.
 
 ## Quick start: local machine
 
-You need Docker Engine with Docker Compose v2 and Node.js 20 or later.
+You need Docker Engine with Docker Compose v2 and Node.js 24.22.1 or later in the 24.x line.
 
 ```sh
 npx @or3/cloud init --local

@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-21",
+  "node": "24.22.1",
+  "packages": [
+    {
+      "name": "or3-provider-basic-auth",
+      "previousVersion": "0.0.14",
+      "version": "0.0.15",
+      "sourceCommit": "3fc8007e3f85cd266b00a6649955360c1c59d807",
+      "tag": "v0.0.15",
+      "workflow": "https://github.com/Saluana/or3-provider-basic-auth/actions/runs/39694432312",
+      "workflowConclusion": "success",
+      "integrity": "sha512-B2P2mPKvReds9VEAWODU+18WSf3MPe1QFINvKuT3kcmnb7F8qB2TtZes+SzfIh3AfVkNGDxLqkwhbR0NRCnSiw==",
+      "shasum": "11583d296a63a6b051d112a8a86855fb32d792c6",
+      "tarball": "https://registry.npmjs.org/or3-provider-basic-auth/-/or3-provider-basic-auth-0.0.15.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.072Z"
+    },
+    {
+      "name": "or3-provider-clerk",
+      "previousVersion": "0.0.9",
+      "version": "0.0.10",
+      "sourceCommit": "21126ac49eac8d16edf4b8bf36cc1b21cb57aada",
+      "tag": "v0.0.10",
+      "workflow": "https://github.com/Saluana/or3-provider-clerk/actions/runs/39694431708",
+      "workflowConclusion": "success",
+      "integrity": "sha512-ZH5PhLbWEmOtEsbyCZmgTXYoDJqantfT4TBslo5lpDOvqjLeK5k1KvsxFhWxWzoOWaACv4YNbroN27uztDwj/Q==",
+      "shasum": "f5751ece04c0f1fc7fd9b0fb247bc31eb1347a4c",
+      "tarball": "https://registry.npmjs.org/or3-provider-clerk/-/or3-provider-clerk-0.0.10.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.061Z"
+    },
+    {
+      "name": "or3-provider-convex",
+      "previousVersion": "0.0.19",
+      "version": "0.0.20",
+      "sourceCommit": "6bbb194da39ba549e63907bcb812edb97089aac6",
+      "tag": "v0.0.20",
+      "workflow": "https://github.com/Saluana/or3-provider-convex/actions/runs/39694603408",
+      "workflowConclusion": "success",
+      "integrity": "sha512-3TRjh2JIWu/r2O1qWvOGrH5MRFizE5KNueC5jodtizEjlSQ2cgfE89MjxhEdffnRNeRdORAtAXNfiB9Hv9LryA==",
+      "shasum": "64d1eb2c350687943982b147290b8b7309605987",
+      "tarball": "https://registry.npmjs.org/or3-provider-convex/-/or3-provider-convex-0.0.20.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.068Z"
+    },
+    {
+      "name": "or3-provider-fs",
+      "previousVersion": "0.0.13",
+      "version": "0.0.14",
+      "sourceCommit": "f4e6788870177a6c168e5987cd61a3e08bce9e46",
+      "tag": "v0.0.14",
+      "workflow": "https://github.com/Saluana/or3-provider-fs/actions/runs/39694434045",
+      "workflowConclusion": "success",
+      "integrity": "sha512-VhBeh6MBgAVo32UgvTX/plycWWX0Up4HlckT3MLTUcksFNGjEfCBNoLZmTd8xVNKhbCjBL/YuLwJ3Mij0Zqg4w==",
+      "shasum": "731eff4e3be194e64ee794094a494c813c6e0082",
+      "tarball": "https://registry.npmjs.org/or3-provider-fs/-/or3-provider-fs-0.0.14.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.051Z"
+    },
+    {
+      "name": "or3-provider-s3",
+      "previousVersion": "0.0.12",
+      "version": "0.0.13",
+      "sourceCommit": "f7c692eaca0dea39707f107e01a66b6576d195c2",
+      "tag": "v0.0.13",
+      "workflow": "https://github.com/Saluana/or3-provider-s3/actions/runs/39694741274",
+      "workflowConclusion": "success",
+      "integrity": "sha512-dAXZsGJLytU/9+fkOSCdIcSpaNx4ZpzEI24pfW1TRb5fkfer4vFmSEPsE3cZtWnIizwmcq/rQXu7XwtSCrdpKA==",
+      "shasum": "c621f8e934b05eabca2d659f8ab12a52e625e5ff",
+      "tarball": "https://registry.npmjs.org/or3-provider-s3/-/or3-provider-s3-0.0.13.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.079Z"
+    },
+    {
+      "name": "or3-provider-sqlite",
+      "previousVersion": "0.0.19",
+      "version": "0.0.20",
+      "sourceCommit": "08ea857f7cf4bf6e6da134120fe608872a69ab28",
+      "tag": "v0.0.20",
+      "workflow": "https://github.com/Saluana/or3-provider-sqlite/actions/runs/39694661412",
+      "workflowConclusion": "success",
+      "integrity": "sha512-AoNLMSkMdcAkMadiwl94tz+aPHMGY8z7tt8GYU7XxIduhafPQEdaMkuR/DJ0s7NEq4Z1S+nzZBsxiUwZMDHHQA==",
+      "shasum": "7e9aa118791e972c2def471ac486e9b252220213",
+      "tarball": "https://registry.npmjs.org/or3-provider-sqlite/-/or3-provider-sqlite-0.0.20.tgz",
+      "registryVerifiedAt": "2026-10-21T23:45:07.077Z"
+    }
+  ],
+  "runtimeComparison": [
+    {
+      "name": "or3-provider-sqlite",
+      "previousVersion": "0.0.19",
+      "version": "0.0.20",
+      "runtimeFilesCompared": 88,
+      "changedRuntimeFiles": [],
+      "migrationImplementations": 26
+    },
+    {
+      "name": "or3-provider-fs",
+      "previousVersion": "0.0.13",
+      "version": "0.0.14",
+      "runtimeFilesCompared": 20,
+      "changedRuntimeFiles": [],
+      "migrationImplementations": 0
+    }
+  ]
+}

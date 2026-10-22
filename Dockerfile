@@ -16,13 +16,13 @@ FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87
 # version instead of inheriting whichever npm happens to ship in a refreshed
 # Node base image. npm is architecture-independent, so prepare it once on the
 # native BuildKit platform and copy it into each operator architecture.
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS operator-npm
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS operator-npm
 RUN npm install --global npm@11.6.2
 
 # This protocol runtime intentionally contains Node/npm plus the Docker client,
 # but none of the OR3 application output or runtime data. It is published as a
 # separately digest-pinned image and only the narrow operator service uses it.
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS dashboard-operator
+FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dashboard-operator
 COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
@@ -33,7 +33,7 @@ WORKDIR /operator
 # install manifests remain byte-identical when dependencies do not change, so
 # BuildKit can reuse npm ci across Cloud patch releases while the application
 # build below still receives the real release version from COPY . . .
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS dependency-manifests
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dependency-manifests
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/create-or3-chat/first-party-versions.json ./packages/create-or3-chat/first-party-versions.json
@@ -47,7 +47,7 @@ RUN node scripts/docker/prepare-manifest.mjs package.json && \
 # The Nuxt output is architecture-neutral and better-sqlite3 ships both Linux
 # runtime bindings in its package. Build it once on the native CI platform;
 # only the runtime and static operator tools vary across output architectures.
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 WORKDIR /app
 ENV NODE_ENV=development \
     NODE_OPTIONS=--max-old-space-size=4096 \
@@ -118,7 +118,7 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 # The distroless runtime keeps only Node, its required libraries, and the
 # pinned static multicall tool above. Both bases are pinned multi-arch
 # OCI indexes and the resulting architectures are scanned during release.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

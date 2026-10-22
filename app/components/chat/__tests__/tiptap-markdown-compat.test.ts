@@ -3,6 +3,8 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown, type MarkdownStorage } from 'tiptap-markdown';
 import { documentToMarkdown } from '~/utils/documents/document-to-markdown';
+import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-schema';
+import { markdownToTipTapDoc } from '~/utils/chat/markdownToTipTapDoc';
 
 const editors: Editor[] = [];
 
@@ -59,6 +61,38 @@ describe('tiptap-markdown compatibility', () => {
         const editor = createMarkdownEditor(source);
 
         expect(getMarkdown(editor)).toBe(source);
+    });
+
+    it('preserves nested document content when switching list item schemas and undoing', async () => {
+        const editor = new Editor({
+            extensions: await loadDocumentEditorExtensions(),
+            content: markdownToTipTapDoc('- Parent\n  - Child\n- Tail'),
+        });
+        editors.push(editor);
+        editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 });
+
+        expect(editor.commands.toggleTaskList()).toBe(true);
+        expect(editor.getJSON().content?.[0]).toMatchObject({
+            type: 'taskList',
+            content: [
+                { type: 'taskItem', content: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Parent' }] },
+                    { type: 'taskList', content: [{ type: 'taskItem', content: [
+                        { type: 'paragraph', content: [{ type: 'text', text: 'Child' }] },
+                    ] }] },
+                ] },
+                { type: 'taskItem', content: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Tail' }] },
+                ] },
+            ],
+        });
+        editor.state.doc.check();
+        expect(await documentToMarkdown(editor.getJSON())).toMatch(/^- \[ \] Parent\n+ +- \[ \] Child\n+- \[ \] Tail$/);
+
+        expect(editor.commands.undo()).toBe(true);
+        expect((await documentToMarkdown(editor.getJSON())).replace(/\n{2,}/g, '\n')).toBe('- Parent\n  - Child\n- Tail');
+        expect(editor.commands.redo()).toBe(true);
+        expect(editor.state.doc.textContent).toBe('ParentChildTail');
     });
 
     it('keeps text from unsupported inline HTML and handles empty documents', () => {

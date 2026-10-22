@@ -1,7 +1,7 @@
 # Local-only image for run-backup-restore-drill.ts. Build the current SSR app
 # first; this fixture copies its output rather than installing dependencies.
 FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS tools
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS distroless
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS distroless
 ARG SOURCE_REVISION
 ARG OR3_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Saluana/or3-chat"
@@ -22,7 +22,7 @@ VOLUME /data
 ENTRYPOINT ["/nodejs/bin/node", "/app/scripts/docker/runtime-entrypoint.mjs"]
 CMD ["/nodejs/bin/node", ".output/server/index.mjs"]
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS bookworm
+FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS bookworm
 ARG SOURCE_REVISION
 ARG OR3_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Saluana/or3-chat"

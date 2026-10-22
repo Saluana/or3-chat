@@ -78,7 +78,7 @@ bun add ./or3-plugin-sdk-2.0.0.tgz
 ```
 
 Bun 1.3.6 or newer must be on PATH for the CLI, bundling and starter tests.
-The library also supports Node.js 24 or newer. The tarball ships prebuilt ESM + type declarations under
+The library also supports Node.js 24.22.1 or newer on the 24.x line. The tarball ships prebuilt ESM + type declarations under
 `dist/`; no TypeScript toolchain is required to consume it. The
 developer-oriented `src/` is included for source inspection.
 

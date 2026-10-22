@@ -715,10 +715,10 @@ describe('or3 cloud wizard apply', () => {
             instanceDir,
         });
         expect(plan.commands.npm).toContain(
-            'or3-provider-basic-auth@0.0.14'
+            'or3-provider-basic-auth@0.0.15'
         );
-        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.13');
-        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.19');
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.14');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.20');
     });
 
     it('keeps installed release-qualified provider plugins valid JavaScript', async () => {
@@ -727,10 +727,10 @@ describe('or3 cloud wizard apply', () => {
         const pluginDir = resolve(packageDir, 'dist/runtime/server/plugins');
         await mkdir(pluginDir, { recursive: true });
         await writeFile(resolve(instanceDir, 'package.json'), JSON.stringify({
-            dependencies: { 'or3-provider-fs': '0.0.13' },
+            dependencies: { 'or3-provider-fs': '0.0.14' },
         }));
         await writeFile(resolve(packageDir, 'package.json'), JSON.stringify({
-            name: 'or3-provider-fs', version: '0.0.13',
+            name: 'or3-provider-fs', version: '0.0.14',
         }));
         const plugin = await readFile(
             resolve(process.cwd(), 'node_modules/or3-provider-fs/dist/runtime/server/plugins/register.js'),

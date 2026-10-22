@@ -682,8 +682,8 @@ export default defineNuxtConfig({
                             ? { cacheDir: resolve(__dirname, 'node_modules/.cache/vite-e2e-tool-cards') }
                             : {}),
         resolve: {
-            // Math renderers accept the root KaTeX patch release. Share it
-            // instead of bundling rehype's older copy alongside Mermaid's.
+            // The KaTeX override coordinates older Markdown/Mermaid ranges.
+            // Share that patched renderer with the root version's stylesheet.
             // These nested copies satisfy the root versions' declared ranges.
             // Share their state and helpers across Nuxt UI, Reka and Nuxt.
             dedupe: [

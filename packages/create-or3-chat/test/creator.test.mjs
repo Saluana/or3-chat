@@ -20,6 +20,10 @@ import {
 import { main as packagedMain } from '../dist/index.mjs';
 import { prepareDockerManifest } from '../../../scripts/docker/prepare-manifest.mjs';
 
+const qualifiedVersions = JSON.parse(await readFile(
+    new URL('../first-party-versions.json', import.meta.url), 'utf8'
+));
+
 test('parses the supported initializer flags', () => {
     assert.deepEqual(
         parseArgs([
@@ -166,7 +170,7 @@ test('Docker manifest preparation prunes inactive providers and replaces pinned 
         },
     });
 
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.11');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], qualifiedVersions['or3-provider-basic-auth']);
     assert.equal(manifest.dependencies['or3-provider-clerk'], undefined);
     assert.equal(manifest.dependencies['or3-provider-convex'], undefined);
     assert.equal(manifest.dependencies['or3-provider-s3'], undefined);
@@ -182,7 +186,8 @@ test('generated template has registry-clean first-party dependencies', async () 
         )
     );
     assert.equal(manifest.private, true);
-    assert.equal(manifest.engines.node, '>=24');
+    assert.equal(manifest.engines.node, '^24.22.1');
+    assert.equal((await readFile(new URL('.node-version', templateUrl), 'utf8')).trim(), '24.22.1');
     assert.equal(manifest.scripts.start, 'node scripts/cli/start.mjs');
     assert.equal(
         manifest.scripts['generate:static'],
@@ -204,11 +209,11 @@ test('generated template has registry-clean first-party dependencies', async () 
     const providerVersions = JSON.parse(
         await readFile(new URL('packages/create-or3-chat/first-party-versions.json', templateUrl), 'utf8')
     );
-    assert.equal(providerVersions['or3-provider-basic-auth'], '0.0.11');
+    assert.equal(providerVersions['or3-provider-basic-auth'], qualifiedVersions['or3-provider-basic-auth']);
     const dockerignore = await readFile(new URL('.dockerignore', templateUrl), 'utf8');
     assert.match(dockerignore, /^\.or3-initial-credentials$/m);
     assert.equal(manifest.dependencies['@or3/intern-client'], undefined);
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.11');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], qualifiedVersions['or3-provider-basic-auth']);
     for (const [name, version] of Object.entries(manifest.dependencies)) {
         if (String(version).startsWith('file:')) {
             assert.equal(name, '@or3/plugin-sdk');
