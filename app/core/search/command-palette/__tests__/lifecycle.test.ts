@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaletteCoordinator } from '../coordinator';
 
-const actions = new Map<string, () => void>();
-const addAction = vi.fn((name: string, fn: () => void) => {
+const actions = new Map<string, (payload?: unknown) => void>();
+const addAction = vi.fn((name: string, fn: (payload?: unknown) => void) => {
     actions.set(name, fn);
 });
-const removeAction = vi.fn((name: string, fn: () => void) => {
+const removeAction = vi.fn((name: string, fn: (payload?: unknown) => void) => {
     if (actions.get(name) === fn) actions.delete(name);
 });
 
@@ -30,6 +30,27 @@ describe('bindPaletteLifecycle', () => {
     });
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it('coalesces affected conversations and lets unknown mutations or sync require a full refresh', async () => {
+        const refreshSources = vi.fn(async () => undefined);
+        const { bindPaletteLifecycle } = await import('../lifecycle');
+        const dispose = bindPaletteLifecycle({ refreshSources } as unknown as PaletteCoordinator);
+        try {
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'a' });
+            actions.get('db.messages.upsert:action:after')?.({ entity: { thread_id: 'b' } });
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'a' });
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(['chat'], new Map([['chat', ['a', 'b']]]));
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'a' });
+            actions.get('db.messages.move:action:after')?.({ messageId: 'm', toThreadId: 'b' });
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(['chat']);
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'a' });
+            actions.get('sync.pull:action:applied')?.();
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(undefined);
+        } finally { dispose(); }
     });
 
     it('binds real mutation hooks and refreshes only affected sources', async () => {

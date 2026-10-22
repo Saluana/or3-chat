@@ -29,6 +29,7 @@ interface DocState {
     pendingTitleGeneration?: number;
     pendingContentGeneration?: number;
     editorConflicts?: Map<string, EditorConflictDraft>;
+    editorOwners?: number;
     nextGeneration: number;
     readGeneration?: number;
     flushPromise?: Promise<void>; // Track active flush operation
@@ -517,14 +518,14 @@ export function __peekDocumentStatus(
  */
 export async function releaseDocument(
     id: string,
-    opts: { flush?: boolean; deleteEntry?: boolean } = {}
+    opts: { flush?: boolean; deleteEntry?: boolean } = {},
+    db = getDb(),
 ) {
     // Rename to avoid shadowing the exported flush(id) function above.
     const { flush: shouldFlush = true, deleteEntry = true } = opts;
-    const db = getDb();
     const documentsMap = getDocumentsMap(db);
     const st = documentsMap.get(id);
-    if (!st) return;
+    if (!st || st.editorOwners) return;
     // Cancel any pending debounced save
     if (st.debouncedSave?.cancel) {
         st.debouncedSave.cancel();
@@ -538,7 +539,7 @@ export async function releaseDocument(
     }
     // Release is cache eviction, not a user-authorized discard. A failed save
     // or an edit staged while release awaited storage must remain retryable.
-    if (st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined || st.editorConflicts?.size) {
+    if (documentsMap.get(id) !== st || st.editorOwners || st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined || st.editorConflicts?.size) {
         return;
     }
     // Null record to drop heavy content reference; then optionally drop entry entirely.
@@ -559,6 +560,19 @@ export async function releaseDocument(
     if (deleteEntry) {
         documentsMap.delete(id);
     }
+}
+
+/** Keep a pane's buffer alive until its final editor closes, in its originating workspace. */
+export function retainDocumentEditor(id: string, db = getDb()): () => Promise<void> {
+    const st = ensure(id, db);
+    st.editorOwners = (st.editorOwners ?? 0) + 1;
+    let released = false;
+    return async () => {
+        if (released) return;
+        released = true;
+        st.editorOwners = Math.max(0, (st.editorOwners ?? 1) - 1);
+        if (!st.editorOwners) await releaseDocument(id, {}, db);
+    };
 }
 
 // HMR cleanup: clear all pending timers on module disposal

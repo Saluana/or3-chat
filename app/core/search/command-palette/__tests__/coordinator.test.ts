@@ -153,6 +153,24 @@ describe('createPaletteCoordinator', () => {
         coordinator.dispose();
     });
 
+    it('applies a conversation delta without reloading or dropping unrelated records', async () => {
+        vi.useRealTimers();
+        const resource = (id: string, title: string) => makeResource({ key: `chat:${id}`, recordId: id, title });
+        const load = vi.fn(async () => [resource('a', 'Old A'), resource('b', 'Keep B'), resource('c', 'Remove C')]);
+        const loadRecords = vi.fn(async () => ({ resources: [resource('a', 'Updated A')], removedKeys: ['chat:c'] }));
+        registerPaletteSource({ id: 'chat', label: 'Chats', order: 20,
+            category: CORE_PALETTE_CATEGORIES.find(category => category.id === 'chat')!, load, loadRecords });
+        const { createPaletteCoordinator } = await import('../coordinator');
+        const coordinator = createPaletteCoordinator({ debounceMs: 0 });
+        try {
+            await coordinator.ensureWarm();
+            await coordinator.refreshSources(['chat'], new Map([['chat', ['a', 'c']]]));
+            expect(load).toHaveBeenCalledTimes(1);
+            expect(loadRecords).toHaveBeenCalledWith(expect.anything(), ['a', 'c']);
+            expect(coordinator.getSnapshot().results.map(result => result.title).sort()).toEqual(['Keep B', 'Updated A']);
+        } finally { coordinator.dispose(); }
+    });
+
     it('reconciles existing source data and removes unregistered sources', async () => {
         vi.useRealTimers();
         const chatCategory = CORE_PALETTE_CATEGORIES.find((c) => c.id === 'chat')!;

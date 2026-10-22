@@ -33,13 +33,57 @@ export function createChatPaletteSource(): PaletteSearchSource {
             context.signal?.throwIfAborted();
             return buildChatResources(threads, messages, context);
         },
+        async loadRecords(context, recordIds) {
+            const db = await context.getDb() as Or3DB;
+            const affected = new Set(recordIds);
+            let frontier = [...affected];
+            // Reference descendants inherit edited ancestor text. Compacted and
+            // legacy branches do not inherit that text and need no refresh.
+            while (frontier.length) {
+                context.signal?.throwIfAborted();
+                const children = await db.threads.where('parent_thread_id').anyOf(frontier).toArray();
+                frontier = [];
+                for (const child of children) {
+                    if (child.branch_mode !== 'reference' || child.deleted || affected.has(child.id)) continue;
+                    affected.add(child.id);
+                    frontier.push(child.id);
+                }
+            }
+            const threads = new Map<string, Thread>();
+            const visited = new Set<string>();
+            frontier = [...affected];
+            while (frontier.length) {
+                context.signal?.throwIfAborted();
+                const rows = await db.threads.bulkGet(frontier);
+                frontier.forEach(id => visited.add(id));
+                const parents = new Set<string>();
+                for (const thread of rows) {
+                    if (!thread) continue;
+                    threads.set(thread.id, thread);
+                    if (!thread.deleted && thread.branch_mode === 'reference' && thread.parent_thread_id
+                        && !visited.has(thread.parent_thread_id)) parents.add(thread.parent_thread_id);
+                }
+                frontier = [...parents];
+            }
+            context.signal?.throwIfAborted();
+            const ids = [...threads.keys()];
+            const messages = ids.length
+                ? await db.messages.where('thread_id').anyOf(ids).filter(message => !message.deleted).toArray()
+                : [];
+            context.signal?.throwIfAborted();
+            return {
+                resources: buildChatResources([...threads.values()], messages, context, affected),
+                removedKeys: [...affected].filter(id => !threads.has(id) || threads.get(id)!.deleted).map(id => `chat:${id}`),
+            };
+        },
     };
 }
 
 export function buildChatResources(
     threads: readonly Thread[],
     messages: readonly Message[],
-    context: PaletteLoadContext
+    context: PaletteLoadContext,
+    resourceIds?: ReadonlySet<string>,
 ): PaletteResource[] {
     const byThread = new Map<string, Message[]>();
     for (const message of messages) {
@@ -54,7 +98,7 @@ export function buildChatResources(
     const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
     for (const thread of threads) {
         context.signal?.throwIfAborted();
-        if (thread.deleted) continue;
+        if (thread.deleted || resourceIds && !resourceIds.has(thread.id)) continue;
         let threadMessages: Message[];
         let incomplete = false;
         try { threadMessages = projectWorkspaceConversation(thread.id, threadMap, byThread); }

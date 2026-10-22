@@ -81,6 +81,7 @@ export interface OramaSearchOptions {
     boost?: Record<string, number>;
     tolerance?: number;
     offset?: number;
+    distinctOn?: string;
 }
 
 /**
@@ -121,6 +122,7 @@ export async function searchWithIndex(
     if (typeof options?.offset === 'number') {
         query.offset = options.offset;
     }
+    if (options?.distinctOn) query.distinctOn = options.distinctOn;
     const result = await searchFn(db, query);
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- searchFn may return null at runtime
     return result ?? { hits: [] };

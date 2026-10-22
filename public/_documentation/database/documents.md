@@ -106,7 +106,13 @@ Mounted editors capture and flush against their own DB before switching workspac
 
 Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
 
-Releasing a cached document drops heavy content and timers only when no staged or in-flight save remains. A failed flush retains the record, conflict baseline and edits for retry; release alone is not a successful-save acknowledgement. Reads also preserve an unsaved edit's original baseline and cannot replace a newer committed save. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+Mounted editors retain a shared cache lease in their originating DB. Closing or
+switching the final pane releases its cached document after saving; another split
+pane or a pane reopened during that save keeps its buffer. Source callers can use
+`retainDocumentEditor(id, db)` and its returned async release callback.
+`releaseDocument(id, options, db)` also accepts the originating DB.
+
+Releasing a cached document drops heavy content and timers only when no editor owner, conflict draft, staged edit or in-flight save remains. A failed flush retains the record, conflict baseline and edits for retry; release alone is not a successful-save acknowledgement. Reads also preserve an unsaved edit's original baseline and cannot replace a newer committed save. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
 
 The mounted editor shows a persistent save-failure banner with **Retry document save** while edits remain unsaved. Hiding the page captures and flushes the current editor buffer. Refreshing or leaving the page with staged edits requests the browser's unsaved-change confirmation and starts a save; dismissing the confirmation keeps the buffer open. An unload-time write is not a durability receipt. Browsers may suppress confirmations without prior user interaction, and forcibly closing the browser or accepting the confirmation can still discard an uncommitted edit.
 
@@ -124,7 +130,10 @@ insert literal text, including angle brackets, and refresh the result count as
 the document changes. Replacement, table editing and image controls respect
 the editor's read-only state. Image controls remain usable at reduced widths.
 Word counts separate paragraphs, hard breaks and table cells; moving the caret
-updates the active outline heading without recounting the document.
+updates the active outline heading without recounting the document. Statistics
+reuse unchanged immutable editor blocks and update after a 150 ms editing pause
+(at least once a second during continuous typing), outside the typing frame.
+Title-only edits skip body serialization and byte-size calculation.
 The slash insert menu closes when the caret moves away from the end of its
 query, preventing a stale command from deleting the wrong range.
 

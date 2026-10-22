@@ -125,6 +125,11 @@ palette shows a small retry notice for the failed source only. If the full-text
 index cannot be built, the palette automatically falls back to substring
 matching, so you never see an empty list because of an indexing error.
 
+Local chat edits refresh the affected conversation and its reference descendants
+using indexed database reads. Mutations without an originating conversation ID
+and incoming sync batches reconcile the source. Search selects the best matching
+chunk per resource so a long conversation cannot crowd out other results.
+
 ## Accessibility
 
 The palette is a combobox over a listbox: the query owns focus and announces the

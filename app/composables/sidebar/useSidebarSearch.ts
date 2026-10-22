@@ -177,11 +177,6 @@ export function useSidebarSearch(
     const busy = ref(false);
     const lastIndexedSignature = ref('');
     const cleanupFns: Array<() => void> = [];
-    const idMaps = {
-        thread: ref<Record<string, Thread>>({}),
-        project: ref<Record<string, Project>>({}),
-        doc: ref<Record<string, Post>>({}),
-    };
 
     cleanupFns.push(subscribeActiveWorkspaceDb(() => {
         lastQueryToken += 1;
@@ -192,9 +187,6 @@ export function useSidebarSearch(
         threadResults.value = [];
         projectResults.value = [];
         documentResults.value = [];
-        idMaps.thread.value = {};
-        idMaps.project.value = {};
-        idMaps.doc.value = {};
     }));
 
     /**
@@ -211,20 +203,16 @@ export function useSidebarSearch(
         if (sig === lastIndexedSignature.value && dbInstance) return;
         busy.value = true;
         try {
-            idMaps.thread.value = Object.fromEntries(
-                threads.value.map((t) => [t.id, t])
-            );
-            idMaps.project.value = Object.fromEntries(
-                projects.value.map((p) => [p.id, p])
-            );
-            idMaps.doc.value = Object.fromEntries(
-                documents.value.filter(isDocPost).map((d) => [d.id, d])
-            );
             const nextIndex = await buildIndex(docs);
             if (generation !== getWorkspaceGeneration()) return;
             dbInstance = nextIndex;
             lastIndexedSignature.value = sig;
             ready.value = true;
+        } catch {
+            if (generation !== getWorkspaceGeneration()) return;
+            dbInstance = null;
+            ready.value = false;
+            substringFallback(query.value.trim());
         } finally {
             if (generation === getWorkspaceGeneration()) busy.value = false;
         }
@@ -280,7 +268,10 @@ export function useSidebarSearch(
         const generation = getWorkspaceGeneration();
         if (!dbInstance) await ensureIndex();
         if (generation !== getWorkspaceGeneration()) return;
-        if (!dbInstance) return;
+        if (!dbInstance) {
+            substringFallback(query.value.trim());
+            return;
+        }
         const raw = query.value.trim();
         if (!raw) {
             threadResults.value = threads.value;

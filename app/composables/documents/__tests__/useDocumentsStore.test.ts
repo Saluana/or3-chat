@@ -6,6 +6,8 @@ import {
     flush,
     releaseDocument,
     useDocumentState,
+    retainDocumentEditor,
+    useAllDocumentsState,
 } from '../useDocumentsStore';
 import * as documentsDb from '~/db/documents';
 
@@ -61,6 +63,24 @@ describe('useDocumentsStore - memory leaks', () => {
         await releaseDocument('doc3', { deleteEntry: false });
 
         expect(state.record).toBeNull();
+    });
+
+    it('does not evict a new editor that opens while the previous owner is saving', async () => {
+        const doc = { id: 'release-reopen-race', title: 'Original',
+            content: { type: 'doc' as const, content: [] }, created_at: 1, updated_at: 1, deleted: false };
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(doc);
+        let finish!: (value: typeof doc) => void;
+        vi.mocked(documentsDb.updateDocumentInDb).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const close = retainDocumentEditor(doc.id);
+        await loadDocument(doc.id);
+        setDocumentTitle(doc.id, 'Saved title');
+        const closing = close();
+        const closeReopened = retainDocumentEditor(doc.id);
+        finish({ ...doc, title: 'Saved title' });
+        await closing;
+        expect(useAllDocumentsState().get(doc.id)?.record?.title).toBe('Saved title');
+        await closeReopened();
+        expect(useAllDocumentsState().has(doc.id)).toBe(false);
     });
 
     it('prevents duplicate saves with concurrent flush calls', async () => {

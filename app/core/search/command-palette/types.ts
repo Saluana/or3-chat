@@ -175,6 +175,11 @@ export interface PaletteSearchSource {
     pluginGeneration?: number;
     access?: PluginGatePolicy;
     load(context: PaletteLoadContext): Promise<readonly PaletteResource[]>;
+    /** Partial refresh of affected record IDs and dependents; removedKeys are resource keys. */
+    loadRecords?(context: PaletteLoadContext, recordIds: readonly string[]): Promise<{
+        resources: readonly PaletteResource[];
+        removedKeys: readonly string[];
+    }>;
     hydratePreview?(
         resource: PaletteResource,
         context: PalettePreviewContext

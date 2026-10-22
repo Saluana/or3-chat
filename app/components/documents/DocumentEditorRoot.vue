@@ -320,7 +320,7 @@ import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { acceptCommittedDocument, flush, loadDocument, refreshDocument, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, refreshDocument, retainDocumentEditor, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { liveQuery } from 'dexie';
@@ -410,6 +410,8 @@ const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
 let capturedTitle = '';
+let capturedEditorDocument: Editor['state']['doc'] | undefined;
+let documentOwnership: { id: string; db: ReturnType<typeof getDb>; release: () => Promise<void> } | undefined;
 const paneConflict = ref(false);
 const conflictKey = () => props.tabId ?? props.paneId ?? 'legacy';
 const externalWrite = ref(false);
@@ -503,14 +505,27 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     if (!current || current.isDestroyed) return;
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = undefined;
-    const json = current.getJSON();
     const currentState = useDocumentState(id, db);
     if (!currentState.record) return;
+    const sharedTitle = currentState.pendingTitle ?? currentState.record.title;
+    // ProseMirror documents are immutable. A title-only edit needs no body
+    // serialization, schema normalization, or byte-size calculation.
+    if (current.state.doc === capturedEditorDocument) {
+        paneConflict.value = titleDraft.value !== capturedTitle && sharedTitle !== capturedTitle && titleDraft.value !== sharedTitle;
+        setDocumentEditorConflict(id, conflictKey(), paneConflict.value
+            ? { title: titleDraft.value, content: capturedContent.value,
+                baselineTitle: capturedTitle, baselineContent: capturedContent.value }
+            : undefined, db);
+        if (paneConflict.value) return;
+        if (titleDraft.value !== capturedTitle && titleDraft.value !== sharedTitle) setDocumentTitle(id, titleDraft.value, db);
+        capturedTitle = titleDraft.value;
+        return;
+    }
+    const json = current.getJSON();
     const serialized = JSON.stringify(json);
     const baseline = JSON.stringify(capturedContent.value);
     const sharedContent = JSON.stringify(current.schema.nodeFromJSON(normalizedContent(currentState.pendingContent !== undefined
         ? currentState.pendingContent : currentState.record.content)).toJSON());
-    const sharedTitle = currentState.pendingTitle ?? currentState.record.title;
     // Shared pending state is not permission for an independently edited pane
     // to rebase its old body/title over another pane's newer draft.
     paneConflict.value = (serialized !== baseline && sharedContent !== baseline && serialized !== sharedContent)
@@ -527,6 +542,7 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     capturedTitle = titleDraft.value;
     if (serialized !== baseline && serialized !== sharedContent) setDocumentContent(id, json, db);
     capturedContent.value = json;
+    capturedEditorDocument = current.state.doc;
     setSerializedSize(new TextEncoder().encode(serialized).byteLength);
     syncCleanBuffers();
 }
@@ -925,6 +941,7 @@ function registerActiveSession(id: string): void {
             capturedContent.value = content;
             editor.value?.commands.setContent(content, { emitUpdate: false, errorOnInvalidContent: true });
             capturedContent.value = normalizedContent(editor.value?.getJSON() ?? content);
+            capturedEditorDocument = editor.value?.state.doc;
             setDocumentEditorConflict(id, conflictKey(), undefined, db);
             contentVersion.value += 1;
             setSerializedSize(new TextEncoder().encode(row.content).byteLength);
@@ -937,6 +954,12 @@ function registerActiveSession(id: string): void {
 
 async function loadActiveDocument(id: string) {
     const db = editorDb.value;
+    if (documentOwnership?.id !== id || documentOwnership.db !== db) {
+        const previous = documentOwnership;
+        documentOwnership = { id, db, release: retainDocumentEditor(id, db) };
+        void previous?.release();
+    }
+    capturedEditorDocument = undefined;
     const generation = ++loadGeneration;
     imageIntakeFailed.value = false;
     documentLoaded.value = false;
@@ -978,6 +1001,7 @@ async function loadActiveDocument(id: string) {
         paneConflict.value = true;
     } else {
         capturedContent.value = normalizedContent(editor.value?.getJSON() ?? capturedContent.value);
+        capturedEditorDocument = editor.value?.state.doc;
     }
     loadedDocumentId = id;
     if (inspectorDefaultApplied.value) inspectorOpen.value = inspectorOpensByDefault();
@@ -1119,15 +1143,22 @@ watch(isCompactToolbar, (compact) => {
     if (compact) inspectorOpen.value = false;
 });
 
-function syncCleanBuffers(): void {
-    const current = editor.value;
+function syncCleanTitle(): void {
     const record = state.value.record;
-    if (!documentLoaded.value || loadedDocumentId !== props.documentId || !current || current.isDestroyed || !record) return;
+    if (!documentLoaded.value || loadedDocumentId !== props.documentId || !record) return;
     const title = state.value.pendingTitle ?? record.title;
     if (titleDraft.value === capturedTitle || titleDraft.value === title) {
         titleDraft.value = title;
         capturedTitle = title;
     }
+}
+
+function syncCleanBuffers(): void {
+    const current = editor.value;
+    const record = state.value.record;
+    if (!documentLoaded.value || loadedDocumentId !== props.documentId || !current || current.isDestroyed || !record) return;
+    const title = state.value.pendingTitle ?? record.title;
+    syncCleanTitle();
     const content = current.schema.nodeFromJSON(normalizedContent(state.value.pendingContent !== undefined
         ? state.value.pendingContent : record.content)).toJSON() as TipTapDocument;
     const serialized = JSON.stringify(content);
@@ -1148,10 +1179,12 @@ function syncCleanBuffers(): void {
             paneConflict.value = false;
             setDocumentEditorConflict(props.documentId, conflictKey(), undefined, editorDb.value);
         }
+        capturedEditorDocument = current.state.doc;
     }
 }
 
-watch(() => [state.value.record, state.value.pendingTitle, state.value.pendingContent], syncCleanBuffers);
+watch(() => [state.value.record?.title, state.value.pendingTitle], syncCleanTitle);
+watch(() => [state.value.record?.content, state.value.pendingContent], syncCleanBuffers);
 
 watch(findOpen, async (open) => {
     if (open && !suppressFindAutofocus) {
@@ -1196,7 +1229,9 @@ onBeforeUnmount(() => {
         console.error('[DocumentEditor] Failed to save during teardown', caught);
     });
     editor.value?.destroy();
-    void pending;
+    const ownership = documentOwnership;
+    documentOwnership = undefined;
+    void pending.then(() => ownership?.release());
 });
 
 function onTitleInput(value: string | number | null) {

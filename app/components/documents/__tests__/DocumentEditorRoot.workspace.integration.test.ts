@@ -7,7 +7,7 @@ import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
-import { flush, loadDocument, releaseDocument, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { flush, loadDocument, releaseDocument, useAllDocumentsState, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -99,6 +99,37 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    it('releases a closed document only after its last split pane saves', async () => {
+        const { dbA, currentEditor } = await mountedWorkspaces();
+        const peer = shallowMount(DocumentEditorRoot, {
+            props: { documentId, paneId: 'peer-pane', tabId: 'peer-tab' },
+            global: { directives: { theme: () => {} }, stubs: {
+                UTextarea: Title, USelect: true, UDropdownMenu: true, UFormField: true, USwitch: true,
+            } },
+        });
+        try {
+            await vi.waitFor(() => expect(peer.emitted('ready')).toEqual([[documentId]]));
+            wrapper!.unmount(); wrapper = undefined;
+            await flushPromises();
+            expect(useAllDocumentsState().get(documentId)?.record?.title).toBe('A private title');
+            currentEditor().commands.insertContent('Peer survives closing its sibling. ');
+        } finally { peer.unmount(); }
+        await vi.waitFor(() => expect(useAllDocumentsState().has(documentId)).toBe(false));
+        expect((await dbA.posts.get(documentId))?.content).toContain('Peer survives closing its sibling.');
+    });
+
+    it('renames a document without serializing its unchanged editor body', async () => {
+        const { dbA, editor } = await mountedWorkspaces();
+        const serialize = vi.spyOn(editor, 'getJSON');
+        await wrapper!.getComponent(Title).get('textarea').setValue('Renamed document');
+        expect(serialize).not.toHaveBeenCalled();
+        serialize.mockRestore();
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        await getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!.ensureLocalDurability();
+        expect((await dbA.posts.get(documentId))?.title).toBe('Renamed document');
+        expect(editor.getText()).toBe('A original body');
+    });
+
     it.each(['clean', 'dirty'] as const)('reconciles a synced document while preserving a %s editor buffer', async (mode) => {
         const { dbA, editor } = await mountedWorkspaces();
         if (mode === 'dirty') {
@@ -466,7 +497,8 @@ describe('mounted document editor workspace lifecycle', () => {
         await vi.waitFor(() => expect(currentEditor().isDestroyed).toBe(false));
         await vi.waitFor(() => expect(wrapper!.getComponent(Title).props('modelValue')).toBe('A private title'));
         finish();
-        await vi.waitFor(() => expect(useDocumentState(documentId, dbB).status).toBe('idle'));
+        await flushPromises();
+        expect((await dbB.posts.get(documentId))?.title).toBe('B title');
         await flushPromises();
         expect(wrapper!.emitted('ready')).toHaveLength(2);
         expect(JSON.stringify(currentEditor().getJSON())).toContain('A original body');
@@ -503,7 +535,7 @@ describe('mounted document editor workspace lifecycle', () => {
         const { dbA, editor } = await mountedWorkspaces();
         editor.commands.setContent(content('A owner edit'), { emitUpdate: true });
         wrapper!.unmount(); wrapper = undefined;
-        await vi.waitFor(() => expect(useDocumentState(documentId).status).toBe('saved'));
+        await vi.waitFor(() => expect(useAllDocumentsState().has(documentId)).toBe(false));
         expect(JSON.stringify((await getDocumentInDb(dbA, documentId))?.content)).toContain('A owner edit');
     });
 });

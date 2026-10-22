@@ -15,14 +15,25 @@ export function bindPaletteLifecycle(
     let timer: ReturnType<typeof setTimeout> | null = null;
     const registrations: Array<{ name: string; fn: () => void }> = [];
     const pendingSourceIds = new Set<string>();
+    const pendingChatIds = new Set<string>();
+    let fullChatPending = false;
     let fullReconcilePending = false;
 
-    const scheduleReconcile = (sourceIds?: readonly string[]) => {
+    const scheduleReconcile = (sourceIds?: readonly string[], chatIds?: readonly string[]) => {
         if (!sourceIds) {
             fullReconcilePending = true;
             pendingSourceIds.clear();
+            pendingChatIds.clear();
         } else if (!fullReconcilePending) {
             for (const sourceId of sourceIds) pendingSourceIds.add(sourceId);
+            if (sourceIds.includes('chat')) {
+                if (!chatIds) {
+                    fullChatPending = true;
+                    pendingChatIds.clear();
+                } else if (!fullChatPending) {
+                    for (const id of chatIds) pendingChatIds.add(id);
+                }
+            }
         }
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
@@ -32,7 +43,11 @@ export function bindPaletteLifecycle(
                 : [...pendingSourceIds];
             fullReconcilePending = false;
             pendingSourceIds.clear();
-            void coordinator.refreshSources(ids);
+            const records = !fullChatPending && pendingChatIds.size
+                ? new Map([['chat', [...pendingChatIds]]]) : undefined;
+            pendingChatIds.clear();
+            fullChatPending = false;
+            void (records ? coordinator.refreshSources(ids, records) : coordinator.refreshSources(ids));
         }, RECONCILE_DEBOUNCE_MS);
     };
     const scheduleFullReconcile = () => scheduleReconcile();
@@ -130,8 +145,10 @@ export function bindPaletteLifecycle(
         },
     ];
     for (const group of localMutationGroups) {
-        const listener = () => scheduleReconcile(group.sourceIds());
         for (const name of group.names) {
+            const listener = (payload?: unknown) => scheduleReconcile(
+                group.sourceIds(), chatThreadIds(name, payload)
+            );
             (hooks.addAction as (name: string, fn: () => void) => void)(
                 name,
                 listener
@@ -143,6 +160,7 @@ export function bindPaletteLifecycle(
     return () => {
         if (timer) clearTimeout(timer);
         pendingSourceIds.clear();
+        pendingChatIds.clear();
         fullReconcilePending = false;
         for (const { name, fn } of registrations) {
             (hooks.removeAction as (name: string, fn: () => void) => void)(
@@ -151,4 +169,16 @@ export function bindPaletteLifecycle(
             );
         }
     };
+}
+
+function chatThreadIds(name: string, payload: unknown): string[] | undefined {
+    if (!payload || typeof payload !== 'object') return;
+    // Move notifications do not retain the old thread ID: reconcile the source.
+    if (name === 'db.messages.move:action:after') return;
+    const row = payload as Record<string, unknown>;
+    const entity = row.entity && typeof row.entity === 'object'
+        ? row.entity as Record<string, unknown> : row;
+    const id = name.startsWith('db.threads.') ? entity.id
+        : entity.thread_id ?? row.threadId ?? row.toThreadId;
+    return typeof id === 'string' && id ? [id] : undefined;
 }

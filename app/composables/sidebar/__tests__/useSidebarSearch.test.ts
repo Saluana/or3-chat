@@ -42,6 +42,19 @@ function setup() {
 }
 
 describe('sidebar search index invalidation', () => {
+    it.each(['create', 'build'] as const)('keeps substring search usable after an index %s failure and recovers on retry', async (stage) => {
+        const { search } = setup();
+        const operation = stage === 'create' ? vi.mocked(createDb) : vi.mocked(buildIndex);
+        operation.mockRejectedValueOnce(new Error('Index unavailable'));
+        search.query.value = 'orchid';
+        await expect(search.runSearch()).resolves.toBeUndefined();
+        expect(search.threadResults.value.map(row => row.id)).toEqual(['newer']);
+        await search.rebuild();
+        await search.runSearch();
+        expect(search.ready.value).toBe(true);
+        expect(search.threadResults.value.map(row => row.id)).toEqual(['newer']);
+    });
+
     it('indexes title changes even when another record has a newer timestamp', async () => {
         const { threads, search } = setup();
         await search.rebuild();

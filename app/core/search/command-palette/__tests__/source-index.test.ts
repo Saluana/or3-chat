@@ -48,6 +48,27 @@ describe('PaletteSourceIndex', () => {
         vi.resetModules();
     });
 
+    it('uses real Orama to return distinct resources without paging through a large conversation', async () => {
+        vi.doUnmock('~/core/search/orama');
+        const orama = await import('~/core/search/orama');
+        const search = vi.spyOn(orama, 'searchWithIndex');
+        const { PaletteSourceIndex } = await import('../source-index');
+        const index = new PaletteSourceIndex('chat');
+        try {
+            await index.replaceAll(Array.from({ length: 9 }, (_, i) => ({
+                ...resources[0]!, key: `chat:${i}`, recordId: String(i),
+                content: 'commonword lorem ipsum '.repeat(i ? 1 : 10_000),
+            })));
+            const result = await index.search({ term: 'commonword', limit: 8 });
+            expect(result.usingFallback).toBe(false);
+            expect(new Set(result.results.map(hit => hit.key)).size).toBe(8);
+            expect(search).toHaveBeenCalledTimes(1);
+            const scoped = await index.search({ term: 'commonword', limit: 1,
+                accepts: resource => resource.recordId === '8' });
+            expect(scoped.results.map(hit => hit.recordId)).toEqual(['8']);
+        } finally { search.mockRestore(); index.dispose(); }
+    });
+
     it('falls back to substring matching when forced', async () => {
         vi.doMock('~/core/search/orama', () => ({
             createDb: vi.fn(async () => {

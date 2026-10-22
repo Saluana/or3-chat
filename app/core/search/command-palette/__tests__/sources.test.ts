@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildChatResources } from '../sources/chat-source';
+import { createChatPaletteSource, buildChatResources } from '../sources/chat-source';
 import { postToDocumentResource } from '../sources/document-source';
 import { projectToResource } from '../sources/project-source';
 import { fileMetaToResource, isImageFileMeta } from '../sources/image-source';
@@ -16,6 +16,38 @@ const context: PaletteLoadContext = {
 };
 
 describe('palette source adapters', () => {
+    it('refreshes only affected conversations and reference descendants using indexed reads', async () => {
+        const { Or3DB } = await import('~/db/client');
+        const db = new Or3DB(`palette-delta-${crypto.randomUUID()}`);
+        const row = (id: string, parent?: string, mode = 'reference') => ({ id, title: id,
+            updated_at: 1, created_at: 1, clock: 1, deleted: false, pinned: false,
+            forked: !!parent, status: 'ready' as const,
+            ...(parent ? { parent_thread_id: parent, branch_mode: mode, anchor_message_id: `m-${parent}` } : {}),
+        });
+        try {
+            await db.threads.bulkPut([row('root'), row('branch', 'root'), row('child', 'branch'),
+                row('copy', 'root', 'copy'), ...Array.from({ length: 50 }, (_, i) => row(`unrelated-${i}`))] as never[]);
+            await db.messages.bulkPut((await db.threads.toArray()).map(thread => ({
+                id: `m-${thread.id}`, thread_id: thread.id, role: 'user', index: 0,
+                data: { content: `body ${thread.id}` }, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+            })) as never[]);
+            const source = createChatPaletteSource();
+            const localContext = { ...context, getDb: async () => db };
+            await db.messages.update('m-root', { data: { content: 'revised ancestor' } });
+            const expected = (await source.load(localContext)).filter(resource => ['root', 'branch', 'child'].includes(resource.recordId));
+            const threadScan = vi.spyOn(db.threads, 'toArray');
+            const messageScan = vi.spyOn(db.messages, 'toArray');
+            const delta = await source.loadRecords!(localContext, ['root']);
+            expect([...delta.resources].sort((a, b) => a.key.localeCompare(b.key))).toEqual(expected.sort((a, b) => a.key.localeCompare(b.key)));
+            expect(delta.resources.find(resource => resource.recordId === 'child')?.content).toContain('revised ancestor');
+            expect(threadScan).not.toHaveBeenCalled();
+            expect(messageScan).not.toHaveBeenCalled();
+            await db.threads.update('child', { deleted: true });
+            expect((await source.loadRecords!(localContext, ['child'])).removedKeys).toEqual(['chat:child']);
+            threadScan.mockRestore(); messageScan.mockRestore();
+        } finally { await db.delete(); }
+    });
+
     it('retains visible history across more than 128 reference generations', () => {
         const threads = Array.from({ length: 130 }, (_, index) => ({
             id: `thread-${index}`, title: `Branch ${index}`, deleted: false, updated_at: 1,

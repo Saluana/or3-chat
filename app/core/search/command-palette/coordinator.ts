@@ -52,7 +52,7 @@ export interface PaletteCoordinator {
     getSnapshot(): PaletteCoordinatorSnapshot;
     subscribe(listener: SnapshotListener): () => void;
     ensureWarm(): Promise<void>;
-    refreshSources(sourceIds?: readonly string[]): Promise<void>;
+    refreshSources(sourceIds?: readonly string[], recordIds?: ReadonlyMap<string, readonly string[]>): Promise<void>;
     retrySource(sourceId: string): Promise<void>;
     getResource(
         sourceId: string,
@@ -135,10 +135,11 @@ export function createPaletteCoordinator(options?: {
     }
 
     function loadContext(signal?: AbortSignal): PaletteLoadContext {
+        const db = getDb();
         return {
             workspaceId: getActiveWorkspaceId() ?? 'default',
             workspaceGeneration,
-            getDb: async () => getDb(),
+            getDb: async () => db,
             canOpenNewPane,
             signal,
         };
@@ -186,6 +187,7 @@ export function createPaletteCoordinator(options?: {
         generation: number,
         options?: {
             sourceIds?: ReadonlySet<string>;
+            recordIds?: ReadonlyMap<string, readonly string[]>;
             signal?: AbortSignal;
         }
     ): Promise<void> {
@@ -228,16 +230,26 @@ export function createPaletteCoordinator(options?: {
                 if (!entry) return;
                 try {
                     throwIfAborted(options?.signal);
-                    const resources = await abortable(
-                        source.load(context),
-                        options?.signal
-                    );
+                    const recordIds = options?.recordIds?.get(source.id);
+                    const delta = entry.ready && recordIds && source.loadRecords
+                        ? await abortable(source.loadRecords(context, recordIds), options?.signal)
+                        : undefined;
+                    const resources = delta?.resources ?? await abortable(source.load(context), options?.signal);
                     throwIfAborted(options?.signal);
                     if (isDisposed() || generation !== workspaceGeneration) return;
                     if (bound.get(source.id) !== entry) {
                         return;
                     }
-                    if (entry.ready) {
+                    if (delta) {
+                        for (const key of delta.removedKeys) {
+                            throwIfAborted(options?.signal);
+                            await entry.index.removeResource(key);
+                        }
+                        for (const resource of resources) {
+                            throwIfAborted(options?.signal);
+                            await entry.index.upsertResource(resource, { signal: options?.signal });
+                        }
+                    } else if (entry.ready) {
                         await entry.index.reconcileAll(resources, {
                             signal: options?.signal,
                         });
@@ -645,7 +657,7 @@ export function createPaletteCoordinator(options?: {
         await refreshSources([sourceId]);
     }
 
-    function refreshSources(sourceIds?: readonly string[]): Promise<void> {
+    function refreshSources(sourceIds?: readonly string[], recordIds?: ReadonlyMap<string, readonly string[]>): Promise<void> {
         if (!sourceIds) {
             invalidateFullWarm();
             return warmPromise ?? Promise.resolve();
@@ -669,6 +681,7 @@ export function createPaletteCoordinator(options?: {
                 try {
                     await reconcileSources(generation, {
                         sourceIds: ids,
+                        recordIds,
                         signal: controller.signal,
                     });
                     if (!controller.signal.aborted) {

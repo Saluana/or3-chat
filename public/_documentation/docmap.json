@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, coverage, and workspace-scoped action feedback."
+                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, accurate statistics, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
+                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
                 },
                 {
                     "name": "prompts.md",

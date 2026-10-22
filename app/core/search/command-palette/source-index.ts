@@ -141,7 +141,6 @@ export class PaletteSourceIndex {
         try {
             await insertDocumentsBatched(db, docs, {
                 batchSize: PALETTE_INSERT_BATCH_SIZE,
-                yieldBetweenBatches: false,
                 signal: options?.signal,
             });
         } catch (error) {
@@ -224,10 +223,10 @@ export class PaletteSourceIndex {
                         PALETTE_ORAMA_LIMIT,
                         Math.min(100, limit * 3)
                     );
-                    const hits: Array<{
-                        document: PaletteIndexDocument;
-                        score: number;
-                    }> = [];
+                    // Orama scores once per page and returns the best chunk of
+                    // each resource. A long conversation cannot consume pages
+                    // of duplicate chunks before another result is considered.
+                    const hits = new Map<string, ReturnType<typeof normalizeOramaHits>[number]>();
                     let offset = 0;
                     let grouped: PaletteResult[] = [];
                     while (grouped.length < limit) {
@@ -242,20 +241,28 @@ export class PaletteSourceIndex {
                             },
                             tolerance,
                             offset,
+                            distinctOn: 'resourceKey',
                         });
                         assertIndexCurrent();
                         const pageHits = normalizeOramaHits(raw.hits);
-                        hits.push(...pageHits);
+                        for (const hit of pageHits) {
+                            const resource = this.resources.get(hit.document.resourceKey);
+                            if (resource && (!options.accepts || options.accepts(resource))) {
+                                hits.set(resource.key, hit);
+                            }
+                        }
                         grouped = groupHitsByResource(
-                            hits,
+                            [...hits.values()],
                             this.resources,
                             term
                         ).filter((result) => {
                             const resource = this.resources.get(result.key);
                             return Boolean(resource && (!options.accepts || options.accepts(resource)));
                         });
-                        if (raw.hits.length < pageSize) break;
+                        if (grouped.length >= limit || raw.hits.length < pageSize) break;
                         offset += raw.hits.length;
+                        await new Promise<void>(resolve => setTimeout(resolve, 0));
+                        assertIndexCurrent();
                     }
                     return finish({
                         results: grouped.slice(0, limit),
