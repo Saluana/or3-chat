@@ -30,6 +30,7 @@ interface ContentPartLike {
 
 interface RawMessageLike {
     id?: string;
+    thread_id?: string;
     stream_id?: string;
     role?: 'user' | 'assistant' | 'system' | 'tool';
     text?: string;
@@ -97,6 +98,8 @@ export type UiChatMessagePart =
 export interface UiChatMessage {
     data?: Record<string, unknown>;
     id: string;
+    /** Stored owner of an inherited message; chat actions still use the pane. */
+    sourceThreadId?: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
     text: string; // flattened text + markdown image placeholders
     file_hashes?: string[];
@@ -293,6 +296,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
 
     return {
         id,
+        ...(raw.thread_id ? { sourceThreadId: raw.thread_id } : {}),
         role,
         text,
         file_hashes,

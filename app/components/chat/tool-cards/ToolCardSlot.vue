@@ -33,7 +33,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ resize: [] }>();
 const bridge = useToolCardChatBridge();
-const scope = captureCardChatScope(bridge?.threadId.value ?? null);
+const scope = captureCardChatScope(bridge?.threadId.value ?? null, props.message.sourceThreadId ?? bridge?.threadId.value ?? null);
 const root = ref<HTMLElement>();
 const near = ref(false);
 const mountMs = ref<number>();
@@ -188,7 +188,8 @@ async function readPersistedState() {
   const data = row?.data;
   return row &&
     !row.deleted &&
-    row.thread_id === scope.threadId &&
+    row.thread_id === scope.sourceThreadId &&
+    row.role === "assistant" &&
     data &&
     typeof data === "object" &&
     "tool_cards" in data

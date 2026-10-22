@@ -31,7 +31,7 @@ export default defineNuxtPlugin(async () => {
         import('~/core/sync/cursor-manager'), import('~/core/sync/hook-bridge'), import('~/core/sync/subscription-manager'),
     ]);
 
-    const { logoutCleanup } = await import('~/utils/logout-cleanup');
+    const { logoutCleanup, clearDevicePluginSecrets } = await import('~/utils/logout-cleanup');
     // A failed session request must leave startup available for the lock page's
     // error/retry flow. It also isn't evidence that local user data needs cleanup.
     const sessionChecked = await refresh().then(() => true, () => false);
@@ -59,21 +59,22 @@ export default defineNuxtPlugin(async () => {
         await cleanup;
     }
 
-    // Register before workspace management so an account change captures the
-    // previous DB and clears memory synchronously, even without a signed-out
-    // intermediate session. Same-user workspace switches retain the key.
+    // Register before workspace management so an account change clears old
+    // credentials synchronously. Remember the owner across transient null or
+    // signed-out states while provider confirmation is still pending.
+    let credentialOwner = initialSession?.authenticated ? initialSession.user?.id : undefined;
     watch(
         () => data.value?.session,
-        (newSession, oldSession) => {
-            if (
-                oldSession?.authenticated &&
-                newSession?.authenticated &&
-                oldSession.user?.id !== newSession.user?.id
-            ) {
+        (newSession) => {
+            if (!newSession?.authenticated) return;
+            const userId = newSession.user?.id;
+            if (credentialOwner && credentialOwner !== userId) {
+                clearDevicePluginSecrets();
                 void clearPersistedUserApiKey().catch(() => {
                     // Best-effort; memory and pending hydration are cleared first.
                 });
             }
+            credentialOwner = userId;
         },
         { flush: 'sync' }
     );

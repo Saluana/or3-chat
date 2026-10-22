@@ -146,7 +146,9 @@ and never becomes a model message. Writes replace only the call's entry inside
 the normal message transaction. Unmount/pagehide flush pending writes.
 A captured workspace DB and generation fence stale cards after a switch.
 Accepted saves finish on their original thread during navigation within the same
-workspace. Saves to a call are serialized across panes and remounts in the same
+workspace. On a reference branch, an inherited card reads and saves state on its
+stored source message; `send(text)` still uses the current branch pane. Copied
+messages have independent state. Saves to a call are serialized across panes and remounts in the same
 app, with only the latest pending value retained. Mounted cards observe their
 persisted entry, including synced changes and filter-normalized values. Save
 completion reconciles optimistic state with storage, so delayed hooks cannot

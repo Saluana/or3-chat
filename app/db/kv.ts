@@ -373,10 +373,9 @@ export async function getKvRecordByName(name: string, targetDb: Or3DB = getDb())
     };
 }
 
-// Convenience helpers for auth/session flows
 /**
  * Purpose:
- * Set or update a KV record by name.
+ * Prepare a KV write without running extension hooks in a caller-owned transaction.
  *
  * Behavior:
  * Creates the record if missing or updates the existing row with clocks.
@@ -385,9 +384,9 @@ export async function getKvRecordByName(name: string, targetDb: Or3DB = getDb())
  * - Uses `kv:${name}` as the id for new records.
  *
  * Non-Goals:
- * - Does not perform transactional writes across tables.
+ * - Does not change the generic KV notification contract.
  */
-export async function setKvByName(
+export async function prepareKvByName(
     name: string,
     value: string | null,
     targetDb: Or3DB = getDb(),
@@ -397,7 +396,7 @@ export async function setKvByName(
         readonly isValid?: () => boolean;
         readonly quota?: StorageQuota;
     } = {}
-): Promise<Kv> {
+) {
     throwIfRevoked(options);
     throwIfBadClock(options.ifClock);
     await ensureDbOpen(targetDb);
@@ -442,7 +441,7 @@ export async function setKvByName(
             ? (filtered as Kv)
             : record;
     let committedEntity = kvEntity;
-    await targetDb.transaction(
+    const commit = () => targetDb.transaction(
         'rw',
         getWriteTxTableNames(targetDb, 'kv', { includeTombstones: true }),
         async () => {
@@ -498,10 +497,28 @@ export async function setKvByName(
             { op: 'write', entity: 'kv', action: 'upsertByName' },
             { rethrow: true }
         );
-        await Dexie.waitFor(hooks.doAction('db.kv.upsertByName:action:after', transactionEntity));
+    }).then(() => committedEntity);
+    return {
+        commit,
+        afterCommit: () => hooks.doAction('db.kv.upsertByName:action:after', committedEntity),
+    };
+}
+
+/** Preserve generic KV notification/revocation semantics in its owning transaction. */
+export async function setKvByName(
+    name: string,
+    value: string | null,
+    targetDb: Or3DB = getDb(),
+    options: Parameters<typeof prepareKvByName>[3] = {},
+): Promise<Kv> {
+    const prepared = await prepareKvByName(name, value, targetDb, options);
+    let entity!: Kv;
+    await targetDb.transaction('rw', getWriteTxTableNames(targetDb, 'kv', { includeTombstones: true }), async () => {
+        entity = await prepared.commit();
+        await Dexie.waitFor(prepared.afterCommit());
         throwIfRevoked(options);
     });
-    return committedEntity;
+    return entity;
 }
 
 /**

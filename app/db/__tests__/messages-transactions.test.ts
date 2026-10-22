@@ -26,8 +26,15 @@ vi.mock('../../core/hooks/useHooks', () => ({
 }));
 
 import { Or3DB } from '../client';
-import { ref } from 'vue';
-import { captureCardChatScope, createToolCardChatBridge } from '~/composables/chat/tool-card-chat-bridge';
+import { ref, defineComponent, h } from 'vue';
+import { mount } from '@vue/test-utils';
+import { captureCardChatScope, createToolCardChatBridge, provideToolCardChatBridge } from '~/composables/chat/tool-card-chat-bridge';
+import ToolCardSlot from '~/components/chat/tool-cards/ToolCardSlot.vue';
+import { vueCard } from '@or3/plugin-sdk/cards/vue';
+import type { ToolCardContext } from '@or3/plugin-sdk/cards';
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { projectTranscriptForUi, projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { buildOpenRouterMessages } from '~/core/auth/openrouter-build';
 import { pluginOk } from '@or3/plugin-sdk';
 import { makeAssistantPersister, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import {
@@ -88,6 +95,7 @@ function makeMessage(
 
 describe('message transaction and ordering contracts', () => {
     beforeEach(async () => {
+        vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected network request in synthetic message test'); }));
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-01-02T03:04:05.000Z'));
         testState.doAction.mockReset();
@@ -98,6 +106,7 @@ describe('message transaction and ordering contracts', () => {
 
     afterEach(async () => {
         vi.useRealTimers();
+        vi.unstubAllGlobals();
         const db = testState.db;
         testState.db = null;
         if (db) {
@@ -129,7 +138,7 @@ describe('message transaction and ordering contracts', () => {
         }
     });
 
-    it('keeps same-call saves ordered across asynchronous preparation hooks and waits for active saves', async () => {
+    it.each(['same pane', 'reference branch'])('keeps same-call saves ordered across asynchronous hooks from %s', async pane => {
         vi.useRealTimers();
         const db = testState.db!;
         await db.messages.put(makeMessage('card', 'original', 1, { role: 'assistant' }));
@@ -149,8 +158,11 @@ describe('message transaction and ordering contracts', () => {
         const first = bridge.writeState('card', 'call', 1, scope);
         const firstFlush = bridge.flush();
         await firstEntered;
-        const second = bridge.writeState('card', 'call', 2, scope);
-        const secondFlush = bridge.flush();
+        const secondBridge = pane === 'same pane' ? bridge
+            : createToolCardChatBridge({ threadId: ref('branch'), busy: ref(false), send: async () => pluginOk(undefined) });
+        const secondScope = pane === 'same pane' ? scope : { ...captureCardChatScope('branch'), sourceThreadId: 'original' };
+        const second = secondBridge.writeState('card', 'call', 2, secondScope);
+        const secondFlush = secondBridge.flush();
         // Allow an incorrectly concurrent second transaction to complete first.
         await new Promise(resolve => setTimeout(resolve, 100));
         release();
@@ -158,6 +170,55 @@ describe('message transaction and ordering contracts', () => {
         expect((await first).ok).toBe(true);
         expect((await second).ok).toBe(true);
         expect((await db.messages.get('card'))?.data).toMatchObject({ tool_cards: { call: { state: 2 } } });
+    });
+
+    it('reloads and saves inherited card state while sending through the branch pane', async () => {
+        vi.useRealTimers();
+        const db = testState.db!;
+        await db.threads.bulkPut([makeThread('source'), makeThread('branch', {
+            parent_thread_id: 'source', anchor_message_id: 'inherited-card', anchor_index: 1, branch_mode: 'reference', forked: true,
+        })]);
+        await db.messages.put(makeMessage('inherited-card', 'source', 1, { role: 'assistant', data: {
+            content: '', tool_calls: [{ id: 'call', name: 'fixture_card', args: '{}', status: 'complete', result: '{}' }],
+            tool_cards: { call: { v: 1, state: { answer: 'A' }, updated_at: 1 } },
+        } }));
+        const projection = await resolveThreadProjection('branch', db);
+        const canonical = storedMessagesToCanonicalTranscript(projection.messages);
+        const message = projectTranscriptForUi(canonical)[0]!;
+        const call = message.toolCalls![0]!;
+        const send = vi.fn(async () => pluginOk(undefined));
+        const bridge = createToolCardChatBridge({ threadId: ref('branch'), busy: ref(false), send });
+        let card!: ToolCardContext;
+        const probe = defineComponent({ props: ['card'], setup(props) {
+            card = props.card as ToolCardContext;
+            return () => h('output', JSON.stringify(card.state));
+        } });
+        vi.stubGlobal('IntersectionObserver', class {
+            constructor(readonly callback: (entries: unknown[]) => void) {}
+            observe(target: Element) { this.callback([{ target, isIntersecting: true, intersectionRatio: 1 }]); }
+            disconnect() {}
+        });
+        vi.stubGlobal('navigator', { userActivation: { isActive: true } });
+        const wrapper = mount(defineComponent({ setup() {
+            provideToolCardChatBridge(bridge);
+            return () => h(ToolCardSlot, { message, call, binding: {
+                tool: call.name, ownerPluginId: null, source: { kind: 'page', module: vueCard(probe) },
+            } });
+        } }));
+        try {
+            await vi.waitFor(() => expect(wrapper.text()).toContain('A'));
+            await db.messages.update('inherited-card', { data: { tool_cards: { call: { v: 1, state: { answer: 'Synced' }, updated_at: 2 } } } });
+            await vi.waitFor(() => expect(wrapper.text()).toContain('Synced'));
+            const saving = card.setState({ answer: 'B' });
+            await bridge.flush();
+            expect((await saving).ok).toBe(true);
+            expect((await db.messages.get('inherited-card'))?.data).toMatchObject({ tool_cards: { call: { state: { answer: 'B' } } } });
+            expect(await db.messages.where('thread_id').equals('branch').count()).toBe(0);
+            expect((await card.send('Answer B')).ok).toBe(true);
+            expect(send).toHaveBeenCalledWith('Answer B', expect.objectContaining({ message_id: 'inherited-card', call_id: 'call' }));
+            const wire = await buildOpenRouterMessages(projectTranscriptForOpenRouter(canonical));
+            expect(JSON.stringify(wire)).not.toMatch(/sourceThreadId|tool_cards|card_origin/);
+        } finally { wrapper.unmount(); await bridge.flush(); }
     });
 
     it('appends with sparse indexes, serializes file hashes, and updates the thread atomically', async () => {
@@ -203,7 +264,8 @@ describe('message transaction and ordering contracts', () => {
         await db.messages.bulkPut([
             makeMessage('source-move', 'source', 1000),
             makeMessage('source-copy', 'source', 2000, {
-                data: { content: 'preserved' },
+                role: 'assistant',
+                data: { content: 'preserved', tool_cards: { call: { v: 1, state: { answer: 'Original' }, updated_at: 1 } } },
             }),
             makeMessage('destination-existing', 'destination', 3000),
         ]);
@@ -239,6 +301,12 @@ describe('message transaction and ordering contracts', () => {
             last_message_at: 1767323045,
             clock: 12,
         });
+        const bridge = createToolCardChatBridge({ threadId: ref('destination'), busy: ref(false), send: async () => pluginOk(undefined) });
+        const saving = bridge.writeState(copied!.id, 'call', { answer: 'Copied' }, captureCardChatScope('destination'));
+        await bridge.flush();
+        expect((await saving).ok).toBe(true);
+        expect((await db.messages.get(copied!.id))?.data).toMatchObject({ tool_cards: { call: { state: { answer: 'Copied' } } } });
+        expect((await db.messages.get('source-copy'))?.data).toMatchObject({ tool_cards: { call: { state: { answer: 'Original' } } } });
     });
 
     it('inserts at a midpoint without rewriting existing sparse indexes', async () => {

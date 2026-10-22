@@ -126,7 +126,7 @@ function keepStoredUnknownFields(
 }
 
 /** Project policy writes are CAS transactions in the captured workspace, including blob ownership. */
-async function save(
+async function prepareProjectRecord(
     scope: WorkspaceOperationScope,
     projectId: string,
     type: string,
@@ -136,7 +136,7 @@ async function save(
     hashes: string[] = [],
     deleted = false,
     newDocument?: Post,
-): Promise<Post> {
+) {
     scope.assertCurrent('write');
     // Dexie returns null outside a transaction, despite its non-nullable type.
     const currentTransaction = Dexie.currentTransaction as typeof Dexie.currentTransaction | null;
@@ -179,15 +179,15 @@ async function save(
         filtered.deleted !== deleted
     )
         throw new Error('A filter changed the project record.');
-    // This helper can join an automatic-memory transaction. Hooks may yield
-    // to browser tasks, so keep that transaction alive only around hook work.
+    // Generic saves may join an existing transaction. Classified memory prepares
+    // these hooks before opening its atomic write transaction.
     await Dexie.waitFor(hooks.doAction('db.posts.upsert:action:before', {
         entity: filtered,
         tableName: 'posts',
     }));
     let row = filtered;
     const referenceChanges: CoreHookPayloadMap['db.files.refchange:action:after'][0][] = [];
-    await scope.db.transaction(
+    const commit = () => scope.db.transaction(
         'rw',
         getWriteTxTableNames(
             scope.db,
@@ -401,6 +401,7 @@ async function save(
             };
             await scope.db.posts.put(row);
             scope.assertCurrent('write');
+            return row;
         },
     );
     const notify = async () => {
@@ -420,10 +421,30 @@ async function save(
             console.warn('[projects] Record saved; notification failed', error);
         }
     };
-    // A nested transaction's completion is only a savepoint. Its caller owns
-    // the durable commit; awaiting that commit here would deadlock the caller.
-    if (outerTransaction) outerTransaction.on('complete', () => { void Dexie.ignoreTransaction(notify); });
-    else await notify();
+    return {
+        commit,
+        afterCommit: async () => {
+            // A nested completion is a savepoint; its caller owns the durable commit.
+            if (outerTransaction) outerTransaction.on('complete', () => { void Dexie.ignoreTransaction(notify); });
+            else await notify();
+        },
+    };
+}
+
+async function save(
+    scope: WorkspaceOperationScope,
+    projectId: string,
+    type: string,
+    content: unknown,
+    id: string,
+    expected: ProjectRecordExpectation,
+    hashes: string[] = [],
+    deleted = false,
+    newDocument?: Post,
+): Promise<Post> {
+    const prepared = await prepareProjectRecord(scope, projectId, type, content, id, expected, hashes, deleted, newDocument);
+    const row = await prepared.commit();
+    await prepared.afterCommit();
     return row;
 }
 
@@ -449,17 +470,25 @@ export async function saveProjectMemory(
     id = newId(),
     expected: ProjectRecordExpectation = null,
 ) {
+    const prepared = await prepareProjectMemory(scope, projectId, input, id, expected);
+    const saved = await prepared.commit();
+    await prepared.afterCommit();
+    return saved;
+}
+
+/** Prepare extension hooks before a caller-owned atomic memory/cursor commit. */
+export async function prepareProjectMemory(
+    scope: WorkspaceOperationScope,
+    projectId: string,
+    input: ProjectMemoryInput,
+    id = newId(),
+    expected: ProjectRecordExpectation = null,
+) {
     const value = ProjectMemorySchema.parse(input);
+    const prepared = await prepareProjectRecord(scope, projectId, PROJECT_POST_TYPES.memory, value, id, expected);
     return {
-        row: await save(
-            scope,
-            projectId,
-            PROJECT_POST_TYPES.memory,
-            value,
-            id,
-            expected,
-        ),
-        value,
+        commit: async () => ({ row: await prepared.commit(), value }),
+        afterCommit: prepared.afterCommit,
     };
 }
 export async function saveProjectSource(

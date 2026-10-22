@@ -69,6 +69,7 @@ const dbState = vi.hoisted(() => {
     return {
         table,
         tombstoneTable,
+        afterWrite: vi.fn<(name: string, ...args: unknown[]) => Promise<void>>(async () => {}),
         reset: () => {
             rows.clear();
             tombstoneRows.clear();
@@ -101,7 +102,7 @@ vi.mock('../client', async (original) => {
 vi.mock('../../core/hooks/useHooks', () => ({
     useHooks: () => ({
         applyFilters: async (_name: string, value: unknown) => value,
-        doAction: async () => {},
+        doAction: dbState.afterWrite,
         _engine: { applyFiltersSync: (_name: string, value: unknown) => value },
     }),
 }));
@@ -112,8 +113,11 @@ import { applySnapshotChain } from '../../core/sync/snapshot-applier';
 import { getHookBridge, _resetHookBridge } from '../../core/sync/hook-bridge';
 
 beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected network request in synthetic KV test'); }));
     dbState.reset();
+    dbState.afterWrite.mockReset().mockResolvedValue(undefined);
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('kv CAS guards', () => {
     it('rejects malformed revisions as invalid input', async () => {
@@ -219,6 +223,18 @@ describe('KV transactions with IndexedDB', () => {
         await db.open();
     });
     afterEach(async () => { _resetHookBridge(); await db.delete(); });
+
+    it.each(['observer error', 'revocation'] as const)('retains generic KV rollback after %s in its notification', async failure => {
+        const abort = new AbortController();
+        dbState.afterWrite.mockImplementation(async name => {
+            if (name !== 'db.kv.upsertByName:action:after') return;
+            expect(await db.kv.get('kv:p:a')).toMatchObject({ value: 'a' });
+            if (failure === 'observer error') throw new Error('Synthetic KV observer failure');
+            abort.abort();
+        });
+        await expect(setKvByName('p:a', 'a', db, { signal: abort.signal })).rejects.toThrow();
+        expect(await db.kv.count()).toBe(0);
+    });
 
     it('accounts for existing/imported rows without a synchronized counter', async () => {
         await setKvByName('p:a', 'a', db);

@@ -276,7 +276,7 @@ Each `PluginSavedFile` contains its catalog `id`, string `revision`, `workspaceI
 
 `update(id, revision, { title?, trashed? })` renames, trashes or restores an entry. `remove(id, revision)` requires Trash first and removes its catalog ownership, preserving shared bytes and retained history. These writes require `files.catalog.write`, workspace write access, and the observed revision. Stale revisions return `conflict`; changed/ended activations return `stale-context`; policy rejection returns `permission-denied`. Get fresh metadata before retrying a conflict.
 
-File menu actions require `files.actions.register` and `files.catalog.read`. They are namespaced to their owning plugin, ordered by `order` (default 200), and automatically removed on disposal. Optional `kinds` restricts them to uploads or native documents. Set `requiresWrite: true` for a mutating action so it is disabled for read-only members. The host checks workspace access and the selected revision again before calling `run(item)`.
+File menu actions require `files.actions.register` and `files.catalog.read`. They are namespaced to their owning plugin, ordered by `order` (default 200), and automatically removed on disposal. Optional `kinds` restricts them to uploads or native documents. Set `requiresWrite: true` for a mutating action so it is disabled for read-only members. The host checks the current catalog row and backing file metadata after revision hashing, then checks registration disposal and workspace access immediately before calling `run(item)`. An item changed during admission is refused; read fresh metadata before retrying.
 
 ```ts
 // Manifest grants: files.actions.register, files.catalog.read, files.catalog.write

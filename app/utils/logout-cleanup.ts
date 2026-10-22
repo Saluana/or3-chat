@@ -46,6 +46,21 @@ interface LogoutCleanupOptions {
     preserveOpenRouterPkce?: boolean;
 }
 
+/** Device plugin credentials have no account namespace; clear before teardown awaits. */
+export function clearDevicePluginSecrets(): void {
+    try {
+        if (typeof localStorage === 'undefined') return;
+        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+            const key = localStorage.key(index);
+            if (key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.'))) {
+                localStorage.removeItem(key);
+            }
+        }
+    } catch {
+        // Best-effort when browser storage is unavailable.
+    }
+}
+
 /**
  * `logoutCleanup`
  *
@@ -61,6 +76,7 @@ export async function logoutCleanup(
     nuxtApp?: NuxtAppWithSync,
     options: LogoutCleanupOptions = {}
 ) {
+    if (!options.preservePluginSecrets) clearDevicePluginSecrets();
     // Clear memory and invalidate pending reads before the first await. Start
     // the captured, guarded delete now so late cleanup cannot erase a new key.
     const clearApiKey = clearPersistedUserApiKey().catch(() => {
@@ -123,7 +139,7 @@ export async function logoutCleanup(
                 // result/identity data while retaining evidence that this
                 // opaque call may have executed before a later sign-in.
                 localStorage.setItem(key, JSON.stringify({ state: 'running' }));
-            } else if (!options.preservePluginSecrets && key && (/^or3\.plugin\..+\.secret\./u.test(key) || key.startsWith('or3.plugin.secret.'))) keys.push(key);
+            }
         }
         keys.forEach((key) => localStorage.removeItem(key));
     }

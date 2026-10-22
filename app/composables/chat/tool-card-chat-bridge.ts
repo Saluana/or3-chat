@@ -11,9 +11,10 @@ export interface CardChatScope {
   db: Or3DB;
   generation: number;
   threadId: string | null;
+  sourceThreadId?: string | null;
 }
-export function captureCardChatScope(threadId: string | null): CardChatScope {
-  return { db: getDb(), generation: getWorkspaceGeneration(), threadId };
+export function captureCardChatScope(threadId: string | null, sourceThreadId = threadId): CardChatScope {
+  return { db: getDb(), generation: getWorkspaceGeneration(), threadId, sourceThreadId };
 }
 export interface ToolCardChatBridge {
   readonly threadId: Readonly<Ref<string | null>>;
@@ -81,7 +82,7 @@ function createStateQueue() {
           },
           (row) =>
             workspaceCurrent(entry.scope) &&
-            row?.thread_id === entry.scope.threadId &&
+            row?.thread_id === (entry.scope.sourceThreadId ?? entry.scope.threadId) &&
             row.role === "assistant",
         );
         result = pluginOk(undefined);
@@ -157,7 +158,6 @@ function createStateQueue() {
       const key = JSON.stringify([
         scope.db.name,
         scope.generation,
-        scope.threadId,
         messageId,
         callId,
       ]);
