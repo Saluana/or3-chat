@@ -433,7 +433,9 @@ export function associateUiToolResultMessages(messages: UiChatMessage[], input: 
     }
     return messages.map(ui => {
         const ids = resultIds.get(ui.id);
-        return ids?.length ? { ...ui, toolResultMessageIds: [...new Set(ids)] } : ui;
+        const sourceThreadId = owners.get(ui.id)?.threadId ?? ui.sourceThreadId;
+        return { ...ui, ...(sourceThreadId ? { sourceThreadId } : {}),
+            ...(ids?.length ? { toolResultMessageIds: [...new Set(ids)] } : {}) };
     });
 }
 

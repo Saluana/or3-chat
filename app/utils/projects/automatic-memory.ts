@@ -9,9 +9,9 @@ import { captureProjectOperation } from './context';
 import {
     readProjectPolicy,
     resolveChatProject,
-    saveProjectMemory,
+    prepareProjectMemory,
 } from '~/db/project-workspace';
-import { setKvByName } from '~/db/kv';
+import { prepareKvByName } from '~/db/kv';
 import { getWriteTxTableNames } from '~/db/util';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import {
@@ -317,7 +317,7 @@ export async function captureAutomaticMemories(
             .where('name')
             .equals(cursorName)
             .first();
-        if (freshCursor?.clock !== cursor?.clock)
+        if (JSON.stringify(freshCursor) !== JSON.stringify(cursor))
             throw new StaleMemoryError('Memory batch already processed.');
     };
     // Admission comes after the snapshot and before any request: a duplicate
@@ -395,6 +395,62 @@ export async function captureAutomaticMemories(
                 };
             }),
         );
+        await validate();
+        // Declined candidates never invoke save hooks. Recheck the same admission
+        // after preparation, since hooks and other tabs can change the catalog.
+        const selectWritable = async <T extends NonNullable<(typeof prepared)[number]>>(items: readonly T[]) => {
+            const currentMemories = await scope.db.posts
+                .where('[postType+title]')
+                .equals([PROJECT_POST_TYPES.memory, projectId])
+                .filter(row => !row.deleted)
+                .limit(501)
+                .toArray();
+            if (currentMemories.length > 500) throw new StaleMemoryError('Memory catalog changed.');
+            const currentValues = currentMemories.map((row) => ({
+                row,
+                value: readPersistedProjectRecord(ProjectMemorySchema, row.content),
+            }));
+            let automaticCount = currentValues.filter(
+                ({ row, value }) => !row.deleted && value?.origin === 'automatic',
+            ).length;
+            const known = new Set([...currentValues, ...memories.filter(({ row }) => row.deleted)].flatMap(({ value }) => value ? [normalized(value.text)] : []));
+            let liveCount = currentMemories.length;
+            const selected: T[] = [];
+            for (const item of items) {
+                if (known.has(normalized(item.candidate.text))) continue;
+                if (item.prior) {
+                    const current = await scope.db.posts.get(item.id);
+                    if (!current || current.deleted || current.clock !== item.prior.row.clock
+                        || current.content !== item.prior.row.content) continue;
+                } else {
+                    if (automaticCount >= 20 || liveCount >= 500 || await scope.db.posts.get(item.id)
+                        || await scope.db.tombstones.get('posts:' + item.id)) continue;
+                    automaticCount++;
+                    liveCount++;
+                }
+                selected.push(item);
+                known.add(normalized(item.candidate.text));
+            }
+            return selected;
+        };
+        const eligible = await scope.db.transaction('r', ['posts', 'tombstones'], () =>
+            selectWritable(prepared.filter((item): item is NonNullable<typeof item> => item !== null)),
+        );
+        const writes: Array<(typeof eligible)[number] & {
+            memory: Awaited<ReturnType<typeof prepareProjectMemory>>;
+        }> = [];
+        for (const item of eligible) {
+            const memory = await prepareProjectMemory(scope, projectId, {
+                text: item.candidate.text, kind: item.candidate.kind, origin: 'automatic',
+                source_message_id: item.source.id, source_thread_id: threadId,
+            }, item.id, item.prior?.row ?? null);
+            writes.push({ ...item, memory });
+        }
+        const cursorWrite = await prepareKvByName(cursorName, JSON.stringify({ projectId, index: assistant.index }), scope.db, {
+            ifClock: cursor?.clock ?? null, signal: scope.signal,
+            isValid: () => { scope.assertCurrent('write'); return true; },
+        });
+        const notifications: typeof writes = [];
         await scope.db.transaction(
             'rw',
             getWriteTxTableNames(
@@ -404,78 +460,16 @@ export async function captureAutomaticMemories(
             ),
             async () => {
                 await validate();
-                const currentMemories = await scope.db.posts
-                    .where('[postType+title]')
-                    .equals([PROJECT_POST_TYPES.memory, projectId])
-                    .filter((row) => !row.deleted)
-                    .limit(501)
-                    .toArray();
-                if (currentMemories.length > 500)
-                    throw new StaleMemoryError('Memory catalog changed.');
-                const currentValues = currentMemories.map((row) => ({
-                    row,
-                    value: readPersistedProjectRecord(ProjectMemorySchema, row.content),
-                }));
-                let automaticCount = currentValues.filter(
-                    ({ row, value }) => !row.deleted && value?.origin === 'automatic',
-                ).length;
-                const known = new Set(
-                    [...currentValues, ...memories.filter(({ row }) => row.deleted)]
-                        .flatMap(({ value }) => (value ? [normalized(value.text)] : [])),
-                );
-                let liveCount = currentMemories.length;
-                for (const item of prepared) {
-                    if (!item || known.has(normalized(item.candidate.text)))
-                        continue;
-                    if (item.prior) {
-                        const current = await scope.db.posts.get(item.id);
-                        if (
-                            !current ||
-                            current.deleted ||
-                            current.clock !== item.prior.row.clock ||
-                            current.content !== item.prior.row.content
-                        )
-                            continue;
-                    } else {
-                        if (
-                            automaticCount >= 20 || liveCount >= 500 ||
-                            (await scope.db.posts.get(item.id)) ||
-                            (await scope.db.tombstones.get('posts:' + item.id))
-                        )
-                            continue;
-                        automaticCount++;
-                        liveCount++;
-                    }
-                    await saveProjectMemory(
-                        scope,
-                        projectId,
-                        {
-                            text: item.candidate.text,
-                            kind: item.candidate.kind,
-                            origin: 'automatic',
-                            source_message_id: item.source.id,
-                            source_thread_id: threadId,
-                        },
-                        item.id,
-                        item.prior?.row ?? null,
-                    );
-                    known.add(normalized(item.candidate.text));
+                for (const item of await selectWritable(writes)) {
+                    await item.memory.commit();
+                    notifications.push(item);
                 }
-                await setKvByName(
-                    cursorName,
-                    JSON.stringify({ projectId, index: assistant.index }),
-                    scope.db,
-                    {
-                        ifClock: cursor?.clock ?? null,
-                        signal: scope.signal,
-                        isValid: () => {
-                            scope.assertCurrent('write');
-                            return true;
-                        },
-                    },
-                );
+                await cursorWrite.commit();
             },
         );
+        for (const item of notifications) await item.memory.afterCommit();
+        try { await cursorWrite.afterCommit(); }
+        catch (error) { console.warn('[project-memory] Capture saved; cursor notification failed', error); }
     } finally {
         release();
     }

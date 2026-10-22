@@ -58,9 +58,20 @@ export function createTrustedWorkspaceFiles(input: {
         if (post.postType === FILE_CATALOG_POST_TYPE && parseFileHashes(post.file_hashes).length !== 1) return null;
         if (!isVisibleWorkspaceItem(post) && workspaceItemMetadata(post.meta)?.trashed_at == null) return null;
         const item = await workspaceFileSnapshot(scope, post);
-        if (item.kind === 'file' && (!item.file || (await input.db.file_meta.get(item.file.id))?.deleted)) return null;
-        scope.assertCurrent();
-        return item;
+        // Revision hashing yields outside IndexedDB. Admit the observed row and
+        // its backing metadata together only after that work has completed.
+        return input.db.transaction('r', ['posts', 'file_meta'], async () => {
+            const current = await input.db.posts.get(id);
+            if (JSON.stringify(current) !== JSON.stringify(post)) return null;
+            if (item.kind === 'file') {
+                if (!item.file) return null;
+                const meta = await input.db.file_meta.get(item.file.id);
+                if (!meta || meta.deleted || meta.name !== item.file.name
+                    || meta.mime_type !== item.file.mimeType || meta.size_bytes !== item.file.size) return null;
+            }
+            scope.assertCurrent();
+            return item;
+        });
     }
     const catalog: PluginFilesCatalogClient = {
         list: (options: NonNullable<Parameters<PluginFilesCatalogClient['list']>[0]> | null = {}) => run('files.catalog.read', async scope => {
@@ -117,14 +128,19 @@ export function createTrustedWorkspaceFiles(input: {
         const handle = registerWorkspaceFileAction({ ...action, id: `${input.pluginId}:${action.id}`, pluginId: input.pluginId,
             workspaceId: input.workspaceId, kinds: action.kinds ? Object.freeze(Array.from(action.kinds)) : undefined,
             async run(selected) {
-                input.allow('files.actions.register'); input.allow('files.catalog.read');
-                if (handle.disposed) throw new Error('File action has been disposed');
+                assertActionCurrent();
                 const scope = assertAccess(action.requiresWrite);
                 if (selected.workspaceId !== input.workspaceId) throw new Error('File belongs to another workspace');
                 const current = await load(scope, selected.id);
                 if (!current || current.trashed || current.revision !== selected.revision) throw Object.assign(new Error('This item changed. Read it again.'), { code: 'conflict' });
+                assertActionCurrent();
+                scope.assertCurrent(action.requiresWrite ? 'write' : 'read');
                 await action.run(current);
             } });
+        function assertActionCurrent() {
+            input.allow('files.actions.register'); input.allow('files.catalog.read');
+            if (handle.disposed) throw new Error('File action has been disposed');
+        }
         input.cleanup(() => handle.dispose());
         return { dispose: () => { handle.dispose(); } };
     }

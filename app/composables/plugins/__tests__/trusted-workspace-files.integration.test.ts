@@ -39,6 +39,7 @@ async function upload(trusted = activate()) {
 }
 beforeEach(async () => {
     vi.stubGlobal('Blob', NativeBlob);
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected network request in synthetic Files test'); }));
     originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     hooks = createHookEngine();
@@ -273,6 +274,63 @@ describe('trusted workspace Files contract', () => {
         const denied = activate([]);
         expect(await denied.context.files.read(ref.id)).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
         expect(get).not.toHaveBeenCalled();
+    });
+
+    function pausedDigest() {
+        const digest = crypto.subtle.digest.bind(crypto.subtle);
+        let release!: () => void;
+        let reached!: () => void;
+        const waiting = new Promise<void>(resolve => { release = resolve; });
+        const started = new Promise<void>(resolve => { reached = resolve; });
+        vi.spyOn(crypto.subtle, 'digest').mockImplementationOnce(async (algorithm, data) => {
+            reached();
+            await waiting;
+            return digest(algorithm, data);
+        });
+        return { started, release };
+    }
+
+    it.each(['rename', 'trash', 'delete'] as const)('refuses an action when %s changes its row during revision hashing', async change => {
+        const { trusted, saved } = await upload();
+        const callback = vi.fn();
+        trusted.context.files.registerAction({ id: 'inspect', label: 'Inspect', run: callback });
+        const { useWorkspaceFileActions } = await import('~/composables/files/useWorkspaceFileActions');
+        const paused = pausedDigest();
+        const running = useWorkspaceFileActions().value[0]!.run(saved);
+        await paused.started;
+        try {
+            if (change === 'rename') await getDb().posts.update(saved.id, { title: 'Renamed during hashing' });
+            if (change === 'trash') await getDb().posts.update(saved.id, { meta: JSON.stringify([{ key: 'or3.workspace-item', value: { version: 1, trashed_at: 42 } }]) });
+            if (change === 'delete') await getDb().posts.update(saved.id, { deleted: true });
+        } finally { paused.release(); }
+        await expect(running).rejects.toThrow(/changed|unavailable/i);
+        expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('refuses an action disposed while revision hashing is pending', async () => {
+        const { trusted, saved } = await upload();
+        const callback = vi.fn();
+        const registration = trusted.context.files.registerAction({ id: 'inspect', label: 'Inspect', run: callback });
+        const { useWorkspaceFileActions } = await import('~/composables/files/useWorkspaceFileActions');
+        const paused = pausedDigest();
+        const running = useWorkspaceFileActions().value[0]!.run(saved);
+        await paused.started;
+        registration.dispose();
+        paused.release();
+        await expect(running).rejects.toThrow(/disposed/i);
+        expect(callback).not.toHaveBeenCalled();
+    });
+
+    it.each(['missing', 'deleted'] as const)('omits a catalog snapshot whose original metadata becomes %s during hashing', async change => {
+        const { trusted, saved, ref } = await upload();
+        const paused = pausedDigest();
+        const running = trusted.context.files.catalog.get(saved.id);
+        await paused.started;
+        try {
+            if (change === 'missing') await getDb().file_meta.delete(ref.id);
+            else await getDb().file_meta.update(ref.id, { deleted: true });
+        } finally { paused.release(); }
+        expect(value(await running)).toBeNull();
     });
 
     it('pages metadata without fetching blobs and includes native documents', async () => {

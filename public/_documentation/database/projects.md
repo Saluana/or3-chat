@@ -88,12 +88,25 @@ Tool admission, approval rechecks and execution/delivery guards use it without
 hydrating memories or unrelated members. Targeted reads still validate live
 membership, knowledge mode and file availability.
 
+Classified memory prepares extension hooks before opening the write transaction.
+Automatic capture revalidates chat evidence, project exclusions and the cursor
+after preparation, then saves admitted memories and the cursor together. Manual
+classification also revalidates before replacing its saved reference. Memory and
+cursor notifications run after commit; an observer failure cannot turn a durable
+capture into a reported failure. Generic KV saves retain their existing notification
+and revocation behavior.
+
 Automatic relevant-file search decodes at most 8 MiB of extraction per turn,
 prioritizing title matches. Sources beyond that budget remain unselected; required
 Always include sources keep their complete-input admission contract. Retrieval
 validates at most twelve candidate summaries for the normal three-result request,
 with a separate 1,000-operation provenance budget including inherited scopes.
 An incomplete validation rejects the candidate rather than accepting partial evidence.
+Cached file extraction requires its current catalog binding and live original and
+extraction metadata before and after decoding. Missing bytes are unavailable;
+the catalog preview never substitutes for complete extraction. An unavailable
+optional source is omitted with a receipt reason, while a required source refuses
+the turn.
 
 `saveProjectNote(scope, projectId, { title, text })` prepares the normal document
 hooks and commits the document, knowledge binding, membership and references

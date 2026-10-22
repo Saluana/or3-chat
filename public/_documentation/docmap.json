@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification. Internal notifications wait for the outer transaction; server execution requires resolved canonical ownership."
+                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification. Internal notifications wait for the outer transaction; server execution requires resolved canonical ownership. Classified memory prepares hooks before atomic memory/cursor commits and rechecks live source bindings around decoding."
                 },
                 {
                     "name": "posts.md",
@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery."
+                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery. Pending operations are fenced by authorization invalidation; device secrets clear before account teardown."
                 }
             ]
         },
@@ -946,7 +946,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements. File byte reads follow activation lifetime across workspace switches."
+                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements. File byte reads follow activation lifetime across workspace switches. File actions revalidate current rows, metadata, grants and disposal after asynchronous revision hashing."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
@@ -991,7 +991,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate."
+                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch."
                 }
             ]
         }

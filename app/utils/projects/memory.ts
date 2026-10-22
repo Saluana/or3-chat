@@ -5,6 +5,7 @@ import {
     readProjectPolicy,
     resolveChatProject,
     saveProjectMemory,
+    prepareProjectMemory,
     type ProjectRecordExpectation,
 } from '~/db/project-workspace';
 import { getWriteTxTableNames } from '~/db/util';
@@ -283,6 +284,10 @@ async function classifySavedMemory(
         result.model !== MEMORY_CLASSIFIER_MODEL
     )
         return;
+    await validate();
+    const prepared = await prepareProjectMemory(
+        scope, projectId, { ...saved.value, kind: 'decision' }, saved.row.id, saved.row,
+    );
     await scope.db.transaction(
         'rw',
         getWriteTxTableNames(
@@ -292,13 +297,8 @@ async function classifySavedMemory(
         ),
         async () => {
             await validate();
-            await saveProjectMemory(
-                scope,
-                projectId,
-                { ...saved.value, kind: 'decision' },
-                saved.row.id,
-                saved.row,
-            );
+            await prepared.commit();
         },
     );
+    await prepared.afterCommit();
 }

@@ -89,6 +89,8 @@ const project = (id: string, data: unknown[] = []) => ({
 });
 
 beforeEach(async () => {
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected network request in synthetic Projects test'); }));
+    useUserApiKey().clearKey();
     hookActions.mockReset();
     hookActions.mockImplementation(async () => {});
     revoked = false;
@@ -131,6 +133,55 @@ describe('persistent project workspace', () => {
         } finally { vi.unstubAllGlobals(); }
     });
 
+    async function extractedSource(mode: 'relevant' | 'always') {
+        vi.stubGlobal('Blob', NodeBlob);
+        await db.threads.put({ id: 'source-chat', project_id: 'a', status: 'ready', deleted: false,
+            pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+        const original = await createOrRefFile(new NodeBlob(['Original nebula source'], { type: 'text/plain' }) as Blob, 'nebula.txt');
+        const extracted = await createOrRefFile(new NodeBlob(['Nebula calibration is in August 2042.'], { type: 'text/plain' }) as Blob, 'extraction.txt');
+        const catalog = await catalogWorkspaceFile(scope(), original.hash, { text: { text: 'Nebula catalog preview', coverage: 'prefix', indexed_bytes: 22 } });
+        await saveProjectSource(scope(), 'a', { item_id: catalog.post.id, title: 'Nebula reference', kind: 'file', mode,
+            current_revision_id: 'extraction', revisions: [{ id: 'extraction', original_hash: original.hash, text_hash: extracted.hash,
+                status: 'ready', coverage: 'full', created_at: 1 }] }, 'source-binding');
+        return { original, extracted, catalog };
+    }
+    it.each((['relevant', 'always'] as const).flatMap(mode =>
+        (['missing-original', 'deleted-original', 'missing-extraction', 'deleted-extraction', 'missing-bytes'] as const)
+            .map(change => ({ mode, change }))))('refuses unavailable cached source $change in $mode mode', async ({ mode, change }) => {
+        const { original, extracted } = await extractedSource(mode);
+        if (change === 'missing-original') await db.file_meta.delete(original.hash);
+        if (change === 'deleted-original') await db.file_meta.update(original.hash, { deleted: true });
+        if (change === 'missing-extraction') await db.file_meta.delete(extracted.hash);
+        if (change === 'deleted-extraction') await db.file_meta.update(extracted.hash, { deleted: true });
+        if (change === 'missing-bytes') await db.file_blobs.delete(extracted.hash);
+        const running = buildProjectContext(scope(), 'source-chat', 'nebula calibration', false);
+        if (mode === 'always') await expect(running).rejects.toThrow(/unavailable/i);
+        else {
+            const snapshot = await running;
+            expect(snapshot?.receipt.sources[0]).toMatchObject({ state: 'available', reason: expect.stringMatching(/unavailable/i) });
+            expect(JSON.stringify(snapshot?.messages)).not.toMatch(/calibration|catalog preview/);
+        }
+    });
+    it.each((['relevant', 'always'] as const).flatMap(mode =>
+        (['original', 'extraction', 'catalog'] as const).map(change => ({ mode, change }))))(
+        'revalidates the $change after cached decoding in $mode mode', async ({ mode, change }) => {
+        const { original, extracted, catalog } = await extractedSource(mode);
+        const text = NodeBlob.prototype.text;
+        const decoding = vi.spyOn(NodeBlob.prototype, 'text').mockImplementationOnce(async function(this: NodeBlob) {
+            if (change === 'catalog') await db.posts.update(catalog.post.id, { file_hashes: '[]' });
+            else await db.file_meta.update(change === 'original' ? original.hash : extracted.hash, { deleted: true });
+            return text.call(this);
+        });
+        try {
+            const running = buildProjectContext(scope(), 'source-chat', 'nebula calibration', false);
+            if (mode === 'always') await expect(running).rejects.toThrow(/unavailable/i);
+            else {
+                const snapshot = await running;
+                expect(snapshot?.receipt.sources[0]?.reason).toMatch(/unavailable/i);
+                expect(JSON.stringify(snapshot?.messages)).not.toContain('August 2042');
+            }
+        } finally { decoding.mockRestore(); }
+    });
     // Many extraction blobs must not all decode on every send. Facts beyond
     // catalog previews still need to be discoverable within the retrieval budget.
     it('bounds extraction decoding per turn while retaining late-file passages', async () => {
@@ -1320,6 +1371,28 @@ describe('nonblocking project memory classification', () => {
         return { saved, body, fetcher, finish, get dispatchedSignal() { return dispatchedRequest.signal; },
             fail: () => reply(new Response('Provider unavailable', { status: 503 })) };
     }
+    it('classifies a saved reference with timer-backed preparation and notification hooks', async () => {
+        const { saved, finish } = await start();
+        hookActions.mockImplementation(async name => {
+            if (name.startsWith('db.posts.upsert:action:')) await new Promise(resolve => setTimeout(resolve, 10));
+        });
+        finish();
+        await vi.waitFor(async () => expect(JSON.parse((await db.posts.get(saved.row.id))!.content).kind).toBe('decision'));
+    });
+    it('retains the manual reference when preparation changes its classification evidence', async () => {
+        const { saved, finish } = await start();
+        let prepared = false;
+        hookActions.mockImplementation(async name => {
+            if (name === 'db.posts.upsert:action:before') {
+                await db.messages.update('memory-source', { data: { content: 'SQLite was rejected.' }, clock: 2 });
+                prepared = true;
+            }
+        });
+        finish();
+        await vi.waitFor(() => expect(prepared).toBe(true));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(await db.posts.get(saved.row.id)).toEqual(saved.row);
+    });
     it.each(['perplexity/pplx-decider-v1.1-27b', 'perplexity/pplx-decider-v1.1-27b-20260917'])(
         'saves immediately, bounds owning-chat context, then accepts resolved model %s', async model => {
         const { saved, body, finish } = await start();
@@ -1538,6 +1611,70 @@ describe('automatic project memory capture', () => {
         await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
         expect(fetcher).not.toHaveBeenCalled();
         expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
+    });
+
+    it('commits memory and cursor before timer-backed extension notifications', async () => {
+        await seed();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+        let notified = 0;
+        hookActions.mockImplementation(async name => {
+            if (name === 'db.posts.upsert:action:before') await new Promise(resolve => setTimeout(resolve, 10));
+            if (name === 'db.kv.upsertByName:action:after') {
+                await new Promise(resolve => setTimeout(resolve, 10));
+                expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(1);
+                expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
+                notified++;
+            }
+        });
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(notified).toBe(1);
+        expect((await readProjectWorkspace(db, 'a')).memories[0]?.value.text).toBe(candidate.text);
+    });
+    it.each(['evidence', 'exclusion'] as const)('rejects automatic memory after a preparation hook changes %s', async change => {
+        await seed();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+        let changed = false;
+        hookActions.mockImplementation(async name => {
+            if (name !== 'db.posts.upsert:action:before' || changed) return;
+            changed = true;
+            if (change === 'evidence') await db.messages.update('auto-user', { data: { content: 'Do not use SQLite.' }, clock: 2 });
+            else await saveProjectSettings(scope(), 'a', { ...defaultProjectSettings(), excluded_chat_ids: ['auto-chat'] }, null);
+        });
+        await expect(captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant')).rejects.toThrow(/evidence|excluded/i);
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeUndefined();
+    });
+    it('keeps a committed capture successful when its cursor observer throws', async () => {
+        await seed();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+        hookActions.mockImplementation(async name => {
+            if (name === 'db.kv.upsertByName:action:after') throw new Error('Synthetic observer failure');
+        });
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(1);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
+    });
+    it.each(['duplicate', 'capacity', 'deleted'] as const)('skips preparation hooks for a declined %s capture', async reason => {
+        await seed();
+        if (reason === 'capacity') {
+            for (let i = 0; i < 20; i++) await saveProjectMemory(scope(), 'a', {
+                text: 'Existing project fact ' + i, origin: 'automatic',
+            }, 'existing-auto-' + i);
+        } else if (reason === 'duplicate') {
+            await saveProjectMemory(scope(), 'a', { text: candidate.text }, 'existing-manual');
+        } else {
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+            await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+            const saved = (await readProjectWorkspace(db, 'a')).memories[0]!;
+            await db.posts.update(saved.row.id, { deleted: true });
+            await db.kv.clear();
+        }
+        hookActions.mockClear();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(gate()).mockResolvedValueOnce(reply()));
+        await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
+        expect(hookActions.mock.calls.some(([name]) => name === 'db.posts.upsert:action:before')).toBe(false);
+        expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(reason === 'capacity' ? 20 : reason === 'duplicate' ? 1 : 0);
+        expect(await db.kv.where('name').equals('project-memory-cursor:auto-chat').first()).toBeDefined();
     });
     it('saves grounded memory, advances the cursor, and never revives a deleted capture', async () => {
         await seed();
