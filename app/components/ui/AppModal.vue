@@ -33,7 +33,7 @@ const modalUi = computed<ModalProps['ui']>(() => ({
         props.ui?.content,
         'app-modal w-[calc(100dvw-2rem)] h-auto max-h-[calc(100dvh-2rem)]! overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 divide-y-0 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
         widths[props.size],
-        props.size === 'workspace' && 'h-[min(800px,calc(100dvh-2rem))] max-sm:w-[100dvw] max-sm:h-[100dvh] max-sm:max-w-none max-sm:max-h-[100dvh]! max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
+        props.size === 'workspace' && 'h-[min(800px,calc(100dvh-2rem))] max-sm:w-[calc(100dvw/var(--app-ui-zoom,1))] max-sm:h-[calc(100dvh/var(--app-ui-zoom,1))] max-sm:max-w-none max-sm:max-h-[calc(100dvh/var(--app-ui-zoom,1))]! max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
     ].filter(Boolean).join(' '),
     header: [props.ui?.header, 'relative flex shrink-0 items-center justify-between gap-4 min-h-0! px-6! py-5! bg-transparent! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
     wrapper: 'min-w-0 flex-1',

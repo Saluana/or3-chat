@@ -45,6 +45,7 @@ export default {
     'chat.message.edit': 'blank-solar:pen-linear',
     'chat.message.branch': 'blank-solar:git-branch-linear',
     'chat.message.delete': 'blank-solar:trash-bin-trash-linear',
+    'chat.message.usage': 'blank-solar:chart-2-linear',
     'chat.reasoning': 'blank-solar:lightbulb-linear',
 
     // Tool Indicators

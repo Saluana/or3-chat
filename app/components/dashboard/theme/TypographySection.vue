@@ -68,8 +68,8 @@
                     </option>
                 </select>
                 <small>
-                    Resizes the whole app on desktop screens. Message and
-                    document text keeps its own size.
+                    Resizes the whole app. Message and document text keeps
+                    its own size.
                 </small>
             </label>
 

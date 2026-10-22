@@ -1,6 +1,6 @@
-import { normalizeProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
+import { normalizeProviderRequestUsage, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
 import { sha256Hex as digest } from '../runtime-crypto';
-import { readRequestUsage, type RequestUsage } from './compaction';
+import { readRequestUsage, type RequestUsage, type UsageTotals } from './compaction';
 import { estimateChatRequest, type CountableChatMessage, type ContextEstimate } from './context-budget';
 
 export interface UsagePrefix {
@@ -104,6 +104,19 @@ export function attachRequestUsage(prefix: UsagePrefix | undefined, measurement:
     if (!prefix || !usage) return undefined;
     return readRequestUsage({ ...prefix, ...usage, model: usage.model ?? prefix.model,
         request_id: usage.response_id ?? identity.requestId, iteration: identity.iteration, measured_at: identity.measuredAt });
+}
+
+/** Adds one measured provider request to a reply's running totals. */
+export function addUsageTotals(prior: UsageTotals | undefined, request: ProviderRequestUsage): UsageTotals {
+    const sum = (a: number | undefined, b: number | undefined) => a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+    const cost = sum(prior?.cost, request.cost);
+    const cached = sum(prior?.cached_tokens, request.cached_tokens);
+    const reasoning = sum(prior?.reasoning_tokens, request.reasoning_tokens);
+    return { requests: (prior?.requests ?? 0) + 1,
+        prompt_tokens: (prior?.prompt_tokens ?? 0) + request.prompt_tokens,
+        completion_tokens: (prior?.completion_tokens ?? 0) + request.completion_tokens,
+        ...(cost !== undefined ? { cost } : {}), ...(cached !== undefined ? { cached_tokens: cached } : {}),
+        ...(reasoning !== undefined ? { reasoning_tokens: reasoning } : {}) };
 }
 
 /** Internal provenance must describe this exact measurement, never an older request's counters. */

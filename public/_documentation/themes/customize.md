@@ -15,7 +15,7 @@ selected. Administrator installation is covered in
 | Section | What it changes |
 | --- | --- |
 | Colors | Accent, surfaces, text, borders, interaction states, and status colors; additional roles live under Advanced colors |
-| Typography | Body and heading font choices, including the authored theme font; base font size is bounded to 14–24px; interface scale (Theme default, 80–120%) resizes the app on desktop screens and leaves message and document text at its own size |
+| Typography | Body and heading font choices, including the authored theme font; base font size is bounded to 14–24px; interface scale (Theme default, 80–120%) resizes the app and leaves message and document text at its own size |
 | Shape | Divider/component/emphasis border widths and small/standard/large radii; density and elevation presets |
 | Backgrounds | Workspace base, workspace overlay, and sidebar layers, with image/layout/opacity controls |
 | Advanced | Focus-ring thickness, motion preference, and reset controls |

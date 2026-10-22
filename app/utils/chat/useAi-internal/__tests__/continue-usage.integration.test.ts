@@ -57,6 +57,34 @@ it.each([false, true])('persists measured continuation usage through canonical r
     expect(request.phase.value).toBe('terminal');
 });
 
+it('adds a continuation request to the totals already spent on the reply', async () => {
+    const db = getDb();
+    const priorPrefix = await captureUsagePrefix({ model: 'model', messages: [{ role: 'user', content: 'Continue this' }], countText: countTokensApprox });
+    const prior = attachRequestUsage(priorPrefix, { prompt_tokens: 100, completion_tokens: 10, cost: 0.01 }, { requestId: 'first', iteration: 1, measuredAt: 1 })!;
+    await db.messages.update('assistant', { data: { content: 'Hello', usage: { ...prior, totals: { requests: 1, prompt_tokens: 100, completion_tokens: 10, cost: 0.01 } } } });
+    provider.mockImplementation(async function* (input: Parameters<typeof captureUsagePrefix>[0] & { orMessages: Parameters<typeof captureUsagePrefix>[0]['messages'] }): AsyncGenerator<ORStreamEvent> {
+        const prefix = await captureUsagePrefix({ model: input.model, messages: input.orMessages, countText: countTokensApprox });
+        yield { type: 'text', text: '>> world' };
+        const usage = { prompt_tokens: 456, completion_tokens: 12, response_id: 'continued-request', cost: 0.02 };
+        yield { type: 'usage', usage, requestUsage: attachRequestUsage(prefix, usage, { requestId: 'host', iteration: 1, measuredAt: 123 }) };
+        yield { type: 'done' };
+    });
+    const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'continue-totals', kind: 'continue', originDb: db, workspaceId: workspace, threadId: 'thread', accumulator });
+    request.ownsView = () => !request.cancelled;
+    const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 },
+            userMaxContextTokens: null, source: 'openrouter-live' }) };
+    await continueMessageImpl(ctx, 'assistant');
+    const usage = storedMessagesToCanonicalTranscript([(await db.messages.get('assistant'))!])[0]!.usage;
+    expect(usage).toMatchObject({ prompt_tokens: 456, completion_tokens: 12, cost: 0.02, totals: { requests: 2, prompt_tokens: 556, completion_tokens: 22 } });
+    expect(usage?.totals?.cost).toBeCloseTo(0.03, 10);
+});
+
 it('refuses an unbound continuation without model policy before any target mutation or provider call', async () => {
     provider.mockImplementation(async function* () { yield { type: 'text', text: 'Must not run' }; yield { type: 'done' }; });
     const db = getDb(); const before = await db.messages.toArray();

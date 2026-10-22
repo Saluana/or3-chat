@@ -399,6 +399,9 @@
                 :class="[
                     'cm-actions flex z-10',
                     `cm-actions-${roleVariant}`,
+                    // A streaming reply keeps the row's space but not its buttons, so
+                    // nothing flickers or becomes focusable until the reply is done.
+                    props.message.pending && 'invisible',
                 ]"
             >
                 <UFieldGroup
@@ -503,6 +506,72 @@
                         </UTooltip>
                     </template>
                 </UFieldGroup>
+                <UTooltip
+                    v-if="usageLabel"
+                    :delay-duration="300"
+                    :teleport="true"
+                    :ui="{ content: USAGE_TOOLTIP_CONTENT }"
+                >
+                    <span
+                        class="cm-usage"
+                        role="note"
+                        data-testid="message-usage"
+                        :aria-label="usageLabel.description"
+                    >
+                        <UIcon
+                            :name="usageIcon"
+                            class="cm-usage-icon"
+                            aria-hidden="true"
+                        />{{ usageLabel.text }}</span
+                    >
+                    <template #content>
+                        <div
+                            class="flex w-[208px] flex-col gap-2 px-3 py-2.5 text-[12px] leading-[18px] tabular-nums"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 font-medium text-(--md-on-surface-variant)"
+                            >
+                                <UIcon
+                                    :name="usageIcon"
+                                    class="size-3.5"
+                                    aria-hidden="true"
+                                />
+                                Usage
+                            </div>
+                            <dl
+                                class="m-0 grid grid-cols-[1fr_auto] gap-x-6 gap-y-1"
+                            >
+                                <template
+                                    v-for="row in usageLabel.rows"
+                                    :key="row.label"
+                                >
+                                    <div
+                                        v-if="row.label === 'Total'"
+                                        class="col-span-2 my-0.5 h-px bg-(--md-border-color)"
+                                    />
+                                    <dt class="text-(--md-on-surface-variant)">
+                                        {{ row.label }}
+                                    </dt>
+                                    <dd
+                                        class="m-0 text-right"
+                                        :class="[
+                                            row.strong && 'font-semibold',
+                                            row.muted &&
+                                                'text-(--md-on-surface-variant)',
+                                        ]"
+                                    >
+                                        {{ row.value }}
+                                    </dd>
+                                </template>
+                            </dl>
+                            <span
+                                v-if="usageLabel.model"
+                                class="break-all text-[11px] leading-4 text-(--md-on-surface-variant)"
+                                >{{ usageLabel.model }}</span
+                            >
+                        </div>
+                    </template>
+                </UTooltip>
             </div>
         </template>
         <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" />
@@ -553,6 +622,7 @@ import { useMessageEditing } from '~/composables/chat/useMessageEditing';
 import ProjectMessageContext from '~/components/projects/ProjectMessageContext.vue';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
 import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
+import { buildUsageLabel } from '~/utils/chat/usage-label';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -598,6 +668,7 @@ const emit = defineEmits<{
 const warningIcon = useIcon('ui.warning');
 const copyIcon = useIcon('chat.message.copy');
 const retryIcon = useIcon('chat.message.retry');
+const usageIcon = useIcon('chat.message.usage');
 const continueIcon = useIcon('chat.message.continue');
 const branchIcon = useIcon('chat.message.branch');
 const editIcon = useIcon('chat.message.edit');
@@ -735,6 +806,19 @@ const showContinueButton = computed(
         props.message.role === 'assistant' &&
         Boolean(props.message.error) &&
         (props.message.text?.length ?? 0) > 0
+);
+
+// The usage tooltip is a themed card (surface, border, elevation) rather than the
+// inverted dark pill, so it reads well in light and dark (dark lifts the card, as
+// its shadow is invisible there).
+const USAGE_TOOLTIP_CONTENT =
+    'p-0 ring-0 rounded-[var(--md-border-radius,10px)] border-[length:var(--md-border-width,1px)] border-[color:var(--md-border-color)] bg-(--md-surface) dark:bg-(--md-surface-container) text-(--md-on-surface) shadow-[var(--app-elevation-high,0_8px_24px_rgb(0_0_0/0.12))]';
+
+// Per-reply tokens and cost; themes opt in by displaying `.cm-usage`.
+const usageLabel = computed(() =>
+    props.message.role === 'assistant' && !props.message.pending
+        ? buildUsageLabel(props.message.usage)
+        : undefined
 );
 
 const isStreamingReasoning = computed(() => {
@@ -1276,6 +1360,11 @@ const streamMdClasses = [
     min-width: 0;
     max-width: 100%;
     flex-wrap: nowrap;
+}
+
+/* Per-reply usage is hidden unless the active theme opts in. */
+.cm-usage {
+    display: none;
 }
 
 @media (width < 768px), (pointer: coarse) {

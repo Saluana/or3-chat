@@ -1,5 +1,5 @@
 const SidebarPopoverButtonConfig = {
-    class: 'justify-start font-normal !normal-case border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
+    class: 'justify-start font-normal !normal-case border-0 max-md:min-h-[40px]! max-md:text-[16px]!',
     variant: 'ghost',
     size: 'sm',
     ui: {
@@ -10,7 +10,7 @@ const SidebarPopoverButtonConfig = {
 // Rail buttons: --blank-control-rail hit areas with 22px muted icons on a medium-radius square.
 // Only hover (darker) and the selected item get a soft neutral fill.
 const RailButtonClass =
-    'h-[var(--blank-control-rail,40px)] w-[var(--blank-control-rail,40px)] shrink-0 flex items-center justify-center p-0! border-0! rounded-[var(--md-border-radius)]! transition-colors duration-[var(--app-motion-duration-fast,150ms)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)]! focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]! focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]! max-md:min-h-[44px]! max-md:min-w-[44px]!';
+    'h-[var(--blank-control-rail,40px)] w-[var(--blank-control-rail,40px)] shrink-0 flex items-center justify-center p-0! border-0! rounded-[var(--md-border-radius)]! transition-colors duration-[var(--app-motion-duration-fast,150ms)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)]! focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]! focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]! max-md:min-h-[40px]! max-md:min-w-[40px]!';
 const SidebarRailButtonConfig = {
     variant: 'ghost',
     square: true,
@@ -30,11 +30,11 @@ export const sidebarOverrides = {
     'input#sidebar.search': {
         ui: {
             leadingIcon: 'size-4 text-[var(--blank-sb-icon)]!',
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[var(--blank-control-rail,40px)]! shadow-[var(--app-elevation-low)] max-md:min-h-[44px]! max-md:text-[16px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[var(--blank-control-rail,40px)]! shadow-[var(--app-elevation-low)] max-md:min-h-[40px]! max-md:text-[16px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
-        class: 'h-[36px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer max-md:min-h-[44px]!',
+        class: 'h-[36px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer max-md:min-h-[40px]!',
         ui: {
             base: 'text-[14px]! max-md:text-[16px]!',
             value: 'text-[14px]! max-md:text-[16px]!',
@@ -44,7 +44,7 @@ export const sidebarOverrides = {
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[40px]! max-md:text-[16px]!',
             },
         },
     },
@@ -118,7 +118,7 @@ export const sidebarOverrides = {
         class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-hover)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-active)] hover:text-[var(--md-on-surface)]',
     },
     'button#sidebar.mobile-nav.create-item': {
-        class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
+        class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-md:min-h-[40px]! max-md:text-[16px]!',
     },
 
     /* --- Collapsed sidebar --- */

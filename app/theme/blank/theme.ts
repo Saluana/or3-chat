@@ -206,8 +206,8 @@ export default defineTheme({
                             'text-highlighted bg-default ring-0 border-[color:var(--md-border-color)] focus-visible:ring-1 focus-visible:ring-[color:var(--md-on-surface)]/20',
                     },
                     size: {
-                        sm: { base: 'h-[32px] text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
-                        md: { base: 'h-[36px] text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
+                        sm: { base: 'h-[32px] text-[14px]! max-md:min-h-[40px]! max-md:text-[16px]!' },
+                        md: { base: 'h-[36px] text-[14px]! max-md:min-h-[40px]! max-md:text-[16px]!' },
                         lg: { base: 'h-[44px] text-[16px]!' },
                     },
                 },
@@ -215,11 +215,11 @@ export default defineTheme({
         },
         selectmenu: {
             ui: {
-                base: 'text-[14px] leading-[20px] max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'text-[14px] leading-[20px] max-md:min-h-[40px]! max-md:text-[16px]!',
                 value: 'text-[14px] max-md:text-[16px]!',
                 placeholder: 'text-[14px] max-md:text-[16px]!',
                 label: 'text-[14px] max-md:text-[16px]!',
-                item: 'text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!',
+                item: 'text-[14px] max-md:min-h-[40px]! max-md:text-[16px]!',
                 itemLabel: 'text-[14px] max-md:text-[16px]!',
                 content: 'text-[14px] max-md:text-[16px]!',
             },
@@ -262,7 +262,7 @@ export default defineTheme({
             slots: {
                 root: '',
                 item: 'border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] mb-2 bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]',
-                link: 'h-[var(--app-control-height-medium,36px)] text-[14px]! hover:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:text-[16px]!',
+                link: 'h-[var(--app-control-height-medium,36px)] text-[14px]! hover:bg-[var(--md-surface-active)] max-md:min-h-[40px]! max-md:text-[16px]!',
             },
         },
         modal: {
@@ -312,21 +312,21 @@ export default defineTheme({
                     error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 size: {
-                    xs: { base: 'h-[24px] px-[8px]! text-[12px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[12px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]!' },
                     sm: {
-                        base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[14px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!',
+                        base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]!',
                         leadingIcon: 'shrink-0 h-4 w-4',
                         trailingIcon: 'shrink-0 h-4 w-4',
                     },
-                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-[14px]! text-[14px] max-md:min-h-[44px]! max-md:px-[16px]! max-md:text-[16px]!' },
+                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-[14px]! text-[14px] max-md:min-h-[40px]! max-md:px-[16px]! max-md:text-[16px]!' },
                     lg: { base: 'h-[var(--app-control-height-large,44px)] px-[20px]! text-[16px]' },
                     'sb-square': {
-                        base: 'h-[var(--app-control-height-medium,36px)] w-[var(--app-control-height-medium,36px)] text-[18px] max-md:min-h-[44px]! max-md:min-w-[44px]!',
+                        base: 'h-[var(--app-control-height-medium,36px)] w-[var(--app-control-height-medium,36px)] text-[18px] max-md:min-h-[40px]! max-md:min-w-[40px]!',
                         trailingIcon: 'shrink-0 h-5 w-5',
                         leadingIcon: 'shrink-0 h-5 w-5',
                     },
                     'sb-base': {
-                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[var(--app-control-height-medium,36px)] max-md:min-h-[44px]! max-md:text-[16px]!',
+                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[var(--app-control-height-medium,36px)] max-md:min-h-[40px]! max-md:text-[16px]!',
                         trailingIcon: 'shrink-0 h-5 w-5',
                         leadingIcon: 'shrink-0 h-5 w-5',
                     },
@@ -351,22 +351,22 @@ export default defineTheme({
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
                 size: {
-                    sm: { base: 'h-[var(--app-control-height-small,32px)] px-3! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
-                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-3! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
+                    sm: { base: 'h-[var(--app-control-height-small,32px)] px-3! text-[14px] max-md:min-h-[40px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
+                    md: { base: 'h-[var(--app-control-height-medium,36px)] px-3! text-[14px] max-md:min-h-[40px]! max-md:text-[16px]!', leading: 'ps-3', trailing: 'pe-3' },
                 },
             },
         },
         select: {
             slots: {
-                base: 'min-h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! focus:outline-none! focus-visible:outline-none! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]! max-md:min-h-[44px]!',
+                base: 'min-h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! focus:outline-none! focus-visible:outline-none! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]! max-md:min-h-[40px]!',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))] dark:border-[rgba(255,255,255,0.08)]',
-                item: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[44px]! max-md:text-[16px]!',
+                item: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[40px]! max-md:text-[16px]!',
             },
             variants: { size: fieldSizes },
         },
         tabs: {
             slots: {
-                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)] max-md:min-h-[44px]! max-md:text-[16px]!',
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)] max-md:min-h-[40px]! max-md:text-[16px]!',
             },
             variants: {
                 variant: {
@@ -407,7 +407,7 @@ export default defineTheme({
         toast: {
             slots: {
                 root: 'border-0 rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-lg',
-                close: 'inline-flex items-center justify-center leading-none h-[var(--app-control-height-small,32px)] w-[var(--app-control-height-small,32px)] p-0 rounded-full max-md:min-h-[44px]! max-md:min-w-[44px]!',
+                close: 'inline-flex items-center justify-center leading-none h-[var(--app-control-height-small,32px)] w-[var(--app-control-height-small,32px)] p-0 rounded-full max-md:min-h-[40px]! max-md:min-w-[40px]!',
             },
         },
         popover: {
@@ -418,7 +418,7 @@ export default defineTheme({
         },
         switch: {
             slots: {
-                root: 'relative flex items-start max-md:min-h-[44px] max-md:items-center',
+                root: 'relative flex items-start max-md:min-h-[40px] max-md:items-center',
                 base: [
                     'inline-flex items-center shrink-0 rounded-full border-2 border-transparent focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] data-[state=unchecked]:bg-accented',
                     'transition-[background] duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)]',
@@ -464,13 +464,13 @@ export default defineTheme({
         },
         selectMenu: {
             slots: {
-                base: 'min-h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-lg:text-[16px]! max-md:min-h-[44px]!',
+                base: 'min-h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-lg:text-[16px]! max-md:min-h-[40px]!',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)]! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))]',
                 // SelectMenu applies this slot to UInput's wrapper, not its input.
                 input: 'border-0 rounded-none! focus:outline-none! focus-visible:outline-none! max-lg:text-[16px]! [&_input]:rounded-none! [&_input]:border-0! [&_input]:bg-transparent! [&_input]:shadow-none! [&_input]:ring-0!',
                 arrow: 'h-[18px] w-[18px]',
-                item: 'max-md:min-h-[44px]! max-md:text-[16px]!',
+                item: 'max-md:min-h-[40px]! max-md:text-[16px]!',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },
             variants: { size: fieldSizes },

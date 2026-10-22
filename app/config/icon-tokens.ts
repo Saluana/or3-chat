@@ -42,6 +42,7 @@ export const DEFAULT_ICONS = {
     'chat.message.branch': 'pixelarticons:git-branch',
     'chat.message.continue': 'pixelarticons:play',
     'chat.message.delete': 'pixelarticons:trash',
+    'chat.message.usage': 'pixelarticons:chart-bar',
     'chat.reasoning': 'pixelarticons:lightbulb-on',
 
     // Tool Indicators

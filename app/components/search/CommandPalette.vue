@@ -496,7 +496,7 @@ const modalProps = computed(() =>
     buildThemeOverrideProps(modalOverrides.value, {
         baseClass: [
             'or3-command-palette-modal p-0 overflow-hidden divide-y-0',
-            'w-dvw h-dvh max-w-none max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none',
+            'w-[calc(100dvw/var(--app-ui-zoom,1))] h-[calc(100dvh/var(--app-ui-zoom,1))] max-w-none max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none',
             'sm:w-[min(980px,94dvw)] sm:h-[min(680px,86dvh)] sm:max-h-[86dvh]',
             'sm:top-[max(4dvh,1.5rem)] sm:left-1/2 sm:-translate-x-1/2 sm:rounded-[var(--md-border-radius)]',
         ].join(' '),

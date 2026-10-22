@@ -84,6 +84,18 @@ nullable owner and live tool policy at commit.
 
 ## Usage tips
 
+Assistant messages keep OpenRouter's measurement in `data.usage`. Its top-level
+`prompt_tokens`, `completion_tokens`, `cost` (credits OpenRouter charged),
+`cached_tokens` and `reasoning_tokens` describe the latest provider request only,
+and a later request replaces them because the context budget reads them as current
+occupancy. `data.usage.totals` is the running sum over the reply's measured requests
+(`requests`, tokens, `cost`), including tool-loop iterations and continuations. All
+cost and detail fields are optional and a malformed one is dropped without
+invalidating the measurement; replies saved before totals existed have counters for
+one request. Regenerated replies, aborted requests and side calls such as titles or
+compaction summaries are not counted. Themes opt in to showing the total by
+displaying `.cm-usage` in the message action row.
+
 Interactive [tool cards](/documentation/plugins/tool-cards) reserve
 `data.tool_cards[callId]` for per-call JSON state on assistant messages and
 `data.card_origin` for attribution on card-generated user replies. Both are

@@ -615,7 +615,9 @@ html[data-theme="blank"] {
        floating pill. A reply keeps the row in flow with the first glyph on its
        text edge (the reply's own inset less the button's padding around a 16px
        icon); a user bubble hangs it below its right edge and reserves the room
-       with its bottom margin. Touch and narrow panes use 44px-wide buttons. */
+       with its bottom margin. Buttons keep the desktop 32px width on touch and
+       narrow panes too, so the row reads the same everywhere; the shared message
+       styles still give each a 44px-tall hit region. */
     .cm-actions {
         --blank-action-w: 32px;
         --blank-reply-inset: 4px;
@@ -632,18 +634,6 @@ html[data-theme="blank"] {
     @media (min-width: 40rem) {
         .cm-actions {
             --blank-reply-inset: 20px;
-        }
-    }
-
-    @media (width < 768px), (pointer: coarse) {
-        .cm-actions {
-            --blank-action-w: 44px;
-        }
-    }
-
-    @container chat-pane (width < 768px) {
-        .cm-actions {
-            --blank-action-w: 44px;
         }
     }
 
@@ -664,6 +654,43 @@ html[data-theme="blank"] {
 
     .cm-action-group > * {
         margin: 0;
+    }
+
+    /* Per-reply tokens and cost: a quiet caption with a small icon. It sits at
+       the row's right edge, and beside the action buttons on desktop. The full
+       breakdown is its tooltip; very narrow panes drop it. */
+    .cm-usage {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        align-self: center;
+        margin-inline-start: auto;
+        padding-inline: 8px;
+        color: var(--md-on-surface-variant);
+        font-size: var(--blank-text-caption);
+        line-height: var(--blank-leading-caption);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        opacity: 0.65;
+        cursor: default;
+    }
+
+    .cm-usage-icon {
+        flex: none;
+        width: 14px;
+        height: 14px;
+    }
+
+    @media (hover: hover) and (min-width: 48rem) {
+        .cm-usage {
+            margin-inline-start: 4px;
+        }
+    }
+
+    @container chat-pane (width < 340px) {
+        .cm-usage {
+            display: none;
+        }
     }
 
     /* ── Prose ──
@@ -854,13 +881,16 @@ html[data-theme="blank"] {
 
 /*
  * Message actions are loose icons, not a joined group: each keeps its own
- * radius. Blank's joined-button variant squares the inner corners with
- * `!important` utilities, and an `!important` rule only beats those from an
- * earlier layer.
+ * radius and width. Blank's joined-button variant squares the inner corners,
+ * and the shared message styles set 44px-wide buttons on touch, both with
+ * `!important` utilities, which an `!important` rule only beats from an earlier
+ * layer.
  */
 @layer components {
     html[data-theme="blank"] .cm-action-group > * {
         border-radius: var(--md-border-radius-small) !important;
+        width: var(--blank-action-w) !important;
+        min-width: var(--blank-action-w) !important;
     }
 }
 
@@ -1072,14 +1102,16 @@ html[data-theme='blank']
 /*
  * Mobile interaction scale
  *
- * Apple recommends a 44×44pt hit region for touch controls, 17pt default text,
- * and 11pt as the absolute minimum for supporting text. CSS px maps closely to
- * the iOS layout-point coordinate system in a correctly configured viewport.
- * Keep desktop compact and enforce the larger scale only on touch/small screens.
+ * Touch and narrow screens keep a 40px floor for controls (Apple suggests
+ * 44pt; WCAG 2.2 AA asks for 24px), 16px text in fields so iOS does not zoom,
+ * and 12px as the smallest supporting text. Keep desktop compact and apply the
+ * larger scale only on touch/small screens.
  */
 @media (hover: none) and (pointer: coarse), (max-width: 47.999rem) {
     html[data-theme="blank"] {
-        --blank-mobile-control-min: 44px;
+        /* Touch and narrow screens scale less than desktop's 0.9. */
+        --app-ui-scale: 0.95;
+        --blank-mobile-control-min: 40px;
         --blank-mobile-control-text: 16px;
         --blank-mobile-input-text: 16px;
         --blank-mobile-label-text: 14px;
@@ -1089,7 +1121,7 @@ html[data-theme='blank']
 
     /*
      * Controls size themselves: Nuxt UI variants and the chat/sidebar overrides
-     * carry their own `max-md:min-h-[44px]!`. A blanket min-size on every
+     * carry their own `max-md:min-h-[40px]!`. A blanket min-size on every
      * button/tab clipped fixed-height desktop strips (e.g. workspace tabs) on
      * touch emulation and tablets, so only the tap behaviour is global.
      */
@@ -1429,7 +1461,7 @@ html[data-theme='blank']
 
     /*
      * Mobile workspace chrome: keep the single header row compact while the
-     * Nuxt UI buttons still meet the 44px touch floor from app.config.
+     * Nuxt UI buttons still meet the 40px touch floor from the theme config.
      */
     html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
         .workspace-chrome-active-title {
@@ -1447,7 +1479,7 @@ html[data-theme='blank']
 
     /*
      * New-tab control: paint the compact desktop-sized square and let the
-     * pseudo-element keep the 44px touch floor (same pattern as the composer).
+     * pseudo-element extend the hit region (same pattern as the composer).
      */
     html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
         .workspace-chrome-new-tab .workspace-tab-new {

@@ -78,6 +78,27 @@ describe('parseOpenRouterSSE', () => {
             { type: 'usage', usage: { prompt_tokens: 55, completion_tokens: 3 } },
         ]);
     });
+    it('captures OpenRouter cost and detail counters alongside the token counts', async () => {
+        const usage = { prompt_tokens: 120, completion_tokens: 30, cost: 0.00042,
+            prompt_tokens_details: { cached_tokens: 80 }, completion_tokens_details: { reasoning_tokens: 12 } };
+        const body = `data: ${JSON.stringify({ id: 'gen-1', model: 'm', choices: [], usage })}\n\ndata: [DONE]\n\n`;
+        expect((await collect(streamFromSSE(body))).filter((event) => event.type === 'usage')).toEqual([{ type: 'usage', usage: {
+            prompt_tokens: 120, completion_tokens: 30, model: 'm', response_id: 'gen-1', cost: 0.00042, cached_tokens: 80, reasoning_tokens: 12 } }]);
+    });
+    it.each([
+        { cost: -0.1 }, { cost: '0.5' }, { cost: null }, { cost: { value: 1 } },
+        { prompt_tokens_details: { cached_tokens: -1 } }, { completion_tokens_details: { reasoning_tokens: 1.5 } },
+        { prompt_tokens_details: 'many' },
+    ])('drops a malformed cost or detail counter but keeps the measured tokens %#', async (extra) => {
+        const body = `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 20, completion_tokens: 2, ...extra } })}\n\ndata: [DONE]\n\n`;
+        expect((await collect(streamFromSSE(body))).filter((event) => event.type === 'usage')).toEqual([
+            { type: 'usage', usage: { prompt_tokens: 20, completion_tokens: 2 } }]);
+    });
+    it('retains an explicit zero cost for a free request', async () => {
+        const body = `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 20, completion_tokens: 2, cost: 0 } })}\n\ndata: [DONE]\n\n`;
+        expect((await collect(streamFromSSE(body))).filter((event) => event.type === 'usage')).toEqual([
+            { type: 'usage', usage: { prompt_tokens: 20, completion_tokens: 2, cost: 0 } }]);
+    });
     it('emits all reasoning_details entries in order', async () => {
         const sse = [
             'data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"plan"},{"type":"reasoning.summary","summary":"summary"}]}}]}',

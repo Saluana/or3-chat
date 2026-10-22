@@ -2,11 +2,25 @@ import { z } from 'zod';
 
 const identifier = z.string().min(1);
 const counter = z.number().int().nonnegative().safe();
+const credits = z.number().finite().nonnegative();
+// Optional usage extras never invalidate the measurement the context budget relies on.
+export const UsageTotalsSchema = z.object({
+    requests: counter, prompt_tokens: counter, completion_tokens: counter,
+    cost: credits.optional().catch(undefined),
+    cached_tokens: counter.optional().catch(undefined),
+    reasoning_tokens: counter.optional().catch(undefined),
+});
+export type UsageTotals = z.infer<typeof UsageTotalsSchema>;
 export const RequestUsageSchema = z.object({
     prompt_tokens: counter, completion_tokens: counter, model: identifier,
     request_id: identifier, iteration: counter, measured_at: counter,
     prefix_message_count: counter, prefix_hash: identifier,
     configuration_hash: identifier, input_estimate_tokens: counter,
+    cost: credits.optional().catch(undefined),
+    cached_tokens: counter.optional().catch(undefined),
+    reasoning_tokens: counter.optional().catch(undefined),
+    /** Running sum over this reply's measured provider requests; the fields above describe the latest request only. */
+    totals: UsageTotalsSchema.optional().catch(undefined),
 });
 export type RequestUsage = z.infer<typeof RequestUsageSchema>;
 

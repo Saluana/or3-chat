@@ -675,33 +675,53 @@ html[data-motion-resolved='reduced'] *::after {
 	}
 }
 
-/* Desktop interface scale. `--app-ui-scale` is the chosen scale (a theme
-   default, or the user's Theme settings override on <html>). On hover-capable
-   screens 768px and wider the app shell renders at that scale through CSS zoom
-   on <body>, so portaled menus and modals inherit it. Reading surfaces undo it,
-   which keeps message and document text at its own size. `zoom` does not
-   rescale viewport units, so the shell divides its 100dvh by the scale. */
+/* Interface scale. `--app-ui-scale` is the chosen scale (a theme default, or
+   the user's Theme settings override on <html>). Wherever the app shell is
+   mounted it renders at that scale through CSS zoom on <body>, so portaled
+   menus and modals inherit it. Reading surfaces undo it, which keeps message
+   and document text at its own size. `zoom` does not rescale viewport units,
+   so the shell divides its 100dvh by the scale. */
 html {
 	--app-ui-zoom: 1;
 }
 
-@media (hover: hover) and (min-width: 48rem) {
-	html:has(#page-container) {
-		--app-ui-zoom: var(--app-ui-scale, 1);
-	}
+html:has(#page-container) {
+	--app-ui-zoom: var(--app-ui-scale, 1);
+}
 
-	html:has(#page-container) body {
-		zoom: var(--app-ui-zoom);
-	}
+html:has(#page-container) body {
+	zoom: var(--app-ui-zoom);
+}
 
-	#page-container {
-		height: calc(100dvh / var(--app-ui-zoom));
-	}
+#page-container {
+	height: calc(100dvh / var(--app-ui-zoom));
 }
 
 .or3-prose,
 .cm-text-user {
 	zoom: calc(1 / var(--app-ui-zoom));
+}
+
+/* iOS Safari zooms the page into a focused field whose rendered text is under
+   16px, and the shell's zoom shrinks the 16px fields declare. On touch screens
+   text fields undo the scale; the document editor already sits inside
+   `.or3-prose`, which does. */
+@media (hover: none) and (pointer: coarse) {
+	:is(
+			input:not([type]),
+			input[type='text'],
+			input[type='search'],
+			input[type='email'],
+			input[type='password'],
+			input[type='url'],
+			input[type='tel'],
+			input[type='number'],
+			textarea,
+			select,
+			[contenteditable]:not([contenteditable='false'])
+		):not(.or3-prose *) {
+		zoom: calc(1 / var(--app-ui-zoom));
+	}
 }
 
 /* Floating UI measures a fixed popper wrapper in viewport pixels but places it
@@ -712,5 +732,16 @@ html {
 }
 
 [data-reka-popper-content-wrapper] > * {
+	zoom: var(--app-ui-zoom);
+}
+
+/* The virtual scroller sizes rows in screen pixels, so it runs at the viewport
+   scale and each row carries the zoom; otherwise its heights and scroll offsets
+   disagree and the list stops short of the bottom. */
+.or3-scroll {
+	zoom: calc(1 / var(--app-ui-zoom));
+}
+
+.or3-scroll-item > * {
 	zoom: var(--app-ui-zoom);
 }

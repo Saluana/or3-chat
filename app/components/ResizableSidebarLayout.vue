@@ -203,13 +203,20 @@ onMounted(() => {
             visualViewportStyle.value = {};
             return;
         }
+        // The visual viewport is in screen pixels; the shell may be zoomed.
+        const zoom =
+            parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue(
+                    '--app-ui-zoom'
+                )
+            ) || 1;
         visualViewportStyle.value = {
             position: 'fixed',
-            top: `${viewport.offsetTop}px`,
+            top: `${viewport.offsetTop / zoom}px`,
             insetInline: '0',
             paddingInlineStart: 'env(safe-area-inset-left)',
             paddingInlineEnd: 'env(safe-area-inset-right)',
-            height: `${viewport.height}px`,
+            height: `${viewport.height / zoom}px`,
         };
     };
     const queueUpdate = () => {
@@ -602,7 +609,7 @@ const toggleAria = computed(() =>
 <style scoped>
 .resizable-sidebar {
     width: 100%;
-    max-width: 100dvw;
+    max-width: calc(100dvw / var(--app-ui-zoom, 1));
 }
 
 @media (min-width: 768px) {

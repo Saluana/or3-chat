@@ -1,5 +1,5 @@
-import { readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
-import type { RequestUsage } from '~~/shared/chat/compaction';
+import { addUsageTotals, readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
+import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 /**
@@ -693,6 +693,8 @@ export async function continueMessageImpl(
         });
 
         let requestUsage: RequestUsage | undefined;
+        // A continuation extends the reply, so its request adds to what was already spent.
+        const priorUsageTotals = readRequestUsage((target.data as Record<string, unknown> | null | undefined)?.usage)?.totals;
         const flushProgress = async () => {
             await writeCoalescer.flush(async () => {
                 await persistAssistant({
@@ -718,7 +720,7 @@ export async function continueMessageImpl(
                 if (!ownsThread()) throw new ContinuationOwnershipLost();
                 if (ev.type === 'usage') {
                     const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
-                    if (measured) { requestUsage = { ...measured, iteration: 1 }; writeCoalescer.markDirty(); }
+                    if (measured) { requestUsage = { ...measured, iteration: 1, totals: addUsageTotals(priorUsageTotals, ev.usage) }; writeCoalescer.markDirty(); }
                 } else if (ev.type === 'reasoning') {
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;

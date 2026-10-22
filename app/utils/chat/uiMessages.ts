@@ -13,7 +13,7 @@ import {
 
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
-import { readCompactionData, type CompactionData } from '~~/shared/chat/compaction';
+import { readCompactionData, readRequestUsage, type CompactionData, type RequestUsage } from '~~/shared/chat/compaction';
 import {
     isWorkflowMessageData,
     type UiWorkflowState,
@@ -118,6 +118,8 @@ export interface UiChatMessage {
     errorEnvelope?: string | null;
     /** Validated host summary boundary, preserved through canonical reload. */
     compaction?: CompactionData;
+    /** Measured provider usage of an assistant reply (`data.usage`), when valid. */
+    usage?: RequestUsage;
 
     // Workflow-specific fields (optional - no breaking changes)
     /** True if this message represents a workflow execution */
@@ -310,5 +312,6 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         ...(raw.data?.project_context ? { data: { project_context: raw.data.project_context, project_context_iterations: raw.data.project_context_iterations } } : {}),
         ...(role === 'system' && raw.data?.kind === 'compaction'
             ? { compaction: readCompactionData(raw.data.compaction) } : {}),
+        ...(role === 'assistant' && raw.data?.usage ? { usage: readRequestUsage(raw.data.usage) } : {}),
     };
 }

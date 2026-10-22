@@ -53,7 +53,7 @@ function restoreFocus(event: Event) {
         </aside>
         <USlideover v-if="narrow && inspector" v-model:open="drawerOpen" title="Details"
             :content="{ onCloseAutoFocus: restoreFocus }"
-            :ui="{ content: 'w-[min(100vw,400px)] max-w-full', body: 'p-0 sm:p-0', header: 'py-3 min-h-0' }">
+            :ui="{ content: 'w-[min(calc(100vw/var(--app-ui-zoom,1)),400px)] max-w-full', body: 'p-0 sm:p-0', header: 'py-3 min-h-0' }">
             <template #content>
                 <div class="portable-workspace-inspector portable-workspace-drawer portable-column">
                     <slot name="notices" />

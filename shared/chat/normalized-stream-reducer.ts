@@ -1,5 +1,5 @@
-import { readMeasuredRequestUsage } from './request-usage';
-import type { RequestUsage } from './compaction';
+import { addUsageTotals, readMeasuredRequestUsage } from './request-usage';
+import type { RequestUsage, UsageTotals } from './compaction';
 import { normalizeProviderRequestUsage, type ORStreamEvent, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
 import {
     CANONICAL_MESSAGE_FIXED_BYTES,
@@ -23,6 +23,8 @@ export type NormalizedStreamState = {
     /** Last measured provider request, never a sum of tool-loop prompt occupancy. */
     usage?: ProviderRequestUsage & { iteration: number };
     requestUsage?: RequestUsage;
+    /** Sum of the measured requests of completed iterations; the current one is added when it reports. */
+    usageTotals?: UsageTotals;
     cumulativeText: string;
     iterationText: string;
     reasoningText: string;
@@ -67,8 +69,10 @@ export function createNormalizedStreamState(options?: {
 export function beginNormalizedIteration(
     state: NormalizedStreamState
 ): NormalizedStreamState {
+    const finished = state.usage?.iteration === state.iteration ? state.usage : undefined;
     return {
         ...state,
+        usageTotals: finished ? addUsageTotals(state.usageTotals, finished) : state.usageTotals,
         iteration: state.iteration + 1,
         iterationText: '',
         iterationToolCallIds: [],
@@ -144,7 +148,7 @@ export function reduceNormalizedStreamEvent(
         if (!measurement) return state;
         const usage = { ...measurement, iteration: state.iteration };
         const record = readMeasuredRequestUsage(measurement, event.requestUsage);
-        const requestUsage = record ? { ...record, iteration: state.iteration } : undefined;
+        const requestUsage = record ? { ...record, iteration: state.iteration, totals: addUsageTotals(state.usageTotals, measurement) } : undefined;
         return JSON.stringify(state.usage) === JSON.stringify(usage) && JSON.stringify(state.requestUsage) === JSON.stringify(requestUsage)
             ? state : { ...state, usage, requestUsage };
     }

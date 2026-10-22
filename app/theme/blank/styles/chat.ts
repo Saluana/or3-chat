@@ -2,7 +2,7 @@
 const chatInputButtonConfig = {
     variant: 'ghost' as const,
     size: 'sm' as const,
-    class: 'min-h-[32px] w-[32px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    class: 'min-h-[32px] w-[32px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 max-md:min-h-[40px]! max-md:min-w-[40px]!',
 };
 
 export const chatOverrides = {
@@ -15,8 +15,10 @@ export const chatOverrides = {
         label: 'Scroll to bottom',
     },
     // Message action buttons: subtle gray icons
+    // Disabled actions (retry/branch/edit while a reply streams) dim and take no hover
+    // fill, so they read as unavailable rather than as filled buttons.
     'button.message': {
-        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
+        class: 'flex items-center justify-center bg-transparent disabled:bg-transparent aria-disabled:bg-transparent disabled:hover:bg-transparent aria-disabled:hover:bg-transparent disabled:active:bg-transparent disabled:opacity-40 aria-disabled:opacity-40 text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
     },
     'button#message.reasoning-toggle': {
         class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
@@ -38,19 +40,19 @@ export const chatOverrides = {
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
     'selectmenu#chat.model-select': {
-        class: 'h-[36px] rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+        class: 'h-[36px] rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]! max-md:min-h-[40px]! max-md:text-[16px]!',
         ui: {
-            base: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+            base: 'text-[14px]! max-md:min-h-[40px]! max-md:text-[16px]!',
             value: 'text-[14px]! max-md:text-[16px]!',
             placeholder: 'text-[14px]! max-md:text-[16px]!',
-            item: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+            item: 'text-[14px]! max-md:min-h-[40px]! max-md:text-[16px]!',
             itemLabel: 'text-[14px]! max-md:text-[16px]!',
             content:
                 'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[40px]! max-md:text-[16px]!',
             },
         },
     },

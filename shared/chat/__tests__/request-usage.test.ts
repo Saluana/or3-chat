@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { captureUsagePrefix, attachRequestUsage, readMeasuredRequestUsage, estimateMeasuredChatRequest } from '../request-usage';
+import { captureUsagePrefix, attachRequestUsage, readMeasuredRequestUsage, estimateMeasuredChatRequest, addUsageTotals } from '../request-usage';
+import { readRequestUsage } from '../compaction';
 import { estimateChatRequest, type CountableChatMessage } from '../context-budget';
 const countText = async (text: string) => Math.ceil(text.length / 4);
 const request = () => ({ model: 'large-model', messages: [{ role: 'user', content: 'Original task' }],
@@ -104,4 +105,25 @@ describe('measured request prefix provenance', () => {
         expect(readMeasuredRequestUsage(initial, { ...record, prefix_hash: '' })).toBeUndefined();
     });
 
+});
+
+describe('reply usage totals', () => {
+    it('adds each request, keeping cost and detail counters absent until some request reports them', () => {
+        const first = addUsageTotals(undefined, { prompt_tokens: 100, completion_tokens: 10 });
+        expect(first).toEqual({ requests: 1, prompt_tokens: 100, completion_tokens: 10 });
+        const second = addUsageTotals(first, { prompt_tokens: 150, completion_tokens: 30, cost: 0.002, cached_tokens: 100, reasoning_tokens: 5 });
+        expect(second).toEqual({ requests: 2, prompt_tokens: 250, completion_tokens: 40, cost: 0.002, cached_tokens: 100, reasoning_tokens: 5 });
+        expect(addUsageTotals(second, { prompt_tokens: 1, completion_tokens: 1, cost: 0.001 })).toMatchObject({ requests: 3, cost: 0.003, cached_tokens: 100 });
+    });
+    it('carries cost into the measured record and survives malformed extras without losing the measurement', async () => {
+        const prefix = await captureUsagePrefix(request());
+        const usage = attachRequestUsage(prefix, { prompt_tokens: 10, completion_tokens: 2, cost: 0.5, cached_tokens: 4 }, { requestId: 'r', iteration: 1, measuredAt: 1 })!;
+        expect(usage).toMatchObject({ prompt_tokens: 10, cost: 0.5, cached_tokens: 4 });
+        for (const bad of [{ cost: 'free' }, { cost: -1 }, { cached_tokens: 1.5 }, { totals: { requests: 'many' } }, { totals: null }]) {
+            const read = readRequestUsage({ ...usage, ...bad });
+            expect(read).toMatchObject({ prompt_tokens: 10, completion_tokens: 2, request_id: 'r' });
+        }
+        expect(readRequestUsage({ ...usage, totals: { requests: 2, prompt_tokens: 30, completion_tokens: 6, cost: 'x' } })?.totals)
+            .toEqual({ requests: 2, prompt_tokens: 30, completion_tokens: 6 });
+    });
 });

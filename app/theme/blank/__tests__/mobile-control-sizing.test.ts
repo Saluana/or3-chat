@@ -24,14 +24,14 @@ const sidebarOverrides = readFileSync(
 );
 
 describe('blank theme mobile control sizing', () => {
-    it('defines an Apple-sized mobile interaction and type scale', () => {
-        expect(blankStyles).toContain('--blank-mobile-control-min: 44px');
+    it('defines a 40px mobile interaction floor and type scale', () => {
+        expect(blankStyles).toContain('--blank-mobile-control-min: 40px');
         expect(blankStyles).toContain('--blank-mobile-control-text: 16px');
         expect(blankStyles).toContain('--blank-mobile-label-text: 14px');
         expect(blankStyles).toContain('--blank-mobile-supporting-text: 12px');
     });
 
-    it('does not impose a blanket 44px minimum on every button, tab or menu item', () => {
+    it('does not impose a blanket mobile minimum on every button, tab or menu item', () => {
         expect(blankStyles).not.toMatch(
             /\[role="tab"\][\s\S]{0,80}\)\s*\{[^}]*min-(height|width): var\(--blank-mobile-control-min\) !important/,
         );
@@ -61,7 +61,7 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('.sidebar-rail-caption');
     });
 
-    it('keeps tokenized desktop fallbacks and 44px mobile variants', () => {
+    it('keeps tokenized desktop fallbacks and 40px mobile variants', () => {
         const buttonSizes = blankUi.button.variants.size;
         expect(buttonSizes.xs.base).toContain('h-[24px]');
         expect(buttonSizes.sm.base).toContain(
@@ -70,13 +70,13 @@ describe('blank theme mobile control sizing', () => {
         expect(buttonSizes.md.base).toContain(
             'h-[var(--app-control-height-medium,36px)]',
         );
-        expect(buttonSizes.xs.base).toContain('max-md:min-h-[44px]!');
-        expect(buttonSizes.sm.base).toContain('max-md:min-h-[44px]!');
-        expect(buttonSizes.md.base).toContain('max-md:min-h-[44px]!');
+        expect(buttonSizes.xs.base).toContain('max-md:min-h-[40px]!');
+        expect(buttonSizes.sm.base).toContain('max-md:min-h-[40px]!');
+        expect(buttonSizes.md.base).toContain('max-md:min-h-[40px]!');
         // Modal close matches the shared AppModal shell: 44px at every width.
         expect(blankUi.modal.slots.close).toContain('size-[44px]');
-        expect(blankUi.toast.slots.close).toContain('max-md:min-h-[44px]!');
-        expect(blankUi.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
+        expect(blankUi.toast.slots.close).toContain('max-md:min-h-[40px]!');
+        expect(blankUi.tabs.slots.trigger).toContain('max-md:min-h-[40px]!');
     });
 
     it('preserves the mobile caret and standalone document controls', () => {
@@ -102,11 +102,11 @@ describe('blank theme mobile control sizing', () => {
     });
 
     it('keeps chat and sidebar override-specific controls touch sized', () => {
-        expect(chatOverrides).toContain('max-md:min-h-[44px]!');
-        expect(chatOverrides).toContain('max-md:min-w-[44px]!');
+        expect(chatOverrides).toContain('max-md:min-h-[40px]!');
+        expect(chatOverrides).toContain('max-md:min-w-[40px]!');
         expect(chatOverrides).toContain('max-md:text-[16px]!');
-        expect(sidebarOverrides).toContain('max-md:min-h-[44px]!');
-        expect(sidebarOverrides).toContain('max-md:min-w-[44px]!');
+        expect(sidebarOverrides).toContain('max-md:min-h-[40px]!');
+        expect(sidebarOverrides).toContain('max-md:min-w-[40px]!');
         expect(sidebarOverrides).toContain('max-md:text-[16px]!');
     });
 });
