@@ -65,6 +65,12 @@ describe('validateWebhookUrl', () => {
         'http://[100::1]/hooks',
         'http://[2001:db8::1]/hooks',
         'http://[::ffff:127.0.0.1]/hooks',
+        'http://[64:ff9b::7f00:1]/hooks',
+        'http://[64:ff9b:1::a00:1]/hooks',
+        'http://[::ffff:0:7f00:1]/hooks',
+        'http://[2002:7f00:1::1]/hooks',
+        'http://[0064:ff9b:0000:0000:0000:0000:0a00:0001]/hooks',
+
     ])('blocks private targets when enabled: %s', async (url) => {
         await expect(
             validateWebhookUrl(url, {

@@ -30,6 +30,7 @@ import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 import { requirePluginMutation } from '../../../utils/plugins/connections/api-context';
 import { resolvePluginPackage } from '../../../utils/plugins/setup/discovery';
 import { registerHostActivation } from '../../../utils/plugins/isolation/activation-registry';
+import { checkPluginRuntimePolicy } from '../../../utils/plugins/isolation/activation-authorization';
 
 type ActivationBody = {
     readonly pluginId?: unknown;
@@ -81,6 +82,15 @@ export default defineEventHandler(async (event) => {
             statusCode: 409,
             statusMessage: 'The selected plugin package is unreadable.',
         });
+    }
+    const runtimeRefusal = checkPluginRuntimePolicy({
+        workspaceId,
+        packageDigest: selected.digest,
+        manifestVersion: manifest.manifestVersion,
+    });
+    if (runtimeRefusal) {
+        throw createError({ statusCode: runtimeRefusal.statusCode, statusMessage: runtimeRefusal.message,
+            data: { code: runtimeRefusal.code } });
     }
     const enabled = await getEnabledPlugins(getWorkspaceSettingsStore(event), workspaceId);
     if (!enabled.includes(pluginId)) {

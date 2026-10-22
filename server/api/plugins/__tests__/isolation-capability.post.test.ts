@@ -4,6 +4,7 @@ import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import {
     clearHostActivationsForTests,
     registerHostActivation,
+    resolveHostActivation,
     revokeHostActivation,
     type HostActivationRecord,
 } from '../../../utils/plugins/isolation/activation-registry';
@@ -300,7 +301,7 @@ describe('POST /api/plugins/isolation/capability', () => {
         getPluginGrantReviewMock.mockReset().mockResolvedValue(grants(['network.http']));
         configMock.mockReset().mockReturnValue({
             auth: { enabled: true },
-            admin: {},
+            admin: { pluginModuleLoaderV2Enabled: true },
             openrouterApiKey: '',
         });
         record = registerHostActivation({
@@ -315,6 +316,21 @@ describe('POST /api/plugins/isolation/capability', () => {
             method: 'unknown.method',
             params: {},
         });
+    });
+
+    // Operator restrictions must deny an otherwise usable package before dispatch.
+    it.each([
+        { disableNonCorePlugins: true },
+        { pluginRuntimeLoaderEnabled: false },
+        { pluginModuleLoaderV2Enabled: false },
+        { pluginModuleLoaderV2WorkspaceIds: ['other-workspace'] },
+    ])('enforces operator runtime policy %j', async policy => {
+        configMock.mockReturnValue({ ...configMock(), admin: { pluginModuleLoaderV2Enabled: true, ...policy } });
+        readBodyMock.mockResolvedValue({ activationId: record.activationId, method: 'unknown.method', params: {} });
+        await expectStatus(handler(makeEvent()), 403);
+        expect(dispatchMock).not.toHaveBeenCalled();
+        expect(aiFactoryMock).not.toHaveBeenCalled();
+        expect(resolveHostActivation(record.activationId)).toMatchObject({ ok: false });
     });
 
     it('runs the mutation guard before reading anything else', async () => {
@@ -429,6 +445,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             auth: { enabled: true },
             openrouterApiKey: 'sk-or-host',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -471,7 +488,7 @@ describe('POST /api/plugins/isolation/capability', () => {
         configMock.mockReturnValue({
             auth: { enabled: true },
             openrouterApiKey: 'sk-or-host',
-            admin: {},
+            admin: { pluginModuleLoaderV2Enabled: true },
         });
         readBodyMock.mockResolvedValue({
             activationId: unapproved.activationId,
@@ -490,6 +507,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -549,6 +567,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             auth: { enabled: true },
             openrouterApiKey: 'sk-or-host',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -593,6 +612,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -637,6 +657,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -776,6 +797,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -947,6 +969,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -992,6 +1015,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -1020,6 +1044,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },
@@ -1053,6 +1078,7 @@ describe('POST /api/plugins/isolation/capability', () => {
             openrouterApiKey: 'sk-or-host',
             openrouterBaseUrl: 'https://openrouter.ai/api/v1',
             admin: {
+                pluginModuleLoaderV2Enabled: true,
                 pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
                 pluginAllowedModels: ['m'],
             },

@@ -49,6 +49,13 @@ to the configured account and are attributed to the acting plugin.
 
 ## Host access checks
 
+Operator runtime restrictions also gate server activation and capability calls.
+Safe mode and a disabled runtime loader prevent activation. Immutable packages
+and legacy V2 manifests additionally require the V2 module loader and an allowed
+workspace. Every capability/settings authorization rechecks these restrictions;
+a denied existing activation is revoked before dispatch. Approved grants do
+not override these operator settings.
+
 Host setup reads and writes require `plugins.manage`. Owners can configure an
 installed current package without starting it. Runtime settings reads pass the
 plugin access gate; runtime writes require a live activation for the selected

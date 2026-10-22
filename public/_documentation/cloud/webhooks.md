@@ -552,3 +552,12 @@ Logs are retained for the configured `OR3_WEBHOOKS_LOG_RETENTION_HOURS` (default
 | All deliveries fail immediately | Target URL resolves to private IP | Set `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS=false` for local dev |
 | Signature verification fails | Body was parsed/re-serialized before verification | Use raw body string for HMAC computation |
 | Deliveries stop retrying | Retry window expired | Increase `OR3_WEBHOOKS_MAX_RETRY_HOURS` or fix receiver |
+
+## IPv6 translation destinations
+
+When private-address blocking is enabled, URL admission and connect-time DNS
+validation reject NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`), IPv4-translated
+(`::ffff:0:0:0/96`) and 6to4 (`2002::/16`) destinations. These special-use
+ranges depend on translation or tunnel routing, so the entire prefix is denied
+rather than guessing its final IPv4 destination. Ordinary public IPv6 remains
+supported. This uses the existing private-address blocking setting.

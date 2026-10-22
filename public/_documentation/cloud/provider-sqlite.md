@@ -188,3 +188,29 @@ This feature is included in `or3-provider-sqlite@0.0.17`, pinned by this release
 - [Sync internals](/documentation/cloud/sync-layer)
 - [Basic Auth](/documentation/cloud/provider-basic-auth)
 - [Filesystem](/documentation/cloud/provider-fs)
+
+## Verified quota accounting and device ownership
+
+Upload quota admission groups unexpired pending authorizations by hash and
+reserves atomically on native SQLite and D1. Migration 027 replaces the
+metadata-derived charges from migration 026 with persisted, verified consumed
+upload receipts. Client-authored file sizes cannot create retained charges.
+Trash, logical deletion and receipt replay expiry do not release verified
+charges; restoring the same hash does not double-charge it. A larger upload
+reserves the difference above its verified retained size.
+
+Pre-receipt files and raw incomplete uploads are outside this verified ledger;
+metadata alone cannot prove their physical size. Existing consumed receipts are
+retained and reconciled during upgrade. Physical filesystem/S3 GC remains
+disabled. The provider advertises `atomicUploadQuota: 'retained-v1'`; configure
+`OR3_STORAGE_WORKSPACE_QUOTA_BYTES` to enforce a quota (the default is unlimited).
+
+Migration 028 namespaces device acknowledgements by workspace, authenticated
+user and device ID. Accounts sharing one browser maintain independent monotonic
+positions. Existing owned positions remain; legacy unowned rows are ignored by
+updates and expire through the normal cursor retention policy. The workspace
+change-log version and client cursor protocol remain unchanged.
+
+Migrations 027–028 are forward-only. Keep a pre-upgrade database backup;
+rolling back the provider requires restoring that snapshot because the old
+adapter expects the previous device-cursor unique key.

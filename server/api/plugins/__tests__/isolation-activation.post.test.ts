@@ -146,7 +146,18 @@ describe('POST /api/plugins/isolation/activation', () => {
             authoritySha256: null,
             packageDigest: DIGEST,
         });
-        configMock.mockReset().mockReturnValue({ auth: { enabled: true }, admin: {} });
+        configMock.mockReset().mockReturnValue({ auth: { enabled: true }, admin: { pluginModuleLoaderV2Enabled: true } });
+    });
+
+    // Operator restrictions must deny an otherwise usable package before dispatch.
+    it.each([
+        { disableNonCorePlugins: true },
+        { pluginRuntimeLoaderEnabled: false },
+        { pluginModuleLoaderV2Enabled: false },
+        { pluginModuleLoaderV2WorkspaceIds: ['other-workspace'] },
+    ])('enforces operator runtime policy %j', async policy => {
+        configMock.mockReturnValue({ ...configMock(), admin: { pluginModuleLoaderV2Enabled: true, ...policy } });
+        await expectStatus(handler(makeEvent()), 403);
     });
 
     it('runs the mutation guard before reading anything else', async () => {
