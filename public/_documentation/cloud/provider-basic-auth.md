@@ -8,6 +8,7 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 
 - SSR auth endpoints for sign-in/sign-out/session/refresh.
 - Self-service registration endpoint (`POST /api/basic-auth/register`) when registration mode allows it.
+- Failed registration, including rejected cross-origin requests, preserves existing login cookies.
 - Local account storage (provider-managed DB).
 - Session tokens for server-gated routes (`can()` enforcement remains in core routes).
 - Provider auth UI adapter registration (when the provider package is installed).

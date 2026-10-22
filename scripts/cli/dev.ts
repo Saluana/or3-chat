@@ -245,7 +245,8 @@ export function parseHost(argv: string[], env: NodeJS.ProcessEnv = process.env):
         const arg = argv[index];
         if (arg === '--host') {
             const value = argv[index + 1];
-            if (value && !value.startsWith('--')) return value;
+            if (value && !value.startsWith('-')) return value;
+            return '0.0.0.0';
         }
         if (arg?.startsWith('--host=')) {
             return arg.slice('--host='.length);
@@ -350,7 +351,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     const ssr = argv.includes('--or3-ssr');
     const nuxtArgs = argv.filter(
         (arg) => arg !== '--or3-offline' && arg !== '--or3-ssr'
-    );
+    ).map((arg, index, args) => {
+        // Nuxt's string-option parser otherwise consumes the next flag as the
+        // host and mistakes the supervisor's launch.env for the project root.
+        return arg === '--host' && (!args[index + 1] || args[index + 1]!.startsWith('-'))
+            ? '--host=0.0.0.0'
+            : arg;
+    });
     const sourceOverrides = { ...inheritedEnvironment };
     if (offline) Object.assign(sourceOverrides, { SSR_AUTH_ENABLED: 'false', NUXT_SECRETS_PROVIDER: '', OR3_SYNC_ENABLED: 'false', OR3_CLOUD_SYNC_ENABLED: 'false', OR3_STORAGE_ENABLED: 'false', OR3_CLOUD_STORAGE_ENABLED: 'false', OR3_BACKGROUND_STREAMING_ENABLED: 'false' });
     else if (ssr) sourceOverrides.SSR_AUTH_ENABLED = 'true';

@@ -6,8 +6,11 @@ const bindCandidateOperationMock = vi.fn();
 const authorizeHostActivationMock = vi.fn();
 const checkHostActivationLiveMock = vi.fn();
 const runPluginOperationMock = vi.fn();
+const requirePluginAccessMock = vi.fn();
+const loadSetupStateMock = vi.fn();
 let body: Record<string, unknown> = {};
 let query: Record<string, unknown> = {};
+let role: 'owner' | 'editor' = 'owner';
 
 const DIGEST_A = `sha256-${'a'.repeat(64)}`;
 const DIGEST_B = `sha256-${'b'.repeat(64)}`;
@@ -41,13 +44,15 @@ vi.mock('../../../utils/plugins/isolation/activation-authorization', () => ({
     checkHostActivationLive: (...args: unknown[]) => checkHostActivationLiveMock(...args),
 }));
 
-vi.mock('../../../auth/can', () => ({
-    requireCan: () => undefined,
-    requireSession: () => undefined,
+vi.mock('../../../auth/hooks', () => ({
+    isAuthHookEngineInitialized: () => false,
+    getAuthHookEngine: vi.fn(),
 }));
 
 vi.mock('../../../auth/session', () => ({
     resolveSessionContext: async () => ({
+        authenticated: true,
+        role,
         workspace: { id: 'ws-1' },
         user: { id: 'user-1' },
     }),
@@ -59,6 +64,19 @@ vi.mock('../../../utils/security/limited-json-body', () => ({
 
 vi.mock('../../../utils/plugins/connections/api-context', () => ({
     requirePluginMutation: () => undefined,
+}));
+
+vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
+    requirePluginAccess: (...args: unknown[]) => requirePluginAccessMock(...args),
+}));
+vi.mock('../../../admin/plugins/package-operation-support', () => ({
+    readPackageManifest: async () => ({ access: { roles: ['owner'] } }),
+}));
+vi.mock('../../../utils/plugins/connections/resolve', () => ({
+    resolveConnectionService: () => ({ service: {}, durable: false }),
+}));
+vi.mock('../../../utils/plugins/setup/state', () => ({
+    loadSetupState: (...args: unknown[]) => loadSetupStateMock(...args),
 }));
 
 vi.mock('../../../admin/extensions/paths', () => ({
@@ -115,6 +133,9 @@ async function callRoute(): Promise<Record<string, unknown>> {
 
 describe('setup values candidate binding', () => {
     beforeEach(() => {
+        role = 'owner';
+        requirePluginAccessMock.mockReset().mockResolvedValue({});
+        loadSetupStateMock.mockReset().mockResolvedValue({ installed: true, plan: null, values: { token: 'saved' } });
         query = {};
         body = {
             values: { token: 'stale-form' },
@@ -144,7 +165,7 @@ describe('setup values candidate binding', () => {
         });
         authorizeHostActivationMock.mockReset().mockResolvedValue({
             ok: true,
-            record: { pluginId: 'sample.plugin' },
+            record: { pluginId: 'sample.plugin', grants: { approvedGrants: ['settings.write'] } },
             review: {},
         });
         checkHostActivationLiveMock.mockReset().mockReturnValue({
@@ -158,12 +179,61 @@ describe('setup values candidate binding', () => {
             );
     });
 
+    // Failure inventory: omitted runtime intent bypasses activation; a valid
+    // handle without settings.write must not authorize saves; owners still set up candidates.
+    it('rejects an editor save that omits its activation and runtime slot', async () => {
+        role = 'editor';
+        body = { values: { token: 'runtime' }, expectedPackageDigest: DIGEST_B };
+        await expect(callRoute()).rejects.toMatchObject({ statusCode: 403 });
+        expect(patchSetupValuesMock).not.toHaveBeenCalled();
+    });
+
+    it('checks an activation even when its runtime slot is omitted', async () => {
+        role = 'editor';
+        body = { values: { token: 'runtime' }, expectedPackageDigest: DIGEST_B, activationId: 'act_stale' };
+        authorizeHostActivationMock.mockResolvedValue({ ok: false, statusCode: 409, code: 'activation-stale', message: 'stale' });
+        await expect(callRoute()).rejects.toMatchObject({ statusCode: 409, data: { code: 'activation-stale' } });
+        expect(patchSetupValuesMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a runtime handle without the settings.write grant', async () => {
+        role = 'editor';
+        query = { slot: 'current' };
+        body = { values: { token: 'runtime' }, expectedPackageDigest: DIGEST_B, activationId: 'act_live' };
+        authorizeHostActivationMock.mockResolvedValue({ ok: true, record: { pluginId: 'sample.plugin', grants: { approvedGrants: [] } }, review: {} });
+        await expect(callRoute()).rejects.toMatchObject({ statusCode: 403 });
+        expect(patchSetupValuesMock).not.toHaveBeenCalled();
+    });
+
     it('rejects a form loaded before the candidate package was replaced', async () => {
         await expect(callRoute()).rejects.toMatchObject({
             statusCode: 409,
             data: { code: 'setup-package-conflict' },
         });
         expect(patchSetupValuesMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses host setup reads by an editor', async () => {
+        role = 'editor';
+        const handler = (await import('../[pluginId]/setup-plan.get')).default;
+        await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 });
+        expect(loadSetupStateMock).not.toHaveBeenCalled();
+    });
+
+    it('applies the plugin access gate before reading runtime settings', async () => {
+        role = 'editor';
+        query = { slot: 'current' };
+        requirePluginAccessMock.mockRejectedValue(Object.assign(new Error('Forbidden'), { statusCode: 403 }));
+        const handler = (await import('../[pluginId]/setup-plan.get')).default;
+        await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 });
+        expect(loadSetupStateMock).not.toHaveBeenCalled();
+    });
+
+    it('continues to return allowed runtime settings', async () => {
+        role = 'editor';
+        query = { slot: 'current' };
+        const handler = (await import('../[pluginId]/setup-plan.get')).default;
+        await expect(handler({} as never)).resolves.toMatchObject({ settings: { values: { token: 'saved' } } });
     });
 
     it('rejects a blocked package instead of writing through it', async () => {
@@ -253,6 +323,7 @@ describe('setup values candidate binding', () => {
     });
 
     it('requires a live activation handle for a runtime save', async () => {
+        role = 'editor';
         query = { slot: 'current' };
         body = {
             values: { token: 'runtime' },
@@ -263,6 +334,13 @@ describe('setup values candidate binding', () => {
             data: { code: 'activation-required' },
         });
         expect(patchSetupValuesMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the owner Configure form working for an installed current package', async () => {
+        query = { slot: 'current' };
+        body = { values: { token: 'configured' }, expectedPackageDigest: DIGEST_B };
+        await expect(callRoute()).resolves.toMatchObject({ ok: true, packageDigest: DIGEST_B });
+        expect(authorizeHostActivationMock).not.toHaveBeenCalled();
     });
 
     it('refuses a runtime save whose activation does not authorize the package', async () => {
@@ -295,6 +373,7 @@ describe('setup values candidate binding', () => {
     });
 
     it('writes a runtime save that its activation authorizes', async () => {
+        role = 'editor';
         query = { slot: 'current' };
         body = {
             values: { token: 'runtime' },

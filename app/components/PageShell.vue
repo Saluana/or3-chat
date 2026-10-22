@@ -589,6 +589,14 @@ provide('or3:dashboard-modal-open', showDashboardModal);
 const dashboardModalActivated = ref(false);
 watch(showDashboardModal, (open) => {
     if (open) dashboardModalActivated.value = true;
+    else if (route.query.dashboard) {
+        const query = { ...route.query };
+        const keys = query.dashboard === 'marketplace'
+            ? ['dashboard', 'page', 'plugin', 'workspace', 'version', 'installRequest', 'setup', 'from', 'acquisition', 'rollout']
+            : ['dashboard', 'page'];
+        for (const key of keys) delete query[key];
+        void router.replace({ query });
+    }
 });
 const hasSyncedInitial = ref(false);
 const or3Config = useOr3Config();

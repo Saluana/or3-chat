@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3';
-import { requireCan, requireSession } from '../../../auth/can';
+import { can, requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
+import { requirePluginAccess } from '../../../utils/plugins/access/require-plugin-access';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { readPackageManifest } from '../../../admin/plugins/package-operation-support';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
@@ -73,6 +74,11 @@ export default defineEventHandler(async (event) => {
         (typeof query.documentId === 'string' && query.documentId.length > 0) ||
         (typeof query.messageId === 'string' && query.messageId.length > 0);
     const slot = query.slot === 'current' ? ('current' as const) : undefined;
+    const runtimeRead = slot === 'current' &&
+        !can(session, 'plugins.manage', { kind: 'workspace', id: workspaceId }).allowed;
+    if (slot === undefined) {
+        requireCan(session, 'plugins.manage', { kind: 'workspace', id: workspaceId });
+    }
 
     const { service, durable } = resolveConnectionService();
 
@@ -85,6 +91,16 @@ export default defineEventHandler(async (event) => {
     let ownedOperationId: string | null = null;
     for (let attempt = 0; ; attempt += 1) {
         ownedOperationId = null;
+        if (runtimeRead) {
+            const manifest = selection?.source === 'package' && selection.path
+                ? await readPackageManifest(selection.path)
+                : null;
+            await requirePluginAccess(event, {
+                pluginId,
+                action: 'settings.read',
+                ...(manifest ? { extension: { access: manifest.access } } : {}),
+            });
+        }
         if (requestedOperationId && selection?.status !== 'candidate') {
             throw createError({ statusCode: 409, statusMessage: 'This install candidate is no longer pending. Reopen Configure from Marketplace.',
                 data: { code: 'setup-operation-conflict' } });

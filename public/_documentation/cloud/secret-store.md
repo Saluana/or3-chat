@@ -49,7 +49,7 @@ The release image contains both runtimes, but they run in separate containers:
 
 The application never receives the database, master key or operator token. The supervisor initializes only completely empty custody, verifies ownership, starts the service and issues a namespace-scoped service token with `metadata,read,write,delete`. Tokens last seven days and renew at startup and daily. Token files are atomically replaced; renewal failure stops the vault. Namespace-wide application authority is deliberate: OR3 enforces user/workspace/plugin grants, while the vault enforces exact supplied scopes.
 
-Compose waits for vault readiness before starting OR3. Deep health/`doctor` probes selected vault availability; ordinary liveness does not. Volumes persist through upgrades/restarts. An incomplete initialization, wrong ownership, missing master key or different vault identity refuses startup. **Never delete custody volumes or generate a replacement key to repair an existing vault.**
+Compose waits for vault readiness before starting OR3. Deep health/`doctor` probes selected vault availability; ordinary liveness does not. The updated provider uses the authenticated, non-writing `probe` operation, so public health polling does not append vault audit events. Deploy the matching vault service and provider together; diagnostic `status` remains audited. Volumes persist through upgrades/restarts. An incomplete initialization, wrong ownership, missing master key or different vault identity refuses startup. **Never delete custody volumes or generate a replacement key to repair an existing vault.**
 
 ## Configuration and explicit opt-out
 

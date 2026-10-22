@@ -64,6 +64,25 @@ function journalProcess(directory: string, mode?: string) {
 }
 
 describe('durable restart supervision', () => {
+    // Nuxt may serve a large startup/error page before /api/ready exists. The
+    // bounded probe must reject without an unhandled socket error, then recover.
+    it('survives oversized readiness responses and can probe the next boot', async () => {
+        let ready = false;
+        const server = createServer((_request, response) => {
+            response.writeHead(200, { 'Content-Type': ready ? 'application/json' : 'text/html' });
+            response.end(ready ? JSON.stringify({ status: 'ready' }) : 'x'.repeat(128 * 1024));
+        });
+        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+        try {
+            const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+            await expect(probeDevelopmentReadiness(origin)).rejects.toThrow('readiness_response_limit');
+            ready = true;
+            await expect(probeDevelopmentReadiness(origin)).resolves.toBeUndefined();
+        } finally {
+            server.closeAllConnections();
+            await new Promise<void>(resolve => server.close(() => resolve()));
+        }
+    });
     it('closes unanswered TLS WebSocket upgrades so Vite can retry, while retaining established sockets', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'or3-restart-upgrade-')); directories.push(directory);
         const key = join(directory, 'key.pem'), cert = join(directory, 'cert.pem');

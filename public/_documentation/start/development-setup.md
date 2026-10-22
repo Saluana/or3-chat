@@ -20,6 +20,9 @@ bun run dev
 
 Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect OpenRouter through the app when you want to generate a response.
 
+The readiness probe tolerates oversized startup/error pages as a not-ready
+response and retries without terminating the launcher or its local vault.
+
 After pulling updates, run `bun install` again. Authenticated source launches now
 check the secret store before starting Nuxt. If vault settings are missing, the
 terminal offers automatic local development setup, manual attachment to an
@@ -36,6 +39,11 @@ VueUse 10 while the app uses VueUse 14; each must resolve its matching shared
 helpers. Forcing them to share one version breaks older exports.
 
 The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
+
+Use `bun run dev --host` to listen on all network interfaces (`0.0.0.0`), or
+`bun run dev --host 127.0.0.1` to select an explicit address. The wrapper expands
+a bare `--host`, including before short options such as `-o`, before forwarding options to Nuxt so its environment-file path
+cannot be mistaken for the project directory.
 
 The dashboard's **Dev Tools** tile (the hook inspector) is hidden by default and never ships in production builds. Start the dev server with `OR3_DEV_TOOLS=true bun run dev` to show it.
 

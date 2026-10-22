@@ -312,8 +312,8 @@ function applyFieldReplacement(response: unknown): void {
 async function loadFirstAction(): Promise<void> {
     try {
         const query = selectedDocumentId.value
-            ? `?documentId=${encodeURIComponent(selectedDocumentId.value)}`
-            : '';
+            ? `?slot=current&documentId=${encodeURIComponent(selectedDocumentId.value)}`
+            : '?slot=current';
         const plan = await $fetch<{
             firstAction?: {
                 label?: string;

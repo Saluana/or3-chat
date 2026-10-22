@@ -4,6 +4,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import { prepareLocalProviders, resolveDevProviderModule } from '../../shared/dev/local-providers';
 import { prepareConvexBackend } from '../../shared/dev/convex-backend';
 import {
@@ -11,6 +12,7 @@ import {
     isNativeAddonAbiMismatch,
     nativeSqliteDependencyTargets,
     nuxtDevEnvironment,
+    parseHost,
     usesNativeSqlite,
     type NativeSqliteDependencyTarget,
 } from '../cli/dev';
@@ -169,6 +171,27 @@ describe('dev launcher runtime', () => {
             expect(receipt.runtime).toBe('node');
             expect(receipt.ssr).toBe(ssr);
         }
+    });
+
+    // Failure modes: a bare host consumes the supervisor's next option,
+    // its env path becomes ROOTDIR, or the port probe uses a different host.
+    it.each([
+        { args: ['--host'], host: '0.0.0.0' },
+        { args: ['--host', '--no-open'], host: '0.0.0.0' },
+        { args: ['--host', '-o'], host: '0.0.0.0' },
+        { args: ['--host', '127.0.0.1'], host: '127.0.0.1' },
+        { args: ['--host=127.0.0.1'], host: '127.0.0.1' },
+    ])('forwards $args without treating launch.env as the project', async ({ args, host }) => {
+        const result = await launch('better-sqlite3', args);
+        expect(result.status, result.stderr).toBe(0);
+        const receipt = JSON.parse(result.stdout.split('NUXT_RECEIPT=')[1]!);
+        // Exercise Node's real argument parser, used by the installed Nuxt CLI.
+        const parsed = parseArgs({ args: receipt.args.slice(1), strict: false, allowPositionals: true,
+            options: { host: { type: 'string' }, port: { type: 'string' }, open: { type: 'boolean', short: 'o' }, dotenv: { type: 'string', multiple: true } } });
+        expect(parsed.positionals).toEqual([]);
+        expect(parsed.values.host).toBe(host);
+        expect(parsed.values.dotenv).toHaveLength(1);
+        expect(parseHost(args, {})).toBe(host);
     });
 
     it('explains missing Bun before launching Nuxt', async () => {

@@ -24,6 +24,8 @@ async function setup() {
     writeFileSync(resolve(source, 'client.mjs'), "import './modules/view.mjs';\n");
     writeFileSync(resolve(source, 'modules/view.mjs'), "export const view = 'ok';\n");
     writeFileSync(resolve(source, 'metadata.json'), '{"ok":true}\n');
+    writeFileSync(resolve(source, 'document.html'), '<script>fetch("/api/auth/session")</script>');
+    writeFileSync(resolve(source, 'image.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const packages = new ImmutablePluginPackageStore(root);
     const stored = await packages.installPackage('alpha', source);
     const pointers = new PluginPackagePointerStore(root, packages);
@@ -50,6 +52,16 @@ async function setup() {
 }
 
 describe('digest-addressed plugin package assets', () => {
+    // Active documents must not acquire the host origin when opened directly;
+    // SVG remains an image resource and JavaScript keeps its module MIME.
+    it.each(['document.html', 'image.svg'])('contains document navigation for %s', async (requestPath) => {
+        const { stored, reader } = await setup();
+        const asset = await reader.readSelectedAsset({ pluginId: 'alpha', packageDigest: stored.digest, requestPath });
+        expect(asset.headers['Content-Disposition']).toBe('attachment');
+        expect(asset.headers['Content-Security-Policy']).toContain('sandbox;');
+        expect(asset.headers['Cache-Control']).toBe('private, no-store');
+        expect(asset.contentType).toBe(requestPath.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream');
+    });
     it('serves a multi-module tree with explicit MIME and immutable private headers', async () => {
         const { stored, reader } = await setup();
         const module = await reader.readSelectedAsset({

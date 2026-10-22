@@ -68,19 +68,30 @@ export async function readProjectWorkspace(db: Or3DB, projectId: string) {
             return value ? [{ row, value }] : [];
         });
     };
+    const sources = await read(PROJECT_POST_TYPES.source, (content) => {
+        const source = readPersistedProjectRecord(ProjectSourceSchema, content);
+        if (!source) return null;
+        return { ...source, revisions: source.revisions.map(revision =>
+            revision.status === 'processing' && nowSec() >= (revision.processing_started_at ?? revision.created_at) + PROJECT_INTAKE_TIMEOUT_SECONDS
+                ? { ...revision, status: 'failed' as const, coverage: 'none' as const, error: 'Processing was interrupted. Retry this revision.' }
+                : revision) };
+    });
+    // Documents are live sources: resolve their current title on read so local
+    // and synced renames also update existing bindings and live queries.
+    const documentSources = sources.filter(source => source.value.kind === 'document');
+    const documents = await db.posts.bulkGet(documentSources.map(source => source.value.item_id));
+    documentSources.forEach((source, index) => {
+        const document = documents[index];
+        if (document?.postType === 'doc' && isVisibleWorkspaceItem(document)) {
+            source.value.title = document.title;
+        }
+    });
     return {
         ...policy,
         memories: await read(PROJECT_POST_TYPES.memory, (content) =>
             readPersistedProjectRecord(ProjectMemorySchema, content),
         ),
-        sources: await read(PROJECT_POST_TYPES.source, (content) => {
-            const source = readPersistedProjectRecord(ProjectSourceSchema, content);
-            if (!source) return null;
-            return { ...source, revisions: source.revisions.map(revision =>
-                revision.status === 'processing' && nowSec() >= (revision.processing_started_at ?? revision.created_at) + PROJECT_INTAKE_TIMEOUT_SECONDS
-                    ? { ...revision, status: 'failed' as const, coverage: 'none' as const, error: 'Processing was interrupted. Retry this revision.' }
-                    : revision) };
-        }),
+        sources,
     };
 }
 

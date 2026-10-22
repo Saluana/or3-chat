@@ -181,7 +181,7 @@ async function runHealthCheck(entry: InstalledEntry): Promise<void> {
 }
 
 function lifecycleBadge(entry: InstalledEntry) {
-    return describePluginStatus(
+    const status = describePluginStatus(
         pluginLifecycleView(entry, installed.workspaceId.value, activations, trustedActivations),
         {
             enabled: isEnabled(entry.pluginId),
@@ -191,6 +191,13 @@ function lifecycleBadge(entry: InstalledEntry) {
             packageReady: entry.startup.status === 'ready',
         }
     );
+    if (entry.startup.issueCodes.includes('module-loader-outside-canary')) {
+        return { ...status, reason: 'This workspace is not approved for plugin execution. Ask a site administrator to review its plugin access.' };
+    }
+    if (entry.startup.issueCodes.includes('module-loader-disabled')) {
+        return { ...status, reason: 'Plugin execution is disabled on this instance. Ask a site administrator to review its plugin settings.' };
+    }
+    return status;
 }
 
 /**
@@ -359,7 +366,7 @@ async function apiGet<T>(url: string): Promise<T> {
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium">{{ entry.pluginId }}</span>
                         <UBadge color="neutral" variant="subtle">
-                            installed {{ entry.display?.version ?? 'no version selected' }}
+                            installed {{ entry.display?.version ?? (entry.startup.status === 'blocked' ? 'version unavailable' : 'no version selected') }}
                         </UBadge>
                         <span
                             class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset"

@@ -1723,6 +1723,13 @@ describe('project review regressions', () => {
         await expect(assertProjectToolAllowed(scope(), 'doc-chat', 'workspace_read', { item: { kind: 'document', id } })).resolves.toBeUndefined();
         const workspace = await readProjectWorkspace(db, 'a');
         expect(workspace.sources.map(source => [source.value.item_id, source.value.mode])).toEqual([[id, 'relevant']]);
+        // A project source must follow local or synced document renames without
+        // rewriting its stored revision, context mode, or unknown metadata.
+        await db.posts.update(id, { title: 'Renamed project output' });
+        const renamed = (await readProjectWorkspace(db, 'a')).sources[0]!;
+        expect(renamed.value.title).toBe('Renamed project output');
+        expect(renamed.value.revisions).toEqual(workspace.sources[0]!.value.revisions);
+        expect(renamed.row).toEqual(workspace.sources[0]!.row);
         const before = await db.projects.get('a');
         const docs = await db.posts.where('postType').equals('doc').count();
         hookActions.mockImplementation(async (name, payload) => {
