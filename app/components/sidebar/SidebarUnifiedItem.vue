@@ -97,6 +97,13 @@
                             {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Rename original conversation' : 'Rename' }}
                         </UButton>
                         <UButton
+                            v-bind="actionButtonProps('pin')"
+                            class="w-full justify-start"
+                            @click="togglePin"
+                        >
+                            {{ pinned ? 'Unpin' : 'Pin' }}
+                        </UButton>
+                        <UButton
                             v-bind="actionButtonProps('add-to-project')"
                             class="w-full justify-start"
                             @click="actionsOpen = false; emit('add-to-project', item)"
@@ -153,6 +160,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
+import { usePinnedItems } from '~/composables/sidebar/usePinnedItems';
 import { isMobile } from '~/state/global';
 import { vTitleMarquee } from '~/utils/title-marquee';
 import {
@@ -191,6 +199,7 @@ const iconTrash = useIcon('ui.trash');
 const iconFolder = useIcon('sidebar.new_folder');
 const iconOpenTab = useIcon('ui.open_tab');
 const iconOpenPane = useIcon('ui.open_pane');
+const iconPin = useIcon('ui.pin');
 
 const threadActions = useThreadHistoryActions();
 const documentActions = useDocumentHistoryActions();
@@ -233,6 +242,12 @@ const actionButtonOverridesMap = {
         identifier: 'sidebar.unified-item.open-pane',
         isNuxtUI: true,
     }),
+    pin: useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.pin',
+        isNuxtUI: true,
+    }),
     extra: useThemeOverrides({
         component: 'button',
         context: 'sidebar',
@@ -265,6 +280,7 @@ const actionButtonProps = (id: ActionButtonId) => {
     if (id === 'add-to-project') icon = iconFolder;
     if (id === 'open-tab') icon = iconOpenTab;
     if (id === 'open-pane') icon = iconOpenPane;
+    if (id === 'pin') icon = iconPin;
 
     return {
         color: 'neutral' as const,
@@ -288,6 +304,17 @@ const {
     openInNewTab,
     openInNewPane,
 } = useWorkspaceResourceActions(workspaceResource);
+
+const pins = usePinnedItems();
+const pinned = computed(() => pins.isPinned(props.item.type, props.item.id));
+async function togglePin() {
+    actionsOpen.value = false;
+    try {
+        await pins.toggle(props.item.type, props.item.id);
+    } catch (e: unknown) {
+        console.error('[SidebarUnifiedItem] Pin error', e);
+    }
+}
 
 const extraActions = computed<readonly ExtraAction[]>(() =>
     props.item.type === 'thread' ? threadActions.value : documentActions.value

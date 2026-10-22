@@ -28,6 +28,10 @@ Use the stop control to cancel an active response. Server background behavior de
 
 A failed response keeps its error in the conversation after reload. Use **Retry message** to retry the saved turn, or continue with a new message. A stopped response keeps any accepted partial text.
 
+## Pin chats and documents
+
+Open the **...** menu on a chat or document in the sidebar and choose **Pin** (or **Unpin**), or right-click its tab at the top and choose **Pin to sidebar**. Pinned items appear under **Pinned**, below projects, most recently pinned first, and stay in their usual place in the list too. Pins are saved with your workspace and sync with it.
+
 ## If something goes wrong
 
 | Symptom | What to check |

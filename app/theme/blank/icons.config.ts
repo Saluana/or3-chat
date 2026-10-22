@@ -88,6 +88,7 @@ export default {
     'ui.close': 'blank-solar:close-linear',
     'ui.copy': 'blank-solar:copy-linear',
     'ui.open_tab': 'blank-solar:square-top-down-linear',
+    'ui.pin': 'blank-solar:pin-linear',
     'ui.open_pane': 'blank-solar:columns-2-linear',
     'ui.trash': 'blank-solar:trash-bin-trash-linear',
     'ui.edit': 'blank-solar:pen-linear',

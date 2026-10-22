@@ -416,8 +416,10 @@ function forwardResize(payload: ResizePayload) {
         animation: blank-mobile-caret-blink 1.05s steps(1, end) infinite;
     }
 
+    /* The container's padding (below) supplies the rest of the 2.25rem single-line
+       height, so a multiline draft keeps the same air above and below its text. */
     :deep(.blank2-chat-dropper .chat-input-editor) {
-        min-height: 2.25rem !important;
+        min-height: 1.5rem !important;
     }
 
     /* Buttons own their touch targets; wrappers must not add width. */
@@ -429,7 +431,7 @@ function forwardResize(payload: ResizePayload) {
 
     :deep(.blank2-chat-dropper .chat-input-editor-container) {
         min-height: 2.25rem !important;
-        padding: 0 3rem 0 5.25rem !important;
+        padding: 0.375rem 3rem 0.375rem 5.25rem !important;
     }
 
     /* Single-line pill is 3rem; controls fill it so icons center vertically. */

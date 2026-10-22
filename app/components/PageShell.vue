@@ -48,6 +48,8 @@
                 :can-open-split="canAddPane"
                 :can-reopen-closed="workspaceTabs.state.value.recentlyClosed.length > 0"
                 :copyable-tab-ids="workspaceCopyableTabIds"
+                :pinnable-tab-ids="workspacePinnableTabIds"
+                :pinned-tab-ids="workspacePinnedTabIds"
                 :mobile="isMobile"
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
@@ -61,6 +63,7 @@
                 @close-right="closeWorkspaceTabsToRight($event)"
                 @reopen-closed="workspaceTabs.reopenClosedTab()"
                 @copy-link="copyWorkspaceTabLink($event)"
+                @toggle-pin="toggleWorkspaceTabPin($event)"
             >
                 <template #sidebar>
                     <UTooltip :delay-duration="0" :disabled="isMobile" text="Open sidebar">
@@ -548,8 +551,11 @@ import { useWorkspaceProfiles } from '~/composables/workspace-profiles/useWorksp
 import type { WorkspaceProfileInitialPane } from '~/core/workspace-profiles';
 import type {
     WorkspaceResource,
+    WorkspaceTab,
     WorkspaceTabStatus,
 } from '~/core/workspace-tabs/types';
+import { usePinnedItems } from '~/composables/sidebar/usePinnedItems';
+import type { PinKind } from '~/utils/sidebar/pins';
 
 const legacyCompatClasses = {
     height: 'h-full',
@@ -572,6 +578,7 @@ const props = withDefaults(
 
 const router = useRouter();
 const toast = useToast();
+const pinnedItems = usePinnedItems();
 const route = useRoute();
 const runtimeConfig = useRuntimeConfig();
 const notificationBellIcon = useIcon('notification.bell');
@@ -1273,6 +1280,36 @@ const workspaceCopyableTabIds = computed(
             )
         )
 );
+
+// Chat and document tabs can be pinned to the sidebar.
+function workspaceTabPin(tab: WorkspaceTab): { kind: PinKind; id: string } | null {
+    if (tab.resource.kind === 'chat') return tab.resource.threadId ? { kind: 'thread', id: tab.resource.threadId } : null;
+    return tab.resource.kind === 'document' ? { kind: 'document', id: tab.resource.documentId } : null;
+}
+const workspacePinnableTabIds = computed(
+    () => new Set(workspaceTabs.tabs.value.filter((tab) => workspaceTabPin(tab)).map((tab) => tab.id))
+);
+const workspacePinnedTabIds = computed(
+    () =>
+        new Set(
+            workspaceTabs.tabs.value
+                .filter((tab) => {
+                    const pin = workspaceTabPin(tab);
+                    return pin && pinnedItems.isPinned(pin.kind, pin.id);
+                })
+                .map((tab) => tab.id)
+        )
+);
+async function toggleWorkspaceTabPin(tabId: string): Promise<void> {
+    const tab = workspaceTabs.tabs.value.find((entry) => entry.id === tabId);
+    const pin = tab && workspaceTabPin(tab);
+    if (!pin) return;
+    try {
+        await pinnedItems.toggle(pin.kind, pin.id);
+    } catch {
+        toast.add({ title: 'Could not update pin', color: 'warning' });
+    }
+}
 
 async function copyWorkspaceTabLink(tabId: string): Promise<void> {
     const tab = workspaceTabs.tabs.value.find((entry) => entry.id === tabId);

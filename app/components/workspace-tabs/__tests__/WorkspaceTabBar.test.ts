@@ -136,6 +136,33 @@ describe('WorkspaceTabBar', () => {
         wrapper.unmount();
     });
 
+    it('offers Pin/Unpin only for tabs that can be pinned and reports the choice', async () => {
+        const wrapper = mount(WorkspaceTabBar, {
+            props: {
+                tabs,
+                activeTabId: 'tab-chat',
+                visibleTabIds: new Set(['tab-chat']),
+                pinnableTabIds: new Set(['tab-doc']),
+                pinnedTabIds: new Set(['tab-doc']),
+            },
+            attachTo: document.body,
+            global: { stubs: { UIcon: { template: '<span />' } } },
+        });
+        const labels = () => Array.from(contextMenu()?.querySelectorAll('[role="menuitem"]') ?? []).map((item) => item.textContent?.trim());
+        await wrapper.findAll('[role="tab"]')[0]!.trigger('contextmenu', { clientX: 20, clientY: 30 });
+        expect(labels().some((label) => /pin/i.test(label ?? ''))).toBe(false);
+        window.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        await wrapper.vm.$nextTick();
+
+        await wrapper.findAll('[role="tab"]')[1]!.trigger('contextmenu', { clientX: 20, clientY: 30 });
+        expect(labels()).toContain('Unpin from sidebar');
+        const item = Array.from(contextMenu()!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((entry) => /Unpin/.test(entry.textContent ?? ''))!;
+        item.click();
+        await wrapper.vm.$nextTick();
+        expect(wrapper.emitted('toggle-pin')).toEqual([['tab-doc']]);
+        wrapper.unmount();
+    });
+
     it('dismisses the context menu when the user clicks outside it', async () => {
         const wrapper = mountBar();
         await wrapper

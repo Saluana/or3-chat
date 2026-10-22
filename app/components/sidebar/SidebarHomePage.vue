@@ -7,7 +7,7 @@
                 :items="combinedItems"
                 :item-key="(item) => item.key"
                 :estimate-height="40"
-                :overscan="240"
+                :overscan="600"
                 mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
@@ -81,6 +81,26 @@
                         "
                         @select-thread="(id) => emit('select-thread', id)"
                         @select-document="(id) => emit('select-document', id)"
+                    />
+
+                    <!-- Pinned chats and documents -->
+                    <SidebarGroupHeader
+                        v-else-if="item.type === 'pinned-header'"
+                        class="mt-1 time-group-header pinned-header"
+                        label="Pinned"
+                        :collapsed="pinnedCollapsed"
+                        @toggle="pinnedCollapsed = !pinnedCollapsed"
+                    />
+                    <SidebarFamilyItem
+                        v-else-if="item.type === 'pinned-item'"
+                        class="mb-0.5"
+                        :item="item.item"
+                        :active="allActiveIds.includes(item.item.id)"
+                        time-display=""
+                        @select="() => onItemSelected(item.item)"
+                        @rename="() => onItemRename(item.item)"
+                        @delete="() => onItemDelete(item.item)"
+                        @add-to-project="() => onItemAddToProject(item.item)"
                     />
 
                     <!-- Time Group Header -->
@@ -345,6 +365,7 @@ import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import SidebarFamilyItem from './SidebarFamilyItem.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
+import { usePinnedItems } from '~/composables/sidebar/usePinnedItems';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
@@ -371,6 +392,8 @@ type SidebarCombinedItem =
           class?: string;
       }
     | { key: string; type: 'projects' }
+    | { key: string; type: 'pinned-header' }
+    | { key: string; type: 'pinned-item'; item: UnifiedSidebarItem }
     | { key: string; type: 'empty-state' }
     | {
           key: string;
@@ -553,6 +576,9 @@ const welcomeSparkles = [
 ];
 
 // Build combined items list for Or3Scroll
+const { items: pinnedItems } = usePinnedItems();
+const pinnedCollapsed = ref(false);
+
 const combinedItems = computed(() => {
     const result: SidebarCombinedItem[] = [];
 
@@ -650,6 +676,16 @@ const combinedItems = computed(() => {
             key: 'home-empty-state',
             type: 'empty-state',
         });
+    }
+
+    // Pinned chats and documents sit under projects
+    if (pinnedItems.value.length > 0) {
+        result.push({ key: 'pinned-header', type: 'pinned-header' });
+        if (!pinnedCollapsed.value) {
+            for (const item of pinnedItems.value) {
+                result.push({ key: `pinned-${item.type}-${item.id}`, type: 'pinned-item', item });
+            }
+        }
     }
 
     // Time-grouped items (flattened for true per-item virtualization)

@@ -85,6 +85,7 @@ export const DEFAULT_ICONS = {
     'ui.close': 'pixelarticons:close',
     'ui.copy': 'pixelarticons:copy',
     'ui.open_tab': 'pixelarticons:open',
+    'ui.pin': 'pixelarticons:pin',
     'ui.open_pane': 'pixelarticons:layout',
     'ui.trash': 'pixelarticons:trash',
     'ui.edit': 'pixelarticons:edit',

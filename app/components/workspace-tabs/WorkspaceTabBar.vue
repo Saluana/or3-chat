@@ -122,6 +122,12 @@
                     type="button"
                     @click="runContext('copy-link')"
                 >Copy resource link</button>
+                <button
+                    v-if="pinnableTabIds.has(contextMenu.tabId)"
+                    role="menuitem"
+                    type="button"
+                    @click="runContext('pin')"
+                >{{ pinnedTabIds.has(contextMenu.tabId) ? 'Unpin from sidebar' : 'Pin to sidebar' }}</button>
                 <button role="menuitem" type="button" @click="runContext('left')">Move left</button>
                 <button role="menuitem" type="button" @click="runContext('right')">Move right</button>
             </div>
@@ -158,6 +164,8 @@ const props = withDefaults(
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
+        pinnableTabIds?: ReadonlySet<string>;
+        pinnedTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
         pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
@@ -169,6 +177,8 @@ const props = withDefaults(
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
+        pinnableTabIds: () => new Set<string>(),
+        pinnedTabIds: () => new Set<string>(),
         canCreateDocument: false,
         pluginItems: () => [],
     }
@@ -185,6 +195,7 @@ const emit = defineEmits<{
     'close-right': [tabId: string];
     'reopen-closed': [];
     'copy-link': [tabId: string];
+    'toggle-pin': [tabId: string];
 }>();
 
 const tabIcon = useWorkspaceTabIcon();
@@ -672,6 +683,7 @@ function runContext(
         | 'reopen'
         | 'split'
         | 'copy-link'
+        | 'pin'
         | 'left'
         | 'right'
 ): void {
@@ -684,6 +696,7 @@ function runContext(
     if (action === 'reopen' && props.canReopenClosed) emit('reopen-closed');
     if (action === 'split' && props.canOpenSplit) emit('open-in-split', menu.tabId);
     if (action === 'copy-link') emit('copy-link', menu.tabId);
+    if (action === 'pin') emit('toggle-pin', menu.tabId);
     const index = props.tabs.findIndex((tab) => tab.id === menu.tabId);
     if (action === 'left' && index > 0) emit('reorder', menu.tabId, index - 1);
     if (action === 'right' && index >= 0 && index < props.tabs.length - 1) {

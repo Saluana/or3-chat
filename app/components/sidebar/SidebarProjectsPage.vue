@@ -1039,7 +1039,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 :items="projectListItems"
                 :item-key="(entry) => entry.project.id"
                 :estimate-height="48"
-                :overscan="240"
+                :overscan="600"
                 mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 role="list"

@@ -70,6 +70,8 @@
                 :can-open-split="canOpenSplit"
                 :can-reopen-closed="canReopenClosed"
                 :copyable-tab-ids="copyableTabIds"
+                :pinnable-tab-ids="pinnableTabIds"
+                :pinned-tab-ids="pinnedTabIds"
                 :can-create-document="canCreateDocument"
                 :plugin-items="pluginItems"
                 @activate="(tabId, reason) => emit('activate', tabId, reason)"
@@ -82,6 +84,7 @@
                 @close-right="emit('close-right', $event)"
                 @reopen-closed="emit('reopen-closed')"
                 @copy-link="emit('copy-link', $event)"
+                @toggle-pin="emit('toggle-pin', $event)"
             />
             <div class="workspace-chrome-actions"><slot name="actions" /></div>
         </div>
@@ -117,6 +120,8 @@ const props = withDefaults(
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
+        pinnableTabIds?: ReadonlySet<string>;
+        pinnedTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
         pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
@@ -127,6 +132,8 @@ const props = withDefaults(
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
+        pinnableTabIds: () => new Set<string>(),
+        pinnedTabIds: () => new Set<string>(),
         canCreateDocument: false,
         pluginItems: () => [],
     }
@@ -143,6 +150,7 @@ const emit = defineEmits<{
     'close-right': [tabId: string];
     'reopen-closed': [];
     'copy-link': [tabId: string];
+    'toggle-pin': [tabId: string];
 }>();
 
 const switcherOpen = ref(false);
