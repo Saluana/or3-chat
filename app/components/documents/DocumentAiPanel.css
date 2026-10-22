@@ -327,7 +327,6 @@
         flex: 1 1 auto;
     }
 }
-.settings-intro,
 .settings-heading {
     display: flex;
     align-items: center;
@@ -340,25 +339,6 @@
     display: grid;
     gap: 1rem;
     min-width: 0;
-}
-.settings-context {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin: 0.4rem 0 0;
-    padding: 0;
-    list-style: none;
-}
-.settings-context li {
-    max-width: 100%;
-    padding: 0.2rem 0.6rem;
-    border: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
-    border-radius: 999px;
-    background: var(--md-surface-container-low);
-    color: var(--md-on-surface);
-    font-size: 0.75rem;
-    line-height: 1.4;
-    overflow-wrap: anywhere;
 }
 .advanced-settings > summary {
     display: flex;
@@ -471,21 +451,16 @@
 .tool-group-empty {
     padding: 0.35rem 0.35rem 0.15rem;
 }
-.settings-intro > div,
 .settings-heading > div,
 .setting-card-copy {
     display: grid;
     gap: 0.15rem;
 }
-.settings-intro span,
 .settings-heading span,
 .setting-card-copy span {
     color: var(--md-on-surface-variant);
     font-size: 0.68rem;
     line-height: 1.35;
-}
-.settings-intro span {
-    font-size: 0.75rem;
 }
 .settings-grid {
     display: grid;
@@ -697,11 +672,6 @@
     color: var(--md-on-surface-variant);
     font-size: 0.66rem;
     margin-inline-end: 0.2rem;
-}
-.settings-note {
-    margin: 0;
-    color: var(--md-on-surface-variant);
-    font-size: 0.65rem;
 }
 .error-message {
     margin: 0;

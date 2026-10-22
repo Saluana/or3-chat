@@ -12,7 +12,8 @@ html[data-theme="blank"] {
      * Design tokens. One ladder per axis; every rule below consumes these, so
      * a raw size only appears where its token is defined.
      *
-     * Type: caption 12 / body 14 / message 16 / title 20. Weights 400, 500, 600.
+     * Type: caption 12 / body 14 / reading 15 / message 16 / title 20. Weights 400, 500, 600.
+     * Reading is chat replies, user messages and documents; message is 16px UI text.
      * Radius: xs 6 / sm 8 / md 10 / lg 14 / xl 20 / composer 28 (`--md-*` own sm-lg).
      * Controls: 32 / 36 / 44 (density tokens) plus the 40px rail slot.
      */
@@ -20,8 +21,9 @@ html[data-theme="blank"] {
     --blank-leading-caption: 16px;
     --blank-text-body: 14px;
     --blank-leading-body: 20px;
+    --blank-text-reading: 15px;
+    --blank-leading-reading: 24px;
     --blank-text-message: 16px;
-    --blank-leading-message: 26px;
     --blank-text-title: 20px;
     --blank-leading-title: 28px;
     --blank-text-code: 13px;
@@ -33,8 +35,12 @@ html[data-theme="blank"] {
     --blank-radius-xl: 20px;
     --blank-control-rail: 40px;
     --blank-gutter: 24px;
+    /* Desktop interface scale (shared zoom rules in main.css); users can change it in Theme settings. */
+    --app-ui-scale: 0.9;
     /* Distance from the sidebar column edge to the content in every section. */
     --blank-sb-inset: 14px;
+    /* Message action row (32px tall on touch) plus its 2px offset. */
+    --blank-actions-clearance: 34px;
 
     .chat-scroll-to-bottom {
         border: max(1px, var(--md-border-width-subtle, var(--md-border-width, 1px))) solid var(--md-border-color) !important;
@@ -545,7 +551,37 @@ html[data-theme="blank"] {
         margin-bottom: 0 !important;
     }
 
-    /* ── Messages: one reading size (16/26) for both speakers ── */
+    /* ── Messages: one reading size (15/24) for both speakers ── */
+    /* Rows and messages carry no vertical margin or padding of their own: the
+       action row under each message and one row gap set the rhythm, and a
+       reply's first and last blocks sit flush with its edges. */
+    .messages-container {
+        padding-bottom: 16px;
+    }
+
+    .chat-message-container {
+        margin-block: 0;
+    }
+
+    .cm-assistant,
+    .cm-assistant .cm-content-assistant {
+        padding-block: 0;
+    }
+
+    .cm-assistant .or3-prose > :first-child {
+        margin-top: 0;
+    }
+
+    .cm-assistant .or3-prose > :last-child {
+        margin-bottom: 0;
+    }
+
+    /* The first block no longer carries a top margin, so a collapsed reasoning
+       toggle keeps the 16px an open reasoning box leaves above the reply. */
+    .cm-assistant .reasoning-toggle[aria-expanded="false"] {
+        margin-bottom: 16px;
+    }
+
     .cm-user {
         background: var(--md-surface-hover) !important;
         color: var(--md-on-surface) !important;
@@ -555,9 +591,14 @@ html[data-theme="blank"] {
         padding: 12px 16px !important;
     }
 
+    /* Room for the action row that hangs below the bubble. */
+    .cm-user:has(> .cm-actions) {
+        margin-bottom: var(--blank-actions-clearance);
+    }
+
     .cm-text-user {
-        font-size: var(--blank-text-message);
-        line-height: var(--blank-leading-message);
+        font-size: var(--blank-text-reading);
+        line-height: var(--blank-leading-reading);
     }
 
     /* ── Assistant messages: no background ── */
@@ -569,47 +610,76 @@ html[data-theme="blank"] {
         -webkit-backdrop-filter: none !important;
     }
 
-    /* ── Action buttons: minimal gray icons ── */
-    .cm-action-group {
-        background: var(--md-surface) !important;
-        border: var(--md-border-width) solid var(--md-border-color) !important;
-        box-shadow: var(--app-elevation-low) !important;
-        border-radius: var(--md-border-radius-small) !important;
+    /* ── Message actions: a quiet row under each message ──
+       Always visible, so nothing is revealed on hover and no space is held for a
+       floating pill. A reply keeps the row in flow with the first glyph on its
+       text edge (the reply's own inset less the button's padding around a 16px
+       icon); a user bubble hangs it below its right edge and reserves the room
+       with its bottom margin. Touch and narrow panes use 44px-wide buttons. */
+    .cm-actions {
+        --blank-action-w: 32px;
+        --blank-reply-inset: 4px;
+        position: static;
+        transform: none;
+        width: auto;
+        max-width: 100%;
+        margin: 4px 0 0 calc(var(--blank-reply-inset) - (var(--blank-action-w) - 16px) / 2);
+        padding: 0;
+        justify-content: flex-start;
+        align-items: center;
     }
 
-    /* Assistant replies have no bubble, so anchor their actions to the text
-       edge and the user's to the bubble edge. Narrow panes and touch devices
-       keep the shared in-flow layout. */
-    @media (pointer: fine) {
-        @container chat-pane (width >= 768px) {
-            .cm-actions.cm-actions-assistant {
-                /* Message padding (0.5rem) plus the reply's own inset (1.25rem). */
-                left: 1.75rem;
-                transform: translateY(50%);
-            }
-
-            .cm-actions.cm-actions-user {
-                left: auto;
-                right: 0.5rem;
-                transform: translateY(50%);
-            }
+    @media (min-width: 40rem) {
+        .cm-actions {
+            --blank-reply-inset: 20px;
         }
+    }
+
+    @media (width < 768px), (pointer: coarse) {
+        .cm-actions {
+            --blank-action-w: 44px;
+        }
+    }
+
+    @container chat-pane (width < 768px) {
+        .cm-actions {
+            --blank-action-w: 44px;
+        }
+    }
+
+    .cm-actions.cm-actions-user {
+        position: absolute;
+        inset: 100% 0 auto auto;
+        width: max-content;
+        max-width: none;
+        margin: 2px 0 0;
+        justify-content: flex-end;
+    }
+
+    .cm-action-group {
+        flex-wrap: nowrap;
+        justify-content: inherit;
+        gap: 2px;
+    }
+
+    .cm-action-group > * {
+        margin: 0;
     }
 
     /* ── Prose ──
        The shared `.or3-prose` sheet is written for every theme, so Blank sets
-       its own rhythm here: 16/26 text, 16px between blocks, 6px between list
+       its own rhythm here: 15/24 text, 16px between blocks, 6px between list
        items (a `<p>` inside an item must not add its own block margin). */
     .cm-markdown-assistant,
     .or3-prose {
-        font-size: var(--blank-text-message);
-        line-height: var(--blank-leading-message);
+        font-size: var(--blank-text-reading);
+        line-height: var(--blank-leading-reading);
         letter-spacing: 0;
         color: var(--md-on-surface);
     }
 
     .or3-prose :is(p, li, blockquote) {
-        line-height: var(--blank-leading-message);
+        line-height: var(--blank-leading-reading);
     }
 
     .or3-prose :is(h1, h2, h3, h4) {
@@ -623,11 +693,16 @@ html[data-theme="blank"] {
     .or3-prose h1 { font-size: 24px; line-height: 32px; }
     .or3-prose h2 { font-size: var(--blank-text-title); line-height: var(--blank-leading-title); }
     .or3-prose h3 { font-size: 18px; line-height: 24px; }
-    .or3-prose h4 { font-size: var(--blank-text-message); line-height: 24px; }
+    .or3-prose h4 { font-size: var(--blank-text-reading); line-height: var(--blank-leading-reading); }
 
     .or3-prose :is(ul, ol) {
         margin-block: 16px;
         padding-left: 24px;
+    }
+
+    /* Two-digit markers ("20.") are wider than the 24px gutter and clip. */
+    .or3-prose ol {
+        padding-left: 32px;
     }
 
     .or3-prose li {
@@ -774,6 +849,18 @@ html[data-theme="blank"] {
     hr {
         border-color: var(--md-border-color);
         opacity: 0.5;
+    }
+}
+
+/*
+ * Message actions are loose icons, not a joined group: each keeps its own
+ * radius. Blank's joined-button variant squares the inner corners with
+ * `!important` utilities, and an `!important` rule only beats those from an
+ * earlier layer.
+ */
+@layer components {
+    html[data-theme="blank"] .cm-action-group > * {
+        border-radius: var(--md-border-radius-small) !important;
     }
 }
 
@@ -2706,10 +2793,6 @@ html[data-theme='blank'] .document-ai-dialog-settings {
     gap: 0;
 }
 
-html[data-theme='blank'] .document-ai-dialog-settings .settings-intro {
-    padding-bottom: 20px;
-}
-
 html[data-theme='blank'] .document-ai-dialog-settings :is(.setting-card, .tool-group) {
     padding: 0;
     border: 0;
@@ -2725,6 +2808,11 @@ html[data-theme='blank'] .document-ai-dialog-settings .settings-grid {
 html[data-theme='blank'] .document-ai-dialog-settings > :is(.settings-grid, .quick-action-settings, .advanced-settings) {
     padding: 20px 0;
     border-top: var(--md-border-width) solid var(--md-border-color);
+}
+
+html[data-theme='blank'] .document-ai-dialog-settings > .settings-grid:first-child {
+    padding-top: 0;
+    border-top: 0;
 }
 
 html[data-theme='blank'] .document-ai-dialog-settings .instruction-card {

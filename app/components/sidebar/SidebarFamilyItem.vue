@@ -21,10 +21,10 @@
                 <template v-if="item.family?.label" #subtitle>
                     <span class="sidebar-family-subtitle block truncate mt-1 text-xs leading-tight text-[var(--md-on-surface-variant)]">{{ item.family.label }}</span>
                 </template>
-                <template v-if="item.family" #family-actions>
-                    <UButton v-if="item.family.originalId" color="neutral" variant="ghost" size="sm" class="w-full justify-start"
+                <template v-if="item.family" #family-actions="{ actionProps }">
+                    <UButton v-if="item.family.originalId" v-bind="actionProps('i-lucide-corner-up-left')" class="w-full justify-start"
                         @click.stop="emit('navigate', item.family.originalId)">Go to original</UButton>
-                    <UButton color="neutral" variant="ghost" size="sm" class="w-full justify-start"
+                    <UButton v-bind="actionProps('i-lucide-skip-forward')" class="w-full justify-start"
                         @click.stop="emit('latestCompaction', item.family.rootId)">Go to latest compaction</UButton>
                 </template>
             </SidebarUnifiedItem>

@@ -686,6 +686,8 @@ onBeforeUnmount(() => {
     window.removeEventListener('pagehide', saveDraftNow);
     document.removeEventListener('visibilitychange', saveDraftWhenHidden);
     componentDisposed = true;
+    if (draftSaveNoticeId) toast.remove(draftSaveNoticeId);
+    if (draftRestoreNoticeId) toast.remove(draftRestoreNoticeId);
     disposeAttachmentIntake();
     editorBuild++;
     draftRestoreRevision++;
@@ -914,6 +916,8 @@ const tabDrafts = useWorkspaceTabDrafts();
 // after a workspace or account change still lands with its original owner.
 let draftScope = tabDrafts.scope();
 const draftAccountId = computed(() => getCachedSessionContext()?.user?.id ?? 'local');
+let draftSaveNoticeId: string | undefined;
+let draftRestoreNoticeId: string | undefined;
 // Bumped by every change to what the user sees in the composer. A send clears
 // only the revision it submitted, so text typed while it was being prepared
 // survives even if it later matches the submitted text.
@@ -1028,23 +1032,28 @@ function saveDraftWhenHidden(): void {
     if (document.visibilityState === 'hidden') saveDraftNow();
 }
 
-// Local storage refused a draft: it is still in this tab and being retried.
-watch(tabDrafts.saveFailed, (failed) => {
-    if (!failed) {
-        toast.remove('draft-save-failed');
-        return;
-    }
+// A failure in another tab/account must not warn about this composer's text.
+watch([() => props.tabId, draftAccountId, () => tabDrafts.hasSaveFailure(props.tabId)], ([tabId, , failed]) => {
+    if (draftSaveNoticeId) toast.remove(draftSaveNoticeId);
+    draftSaveNoticeId = undefined;
+    if (!tabId || !failed) return;
+    const scope = tabDrafts.scope();
+    draftSaveNoticeId = `draft-save-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
     toast.add({
-        id: 'draft-save-failed',
+        id: draftSaveNoticeId,
         title: 'Draft could not be saved',
         description: 'Your unsent message is still here, but the latest changes will not survive a reload. Browser storage may be full or blocked, or this draft may be too large.',
         color: 'warning',
         duration: 0,
-        actions: [{ label: 'Retry', onClick: () => void tabDrafts.flush() }],
+        actions: [{ label: 'Retry', onClick: () => {
+            if (!componentDisposed && props.tabId === tabId && tabDrafts.scope().key === scope.key) void tabDrafts.flush();
+        } }],
     });
-});
+}, { immediate: true });
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
+    if (draftRestoreNoticeId) toast.remove(draftRestoreNoticeId);
+    draftRestoreNoticeId = undefined;
     const revision = ++draftRestoreRevision;
     draftRestoreFailed = false;
     if (!tabId) {
@@ -1056,6 +1065,7 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revisionBeforeLoad = draftEditRevision;
     const scope = tabDrafts.scope();
     const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
+    draftRestoreNoticeId = noticeId;
     let keptTypedText = false;
     try {
         let draft: WorkspaceChatTabDraft | undefined;

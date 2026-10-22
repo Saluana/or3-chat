@@ -41,6 +41,9 @@ export type ElevationPreset =
     | 'subtle'
     | 'expressive';
 
+/** Desktop interface scale in percent; `theme` keeps the active theme's default. */
+export type UiScaleChoice = 'theme' | 80 | 90 | 100 | 110 | 120;
+
 /**
  * Purpose:
  * Top-level user theme overrides. Each sub-object has an `enabled` toggle
@@ -129,6 +132,8 @@ export interface UserThemeOverrides {
         headingFont?: UserFontChoice;
         /** @deprecated Legacy combined font toggle retained for saved overrides */
         useSystemFont?: boolean;
+        /** Desktop interface scale; reading text keeps its own size */
+        uiScale?: UiScaleChoice;
     };
 
     /** Tiered shape tokens shared by app components */

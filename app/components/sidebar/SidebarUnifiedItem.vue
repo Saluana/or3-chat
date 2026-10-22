@@ -67,7 +67,6 @@
                 />
                 <template #content>
                     <div class="or3-action-menu p-1 w-56 max-w-[calc(100vw-2rem)]">
-                        <slot name="family-actions" />
                         <UButton
                             v-if="canOpenInNewTab"
                             v-bind="actionButtonProps('open-tab')"
@@ -131,6 +130,12 @@
                             >
                                 {{ action.label || '' }}
                             </UButton>
+                        </template>
+
+                        <!-- Thread family navigation -->
+                        <template v-if="$slots['family-actions']">
+                            <div class="my-1 border-t border-[color:var(--md-border-color)]/30" />
+                            <slot name="family-actions" :action-props="familyActionProps" />
                         </template>
                     </div>
                 </template>
@@ -269,6 +274,8 @@ const actionButtonProps = (id: ActionButtonId) => {
         ...overrides,
     };
 };
+
+const familyActionProps = (icon: string) => ({ ...actionButtonProps('extra'), icon });
 
 const workspaceResource = computed(() =>
     props.item.type === 'thread'

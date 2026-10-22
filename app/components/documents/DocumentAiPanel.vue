@@ -98,15 +98,6 @@
             description="Customize models, context and quick actions for document edits."
         >
             <div v-theme="'document.ai'" class="document-ai-dialog-settings">
-                <div class="settings-intro">
-                    <div>
-                        <span>If you select text, the AI focuses on it. Otherwise, it starts near your cursor and can read the surrounding document.</span>
-                        <ul class="settings-context" aria-label="Context for the next request">
-                            <li v-for="part in contextSummary" :key="part">{{ part }}</li>
-                        </ul>
-                    </div>
-                </div>
-
                 <div class="settings-grid">
                     <section class="setting-card">
                         <div class="setting-card-copy">
@@ -319,8 +310,6 @@
                         </section>
                     </div>
                 </details>
-
-                <p class="settings-note">Document AI preferences sync with this workspace.</p>
             </div>
         </AppModal>
 
@@ -518,18 +507,6 @@ const modelItems = computed(() => {
 });
 const selectedModelValue = computed(() => settings.value.modelId ?? INHERIT_MODEL_VALUE);
 const autocompleteLabel = computed(() => (props.autocomplete.loading ? 'Updating…' : props.autocomplete.enabled ? 'On' : 'Off'));
-const tokenLabel = computed(() => {
-    const estimate = props.tokenEstimate ? `~${props.tokenEstimate.toLocaleString()} tokens` : 'Estimate pending';
-    const files = attachments.value.length ? ` · ${attachments.value.length} ${attachments.value.length === 1 ? 'file' : 'files'}` : '';
-    const context = references.value.length ? ` · ${references.value.length} ${references.value.length === 1 ? 'reference' : 'references'}` : '';
-    return `${estimate}${files}${context}`;
-});
-const contextSummary = computed(() => {
-    const target = props.selectionAvailable
-        ? `Selected text${props.selectedText.trim() ? `: “${props.selectedText.trim().replace(/\s+/gu, ' ').slice(0, 90)}${props.selectedText.trim().length > 90 ? '…' : ''}”` : ''}`
-        : 'Text near cursor';
-    return [target, 'Surrounding document available', tokenLabel.value];
-});
 const pendingHunks = computed(() =>
     (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'pending'),
 );

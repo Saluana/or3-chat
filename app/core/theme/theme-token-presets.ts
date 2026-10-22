@@ -1,7 +1,21 @@
 import type {
     DensityPreset,
     ElevationPreset,
+    UiScaleChoice,
 } from './user-overrides-types';
+
+export const UI_SCALE_CHOICES: readonly UiScaleChoice[] = [
+    'theme',
+    80,
+    90,
+    100,
+    110,
+    120,
+];
+
+export function isUiScaleChoice(value: unknown): value is UiScaleChoice {
+    return UI_SCALE_CHOICES.includes(value as UiScaleChoice);
+}
 
 export const DENSITY_TOKEN_VARIABLES = [
     '--app-control-height-small',

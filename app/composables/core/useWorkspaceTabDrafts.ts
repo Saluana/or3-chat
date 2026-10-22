@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue';
+import { readonly, ref, shallowReactive } from 'vue';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import type {
@@ -11,7 +11,7 @@ import type {
 import { getActiveWorkspaceId, getDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
 import { getFileBlob } from '~/db/files';
 import { newId } from '~/db/util';
-import { commitDraftVersion, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
+import { commitDraftVersion, DraftVersionCapacityError, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 
 export interface WorkspaceChatTabDraft {
@@ -57,11 +57,11 @@ const drafts = new Map<string, DraftEntry>();
 const discardTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const dirty = new Map<string, { scope: WorkspaceDraftScope; tabId: string }>();
 /** Independent flushes may overlap; success for one tab cannot acknowledge another. */
-const failedDrafts = new Set<string>();
+const failedDrafts = shallowReactive(new Set<string>());
 /** Local receipts keep unchanged large buffers from requesting needless confirmations. */
 const durableDrafts = new Map<string, PersistedWorkspaceTabDraft | null>();
 const inFlightDrafts = new Map<string, { scope: WorkspaceDraftScope; tabId: string; count: number }>();
-const hydrations = new Map<string, { db: Or3DB; promise: Promise<void>; done: boolean }>();
+const hydrations = new Map<string, { db: Or3DB; promise: Promise<void>; done: boolean; errors: Map<string, unknown> }>();
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 const hasPersistTimer = (): boolean => Boolean(persistTimer);
 let retryArmed = false;
@@ -228,22 +228,30 @@ function clearJournalCoveredBy(scope: WorkspaceDraftScope, tabId: string, sequen
         }
     } catch { /* Unknown records remain available for recovery. */ }
 }
-function readJournals(scope: WorkspaceDraftScope): Array<{ key: string; raw: string; record: JournalRecord }> {
+function readJournals(scope: WorkspaceDraftScope, errors: Map<string, unknown>): Array<{ key: string; raw: string; record: JournalRecord }> {
     const storage = journalStorage(); if (!storage) return [];
     const prefixes = [JOURNAL_PREFIX, LEGACY_JOURNAL_PREFIX].map(prefix => `${prefix}${encodeURIComponent(scope.key)}:`);
     const results: Array<{ key: string; raw: string; record: JournalRecord }> = [];
     for (let index = 0; index < storage.length; index++) {
-        const key = storage.key(index); if (!key || !prefixes.some(prefix => key.startsWith(prefix))) continue;
-        const raw = storage.getItem(key); if (raw === null) continue;
-        // Malformed/unknown data must not be silently erased by migration.
-        const record = JSON.parse(raw) as JournalRecord;
-        if (typeof record.tabId !== 'string' || typeof record.updatedAt !== 'number'
-            || !(record.draft === null || fromPersisted(record.draft))
-            || (key.startsWith(JOURNAL_PREFIX) && (typeof record.writerId !== 'string'
-                || !Number.isSafeInteger(record.sequence) || record.sequence! < 0))) {
-            throw new Error('A saved draft journal could not be read.');
+        const key = storage.key(index); if (!key) continue;
+        const prefix = prefixes.find(prefix => key.startsWith(prefix)); if (!prefix) continue;
+        let tabId: string;
+        try { tabId = decodeURIComponent(key.slice(prefix.length).split(':')[0]!); }
+        catch { continue; } // Unknown keys remain untouched and cannot own a valid tab.
+        try {
+            const raw = storage.getItem(key); if (raw === null) continue;
+            const record = JSON.parse(raw) as JournalRecord;
+            if (!record || record.tabId !== tabId || typeof record.updatedAt !== 'number'
+                || !(record.draft === null || fromPersisted(record.draft))
+                || (key.startsWith(JOURNAL_PREFIX) && (typeof record.writerId !== 'string'
+                    || !Number.isSafeInteger(record.sequence) || record.sequence! < 0))) {
+                throw new Error('A saved draft journal could not be read.');
+            }
+            results.push({ key, raw, record });
+        } catch (error) {
+            // Keep unread bytes protected without blocking every other chat.
+            errors.set(tabId, error);
         }
-        results.push({ key, raw, record });
     }
     return results;
 }
@@ -265,14 +273,12 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
         const persisted = entry ? toPersisted(entry.draft) : null;
         if (persisted === undefined) return { saved: false };
         const sequence = sequences.get(key) ?? advanceSequence(key);
-        const journalReceipt = journalStorage()?.getItem(journalKey(scope, tabId, sequence));
         const receipt = await commitDraftVersion(db, { account: scope.accountKey, tab: tabId,
             writer: writerId, sequence, draft: persisted, baseline: baselines.get(key) });
         if (!receipt.superseded && sequence === sequences.get(key)) baselines.set(key, receipt.baseline);
         if (matchesCurrentDraftReceipt(key, receipt.persisted)) durableDrafts.set(key, receipt.persisted);
-        if (journalReceipt === journalStorage()?.getItem(journalKey(scope, tabId, sequence))) clearJournalCoveredBy(scope, tabId, sequence, receipt.persisted);
-        recoveryChannel?.postMessage({ db: db.name, account: scope.accountKey });
-        versionsRevision.value++;
+        clearJournalCoveredBy(scope, tabId, sequence, receipt.persisted);
+        notifyVersionsChanged(db, scope.accountKey);
         return { saved: !receipt.superseded, persisted: receipt.persisted };
     } catch (error) {
         console.warn('[tab-drafts] Draft was not saved to local storage', error);
@@ -343,6 +349,12 @@ export async function flushWorkspaceTabDrafts(): Promise<void> {
     }
 }
 
+function notifyVersionsChanged(db: Or3DB, account: string): void {
+    versionsRevision.value++;
+    try { recoveryChannel?.postMessage({ db: db.name, account }); }
+    catch { /* Cross-page notification cannot invalidate a confirmed database write. */ }
+}
+
 function bindPageLifecycle(): void {
     if (lifecycleBound || typeof window === 'undefined') return;
     lifecycleBound = true;
@@ -358,12 +370,16 @@ function bindPageLifecycle(): void {
 }
 
 /** Loads this account's saved drafts once per workspace database; memory edits win. */
-function hydrate(scope: WorkspaceDraftScope): Promise<void> {
+async function hydrate(scope: WorkspaceDraftScope, requestedTab: string): Promise<void> {
     const db = scope.db;
-    if (!db) return Promise.resolve();
+    if (!db) return;
     const existing = hydrations.get(scope.key);
-    if (existing?.db === db) return existing.promise;
-    const entry = { db, promise: Promise.resolve(), done: false };
+    if (existing?.db === db && !(existing.done && existing.errors.has(requestedTab))) {
+        await existing.promise;
+        if (existing.errors.has(requestedTab)) throw existing.errors.get(requestedTab);
+        return;
+    }
+    const entry = { db, promise: Promise.resolve(), done: false, errors: new Map<string, unknown>() };
     entry.promise = (async () => {
         try {
             const rows = await db.workspace_tab_drafts
@@ -376,25 +392,39 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
             }
             const journalChoices = new Map<string, PersistedWorkspaceTabDraft | null>();
             // Import every independent journal before cleanup. Clock ties/age cannot authorize loss.
-            for (const { key: journalStorageKey, raw, record } of readJournals(scope)) {
+            for (const { key: journalStorageKey, raw, record } of readJournals(scope, entry.errors)) {
+                if (entry.errors.has(record.tabId)) continue;
                 const recordWriter = record.writerId ?? `legacy-journal:${bytesToHex(sha256(new TextEncoder().encode(raw)))}`;
-                const receipt = await commitDraftVersion(db, { account: scope.accountKey, tab: record.tabId,
-                    writer: recordWriter, sequence: record.sequence ?? 1, draft: record.draft,
-                    baseline: record.baseline, archiveOnly: recordWriter !== writerId && readHint(scope, record.tabId) !== recordWriter });
                 const hint = readHint(scope, record.tabId);
-                if (!receipt.superseded && (hint === recordWriter || (!hint && !journalChoices.has(record.tabId)))) {
+                const selected = hint === recordWriter || (!hint && !journalChoices.has(record.tabId));
+                let receipt: { persisted: PersistedWorkspaceTabDraft | null; superseded: boolean };
+                let imported = true;
+                try {
+                    receipt = await commitDraftVersion(db, { account: scope.accountKey, tab: record.tabId,
+                        writer: recordWriter, sequence: record.sequence ?? 1, draft: record.draft,
+                        baseline: record.baseline, archiveOnly: recordWriter !== writerId && !selected });
+                } catch (error) {
+                    if (!(error instanceof DraftVersionCapacityError)) console.warn('[tab-drafts] Journal archive deferred', error);
+                    // Archive failures are write limits, not read failures. Keep
+                    // the journal intact and restore its bytes without importing.
+                    imported = false;
+                    receipt = { persisted: record.draft, superseded: false };
+                }
+                if (!receipt.superseded && selected) {
                     journalChoices.set(record.tabId, receipt.persisted);
                     writeHint(scope, record.tabId, recordWriter);
                 }
-                const storage = journalStorage();
                 // v2 keys include sequence and are immutable. Legacy mutable keys remain untouched.
-                if (journalStorageKey.startsWith(JOURNAL_PREFIX) && storage?.getItem(journalStorageKey) === raw) storage.removeItem(journalStorageKey);
+                try {
+                    const storage = journalStorage();
+                    if (imported && journalStorageKey.startsWith(JOURNAL_PREFIX) && storage?.getItem(journalStorageKey) === raw) storage.removeItem(journalStorageKey);
+                } catch { /* Already archived; retaining a journal is safe to retry. */ }
             }
             const versions = await listDraftVersions(db, scope.accountKey);
             const tabs = new Set([...live.keys(), ...versions.map(row => row.tab_id), ...journalChoices.keys()]);
             for (const tabId of tabs) {
                 const key = memoryKey(scope, tabId);
-                if (drafts.has(key) || dirty.has(key)) continue;
+                if (drafts.has(key) || dirty.has(key) || entry.errors.has(tabId)) continue;
                 const hint = readHint(scope, tabId);
                 const hinted = versions.find(row => row.tab_id === tabId && row.writer_id === hint)
                     ?? states.find(row => row.kind === 'retired' && row.tab_id === tabId && row.writer_id === hint);
@@ -402,9 +432,6 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
                 if (value !== undefined) durableDrafts.set(key, value);
                 const restored = value ? fromPersisted(value) : null;
                 if (restored) drafts.set(key, { scope, tabId, draft: restored });
-                if (journalChoices.has(tabId) && value) {
-                    advanceSequence(key); writeJournal(scope, tabId, value); markDirty(scope, tabId);
-                }
                 baselines.set(key, await readDraftBaseline(db, scope.accountKey, tabId));
             }
             versionsRevision.value++;
@@ -416,7 +443,8 @@ function hydrate(scope: WorkspaceDraftScope): Promise<void> {
         entry.done = true;
     })();
     hydrations.set(scope.key, entry);
-    return entry.promise;
+    await entry.promise;
+    if (entry.errors.has(requestedTab)) throw entry.errors.get(requestedTab);
 }
 
 async function resolveAttachment(
@@ -494,6 +522,7 @@ export function useWorkspaceTabDrafts() {
         if (!tabId || !scope.db) return true;
         const hydration = hydrations.get(scope.key);
         if (hydration?.db !== scope.db || !hydration.done) return false;
+        if (hydration.errors.has(tabId)) return false;
         return !drafts.get(memoryKey(scope, tabId))?.draft.attachmentRefs?.length;
     }
 
@@ -503,12 +532,15 @@ export function useWorkspaceTabDrafts() {
         scope = currentWorkspaceDraftScope()
     ): Promise<WorkspaceChatTabDraft | undefined> {
         if (!tabId) return undefined;
-        await hydrate(scope);
+        await hydrate(scope, tabId);
         const key = memoryKey(scope, tabId);
         clearDiscardTimer(key);
         const entry = drafts.get(key);
         const refs = entry?.draft.attachmentRefs;
-        if (!entry || !refs?.length || !scope.db) return entry?.draft;
+        if (!entry || !refs?.length || !scope.db) {
+            if (!entry && !dirty.has(key) && !inFlightDrafts.has(key)) durableDrafts.set(key, null);
+            return entry?.draft;
+        }
 
         // A rejected read is not evidence that the bytes are missing. Wait for
         // every read so partial preview URLs can be released before retrying.
@@ -550,8 +582,11 @@ export function useWorkspaceTabDrafts() {
         const key = memoryKey(scope, tabId);
         clearDiscardTimer(key);
         drafts.set(key, { scope, tabId, draft });
-        advanceSequence(key);
         const persisted = toPersisted(draft);
+        const durable = durableDrafts.get(key);
+        if (persisted !== undefined && durable !== undefined && !dirty.has(key) && !inFlightDrafts.has(key)
+            && !failedDrafts.has(key) && samePersistedContent(persisted, durable)) return;
+        advanceSequence(key);
         if (persisted !== undefined) writeJournal(scope, tabId, persisted);
         markDirty(scope, tabId);
     }
@@ -642,13 +677,15 @@ export function useWorkspaceTabDrafts() {
         if (version.writer_id === writerId && (drafts.has(key) || dirty.has(key) || inFlightDrafts.has(key))) {
             throw new Error('Clear this draft in its editor and wait for its save before discarding the saved version.');
         }
-        await removeDraftVersion(scope.db, scope.accountKey, version); versionsRevision.value++;
-        recoveryChannel?.postMessage({ db: scope.db.name, account: scope.accountKey });
+        await removeDraftVersion(scope.db, scope.accountKey, version);
+        notifyVersionsChanged(scope.db, scope.accountKey);
     }
 
     return {
         read, load, isLoaded, write, discard, discardAfter, clear, listVersions, restoreVersion, discardVersion,
         versionsRevision: readonly(versionsRevision),
+        hasSaveFailure: (tabId: string | undefined, scope = currentWorkspaceDraftScope()) =>
+            Boolean(tabId && failedDrafts.has(memoryKey(scope, tabId))),
         writerId,
         scope: currentWorkspaceDraftScope,
         flush: flushWorkspaceTabDrafts,

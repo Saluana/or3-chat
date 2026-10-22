@@ -30,6 +30,11 @@ silently opt out. Existing `.env` secrets stay in place. Preserve `.or3/secrets`
 and its master key across upgrades; see [secret-store setup](/documentation/cloud/secret-store)
 for custody, production attachment and recovery details.
 
+If dependency optimization reports a missing VueUse export such as `toValue`,
+keep `@vueuse/shared` out of Vite's `resolve.dedupe`. The drawer dependency uses
+VueUse 10 while the app uses VueUse 14; each must resolve its matching shared
+helpers. Forcing them to share one version breaks older exports.
+
 The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
 
 The dashboard's **Dev Tools** tile (the hook inspector) is hidden by default and never ships in production builds. Start the dev server with `OR3_DEV_TOOLS=true bun run dev` to show it.

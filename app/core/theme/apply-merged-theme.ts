@@ -187,6 +187,13 @@ function applyTypographyOverrides(
         style.removeProperty('--app-font-size-root');
     }
 
+    const uiScale = overrides.typography?.uiScale;
+    if (typeof uiScale === 'number') {
+        style.setProperty('--app-ui-scale', String(uiScale / 100));
+    } else {
+        style.removeProperty('--app-ui-scale');
+    }
+
     const legacyFontChoice = overrides.typography?.useSystemFont
         ? 'system'
         : 'theme';

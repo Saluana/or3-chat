@@ -829,11 +829,21 @@ describe('ChatInputDropper', () => {
             vm.setText('cannot be stored yet');
             await vi.waitFor(() => expect(drafts.read('quota-tab')?.text).toBe('cannot be stored yet'));
             await drafts.flush();
-            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ id: 'draft-save-failed' })));
+            await vi.waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be saved' })));
+            const noticeId = add.mock.calls.find(([notice]) => notice.title === 'Draft could not be saved')![0].id;
+            add.mockClear(); remove.mockClear();
+            await wrapper.setProps({ tabId: 'healthy-chat' });
+            await flushPromises();
+            expect(remove).toHaveBeenCalledWith(noticeId);
+            expect(add.mock.calls.some(([notice]) => notice.title === 'Draft could not be saved')).toBe(false);
+            await wrapper.setProps({ tabId: 'quota-tab' });
+            await flushPromises();
+            expect(add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft could not be saved' }));
 
             failing.mockRestore();
+            remove.mockClear();
             await drafts.flush();
-            await vi.waitFor(() => expect(remove).toHaveBeenCalledWith('draft-save-failed'));
+            await vi.waitFor(() => expect(remove).toHaveBeenCalledWith(noticeId));
             expect((await getDb().workspace_tab_drafts.toArray()).some((row) => row.tab_id === 'quota-tab')).toBe(true);
         } finally {
             failing.mockRestore();

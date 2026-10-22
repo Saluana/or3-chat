@@ -13,8 +13,8 @@
                 Typography
             </h2>
             <p class="supporting-text mt-1">
-                Choose the typefaces used for interface text and headings.
-                Changes apply only to this color mode.
+                Choose the typefaces and interface scale. Changes apply only
+                to this color mode.
             </p>
         </div>
 
@@ -53,6 +53,26 @@
                 <small>Used for titles, section labels, and display text.</small>
             </label>
 
+            <label class="typography-field">
+                <span>Interface scale</span>
+                <select
+                    :value="uiScaleChoice"
+                    @change="setUiScale"
+                >
+                    <option
+                        v-for="choice in UI_SCALE_CHOICES"
+                        :key="choice"
+                        :value="choice"
+                    >
+                        {{ choice === 'theme' ? 'Theme default' : `${choice}%` }}
+                    </option>
+                </select>
+                <small>
+                    Resizes the whole app on desktop screens. Message and
+                    document text keeps its own size.
+                </small>
+            </label>
+
             <label class="typography-field typography-size-field">
                 <span>Base font size</span>
                 <span class="typography-range-row">
@@ -77,6 +97,10 @@
 import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { USER_FONT_OPTIONS } from '~/core/theme/font-options';
+import {
+    UI_SCALE_CHOICES,
+    isUiScaleChoice,
+} from '~/core/theme/theme-token-presets';
 import type {
     UserFontChoice,
     UserThemeOverrides,
@@ -110,6 +134,16 @@ const bodyFontChoice = computed(
 const headingFontChoice = computed(
     () => overrides.value.typography?.headingFont ?? legacyFontChoice.value
 );
+
+const uiScaleChoice = computed(
+    () => overrides.value.typography?.uiScale ?? 'theme'
+);
+
+function setUiScale(event: Event) {
+    const raw = (event.currentTarget as HTMLSelectElement).value;
+    const value = raw === 'theme' ? raw : Number(raw);
+    if (isUiScaleChoice(value)) set({ typography: { uiScale: value } });
+}
 
 const commitFontSize = useDebounceFn(
     (value: number) => set({ typography: { baseFontPx: value } }),

@@ -205,9 +205,9 @@ composer's attach and settings icons at 16px. Chat tabs use the same
 sizes.
 
 Blank follows one design scale, defined as `--blank-*` variables at the top of
-`app/theme/blank/styles.css` so no size appears as a stray literal. Type has four
-steps: caption 12px, body 14px, message 16px, and title 20px, with weights 400, 500
-and 600 only. Code is 13px and prose headings run 24 / 20 / 18 / 16px; touch layouts
+`app/theme/blank/styles.css` so no size appears as a stray literal. Type has five
+steps: caption 12px, body 14px, reading 15px (chat replies, user messages and documents, on a 24px line), message 16px (UI titles) and title 20px, with weights 400, 500
+and 600 only. Code is 13px and prose headings run 24 / 20 / 18 / 15px; touch layouts
 raise labels and controls through the `--blank-mobile-*` variables and never go
 below 12px. Radii are 6 (chips), 8 (controls), 10 (rail, tabs), 14 (cards, dialogs),
 20 (message bubble, empty-state cards) and 28px (composer); an inner radius equals
@@ -217,6 +217,25 @@ its container's radius minus the gap between them. Controls are 32, 36 and 44px
 Text fields use a single 12px horizontal inset and form labels are 14px / 500 over
 12px help text. Every rule hangs off `html[data-theme='blank']`, which keeps it
 ahead of component-scoped CSS regardless of stylesheet load order.
+
+On desktop (hover-capable pointers at 768px and wider) the app shell renders at the
+scale in `--app-ui-scale`: `main.css` sets CSS `zoom` on `<body>` whenever
+`#page-container` is mounted, so portaled menus and modals scale with it. Blank
+defaults to `0.9`, so the sizes above read as 90% of their stated value; other themes
+default to 1. Users change it under Theme settings → Typography → Interface scale
+(`typography.uiScale`: Theme default or 80–120%), which sets `--app-ui-scale` on
+`<html>`. `.or3-prose` (chat replies, documents, docs) and `.cm-text-user` apply the
+inverse zoom, which keeps reading text at its stated 15px. `zoom` does not rescale viewport
+units, so full-height shell elements divide `100dvh` by `--app-ui-zoom`; do the same
+for any new `100dvh`/`100vh` container that must fill the window. Touch and narrow
+screens stay at 100%.
+
+Blank keeps message actions (copy, retry, branch, edit) visible as a quiet row of
+loose icons under each message instead of a pill revealed on hover: a reply's row sits
+in flow with its first icon on the text edge, and a user bubble hangs its row below
+its right edge (reserved by `--blank-actions-clearance`). Message rows carry no
+vertical margin, so the row and a 16px row gap set the spacing between messages;
+touch and narrow panes keep 44px-wide buttons.
 
 Blank's sidebar chat and document row icons render at 16px in the same
 90% `onSurface` (`--blank-sb-icon`) so titles carry the list; hover and

@@ -7,6 +7,12 @@ export interface DraftBaseline {
     state: WorkspaceDraftVersionRow | null;
 }
 const MAX_VERSIONS = 200;
+export class DraftVersionCapacityError extends Error {
+    constructor() {
+        super('Saved draft versions are full. Review and explicitly discard unneeded versions, then retry.');
+        this.name = 'DraftVersionCapacityError';
+    }
+}
 export const draftCanonicalId = (account: string, tab: string) => `${account}\u0000${tab}`;
 export const draftVersionId = (account: string, tab: string, writer: string) => `version:${account}\u0000${tab}\u0000${writer}`;
 const stateId = (account: string, tab: string) => `state:${draftCanonicalId(account, tab)}`;
@@ -48,8 +54,13 @@ export async function commitDraftVersion(db: Or3DB, input: {
                 tab_id: input.tab, writer_id: archiveWriter, sequence: 0, kind: 'version',
                 updated_at: canonical.updated_at, draft: canonical.draft });
         }
-        if (versions.length + additions.length + (own?.kind === 'version' ? 0 : 1) > MAX_VERSIONS) {
-            throw new Error('Saved draft versions are full. Review and explicitly discard unneeded versions, then retry.');
+        // Empty composers persist null sequence floors. They protect against stale
+        // retries, but must not consume the capacity reserved for unsent content.
+        const contentVersions = versions.filter(row => row.draft !== null).length;
+        const addedContent = additions.length + (input.draft ? 1 : 0)
+            - (own?.kind === 'version' && own.draft !== null ? 1 : 0);
+        if (addedContent > 0 && contentVersions + addedContent > MAX_VERSIONS) {
+            throw new DraftVersionCapacityError();
         }
         // Sharing file_meta with deletion serializes publication of attachment refs.
         // Missing bytes remain hash/name evidence and are reported by the loader.

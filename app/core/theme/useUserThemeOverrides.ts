@@ -9,6 +9,7 @@ import { isUserFontChoice } from './font-options';
 import {
     isDensityPreset,
     isElevationPreset,
+    isUiScaleChoice,
 } from './theme-token-presets';
 import { invalidateBackgroundToken, revokeBackgroundBlobs } from './backgrounds';
 import { isBrowser } from '~/utils/env';
@@ -251,6 +252,12 @@ function validatePatch(patch: Partial<UserThemeOverrides>): Partial<UserThemeOve
             14,
             Math.min(24, result.typography.baseFontPx)
         );
+    }
+    if (
+        result.typography?.uiScale !== undefined &&
+        !isUiScaleChoice(result.typography.uiScale)
+    ) {
+        delete result.typography.uiScale;
     }
     for (const key of ['bodyFont', 'headingFont'] as const) {
         const value = result.typography?.[key];

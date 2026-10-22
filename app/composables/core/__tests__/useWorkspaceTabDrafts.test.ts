@@ -182,8 +182,64 @@ describe('durable workspace tab drafts', () => {
         expect((await drafts.listVersions()).some(row => row.id === closed.id)).toBe(false);
         const key = 'or3:tab-draft-journal:v1:' + encodeURIComponent('local\u0000local') + ':unknown';
         localStorage.setItem(key, '{broken synthetic journal');
-        const next = await reload(); await expect(next.drafts.load('unknown')).rejects.toThrow();
+        const next = await reload();
+        await expect(next.drafts.load('healthy-chat')).resolves.toBeUndefined();
+        await expect(next.drafts.load('unknown')).rejects.toThrow();
         expect(localStorage.getItem(key)).toBe('{broken synthetic journal');
+        localStorage.setItem(key, JSON.stringify({ tabId: 'unknown', updatedAt: 1,
+            draft: { version: 1, text: 'repaired journal', attachments: [], largeTextBlocks: [], updatedAt: 1 } }));
+        expect((await next.drafts.load('unknown'))?.text).toBe('repaired journal');
+    });
+
+    it('does not create new recovery branches or save failures when unchanged composers are recaptured', async () => {
+        const first = await reload();
+        first.drafts.write('unchanged-chat', draft('already durable'));
+        await first.flush();
+        const second = await reload();
+        const restored = (await second.drafts.load('unchanged-chat'))!;
+        await second.drafts.load('empty-chat');
+        const versions = await second.drafts.listVersions();
+        const blocked = vi.spyOn(second.client.getDb().workspace_draft_versions, 'put')
+            .mockRejectedValue(new DOMException('Synthetic storage quota', 'QuotaExceededError'));
+        second.drafts.write('unchanged-chat', { ...restored, updatedAt: Date.now() + 100 });
+        second.drafts.write('empty-chat', draft(''));
+        await second.flush();
+        expect(second.drafts.saveFailed.value).toBe(false);
+        expect(second.drafts.needsUnloadConfirmation()).toBe(false);
+        expect(await second.drafts.listVersions()).toEqual(versions);
+        expect(journalKeys()).toEqual([]);
+        blocked.mockRestore();
+    });
+
+    it('persists to IndexedDB when journal access fails and does not report the confirmed save as failed', async () => {
+        const { drafts, flush, client } = await reload();
+        drafts.write('journal-read-denied', draft('native storage still works'));
+        const storage = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new DOMException('Synthetic journal access denied', 'SecurityError');
+        });
+        await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect(drafts.needsUnloadConfirmation()).toBe(false);
+        expect((await client.getDb().workspace_tab_drafts.toArray())[0]?.draft.text).toBe('native storage still works');
+        storage.mockRestore();
+    });
+
+    it.each(['archive', 'cleanup'])('restores journaled content when journal %s fails without reporting a save failure', async (failure) => {
+        const { drafts, client, flush } = await reload();
+        const key = 'or3:tab-draft-journal:v2:' + encodeURIComponent('local\u0000local') + ':journal-fault:pending-writer:1';
+        const raw = JSON.stringify({ tabId: 'journal-fault', writerId: 'pending-writer', sequence: 1, updatedAt: 1,
+            draft: { version: 1, text: 'readable journal content', attachments: [], largeTextBlocks: [], updatedAt: 1 } });
+        localStorage.setItem(key, raw);
+        const fault = failure === 'archive'
+            ? vi.spyOn(client.getDb().workspace_draft_versions, 'put').mockRejectedValue(new DOMException('Synthetic archive quota', 'QuotaExceededError'))
+            : vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new DOMException('Synthetic journal cleanup denied', 'SecurityError'); });
+        await expect(drafts.load('healthy-chat')).resolves.toBeUndefined();
+        expect((await drafts.load('journal-fault'))?.text).toBe('readable journal content');
+        await flush();
+        expect(drafts.saveFailed.value).toBe(false);
+        expect(drafts.needsUnloadConfirmation()).toBe(false);
+        expect(localStorage.getItem(key)).toBe(raw);
+        fault.mockRestore();
     });
 
     it('rejects capacity overflow without evicting old drafts and retries after explicit cleanup', async () => {
@@ -195,10 +251,47 @@ describe('durable workspace tab drafts', () => {
         await expect(recovery.commitDraftVersion(db, input)).rejects.toThrow('full');
         expect(await db.workspace_draft_versions.count()).toBe(200);
         expect(await db.workspace_tab_drafts.get('local\u0000capacity-new')).toBeUndefined();
-        await recovery.removeDraftVersion(db, 'local', (await recovery.listDraftVersions(db, 'local'))[0]!);
-        await recovery.commitDraftVersion(db, input);
+        // Empty chats can still save at capacity; turning that marker into real
+        // content must obey the same limit as a new writer.
+        await recovery.commitDraftVersion(db, { ...input, draft: null });
+        await expect(recovery.commitDraftVersion(db, { ...input, sequence: 2 })).rejects.toThrow('full');
+        await recovery.removeDraftVersion(db, 'local', (await recovery.listDraftVersions(db, 'local')).find(row => row.draft?.text === old.text)!);
+        await recovery.commitDraftVersion(db, { ...input, sequence: 2 });
         expect((await recovery.listDraftVersions(db, 'local')).filter(row => row.draft?.text === old.text)).toHaveLength(199);
         expect((await db.workspace_tab_drafts.get('local\u0000capacity-new'))?.draft.text).toBe(input.draft.text);
+    });
+
+    it.each([0, 199, 200])('restores chats without redundant saves with %s content versions at recovery capacity', async (contentCount) => {
+        const first = await reload();
+        const db = first.client.getDb();
+        const retained = { version: 1 as const, text: 'retained recovery content', attachments: [], largeTextBlocks: [], updatedAt: 1 };
+        const rows = Array.from({ length: Math.max(200, contentCount) }, (_, i) => ({
+            id: `restore-capacity-${i}`, account_key: 'local', tab_id: `old-${i}`,
+            writer_id: `old-writer-${i}`, sequence: 1, updated_at: 1, kind: 'version' as const,
+            draft: i < contentCount ? retained : null,
+        }));
+        await db.workspace_draft_versions.bulkPut(rows);
+        await db.workspace_tab_drafts.put({ id: 'local\u0000saved-chat', account_key: 'local',
+            tab_id: 'saved-chat', updated_at: 1, draft: retained });
+        const journalKey = 'or3:tab-draft-journal:v2:' + encodeURIComponent('local\u0000local') + ':pending-chat:pending-writer:1';
+        const raw = JSON.stringify({ tabId: 'pending-chat', writerId: 'pending-writer', sequence: 1,
+            updatedAt: 2, draft: { ...retained, text: 'unsent journal message', updatedAt: 2 } });
+        localStorage.setItem(journalKey, raw);
+        const second = await reload();
+
+        await expect(second.drafts.load('new-chat')).resolves.toBeUndefined();
+        expect((await second.drafts.load('saved-chat'))?.text).toBe(retained.text);
+        expect((await second.drafts.load('pending-chat'))?.text).toBe('unsent journal message');
+        expect(second.drafts.isLoaded('new-chat')).toBe(true);
+        expect(await db.workspace_draft_versions.bulkGet(rows.map(row => row.id))).toEqual(rows);
+        await second.flush();
+        expect(second.drafts.saveFailed.value).toBe(false);
+        if (contentCount === 200) expect(localStorage.getItem(journalKey)).toBe(raw);
+        else {
+            await second.flush();
+            expect(localStorage.getItem(journalKey)).toBeNull();
+            expect((await db.workspace_tab_drafts.get('local\u0000pending-chat'))?.draft.text).toBe('unsent journal message');
+        }
     });
 
     it('upgrades a v27 database additively without changing drafts, queued state or attachment bytes', async () => {

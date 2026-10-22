@@ -233,20 +233,9 @@
 }
 
 [data-theme="blank"] .cm-action-group {
-  background-color: var(--md-surface);
-  border: var(--md-border-width) solid var(--md-border-color);
-  box-shadow: var(--app-elevation-low);
-  border-radius: var(--md-border-radius-small, var(--md-border-radius));
-  opacity: 0;
-  transition: opacity var(--app-motion-duration-fast, 150ms) var(--app-motion-easing-standard, ease);
-}
-
-[data-theme="blank"] .group:hover .cm-action-group {
-  opacity: 1;
-}
-
-[data-theme="blank"] .group:focus-within .cm-action-group {
-  opacity: 1;
+  background-color: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 [data-theme="blank"] .chat-container-root:not(:last-child) {
@@ -345,10 +334,6 @@
 
 [data-theme="blank"] .tool-call-detail-value {
   font-size: 12px;
-}
-
-[data-theme="blank"] .cm-actions-user {
-  bottom: -24px !important;
 }
 
 [data-theme="blank"] #dashboard-page-header {

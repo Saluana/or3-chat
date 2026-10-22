@@ -674,3 +674,43 @@ html[data-motion-resolved='reduced'] *::after {
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Desktop interface scale. `--app-ui-scale` is the chosen scale (a theme
+   default, or the user's Theme settings override on <html>). On hover-capable
+   screens 768px and wider the app shell renders at that scale through CSS zoom
+   on <body>, so portaled menus and modals inherit it. Reading surfaces undo it,
+   which keeps message and document text at its own size. `zoom` does not
+   rescale viewport units, so the shell divides its 100dvh by the scale. */
+html {
+	--app-ui-zoom: 1;
+}
+
+@media (hover: hover) and (min-width: 48rem) {
+	html:has(#page-container) {
+		--app-ui-zoom: var(--app-ui-scale, 1);
+	}
+
+	html:has(#page-container) body {
+		zoom: var(--app-ui-zoom);
+	}
+
+	#page-container {
+		height: calc(100dvh / var(--app-ui-zoom));
+	}
+}
+
+.or3-prose,
+.cm-text-user {
+	zoom: calc(1 / var(--app-ui-zoom));
+}
+
+/* Floating UI measures a fixed popper wrapper in viewport pixels but places it
+   in the wrapper's own zoomed units, so the wrapper sits at the viewport scale
+   and its content carries the zoom. */
+[data-reka-popper-content-wrapper] {
+	zoom: calc(1 / var(--app-ui-zoom));
+}
+
+[data-reka-popper-content-wrapper] > * {
+	zoom: var(--app-ui-zoom);
+}

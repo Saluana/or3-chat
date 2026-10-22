@@ -97,23 +97,9 @@ export const chatCssSelectors = {
     },
     '.cm-action-group': {
         style: {
-            backgroundColor: 'var(--md-surface)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            boxShadow: 'var(--app-elevation-low)',
-            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
-            opacity: '0',
-            transition:
-                'opacity var(--app-motion-duration-fast, 150ms) var(--app-motion-easing-standard, ease)',
-        },
-    },
-    '.group:hover .cm-action-group': {
-        style: {
-            opacity: '1',
-        },
-    },
-    '.group:focus-within .cm-action-group': {
-        style: {
-            opacity: '1',
+            backgroundColor: 'transparent',
+            border: '0',
+            boxShadow: 'none',
         },
     },
     '.chat-container-root:not(:last-child)': {
@@ -229,11 +215,6 @@ export const chatCssSelectors = {
     '.tool-call-detail-value': {
         style: {
             fontSize: '12px',
-        },
-    },
-    '.cm-actions-user': {
-        style: {
-            bottom: '-24px !important',
         },
     },
 };

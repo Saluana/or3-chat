@@ -67,6 +67,7 @@ describe('blank theme design scale', () => {
         for (const token of [
             '--blank-text-caption: 12px',
             '--blank-text-body: 14px',
+            '--blank-text-reading: 15px',
             '--blank-text-message: 16px',
             '--blank-text-title: 20px',
             '--blank-radius-xs: 6px',

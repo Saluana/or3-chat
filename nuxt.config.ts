@@ -686,9 +686,11 @@ export default defineNuxtConfig({
             // Share that patched renderer with the root version's stylesheet.
             // These nested copies satisfy the root versions' declared ranges.
             // Share their state and helpers across Nuxt UI, Reka and Nuxt.
+            // VueUse must keep each major's own shared helpers: vaul-vue still
+            // uses v10 APIs that the root v14 no longer exports.
             dedupe: [
                 'katex', '@floating-ui/core', '@floating-ui/dom',
-                '@floating-ui/utils', '@vueuse/shared', 'ufo', 'ohash',
+                '@floating-ui/utils', 'ufo', 'ohash',
             ],
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects

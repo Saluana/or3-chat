@@ -467,7 +467,8 @@ export default defineTheme({
                 base: 'min-h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-lg:text-[16px]! max-md:min-h-[44px]!',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)]! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-[var(--app-elevation-medium,0_2px_8px_rgba(0,0,0,0.08))]',
-                input: 'border-0 rounded-none! focus:outline-none! focus-visible:outline-none! max-lg:text-[16px]!',
+                // SelectMenu applies this slot to UInput's wrapper, not its input.
+                input: 'border-0 rounded-none! focus:outline-none! focus-visible:outline-none! max-lg:text-[16px]! [&_input]:rounded-none! [&_input]:border-0! [&_input]:bg-transparent! [&_input]:shadow-none! [&_input]:ring-0!',
                 arrow: 'h-[18px] w-[18px]',
                 item: 'max-md:min-h-[44px]! max-md:text-[16px]!',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',

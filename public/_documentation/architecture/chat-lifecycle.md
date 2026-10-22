@@ -133,7 +133,13 @@ panel or version-management controls. Other branches and orphaned app-tab
 drafts remain protected in local recovery storage. The recovery APIs archive
 the current buffer before restoring a version and require the exact version
 for removal. Recovery versions never automatically evict unsent content;
-reaching the 200-version capacity fails visibly. Explicitly removed versions
+reaching the 200-version content capacity rejects new archived content. Empty
+composer and discard markers retain their sequence floors without consuming
+that capacity. A full archive never blocks reading drafts: journals that cannot
+be imported remain intact and can still restore their composer content.
+Restoring an imported journal reuses its writer head rather than publishing a
+duplicate recovery version. Recapturing unchanged durable content, including an
+empty composer, does not enqueue another write. Explicitly removed versions
 retain only a sequence floor, without text or attachment references.
 
 Drafts retain text, editor JSON, settings, pasted blocks and attachment hashes;
@@ -144,14 +150,19 @@ Synchronous journals up to about 100k characters use immutable per-writer
 operation keys (`or3:tab-draft-journal:v2:*`). A confirmed newer own write
 compacts its older keys. Legacy v1 records are imported conservatively and
 retained because old writers can still mutate them. Unknown records remain
-untouched and cause a visible restore failure. Failed saves retain the buffer,
-show **Draft could not be saved** with Retry, and request unload confirmation
+untouched and block restoration only for their own app tab; retry rereads those
+records. A failed archive import or journal cleanup does not turn readable bytes
+or a confirmed database commit into a restore/save failure. Failed saves retain
+the buffer, show **Draft could not be saved** with Retry for the affected
+workspace/account/tab, and request unload confirmation
 when neither a native receipt nor a journal protects the bytes. Drafts over
 about 500k serialized characters stay in memory with a visible failure and
 preserve the previous durable copy. Captured scope prevents late writes entering
 another workspace/account. Send clears only its submitted composer revision;
 close-tab Undo retains its existing grace period and preview URLs are released
-on discard.
+on discard. Save and restore notices are removed when their composer navigates
+away or unmounts; returning to a draft with an unresolved save failure shows its
+warning again.
 
 Concurrent draft flushes can finish out of order. A successful write clears only that tab's failure; it cannot dismiss another tab's unresolved save warning. A confirmed explicit discard clears the corresponding failure once its deletion is durable.
 
