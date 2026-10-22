@@ -133,6 +133,11 @@ profile.
 - Idempotent push handling via `op_id`.
 - Snapshot items are captured at one high-watermark, ordered by
   `(tableName, primaryKey, kind)`, and served through bounded keyset pages.
+- Sync and backup continuation tokens belong to the capturing user and workspace.
+  At most four copies per user/workspace are retained across both modes for one
+  hour. Superseded, expired, and pre-upgrade tokens return HTTP 410; start a fresh
+  capture. Native runtimes prune expiry at startup and every minute; D1 prunes
+  on requests at most once per minute. Copied items are deleted with the header.
 - Tombstones and change history remain retained while end-to-end snapshot apply
   and replay verification are incomplete.
 - One cursor per workspace (not per-table cursors).

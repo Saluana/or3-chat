@@ -1,5 +1,5 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3';
-import { requireCan, requireSession } from '../../../auth/can';
+import { can, requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
 import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 import { requirePluginMutation } from '../../../utils/plugins/connections/api-context';
@@ -56,10 +56,11 @@ const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
  * Patch-style writes apply the transform inside the settings store's
  * compare-and-set retry loop, so concurrent disjoint patches both land. A form
  * that sends `expectedRevision` keeps the explicit conflict instead of
- * auto-merging. A runtime write (`slot=current`) must name the executing
+ * auto-merging. A runtime write must name the executing
  * package digest and the host activation handle that sealed it, so an old,
  * revoked or superseded activation cannot configure a package after disable,
- * rollback or promotion.
+ * rollback or promotion. Host configuration instead requires plugins.manage,
+ * including Configure forms that select the current package without starting it.
  *
  * While an update is staged, the resolved package is the candidate, and the
  * values are written under that candidate's digest. The running version keeps
@@ -109,11 +110,16 @@ export default defineEventHandler(async (event) => {
             ? body.activationId
             : null;
 
-    // The query carries the runtime/setup intent; the body carries the form
-    // state. Both are read before the lease so the critical section is only the
-    // authoritative resolution and write.
+    // Current-package selection is shared by runtime and owner Configure forms.
+    // An activation always identifies a runtime save; without one, only a
+    // plugin manager can use the host configuration path.
     const query = getQuery(event);
     const slot = query.slot === 'current' ? ('current' as const) : undefined;
+    const runtimeSave = activationId !== null ||
+        (slot === 'current' && !can(session, 'plugins.manage', { kind: 'workspace', id: workspaceId }).allowed);
+    if (!runtimeSave) {
+        requireCan(session, 'plugins.manage', { kind: 'workspace', id: workspaceId });
+    }
     const requestedOperationId =
         operationId ??
         (typeof query.operationId === 'string' && query.operationId.length > 0
@@ -135,7 +141,7 @@ export default defineEventHandler(async (event) => {
             const selection = await resolvePluginPackage(
                 pluginId,
                 EXTENSIONS_BASE_DIR,
-                slot ?? 'auto'
+                runtimeSave ? 'current' : slot ?? 'auto'
             );
             if (!selection) {
                 throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
@@ -200,7 +206,7 @@ export default defineEventHandler(async (event) => {
             // A runtime save is bound to the executing activation: digest alone
             // cannot prove the writer is still authorized after disable,
             // revocation, rollback or a superseding activation.
-            if (slot === 'current' && selection.source === 'package') {
+            if (runtimeSave && selection.source === 'package') {
                 if (expectedPackageDigest === null) {
                     throw createError({
                         statusCode: 409,
@@ -234,6 +240,9 @@ export default defineEventHandler(async (event) => {
                         data: { code: authorized.code },
                     });
                 }
+                if (!authorized.record.grants.approvedGrants.includes('settings.write')) {
+                    throw createError({ statusCode: 403, statusMessage: 'Plugin settings.write grant is required' });
+                }
                 const guardedActivationId = activationId;
                 activationGuard = () => {
                     const live = checkHostActivationLive(guardedActivationId);
@@ -245,6 +254,10 @@ export default defineEventHandler(async (event) => {
                         });
                     }
                 };
+            }
+
+            if (selection.source !== 'package') {
+                requireCan(session, 'plugins.manage', { kind: 'workspace', id: workspaceId });
             }
 
             const descriptors = await loadPackageDescriptors({

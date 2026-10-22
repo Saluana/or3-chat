@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, email-first lock page with marketing and GitHub links, branded light/dark sign-in and registration dialogs, short invitation codes, preflight and retries, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, branded sign-in and registration dialogs, short invitation codes, session-preserving registration refusals, preflight and retries, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, plain-language maintenance controls, independent durable limits, retained Trash archive snapshots, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
+                    "summary": "SQLite auth/sync, maintenance controls, durable limits, bounded user-bound sync and Trash archive snapshots, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -755,7 +755,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 17,
-                    "summary": "Environment variables for OR3 and its providers, dashboard registration mode changes and Restart now requirements, optional invitations, signing setup, and deployment overrides."
+                    "summary": "Environment variables for OR3 and its providers, validated registration modes and Restart now requirements, optional invitations, signing setup, and deployment overrides."
                 },
                 {
                     "name": "capability-matrix.md",
@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, source launch provisioning and manual attachment, custody-preserving upgrades, account-bound OpenRouter OAuth, billing policy, owner-safe browser migration and cleanup retries, governed plugin AI, separate custody and encrypted recovery."
+                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery."
                 }
             ]
         },
@@ -973,7 +973,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, batched host access checks, package verification, permission review, CSP-compatible browser checks, containment, budgets, safe mode, and recovery."
+                    "summary": "Operator configuration, plugin settings authorization, active document asset containment, batched host access checks, package verification, permission review, containment, budgets, safe mode, and recovery."
                 },
                 {
                     "name": "admin-plugins.md",

@@ -49,6 +49,17 @@ to the configured account and are attributed to the acting plugin.
 
 ## Host access checks
 
+Host setup reads and writes require `plugins.manage`. Owners can configure an
+installed current package without starting it. Runtime settings reads pass the
+plugin access gate; runtime writes require a live activation for the selected
+package and its approved `settings.write` grant. Omitting `slot=current` does
+not bypass these checks.
+
+Package HTML assets download as opaque attachments. SVG images keep their image
+MIME type for embedding, with attachment and sandbox headers for direct
+navigation. These active document responses are not cached; JavaScript modules
+and ordinary images retain their existing loading and cache behavior.
+
 In SSR mode, host UI registries coalesce plugin access checks from the same
 render into requests containing at most 50 plugin IDs. The host endpoint
 accepts repeated `pluginIds` query parameters and returns

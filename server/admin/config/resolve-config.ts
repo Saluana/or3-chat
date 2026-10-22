@@ -112,6 +112,9 @@ function parseAuthRegistrationMode(
     if (value === 'open' || value === 'invite_only' || value === 'disabled') {
         return value;
     }
+    if (value !== undefined) {
+        throw new Error('OR3_AUTH_REGISTRATION_MODE must be open, invite_only, or disabled.');
+    }
     return undefined;
 }
 

@@ -129,7 +129,7 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 |---|---:|---|
 | `OR3_GUEST_ACCESS_ENABLED` | `false` | Allow unauthenticated guest access where supported. |
 | `OR3_AUTH_AUTO_PROVISION` | `true` | Legacy registration switch. Prefer `OR3_AUTH_REGISTRATION_MODE` for new deployments. |
-| `OR3_AUTH_REGISTRATION_MODE` | derived | `open`, `invite_only`, or `disabled`; when unset, `OR3_AUTH_AUTO_PROVISION=false` maps to `disabled`, otherwise `open`. |
+| `OR3_AUTH_REGISTRATION_MODE` | derived | Exactly `open`, `invite_only`, or `disabled`; an explicit invalid or empty value fails configuration. When unset, `OR3_AUTH_AUTO_PROVISION=false` maps to `disabled`, otherwise `open`. |
 | `OR3_AUTH_INVITE_TOKEN_SECRET` | unset | HMAC secret required to create invitations and for `invite_only` registration. |
 | `OR3_AUTH_INVITE_TOKEN_TTL_SECONDS` | `604800` | Default invite-token lifetime. |
 | `OR3_SESSION_PROVISIONING_FAILURE` | `throw` | Session provisioning failure mode: `throw`, `unauthenticated`, or `service-unavailable`. |
