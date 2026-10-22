@@ -51,7 +51,8 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('.sb-btn-title');
         expect(blankStyles).toContain('.sb-btn-icon');
         expect(blankStyles).toContain('padding-right: 2.5rem !important');
-        expect(blankStyles).toContain('font-size: 8px !important');
+        // Nothing on touch layouts sits under the supporting-text floor (12px).
+        expect(blankStyles).not.toMatch(/font-size:\s*(?:[0-9]|1[01])px\s*!important/);
         expect(blankStyles).toContain('min-height: 56px !important');
         expect(blankStyles).toContain('padding-block: 6px !important');
         expect(blankStyles).toContain('.basic-auth-account-menu');
@@ -72,7 +73,8 @@ describe('blank theme mobile control sizing', () => {
         expect(buttonSizes.xs.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.sm.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.md.base).toContain('max-md:min-h-[44px]!');
-        expect(blankUi.modal.slots.close).toContain('max-md:min-h-[44px]!');
+        // Modal close matches the shared AppModal shell: 44px at every width.
+        expect(blankUi.modal.slots.close).toContain('size-[44px]');
         expect(blankUi.toast.slots.close).toContain('max-md:min-h-[44px]!');
         expect(blankUi.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
     });

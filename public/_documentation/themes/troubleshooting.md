@@ -66,8 +66,14 @@ nodes. Existing-node attribute changes are not a universal rescan trigger.
 Verify the selector matches and inspect competing specificity before adding
 manual rescans. The deprecated `useThemeClasses()` helper is a no-op.
 
-Scope raw stylesheets to `[data-theme="<name>"]`. Check narrow panes, teleported
-dialogs, light/dark mode, and switching away so leaked rules are visible.
+Scope raw stylesheets to `html[data-theme="<name>"]`. A bare `[data-theme]`
+selector has the same specificity as a component's scoped `.name[data-v-…] x`
+rule, and the theme `<link>` is attached at activation while component CSS
+arrives with its chunk, so the winner depends on load order. The `html` prefix
+makes your rule win deterministically. If a utility class such as `ring-0!`
+still beats you, put the declaration inside `@layer utilities` too. Check
+narrow panes, teleported dialogs, light/dark mode, and switching away so
+leaked rules are visible.
 
 ## Replacement components fail
 
