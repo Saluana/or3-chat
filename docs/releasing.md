@@ -134,8 +134,8 @@ in `packages/create-or3-chat/first-party-versions.json` are already available
 on npm:
 
 ```bash
-npm view or3-provider-basic-auth@0.0.15 version
-npm view or3-provider-sqlite@0.0.20 version
+npm view or3-provider-basic-auth@0.0.16 version
+npm view or3-provider-sqlite@0.0.21 version
 npm view or3-provider-fs@0.0.14 version
 ```
 

@@ -5,8 +5,8 @@ import { readFileSync, lstatSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.20', filesystem: '0.0.14' });
-export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage'];
+export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.21', filesystem: '0.0.14' });
+export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors'];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 // One MiB accommodates the admitted 256 KiB payload and persisted fields.
@@ -72,9 +72,9 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
       if (db.prepare('SELECT type FROM sqlite_master WHERE name = ?').get(name)?.type !== 'table') throw new Error('Unsupported offline canonical SQLite schema');
     }
     const migrationNames = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
-    // Published 0.0.18 backups end at 024; the current package ends at 026.
-    // An interrupted upgrade ending at 025 is not a qualified backup history.
-    const expectedMigrations = migrationNames.length === 24 ? QUALIFIED_MIGRATIONS.slice(0, 24) : QUALIFIED_MIGRATIONS;
+    // Published backups end at 024 or 026; the current package ends at 028.
+    // Interrupted upgrades ending at 025 or 027 are not qualified histories.
+    const expectedMigrations = [24, 26].includes(migrationNames.length) ? QUALIFIED_MIGRATIONS.slice(0, migrationNames.length) : QUALIFIED_MIGRATIONS;
     if (JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
     const columns = db.prepare('PRAGMA table_info(s_file_meta)').all();
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {

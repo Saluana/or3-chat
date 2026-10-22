@@ -88,12 +88,17 @@ test('offline inspection accepts the installed provider migration history and re
     expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all()).toEqual(QUALIFIED_MIGRATIONS.map(name => ({ name })));
     db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
     expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
+    // Published 0.0.20 backups remain valid for upgrade and rollback inspection.
+    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-2)!);
+    expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-3)!);
+    expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
   } finally { db.close(); }
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.20', filesystem: '0.0.14' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.20', filesystem: '0.0.14' }, { contract: 1, sqlite: '0.0.19', filesystem: '0.0.14' }, { contract: 1, sqlite: '0.0.20', filesystem: '0.0.13' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.21', filesystem: '0.0.14' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.21', filesystem: '0.0.14' }, { contract: 1, sqlite: '0.0.19', filesystem: '0.0.14' }, { contract: 1, sqlite: '0.0.21', filesystem: '0.0.13' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');
