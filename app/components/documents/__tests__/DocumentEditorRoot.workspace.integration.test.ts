@@ -94,6 +94,8 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
     if (!initialAvailability) {
         expect(wrapper.getComponent(Title).props('modelValue')).toBe('A private title');
         expect(JSON.stringify(editor.getJSON())).toContain('A original body');
+        // Editor readiness and the IndexedDB availability subscription resolve independently.
+        await vi.waitFor(() => expect((wrapper!.getComponent(Title).get('textarea').element as HTMLTextAreaElement).disabled).toBe(false));
     }
     return { dbA, dbB, idA, idB, editor, hooks, currentEditor: () => editor };
 }
