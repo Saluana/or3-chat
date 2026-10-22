@@ -32,6 +32,10 @@ Image-only DOCX files fail with a readable-text explanation; DOCX files that
 contain text and embedded media are Partially readable because extraction does
 not include those images.
 
+Document sources show the document's current title, including after a local or
+synced rename. Existing Knowledge bindings update without being removed and
+added again.
+
 Choose a mode independently for each project:
 
 - **Use when relevant:** OR3 selects a bounded excerpt when the question matches. Up to five knowledge excerpts are selected per turn.

@@ -506,8 +506,11 @@ describe('PortableClientView host actions', () => {
     })
 
     it('offers the declared first action only when the plan says it can run', async () => {
-        fetchMock.mockResolvedValue({
-            firstAction: { label: 'Summarize sample', ready: false, reason: 'Finish setup' },
+        // Non-managers may read only the current package's plan. Exercise the
+        // visible action against that API restriction, not just a call string.
+        fetchMock.mockImplementation(async (url: string) => {
+            if (new URL(url, 'http://localhost').searchParams.get('slot') !== 'current') throw new Error('Forbidden');
+            return { firstAction: { label: 'Summarize sample', ready: false, reason: 'Finish setup' } };
         });
         const notReady = shell([]);
         await flushPromises();
@@ -558,6 +561,9 @@ describe('PortableClientView host actions', () => {
         invokeMock.mockResolvedValue({ ok: true, result: {} });
         const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
         await flushPromises();
+        const planUrl = new URL(String(fetchMock.mock.calls[0]?.[0]), 'http://localhost');
+        expect(planUrl.searchParams.get('slot')).toBe('current');
+        expect(planUrl.searchParams.get('documentId')).toBe('doc_1');
         await wrapper.get('[data-testid="portable-plugin-first-action"] button').trigger('click');
         await flushPromises();
         const call = fetchMock.mock.calls.find((entry) => String(entry[0]).includes('first-action'));

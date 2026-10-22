@@ -236,6 +236,12 @@ describe('buildOr3CloudConfigFromEnv', () => {
         );
     });
 
+    it.each(['DISABLED', 'invite-only', 'typo', ''])('rejects an explicitly invalid registration policy %j', (mode) => {
+        expect(() => buildOr3CloudConfigFromEnv({
+            NODE_ENV: 'development', OR3_AUTH_REGISTRATION_MODE: mode,
+        })).toThrow('OR3_AUTH_REGISTRATION_MODE');
+    });
+
     it('maps an explicit invite-only registration mode from env', () => {
         const config = buildOr3CloudConfigFromEnv({
             SSR_AUTH_ENABLED: 'true',

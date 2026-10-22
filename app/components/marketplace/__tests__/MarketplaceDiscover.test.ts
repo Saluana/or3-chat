@@ -548,10 +548,17 @@ describe('MarketplaceDiscover', () => {
         await wrapper.get('[data-testid="marketplace-installed-configure"]').trigger('click');
     });
 
-    it('uses the preflight installed signal when the admin package projection is unavailable', async () => {
+    it('uses the preflight installed signal when runtime policy hides the selected descriptor', async () => {
         fetchMock.mockImplementation((url: string) => {
             if (url.startsWith('/api/admin/plugins-page')) {
-                return Promise.reject(new Error('Forbidden'));
+                return Promise.reject({ statusCode: 403 });
+            }
+            if (url.startsWith('/api/plugins/runtime-manifest')) {
+                return Promise.resolve({ workspaceId: 'ws-1', enabledPluginIds: [],
+                    installedPluginIds: ['or3.sample-utility'], runtime: {
+                        'or3.sample-utility': { lifecycleCoverage: 'managed-v2', descriptorStatus: 'blocked',
+                            blockCode: 'module-loader-outside-canary', loadAllowed: false },
+                    } });
             }
             if (url.startsWith('/api/plugins/marketplace/preflight')) {
                 return Promise.resolve(
@@ -579,6 +586,8 @@ describe('MarketplaceDiscover', () => {
         );
         expect(wrapper.find('[data-testid="marketplace-install"]').exists()).toBe(false);
         expect(wrapper.find('[data-testid="marketplace-installed-uninstall"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="marketplace-block"]').exists()).toBe(false);
+        expect(wrapper.text()).not.toContain('Version 1.0.0 is selected');
     });
 
     it('keeps recovery status visible for a candidate-only package pointer', async () => {

@@ -97,7 +97,7 @@ beforeEach(async () => {
 });
 
 describe('MarketplaceInstalled', () => {
-    it('shows installed packages without management controls to a signed-in member', async () => {
+    it.each(['module-loader-disabled', 'module-loader-outside-canary'])('explains %s without management controls to a signed-in member', async blockCode => {
         const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null>; testDeploymentAdmin: Ref<boolean> };
         auth.testWorkspace.value = 'ws-1';
         auth.testDeploymentAdmin.value = false;
@@ -108,7 +108,7 @@ describe('MarketplaceInstalled', () => {
             runtime: {
                 'sample.plugin': {
                     lifecycleCoverage: 'managed-v2', descriptorStatus: 'blocked',
-                    blockCode: 'module-loader-disabled', loadAllowed: false,
+                    blockCode, loadAllowed: false,
                 },
             },
         });
@@ -117,6 +117,11 @@ describe('MarketplaceInstalled', () => {
 
         expect(fetchMock).toHaveBeenCalledWith('/api/plugins/runtime-manifest');
         expect(wrapper.text()).toContain('sample.plugin');
+        expect(wrapper.text()).toContain('version unavailable');
+        expect(wrapper.text()).toContain('Ask a site administrator');
+        expect(wrapper.text()).toContain(blockCode === 'module-loader-disabled'
+            ? 'Plugin execution is disabled' : 'not approved for plugin execution');
+        expect(wrapper.text()).not.toContain('could not be verified');
         expect(wrapper.text()).not.toContain('Uninstall');
         expect(wrapper.text()).not.toContain('Disable');
         wrapper.unmount();

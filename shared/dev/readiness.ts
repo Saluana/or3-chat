@@ -13,8 +13,21 @@ function probe(url: URL, deadline: number): Promise<void> {
             ...(url.protocol === 'https:' ? { rejectUnauthorized: !local } : {}),
         }, response => {
             let text = '';
-            response.on('data', chunk => { text += chunk; if (text.length > 1024) request.destroy(new Error('readiness_response_limit')); });
-            response.once('error', reject);
+            response.on('data', chunk => {
+                if (response.destroyed) return;
+                if (text.length + chunk.length > 1024) {
+                    clearTimeout(timer);
+                    // A valid HTTP response already established the protocol.
+                    // Reject once and close without injecting errors into a
+                    // socket that may still have more buffered data events.
+                    reject(Object.assign(new Error('readiness_response_limit'), { code: 'NOT_READY' }));
+                    response.destroy();
+                    request.destroy();
+                    return;
+                }
+                text += chunk;
+            });
+            response.on('error', error => { clearTimeout(timer); reject(error); });
             response.once('end', () => {
                 clearTimeout(timer);
                 try {
@@ -24,7 +37,7 @@ function probe(url: URL, deadline: number): Promise<void> {
             });
         });
         const timer = setTimeout(() => request.destroy(new Error('readiness_timeout')), Math.min(3000, remaining));
-        request.once('error', error => { clearTimeout(timer); reject(error); }); request.end();
+        request.on('error', error => { clearTimeout(timer); reject(error); }); request.end();
     });
 }
 

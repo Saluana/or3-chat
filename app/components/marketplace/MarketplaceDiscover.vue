@@ -349,7 +349,10 @@ const selectedInstalledEntry = computed(() => {
 const selectedIsInstalled = computed(
     () =>
         selectedInstalledEntry.value !== null ||
-        (selectedPackageEntry.value === null &&
+        ((selectedPackageEntry.value === null ||
+            (selectedPackageEntry.value.pointer === null &&
+                selectedPackageEntry.value.startup.status === 'blocked' &&
+                !selectedPackageEntry.value.startup.issueCodes.includes('package-inactive'))) &&
             selectedBlocks.value.some((block) => block.code === 'already-installed'))
 );
 const selectedBlocksForDisplay = computed(() =>
@@ -1003,8 +1006,11 @@ function blockActionLabel(block: { action: string }): string | null {
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <p class="font-medium">Installed</p>
-                        <p class="text-sm text-(--ui-text-muted)">
-                            Version {{ selectedInstalledEntry?.display?.version ?? selectedRelease?.version ?? 'unknown' }} is selected for this plugin.
+                        <p v-if="selectedInstalledEntry?.display?.version" class="text-sm text-(--ui-text-muted)">
+                            Version {{ selectedInstalledEntry.display.version }} is selected for this plugin.
+                        </p>
+                        <p v-else class="text-sm text-(--ui-text-muted)">
+                            The selected version is unavailable in this workspace.
                         </p>
                     </div>
                 </div>

@@ -160,15 +160,23 @@ export class PluginPackageAssetReader {
             if (bytes.byteLength !== opened.size) {
                 throw new PluginPackageAssetError('asset-changed', 404, 'Package asset length changed during read');
             }
+            const extension = extname(relativePath).toLowerCase();
+            // Images may still be embedded, but active documents must never
+            // acquire the host origin when a user opens their asset URL.
+            const activeDocument = extension === '.html' || extension === '.svg';
             return Object.freeze({
                 bytes,
-                contentType: MIME_TYPES[extname(relativePath).toLowerCase()] ?? 'application/octet-stream',
+                contentType: extension === '.html' ? 'application/octet-stream' : MIME_TYPES[extension] ?? 'application/octet-stream',
                 relativePath,
                 packageDigest: request.packageDigest,
                 headers: Object.freeze({
-                    'Cache-Control': 'private, max-age=31536000, immutable',
+                    'Cache-Control': activeDocument ? 'private, no-store' : 'private, max-age=31536000, immutable',
                     'Cross-Origin-Resource-Policy': 'same-origin',
                     'X-Content-Type-Options': 'nosniff',
+                    ...(activeDocument ? {
+                        'Content-Disposition': 'attachment',
+                        'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+                    } : {}),
                 }),
             });
         } finally {
