@@ -4,7 +4,7 @@
 - [x] 1.2 Add backend inference and administrator model configuration. Requirements: R1, R4. Done when route and settings tests pass.
 - [x] 1.3 Connect chat and document triggers. Requirements: R2, R3. Done when nonblocking and duplicate tests pass.
 ## 2. Delivery
-- [ ] 2.1 Validate, document cost and limitations, review, open PR. Requirements: R4. Done when PR exists with check results.
+- [x] 2.1 Validate, document cost and limitations, review, open PR. Requirements: R4. Done when PR exists with check results.
 ## Traceability Matrix
 | Requirement | Component | Task |
 |---|---|---|
@@ -14,3 +14,6 @@
 | R4 | Settings and delivery | 1.2,2.1 |
 ## Definition of Done
 Focused coverage passes and validation outcomes and limitations are recorded in the PR.
+
+PR: https://github.com/Saluana/or3-chat/pull/280 (open, unmerged).
+Validation: 252 focused tests passed; one existing skip. Type check, focused lint, production build and diff checks passed.
