@@ -1,5 +1,5 @@
 // Disposable synthetic browser context; no production account or external requests.
-async function catalogProjectScrollProbe(page) {
+async function catalogProjectScrollProbe(page, options = {}) {
     const context = await page.context().browser().newContext({
         viewport: { width: 1200, height: 689 }, deviceScaleFactor: 2,
     });
@@ -45,9 +45,9 @@ async function catalogProjectScrollProbe(page) {
         await p.bringToFront();
         await p.getByRole('button', { name: 'Projects', exact: true }).click();
         cdp = await context.newCDPSession(p);
-        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: options.cpuRate ?? 4 });
         const results = [];
-        for (const surface of ['projects', 'models']) {
+        for (const surface of options.surfaces ?? ['projects', 'models']) {
             if (surface === 'models') {
                 await p.getByRole('button', { name: 'Settings', exact: true }).click();
                 await p.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
@@ -90,7 +90,7 @@ async function catalogProjectScrollProbe(page) {
                 results.push({surface,run,initial,scroll:await sampling});
             }
         }
-        return { seededProjects:600,seededModels:600,cpuThrottle:4,wheelEvents:20,wheelDelta:600,results };
+        return { seededProjects:600,seededModels:600,cpuThrottle:options.cpuRate??4,wheelEvents:20,wheelDelta:600,results };
     } finally {
         if (cdp) { await cdp.send('Emulation.setCPUThrottlingRate',{rate:1}).catch(()=>{});await cdp.detach(); }
         await context.close();

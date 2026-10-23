@@ -94,6 +94,7 @@ export default defineConfig({
                 'packages/plugin-sdk/src/host.ts'
             ),
             '#imports': path.resolve(rootDir, 'tests/stubs/nuxt-imports.ts'),
+            '#build/nuxt-icon-client-bundle': path.resolve(rootDir, 'tests/stubs/nuxt-icon-client-bundle.ts'),
             '#build/or3/bundled-plugin-catalog': path.resolve(
                 rootDir,
                 'tests/stubs/bundled-plugin-catalog.ts'
@@ -113,9 +114,10 @@ export default defineConfig({
         globals: true,
         server: {
             deps: {
-                // Transform this real toast owner so its Nuxt #imports use the
-                // existing test alias rather than Node package-import lookup.
                 inline: [
+                    // Qualify the installed icon resolver with reactive app config.
+                    /\/@nuxt\/icon\/dist\/runtime\/components\/shared\.js$/,
+                    // Keep the real toast owner's Nuxt #imports on host aliases.
                     /\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/,
                     // Exercise the installed filesystem download route with the
                     // host's auth aliases at the real HTTP boundary.
