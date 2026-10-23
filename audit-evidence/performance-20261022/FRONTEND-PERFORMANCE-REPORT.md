@@ -15,7 +15,7 @@ layout costs, image streaming and some WebKit/theme cases remain unresolved.
 
 ## Delivery status
 
-The changes are committed locally as a stack above `3aa7b3c0`, with a branch
+The changes are published as a stack above `3aa7b3c0`, with a branch
 retained for each section. The final branch is `codex/perf-stream-thumbnails`.
 The section reports below contain measurements, reproduction instructions,
 regression coverage and limitations. Committed JSON receipts preserve the
@@ -23,12 +23,41 @@ numeric evidence; many screenshots, traces and command logs remain local in
 `.playwright-mcp/`, test artifact directories or `/tmp` and are not durable
 remote attachments.
 
-No section PR has been created or published. Automatic approval review rejected
-the initial GitHub push because it could not confirm trusted human authorization
-for uploading the code/audit payload to `Saluana/or3-chat`. The pending approval
-was not answered, and no alternate publication path was used. Local PR drafts
-were prepared; publishing the section stack still requires resolving that
-approval. No deployment, package publication or live-data migration occurred.
+All 22 branches and their code, tests, patches and audit evidence were published
+to public `Saluana/or3-chat` after the user explicitly approved that upload.
+The working GitHub connector created the 22 draft PRs indexed below, and each
+PR is attached to this task. No PR has been merged, and no deployment, package
+publication or live-data migration occurred.
+
+## Published pull requests
+
+All PRs are drafts. Section 15 contains diagnostic evidence without an
+application change; the remaining sections include their scoped fixes.
+
+| Section | Pull request | Scope |
+| --- | --- | --- |
+| 1 | [#281](https://github.com/Saluana/or3-chat/pull/281) | Keep settled chat rows idle during streaming |
+| 2 | [#282](https://github.com/Saluana/or3-chat/pull/282) | Stabilize virtual sidebar row recycling |
+| 3 | [#283](https://github.com/Saluana/or3-chat/pull/283) | Reduce sidebar mount and pagination work |
+| 4 | [#284](https://github.com/Saluana/or3-chat/pull/284) | Reduce project and model list mount work |
+| 5 | [#285](https://github.com/Saluana/or3-chat/pull/285) | Scope focus selectors during streaming |
+| 6 | [#286](https://github.com/Saluana/or3-chat/pull/286) | Load syntax grammars on demand |
+| 7 | [#287](https://github.com/Saluana/or3-chat/pull/287) | Avoid repeated icon collection sorting |
+| 8 | [#288](https://github.com/Saluana/or3-chat/pull/288) | Keep scaled sidebar dragging aligned |
+| 9 | [#289](https://github.com/Saluana/or3-chat/pull/289) | Restore sidebar geometry before first paint |
+| 10 | [#290](https://github.com/Saluana/or3-chat/pull/290) | Keep project pin handlers stable while scrolling |
+| 11 | [#291](https://github.com/Saluana/or3-chat/pull/291) | Scope live pane history to each conversation |
+| 12 | [#292](https://github.com/Saluana/or3-chat/pull/292) | Preserve completed math classes during streaming |
+| 13 | [#293](https://github.com/Saluana/or3-chat/pull/293) | Scope mobile More stacking to its open state |
+| 14 | [#294](https://github.com/Saluana/or3-chat/pull/294) | Highlight host code blocks in an owned worker |
+| 15 | [#295](https://github.com/Saluana/or3-chat/pull/295) | Record painted coverage across host scrollers |
+| 16 | [#296](https://github.com/Saluana/or3-chat/pull/296) | Keep lazy message wrappers idle during streaming |
+| 17 | [#297](https://github.com/Saluana/or3-chat/pull/297) | Keep streaming projections and follow controls stable |
+| 18 | [#298](https://github.com/Saluana/or3-chat/pull/298) | Keep unchanged history rows idle after streaming |
+| 19 | [#299](https://github.com/Saluana/or3-chat/pull/299) | Load math styles before the first formula renders |
+| 20 | [#300](https://github.com/Saluana/or3-chat/pull/300) | Composite the generating loader scan animation |
+| 21 | [#301](https://github.com/Saluana/or3-chat/pull/301) | Apply reduced-motion state changes immediately |
+| 22 | [#302](https://github.com/Saluana/or3-chat/pull/302) | Keep thumbnail loading idle during text streaming |
 
 ## What was investigated and fixed
 
@@ -113,11 +142,16 @@ WebKit intake failures, then continue large-jump painting and rich-stream layout
 diagnosis. The current goal ends at this report, as requested; these items are
 an explicit handoff, not background work scheduled to continue automatically.
 
-## Maintaining and publishing the result
+## Reviewing and maintaining the stack
 
-Review and publish the local section branches in stack order after publication
-authorization is resolved. Preserve each section's measurements and limitations
-in its PR. The `or3-scroll@0.1.3` scheduling patch is a local installation patch;
+Review the PRs in section order. The first targets `or3-cloud`; each subsequent
+PR targets the preceding section's branch. Retarget the next PR after its
+predecessor lands. Preserve commit ancestry when merging, or rebase the
+remaining stack after a squash/rebase merge so earlier changes do not reappear
+in later review diffs. Keep base branches until dependent PRs are retargeted.
+Preserve each section's measurements and limitations in its PR.
+
+The `or3-scroll@0.1.3` scheduling patch is a local installation patch;
 follow [its removal criteria](../../patches/README.md) when adopting an upstream
 replacement. No upstream library checkout was modified as part of that handoff.
 
