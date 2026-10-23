@@ -87,7 +87,8 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [on-demand syntax grammars](HIGHLIGHTING.md), and
 [icon setup during virtual recycling](ICON-RESOLUTION.md), and
 [scaled sidebar pointer tracking](SIDEBAR-DRAG.md), and
-[saved sidebar startup geometry](SIDEBAR-STARTUP.md), with separate raw production
+[saved sidebar startup geometry](SIDEBAR-STARTUP.md), and
+[retained project buttons and full-list endpoints](PROJECT-ROW-HANDLERS.md), with separate raw production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
