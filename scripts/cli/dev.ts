@@ -312,12 +312,22 @@ export function nuxtDevEnvironment(
 }
 
 async function runNuxtDev(argv: string[]): Promise<number> {
-    const localProviders = await prepareLocalProviders(process.cwd());
-    const secrets = await prepareSourceSecrets(process.cwd(), nuxtDevEnvironment(), {
-        envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
-    });
+    const controller = new AbortController();
+    const interrupt = () => controller.abort();
+    // Keep handling repeated signals until both Nuxt and the vault have closed.
+    process.on('SIGINT', interrupt);
+    process.on('SIGTERM', interrupt);
+    let secrets: Awaited<ReturnType<typeof prepareSourceSecrets>> | undefined;
     try {
+        const localProviders = await prepareLocalProviders(process.cwd());
+        controller.signal.throwIfAborted();
+        secrets = await prepareSourceSecrets(process.cwd(), nuxtDevEnvironment(), {
+            envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
+        });
+        controller.signal.throwIfAborted();
         const startupEnv = await prepareConvexBackend(process.cwd(), secrets.env, localProviders, { loadEnv: false });
+        controller.signal.throwIfAborted();
+        const secretsEnvironment = secrets.env;
         const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
         const entry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
         if (process.platform === 'win32') {
@@ -333,17 +343,24 @@ async function runNuxtDev(argv: string[]): Promise<number> {
             try { preparedArtifacts.push(requireFromProject.resolve(`${name}/nuxt`)); } catch { /* Unselected optional provider. */ }
         }
         return await superviseDevelopment({
+            signal: controller.signal,
             root: process.cwd(), runtime: nuxtRuntime(startupEnv), args: [resolve(process.cwd(), 'shared/dev/nuxt-child.mjs'), ...argv],
             origin: `http://${host === '0.0.0.0' ? '127.0.0.1' : host === '::' ? '[::1]' : host.includes(':') ? `[${host}]` : host}:${parsePort(argv)}`,
             envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
             environment: async () => ({
                 ...nuxtDevEnvironment(await reloadEnvironment()),
-                ...Object.fromEntries(Object.entries(secrets.env).filter(([key]) => key.startsWith('NUXT_SECRETS_'))),
+                ...Object.fromEntries(Object.entries(secretsEnvironment).filter(([key]) => key.startsWith('NUXT_SECRETS_'))),
                 OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders),
             }),
             prerequisites: createDevelopmentPrerequisiteCheck(process.cwd(), preparedArtifacts),
         });
-    } finally { await secrets.close(); }
+    } catch (error) {
+        if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
+        return 0;
+    } finally {
+        try { await secrets?.close(); }
+        finally { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); }
+    }
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {

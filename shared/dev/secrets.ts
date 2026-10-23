@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import type { createClient as ClientFactory } from '@or3/secrets/client';
+import { AdvisoryPluginOperationLock } from '../../server/admin/plugins/package-operation-lock';
 import { writeEnvFileDetailed } from '../../server/admin/config/env-file';
 
 const execute = promisify(execFile);
@@ -56,11 +57,66 @@ async function verify(createClient: typeof ClientFactory, config: Settings) {
     await client.list({ scope: { namespace: config.NAMESPACE, ownerUserId: '@or3-startup', workspaceId: '@or3-startup', consumerId: '@or3-startup' }, limit: 1 });
 }
 
+/** Only a refused connection proves staleness; auth failures and timeouts do not. */
+async function recoverStaleSocket(socketPath: string): Promise<void> {
+    let before;
+    try { before = await lstat(socketPath); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+    if (!before.isSocket() || before.uid !== process.getuid?.() || (before.mode & 0o777) !== 0o600) {
+        throw new Error('Unsafe local vault socket. Existing path and custody were preserved.');
+    }
+    // Bun 1.3 reports ENOENT for refused Unix connections. Use the required
+    // Node runtime to distinguish a stale endpoint from an ambiguous failure.
+    const probe = await execute('node', ['-e', `
+        const connection = require('node:net').createConnection({ path: process.argv[1] });
+        connection.setTimeout(3000, () => { console.log('ETIMEDOUT'); connection.destroy(); });
+        connection.once('connect', () => { console.log('reachable'); connection.destroy(); });
+        connection.once('error', error => console.log(error.code));
+    `, socketPath], { env: { PATH: process.env.PATH, HOME: process.env.HOME }, timeout: 5_000, maxBuffer: 1024 });
+    if (probe.stdout.trim() !== 'ECONNREFUSED') {
+        throw new Error(`Local vault socket is reachable or its staleness cannot be proven (${probe.stdout.trim()}). Check its identity/token; existing socket was preserved.`);
+    }
+    const current = await lstat(socketPath);
+    if (current.dev !== before.dev || current.ino !== before.ino || !current.isSocket()
+        || current.uid !== before.uid || current.mode !== before.mode) {
+        throw new Error('Local vault socket changed during recovery; existing path was preserved.');
+    }
+    // The launcher lock fences other source launchers through bind and readiness.
+    await rm(socketPath);
+    console.log('Recovered stale local vault socket; vault data and keys preserved.');
+}
+
 /** Source launch boundary. Never runs during Nuxt builds or from a web request. */
 export async function prepareSourceSecrets(
     projectRoot: string,
     environment: NodeJS.ProcessEnv,
     options: { envFile?: string; mode?: Mode } = {},
+): Promise<Owner> {
+    const selected = environment.NUXT_SECRETS_PROVIDER ?? (environment.SSR_AUTH_ENABLED === 'true' ? 'or3-secrets' : '');
+    if ((!options.mode && selected !== 'or3-secrets') || options.mode === 'manual' || options.mode === 'disable'
+        || process.getuid?.() === undefined) return prepareSourceSecretsLocked(projectRoot, environment, options);
+    const root = await realpath(projectRoot);
+    const socketDirectory = join(await realpath(tmpdir()), `or3-vault-${process.getuid()}-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
+    await privateDirectory(socketDirectory);
+    // Reuse the process-owned repository lock: a live owner is never displaced
+    // by age, and a dead launcher's lease can be recovered on the next launch.
+    const lock = new AdvisoryPluginOperationLock(socketDirectory, undefined, true);
+    const acquire = () => lock.acquire('launcher', { requireDeadOwner: true });
+    const lease = await acquire();
+    try {
+        const owner = await prepareSourceSecretsLocked(root, environment, options);
+        let closing: Promise<void> | undefined;
+        return { env: owner.env, close: () => closing ??= (async () => {
+            const shutdownLease = await acquire();
+            try { await owner.close(); } finally { await shutdownLease.release(); }
+        })() };
+    } finally { await lease.release(); }
+}
+
+async function prepareSourceSecretsLocked(
+    projectRoot: string,
+    environment: NodeJS.ProcessEnv,
+    options: { envFile?: string; mode?: Mode },
 ): Promise<Owner> {
     const env = { ...environment };
     const selected = env.NUXT_SECRETS_PROVIDER ?? (env.SSR_AUTH_ENABLED === 'true' ? 'or3-secrets' : '');
@@ -166,7 +222,8 @@ export async function prepareSourceSecrets(
         await verify(createClient, config);
         if (mode) await persist(config);
         return { env: { ...env, ...environmentSettings(config) }, close: noop };
-    } catch { /* Start only when the socket is absent; the service refuses stale/foreign sockets. */ }
+    } catch { /* A token/identity failure alone never authorizes removing a socket. */ }
+    await recoverStaleSocket(config.SOCKET_PATH);
     const child = spawn('bun', ['--no-env-file', join(dirname(clientEntry), 'cli.js'), 'serve', '--vault-dir', join(directory, 'vault'),
         '--key-file', join(directory, 'master.key'), '--socket', config.SOCKET_PATH],
     { env: { PATH: env.PATH, HOME: env.HOME }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -177,15 +234,15 @@ export async function prepareSourceSecrets(
     const exitCleanup = () => { child.kill('SIGTERM'); };
     process.once('exit', exitCleanup);
     let renewal: ReturnType<typeof setInterval> | undefined;
-    const close = async () => {
-        if (closing) return;
+    let closePromise: Promise<void> | undefined;
+    const close = () => closePromise ??= (async () => {
         closing = true;
         clearInterval(renewal);
         process.off('exit', exitCleanup);
         child.kill('SIGTERM');
         const force = setTimeout(() => child.kill('SIGKILL'), 5_000);
         try { await exited; } finally { clearTimeout(force); }
-    };
+    })();
     try {
         await new Promise<void>((resolveReady, reject) => {
             let output = '';
