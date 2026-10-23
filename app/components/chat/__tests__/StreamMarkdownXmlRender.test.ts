@@ -41,9 +41,10 @@ describe('StreamMarkdown XML / custom element handling', () => {
         }
     });
 
-    it('renders inline and block math with the shared KaTeX renderer', async () => {
+    it('renders math and keeps completed formulas unchanged while later text streams', async () => {
+        const content = 'Inline $$x^2$$.\n\n$$\n\\frac{1}{2}\n$$\n\nLater text';
         const wrapper = mount(StreamMarkdown, {
-            props: { content: 'Inline $$x^2$$.\n\n$$\n\\frac{1}{2}\n$$', parseIncompleteMarkdown: false },
+            props: { content, parseIncompleteMarkdown: false },
         });
         try {
             await expect.poll(() => wrapper.findAll('.katex').length).toBe(2);
@@ -51,6 +52,23 @@ describe('StreamMarkdown XML / custom element handling', () => {
             expect(wrapper.find('.katex-display .katex').exists()).toBe(true);
             expect(wrapper.find('.katex-error').exists()).toBe(false);
             expect(wrapper.find('.katex-base').exists()).toBe(true);
+            await wrapper.setProps({ parseIncompleteMarkdown: true });
+            const formula = wrapper.find('.katex').element;
+            const mutations: MutationRecord[] = [];
+            const observer = new MutationObserver(records => mutations.push(...records));
+            observer.observe(formula, { subtree: true, attributes: true, childList: true, characterData: true });
+            try {
+                for (const suffix of [' continues', ' continues with **bold**', ' continues with **bold** output.']) {
+                    await wrapper.setProps({ content: content + suffix });
+                }
+                expect(wrapper.find('.katex').element).toBe(formula);
+                expect(mutations, 'streaming later text must not rewrite settled math attributes').toHaveLength(0);
+            } finally {
+                observer.disconnect();
+            }
+            expect(wrapper.find('.katex .mord.mathnormal').exists()).toBe(true);
+            await wrapper.setProps({ content: content.replace('x^2', 'x^3'), parseIncompleteMarkdown: false });
+            expect(wrapper.find('.katex annotation').text()).toBe('x^3');
         } finally {
             wrapper.unmount();
         }

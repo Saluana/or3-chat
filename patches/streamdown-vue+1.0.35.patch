@@ -1,0 +1,14 @@
+diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js b/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
+--- a/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
++++ b/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
+@@ -1178,7 +1178,9 @@
+ 		let v = (e, n, r) => typeof e == "string" ? r && r.length ? t(e, n, r) : t(e, n) : !r || Array.isArray(r) && r.length === 0 ? t(e, n) : t(e, n, { default: Array.isArray(r) ? () => r : () => [r] }), y = (n, r) => {
+ 			if (!n) return null;
+ 			if (n.type === "text") return n.value;
+ 			if (n.type !== "element") return null;
+-			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e, Array.isArray(t) ? [...t] : t])), o = g(i.children || [], i.tagName), s = i.tagName;
++			// Vue normalizes `class` arrays to strings. HAST's `className` would
++			// instead rewrite the DOM property for every fresh array on each render.
++			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e === "className" ? "class" : e, Array.isArray(t) ? [...t] : t])), o = g(i.children || [], i.tagName), s = i.tagName;
+ 			if (s === "a") {
+ 				let e = yt(String(a.href || ""), c);
