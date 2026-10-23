@@ -189,6 +189,10 @@ test('generated template has registry-clean first-party dependencies', async () 
     assert.equal(manifest.engines.node, '^24.22.1');
     assert.equal((await readFile(new URL('.node-version', templateUrl), 'utf8')).trim(), '24.22.1');
     assert.equal(manifest.scripts.start, 'node scripts/cli/start.mjs');
+    // Generated projects must receive the dependency fix as well as its runner.
+    assert.equal(manifest.scripts.postinstall, 'patch-package --error-on-fail && nuxt prepare');
+    assert.ok(manifest.devDependencies['patch-package']);
+    await readFile(new URL('patches/or3-scroll+0.1.3.patch', templateUrl));
     assert.equal(
         manifest.scripts['generate:static'],
         'tsx scripts/cli/nuxt-task.ts generate-static'

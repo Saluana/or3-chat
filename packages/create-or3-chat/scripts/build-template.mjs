@@ -51,6 +51,7 @@ const RUNTIME_DIRECTORIES = [
     'extensions',
     'modules',
     'plugins',
+    'patches',
     'public',
     'server',
     'shared',
@@ -191,7 +192,7 @@ export function rewriteTemplateManifest(manifest) {
             'generate:static': 'tsx scripts/cli/nuxt-task.ts generate-static',
             preview: 'nuxt preview',
             'preview:static': 'npx --yes serve .output/public -l 4173',
-            postinstall: 'nuxt prepare',
+            postinstall: manifest.scripts.postinstall,
             setup: 'tsx scripts/cli/or3-cloud.ts init',
             doctor: 'tsx scripts/cli/or3-cloud.ts doctor',
             'docker:up':

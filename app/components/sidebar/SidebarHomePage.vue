@@ -119,12 +119,7 @@
                         :active="item.item.family?.kind === 'group-header'
                             ? activeFamilyIds.has(item.item.family.rootId)
                             : allActiveIds.includes(item.item.id)"
-                        :time-display="
-                            formatTimeDisplay(
-                                item.item.updatedAt,
-                                item.groupKey
-                            )
-                        "
+                        :time-display="item.timeDisplay"
                         :class="[
                             'mb-0.5',
                             collapsingGroups.has(item.groupKey) && 'is-exiting',
@@ -406,6 +401,7 @@ type SidebarCombinedItem =
           type: 'time-group-item';
           item: UnifiedSidebarItem;
           groupKey: TimeGroup;
+          timeDisplay: string;
       };
 
 interface SidebarPageProps {
@@ -704,6 +700,8 @@ const combinedItems = computed(() => {
                     type: 'time-group-item',
                     item,
                     groupKey,
+                    // Formatting belongs to data changes, not each scroll render.
+                    timeDisplay: formatTimeDisplay(item.updatedAt, groupKey),
                 });
             }
         }

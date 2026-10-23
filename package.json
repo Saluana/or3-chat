@@ -21,7 +21,7 @@
         "generate:static": "tsx scripts/cli/nuxt-task.ts generate-static",
         "preview": "tsx scripts/cli/nuxt-task.ts preview",
         "preview:static": "npx --yes serve .output/public -l 4173",
-        "postinstall": "nuxt prepare",
+        "postinstall": "patch-package --error-on-fail && nuxt prepare",
         "setup": "tsx scripts/cli/or3-cloud.ts init",
         "setup:secrets": "tsx scripts/cli/secrets.ts",
         "test:e2e:source-secrets": "bun scripts/test/run-source-secrets-e2e.ts",
@@ -245,7 +245,8 @@
         "vite": "8.3.5",
         "vite-bundle-visualizer": "^1.2.1",
         "vitest": "4.1.12",
-        "vue-tsc": "2.2.12"
+        "vue-tsc": "2.2.12",
+        "patch-package": "8.0.1"
     },
     "overrides": {
         "fast-uri": "3.1.9",

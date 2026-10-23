@@ -1,0 +1,47 @@
+diff --git a/node_modules/or3-scroll/dist/or3-scroll.js b/node_modules/or3-scroll/dist/or3-scroll.js
+index 4b74b84dd83f1522e7fc40293cd8f78a765b8ca9..5b37741426b34cebf9d14ee8b11c62b01b4686ed 100644
+--- a/node_modules/or3-scroll/dist/or3-scroll.js
++++ b/node_modules/or3-scroll/dist/or3-scroll.js
+@@ -497,10 +497,11 @@ var re = class e {
+ 				}
+ 			};
+ 			return Z.set(n, i), i;
+-		}, Q = /* @__PURE__ */ new Map(), Qe = !1, $e = (e, t) => {
++		}, Q = /* @__PURE__ */ new Map(), Qe = !1, measurementFrame = 0, $e = (e, t) => {
+ 			let n = Ae(t), r = R.get(e);
+-			r !== void 0 && Math.abs(r - n) < h || (Q.set(e, n), Qe || (Qe = !0, queueMicrotask(et)));
++			r !== void 0 && Math.abs(r - n) < h || (Q.set(e, n), Qe || (Qe = !0, measurementFrame = ke(et)));
+ 		}, et = () => {
++			B(measurementFrame), measurementFrame = 0;
+ 			if (Qe = !1, Q.size === 0 || k) return;
+ 			_.value && (C = _.value.scrollTop);
+ 			let e = Me(), t = !1;
+@@ -653,7 +654,7 @@ var re = class e {
+ 				n > 0 && $e(e, n);
+ 			}
+ 			Qe ? et() : W();
+-		}, gt = () => ct(), _t = null, vt = (e) => {
++		}, gt = () => ct(), _t = null, viewportResizeFrame = 0, pendingViewportHeight = 0, vt = (e) => {
+ 			if (!_.value || e === v.value) return;
+ 			let t = V();
+ 			v.value = e, W(), Ie(t, g.maintainBottom && w === "followingBottom"), q(0, !0), G();
+@@ -662,10 +663,17 @@ var re = class e {
+ 			ye = !0;
+ 			let e = _.value;
+ 			e && (C = e.scrollTop, _e = e.scrollTop, v.value = e.clientHeight, typeof ResizeObserver < "u" && (_t = new ResizeObserver((e) => {
+-				for (let t of e) vt(t.contentRect.height);
++				const entry = e[e.length - 1];
++				if (!entry) return;
++				pendingViewportHeight = entry.contentRect.height;
++				if (viewportResizeFrame) return;
++				viewportResizeFrame = ke(() => {
++					viewportResizeFrame = 0;
++					if (!k) vt(pendingViewportHeight);
++				});
+ 			}), _t.observe(e)), W(), H(F.getTotalHeight()), G(), g.maintainBottom && st(!0));
+ 		}), l(() => {
+-			k = !0, M++, we++, N++, be++, B(A), A = 0, $(), j && clearTimeout(j), _t?.disconnect(), X.forEach((e) => m.unobserve(e)), X.clear(), Z.clear(), Q.clear();
++			k = !0, M++, we++, N++, be++, B(A), A = 0, $(), j && clearTimeout(j), _t?.disconnect(), B(viewportResizeFrame), viewportResizeFrame = 0, X.forEach((e) => m.unobserve(e)), X.clear(), Z.clear(), Q.clear(), B(measurementFrame), measurementFrame = 0;
+ 		}), p(() => {
+ 			let e = g.items;
+ 			return g.mutationMode === "arbitrary" ? e.map(z) : [e, e.length];
