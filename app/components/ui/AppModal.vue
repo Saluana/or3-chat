@@ -26,9 +26,10 @@ const widths = {
 };
 
 // Themes own the surface; the shared shell owns spacing and geometry.
+// The scrim only dims: a full-viewport backdrop blur flashes while content scrolls.
 const modalUi = computed<ModalProps['ui']>(() => ({
     ...props.ui,
-    overlay: [props.ui?.overlay, 'bg-[rgb(15_23_42/0.22)]! backdrop-blur-[1.5px]!'].filter(Boolean).join(' '),
+    overlay: [props.ui?.overlay, 'bg-[rgb(15_23_42/0.22)]!'].filter(Boolean).join(' '),
     content: [
         props.ui?.content,
         'app-modal w-[calc(100dvw-2rem)] h-auto max-h-[calc(100dvh-2rem)]! overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 divide-y-0 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',

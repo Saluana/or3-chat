@@ -12,7 +12,7 @@ export const paletteOverrides = {
     'modal#modal.command-palette': {
         class: 'sm:rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-2xl ring-0',
         ui: {
-            overlay: 'bg-black/40 backdrop-blur-[2px]',
+            overlay: 'bg-black/40',
         },
     },
     'command-palette#command-palette.shell': {

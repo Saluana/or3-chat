@@ -21,6 +21,7 @@ export function attachTitleMarquee(el: HTMLElement): TitleMarquee {
     let timer: number | undefined;
     let frame: number | undefined;
     let active = false;
+    let scrolled = false;
     let text = el.textContent;
 
     const stop = () => {
@@ -28,6 +29,10 @@ export function attachTitleMarquee(el: HTMLElement): TitleMarquee {
         if (frame !== undefined) cancelAnimationFrame(frame);
         timer = frame = undefined;
         active = false;
+        // Writing scrollLeft forces a layout. Rows unmounted or swept past by a
+        // fast list scroll never moved, so only reset a title that scrolled.
+        if (!scrolled) return;
+        scrolled = false;
         el.style.textOverflow = '';
         el.scrollLeft = 0;
     };
@@ -55,6 +60,7 @@ export function attachTitleMarquee(el: HTMLElement): TitleMarquee {
             const distance = el.scrollWidth - el.clientWidth;
             if (distance <= 1) return;
             el.style.textOverflow = 'clip';
+            scrolled = true;
             scrollTo(distance);
         }, START_DELAY_MS);
     };

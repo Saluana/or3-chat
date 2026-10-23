@@ -267,7 +267,7 @@ export default defineTheme({
         modal: {
             slots: {
                 overlay:
-                    'fixed inset-0 bg-black/60 backdrop-blur-sm dark:bg-black/80',
+                    'fixed inset-0 bg-black/60 dark:bg-black/80',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y-0 bg-[var(--md-surface)] text-[var(--md-on-surface)] flex flex-col focus:outline-none',
                 body: 'bg-[var(--md-surface)] text-[var(--md-on-surface)] p-4',

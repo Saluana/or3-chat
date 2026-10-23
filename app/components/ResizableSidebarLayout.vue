@@ -76,13 +76,20 @@
                 <div
                     id="sidebar-container-expanded"
                     :class="[
-                        'flex-1 min-w-0 min-h-0',
+                        'relative flex-1 min-w-0 min-h-0',
                         collapsed
                             ? 'overflow-hidden'
                             : 'overflow-auto overscroll-contain',
                     ]"
                 >
-                    <div v-show="!collapsed" class="flex-1 h-full">
+                    <!-- Collapsed, the expanded content keeps its size but is hidden and
+                         inert. display:none would zero every virtual-list row height and
+                         force the list to remount all of them on expand. -->
+                    <div
+                        :class="collapsed ? 'invisible absolute inset-y-0 start-0' : 'flex-1 h-full'"
+                        :style="collapsed ? { width: `${width}px` } : undefined"
+                        :inert="collapsed"
+                    >
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>
