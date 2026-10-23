@@ -363,47 +363,56 @@ export function useMultiPane(
         // Observe only open conversations in the captured local workspace. Sync
         // already delivers rows to Dexie; refreshing views needs no HTTP polling.
         const workspaceRevision = ref(0);
-        let subscription: Subscription | undefined;
-        let revision = 0;
+        // A combined liveQuery reruns every open history when any one thread
+        // changes. Keep one owned observer per distinct open conversation so
+        // an idle pane retains its history objects during neighboring writes.
+        const histories = new Map<string, { subscription?: Subscription }>();
+        const releaseHistories = () => {
+            for (const observer of histories.values()) observer.subscription?.unsubscribe();
+            histories.clear();
+        };
         const stopWorkspace = subscribeActiveWorkspaceDb(() => {
             workspaceReadGeneration++;
-            revision++;
-            subscription?.unsubscribe();
+            releaseHistories();
             for (const pane of panes.value) pane.messages = [];
             workspaceRevision.value++;
         });
         const stopWatching = watch(
             () => [workspaceRevision.value, ...panes.value.map(pane => `${pane.id}\0${pane.mode}\0${pane.threadId}`)],
             () => {
-                subscription?.unsubscribe();
-                const generation = ++revision;
                 const db = getDb();
-                const ids = [...new Set(panes.value.filter(pane => pane.mode === 'chat' && pane.threadId).map(pane => pane.threadId))];
-                if (!ids.length) return;
-                subscription = liveQuery(() => Promise.all(ids.map(async id =>
-                    [id, await loadMessagesInDb(id, db)] as const
-                ))).subscribe({
-                    next: histories => {
-                        if (generation !== revision || getDb() !== db) return;
-                        const byId = new Map(histories);
-                        for (const pane of panes.value) {
-                            const messages = pane.mode === 'chat' ? byId.get(pane.threadId) : undefined;
-                            if (messages) pane.messages = markRaw(messages);
-                        }
-                    },
-                    error: error => {
-                        if (import.meta.dev) console.warn('[useMultiPane] History observation failed:', error);
-                    },
-                });
+                const ids = new Set(panes.value.filter(pane => pane.mode === 'chat' && pane.threadId).map(pane => pane.threadId));
+                for (const [id, observer] of histories) {
+                    if (ids.has(id)) continue;
+                    observer.subscription?.unsubscribe();
+                    histories.delete(id);
+                }
+                for (const id of ids) {
+                    if (histories.has(id)) continue;
+                    const observer: { subscription?: Subscription } = {};
+                    histories.set(id, observer);
+                    observer.subscription = liveQuery(() => loadMessagesInDb(id, db)).subscribe({
+                        next: messages => {
+                            if (histories.get(id) !== observer || getDb() !== db) return;
+                            for (const pane of panes.value) {
+                                if (pane.mode === 'chat' && pane.threadId === id) pane.messages = markRaw(messages);
+                            }
+                        },
+                        error: error => {
+                            // A later binding change can retry a failed observer.
+                            if (histories.get(id) === observer) histories.delete(id);
+                            if (import.meta.dev) console.warn('[useMultiPane] History observation failed:', error);
+                        },
+                    });
+                }
             },
             { immediate: true }
         );
         onScopeDispose(() => {
             workspaceReadGeneration++;
-            revision++;
             stopWatching();
             stopWorkspace();
-            subscription?.unsubscribe();
+            releaseHistories();
         });
     }
 

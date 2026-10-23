@@ -36,6 +36,9 @@ test('swaps adjacent panes and keeps blank-theme pane edges visible', async ({
         });
     }).toPass({ timeout: 70_000 });
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'blank');
+    // Fresh local workspaces show onboarding before pane controls are usable.
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    await expect(page.locator('[data-welcome-backdrop]')).toHaveCount(0);
     await page.getByRole('button', { name: 'New split' }).click();
 
     const panes = page.locator('.pane-container > [role="tabpanel"]');
@@ -78,19 +81,21 @@ test('swaps adjacent panes and keeps blank-theme pane edges visible', async ({
     ).toEqual([...originalIds].reverse());
     await expect(page.locator('.pane-container > .pane-active')).toHaveAttribute('id', activeId!);
 
-    const edge = await panes.nth(1).evaluate((element) => {
+    // Blank's first pane owns the internal divider; the shell owns outer seams.
+    const edge = await panes.first().evaluate((element) => {
         const style = getComputedStyle(element);
+        const scale = Number(getComputedStyle(document.body).zoom) || 1;
         return {
-            width: style.borderRightWidth,
+            width: parseFloat(style.borderRightWidth) * scale,
             style: style.borderRightStyle,
             color: style.borderRightColor,
-            top: style.borderTopWidth,
+            bottom: parseFloat(style.borderBottomWidth) * scale,
         };
     });
-    expect(edge.width).toBe('1px');
+    expect(edge.width).toBeCloseTo(1, 2);
     expect(edge.style).toBe('solid');
     expect(edge.color).not.toBe('rgba(0, 0, 0, 0)');
-    expect(edge.top).toBe('1px');
+    expect(edge.bottom).toBeCloseTo(1, 2);
 
     await page.reload();
     await expect(panes).toHaveCount(2);
