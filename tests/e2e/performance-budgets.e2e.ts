@@ -25,6 +25,79 @@ test.skip(
     'Performance budgets require OR3_E2E_PERFORMANCE=true'
 );
 
+test('streaming DOM changes keep unrelated focus groups out of document-wide style invalidation', async ({ page, context }, info) => {
+    await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
+    await page.goto('/chat');
+    await page.getByRole('textbox', { name: 'Message input' }).waitFor();
+    // Exercise the shipped stylesheet independently of any Markdown parser.
+    // These are Nuxt UI's public group/utility classes, including an unmatched
+    // target to ensure the optimized rule doesn't broaden its focus effect.
+    await page.evaluate(() => {
+        const fixture = document.createElement('section');
+        fixture.id = 'style-scope-fixture';
+        fixture.style.cssText = 'position:fixed;top:0;left:0;z-index:9999;background:white;';
+        fixture.innerHTML = '<div id="style-scope-content"><span>Initial content</span></div>'
+            + '<div class="group/user"><button id="style-user-focus">User focus</button><span id="style-user-target" class="group-has-focus-visible/user:scale-115">Avatar</span></div>'
+            + '<div class="group/changelog-version-image"><button id="style-changelog-focus">Changelog focus</button><span id="style-changelog-target" class="group-has-focus-visible/changelog-version-image:scale-105">Image</span></div>'
+            + '<span id="style-unmatched-target" class="group-has-focus-visible/user:scale-115">Outside</span>';
+        document.body.append(fixture);
+    });
+    await page.waitForTimeout(300);
+    const cdp = await context.newCDPSession(page);
+    let tracing = false;
+    try {
+        await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.invalidationTracking', transferMode: 'ReturnAsStream' });
+        tracing = true;
+        await page.locator('#style-scope-content').evaluate(async element => {
+            for (let index = 0; index < 12; index++) {
+                const next = document.createElement('span'); next.textContent = `Stream chunk ${index}`;
+                element.replaceChildren(next);
+                await new Promise(requestAnimationFrame);
+            }
+        });
+        const completed = new Promise<{ stream: string }>(resolve => cdp.once('Tracing.tracingComplete', resolve));
+        await cdp.send('Tracing.end');
+        tracing = false;
+        const { stream } = await completed;
+        let trace = '';
+        for (;;) {
+            const chunk = await cdp.send('IO.read', { handle: stream }); trace += chunk.data;
+            if (chunk.eof) break;
+        }
+        await cdp.send('IO.close', { handle: stream });
+        const events = (JSON.parse(trace) as { traceEvents: Array<{ name: string; args?: { data?: {
+            nodeName?: string; reason?: string; selectors?: Array<{ selector: string }>;
+        } } }> }).traceEvents;
+        const styleUpdates = events.filter(event => event.name === 'UpdateLayoutTree').length;
+        expect(styleUpdates, 'the trace must observe the mutations being styled').toBeGreaterThan(0);
+        const globalInvalidations = events.filter(event => event.name === 'StyleInvalidatorInvalidationTracking'
+            && event.args?.data?.nodeName?.startsWith('HTML')
+            && event.args.data.reason === 'Invalidation set invalidates subtree'
+            && event.args.data.selectors?.some(rule => rule.selector.includes('group-has-focus-visible')));
+        await info.attach('stream-style-scope', { contentType: 'application/json', body: JSON.stringify({
+            mutationFrames: 12, styleUpdates, globalInvalidations: globalInvalidations.map(event => event.args!.data),
+        }) });
+        expect(globalInvalidations).toHaveLength(0);
+    } finally {
+        if (tracing) await cdp.send('Tracing.end').catch(() => {});
+        await cdp.detach();
+    }
+
+    const scale = (id: string) => page.locator(`#${id}`).evaluate(element => getComputedStyle(element).scale);
+    await page.locator('#style-user-focus').focus();
+    await expect(page.locator('#style-user-focus')).toBeFocused();
+    expect(await page.locator('#style-user-focus').evaluate(element => element.matches(':focus-visible'))).toBe(true);
+    await expect.poll(() => scale('style-user-target')).toBe('1.15');
+    expect(await scale('style-changelog-target')).toBe('none');
+    expect(await scale('style-unmatched-target')).toBe('none');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#style-changelog-focus')).toBeFocused();
+    await expect.poll(() => scale('style-changelog-target')).toBe('1.05');
+    expect(await scale('style-user-target')).toBe('none');
+    expect(await scale('style-unmatched-target')).toBe('none');
+});
+
 for (const [name, viewport] of [
     ['desktop', { width: 1280, height: 720 }],
     ['mobile', { width: 390, height: 844 }],

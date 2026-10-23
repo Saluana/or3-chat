@@ -82,7 +82,8 @@ not an application API or a production instrumentation hook.
 
 Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [sidebar mount work and pagination](SIDEBAR-WORK.md), and
-[project/model list mount work](CATALOG-PROJECTS.md), with separate raw production
+[project/model list mount work](CATALOG-PROJECTS.md), and
+[rich streaming style invalidation](RICH-STREAMING.md), with separate raw production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
