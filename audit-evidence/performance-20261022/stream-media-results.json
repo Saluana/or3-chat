@@ -1,0 +1,508 @@
+{
+  "base": "1828bea4",
+  "sourceSha256": "bc7a4406a717b019d81d1314923fd791574621d875259622b61dfe91a5914ebf",
+  "note": "Final entries are the final content-comparison implementation; intermediate identity-cached runs are excluded.",
+  "baseline": [
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 160,
+      "gets": {},
+      "decoded": 1,
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 251,
+      "p95": 16.799999999999955,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/ecd97898-bd45-40d3-8d62-c538622089c3",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": true,
+        "fileHashes": 1,
+        "toolNames": []
+      }
+    },
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4,
+        "decodeDelay": 1500
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 160,
+      "gets": {
+        "file_meta": 59
+      },
+      "decoded": 1,
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 251,
+      "p95": 16.799999999999727,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/c1c4cd58-2665-4c9e-94f4-1ce435cb3c96",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": true,
+        "fileHashes": 1,
+        "toolNames": []
+      }
+    },
+    {
+      "options": {
+        "mode": "tool",
+        "cpuRate": 4
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 160,
+      "gets": {},
+      "decoded": 0,
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 1,
+      "transportDone": true,
+      "frames": 250,
+      "p95": 16.700000000000273,
+      "max": 16.800000000000182,
+      "images": [],
+      "persisted": {
+        "exactTail": true,
+        "fileHashes": 0,
+        "toolNames": [
+          "workspace_search",
+          "workspace_read"
+        ]
+      }
+    }
+  ],
+  "originalControl": [
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4,
+        "decodeDelay": 1500,
+        "hashControl": {
+          "needle": "m(t=>{let n=ze(e.value.file_hashes);return t?.length===n.length&&n.every((e,n)=>e===t[n])?t:n})",
+          "replacement": "m(()=>ze(e.value.file_hashes))"
+        }
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 160,
+      "gets": {
+        "file_meta": 59
+      },
+      "decodeStarted": 1,
+      "decoded": 1,
+      "decodeErrors": [],
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 251,
+      "p95": 16.700000000000728,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/37c7fb06-b4c0-4e90-9f84-4cde461010a8",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": true,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 1,
+        "toolNames": []
+      }
+    }
+  ],
+  "final": [
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4,
+        "decodeDelay": 1500
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 0,
+      "gets": {},
+      "decoded": 1,
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 251,
+      "p95": 16.700000000000273,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/5786edf5-5f6d-4b78-8807-2c2665ff7deb",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": true,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 1,
+        "toolNames": []
+      }
+    },
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 0,
+      "gets": {},
+      "decoded": 1,
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 251,
+      "p95": 16.799999999999955,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/2bd3a246-c9bd-42dc-9796-5bc4d4040419",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": true,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 1,
+        "toolNames": []
+      }
+    },
+    {
+      "options": {
+        "mode": "tool",
+        "cpuRate": 4
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 0,
+      "gets": {},
+      "decodeStarted": 0,
+      "decoded": 0,
+      "decodeErrors": [],
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 1,
+      "transportDone": true,
+      "toolRootsConnected": true,
+      "frames": 251,
+      "p95": 16.700000000000728,
+      "max": 16.800000000000182,
+      "images": [],
+      "persisted": {
+        "exactTail": true,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 0,
+        "toolNames": [
+          "workspace_search",
+          "workspace_read"
+        ]
+      }
+    },
+    {
+      "options": {
+        "mode": "image",
+        "cpuRate": 4,
+        "secondImage": true
+      },
+      "browser": "153.0.8010.12",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 1,
+      "gets": {
+        "file_meta": 4,
+        "file_blobs": 1
+      },
+      "decoded": 2,
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 0,
+      "transportDone": true,
+      "frames": 249,
+      "p95": 16.700000000000273,
+      "max": 16.800000000000182,
+      "images": [],
+      "finalImages": [
+        {
+          "src": "blob:http://127.0.0.1:3147/79041bdf-da4e-4164-9946-59453ffcf9ef",
+          "hydrated": "true",
+          "width": 64
+        },
+        {
+          "src": "blob:http://127.0.0.1:3147/b25adb04-a4e2-460e-9469-1cd288dfb65e",
+          "hydrated": "true",
+          "width": 64
+        }
+      ],
+      "persisted": {
+        "exactTail": false,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 2,
+        "toolNames": []
+      }
+    },
+    {
+      "options": {
+        "mode": "tool",
+        "browser": "webkit"
+      },
+      "browser": "26.6",
+      "instrumentationApplied": 1,
+      "errors": [],
+      "active": false,
+      "syncs": 0,
+      "gets": {},
+      "decodeStarted": 0,
+      "decoded": 0,
+      "decodeErrors": [],
+      "instances": {
+        "ChatMessage": 2,
+        "ChatToolCardsEnd": 1
+      },
+      "updates": {
+        "ChatMessage": 160,
+        "ChatToolCardsEnd": 160
+      },
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 160,
+      "longTasks": [],
+      "transportReady": true,
+      "initialImage": null,
+      "toolRoots": 1,
+      "transportDone": true,
+      "toolRootsConnected": true,
+      "frames": 277,
+      "p95": 19,
+      "max": 19,
+      "images": [],
+      "persisted": {
+        "exactTail": true,
+        "textChunks": 160,
+        "endsWithMarker": true,
+        "fileHashes": 0,
+        "toolNames": [
+          "workspace_search",
+          "workspace_read"
+        ]
+      }
+    }
+  ],
+  "unresolved": [
+    {
+      "options": {
+        "mode": "image",
+        "browser": "webkit",
+        "decodeDelay": 1500,
+        "hashControl": {
+          "needle": "m(t=>{let n=ze(e.value.file_hashes);return t?.length===n.length&&n.every((e,n)=>e===t[n])?t:n})",
+          "replacement": "m(()=>ze(e.value.file_hashes))"
+        }
+      },
+      "browser": "26.6",
+      "failure": "TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.",
+      "errors": [],
+      "diagnostic": {
+        "audit": {
+          "active": false,
+          "syncs": 0,
+          "gets": {},
+          "decodeStarted": 0,
+          "decoded": 0,
+          "decodeErrors": [],
+          "instances": {},
+          "updates": {},
+          "imageMutations": 0,
+          "toolMutations": 0,
+          "chunks": 0,
+          "gaps": [],
+          "longTasks": [],
+          "transportReady": true
+        },
+        "metadata": [],
+        "cache": [],
+        "images": [
+          "<img data-v-4d1a2fe2=\"\" src=\"/logos/logo-svg.svg\" alt=\"OR3\" width=\"1632\" height=\"344\" class=\"h-7 w-auto\">"
+        ]
+      }
+    },
+    {
+      "options": {
+        "mode": "image",
+        "browser": "webkit",
+        "decodeDelay": 1500
+      },
+      "browser": "26.6",
+      "failure": "TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.",
+      "errors": [],
+      "diagnostic": {
+        "audit": {
+          "active": false,
+          "syncs": 0,
+          "gets": {},
+          "decodeStarted": 0,
+          "decoded": 0,
+          "decodeErrors": [],
+          "instances": {},
+          "updates": {},
+          "imageMutations": 0,
+          "toolMutations": 0,
+          "chunks": 0,
+          "gaps": [],
+          "longTasks": [],
+          "transportReady": true
+        },
+        "metadata": [],
+        "cache": [],
+        "images": [
+          "<img data-v-4d1a2fe2=\"\" src=\"/logos/logo-svg.svg\" alt=\"OR3\" width=\"1632\" height=\"344\" class=\"h-7 w-auto\">"
+        ]
+      }
+    }
+  ]
+}

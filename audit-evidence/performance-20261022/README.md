@@ -1,5 +1,10 @@
 # Frontend performance audit — 22 October 2026
 
+The audit goal was wrapped up at the user's requested stopping point after
+section 22. See the [consolidated report](FRONTEND-PERFORMANCE-REPORT.md) for
+all investigated sections, measured improvements, validation failures, remaining
+evaluation and publication status. The section 1 evidence follows.
+
 ## Section 1: settled chat rows during streaming
 
 Baseline: `3aa7b3c0`. `ChatContainer.vue` retains the combined message array
@@ -99,11 +104,13 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [unchanged rows during canonical history settlement](HISTORY-SETTLEMENT.md), and
 [styles before the first math reply](FIRST-MATH-STYLES.md), and
 [composited generating-loader motion](LOADER-MOTION.md), and
-[reduced motion without cascading transitions](REDUCED-MOTION.md), with separate production
+[reduced motion without cascading transitions](REDUCED-MOTION.md), and
+[stable attachment loading during text streams](STREAM-THUMBNAILS.md), with separate production
 receipts and explicit limits.
 
-The full frontend audit remains open. Section PRs should carry their own
-measurements and validation; this section does not qualify the entire app.
+The goal is closed at the requested stopping point. The following broader
+qualification work remains for a future audit. Section PRs should carry their
+own measurements and validation; these sections do not qualify the entire app.
 
 1. Chat rendering: long Markdown/code/math/tool streams, multiple panes,
    accumulator/persistence costs, production traces and reduced motion.
