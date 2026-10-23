@@ -14,6 +14,16 @@ export class CompactionHistoryError extends Error {
 export interface ThreadProjectionSegment { thread: Thread; rows: Message[]; visible: Message[] }
 export interface ThreadProjection { messages: Message[]; segments: ThreadProjectionSegment[] }
 
+/** Request admission tracks transcript and lineage, not independently updated display titles. */
+export function requestHistoryFingerprint(projection: ThreadProjection): string {
+    return JSON.stringify({ messages: projection.messages, segments: projection.segments.map(({ thread, rows, visible }) => ({
+        rows, visible, thread: { id: thread.id, parent_thread_id: thread.parent_thread_id,
+            anchor_message_id: thread.anchor_message_id, anchor_index: thread.anchor_index, branch_mode: thread.branch_mode,
+            root_thread_id: thread.root_thread_id, summary_message_id: thread.summary_message_id, fork_reason: thread.fork_reason,
+            project_id: thread.project_id, system_prompt_id: thread.system_prompt_id, status: thread.status, deleted: thread.deleted },
+    })) });
+}
+
 /** The original content may be gone, but the summary's own pair must be intact. */
 export function assertCompactedSummary(thread: Thread, rows: readonly Message[]): Message {
     const summary = rows.find((row) => row.id === thread.summary_message_id);
