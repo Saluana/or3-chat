@@ -76,7 +76,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         const prose=Array.from({length:50},(_,i)=>`Paragraph ${i}: **Both conversations are streaming** while one reader stays in settled history. `+'More words keep the response growing. '.repeat(3)+'\n\n').join('');
         const rich=Array.from({length:12},(_,i)=>`### Example ${i}\n\nA TypeScript sample and inline math $x^2 + y^2$.\n\n\`\`\`ts\nexport function calculate${i}(values: number[]): number {\n  return values.map(value => value * 2).reduce((sum, value) => sum + value, 0);\n}\n\`\`\`\n\n$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n`).join('');
         const responses=Object.fromEntries(['left','right'].map(side=>[side,(options.rich?rich:prose)+`CONCURRENT-${side.toUpperCase()}-END`]));
-        await p.evaluate(({responses,dbCounts,synchronized,observeRich})=>{
+        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit})=>{
             const roots=[...document.querySelectorAll('.pane-container > [role="tabpanel"]')];
             const scroll=roots[0].querySelector('.chat-message-list');
             const states={left:{produced:0},right:{produced:0}};
@@ -85,6 +85,62 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             let releaseStreams;
             const startGate=synchronized?new Promise(resolve=>{releaseStreams=resolve;}):Promise.resolve();
             window.__concurrentStates=states;window.__concurrentExpected=responses;
+            const observeShell=()=>{
+                const initial=new Set(),instances=[],cleanups=[],dom={},editors=[];
+                const phase=()=>Object.values(states).every(s=>s.done)?'afterTransport':'streaming';
+                const paneFor=el=>{const root=el?.nodeType===1?el.closest('.pane-container > [role="tabpanel"]'):el?.parentElement?.closest('.pane-container > [role="tabpanel"]');return roots.indexOf(root);};
+                const visit=vnode=>{
+                    if(!vnode||typeof vnode!=='object'||initial.has(vnode))return;
+                    initial.add(vnode);
+                    if(vnode.component){
+                        const vm=vnode.component,name=vm.type.name||vm.type.__name||'(anonymous)';
+                        // Raw shallow prop reads avoid subscribing the component
+                        // render effect to diagnostic-only accesses in this hook.
+                        const raw=vm.props?.__v_raw??vm.props??{};
+                        let previous={...raw},previousVNode={...vm.vnode.props};
+                        const row={uid:vm.uid,name,pane:paneFor(vm.vnode.el),inner:name==='AsyncComponentWrapper'?vm.subTree?.type?.name||vm.subTree?.type?.__name:undefined,
+                            messageId:vm.vnode.props?.message?.id,streaming:0,afterTransport:0,noChangedProps:0,props:{},vnodeProps:{}};
+                        instances.push(row);
+                        const update=()=>{
+                            row[phase()]++;
+                            let changed=false;
+                            for(const key of new Set([...Object.keys(previous),...Object.keys(raw)]))if(!Object.is(previous[key],raw[key])){row.props[key]=(row.props[key]??0)+1;changed=true;}
+                            if(!changed)row.noChangedProps++;
+                            previous={...raw};
+                            if(name==='AsyncComponentWrapper'){
+                                const next=vm.vnode.props??{};
+                                for(const key of new Set([...Object.keys(previousVNode),...Object.keys(next)]))if(!Object.is(previousVNode[key],next[key]))row.vnodeProps[key]=(row.vnodeProps[key]??0)+1;
+                                previousVNode={...next};
+                            }
+                        };
+                        (vm.bu??=[]).push(update);
+                        cleanups.push(()=>{const i=vm.bu?.indexOf(update);if(i>=0)vm.bu.splice(i,1);});
+                        if(name==='EditorContent'&&raw.editor?.on){
+                            const editor=raw.editor,entry={pane:row.pane,transactions:0,docChanges:0,selectionChanges:0};editors.push(entry);
+                            const onTransaction=({transaction})=>{entry.transactions++;if(transaction.docChanged)entry.docChanges++;if(transaction.selectionSet)entry.selectionChanges++;};
+                            editor.on('transaction',onTransaction);cleanups.push(()=>editor.off('transaction',onTransaction));
+                        }
+                        visit(vm.subTree);
+                    }
+                    if(vnode.suspense)visit(vnode.suspense.activeBranch);
+                    if(Array.isArray(vnode.children))vnode.children.forEach(visit);
+                };
+                visit(document.querySelector('#__nuxt')?._vnode);
+                if(!instances.some(row=>row.name==='ChatInputDropper'))throw new Error('Missing production composer instances');
+                const regions={sidebar:document.querySelector('#nav-scroll-area'),tabs:document.querySelector('.workspace-tab-bar-shell'),
+                    leftComposer:roots[0].querySelector('.chat-input-wrapper'),rightComposer:roots[1].querySelector('.chat-input-wrapper')};
+                for(const [name,element]of Object.entries(regions)){
+                    if(!element)throw new Error('Missing shell region '+name);
+                    const entry=dom[name]={streaming:0,afterTransport:0,examples:[]};
+                    const observer=new MutationObserver(records=>{entry[phase()]+=records.length;for(const record of records)if(entry.examples.length<8)entry.examples.push({phase:phase(),type:record.type,attribute:record.attributeName,target:record.target.nodeName,id:record.target.id,class:typeof record.target.className==='string'?record.target.className.slice(0,160):undefined});});
+                    observer.observe(element,{subtree:true,childList:true,characterData:true,attributes:true});cleanups.push(()=>observer.disconnect());
+                }
+                return ()=>{
+                    cleanups.forEach(fn=>fn());
+                    const grouped={};for(const row of instances){const group=grouped[row.name]??={instances:0,streaming:0,afterTransport:0,noChangedProps:0,props:{},vnodeProps:{}};group.instances++;group.streaming+=row.streaming;group.afterTransport+=row.afterTransport;group.noChangedProps+=row.noChangedProps;for(const field of ['props','vnodeProps'])for(const [key,n]of Object.entries(row[field]))group[field][key]=(group[field][key]??0)+n;}
+                    return {initialInstances:instances.length,grouped,instances:instances.filter(row=>row.streaming||row.afterTransport).sort((a,b)=>b.streaming-a.streaming).slice(0,60),dom,editors};
+                };
+            };
             const originalFetch=window.fetch;
             window.fetch=async(input,init)=>{
                 const url=input instanceof Request?input.url:String(input);
@@ -113,6 +169,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 const anchor=visible[0];if(!anchor)throw new Error('No settled anchor');
                 const anchorState=()=>({scrollTop:scroll.scrollTop,id:anchor.getAttribute('data-msg-id'),connected:anchor.isConnected,offset:anchor.getBoundingClientRect().top-scroll.getBoundingClientRect().top});
                 const metrics={reads:{},settledMutations:0,mutationExamples:[],visibleIds:visible.map(el=>el.getAttribute('data-msg-id')),gaps:[],longTasks:[],start:performance.now(),before:anchorState(),producedAtStart:structuredClone(states)};
+                const finishShell=shellAudit?observeShell():undefined;
                 const richNodes=[];let richObserver;
                 let frame,previous;
                 const tick=t=>{if(previous!==undefined)metrics.gaps.push(t-previous);previous=t;
@@ -137,6 +194,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 window.__finishConcurrent=()=>{
                     cancelAnimationFrame(frame);tasks.disconnect();observer.disconnect();window.fetch=originalFetch;
                     richObserver?.disconnect();if(richObserver)metrics.richNodesRetained=richNodes.map(el=>({tag:el.tagName,connected:el.isConnected}));
+                    if(finishShell)metrics.shell=finishShell();
                     for(const [method,original] of Object.entries(originals))IDBIndex.prototype[method]=original;
                     metrics.after=anchorState();metrics.elapsed=performance.now()-metrics.start;metrics.gaps.sort((a,b)=>a-b);
                     return {...metrics,p95:metrics.gaps[Math.floor(metrics.gaps.length*.95)],max:metrics.gaps.at(-1),frames:metrics.gaps.length,gaps:undefined,states,
@@ -144,7 +202,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 };
                 releaseStreams?.();
             };
-        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false});
+        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit??false});
         cdp=await context.newCDPSession(p);await cdp.send('Emulation.setCPUThrottlingRate',{rate:options.cpuRate??4});
         await panes.nth(1).getByRole('textbox',{name:'Message input'}).fill('Measure concurrent right.');
         await panes.nth(1).getByRole('button',{name:'Send message',exact:true}).click();

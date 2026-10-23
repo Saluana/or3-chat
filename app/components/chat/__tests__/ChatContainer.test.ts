@@ -3,7 +3,7 @@ import { flushPromises, mount as mountComponent } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
-import { defineComponent, nextTick, reactive, ref, toRaw } from 'vue';
+import { defineAsyncComponent, defineComponent, nextTick, reactive, ref, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 import type { ChatRequestState } from '~/utils/chat/types';
 
@@ -148,11 +148,17 @@ const LazyChatMessage = defineComponent({
     `,
 });
 const LazyChatInputDropper = { template: '<div>Input</div>' };
+const lazyBoundaryUpdates = vi.fn<(id: string) => void>();
+const AsyncThemeMessage = Object.assign(defineAsyncComponent(async () => LazyChatMessage), {
+    updated(this: { $attrs: { message: { id: string } } }) {
+        lazyBoundaryUpdates(this.$attrs.message.id);
+    },
+});
 
-const createThemeMock = () => ({
+const createThemeMock = (messageRenderer: Component = LazyChatMessage) => ({
     activeComponents: {
         value: {
-            'chat-message': LazyChatMessage,
+            'chat-message': messageRenderer,
             'chat-input': LazyChatInputDropper,
         },
     },
@@ -233,13 +239,14 @@ describe('ChatContainer', () => {
 
     function mountChatInstance(
         instance: MockChatInstance,
-        props: Record<string, unknown> = {}
+        props: Record<string, unknown> = {},
+        messageRenderer: Component = LazyChatMessage
     ) {
         useChatMock.mockImplementationOnce(() => instance);
         return mount(ChatContainer, {
             props: { ...defaultProps, ...props },
             global: {
-                mocks: { $theme: createThemeMock() },
+                mocks: { $theme: createThemeMock(messageRenderer) },
                 stubs: {
                     Teleport: true,
                     ChatWelcomeCard: {
@@ -277,6 +284,16 @@ describe('ChatContainer', () => {
             row.vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
             expect(wrapper.emitted('thread-selected')).toBeUndefined();
             expect(wrapper.emitted('view-compaction-source')).toMatchObject([[{ threadId: 'source', messageId: 'anchor', originThreadId: 'child' }]]);
+            // Replacing the same row must refresh the navigation authority;
+            // stable listeners cannot retain its previous compaction payload.
+            instance.messages.value = [{ id: 'summary', role: 'system', text: 'Updated reference', compaction: {
+                compaction_id: 'updated-operation', source_thread_id: 'updated-source', anchor_message_id: 'updated-anchor', landmarks: [],
+            } }];
+            await nextTick(); await flushPromises();
+            row.vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
+            expect(wrapper.emitted('view-compaction-source')).toHaveLength(1);
+            row.vm.$emit('view-compaction-source', { threadId: 'updated-source', messageId: 'updated-anchor', originThreadId: 'child' });
+            expect(wrapper.emitted('view-compaction-source')?.at(-1)).toMatchObject([{ threadId: 'updated-source', messageId: 'updated-anchor', originThreadId: 'child' }]);
             await wrapper.setProps({ threadId: 'source' }); await flushPromises();
             const destination = wrapper.vm.$.exposed as { scrollToMessage: (target: { threadId: string; messageId: string; generation: number }) => void };
             destination.scrollToMessage({ threadId: 'source', messageId: 'anchor', generation: getWorkspaceGeneration() });
@@ -544,10 +561,11 @@ describe('ChatContainer', () => {
     describe('streaming rows through the real scroller', () => {
         it('renders repeated text updates through the same array and row', async () => {
             const instance = makeStreamingInstance();
-            const wrapper = mountChatInstance(instance);
+            const wrapper = mountChatInstance(instance, {}, AsyncThemeMessage);
             await nextTick();
             await flushPromises();
             messageUpdates.mockClear();
+            lazyBoundaryUpdates.mockClear();
 
             const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             const itemsBefore = toRaw(scroller.props('items') as unknown[]);
@@ -573,6 +591,9 @@ describe('ChatContainer', () => {
             expect(messageUpdates.mock.calls.map(([id]) => id)).toEqual([
                 'tail-1', 'tail-1', 'tail-1',
             ]);
+            expect(lazyBoundaryUpdates.mock.calls.map(([id]) => id)).toEqual([
+                'tail-1', 'tail-1', 'tail-1',
+            ]);
 
             // Stable rows must still react to edits and action availability.
             instance.messages.value[1]!.text = 'Edited answer';
@@ -582,6 +603,13 @@ describe('ChatContainer', () => {
             await nextTick();
             expect(wrapper.findAllComponents(LazyChatMessage).every((row) => row.props('retryDisabled'))).toBe(true);
             expect(rowFor(wrapper, 'stable-2').find('.test-compaction').text()).toBe('Wait for the reply to finish.');
+            const rendered = wrapper.findAllComponents(LazyChatMessage).find(row => row.props('message').id === 'stable-2')!;
+            rendered.vm.$emit('begin-edit', 'stable-2');
+            await nextTick();
+            expect(scroller.props('maintainBottom')).toBe(false);
+            rendered.vm.$emit('save-edit', 'stable-2');
+            await nextTick();
+            expect(scroller.props('maintainBottom')).toBe(true);
         });
 
         it('renders reasoning, pending, and same-length text transitions in place', async () => {

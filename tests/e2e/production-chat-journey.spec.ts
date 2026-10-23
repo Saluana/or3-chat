@@ -2970,16 +2970,20 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     const after = info.outputPath('compaction-summary-after.png'); await page.screenshot({ path: after, animations: 'disabled' }); await info.attach('summary-after', { path: after, contentType: 'image/png' });
     await card.getByRole('button', { name: 'View original · message 4', exact: true }).click();
     const anchor = page.locator(`[data-msg-id="${source}-anchor"]`); await expect(anchor).toBeVisible(); await expect(anchor).toContainText('Original anchor: implementation is pending.');
-    const anchorBounds = await anchor.boundingBox(); expect(anchorBounds!.y + anchorBounds!.height).toBeGreaterThan(0); expect(anchorBounds!.y).toBeLessThan(720);
+    // WebKit can expose the new row before its bounding box is available.
+    // Keep the viewport assertion retryable while navigation settles.
+    await expect.poll(async () => {
+        const bounds = await anchor.boundingBox();
+        return Boolean(bounds && bounds.y + bounds.height > 0 && bounds.y < 720);
+    }).toBe(true);
     expect(await readRows()).toEqual(saved);
     await page.reload(); await expect(card).toBeVisible(); await card.locator('summary').click();
-    // Drafts live in memory: reload clears them. Re-establish the source draft
-    // before checking preservation across child/landmark navigation.
+    // The source tab's durable draft must survive reload and subsequent
+    // child/landmark navigation without needing to enter it again.
     await card.getByRole('button', { name: 'View original · message 4', exact: true }).click();
     await expect(anchor).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Compaction original evidence', exact: true })).toHaveAttribute('aria-selected', 'true');
-    await expect(input).toHaveText('');
-    await input.fill('Keep this unsent source draft.');
+    await expect(input).toHaveText('Keep this unsent source draft.');
     await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
     await expect(card).toBeVisible();
     if (await card.locator('details').getAttribute('open') === null) await card.locator('summary').click();

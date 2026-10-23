@@ -32,6 +32,12 @@ The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
 
+`ChatMessageHost.vue` owns stable edit and navigation handlers for each mounted
+row, so token updates do not repeatedly update the lazy wrappers of settled
+messages. Handlers read the current row when invoked; replacing history must
+refresh the data used by the container's existing source and workspace guards.
+Other renderer events pass through with their original listeners and payloads.
+
 Host Markdown surfaces share `app/utils/stream-markdown.ts` and pass its stable
 `streamMarkdownComponents` map to Streamdown. Code highlighting runs in one
 browser worker shared by mounted host code blocks. The existing Streamdown
