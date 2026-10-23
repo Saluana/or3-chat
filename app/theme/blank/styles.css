@@ -821,11 +821,6 @@ html[data-theme="blank"] {
         border-radius: var(--md-border-radius-small);
     }
 
-    /* ── Modal: clean and round ── */
-    .modal-overlay {
-        backdrop-filter: blur(4px);
-    }
-
     /* ── Cards and sections: subtle depth ── */
     .section-card {
         border: var(--md-border-width) solid var(--md-border-color) !important;

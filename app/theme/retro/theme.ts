@@ -303,7 +303,7 @@ export default defineTheme({
         modal: {
             slots: {
                 overlay:
-                    'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
+                    'fixed inset-0 bg-black/50 dark:bg-black/70',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none ',
                 body: 'p-4',

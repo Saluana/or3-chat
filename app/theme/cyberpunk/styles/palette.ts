@@ -13,7 +13,7 @@ export const paletteOverrides = {
     'modal#modal.command-palette': {
         class: 'theme-shadow border-[length:var(--md-border-width)] border-[color:var(--md-primary)]/60 ring-0',
         ui: {
-            overlay: 'bg-black/65 backdrop-blur-[1px]',
+            overlay: 'bg-black/65',
         },
     },
     'command-palette#command-palette.shell': {
