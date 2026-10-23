@@ -26,6 +26,12 @@ same stream generation, including replies held in the separate foreground tail.
 Foreground token fragments remain local to the sending client; peers receive
 the saved reply.
 
+Canonical refreshes always replace the provider history, including metadata and
+ordering. The controller reuses an existing presentation row only when its full
+own-field set and shallow values are unchanged. This keeps unchanged rows idle
+when a stream finishes. New metadata references, edits, and removed fields still
+replace the presentation row; nested reactive metadata keeps its existing behavior.
+
 ## Streaming, stopping, and teardown
 
 The default message renderer loads through the theme registry when a message

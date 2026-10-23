@@ -1,7 +1,7 @@
 vi.unmock('~/utils/errors');
 import { setErrorToastApi } from '~/utils/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h, effectScope, ref, type EffectScope } from 'vue';
+import { defineComponent, h, effectScope, ref, nextTick, onUpdated, type EffectScope, type PropType } from 'vue';
 import { mount } from '@vue/test-utils';
 import Dexie from 'dexie';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
@@ -25,6 +25,8 @@ import { captureProjectOperation } from '~/utils/projects/context';
 import { addProjectDocument } from '~/utils/projects/source-intake';
 import { PROJECT_POST_TYPES } from '~~/shared/projects/workspace';
 import { moveChatToProject, saveProjectSource, saveProjectSettings } from '~/db/project-workspace';
+import type { ChatMessage } from '~/utils/chat/types';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
 const external = vi.hoisted(() => ({ capacity: 1_000_000, bodies: [] as Record<string, unknown>[],
     workspace: '', catalogGate: undefined as Promise<void> | undefined, catalogEntered: undefined as (() => void) | undefined,
@@ -94,6 +96,70 @@ afterEach(async () => {
     useToolRegistry().unregisterTool('fixture_context_output');
 });
 function chat(threadId?: string) { scope = effectScope(); return scope.run(() => useChat([], threadId))!; }
+
+describe('canonical history presentation at the controller boundary', () => {
+    it('keeps unchanged rows idle while applying canonical edits, metadata, ordering and removal', async () => {
+        const controller = chat();
+        const seed: ChatMessage[] = [
+            { id: 'user', role: 'user', content: 'hello' },
+            { id: 'assistant', role: 'assistant', content: 'reply' },
+        ];
+        controller.replaceCanonicalHistory(seed);
+        const updates: string[] = [];
+        const Row = defineComponent({
+            props: { message: { type: Object as PropType<UiChatMessage>, required: true } },
+            setup(props) {
+                onUpdated(() => updates.push(props.message.id));
+                return () => h('p', { 'data-id': props.message.id }, [
+                    props.message.text, props.message.reasoning_text ?? '',
+                    props.message.toolCalls?.[0]?.status ?? '',
+                    props.message.file_hashes?.join(',') ?? '',
+                ].join('|'));
+            },
+        });
+        const wrapper = mount(defineComponent({
+            setup: () => () => h('div', controller.messages.value.map(message =>
+                h(Row, { key: message.id, message }))),
+        }));
+        try {
+            // Canonical-only fields must refresh without rerendering identical
+            // presentation rows. These are real controller and projection paths.
+            controller.replaceCanonicalHistory(seed.map((message, index) => ({ ...message, index })));
+            await nextTick();
+            expect(updates).toEqual([]);
+            expect(controller.rawMessages.value.map(message => message.index)).toEqual([0, 1]);
+
+            const assistantElement = wrapper.get('[data-id="assistant"]').element;
+            controller.replaceCanonicalHistory([
+                seed[1]!, seed[0]!, { id: 'new', role: 'assistant', content: 'new reply' },
+            ]);
+            await nextTick();
+            expect(wrapper.findAll('p').map(row => row.attributes('data-id'))).toEqual(['assistant', 'user', 'new']);
+            expect(wrapper.get('[data-id="assistant"]').element).toBe(assistantElement);
+            expect(updates).toEqual([]);
+
+            controller.replaceCanonicalHistory([
+                { ...seed[1]!, content: 'REPLY', reasoning_text: 'Reason',
+                    file_hashes: JSON.stringify(['file-a']),
+                    data: { tool_calls: [{ id: 'call', name: 'search', status: 'loading' }] } },
+                seed[0]!,
+            ]);
+            await nextTick();
+            expect(wrapper.get('[data-id="assistant"]').text()).toContain('REPLY');
+            expect(wrapper.get('[data-id="assistant"]').text()).toContain('|Reason|loading|file-a');
+            expect(updates).toEqual(['assistant']);
+            controller.messages.value[0]!.toolCalls![0]!.status = 'complete';
+            await nextTick();
+            expect(wrapper.get('[data-id="assistant"]').text()).toContain('|Reason|complete|file-a');
+
+            controller.replaceCanonicalHistory([seed[1]!]);
+            await nextTick();
+            expect(wrapper.findAll('p')).toHaveLength(1);
+            expect(wrapper.get('p').text()).toBe('reply|||');
+            expect(controller.rawMessages.value.map(message => message.id)).toEqual(['assistant']);
+        } finally { wrapper.unmount(); }
+    });
+});
 
 // A distinct acceptance owner is necessary: existing background-detach tests
 // mock DB appends and the message builder. Here DB, builder, catalog, policy,

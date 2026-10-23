@@ -1,0 +1,2500 @@
+{
+  "sourceBase": "f38f1bc7",
+  "change": "Reuse unchanged UI rows during canonical history replacement",
+  "diagnostics": {
+    "rich": {
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true,
+        "tailAudit": true,
+        "scrollControlAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-57","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-56","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-55","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-54","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        61,
+        62
+      ],
+      "start": 2841.100000143051,
+      "before": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2670.4000000953674
+        },
+        "right": {
+          "produced": 0,
+          "start": 2340.800000190735
+        }
+      },
+      "scrollControls": [
+        {"frames":130,"visibleFrames":130,"maxOpacity":1,"styles":[],"visibleSamples":[{"time":2890.494,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":2907.1,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":2923.8,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":2957.1,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":2990.4,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3007.1,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3023.7,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3073.8,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3090.5,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3123.7,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3140.4,"opacity":1,"inline":"opacity: 1;","atBottom":false},{"time":3157.1,"opacity":1,"inline":"opacity: 1;","atBottom":false}]},
+        {"frames":130,"visibleFrames":0,"maxOpacity":0,"styles":[],"visibleSamples":[]}
+      ],
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {"tag":"H3","connected":true},
+        {"tag":"PRE","connected":true},
+        {"tag":"SPAN","connected":true}
+      ],
+      "shell": {
+        "initialInstances": 8222,
+        "grouped": {
+          "nuxt-root": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "app": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "App": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ConfigProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Toaster": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 2,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "(anonymous)": {
+            "instances": 70,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ErrorRecovery": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiAppModal": {
+            "instances": 10,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UModal": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogRoot": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ReusableTemplate.define": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogPortal": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Teleport": {
+            "instances": 343,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "FieldGroupReset": {
+            "instances": 342,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogOverlay": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Presence": {
+            "instances": 353,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ReusableTemplate.reuse": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogContent": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "FatalErrorBoundary": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtLayout": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtLayoutProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtPage": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "RouterView": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "KeepAlive": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProductionChatJourney": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "AsyncComponentWrapper": {
+            "instances": 77,
+            "streaming": 47,
+            "afterTransport": 64,
+            "noChangedProps": 111,
+            "props": {},
+            "vnodeProps": {
+              "visible-tab-ids": 2,
+              "status-by-tab-id": 2,
+              "retry-disabled": 57,
+              "compaction-action": 57,
+              "context-revision": 5,
+              "loading": 2,
+              "streaming": 2,
+              "compaction-blocked-reason": 2,
+              "message": 48
+            }
+          },
+          "PageShell": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ResizableSidebarLayout": {
+            "instances": 1,
+            "streaming": 7,
+            "afterTransport": 8,
+            "noChangedProps": 15,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "BaseTransition": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UButton": {
+            "instances": 338,
+            "streaming": 94,
+            "afterTransport": 63,
+            "noChangedProps": 0,
+            "props": {
+              "onClick": 153,
+              "disabled": 63
+            },
+            "vnodeProps": {}
+          },
+          "ULink": {
+            "instances": 338,
+            "streaming": 94,
+            "afterTransport": 63,
+            "noChangedProps": 94,
+            "props": {
+              "disabled": 63
+            },
+            "vnodeProps": {}
+          },
+          "PrimitiveSlot": {
+            "instances": 1001,
+            "streaming": 188,
+            "afterTransport": 124,
+            "noChangedProps": 312,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ULinkBase": {
+            "instances": 338,
+            "streaming": 94,
+            "afterTransport": 63,
+            "noChangedProps": 94,
+            "props": {
+              "disabled": 63
+            },
+            "vnodeProps": {}
+          },
+          "Primitive": {
+            "instances": 1073,
+            "streaming": 94,
+            "afterTransport": 63,
+            "noChangedProps": 157,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UIcon": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtIcon": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtIconCss": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideBar": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavContentCollapsed": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UPopover": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverRoot": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopperRoot": {
+            "instances": 331,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverTrigger": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopperAnchor": {
+            "instances": 331,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UTooltip": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipRoot": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipTrigger": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipPortal": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipContent": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverPortal": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverContent": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ClientOnly": {
+            "instances": 14,
+            "streaming": 94,
+            "afterTransport": 5,
+            "noChangedProps": 99,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiAppIcon": {
+            "instances": 3,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideBottomNav": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarAuthButton": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "AdminConfirmDialog": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavContent": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UInput": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarRenameEntityModal": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarRenameProjectModal": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "sidebar-chats": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarTimeGroupedList": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Or3Scroll": {
+            "instances": 3,
+            "streaming": 168,
+            "afterTransport": 5,
+            "noChangedProps": 74,
+            "props": {
+              "rowContentRevision": 96,
+              "items": 5
+            },
+            "vnodeProps": {}
+          },
+          "SidebarGroupHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarFamilyItem": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarUnifiedItem": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarEntityModals": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarResizeHandle": {
+            "instances": 1,
+            "streaming": 7,
+            "afterTransport": 8,
+            "noChangedProps": 15,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiBaseResizeHandle": {
+            "instances": 2,
+            "streaming": 7,
+            "afterTransport": 8,
+            "noChangedProps": 15,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceChrome": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 0,
+            "props": {
+              "visibleTabIds": 2,
+              "statusByTabId": 2
+            },
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceTabBar": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 0,
+            "props": {
+              "visibleTabIds": 2,
+              "statusByTabId": 2
+            },
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceNewTabControl": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatContainer": {
+            "instances": 2,
+            "streaming": 14,
+            "afterTransport": 18,
+            "noChangedProps": 19,
+            "props": {
+              "messageHistory": 13
+            },
+            "vnodeProps": {}
+          },
+          "ChatMessageHost": {
+            "instances": 70,
+            "streaming": 47,
+            "afterTransport": 57,
+            "noChangedProps": 0,
+            "props": {
+              "compactionAction": 57,
+              "retryDisabled": 57,
+              "message": 48
+            },
+            "vnodeProps": {}
+          },
+          "ChatMessage": {
+            "instances": 70,
+            "streaming": 47,
+            "afterTransport": 57,
+            "noChangedProps": 0,
+            "props": {
+              "compactionAction": 57,
+              "retryDisabled": 57,
+              "message": 48
+            },
+            "vnodeProps": {}
+          },
+          "UFieldGroup": {
+            "instances": 70,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProjectsProjectMessageContext": {
+            "instances": 70,
+            "streaming": 47,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {
+              "text": 47
+            },
+            "vnodeProps": {}
+          },
+          "ChatThreadChildLinks": {
+            "instances": 69,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "StreamMarkdown": {
+            "instances": 34,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatToolCardsEnd": {
+            "instances": 35,
+            "streaming": 47,
+            "afterTransport": 1,
+            "noChangedProps": 0,
+            "props": {
+              "message": 48
+            },
+            "vnodeProps": {}
+          },
+          "ChatInput": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 5,
+            "noChangedProps": 3,
+            "props": {
+              "loading": 2,
+              "streaming": 2
+            },
+            "vnodeProps": {}
+          },
+          "ChatInputDropper": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 5,
+            "noChangedProps": 0,
+            "props": {
+              "contextRevision": 5,
+              "compactionBlockedReason": 2,
+              "loading": 2,
+              "streaming": 2
+            },
+            "vnodeProps": {}
+          },
+          "ChatComposerShell": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 2,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProjectsChatProjectChoice": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "EditorContent": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PanesPaneResizeHandle": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatLoadingGenerating": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SearchCommandPalette": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastPortal": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastViewport": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DismissableLayerBranch": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "CollectionSlot": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UOverlayProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          }
+        },
+        "instances": [
+          {"uid":16535,"name":"Or3Scroll","pane":1,"streaming":121,"afterTransport":2,"noChangedProps":74,"props":{"rowContentRevision":48,"items":2},"vnodeProps":{}},
+          {"uid":736,"name":"ClientOnly","pane":0,"streaming":47,"afterTransport":3,"noChangedProps":50,"props":{},"vnodeProps":{}},
+          {"uid":738,"name":"Or3Scroll","pane":0,"streaming":47,"afterTransport":3,"noChangedProps":0,"props":{"rowContentRevision":48,"items":3},"vnodeProps":{}},
+          {"uid":16533,"name":"ClientOnly","pane":1,"streaming":47,"afterTransport":2,"noChangedProps":49,"props":{},"vnodeProps":{}},
+          {"uid":37068,"name":"ChatMessageHost","pane":1,"messageId":"2a76dc5d-1910-4b7f-888d-7704a8dc7c99","streaming":47,"afterTransport":1,"noChangedProps":0,"props":{"message":48,"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":37069,"name":"AsyncComponentWrapper","pane":1,"inner":"ChatMessage","messageId":"2a76dc5d-1910-4b7f-888d-7704a8dc7c99","streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{"message":48,"retry-disabled":1,"compaction-action":1}},
+          {"uid":37070,"name":"ChatMessage","pane":1,"messageId":"2a76dc5d-1910-4b7f-888d-7704a8dc7c99","streaming":47,"afterTransport":1,"noChangedProps":0,"props":{"message":48,"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":0},"fields":{"text":47,"pending":1},"samples":[{"phase":"streaming","keys":["text"],"beforeTextLength":0,"afterTextLength":64,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":64,"afterTextLength":128,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":128,"afterTextLength":192,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":192,"afterTextLength":256,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":256,"afterTextLength":320,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":320,"afterTextLength":384,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":384,"afterTextLength":448,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":448,"afterTextLength":512,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":512,"afterTextLength":576,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":576,"afterTextLength":640,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":640,"afterTextLength":704,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":704,"afterTextLength":768,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":37072,"name":"ChatToolCardsEnd","pane":1,"messageId":"2a76dc5d-1910-4b7f-888d-7704a8dc7c99","streaming":47,"afterTransport":1,"noChangedProps":0,"props":{"message":48},"vnodeProps":{}},
+          {"uid":37121,"name":"PrimitiveSlot","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37122,"name":"UButton","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":0,"props":{"onClick":48,"disabled":1},"vnodeProps":{}},
+          {"uid":37123,"name":"ULink","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":47,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37124,"name":"PrimitiveSlot","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37125,"name":"ULinkBase","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":47,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37126,"name":"Primitive","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37140,"name":"PrimitiveSlot","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37141,"name":"UButton","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":0,"props":{"onClick":48,"disabled":1},"vnodeProps":{}},
+          {"uid":37142,"name":"ULink","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":47,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37143,"name":"PrimitiveSlot","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37144,"name":"ULinkBase","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":47,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37145,"name":"Primitive","pane":1,"streaming":47,"afterTransport":1,"noChangedProps":48,"props":{},"vnodeProps":{}},
+          {"uid":37170,"name":"ProjectsProjectMessageContext","pane":1,"streaming":47,"afterTransport":0,"noChangedProps":0,"props":{"text":47},"vnodeProps":{}},
+          {"uid":52,"name":"ResizableSidebarLayout","pane":-1,"streaming":7,"afterTransport":8,"noChangedProps":15,"props":{},"vnodeProps":{}},
+          {"uid":137,"name":"SidebarResizeHandle","pane":-1,"streaming":7,"afterTransport":8,"noChangedProps":15,"props":{},"vnodeProps":{}},
+          {"uid":138,"name":"UiBaseResizeHandle","pane":-1,"streaming":7,"afterTransport":8,"noChangedProps":15,"props":{},"vnodeProps":{}},
+          {"uid":175,"name":"ChatContainer","pane":0,"streaming":7,"afterTransport":9,"noChangedProps":10,"props":{"messageHistory":6},"vnodeProps":{}},
+          {"uid":1026,"name":"ChatContainer","pane":1,"streaming":7,"afterTransport":9,"noChangedProps":9,"props":{"messageHistory":7},"vnodeProps":{}},
+          {"uid":6,"name":"ToastProvider","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":2,"props":{},"vnodeProps":{}},
+          {"uid":380,"name":"WorkspaceTabsWorkspaceChrome","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":0,"props":{"visibleTabIds":2,"statusByTabId":2},"vnodeProps":{}},
+          {"uid":381,"name":"AsyncComponentWrapper","pane":-1,"inner":"WorkspaceTabsWorkspaceTabBar","streaming":0,"afterTransport":2,"noChangedProps":2,"props":{},"vnodeProps":{"visible-tab-ids":2,"status-by-tab-id":2}},
+          {"uid":597,"name":"WorkspaceTabsWorkspaceTabBar","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":0,"props":{"visibleTabIds":2,"statusByTabId":2},"vnodeProps":{}},
+          {"uid":36163,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":36164,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":36165,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36195,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36196,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36197,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36198,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36199,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36200,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36057,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":36058,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":36059,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36093,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36094,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36095,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36096,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36097,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36098,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":35974,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":35975,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":35976,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36006,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36007,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36008,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36009,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36010,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36011,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":35868,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":35869,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":35870,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}}
+        ],
+        "dom": {
+          "sidebar": {
+            "streaming": 0,
+            "afterTransport": 0,
+            "examples": []
+          },
+          "tabs": {
+            "streaming": 0,
+            "afterTransport": 6,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-080469f4-99a2-43b3-ab61-c7c18e729791","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-080469f4-99a2-43b3-ab61-c7c18e729791","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"SPAN","id":"","class":"sr-only"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-0e8e5437-e9fc-416e-8bc1-054ec698f39f","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-0e8e5437-e9fc-416e-8bc1-054ec698f39f","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"SPAN","id":"","class":"sr-only"}
+            ]
+          },
+          "leftComposer": {
+            "streaming": 0,
+            "afterTransport": 5,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"attributes","attribute":"class","target":"DIV","id":"chat-input-main","class":"hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600 blank2-chat-dropper chat-input pointer-events-auto w-full max-w"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"reka-popover-trigger-v-1-8-0","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"}
+            ]
+          },
+          "rightComposer": {
+            "streaming": 0,
+            "afterTransport": 5,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"attributes","attribute":"class","target":"DIV","id":"chat-input-main","class":"hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600 blank2-chat-dropper chat-input pointer-events-auto w-full max-w"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"reka-popover-trigger-v-1-144-0","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"}
+            ]
+          }
+        },
+        "editors": [
+          {"pane":0,"transactions":0,"docChanges":0,"selectionChanges":0},
+          {"pane":1,"transactions":0,"docChanges":0,"selectionChanges":0}
+        ],
+        "messageAudit": [
+          {"id":"pane-audit-left-34","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-35","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-36","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-37","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-38","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-39","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-40","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-41","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-42","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-43","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-44","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-45","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-46","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-47","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-48","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-49","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-50","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-51","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-52","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-53","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-54","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-55","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-56","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-57","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-58","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-59","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-60","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-61","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-62","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-63","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-64","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-65","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-66","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-67","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-68","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-69","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-70","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-71","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-72","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-73","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-74","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-75","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-76","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-77","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-78","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-97","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-98","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-99","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-100","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-101","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-102","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-103","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-104","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-105","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-106","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-107","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-108","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-109","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-110","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-111","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-112","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-113","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-114","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-115","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-116","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-117","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-118","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-119","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"fa99bb69-6270-42d2-8efc-ff4babb1c1af","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":25,"afterTextLength":25,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"2a76dc5d-1910-4b7f-888d-7704a8dc7c99","pane":1,"streaming":47,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":0},"fields":{"text":47,"pending":1},"samples":[{"phase":"streaming","keys":["text"],"beforeTextLength":0,"afterTextLength":64,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":64,"afterTextLength":128,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":128,"afterTextLength":192,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":192,"afterTextLength":256,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":256,"afterTextLength":320,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":320,"afterTextLength":384,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":384,"afterTextLength":448,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":448,"afterTextLength":512,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":512,"afterTextLength":576,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":576,"afterTextLength":640,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":640,"afterTextLength":704,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":704,"afterTextLength":768,"beforeReasoningLength":0,"afterReasoningLength":0}]}
+        ]
+      },
+      "after": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "elapsed": 2468.7000000476837,
+      "phases": {
+        "streaming": {
+          "frames": 87,
+          "p95": 33.399999999999636,
+          "max": 50.100000000000364,
+          "longTasks": [
+            {"start":2839.4000000953674,"end":2900.4000000953674,"duration":61},
+            {"start":3024.600000143051,"end":3086.600000143051,"duration":62}
+          ]
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.699999999999818,
+          "max": 16.699999999999818,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 41,
+          "p95": 16.800000000000182,
+          "max": 50,
+          "longTasks": []
+        }
+      },
+      "p95": 33.399999999999636,
+      "max": 50.100000000000364,
+      "frames": 129,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2670.4000000953674,
+          "firstChunk": 2887.5,
+          "end": 4533.100000143051,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2340.800000190735,
+          "firstChunk": 2887.4000000953674,
+          "end": 4532,
+          "done": true
+        }
+      },
+      "overlapMs": 1644.5,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17076,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    "prose": {
+      "browser": "153.0.8010.12",
+      "options": {
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true,
+        "tailAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 10,
+        "pane-audit-left": 10
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-57","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-56","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-55","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+        {"type":"attributes","attribute":"disabled","message":"pane-audit-left-54","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        50
+      ],
+      "start": 2755.5999999046326,
+      "before": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2588.5999999046326
+        },
+        "right": {
+          "produced": 0,
+          "start": 2274.5
+        }
+      },
+      "shell": {
+        "initialInstances": 8222,
+        "grouped": {
+          "nuxt-root": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "app": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "App": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ConfigProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Toaster": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 2,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "(anonymous)": {
+            "instances": 70,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ErrorRecovery": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiAppModal": {
+            "instances": 10,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UModal": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogRoot": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ReusableTemplate.define": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogPortal": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Teleport": {
+            "instances": 343,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "FieldGroupReset": {
+            "instances": 342,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogOverlay": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Presence": {
+            "instances": 353,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ReusableTemplate.reuse": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DialogContent": {
+            "instances": 11,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "FatalErrorBoundary": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtLayout": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtLayoutProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtPage": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "RouterView": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "KeepAlive": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProductionChatJourney": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "AsyncComponentWrapper": {
+            "instances": 77,
+            "streaming": 164,
+            "afterTransport": 61,
+            "noChangedProps": 225,
+            "props": {},
+            "vnodeProps": {
+              "visible-tab-ids": 2,
+              "status-by-tab-id": 2,
+              "retry-disabled": 54,
+              "compaction-action": 54,
+              "context-revision": 5,
+              "loading": 2,
+              "streaming": 2,
+              "compaction-blocked-reason": 2,
+              "message": 165
+            }
+          },
+          "PageShell": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ResizableSidebarLayout": {
+            "instances": 1,
+            "streaming": 12,
+            "afterTransport": 8,
+            "noChangedProps": 20,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "BaseTransition": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UButton": {
+            "instances": 338,
+            "streaming": 328,
+            "afterTransport": 60,
+            "noChangedProps": 0,
+            "props": {
+              "onClick": 384,
+              "disabled": 60
+            },
+            "vnodeProps": {}
+          },
+          "ULink": {
+            "instances": 338,
+            "streaming": 328,
+            "afterTransport": 60,
+            "noChangedProps": 328,
+            "props": {
+              "disabled": 60
+            },
+            "vnodeProps": {}
+          },
+          "PrimitiveSlot": {
+            "instances": 1001,
+            "streaming": 656,
+            "afterTransport": 118,
+            "noChangedProps": 774,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ULinkBase": {
+            "instances": 338,
+            "streaming": 328,
+            "afterTransport": 60,
+            "noChangedProps": 328,
+            "props": {
+              "disabled": 60
+            },
+            "vnodeProps": {}
+          },
+          "Primitive": {
+            "instances": 1073,
+            "streaming": 328,
+            "afterTransport": 60,
+            "noChangedProps": 388,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UIcon": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtIcon": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "NuxtIconCss": {
+            "instances": 346,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideBar": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavContentCollapsed": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UPopover": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverRoot": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopperRoot": {
+            "instances": 331,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverTrigger": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopperAnchor": {
+            "instances": 331,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UTooltip": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipRoot": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipTrigger": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipPortal": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "TooltipContent": {
+            "instances": 327,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverPortal": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PopoverContent": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ClientOnly": {
+            "instances": 14,
+            "streaming": 329,
+            "afterTransport": 5,
+            "noChangedProps": 334,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiAppIcon": {
+            "instances": 3,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideBottomNav": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarAuthButton": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "AdminConfirmDialog": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavContent": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarSideNavHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UInput": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarRenameEntityModal": {
+            "instances": 4,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarRenameProjectModal": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "sidebar-chats": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarTimeGroupedList": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "Or3Scroll": {
+            "instances": 3,
+            "streaming": 494,
+            "afterTransport": 5,
+            "noChangedProps": 165,
+            "props": {
+              "rowContentRevision": 331,
+              "items": 5
+            },
+            "vnodeProps": {}
+          },
+          "SidebarGroupHeader": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarFamilyItem": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarUnifiedItem": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarEntityModals": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SidebarResizeHandle": {
+            "instances": 1,
+            "streaming": 12,
+            "afterTransport": 8,
+            "noChangedProps": 20,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UiBaseResizeHandle": {
+            "instances": 2,
+            "streaming": 12,
+            "afterTransport": 8,
+            "noChangedProps": 20,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceChrome": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 0,
+            "props": {
+              "visibleTabIds": 2,
+              "statusByTabId": 2
+            },
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceTabBar": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 0,
+            "props": {
+              "visibleTabIds": 2,
+              "statusByTabId": 2
+            },
+            "vnodeProps": {}
+          },
+          "WorkspaceTabsWorkspaceNewTabControl": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatContainer": {
+            "instances": 2,
+            "streaming": 24,
+            "afterTransport": 18,
+            "noChangedProps": 24,
+            "props": {
+              "messageHistory": 18
+            },
+            "vnodeProps": {}
+          },
+          "ChatMessageHost": {
+            "instances": 70,
+            "streaming": 164,
+            "afterTransport": 54,
+            "noChangedProps": 0,
+            "props": {
+              "compactionAction": 54,
+              "retryDisabled": 54,
+              "message": 165
+            },
+            "vnodeProps": {}
+          },
+          "ChatMessage": {
+            "instances": 70,
+            "streaming": 164,
+            "afterTransport": 54,
+            "noChangedProps": 0,
+            "props": {
+              "compactionAction": 54,
+              "retryDisabled": 54,
+              "message": 165
+            },
+            "vnodeProps": {}
+          },
+          "UFieldGroup": {
+            "instances": 70,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProjectsProjectMessageContext": {
+            "instances": 70,
+            "streaming": 164,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {
+              "text": 164
+            },
+            "vnodeProps": {}
+          },
+          "ChatThreadChildLinks": {
+            "instances": 69,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "StreamMarkdown": {
+            "instances": 34,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatToolCardsEnd": {
+            "instances": 35,
+            "streaming": 164,
+            "afterTransport": 1,
+            "noChangedProps": 0,
+            "props": {
+              "message": 165
+            },
+            "vnodeProps": {}
+          },
+          "ChatInput": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 5,
+            "noChangedProps": 3,
+            "props": {
+              "loading": 2,
+              "streaming": 2
+            },
+            "vnodeProps": {}
+          },
+          "ChatInputDropper": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 5,
+            "noChangedProps": 0,
+            "props": {
+              "contextRevision": 5,
+              "compactionBlockedReason": 2,
+              "loading": 2,
+              "streaming": 2
+            },
+            "vnodeProps": {}
+          },
+          "ChatComposerShell": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 2,
+            "noChangedProps": 2,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ProjectsChatProjectChoice": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "EditorContent": {
+            "instances": 2,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "PanesPaneResizeHandle": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ChatLoadingGenerating": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "SearchCommandPalette": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastPortal": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "ToastViewport": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "DismissableLayerBranch": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "CollectionSlot": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          },
+          "UOverlayProvider": {
+            "instances": 1,
+            "streaming": 0,
+            "afterTransport": 0,
+            "noChangedProps": 0,
+            "props": {},
+            "vnodeProps": {}
+          }
+        },
+        "instances": [
+          {"uid":16535,"name":"Or3Scroll","pane":1,"streaming":329,"afterTransport":2,"noChangedProps":165,"props":{"rowContentRevision":165,"items":2},"vnodeProps":{}},
+          {"uid":736,"name":"ClientOnly","pane":0,"streaming":165,"afterTransport":3,"noChangedProps":168,"props":{},"vnodeProps":{}},
+          {"uid":738,"name":"Or3Scroll","pane":0,"streaming":165,"afterTransport":3,"noChangedProps":0,"props":{"rowContentRevision":166,"items":3},"vnodeProps":{}},
+          {"uid":16533,"name":"ClientOnly","pane":1,"streaming":164,"afterTransport":2,"noChangedProps":166,"props":{},"vnodeProps":{}},
+          {"uid":37068,"name":"ChatMessageHost","pane":1,"messageId":"c0aef36d-d9f8-477b-90f3-2f8179fa7cf4","streaming":164,"afterTransport":1,"noChangedProps":0,"props":{"message":165,"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":37069,"name":"AsyncComponentWrapper","pane":1,"inner":"ChatMessage","messageId":"c0aef36d-d9f8-477b-90f3-2f8179fa7cf4","streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{"message":165,"retry-disabled":1,"compaction-action":1}},
+          {"uid":37070,"name":"ChatMessage","pane":1,"messageId":"c0aef36d-d9f8-477b-90f3-2f8179fa7cf4","streaming":164,"afterTransport":1,"noChangedProps":0,"props":{"message":165,"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":0},"fields":{"text":164,"pending":1},"samples":[{"phase":"streaming","keys":["text"],"beforeTextLength":0,"afterTextLength":64,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":64,"afterTextLength":192,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":192,"afterTextLength":256,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":256,"afterTextLength":320,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":320,"afterTextLength":384,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":384,"afterTextLength":448,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":448,"afterTextLength":512,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":512,"afterTextLength":576,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":576,"afterTextLength":640,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":640,"afterTextLength":704,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":704,"afterTextLength":768,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":768,"afterTextLength":832,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":37072,"name":"ChatToolCardsEnd","pane":1,"messageId":"c0aef36d-d9f8-477b-90f3-2f8179fa7cf4","streaming":164,"afterTransport":1,"noChangedProps":0,"props":{"message":165},"vnodeProps":{}},
+          {"uid":37121,"name":"PrimitiveSlot","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37122,"name":"UButton","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":0,"props":{"onClick":165,"disabled":1},"vnodeProps":{}},
+          {"uid":37123,"name":"ULink","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":164,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37124,"name":"PrimitiveSlot","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37125,"name":"ULinkBase","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":164,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37126,"name":"Primitive","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37140,"name":"PrimitiveSlot","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37141,"name":"UButton","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":0,"props":{"onClick":165,"disabled":1},"vnodeProps":{}},
+          {"uid":37142,"name":"ULink","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":164,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37143,"name":"PrimitiveSlot","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37144,"name":"ULinkBase","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":164,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":37145,"name":"Primitive","pane":1,"streaming":164,"afterTransport":1,"noChangedProps":165,"props":{},"vnodeProps":{}},
+          {"uid":37170,"name":"ProjectsProjectMessageContext","pane":1,"streaming":164,"afterTransport":0,"noChangedProps":0,"props":{"text":164},"vnodeProps":{}},
+          {"uid":52,"name":"ResizableSidebarLayout","pane":-1,"streaming":12,"afterTransport":8,"noChangedProps":20,"props":{},"vnodeProps":{}},
+          {"uid":137,"name":"SidebarResizeHandle","pane":-1,"streaming":12,"afterTransport":8,"noChangedProps":20,"props":{},"vnodeProps":{}},
+          {"uid":138,"name":"UiBaseResizeHandle","pane":-1,"streaming":12,"afterTransport":8,"noChangedProps":20,"props":{},"vnodeProps":{}},
+          {"uid":175,"name":"ChatContainer","pane":0,"streaming":12,"afterTransport":9,"noChangedProps":12,"props":{"messageHistory":9},"vnodeProps":{}},
+          {"uid":1026,"name":"ChatContainer","pane":1,"streaming":12,"afterTransport":9,"noChangedProps":12,"props":{"messageHistory":9},"vnodeProps":{}},
+          {"uid":6,"name":"ToastProvider","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":2,"props":{},"vnodeProps":{}},
+          {"uid":380,"name":"WorkspaceTabsWorkspaceChrome","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":0,"props":{"visibleTabIds":2,"statusByTabId":2},"vnodeProps":{}},
+          {"uid":381,"name":"AsyncComponentWrapper","pane":-1,"inner":"WorkspaceTabsWorkspaceTabBar","streaming":0,"afterTransport":2,"noChangedProps":2,"props":{},"vnodeProps":{"visible-tab-ids":2,"status-by-tab-id":2}},
+          {"uid":597,"name":"WorkspaceTabsWorkspaceTabBar","pane":-1,"streaming":0,"afterTransport":2,"noChangedProps":0,"props":{"visibleTabIds":2,"statusByTabId":2},"vnodeProps":{}},
+          {"uid":36163,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":36164,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":36165,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-34","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36195,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36196,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36197,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36198,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36199,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36200,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36057,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":36058,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":36059,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-35","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36093,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36094,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36095,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36096,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36097,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36098,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":35974,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":35975,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":35976,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-36","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}},
+          {"uid":36006,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36007,"name":"UButton","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"onClick":1,"disabled":1},"vnodeProps":{}},
+          {"uid":36008,"name":"ULink","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36009,"name":"PrimitiveSlot","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":36010,"name":"ULinkBase","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"disabled":1},"vnodeProps":{}},
+          {"uid":36011,"name":"Primitive","pane":0,"streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{}},
+          {"uid":35868,"name":"ChatMessageHost","pane":0,"messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{}},
+          {"uid":35869,"name":"AsyncComponentWrapper","pane":0,"inner":"ChatMessage","messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":1,"props":{},"vnodeProps":{"retry-disabled":1,"compaction-action":1}},
+          {"uid":35870,"name":"ChatMessage","pane":0,"messageId":"pane-audit-left-37","streaming":0,"afterTransport":1,"noChangedProps":0,"props":{"compactionAction":1,"retryDisabled":1},"vnodeProps":{},"messageAudit":{"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]}}
+        ],
+        "dom": {
+          "sidebar": {
+            "streaming": 0,
+            "afterTransport": 0,
+            "examples": []
+          },
+          "tabs": {
+            "streaming": 0,
+            "afterTransport": 6,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-07842beb-f27e-4a40-b5dc-7643fa1bd449","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-07842beb-f27e-4a40-b5dc-7643fa1bd449","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"SPAN","id":"","class":"sr-only"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-aed34b98-0115-4fc9-9e79-31d6bac07f72","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"BUTTON","id":"workspace-tab-aed34b98-0115-4fc9-9e79-31d6bac07f72","class":"workspace-tab"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"SPAN","id":"","class":"sr-only"}
+            ]
+          },
+          "leftComposer": {
+            "streaming": 0,
+            "afterTransport": 5,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"attributes","attribute":"class","target":"DIV","id":"chat-input-main","class":"hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600 blank2-chat-dropper chat-input pointer-events-auto w-full max-w"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"reka-popover-trigger-v-1-8-0","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"}
+            ]
+          },
+          "rightComposer": {
+            "streaming": 0,
+            "afterTransport": 5,
+            "examples": [
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"childList","attribute":null,"target":"DIV","id":"","class":"chat-input-bottom-controls-right"},
+              {"phase":"afterTransport","type":"attributes","attribute":"class","target":"DIV","id":"chat-input-main","class":"hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600 blank2-chat-dropper chat-input pointer-events-auto w-full max-w"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"},
+              {"phase":"afterTransport","type":"attributes","attribute":"disabled","target":"BUTTON","id":"reka-popover-trigger-v-1-144-0","class":"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-[color,background-color,border-"}
+            ]
+          }
+        },
+        "editors": [
+          {"pane":0,"transactions":0,"docChanges":0,"selectionChanges":0},
+          {"pane":1,"transactions":0,"docChanges":0,"selectionChanges":0}
+        ],
+        "messageAudit": [
+          {"id":"pane-audit-left-34","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-35","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-36","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-37","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-38","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-39","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-40","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-41","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-42","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-43","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-44","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-45","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-46","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-47","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-48","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-49","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-50","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-51","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-52","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-53","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-54","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-55","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-56","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-57","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-58","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-59","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-60","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-61","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-62","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-63","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-64","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-65","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-66","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-67","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-68","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-69","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-70","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-71","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-72","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-73","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-74","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-75","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-76","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-77","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-left-78","pane":0,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":515,"afterTextLength":515,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-97","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-98","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-99","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-100","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-101","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-102","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-103","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-104","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-105","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-106","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-107","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-108","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-109","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-110","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-111","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-112","pane":1,"streaming":0,"afterTransport":0,"sameFields":{"streaming":0,"afterTransport":0},"fields":{},"samples":[]},
+          {"id":"pane-audit-right-113","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-114","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-115","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-116","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-117","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-118","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"pane-audit-right-119","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":517,"afterTextLength":517,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"9e2aabec-e695-4ecc-967f-af3e2cdb321f","pane":1,"streaming":0,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":1},"fields":{},"samples":[{"phase":"afterTransport","keys":[],"beforeTextLength":25,"afterTextLength":25,"beforeReasoningLength":0,"afterReasoningLength":0}]},
+          {"id":"c0aef36d-d9f8-477b-90f3-2f8179fa7cf4","pane":1,"streaming":164,"afterTransport":1,"sameFields":{"streaming":0,"afterTransport":0},"fields":{"text":164,"pending":1},"samples":[{"phase":"streaming","keys":["text"],"beforeTextLength":0,"afterTextLength":64,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":64,"afterTextLength":192,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":192,"afterTextLength":256,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":256,"afterTextLength":320,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":320,"afterTextLength":384,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":384,"afterTextLength":448,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":448,"afterTextLength":512,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":512,"afterTextLength":576,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":576,"afterTextLength":640,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":640,"afterTextLength":704,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":704,"afterTextLength":768,"beforeReasoningLength":0,"afterReasoningLength":0},{"phase":"streaming","keys":["text"],"beforeTextLength":768,"afterTextLength":832,"beforeReasoningLength":0,"afterReasoningLength":0}]}
+        ]
+      },
+      "after": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "elapsed": 3618,
+      "phases": {
+        "streaming": {
+          "frames": 170,
+          "p95": 16.700000000000728,
+          "max": 16.800000000000182,
+          "longTasks": [
+            {"start":2753.699999809265,"end":2803.699999809265,"duration":50}
+          ]
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.800000000000182,
+          "max": 16.800000000000182,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 40,
+          "p95": 33.19999999999982,
+          "max": 50.100000000000364,
+          "longTasks": []
+        }
+      },
+      "p95": 16.800000000000182,
+      "max": 50.100000000000364,
+      "frames": 211,
+      "states": {
+        "left": {
+          "produced": 10509,
+          "start": 2588.5999999046326,
+          "firstChunk": 2793.7999999523163,
+          "end": 5623,
+          "done": true
+        },
+        "right": {
+          "produced": 10510,
+          "start": 2274.5,
+          "firstChunk": 2793.699999809265,
+          "end": 5622.299999952316,
+          "done": true
+        }
+      },
+      "overlapMs": 2828.5,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 0,
+      "rightCodeBlocks": 0,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17076,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 0
+    }
+  },
+  "richClean": [
+    {"browser":"153.0.8010.12","options":{"rich":true,"synchronized":true,"cpuRate":4,"phaseAudit":true},"reads":{"pane-audit-right":8,"pane-audit-left":7},"settledMutations":4,"mutationExamples":[{"type":"attributes","attribute":"disabled","message":"pane-audit-left-56","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-55","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-54","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-53","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}],"visibleIds":["pane-audit-left-53","pane-audit-left-54","pane-audit-left-55","pane-audit-left-56"],"longTasks":[68,61,77],"start":2953.4000000953674,"before":{"scrollTop":14502,"id":"pane-audit-left-53","connected":true,"offset":-209.40625},"producedAtStart":{"left":{"produced":0,"start":2789.2999999523163},"right":{"produced":0,"start":2447.7999999523163}},"richMutations":{"count":0,"examples":[]},"richNodesRetained":[{"tag":"H3","connected":true},{"tag":"PRE","connected":true},{"tag":"SPAN","connected":true}],"after":{"scrollTop":14502,"id":"pane-audit-left-53","connected":true,"offset":-209.40625},"elapsed":2513,"phases":{"streaming":{"frames":86,"p95":33.40000000000009,"max":83.30000000000018,"longTasks":[{"start":2991,"end":3059,"duration":68},{"start":3090,"end":3151,"duration":61},{"start":3798.100000143051,"end":3875.100000143051,"duration":77}]},"boundary":{"frames":1,"p95":16.699999999999818,"max":16.699999999999818,"longTasks":[]},"afterTransport":{"frames":43,"p95":16.800000000000182,"max":50,"longTasks":[]}},"p95":33.40000000000009,"max":83.30000000000018,"frames":130,"states":{"left":{"produced":2999,"start":2789.2999999523163,"firstChunk":2953.9000000953674,"end":4665.299999952316,"done":true},"right":{"produced":3000,"start":2447.7999999523163,"firstChunk":2953.5,"end":4664.400000095367,"done":true}},"overlapMs":1710.5,"savedExact":{"left":true,"right":true},"rightHighlightedBlocks":12,"rightCodeBlocks":12,"rightComplete":true,"leftEndInitiallyOffscreen":true,"bottoms":[16865,0],"theme":"blank","zoom":"0.9","leftRevealed":true,"highlightControlApplied":0,"projectionControlApplied":0,"bundleControlApplied":0,"highlightingWorkers":1},
+    {"browser":"153.0.8010.12","options":{"rich":true,"synchronized":true,"cpuRate":4,"phaseAudit":true},"reads":{"pane-audit-right":7,"pane-audit-left":7},"settledMutations":4,"mutationExamples":[{"type":"attributes","attribute":"disabled","message":"pane-audit-left-57","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-56","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-55","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-54","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}],"visibleIds":["pane-audit-left-54","pane-audit-left-55","pane-audit-left-56","pane-audit-left-57"],"longTasks":[58],"start":2771.5999999046326,"before":{"scrollTop":14675,"id":"pane-audit-left-54","connected":true,"offset":-127.40625},"producedAtStart":{"left":{"produced":0,"start":2599.399999856949},"right":{"produced":0,"start":2263.399999856949}},"richMutations":{"count":0,"examples":[]},"richNodesRetained":[{"tag":"H3","connected":true},{"tag":"PRE","connected":true},{"tag":"SPAN","connected":true}],"after":{"scrollTop":14675,"id":"pane-audit-left-54","connected":true,"offset":-127.40625},"elapsed":2343.4000000953674,"phases":{"streaming":{"frames":84,"p95":33.30000000000018,"max":49.90000000000009,"longTasks":[{"start":2907.399999856949,"end":2965.399999856949,"duration":58}]},"boundary":{"frames":1,"p95":16.700000000000728,"max":16.700000000000728,"longTasks":[]},"afterTransport":{"frames":42,"p95":16.800000000000182,"max":50,"longTasks":[]}},"p95":33.30000000000018,"max":50,"frames":127,"states":{"left":{"produced":2999,"start":2599.399999856949,"firstChunk":2772.399999856949,"end":4350.599999904633,"done":true},"right":{"produced":3000,"start":2263.399999856949,"firstChunk":2772.399999856949,"end":4350.599999904633,"done":true}},"overlapMs":1578.2000000476837,"savedExact":{"left":true,"right":true},"rightHighlightedBlocks":12,"rightCodeBlocks":12,"rightComplete":true,"leftEndInitiallyOffscreen":true,"bottoms":[17076,0],"theme":"blank","zoom":"0.9","leftRevealed":true,"highlightControlApplied":0,"projectionControlApplied":0,"bundleControlApplied":0,"highlightingWorkers":1},
+    {"browser":"153.0.8010.12","options":{"rich":true,"synchronized":true,"cpuRate":4,"phaseAudit":true},"reads":{"pane-audit-right":7,"pane-audit-left":7},"settledMutations":4,"mutationExamples":[{"type":"attributes","attribute":"disabled","message":"pane-audit-left-74","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-73","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-72","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},{"type":"attributes","attribute":"disabled","message":"pane-audit-left-71","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}],"visibleIds":["pane-audit-left-71","pane-audit-left-72","pane-audit-left-73","pane-audit-left-74"],"longTasks":[59,57],"start":2755.5,"before":{"scrollTop":10981,"id":"pane-audit-left-71","connected":true,"offset":-53.828125},"producedAtStart":{"left":{"produced":0,"start":2583},"right":{"produced":0,"start":2254.7000000476837}},"richMutations":{"count":0,"examples":[]},"richNodesRetained":[{"tag":"H3","connected":true},{"tag":"PRE","connected":true},{"tag":"SPAN","connected":true}],"after":{"scrollTop":10981,"id":"pane-audit-left-71","connected":true,"offset":-53.828125},"elapsed":2244.2999999523163,"phases":{"streaming":{"frames":79,"p95":33.40000000000009,"max":50,"longTasks":[{"start":2794.7999999523163,"end":2853.7999999523163,"duration":59},{"start":2874.4000000953674,"end":2931.4000000953674,"duration":57}]},"boundary":{"frames":1,"p95":16.699999999999818,"max":16.699999999999818,"longTasks":[]},"afterTransport":{"frames":38,"p95":16.700000000000728,"max":83.29999999999927,"longTasks":[]}},"p95":33.399999999999636,"max":83.29999999999927,"frames":118,"states":{"left":{"produced":2999,"start":2583,"firstChunk":2755.7999999523163,"end":4283,"done":true},"right":{"produced":3000,"start":2254.7000000476837,"firstChunk":2755.7000000476837,"end":4282.400000095367,"done":true}},"overlapMs":1526.6000001430511,"savedExact":{"left":true,"right":true},"rightHighlightedBlocks":12,"rightCodeBlocks":12,"rightComplete":true,"leftEndInitiallyOffscreen":true,"bottoms":[12563,0],"theme":"blank","zoom":"0.9","leftRevealed":true,"highlightControlApplied":0,"projectionControlApplied":0,"bundleControlApplied":0,"highlightingWorkers":1}
+  ],
+  "proseClean": {
+    "browser": "153.0.8010.12",
+    "options": {
+      "synchronized": true,
+      "cpuRate": 4,
+      "phaseAudit": true
+    },
+    "reads": {
+      "pane-audit-right": 10,
+      "pane-audit-left": 10
+    },
+    "settledMutations": 4,
+    "mutationExamples": [
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-74","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-73","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-72","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-71","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}
+    ],
+    "visibleIds": [
+      "pane-audit-left-71",
+      "pane-audit-left-72",
+      "pane-audit-left-73",
+      "pane-audit-left-74"
+    ],
+    "longTasks": [],
+    "start": 2769.899999856949,
+    "before": {
+      "scrollTop": 10981,
+      "id": "pane-audit-left-71",
+      "connected": true,
+      "offset": -53.828125
+    },
+    "producedAtStart": {
+      "left": {
+        "produced": 0,
+        "start": 2598.899999856949
+      },
+      "right": {
+        "produced": 0,
+        "start": 2246.7999999523163
+      }
+    },
+    "after": {
+      "scrollTop": 10981,
+      "id": "pane-audit-left-71",
+      "connected": true,
+      "offset": -53.828125
+    },
+    "elapsed": 3599.5,
+    "phases": {
+      "streaming": {
+        "frames": 170,
+        "p95": 16.700000000000728,
+        "max": 16.800000000000182,
+        "longTasks": []
+      },
+      "boundary": {
+        "frames": 1,
+        "p95": 16.699999999999818,
+        "max": 16.699999999999818,
+        "longTasks": []
+      },
+      "afterTransport": {
+        "frames": 42,
+        "p95": 16.799999999999272,
+        "max": 33.399999999999636,
+        "longTasks": []
+      }
+    },
+    "p95": 16.700000000000728,
+    "max": 33.399999999999636,
+    "frames": 213,
+    "states": {
+      "left": {
+        "produced": 10509,
+        "start": 2598.899999856949,
+        "firstChunk": 2770,
+        "end": 5622.399999856949,
+        "done": true
+      },
+      "right": {
+        "produced": 10510,
+        "start": 2246.7999999523163,
+        "firstChunk": 2770,
+        "end": 5622.299999952316,
+        "done": true
+      }
+    },
+    "overlapMs": 2852.2999999523163,
+    "savedExact": {
+      "left": true,
+      "right": true
+    },
+    "rightHighlightedBlocks": 0,
+    "rightCodeBlocks": 0,
+    "rightComplete": true,
+    "leftEndInitiallyOffscreen": true,
+    "bottoms": [
+      12563,
+      0
+    ],
+    "theme": "blank",
+    "zoom": "0.9",
+    "leftRevealed": true,
+    "highlightControlApplied": 0,
+    "projectionControlApplied": 0,
+    "bundleControlApplied": 0,
+    "highlightingWorkers": 0
+  },
+  "normalRich": {
+    "browser": "153.0.8010.12",
+    "options": {
+      "rich": true,
+      "synchronized": true,
+      "cpuRate": 1,
+      "phaseAudit": true
+    },
+    "reads": {
+      "pane-audit-right": 6,
+      "pane-audit-left": 5
+    },
+    "settledMutations": 4,
+    "mutationExamples": [
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-57","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-56","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-55","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true},
+      {"type":"attributes","attribute":"disabled","message":"pane-audit-left-54","target":"<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r","afterTransportDone":true}
+    ],
+    "visibleIds": [
+      "pane-audit-left-54",
+      "pane-audit-left-55",
+      "pane-audit-left-56",
+      "pane-audit-left-57"
+    ],
+    "longTasks": [],
+    "start": 2194.199999809265,
+    "before": {
+      "scrollTop": 14675,
+      "id": "pane-audit-left-54",
+      "connected": true,
+      "offset": -127.40625
+    },
+    "producedAtStart": {
+      "left": {
+        "produced": 0,
+        "start": 2025
+      },
+      "right": {
+        "produced": 0,
+        "start": 1932.3999998569489
+      }
+    },
+    "richMutations": {
+      "count": 0,
+      "examples": []
+    },
+    "richNodesRetained": [
+      {"tag":"H3","connected":true},
+      {"tag":"PRE","connected":true},
+      {"tag":"SPAN","connected":true}
+    ],
+    "after": {
+      "scrollTop": 14675,
+      "id": "pane-audit-left-54",
+      "connected": true,
+      "offset": -127.40625
+    },
+    "elapsed": 1414.7000000476837,
+    "phases": {
+      "streaming": {
+        "frames": 50,
+        "p95": 16.799999999999727,
+        "max": 16.800000000000182,
+        "longTasks": []
+      },
+      "boundary": {
+        "frames": 1,
+        "p95": 16.59999999999991,
+        "max": 16.59999999999991,
+        "longTasks": []
+      },
+      "afterTransport": {
+        "frames": 32,
+        "p95": 16.800000000000182,
+        "max": 16.800000000000182,
+        "longTasks": []
+      }
+    },
+    "p95": 16.799999999999727,
+    "max": 16.800000000000182,
+    "frames": 83,
+    "states": {
+      "left": {
+        "produced": 2999,
+        "start": 2025,
+        "firstChunk": 2194.399999856949,
+        "end": 3048.899999856949,
+        "done": true
+      },
+      "right": {
+        "produced": 3000,
+        "start": 1932.3999998569489,
+        "firstChunk": 2194.2999999523163,
+        "end": 3048.7999999523163,
+        "done": true
+      }
+    },
+    "overlapMs": 854.4000000953674,
+    "savedExact": {
+      "left": true,
+      "right": true
+    },
+    "rightHighlightedBlocks": 12,
+    "rightCodeBlocks": 12,
+    "rightComplete": true,
+    "leftEndInitiallyOffscreen": true,
+    "bottoms": [
+      17076,
+      0
+    ],
+    "theme": "blank",
+    "zoom": "0.9",
+    "leftRevealed": true,
+    "highlightControlApplied": 0,
+    "projectionControlApplied": 0,
+    "bundleControlApplied": 0,
+    "highlightingWorkers": 1
+  }
+}

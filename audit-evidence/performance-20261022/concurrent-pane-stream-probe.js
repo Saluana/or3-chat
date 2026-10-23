@@ -5,6 +5,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
     let cdp;
     let highlightControlApplied=0;
     let projectionControlApplied=0;
+    let bundleControlApplied=0;
     const traceEvents=[];
     try {
         await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
@@ -22,6 +23,14 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             const {needle,replacement}=options.uncachedProjectionControl;
             if(body.split(needle).length!==2)throw new Error('Unmatched projection control');
             projectionControlApplied++;
+            await route.fulfill({response,body:body.replace(needle,replacement)});
+        });
+        const bundleControl=options.bundleControl??options.measurementFollowControl;
+        if(bundleControl)await p.route(`**/_nuxt/${bundleControl.bundle}`,async route=>{
+            const response=await route.fetch(),body=await response.text();
+            const {needle,replacement}=bundleControl;
+            if(body.split(needle).length!==2)throw new Error('Unmatched bundle control');
+            bundleControlApplied++;
             await route.fulfill({response,body:body.replace(needle,replacement)});
         });
         await context.addCookies([
@@ -84,7 +93,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         const prose=Array.from({length:50},(_,i)=>`Paragraph ${i}: **Both conversations are streaming** while one reader stays in settled history. `+'More words keep the response growing. '.repeat(3)+'\n\n').join('');
         const rich=Array.from({length:12},(_,i)=>`### Example ${i}\n\nA TypeScript sample and inline math $x^2 + y^2$.\n\n\`\`\`ts\nexport function calculate${i}(values: number[]): number {\n  return values.map(value => value * 2).reduce((sum, value) => sum + value, 0);\n}\n\`\`\`\n\n$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n`).join('');
         const responses=Object.fromEntries(['left','right'].map(side=>[side,(options.rich?rich:prose)+`CONCURRENT-${side.toUpperCase()}-END`]));
-        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit,tailAudit,scrollControlAudit})=>{
+        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit,tailAudit,scrollControlAudit,domWorkAudit,phaseAudit})=>{
             const roots=[...document.querySelectorAll('.pane-container > [role="tabpanel"]')];
             const scroll=roots[0].querySelector('.chat-message-list');
             const states={left:{produced:0},right:{produced:0}};
@@ -176,12 +185,14 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 const signal=init?.signal??(input instanceof Request?input.signal:null);const encoder=new TextEncoder();
                 const stream=new ReadableStream({async start(controller){try{
                     await startGate;states[side].firstChunk=performance.now();
+                    if(phaseAudit)performance.mark(`or3-audit-${side}-first`);
                     for(let offset=0;offset<responseText.length;offset+=64){
                         if(signal?.aborted)throw new DOMException('Aborted','AbortError');
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({choices:[{delta:{content:responseText.slice(offset,offset+64)},finish_reason:null}]})}\n\n`));
                         states[side].produced=Math.min(offset+64,responseText.length);await new Promise(resolve=>setTimeout(resolve,16));
                     }
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));controller.close();states[side].end=performance.now();states[side].done=true;
+                    if(phaseAudit)performance.mark(`or3-audit-${side}-done`);
                 }catch(error){states[side].error=String(error);controller.error(error);}}});
                 return new Response(stream,{headers:{'Content-Type':'text/event-stream','Cache-Control':'no-cache'}});
             };
@@ -192,6 +203,25 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 const anchor=visible[0];if(!anchor)throw new Error('No settled anchor');
                 const anchorState=()=>({scrollTop:scroll.scrollTop,id:anchor.getAttribute('data-msg-id'),connected:anchor.isConnected,offset:anchor.getBoundingClientRect().top-scroll.getBoundingClientRect().top});
                 const metrics={reads:{},settledMutations:0,mutationExamples:[],visibleIds:visible.map(el=>el.getAttribute('data-msg-id')),gaps:[],longTasks:[],start:performance.now(),before:anchorState(),producedAtStart:structuredClone(states)};
+                const frameSamples=[],taskSamples=[];
+                let restoreHtml;
+                if(domWorkAudit){
+                    const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
+                    if(!descriptor?.set||!descriptor.get)throw new Error('Missing native innerHTML accessor');
+                    const previousHtml=new WeakMap(),groups=new Map();
+                    metrics.htmlWrites=[];
+                    Object.defineProperty(Element.prototype,'innerHTML',{...descriptor,set(value){
+                        const phase=Object.values(states).every(state=>state.done)?'afterTransport':'streaming';
+                        const key=JSON.stringify({phase,tag:this.tagName,class:this.getAttribute('class'),streamdown:this.getAttribute('data-streamdown'),connected:this.isConnected});
+                        let group=groups.get(key);
+                        if(!group){group={...JSON.parse(key),count:0,sameInput:0,maxLength:0};groups.set(key,group);metrics.htmlWrites.push(group);}
+                        const source=String(value);group.count++;group.maxLength=Math.max(group.maxLength,source.length);
+                        if(previousHtml.get(this)===source)group.sameInput++;
+                        previousHtml.set(this,source);
+                        return descriptor.set.call(this,value);
+                    }});
+                    restoreHtml=()=>Object.defineProperty(Element.prototype,'innerHTML',descriptor);
+                }
                 const finishShell=shellAudit?observeShell():undefined;
                 const scrollControls=scrollControlAudit?roots.map(root=>root.querySelector('.chat-scroll-to-bottom')?.parentElement):[];
                 if(scrollControls.some(el=>!el))throw new Error('Missing scroll control');
@@ -213,7 +243,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 });
                 const richNodes=[];let richObserver;
                 let frame,previous;
-                const tick=t=>{if(previous!==undefined)metrics.gaps.push(t-previous);previous=t;
+                const tick=t=>{if(previous!==undefined){metrics.gaps.push(t-previous);if(phaseAudit)frameSamples.push({start:previous,end:t,duration:t-previous});}previous=t;
                     scrollControls.forEach((element,index)=>{
                         const style=getComputedStyle(element),record=metrics.scrollControls[index];
                         const opacity=style.display==='none'?0:Number(style.opacity);
@@ -225,7 +255,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                         if(rich){richNodes.push(...['h3','pre','.katex'].map(selector=>rich.querySelector(selector)).filter(Boolean));metrics.richMutations={count:0,examples:[]};richObserver=new MutationObserver(records=>{metrics.richMutations.count+=records.length;for(const record of records){if(metrics.richMutations.examples.length<10)metrics.richMutations.examples.push({type:record.type,attribute:record.attributeName,target:record.target.nodeName,afterTransportDone:Boolean(states.right.done)});}});for(const el of richNodes)richObserver.observe(el,{subtree:true,attributes:true,childList:true,characterData:true});}
                     }
                     frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);
-                const tasks=new PerformanceObserver(list=>metrics.longTasks.push(...list.getEntries().map(e=>e.duration)));tasks.observe({type:'longtask'});
+                const tasks=new PerformanceObserver(list=>{const entries=list.getEntries();metrics.longTasks.push(...entries.map(e=>e.duration));if(phaseAudit)taskSamples.push(...entries.map(e=>({start:e.startTime,end:e.startTime+e.duration,duration:e.duration})));});tasks.observe({type:'longtask'});
                 const observer=new MutationObserver(records=>{metrics.settledMutations+=records.length;for(const record of records){if(metrics.mutationExamples.length<12)metrics.mutationExamples.push({type:record.type,attribute:record.attributeName,message:record.target.closest?.('[data-msg-id]')?.getAttribute('data-msg-id'),target:record.target.outerHTML?.slice(0,700),afterTransportDone:Boolean(states.left.done)});}});
                 for(const el of visible)observer.observe(el,{subtree:true,childList:true,characterData:true,attributes:true});
                 const originals={};
@@ -240,17 +270,26 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 }
                 window.__finishConcurrent=()=>{
                     cancelAnimationFrame(frame);tasks.disconnect();observer.disconnect();window.fetch=originalFetch;
+                    restoreHtml?.();
                     scrollObservers.forEach(observer=>observer.disconnect());
                     richObserver?.disconnect();if(richObserver)metrics.richNodesRetained=richNodes.map(el=>({tag:el.tagName,connected:el.isConnected}));
                     if(finishShell)metrics.shell=finishShell();
                     for(const [method,original] of Object.entries(originals))IDBIndex.prototype[method]=original;
                     metrics.after=anchorState();metrics.elapsed=performance.now()-metrics.start;metrics.gaps.sort((a,b)=>a-b);
+                    if(phaseAudit){
+                        const end=Math.max(...Object.values(states).map(state=>state.end));
+                        const phase=sample=>sample.end<=end?'streaming':sample.start>=end?'afterTransport':'boundary';
+                        metrics.phases=Object.fromEntries(['streaming','boundary','afterTransport'].map(name=>{
+                            const frames=frameSamples.filter(sample=>phase(sample)===name).map(sample=>sample.duration).sort((a,b)=>a-b);
+                            return [name,{frames:frames.length,p95:frames[Math.floor(frames.length*.95)],max:frames.at(-1),longTasks:taskSamples.filter(sample=>phase(sample)===name)}];
+                        }));
+                    }
                     return {...metrics,p95:metrics.gaps[Math.floor(metrics.gaps.length*.95)],max:metrics.gaps.at(-1),frames:metrics.gaps.length,gaps:undefined,states,
                         overlapMs:Math.min(...Object.values(states).map(state=>state.end))-Math.max(...Object.values(states).map(state=>state.firstChunk))};
                 };
                 releaseStreams?.();
             };
-        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit||options.tailAudit||false,tailAudit:options.tailAudit??false,scrollControlAudit:options.scrollControlAudit??false});
+        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit||options.tailAudit||false,tailAudit:options.tailAudit??false,scrollControlAudit:options.scrollControlAudit??false,domWorkAudit:options.domWorkAudit??false,phaseAudit:options.phaseAudit??false});
         cdp=await context.newCDPSession(p);await cdp.send('Emulation.setCPUThrottlingRate',{rate:options.cpuRate??4});
         await panes.nth(1).getByRole('textbox',{name:'Message input'}).fill('Measure concurrent right.');
         await panes.nth(1).getByRole('button',{name:'Send message',exact:true}).click();
@@ -264,7 +303,13 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         if(options.profile){await cdp.send('Profiler.enable');await cdp.send('Profiler.start');}
         if(options.trace){
             cdp.on('Tracing.dataCollected',event=>traceEvents.push(...event.value));
-            await cdp.send('Tracing.start',{categories:'devtools.timeline,disabled-by-default-devtools.timeline.invalidationTracking',transferMode:'ReportEvents'});
+            let categories='devtools.timeline,blink.user_timing,disabled-by-default-devtools.timeline.invalidationTracking';
+            if(options.traceStacks){
+                const available=await cdp.send('Tracing.getCategories');
+                if(!available.categories.includes('disabled-by-default-devtools.timeline.stack'))throw new Error('Missing trace stack category');
+                categories+=',disabled-by-default-devtools.timeline.stack';
+            }
+            await cdp.send('Tracing.start',{categories,transferMode:'ReportEvents'});
         }
         await p.evaluate(()=>window.__beginConcurrent());
         await p.waitForFunction(()=>Object.values(window.__concurrentStates).every(state=>state.done),{},{timeout:60000});
@@ -303,12 +348,29 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 largestLayout:traceEvents.filter(event=>['Layout','UpdateLayoutTree'].includes(event.name)).sort((a,b)=>(b.dur??0)-(a.dur??0)).slice(0,15),
                 invalidations:[...invalidations].map(([key,count])=>({key:JSON.parse(key),count})).sort((a,b)=>b.count-a.count).slice(0,30),
                 sampleInvalidations:traceEvents.filter(event=>event.name.includes('InvalidationTracking')).slice(0,20)};
+            if(options.phaseAudit){
+                const marks=traceEvents.filter(event=>event.name.startsWith('or3-audit-'));
+                const first=marks.filter(event=>event.name.endsWith('-first')),done=marks.filter(event=>event.name.endsWith('-done'));
+                if(first.length!==2||done.length!==2)throw new Error('Missing trace phase marks');
+                const start=Math.min(...first.map(event=>event.ts)),end=Math.max(...done.map(event=>event.ts));
+                const phase=event=>event.ts+event.dur<=end?'streaming':event.ts>=end?'afterTransport':'boundary';
+                result.trace.phases=Object.fromEntries(['streaming','boundary','afterTransport'].map(name=>{
+                    const groups=new Map();
+                    for(const event of traceEvents){
+                        if(event.ts<start||!event.dur||phase(event)!==name)continue;
+                        const group=groups.get(event.name)??{count:0,ms:0,maxMs:0};
+                        group.count++;group.ms+=event.dur/1000;group.maxMs=Math.max(group.maxMs,event.dur/1000);groups.set(event.name,group);
+                    }
+                    return [name,[...groups].map(([name,value])=>({name,...value})).sort((a,b)=>b.ms-a.ms)];
+                }));
+            }
         }
         await panes.first().locator('.chat-scroll-to-bottom').click();
         await panes.first().getByText('CONCURRENT-LEFT-END',{exact:false}).waitFor();
         result.leftRevealed=true;
         result.highlightControlApplied=highlightControlApplied;
         result.projectionControlApplied=projectionControlApplied;
+        result.bundleControlApplied=bundleControlApplied;
         result.highlightingWorkers=p.workers().filter(worker=>worker.url().includes('markdown-highlight.worker')).length;
         if(options.screenshot)await p.screenshot({path:options.screenshot,animations:'disabled'});
         return result;
