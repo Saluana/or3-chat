@@ -608,7 +608,7 @@ import type {
     UiChatMessagePart,
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
-import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
 import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';

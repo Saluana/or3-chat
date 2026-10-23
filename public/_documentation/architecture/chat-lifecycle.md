@@ -30,6 +30,13 @@ The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
 
+Host Markdown surfaces share `app/utils/stream-markdown.ts`. Its existing
+Streamdown language registry loads local syntax grammars when a code fence first
+uses them, rather than initializing every grammar on the first block. Code stays
+readable while its grammar loads; language aliases and unknown-language plain
+text fallback are retained. Keep this module behind the renderer's lazy boundary
+when adding another host Markdown surface.
+
 Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
 
 `createStreamAccumulator()` in `app/composables/chat/useStreamAccumulator.ts`
