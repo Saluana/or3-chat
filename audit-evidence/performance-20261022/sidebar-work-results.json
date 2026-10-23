@@ -1,0 +1,2203 @@
+{
+  "baselineCommit": "61671ffa",
+  "environment": "Local production build, Chrome 155 on macOS, Blank at 90% scale; exact viewport in each run.",
+  "notes": [
+    "Baseline and menu-only runs used the prior disposable browser session. Final combined runs used a restarted browser with the same profile and recorded dimensions after an earlier attempt timed out. The stalled attempt has no timing result; no application cause established.",
+    "Each measurement includes CDP CPU profiling and therefore instrumentation overhead.",
+    "Final combined adds only pagination admission to the menu-only candidate."
+  ],
+  "baseline": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 132,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            55,
+            60,
+            58,
+            58,
+            55,
+            61,
+            55,
+            52,
+            58,
+            64,
+            62,
+            58,
+            62,
+            58,
+            60
+          ],
+          "frameP95Ms": 74.30000000000018,
+          "maxFrameMs": 102,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1612.467
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1259.502
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 51.032
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 30.575
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 27.015
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 26.839
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 25.819
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 24.798
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 20.302
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 15.696
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 15.658
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 10.23
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 9.439
+          },
+          {
+            "frame": {
+              "functionName": "Y",
+              "scriptId": "21556",
+              "url": "http://127.0.0.1:3147/_nuxt/Cyi8GNQw.js",
+              "lineNumber": 0,
+              "columnNumber": 8274
+            },
+            "selfMs": 6.478
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 5.667
+          },
+          {
+            "frame": {
+              "functionName": "X",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 7557
+            },
+            "selfMs": 5.319
+          },
+          {
+            "frame": {
+              "functionName": "Ia",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 11642
+            },
+            "selfMs": 4.893
+          },
+          {
+            "frame": {
+              "functionName": "Xa",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 12664
+            },
+            "selfMs": 4.811
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 4.776
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 4.5
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 124,
+          "entranceAnimations": 0,
+          "dateFormats": 572,
+          "longTasks": [
+            65,
+            298,
+            68,
+            58,
+            59,
+            66,
+            65,
+            58,
+            53,
+            59,
+            59,
+            52,
+            52,
+            65,
+            63,
+            63,
+            66,
+            66,
+            65,
+            63
+          ],
+          "frameP95Ms": 76.60000000000036,
+          "maxFrameMs": 291.4000000000001,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1610.891
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1079.467
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 54.021
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 45.705
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 42.298
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 32.565
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 25.479
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 25.292
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 22.04
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 20.472
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 18.618
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 16.504
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 15.945
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 12.935
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 11.956
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 11.269
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 10.968
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 10.912
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 10.735
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.527
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 128,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            67,
+            57,
+            84,
+            61,
+            56,
+            54,
+            63,
+            60,
+            53,
+            52,
+            59,
+            69,
+            62,
+            63,
+            67,
+            61,
+            62
+          ],
+          "frameP95Ms": 75.10000000000036,
+          "maxFrameMs": 107.29999999999927,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1886.286
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1189.001
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 47.94
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 45.204
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 32.498
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 29.964
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 28.65
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 26.974
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 25.995
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 17.37
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 8.908
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 7.867
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 7.607
+          },
+          {
+            "frame": {
+              "functionName": "ll",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 10,
+              "columnNumber": 121
+            },
+            "selfMs": 7.453
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "21555",
+              "url": "http://127.0.0.1:3147/_nuxt/VoJFv43S.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 6.941
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 6.377
+          },
+          {
+            "frame": {
+              "functionName": "Zc",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 2,
+              "columnNumber": 34025
+            },
+            "selfMs": 5.704
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.493
+          },
+          {
+            "frame": {
+              "functionName": "Z",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 0,
+              "columnNumber": 12192
+            },
+            "selfMs": 5.392
+          },
+          {
+            "frame": {
+              "functionName": "Zc",
+              "scriptId": "21539",
+              "url": "http://127.0.0.1:3147/_nuxt/BKTPDUdN.js",
+              "lineNumber": 2,
+              "columnNumber": 34025
+            },
+            "selfMs": 4.966
+          }
+        ]
+      }
+    ]
+  },
+  "menuOnly": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 135,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            51,
+            53,
+            50,
+            50,
+            55,
+            50,
+            52,
+            55,
+            52,
+            53
+          ],
+          "frameP95Ms": 60.09999999999991,
+          "maxFrameMs": 82.89999999999964,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1753.72
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1278.422
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 45.076
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 36.872
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 33.533
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 28.813
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 24.359
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 23.681
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 22.019
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 11.579
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 11.532
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.12
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 7.731
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 6.809
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 6.543
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18379
+            },
+            "selfMs": 6.456
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 13572
+            },
+            "selfMs": 6.18
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 5.906
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18379
+            },
+            "selfMs": 5.38
+          },
+          {
+            "frame": {
+              "functionName": "getAll",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 5.351
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 129,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            57,
+            77,
+            53,
+            50,
+            50,
+            51,
+            50,
+            53,
+            56,
+            56,
+            56,
+            59,
+            57,
+            55
+          ],
+          "frameP95Ms": 67.19999999999982,
+          "maxFrameMs": 90.80000000000018,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1533.762
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1272.12
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 46.603
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 45.346
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 30.85
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 29.095
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 23.15
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 17.426
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 16.279
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 13.604
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 9.959
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.406
+          },
+          {
+            "frame": {
+              "functionName": "Xa",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 12664
+            },
+            "selfMs": 7.484
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 7.272
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 6.405
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 5.102
+          },
+          {
+            "frame": {
+              "functionName": "ge",
+              "scriptId": "20189",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "lineNumber": 0,
+              "columnNumber": 4559
+            },
+            "selfMs": 5.038
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 4.799
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 4.374
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 13572
+            },
+            "selfMs": 4.033
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 134,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            58,
+            72,
+            54,
+            52,
+            55,
+            51,
+            52,
+            55,
+            56,
+            55,
+            56,
+            58,
+            63
+          ],
+          "frameP95Ms": 67.20000000000027,
+          "maxFrameMs": 91.80000000000018,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1783.51
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1253.984
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 49.484
+          },
+          {
+            "frame": {
+              "functionName": "get scrollTop",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 48.809
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 35.231
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "23259",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 30.332
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 28.537
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 22.785
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 19.014
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 17.265
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 12.135
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 10.468
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 8.808
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 8.062
+          },
+          {
+            "frame": {
+              "functionName": "Bi",
+              "scriptId": "23405",
+              "url": "http://127.0.0.1:3147/_nuxt/9PgMswQo.js",
+              "lineNumber": 8,
+              "columnNumber": 14323
+            },
+            "selfMs": 6.533
+          },
+          {
+            "frame": {
+              "functionName": "Xa",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 12664
+            },
+            "selfMs": 6.155
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "20188",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 5.974
+          },
+          {
+            "frame": {
+              "functionName": "Q",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 12326
+            },
+            "selfMs": 5.665
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "23398",
+              "url": "http://127.0.0.1:3147/_nuxt/jveb7i67.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.64
+          },
+          {
+            "frame": {
+              "functionName": "ownKeys",
+              "scriptId": "23414",
+              "url": "http://127.0.0.1:3147/_nuxt/BM7SyOcz.js",
+              "lineNumber": 5,
+              "columnNumber": 14401
+            },
+            "selfMs": 5.081
+          }
+        ]
+      }
+    ]
+  },
+  "finalCombined": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 134,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            51,
+            68,
+            51,
+            50,
+            53,
+            54,
+            51,
+            53,
+            53,
+            51
+          ],
+          "frameP95Ms": 66.30000000000018,
+          "maxFrameMs": 84.40000000000009,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1528.35
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1336.43
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 42.189
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 40.761
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "276",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 32.539
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 26.316
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 23.778
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 23.359
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 18.375
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 17.393
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 13.153
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18379
+            },
+            "selfMs": 8.99
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 7.387
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 7.316
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 6.199
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.875
+          },
+          {
+            "frame": {
+              "functionName": "",
+              "scriptId": "22",
+              "url": "http://127.0.0.1:3147/_nuxt/DGVxcCqM.js",
+              "lineNumber": 0,
+              "columnNumber": 3645
+            },
+            "selfMs": 4.755
+          },
+          {
+            "frame": {
+              "functionName": "da",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 6610
+            },
+            "selfMs": 4.612
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 4.436
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 4.408
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 130,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            58,
+            53,
+            52,
+            51,
+            51,
+            55,
+            57,
+            53,
+            56,
+            57,
+            52,
+            57
+          ],
+          "frameP95Ms": 66.29999999999927,
+          "maxFrameMs": 92.29999999999973,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1273.427
+          },
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1236.452
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 47.069
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 46.788
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "276",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 32.465
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 29.34
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 29.088
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 25.27
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 24.019
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 18.391
+          },
+          {
+            "frame": {
+              "functionName": "H",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 88018
+            },
+            "selfMs": 12.053
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 11.72
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 10.059
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 9.835
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 5,
+              "columnNumber": 13572
+            },
+            "selfMs": 7.153
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 6.663
+          },
+          {
+            "frame": {
+              "functionName": "Z",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 12192
+            },
+            "selfMs": 6.598
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.11
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 4.421
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 4.404
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 127,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            58,
+            80,
+            53,
+            51,
+            52,
+            51,
+            58,
+            57,
+            54,
+            53,
+            55,
+            55,
+            56
+          ],
+          "frameP95Ms": 66.59999999999991,
+          "maxFrameMs": 90.59999999999991,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1197.949
+          },
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1158.439
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 48.29
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 47.173
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "276",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 27.741
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 25.782
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 21.001
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 20.187
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 18.784
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 15.774
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 14.666
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.696
+          },
+          {
+            "frame": {
+              "functionName": "H",
+              "scriptId": "34",
+              "url": "http://127.0.0.1:3147/_nuxt/CQ4lzu3G.js",
+              "lineNumber": 0,
+              "columnNumber": 88018
+            },
+            "selfMs": 8.259
+          },
+          {
+            "frame": {
+              "functionName": "getAll",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 7.375
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 6.494
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 6.335
+          },
+          {
+            "frame": {
+              "functionName": "Z",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 12192
+            },
+            "selfMs": 5.886
+          },
+          {
+            "frame": {
+              "functionName": "Z",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 12192
+            },
+            "selfMs": 5.572
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "33",
+              "url": "http://127.0.0.1:3147/_nuxt/D8yJbPV8.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 4.4
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "7",
+              "url": "http://127.0.0.1:3147/_nuxt/2opUVbMi.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 4.354
+          }
+        ]
+      }
+    ]
+  }
+}

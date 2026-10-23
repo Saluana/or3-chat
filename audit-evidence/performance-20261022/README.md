@@ -20,9 +20,13 @@ scroll settings, or public component contracts change.
 StreamMarkdown, and installed `or3-scroll@0.1.3` on an isolated Vite journey
 server. It supplies synthetic UI projections directly to the existing
 controller: 160 history messages, 120 text updates on animation frames,
-32 initially mounted rows, default retro theme, Chromium with 4× CPU
+32 initially mounted rows, Chromium with 4× CPU
 throttling, three fresh-page runs before and after. External requests are
 blocked. Temporary Vue update hooks and DOM observers are removed afterward.
+
+The original prose identified the theme as Retro without recording it in the
+receipt. That attribution is withdrawn: these runs establish single-profile
+behavior, not theme-specific or cross-theme coverage.
 
 | Measurement per run | Before | After |
 | --- | --- | --- |
@@ -75,6 +79,10 @@ not an application API or a production instrumentation hook.
   Vue/test files; the typecheck and executable tests cover those files.
 
 ### Remaining audit sections
+
+Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md)
+and [sidebar mount work and pagination](SIDEBAR-WORK.md), with separate raw
+production receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
 measurements and validation; this section does not qualify the entire app.

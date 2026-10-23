@@ -1,6 +1,8 @@
 // Disposable local journey fixture only. Run through browser_run_code_unsafe's
 // filename argument; the browser profile must not contain user data.
 async function sidebarScrollProbe(page) {
+    await page.bringToFront();
+    page.setDefaultTimeout(10_000);
     await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
@@ -40,6 +42,9 @@ async function sidebarScrollProbe(page) {
             await page.getByRole('button', { name: /Open Performance audit conversation/ }).first().waitFor();
             await page.waitForTimeout(700);
             const initial = await scroller.evaluate(el => ({
+                theme: document.documentElement.getAttribute('data-theme'),
+                zoom: getComputedStyle(document.body).zoom,
+                viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
                 trackHeight: el.scrollHeight, viewportHeight: el.clientHeight,
                 mountedRows: el.querySelectorAll('.or3-scroll-item').length,
             }));
@@ -58,24 +63,29 @@ async function sidebarScrollProbe(page) {
                 const longTasks = [];
                 const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(entry => entry.duration)));
                 observer.observe({ type: 'longtask' });
+                let frame, timer;
+                const finish = timedOut => {
+                    cancelAnimationFrame(frame);
+                    clearTimeout(timer);
+                    Date.prototype.toLocaleTimeString = formatTime;
+                    Date.prototype.toLocaleDateString = formatDate;
+                    el.removeEventListener('animationstart', onAnimation);
+                    observer.disconnect();
+                    gaps.sort((a, b) => a - b);
+                    resolve({ timedOut, frames, entranceAnimations, dateFormats, longTasks,
+                        frameP95Ms: gaps[Math.floor(gaps.length * 0.95)], maxFrameMs: gaps.at(-1),
+                        trackHeight: el.scrollHeight, scrollTop: el.scrollTop });
+                };
                 const sample = timestamp => {
                     const gap = previous === undefined ? 0 : timestamp - previous;
                     previous = timestamp;
                     if (gap) gaps.push(gap);
                     frames++;
-                    if (!window.__sidebarAuditStop) requestAnimationFrame(sample);
-                    else {
-                        Date.prototype.toLocaleTimeString = formatTime;
-                        Date.prototype.toLocaleDateString = formatDate;
-                        el.removeEventListener('animationstart', onAnimation);
-                        observer.disconnect();
-                        gaps.sort((a, b) => a - b);
-                        resolve({ frames, entranceAnimations, dateFormats, longTasks,
-                            frameP95Ms: gaps[Math.floor(gaps.length * 0.95)], maxFrameMs: gaps.at(-1),
-                            trackHeight: el.scrollHeight, scrollTop: el.scrollTop });
-                    }
+                    if (!window.__sidebarAuditStop) frame = requestAnimationFrame(sample);
+                    else finish(false);
                 };
-                requestAnimationFrame(sample);
+                timer = setTimeout(() => finish(true), 20_000);
+                frame = requestAnimationFrame(sample);
             }));
             const box = await scroller.boundingBox();
             await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

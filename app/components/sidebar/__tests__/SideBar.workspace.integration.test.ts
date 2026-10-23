@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, computed, h, ref, KeepAlive, nextTick } from 'vue';
 import { mount, shallowMount, type VueWrapper } from '@vue/test-utils';
 import Dexie from 'dexie';
+import { Or3Scroll } from 'or3-scroll';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -63,6 +64,28 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
+    it('admits one page for repeated bottom events while the current page is loading', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
+        const id = `sidebar-page-admission-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        workspaces.push({ id, name: db.name });
+        await db.threads.bulkPut(Array.from({ length: 160 }, (_, index) => ({
+            id: `page-${index}`, title: `Page row ${index}`, status: 'ready',
+            deleted: false, pinned: false, forked: false, clock: 1,
+            created_at: 1000 - index, updated_at: 1000 - index,
+        })));
+        wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
+            global: { stubs: { SidebarUnifiedItem: true } } });
+        const scroller = () => wrapper!.findComponent(Or3Scroll);
+        const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
+        await vi.waitFor(() => expect(rowCount()).toBe(50));
+        for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
+        await vi.waitFor(() => expect(rowCount()).toBe(100));
+        scroller().vm.$emit('reachBottom');
+        await vi.waitFor(() => expect(rowCount()).toBe(150));
+    });
+
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
     // The live activity projection and project-filtered pagination must agree
