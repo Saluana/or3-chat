@@ -1185,7 +1185,7 @@ for (const theme of themes) {
                         ).toHaveCSS('outline-width', '4px');
                         await expect(
                             page.getByRole('tab', { name: 'Theme' })
-                        ).toHaveCSS('transition-duration', '0.1s');
+                        ).toHaveCSS('transition-duration', '0s');
 
                         if (!viewport.mobile) {
                             await page
@@ -1205,6 +1205,55 @@ for (const theme of themes) {
                         }
                     } finally {
                         await context.close().catch(() => undefined);
+                    }
+                });
+
+                test('reduced motion changes typography without starting transitions', async ({ browser }) => {
+                    const context = await browser.newContext({
+                        viewport: { width: viewport.width, height: viewport.height },
+                        isMobile: viewport.mobile,
+                        hasTouch: viewport.mobile,
+                    });
+                    const page = await context.newPage();
+                    try {
+                        await openThemeStudio(page, viewport.mobile);
+                        await selectThemeAndMode(page, theme, mode);
+                        await page.getByRole('tab', { name: 'Advanced' }).click();
+                        await page.getByLabel('Motion preference').selectOption('reduced');
+                        await expect(page.locator('html')).toHaveAttribute('data-motion-resolved', 'reduced');
+                        await page.getByRole('tab', { name: 'Typography', exact: true }).click();
+                        await page.evaluate(() => {
+                            let count = 0;
+                            const record = (event: TransitionEvent) => {
+                                if (event.propertyName === 'font-size') count++;
+                            };
+                            document.addEventListener('transitionrun', record, true);
+                            (window as Window & { __finishReducedTypography?: () => number })
+                                .__finishReducedTypography = () => {
+                                    document.removeEventListener('transitionrun', record, true);
+                                    return count;
+                                };
+                        });
+                        let fontTransitions: number;
+                        try {
+                            await page.getByRole('slider', { name: /Base font size/ }).press('End');
+                            await expect.poll(() => cssVariable(page, '--app-font-size-root')).toBe('24px');
+                            await page.evaluate(() => new Promise<void>(resolve =>
+                                requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+                            ));
+                        } finally {
+                            fontTransitions = await page.evaluate(() => {
+                                const owner = window as Window & { __finishReducedTypography?: () => number };
+                                const count = owner.__finishReducedTypography!();
+                                delete owner.__finishReducedTypography;
+                                return count;
+                            });
+                        }
+                        expect(fontTransitions).toBe(0);
+                        expect(await page.locator('html').evaluate(element => getComputedStyle(element).fontSize))
+                            .toBe('24px');
+                    } finally {
+                        await context.close();
                     }
                 });
             });

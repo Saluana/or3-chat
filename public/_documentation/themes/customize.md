@@ -34,8 +34,9 @@ selected theme, so disable them when comparing themes' original appearance.
 
 Focus thickness is 1–4px and applies to both modes. **Reduced** motion and the
 operating system's reduced-motion preference suppress decorative motion while
-preserving visible status information. These are global accessibility choices,
-not per-theme light/dark presets.
+preserving visible status information. CSS state changes apply immediately,
+including live typography changes, instead of animating every affected element.
+These are global accessibility choices, not per-theme light/dark presets.
 
 ## Background images
 
