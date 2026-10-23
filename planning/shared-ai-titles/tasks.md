@@ -17,3 +17,5 @@ Focused coverage passes and validation outcomes and limitations are recorded in 
 
 PR: https://github.com/Saluana/or3-chat/pull/280 (open, unmerged).
 Validation: 252 focused tests passed; one existing skip. Type check, focused lint, production build and diff checks passed.
+
+Chrome UI qualification: verified immediate chat fallback, sidebar/tab title updates, main response completion while title inference remained pending, no title calls on subsequent turns, heading reuse without inference, heading-free document opening before inference completed, unchanged document content, manual document rename winning over a pending result, and title persistence after reload. Dashboard routing persisted across reload, preserved complete model identifiers, and the changed model appeared in subsequent title requests. Restored Nitro after qualification. Used controlled browser network responses in the existing journey harness; paid live OpenRouter inference and managed administrator UI were not exercised by this browser pass. Temporary screenshots: `/tmp/or3-title-chrome-qa/`.
