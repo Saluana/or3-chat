@@ -101,14 +101,15 @@ test('streaming DOM changes keep unrelated focus groups out of document-wide sty
 for (const [name, viewport] of [
     ['desktop', { width: 1280, height: 720 }],
     ['mobile', { width: 390, height: 844 }],
-] as const) {
-    test(`initial ${name} shell reserves responsive geometry before hydration`, async ({ browser }, testInfo) => {
+] as const) for (const theme of ['blank', 'retro', 'cyberpunk']) {
+    test(`initial ${name} ${theme} shell reserves responsive geometry before hydration`, async ({ browser }, testInfo) => {
         const context = await browser.newContext({
             baseURL: String(testInfo.project.use.baseURL),
             viewport,
             javaScriptEnabled: false,
         });
         try {
+            await context.addCookies([{ name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' }]);
             const page = await context.newPage();
             await page.goto('/', { waitUntil: 'load' });
             await page.locator('#main-content').waitFor({ state: 'attached' });
@@ -116,6 +117,8 @@ for (const [name, viewport] of [
                 const rectangle = (id: string) => document.getElementById(id)!.getBoundingClientRect().toJSON();
                 const sidebar = getComputedStyle(document.getElementById('sidebar')!);
                 return {
+                    theme: document.documentElement.dataset.theme,
+                    zoom: Number(getComputedStyle(document.body).zoom),
                     root: rectangle('page-container'),
                     sidebar: rectangle('sidebar'),
                     main: rectangle('main-content'),
@@ -131,12 +134,16 @@ for (const [name, viewport] of [
                 };
             });
             await testInfo.attach('initial-shell-geometry', {
-                body: Buffer.from(JSON.stringify({ viewport, geometry }, null, 2)),
+                body: Buffer.from(JSON.stringify({ viewport, theme, geometry }, null, 2)),
                 contentType: 'application/json',
             });
             await testInfo.attach('initial-shell', {
                 body: await page.screenshot(), contentType: 'image/png',
             });
+            // These are the documented theme defaults, including before JS runs.
+            const scale = theme === 'blank' ? (name === 'desktop' ? 0.9 : 0.95) : 1;
+            expect(geometry.theme).toBe(theme);
+            expect(geometry.zoom).toBe(scale);
             expect(geometry.root.width, 'SSR shell must fill the viewport').toBeCloseTo(viewport.width, 0);
             expect(geometry.root.height).toBeCloseTo(viewport.height, 0);
             expect(geometry.root.x).toBeCloseTo(0, 0);
@@ -146,15 +153,14 @@ for (const [name, viewport] of [
                 expect(placeholder.rectangle.height, 'empty client placeholders reserve no content height').toBe(0);
             }
             if (name === 'desktop') {
-                expect(geometry.sidebar.width, 'desktop width must be reserved before JavaScript').toBeCloseTo(320, 0);
-                expect(geometry.main.x).toBeCloseTo(320, 0);
-                expect(geometry.main.width, 'main content must have its final initial width').toBeCloseTo(viewport.width - 320, 0);
-                expect(geometry.sidebarMaxWidth).toBe('none');
+                expect(parseFloat(geometry.sidebarWidth), 'the default logical width stays 320px').toBeCloseTo(320, 0);
+                expect(geometry.sidebar.width, 'scaled desktop width must be reserved before JavaScript').toBeCloseTo(320 * scale, 0);
+                expect(geometry.main.x).toBeCloseTo(320 * scale, 0);
+                expect(geometry.main.width, 'main content must have its final initial width').toBeCloseTo(viewport.width - 320 * scale, 0);
             } else {
                 expect(geometry.sidebar.width, 'mobile drawer must retain full viewport width').toBeCloseTo(viewport.width, 0);
                 expect(geometry.main.x).toBeCloseTo(0, 0);
                 expect(geometry.main.width).toBeCloseTo(viewport.width, 0);
-                expect(geometry.sidebarMaxWidth).toBe(`${viewport.width}px`);
             }
         } finally {
             await context.close();
@@ -320,6 +326,60 @@ test('client error recovery remains visible and dismissible after shell sizing',
     expect(root!.height, 'the populated application wrapper retains full height after recovery').toBeCloseTo(viewport.height, 0);
 });
 
+for (const scale of [80, 90, 100, 120]) for (const motion of ['no-preference', 'reduce'] as const) {
+    test(`sidebar drag tracks the pointer at ${scale}% scale with ${motion} motion`, async ({ page, context }, testInfo) => {
+        await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+        await page.setViewportSize({ width: 1280, height: 720 });
+        await page.emulateMedia({ reducedMotion: motion });
+        await context.addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+        await page.addInitScript(scale => {
+            localStorage.setItem('activeTheme', 'blank');
+            localStorage.setItem('theme', 'light');
+            localStorage.setItem('or3:user-theme-overrides:light', JSON.stringify({ typography: { uiScale: scale } }));
+        }, scale);
+        await page.goto('/chat?welcome=1');
+        await waitForFunctionalChat(page);
+        await expect(page.locator('body')).toHaveCSS('zoom', String(scale / 100));
+        const sidebar = page.getByTestId('sidebar');
+        const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
+        const before = (await sidebar.boundingBox())!;
+        const box = (await handle.boundingBox())!;
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        const errors: number[] = [];
+        try {
+            for (let step = 1; step <= 8; step++) {
+                await page.mouse.move(x + step * 12, y);
+                // Allow the existing coalesced rAF update and one rendered frame.
+                await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+                errors.push((await sidebar.boundingBox())!.width - before.width - step * 12);
+            }
+            // A final move and release can reach the owner before its queued rAF.
+            // Keep both standard DOM events in one task to exercise that flush.
+            await page.evaluate(({ x, y }) => {
+                window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, buttons: 1 }));
+                window.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y }));
+            }, { x: x + 108, y });
+        } finally {
+            await page.mouse.up();
+        }
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        const releaseError = (await sidebar.boundingBox())!.width - before.width - 108;
+        await page.waitForTimeout(250);
+        const after = (await sidebar.boundingBox())!;
+        const stored = await page.evaluate(() => localStorage.getItem('sidebar:width'));
+        await testInfo.attach('sidebar-pointer-tracking', { contentType: 'application/json', body: JSON.stringify({ scale, motion, before, errors, releaseError, after, stored }) });
+        expect(Math.max(...errors.map(Math.abs)), 'the edge follows each pointer update without a width tween').toBeLessThanOrEqual(1);
+        expect(Math.abs(releaseError), 'a final pending update paints without a release tween').toBeLessThanOrEqual(1);
+        expect(Math.abs(after.width - before.width - 108), 'screen-pixel movement is preserved at every interface scale').toBeLessThanOrEqual(1);
+        await page.reload();
+        await waitForFunctionalChat(page);
+        await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - after.width), 'the completed drag persists without a release/reload jump').toBeLessThanOrEqual(1);
+    });
+}
+
 test('sidebar resizing persists through collapse and responsive changes', async ({ page }, testInfo) => {
     await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, (route) =>
         route.request().method() === 'POST'
@@ -329,23 +389,25 @@ test('sidebar resizing persists through collapse and responsive changes', async 
     await page.goto('/chat?welcome=1');
     await waitForFunctionalChat(page);
     const sidebar = page.getByTestId('sidebar');
+    const expectLogicalWidth = (width: number) => expect.poll(() => sidebar.evaluate((element, width) =>
+        Math.abs(parseFloat(getComputedStyle(element).width) - width), width)).toBeLessThan(0.1);
     const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
     await expect(handle).toHaveAttribute('aria-valuenow', '320');
     await handle.focus();
     await handle.press('ArrowRight');
     await expect(handle).toBeFocused();
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
-    await expect(sidebar).toHaveCSS('width', '336px');
+    await expectLogicalWidth(336);
     await page.reload();
     await waitForFunctionalChat(page);
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
-    await expect(sidebar).toHaveCSS('width', '336px');
+    await expectLogicalWidth(336);
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
-    await expect(sidebar).toHaveCSS('width', '64px');
+    await expectLogicalWidth(64);
     await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click();
-    await expect(sidebar).toHaveCSS('width', '336px');
+    await expectLogicalWidth(336);
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(sidebar).toHaveCSS('width', '390px');
+    await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - 390)).toBeLessThan(1);
     await expect(sidebar).toHaveAttribute('inert', '');
     const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
     await open.click();
@@ -356,7 +418,7 @@ test('sidebar resizing persists through collapse and responsive changes', async 
     await expect(sidebar).toHaveAttribute('inert', '');
     await expect(open).toBeFocused();
     await page.setViewportSize({ width: 1280, height: 720 });
-    await expect(sidebar).toHaveCSS('width', '336px');
+    await expectLogicalWidth(336);
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
 });
 

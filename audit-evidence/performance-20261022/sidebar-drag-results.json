@@ -1,0 +1,1375 @@
+{
+  "baselineCommit": "62d1de5f",
+  "servedBuild": "production",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "cpuRate": 1,
+  "source": "sidebar-drag-probe.js",
+  "normal": {
+    "results": [
+      {
+        "scale": 80,
+        "motion": "no-preference",
+        "releaseBeforeFrame": false,
+        "before": {
+          "width": 256,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.8",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 268,
+            "cssWidth": 335,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "335"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 280,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 292,
+            "cssWidth": 365,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "365"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 304,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 316,
+            "cssWidth": 395,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "395"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 328,
+            "cssWidth": 410,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "410"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 340,
+            "cssWidth": 425,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "425"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 352,
+            "cssWidth": 440,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "440"
+          }
+        ],
+        "after": {
+          "width": 352,
+          "cssWidth": 440,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.8",
+          "stored": "440"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 90,
+        "motion": "no-preference",
+        "releaseBeforeFrame": false,
+        "before": {
+          "width": 288,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.9",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 11.6953125,
+            "error": -0.3046875,
+            "width": 299.6953125,
+            "cssWidth": 332.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "333"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24.296875,
+            "error": 0.296875,
+            "width": 312.296875,
+            "cssWidth": 346.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "347"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 324,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 47.6953125,
+            "error": -0.3046875,
+            "width": 335.6953125,
+            "cssWidth": 372.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "373"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60.296875,
+            "error": 0.296875,
+            "width": 348.296875,
+            "cssWidth": 386.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "387"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 360,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "400"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 83.6953125,
+            "error": -0.3046875,
+            "width": 371.6953125,
+            "cssWidth": 412.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "413"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96.296875,
+            "error": 0.296875,
+            "width": 384.296875,
+            "cssWidth": 426.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "427"
+          }
+        ],
+        "after": {
+          "width": 384.296875,
+          "cssWidth": 426.997,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.9",
+          "stored": "427"
+        },
+        "settledError": 0.296875
+      },
+      {
+        "scale": 100,
+        "motion": "no-preference",
+        "releaseBeforeFrame": false,
+        "before": {
+          "width": 320,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 332,
+            "cssWidth": 332,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "332"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 344,
+            "cssWidth": 344,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "344"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 356,
+            "cssWidth": 356,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "356"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 368,
+            "cssWidth": 368,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "368"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 380,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 392,
+            "cssWidth": 392,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "392"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 404,
+            "cssWidth": 404,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "404"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 416,
+            "cssWidth": 416,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "416"
+          }
+        ],
+        "after": {
+          "width": 416,
+          "cssWidth": 416,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1",
+          "stored": "416"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 120,
+        "motion": "no-preference",
+        "releaseBeforeFrame": false,
+        "before": {
+          "width": 384,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1.2",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 396,
+            "cssWidth": 330,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "330"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 408,
+            "cssWidth": 340,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "340"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 420,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 432,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 444,
+            "cssWidth": 370,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "370"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 456,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 468,
+            "cssWidth": 390,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "390"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 480,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "400"
+          }
+        ],
+        "after": {
+          "width": 480,
+          "cssWidth": 400,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1.2",
+          "stored": "400"
+        },
+        "settledError": 0
+      }
+    ]
+  },
+  "release": {
+    "results": [
+      {
+        "scale": 80,
+        "motion": "no-preference",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 256,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.8",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 268,
+            "cssWidth": 335,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "335"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 280,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 292,
+            "cssWidth": 365,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "365"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 304,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 316,
+            "cssWidth": 395,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "395"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 328,
+            "cssWidth": 410,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "410"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 340,
+            "cssWidth": 425,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "425"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 352,
+            "cssWidth": 440,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.8",
+            "stored": "440"
+          }
+        ],
+        "after": {
+          "width": 364,
+          "cssWidth": 455,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.8",
+          "stored": "455"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 90,
+        "motion": "no-preference",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 288,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.9",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 11.6953125,
+            "error": -0.3046875,
+            "width": 299.6953125,
+            "cssWidth": 332.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "333"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24.296875,
+            "error": 0.296875,
+            "width": 312.296875,
+            "cssWidth": 346.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "347"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 324,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 47.6953125,
+            "error": -0.3046875,
+            "width": 335.6953125,
+            "cssWidth": 372.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "373"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60.296875,
+            "error": 0.296875,
+            "width": 348.296875,
+            "cssWidth": 386.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "387"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 360,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "400"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 83.6953125,
+            "error": -0.3046875,
+            "width": 371.6953125,
+            "cssWidth": 412.995,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "413"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96.296875,
+            "error": 0.296875,
+            "width": 384.296875,
+            "cssWidth": 426.997,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "0.9",
+            "stored": "427"
+          }
+        ],
+        "after": {
+          "width": 396,
+          "cssWidth": 440,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "0.9",
+          "stored": "440"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 100,
+        "motion": "no-preference",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 320,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 332,
+            "cssWidth": 332,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "332"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 344,
+            "cssWidth": 344,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "344"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 356,
+            "cssWidth": 356,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "356"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 368,
+            "cssWidth": 368,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "368"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 380,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 392,
+            "cssWidth": 392,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "392"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 404,
+            "cssWidth": 404,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "404"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 416,
+            "cssWidth": 416,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1",
+            "stored": "416"
+          }
+        ],
+        "after": {
+          "width": 428,
+          "cssWidth": 428,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1",
+          "stored": "428"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 120,
+        "motion": "no-preference",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 384,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1.2",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 396,
+            "cssWidth": 330,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "330"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 408,
+            "cssWidth": 340,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "340"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 420,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 432,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 444,
+            "cssWidth": 370,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "370"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 456,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 468,
+            "cssWidth": 390,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "390"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 480,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0s",
+            "zoom": "1.2",
+            "stored": "400"
+          }
+        ],
+        "after": {
+          "width": 492,
+          "cssWidth": 410,
+          "transition": "width",
+          "duration": "0.2s",
+          "zoom": "1.2",
+          "stored": "410"
+        },
+        "settledError": 0
+      }
+    ]
+  },
+  "reduced": {
+    "results": [
+      {
+        "scale": 80,
+        "motion": "reduce",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 256,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "0.8",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 268,
+            "cssWidth": 335,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "335"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 280,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 292,
+            "cssWidth": 365,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "365"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 304,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 316,
+            "cssWidth": 395,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "395"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 328,
+            "cssWidth": 410,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "410"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 340,
+            "cssWidth": 425,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "425"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 352,
+            "cssWidth": 440,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.8",
+            "stored": "440"
+          }
+        ],
+        "after": {
+          "width": 364,
+          "cssWidth": 455,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "0.8",
+          "stored": "455"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 90,
+        "motion": "reduce",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 288,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "0.9",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 11.6953125,
+            "error": -0.3046875,
+            "width": 299.6953125,
+            "cssWidth": 332.995,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "333"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24.296875,
+            "error": 0.296875,
+            "width": 312.296875,
+            "cssWidth": 346.997,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "347"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 324,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 47.6953125,
+            "error": -0.3046875,
+            "width": 335.6953125,
+            "cssWidth": 372.995,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "373"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60.296875,
+            "error": 0.296875,
+            "width": 348.296875,
+            "cssWidth": 386.997,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "387"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 360,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "400"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 83.6953125,
+            "error": -0.3046875,
+            "width": 371.6953125,
+            "cssWidth": 412.995,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "413"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96.296875,
+            "error": 0.296875,
+            "width": 384.296875,
+            "cssWidth": 426.997,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "0.9",
+            "stored": "427"
+          }
+        ],
+        "after": {
+          "width": 396,
+          "cssWidth": 440,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "0.9",
+          "stored": "440"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 100,
+        "motion": "reduce",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 320,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "1",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 332,
+            "cssWidth": 332,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "332"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 344,
+            "cssWidth": 344,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "344"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 356,
+            "cssWidth": 356,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "356"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 368,
+            "cssWidth": 368,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "368"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 380,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 392,
+            "cssWidth": 392,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "392"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 404,
+            "cssWidth": 404,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "404"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 416,
+            "cssWidth": 416,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1",
+            "stored": "416"
+          }
+        ],
+        "after": {
+          "width": 428,
+          "cssWidth": 428,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "1",
+          "stored": "428"
+        },
+        "settledError": 0
+      },
+      {
+        "scale": 120,
+        "motion": "reduce",
+        "releaseBeforeFrame": true,
+        "releaseImmediateError": 0,
+        "before": {
+          "width": 384,
+          "cssWidth": 320,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "1.2",
+          "stored": null
+        },
+        "samples": [
+          {
+            "pointerDelta": 12,
+            "actualDelta": 12,
+            "error": 0,
+            "width": 396,
+            "cssWidth": 330,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "330"
+          },
+          {
+            "pointerDelta": 24,
+            "actualDelta": 24,
+            "error": 0,
+            "width": 408,
+            "cssWidth": 340,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "340"
+          },
+          {
+            "pointerDelta": 36,
+            "actualDelta": 36,
+            "error": 0,
+            "width": 420,
+            "cssWidth": 350,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "350"
+          },
+          {
+            "pointerDelta": 48,
+            "actualDelta": 48,
+            "error": 0,
+            "width": 432,
+            "cssWidth": 360,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "360"
+          },
+          {
+            "pointerDelta": 60,
+            "actualDelta": 60,
+            "error": 0,
+            "width": 444,
+            "cssWidth": 370,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "370"
+          },
+          {
+            "pointerDelta": 72,
+            "actualDelta": 72,
+            "error": 0,
+            "width": 456,
+            "cssWidth": 380,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "380"
+          },
+          {
+            "pointerDelta": 84,
+            "actualDelta": 84,
+            "error": 0,
+            "width": 468,
+            "cssWidth": 390,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "390"
+          },
+          {
+            "pointerDelta": 96,
+            "actualDelta": 96,
+            "error": 0,
+            "width": 480,
+            "cssWidth": 400,
+            "transition": "none",
+            "duration": "0.1s",
+            "zoom": "1.2",
+            "stored": "400"
+          }
+        ],
+        "after": {
+          "width": 492,
+          "cssWidth": 410,
+          "transition": "width",
+          "duration": "0.1s",
+          "zoom": "1.2",
+          "stored": "410"
+        },
+        "settledError": 0
+      }
+    ]
+  }
+}

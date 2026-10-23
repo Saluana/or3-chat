@@ -1,0 +1,117 @@
+{
+  "description": "Initial repair before deferring transition restoration: native drag followed by one-task pointermove+pointerup to total 108 px.",
+  "results": [
+    {
+      "releaseImmediateError": -10.1953125,
+      "scale": 100,
+      "motion": "no-preference",
+      "before": {
+        "width": 320,
+        "cssWidth": 320,
+        "transition": "width",
+        "duration": "0.2s",
+        "zoom": "1",
+        "stored": null
+      },
+      "samples": [
+        {
+          "pointerDelta": 12,
+          "actualDelta": 12,
+          "error": 0,
+          "width": 332,
+          "cssWidth": 332,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "332"
+        },
+        {
+          "pointerDelta": 24,
+          "actualDelta": 24,
+          "error": 0,
+          "width": 344,
+          "cssWidth": 344,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "344"
+        },
+        {
+          "pointerDelta": 36,
+          "actualDelta": 36,
+          "error": 0,
+          "width": 356,
+          "cssWidth": 356,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "356"
+        },
+        {
+          "pointerDelta": 48,
+          "actualDelta": 48,
+          "error": 0,
+          "width": 368,
+          "cssWidth": 368,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "368"
+        },
+        {
+          "pointerDelta": 60,
+          "actualDelta": 60,
+          "error": 0,
+          "width": 380,
+          "cssWidth": 380,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "380"
+        },
+        {
+          "pointerDelta": 72,
+          "actualDelta": 72,
+          "error": 0,
+          "width": 392,
+          "cssWidth": 392,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "392"
+        },
+        {
+          "pointerDelta": 84,
+          "actualDelta": 84,
+          "error": 0,
+          "width": 404,
+          "cssWidth": 404,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "404"
+        },
+        {
+          "pointerDelta": 96,
+          "actualDelta": 96,
+          "error": 0,
+          "width": 416,
+          "cssWidth": 416,
+          "transition": "none",
+          "duration": "0s",
+          "zoom": "1",
+          "stored": "416"
+        }
+      ],
+      "after": {
+        "width": 428,
+        "cssWidth": 428,
+        "transition": "width",
+        "duration": "0.2s",
+        "zoom": "1",
+        "stored": "428"
+      },
+      "settledError": 0
+    }
+  ]
+}

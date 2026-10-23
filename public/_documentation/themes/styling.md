@@ -234,6 +234,13 @@ for any new `100dvh`/`100vw` container that must fill the window. Virtual lists 
 run at the viewport scale and re-apply the zoom to each row, because the scroller measures in
 screen pixels and otherwise stops short of the bottom of a streaming chat.
 
+Resizable surfaces must convert pointer movement from screen pixels to their
+logical CSS width at the active scale. The sidebar measures that ratio when a
+drag starts, coalesces width updates by frame, and suppresses width transitions
+until the final pointer update has painted. Keyboard resizing and collapse keep
+their normal motion preferences. Preserve that distinction in theme overrides;
+animating each drag update makes the edge trail the pointer.
+
 Blank keeps message actions (copy, retry, branch, edit) visible as a quiet row of
 loose icons under each message instead of a pill revealed on hover: a reply's row sits
 in flow with its first icon on the text edge, and a user bubble hangs its row below

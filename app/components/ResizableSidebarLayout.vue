@@ -47,9 +47,13 @@
                     : // Only cast a shadow while visible so the closed
                       // off-canvas drawer doesn't tint the screen edge.
                       'max-md:shadow-xl',
-                initialized
-                    ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : '',
+                // Pointer updates are already coalesced to frames. A width
+                // transition here would continually trail the user's hand.
+                isDragging || isResizeSettling
+                    ? 'md:transition-none!'
+                    : initialized
+                        ? 'md:transition-[width] md:duration-200 md:ease-out'
+                        : '',
             ]"
             :style="sidebarStyle"
             @keydown="onSidebarKeydown"
@@ -475,10 +479,13 @@ function toggleCollapse() {
 
 // Resize logic (desktop only)
 const isDragging = ref(false);
+const isResizeSettling = ref(false);
 let startX = 0;
 let startWidth = 0;
+let dragScale = 1;
 let pendingWidthUpdate: number | null = null;
 let widthRafId: number | null = null;
+let resizeEndRafId: number | null = null;
 
 function applyPendingWidth() {
     if (pendingWidthUpdate === null) return;
@@ -506,15 +513,42 @@ function flushWidthUpdates() {
     applyPendingWidth();
 }
 
+function cancelResizeEndFrame() {
+    if (resizeEndRafId === null) return;
+    cancelAnimationFrame(resizeEndRafId);
+    resizeEndRafId = null;
+}
+
+onBeforeUnmount(() => {
+    cancelWidthRaf();
+    cancelResizeEndFrame();
+    pendingWidthUpdate = null;
+});
+
 function onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - startX;
+    if (!isDragging.value) return;
+    const dx = (e.clientX - startX) / dragScale;
     const delta = props.side === 'right' ? -dx : dx;
-    scheduleWidthUpdate(clamp(startWidth + delta));
+    // Width preferences are stored/restored in whole logical CSS pixels.
+    scheduleWidthUpdate(clamp(Math.round(startWidth + delta)));
 }
 
 function onPointerUp() {
-    isDragging.value = false;
+    const hadPendingWidth = pendingWidthUpdate !== null;
     flushWidthUpdates();
+    isDragging.value = false;
+    if (hadPendingWidth) {
+        // Paint the final coalesced width with transitions still disabled. If
+        // restored in this same task, CSS would animate the last pointer step.
+        isResizeSettling.value = true;
+        cancelResizeEndFrame();
+        resizeEndRafId = requestAnimationFrame(() => {
+            resizeEndRafId = requestAnimationFrame(() => {
+                resizeEndRafId = null;
+                isResizeSettling.value = false;
+            });
+        });
+    }
 }
 
 // Use VueUse's useEventListener for pointermove/pointerup during drag
@@ -526,16 +560,24 @@ useEventListener(
 );
 useEventListener(
     () => (isDragging.value ? window : null),
-    'pointerup',
+    ['pointerup', 'pointercancel'],
     onPointerUp
 );
 
 function onPointerDown(e: PointerEvent) {
     if (!isDesktop.value || collapsed.value) return;
+    cancelResizeEndFrame();
+    isResizeSettling.value = false;
     flushWidthUpdates();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     startX = e.clientX;
     startWidth = width.value;
+    // Pointer coordinates are screen pixels; the shell can have CSS zoom.
+    // Measure that conversion once per drag, outside the pointermove hot path.
+    const element = sidebarElement.value;
+    const logicalWidth = element ? parseFloat(getComputedStyle(element).width) : 0;
+    const renderedWidth = element?.getBoundingClientRect().width ?? 0;
+    dragScale = logicalWidth > 0 && renderedWidth > 0 ? renderedWidth / logicalWidth : 1;
     isDragging.value = true;
 }
 
