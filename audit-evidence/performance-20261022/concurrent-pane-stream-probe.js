@@ -82,6 +82,13 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             await p.addStyleTag({content:(options.containment==='rows'?'.chat-message-list .or3-scroll-item':'.chat-message-list')+' { contain: layout style; }'});
             await p.waitForTimeout(100);
         }
+        if(options.cssControl){
+            await p.addStyleTag({content:options.cssControl});
+            await p.waitForTimeout(100);
+        }
+        if(options.mathStyleControl){
+            await p.addStyleTag({url:'http://127.0.0.1:3147/_nuxt/'+options.mathStyleControl});
+        }
         if(options.layoutSelectorControl)await p.evaluate(()=>{
             const before=getComputedStyle(document.body).zoom;let changed=0;
             document.documentElement.setAttribute('data-perf-layout-control','');
@@ -92,8 +99,8 @@ async function concurrentPaneStreamProbe(page, options = {}) {
 
         const prose=Array.from({length:50},(_,i)=>`Paragraph ${i}: **Both conversations are streaming** while one reader stays in settled history. `+'More words keep the response growing. '.repeat(3)+'\n\n').join('');
         const rich=Array.from({length:12},(_,i)=>`### Example ${i}\n\nA TypeScript sample and inline math $x^2 + y^2$.\n\n\`\`\`ts\nexport function calculate${i}(values: number[]): number {\n  return values.map(value => value * 2).reduce((sum, value) => sum + value, 0);\n}\n\`\`\`\n\n$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n`).join('');
-        const responses=Object.fromEntries(['left','right'].map(side=>[side,(options.rich?rich:prose)+`CONCURRENT-${side.toUpperCase()}-END`]));
-        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit,tailAudit,scrollControlAudit,domWorkAudit,phaseAudit})=>{
+        const responses=Object.fromEntries(['left','right'].map(side=>[side,(options.mathFirst?'$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n':'')+(options.rich?rich:prose)+`CONCURRENT-${side.toUpperCase()}-END`]));
+        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit,tailAudit,scrollControlAudit,domWorkAudit,geometryAudit,mathPaintAudit,phaseAudit})=>{
             const roots=[...document.querySelectorAll('.pane-container > [role="tabpanel"]')];
             const scroll=roots[0].querySelector('.chat-message-list');
             const states={left:{produced:0},right:{produced:0}};
@@ -204,6 +211,37 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 const anchorState=()=>({scrollTop:scroll.scrollTop,id:anchor.getAttribute('data-msg-id'),connected:anchor.isConnected,offset:anchor.getBoundingClientRect().top-scroll.getBoundingClientRect().top});
                 const metrics={reads:{},settledMutations:0,mutationExamples:[],visibleIds:visible.map(el=>el.getAttribute('data-msg-id')),gaps:[],longTasks:[],start:performance.now(),before:anchorState(),producedAtStart:structuredClone(states)};
                 const frameSamples=[],taskSamples=[];
+                const restoreGeometry=[];
+                if(geometryAudit){
+                    const groups=new Map();
+                    metrics.geometry={groups:[],slow:[]};
+                    const record=(element,name,start)=>{
+                        const duration=performance.now()-start;
+                        const phase=Object.values(states).every(state=>state.done)?'afterTransport':'streaming';
+                        const identity={phase,name,tag:element.tagName,class:element.getAttribute('class')};
+                        const key=JSON.stringify(identity);
+                        let group=groups.get(key);
+                        if(!group){group={...identity,count:0,ms:0,maxMs:0};groups.set(key,group);metrics.geometry.groups.push(group);}
+                        group.count++;group.ms+=duration;group.maxMs=Math.max(group.maxMs,duration);
+                        if(duration>=1&&metrics.geometry.slow.length<100)metrics.geometry.slow.push({...identity,duration,stack:new Error().stack});
+                    };
+                    for(const [prototype,names]of [
+                        [Element.prototype,['clientHeight','clientWidth','scrollHeight','scrollWidth','scrollTop','scrollLeft','getBoundingClientRect','getClientRects']],
+                        [HTMLElement.prototype,['offsetHeight','offsetWidth','offsetTop','offsetLeft']],
+                    ])for(const name of names){
+                        const descriptor=Object.getOwnPropertyDescriptor(prototype,name);
+                        if(!descriptor?.configurable)throw new Error('Missing native geometry descriptor '+name);
+                        if(descriptor.get){
+                            Object.defineProperty(prototype,name,{...descriptor,
+                                get(){const start=performance.now();const value=descriptor.get.call(this);record(this,name,start);return value;},
+                                ...(descriptor.set?{set(value){const start=performance.now();descriptor.set.call(this,value);record(this,name+':set',start);}}:{}),
+                            });
+                        }else if(typeof descriptor.value==='function'){
+                            Object.defineProperty(prototype,name,{...descriptor,value(...args){const start=performance.now();const value=descriptor.value.apply(this,args);record(this,name,start);return value;}});
+                        }else throw new Error('Unsupported geometry descriptor '+name);
+                        restoreGeometry.push(()=>Object.defineProperty(prototype,name,descriptor));
+                    }
+                }
                 let restoreHtml;
                 if(domWorkAudit){
                     const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
@@ -242,8 +280,13 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                     return observer;
                 });
                 const richNodes=[];let richObserver;
+                if(mathPaintAudit)metrics.mathPaints=[];
                 let frame,previous;
                 const tick=t=>{if(previous!==undefined){metrics.gaps.push(t-previous);if(phaseAudit)frameSamples.push({start:previous,end:t,duration:t-previous});}previous=t;
+                    if(mathPaintAudit&&metrics.mathPaints.length<20){
+                        const math=roots[1].querySelector('.katex'),semantic=math?.querySelector('.katex-mathml');
+                        if(semantic){const style=getComputedStyle(semantic);metrics.mathPaints.push({time:t,styled:style.position==='absolute',position:style.position,height:math.getBoundingClientRect().height});}
+                    }
                     scrollControls.forEach((element,index)=>{
                         const style=getComputedStyle(element),record=metrics.scrollControls[index];
                         const opacity=style.display==='none'?0:Number(style.opacity);
@@ -271,6 +314,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 window.__finishConcurrent=()=>{
                     cancelAnimationFrame(frame);tasks.disconnect();observer.disconnect();window.fetch=originalFetch;
                     restoreHtml?.();
+                    restoreGeometry.forEach(restore=>restore());
                     scrollObservers.forEach(observer=>observer.disconnect());
                     richObserver?.disconnect();if(richObserver)metrics.richNodesRetained=richNodes.map(el=>({tag:el.tagName,connected:el.isConnected}));
                     if(finishShell)metrics.shell=finishShell();
@@ -289,7 +333,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 };
                 releaseStreams?.();
             };
-        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit||options.tailAudit||false,tailAudit:options.tailAudit??false,scrollControlAudit:options.scrollControlAudit??false,domWorkAudit:options.domWorkAudit??false,phaseAudit:options.phaseAudit??false});
+        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit||options.tailAudit||false,tailAudit:options.tailAudit??false,scrollControlAudit:options.scrollControlAudit??false,domWorkAudit:options.domWorkAudit??false,geometryAudit:options.geometryAudit??false,mathPaintAudit:options.mathPaintAudit??false,phaseAudit:options.phaseAudit??false});
         cdp=await context.newCDPSession(p);await cdp.send('Emulation.setCPUThrottlingRate',{rate:options.cpuRate??4});
         await panes.nth(1).getByRole('textbox',{name:'Message input'}).fill('Measure concurrent right.');
         await panes.nth(1).getByRole('button',{name:'Send message',exact:true}).click();
@@ -348,6 +392,21 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 largestLayout:traceEvents.filter(event=>['Layout','UpdateLayoutTree'].includes(event.name)).sort((a,b)=>(b.dur??0)-(a.dur??0)).slice(0,15),
                 invalidations:[...invalidations].map(([key,count])=>({key:JSON.parse(key),count})).sort((a,b)=>b.count-a.count).slice(0,30),
                 sampleInvalidations:traceEvents.filter(event=>event.name.includes('InvalidationTracking')).slice(0,20)};
+            if(options.layoutAudit){
+                result.trace.layoutContexts=traceEvents.filter(event=>event.name==='Layout').sort((a,b)=>(b.dur??0)-(a.dur??0)).slice(0,20).map(event=>({
+                    ...event,ancestors:traceEvents.filter(parent=>parent!==event&&parent.pid===event.pid&&parent.tid===event.tid&&parent.dur&&parent.ts<=event.ts&&parent.ts+parent.dur>=event.ts+event.dur)
+                        .sort((a,b)=>a.dur-b.dur).slice(0,5).map(({name,dur,args})=>({name,dur,args})),
+                }));
+                const fonts=new Map();
+                for(const event of traceEvents.filter(event=>event.name==='LayoutInvalidationTracking'&&event.args?.data?.reason==='Fonts changed')){
+                    const data=event.args.data,key=data.nodeId;
+                    let value=fonts.get(key);
+                    if(!value){value={nodeId:key,nodeName:data.nodeName,count:0,first:event.ts,last:event.ts};fonts.set(key,value);}
+                    value.count++;value.last=event.ts;
+                }
+                result.trace.fontInvalidations=[...fonts.values()].sort((a,b)=>b.count-a.count).slice(0,20);
+                result.trace.requests=traceEvents.filter(event=>event.name==='ResourceSendRequest').map(event=>({ts:event.ts,...event.args?.data}));
+            }
             if(options.phaseAudit){
                 const marks=traceEvents.filter(event=>event.name.startsWith('or3-audit-'));
                 const first=marks.filter(event=>event.name.endsWith('-first')),done=marks.filter(event=>event.name.endsWith('-done'));

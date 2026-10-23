@@ -1126,38 +1126,8 @@ watch(
     { immediate: true }
 );
 
-// Detect if message has math or code content
-const hasMathContent = computed(() => {
-    const text = props.message.text || '';
-    // The renderer also typesets `\[…\]` display math (normalized to `$$`).
-    return /\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\[[\s\S]*?\\\]/.test(text);
-});
-
-// Load KaTeX CSS during idle time only if message has math
-const loadKaTeXOnIdle = () => {
-    if (!hasMathContent.value) return; // Skip if no math
-    const idleLoader = (callback: () => void) => {
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(callback, { timeout: 2000 }); // Fallback after 2s
-        } else {
-            setTimeout(callback, 0); // Polyfill for older browsers
-        }
-    };
-    idleLoader(() => {
-        import('katex/dist/katex.min.css').catch((e) => {
-            if (import.meta.dev)
-                console.warn('[ChatMessage] KaTeX CSS load error:', e);
-        });
-    });
-};
-
 onMounted(() => {
     rafHydrate.resume();
-    loadKaTeXOnIdle();
-});
-// Streamed replies mount empty; load KaTeX once math actually arrives.
-watch(hasMathContent, (hasMath) => {
-    if (hasMath) loadKaTeXOnIdle();
 });
 
 const { copy: copyToClipboard } = useClipboard({ legacy: true });

@@ -1,0 +1,1616 @@
+{
+  "base": "0a558f49",
+  "scope": "Rebuilt-source local qualification; after-only timing, not a matched speedup comparison. mathPaints records animation-frame DOM observations, not screenshot coverage.",
+  "runs": [
+    {
+      "name": "final-1",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "mathFirst": true,
+        "mathPaintAudit": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-53",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-53",
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56"
+      ],
+      "longTasks": [],
+      "start": 3040.2000000476837,
+      "before": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2867.2000000476837
+        },
+        "right": {
+          "produced": 0,
+          "start": 2491
+        }
+      },
+      "mathPaints": [
+        {
+          "time": 3056.962,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3106.9,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3123.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3140.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3173.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3190.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3207,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3223.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3257,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3273.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3290.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3307,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3323.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3357,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3373.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3390.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3407,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3423.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3440.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3456.9,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        }
+      ],
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "elapsed": 2543,
+      "phases": {
+        "streaming": {
+          "frames": 86,
+          "p95": 33.400000000000546,
+          "max": 50,
+          "longTasks": []
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.700000000000728,
+          "max": 16.700000000000728,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 40,
+          "p95": 50,
+          "max": 66.60000000000036,
+          "longTasks": []
+        }
+      },
+      "p95": 33.400000000000546,
+      "max": 66.60000000000036,
+      "frames": 127,
+      "states": {
+        "left": {
+          "produced": 3034,
+          "start": 2867.2000000476837,
+          "firstChunk": 3040.7999999523163,
+          "end": 4810.100000143051,
+          "done": true
+        },
+        "right": {
+          "produced": 3035,
+          "start": 2491,
+          "firstChunk": 3040.2000000476837,
+          "end": 4810.100000143051,
+          "done": true
+        }
+      },
+      "overlapMs": 1769.3000001907349,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        16865,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    {
+      "name": "final-2",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "mathFirst": true,
+        "mathPaintAudit": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-53",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-53",
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56"
+      ],
+      "longTasks": [],
+      "start": 2953.2000000476837,
+      "before": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2786.5
+        },
+        "right": {
+          "produced": 0,
+          "start": 2435.7999999523163
+        }
+      },
+      "mathPaints": [
+        {
+          "time": 2973.696,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3007,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3023.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3040.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3057,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3073.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3107,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3123.6,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3140.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3157,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3173.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3190.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3207,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3223.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3240.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3257,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3273.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3290.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3307,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3323.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        }
+      ],
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "elapsed": 2378.5,
+      "phases": {
+        "streaming": {
+          "frames": 82,
+          "p95": 33.40000000000009,
+          "max": 50,
+          "longTasks": []
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.600000000000364,
+          "max": 16.600000000000364,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 42,
+          "p95": 16.800000000000182,
+          "max": 50,
+          "longTasks": []
+        }
+      },
+      "p95": 33.40000000000009,
+      "max": 50,
+      "frames": 125,
+      "states": {
+        "left": {
+          "produced": 3034,
+          "start": 2786.5,
+          "firstChunk": 2953.2999999523163,
+          "end": 4570.799999952316,
+          "done": true
+        },
+        "right": {
+          "produced": 3035,
+          "start": 2435.7999999523163,
+          "firstChunk": 2953.2999999523163,
+          "end": 4569.799999952316,
+          "done": true
+        }
+      },
+      "overlapMs": 1616.5,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        16865,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    {
+      "name": "final-3",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "mathFirst": true,
+        "mathPaintAudit": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        54
+      ],
+      "start": 2787.7999999523163,
+      "before": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2609.4000000953674
+        },
+        "right": {
+          "produced": 0,
+          "start": 2267.2000000476837
+        }
+      },
+      "mathPaints": [
+        {
+          "time": 2806.062,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2839.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2856.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2872.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2889.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2906.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2922.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2956.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2972.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2989.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3006,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3022.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3039.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3056,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3072.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3089.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3106.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3122.7,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3139.3,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 3156.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        }
+      ],
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "elapsed": 2469.7999999523163,
+      "phases": {
+        "streaming": {
+          "frames": 87,
+          "p95": 33.40000000000009,
+          "max": 50,
+          "longTasks": [
+            {
+              "start": 4409.099999904633,
+              "end": 4463.099999904633,
+              "duration": 54
+            }
+          ]
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.699999999999818,
+          "max": 16.699999999999818,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 41,
+          "p95": 33.30000000000018,
+          "max": 50.100000000000364,
+          "longTasks": []
+        }
+      },
+      "p95": 33.40000000000009,
+      "max": 50.100000000000364,
+      "frames": 129,
+      "states": {
+        "left": {
+          "produced": 3034,
+          "start": 2609.4000000953674,
+          "firstChunk": 2788.2999999523163,
+          "end": 4472.900000095367,
+          "done": true
+        },
+        "right": {
+          "produced": 3035,
+          "start": 2267.2000000476837,
+          "firstChunk": 2788.2000000476837,
+          "end": 4471.900000095367,
+          "done": true
+        }
+      },
+      "overlapMs": 1683.6000001430511,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17076,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    {
+      "name": "rich-clean-1",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 7,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-74",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-73",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-72",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-71",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-71",
+        "pane-audit-left-72",
+        "pane-audit-left-73",
+        "pane-audit-left-74"
+      ],
+      "longTasks": [
+        59
+      ],
+      "start": 2771.5,
+      "before": {
+        "scrollTop": 10981,
+        "id": "pane-audit-left-71",
+        "connected": true,
+        "offset": -53.828125
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2597.5
+        },
+        "right": {
+          "produced": 0,
+          "start": 2266.100000143051
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 10981,
+        "id": "pane-audit-left-71",
+        "connected": true,
+        "offset": -53.828125
+      },
+      "elapsed": 2274.4000000953674,
+      "phases": {
+        "streaming": {
+          "frames": 82,
+          "p95": 33.399999999999636,
+          "max": 50,
+          "longTasks": [
+            {
+              "start": 2859.7999999523163,
+              "end": 2918.7999999523163,
+              "duration": 59
+            }
+          ]
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.699999999999818,
+          "max": 16.699999999999818,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 39,
+          "p95": 16.800000000000182,
+          "max": 83.30000000000018,
+          "longTasks": []
+        }
+      },
+      "p95": 33.399999999999636,
+      "max": 83.30000000000018,
+      "frames": 122,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2597.5,
+          "firstChunk": 2771.7000000476837,
+          "end": 4317.200000047684,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2266.100000143051,
+          "firstChunk": 2771.7000000476837,
+          "end": 4316.200000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 1544.5,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        12563,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    {
+      "name": "rich-clean-2",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 7,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        57
+      ],
+      "start": 2838.4000000953674,
+      "before": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2674.2999999523163
+        },
+        "right": {
+          "produced": 0,
+          "start": 2324.2999999523163
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14675,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -127.40625
+      },
+      "elapsed": 2321.899999856949,
+      "phases": {
+        "streaming": {
+          "frames": 83,
+          "p95": 33.30000000000018,
+          "max": 49.90000000000009,
+          "longTasks": [
+            {
+              "start": 2940.9000000953674,
+              "end": 2997.9000000953674,
+              "duration": 57
+            }
+          ]
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.699999999999818,
+          "max": 16.699999999999818,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 42,
+          "p95": 16.800000000000182,
+          "max": 49.899999999999636,
+          "longTasks": []
+        }
+      },
+      "p95": 33.30000000000018,
+      "max": 49.90000000000009,
+      "frames": 126,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2674.2999999523163,
+          "firstChunk": 2839.2999999523163,
+          "end": 4384.400000095367,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2324.2999999523163,
+          "firstChunk": 2839.2000000476837,
+          "end": 4384.200000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 1544.9000000953674,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17076,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    },
+    {
+      "name": "prose-clean",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": false,
+        "synchronized": true,
+        "cpuRate": 4,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 10,
+        "pane-audit-left": 10
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-53",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-53",
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56"
+      ],
+      "longTasks": [],
+      "start": 3020,
+      "before": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2847.7999999523163
+        },
+        "right": {
+          "produced": 0,
+          "start": 2507.4000000953674
+        }
+      },
+      "after": {
+        "scrollTop": 14502,
+        "id": "pane-audit-left-53",
+        "connected": true,
+        "offset": -209.40625
+      },
+      "elapsed": 3603.5,
+      "phases": {
+        "streaming": {
+          "frames": 173,
+          "p95": 16.799999999999727,
+          "max": 16.800000000000182,
+          "longTasks": []
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.599999999999454,
+          "max": 16.599999999999454,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 37,
+          "p95": 16.800000000000182,
+          "max": 83.30000000000018,
+          "longTasks": []
+        }
+      },
+      "p95": 16.800000000000182,
+      "max": 83.30000000000018,
+      "frames": 211,
+      "states": {
+        "left": {
+          "produced": 10509,
+          "start": 2847.7999999523163,
+          "firstChunk": 3020.7000000476837,
+          "end": 5921.799999952316,
+          "done": true
+        },
+        "right": {
+          "produced": 10510,
+          "start": 2507.4000000953674,
+          "firstChunk": 3020.7000000476837,
+          "end": 5921.700000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 2901,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 0,
+      "rightCodeBlocks": 0,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        16865,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 0
+    },
+    {
+      "name": "normal",
+      "browser": "153.0.8010.12",
+      "options": {
+        "rich": true,
+        "mathFirst": true,
+        "mathPaintAudit": true,
+        "synchronized": true,
+        "cpuRate": 1,
+        "phaseAudit": true
+      },
+      "reads": {
+        "pane-audit-right": 6,
+        "pane-audit-left": 6
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-74",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-73",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-72",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-71",
+          "target": "<button data-v-d538d9d2=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-71",
+        "pane-audit-left-72",
+        "pane-audit-left-73",
+        "pane-audit-left-74"
+      ],
+      "longTasks": [],
+      "start": 2215.5999999046326,
+      "before": {
+        "scrollTop": 10981,
+        "id": "pane-audit-left-71",
+        "connected": true,
+        "offset": -53.828125
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2047.4000000953674
+        },
+        "right": {
+          "produced": 0,
+          "start": 1952.4000000953674
+        }
+      },
+      "mathPaints": [
+        {
+          "time": 2223.2,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2239.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2256.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2273.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2289.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2306.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2323.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2339.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2356.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2373.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2389.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2406.5,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2423.2,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2439.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2456.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2473.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2489.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2506.4,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2523.1,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        },
+        {
+          "time": 2539.8,
+          "styled": true,
+          "position": "absolute",
+          "height": 22
+        }
+      ],
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 10981,
+        "id": "pane-audit-left-71",
+        "connected": true,
+        "offset": -53.828125
+      },
+      "elapsed": 1473.2000000476837,
+      "phases": {
+        "streaming": {
+          "frames": 51,
+          "p95": 16.700000000000273,
+          "max": 16.800000000000182,
+          "longTasks": []
+        },
+        "boundary": {
+          "frames": 1,
+          "p95": 16.59999999999991,
+          "max": 16.59999999999991,
+          "longTasks": []
+        },
+        "afterTransport": {
+          "frames": 35,
+          "p95": 16.700000000000273,
+          "max": 16.800000000000182,
+          "longTasks": []
+        }
+      },
+      "p95": 16.700000000000273,
+      "max": 16.800000000000182,
+      "frames": 87,
+      "states": {
+        "left": {
+          "produced": 3034,
+          "start": 2047.4000000953674,
+          "firstChunk": 2215.5999999046326,
+          "end": 3088,
+          "done": true
+        },
+        "right": {
+          "produced": 3035,
+          "start": 1952.4000000953674,
+          "firstChunk": 2215.5999999046326,
+          "end": 3087.7999999523163,
+          "done": true
+        }
+      },
+      "overlapMs": 872.2000000476837,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        12563,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "projectionControlApplied": 0,
+      "bundleControlApplied": 0,
+      "highlightingWorkers": 1
+    }
+  ],
+  "emptyChat": {
+    "browser": "153.0.8010.12",
+    "url": "http://127.0.0.1:3147/chat",
+    "welcomeVisible": true,
+    "mathStyles": [],
+    "styleCount": 11
+  },
+  "regression": {
+    "baseline": {
+      "unstyled": 14,
+      "stylesheetDelayMs": 200,
+      "log": "/tmp/first-math-test-before.log"
+    },
+    "chromium": {
+      "delayedStyles": 1,
+      "frames": 3,
+      "unstyled": 0,
+      "frame": 70,
+      "heights": [
+        22,
+        22,
+        22
+      ]
+    },
+    "webkit": {
+      "delayedStyles": 1,
+      "frames": 4,
+      "unstyled": 0,
+      "frame": 72,
+      "heights": [
+        21.375885009765625,
+        21.375885009765625,
+        21.375885009765625,
+        21.375885009765625
+      ]
+    }
+  }
+}
