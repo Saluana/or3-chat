@@ -122,12 +122,19 @@ vi.mock('@vueuse/core', async (importOriginal) => ({
 }));
 
 // Mock child components
+const messageUpdates = vi.fn<(id: string) => void>();
 const LazyChatMessage = defineComponent({
     name: 'LazyChatMessage',
     props: {
         message: { type: Object, required: true },
         threadId: { type: String, default: '' },
+        retryDisabled: Boolean,
+        compactionAction: Object,
+        historyRetrievalAvailable: Boolean,
     },
+    // Match the message renderer's event boundary: listeners are not DOM attrs.
+    emits: ['retry', 'continue', 'branch', 'view-compaction-source', 'view-related-thread', 'edited', 'begin-edit', 'cancel-edit', 'save-edit'],
+    updated() { messageUpdates(this.message.id); },
     template: `
         <div class="test-message" :data-message-id="message.id">
             <span class="test-text">{{ message.text }}</span>
@@ -136,6 +143,7 @@ const LazyChatMessage = defineComponent({
             <span class="test-tools">{{ (message.toolCalls || []).map((call) => call.name + ':' + call.status).join('|') }}</span>
             <span class="test-hashes">{{ (message.file_hashes || []).join('|') }}</span>
             <span class="test-error">{{ message.error || '' }}</span>
+            <span class="test-compaction">{{ compactionAction?.blockedReason || '' }}</span>
         </div>
     `,
 });
@@ -538,6 +546,8 @@ describe('ChatContainer', () => {
             const instance = makeStreamingInstance();
             const wrapper = mountChatInstance(instance);
             await nextTick();
+            await flushPromises();
+            messageUpdates.mockClear();
 
             const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             const itemsBefore = toRaw(scroller.props('items') as unknown[]);
@@ -560,6 +570,18 @@ describe('ChatContainer', () => {
             expect(
                 scroller.props('rowContentRevision') as number
             ).toBe(revisionBefore + 3);
+            expect(messageUpdates.mock.calls.map(([id]) => id)).toEqual([
+                'tail-1', 'tail-1', 'tail-1',
+            ]);
+
+            // Stable rows must still react to edits and action availability.
+            instance.messages.value[1]!.text = 'Edited answer';
+            await nextTick();
+            expect(rowFor(wrapper, 'stable-2').find('.test-text').text()).toBe('Edited answer');
+            instance.loading.value = true;
+            await nextTick();
+            expect(wrapper.findAllComponents(LazyChatMessage).every((row) => row.props('retryDisabled'))).toBe(true);
+            expect(rowFor(wrapper, 'stable-2').find('.test-compaction').text()).toBe('Wait for the reply to finish.');
         });
 
         it('renders reasoning, pending, and same-length text transitions in place', async () => {

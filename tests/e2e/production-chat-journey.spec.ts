@@ -2500,12 +2500,19 @@ test.describe('production chat journey', () => {
 
         await expect(page.getByText('Partial response before stop.'))
             .toBeVisible();
-        await expect(page.getByRole('button', { name: 'Branch conversation', exact: true }).last()).toBeDisabled();
+        // Pending actions retain their layout but are hidden from accessibility.
+        // A visible-only query selects the preceding user's enabled button.
+        const branch = page.locator('.cm-assistant').last().getByRole('button', {
+            name: 'Branch conversation', exact: true, includeHidden: true,
+        });
+        await expect(branch).toBeHidden();
+        await expect(branch).toBeDisabled();
         await page.getByRole('button', { name: 'Stop generation' }).click();
         await expect(
             page.getByRole('button', { name: 'Send message' })
         ).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Branch conversation', exact: true }).last()).toBeEnabled();
+        await expect(branch).toBeVisible();
+        await expect(branch).toBeEnabled();
         await page.waitForTimeout(1_400);
         await expect(page.getByText(/Late response that must be ignored/))
             .toHaveCount(0);

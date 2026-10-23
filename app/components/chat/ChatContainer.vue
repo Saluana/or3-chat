@@ -784,8 +784,21 @@ const anchorCompactionReasons = computed(() => {
     }
     return reasons;
 });
+// These finite host-authored reasons share the same controller callback. Keep
+// their action objects stable for this pane's lifetime: a fresh object would
+// make every mounted message render again on each streaming/scroll revision.
+const compactionActions = new Map<string | undefined, {
+    start: typeof compactThread;
+    blockedReason: string | undefined;
+}>();
 function compactionActionFor(message: UiChatMessage) {
-    return { start: compactThread, blockedReason: anchorCompactionReasons.value.get(message.id) ?? compaction.blockedReason.value };
+    const blockedReason = anchorCompactionReasons.value.get(message.id) ?? compaction.blockedReason.value;
+    let action = compactionActions.get(blockedReason);
+    if (!action) {
+        action = { start: compactThread, blockedReason };
+        compactionActions.set(blockedReason, action);
+    }
+    return action;
 }
 const threadCompactionBlockedReason = computed(() => {
     const anchor = [...allMessages.value].reverse().find((row) => localCompactionIds.value?.has(row.id));
