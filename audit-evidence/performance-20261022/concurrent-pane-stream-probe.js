@@ -4,6 +4,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
     const p=await context.newPage();p.setDefaultTimeout(20000);
     let cdp;
     let highlightControlApplied=0;
+    let projectionControlApplied=0;
     const traceEvents=[];
     try {
         await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
@@ -14,6 +15,13 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             const {needle,replacement}=options.mainThreadHighlightControl;
             if(body.split(needle).length!==2)throw new Error('Unmatched highlighting adapter control');
             highlightControlApplied++;
+            await route.fulfill({response,body:body.replace(needle,replacement)});
+        });
+        if(options.uncachedProjectionControl)await p.route(`**/_nuxt/${options.uncachedProjectionControl.bundle}`,async route=>{
+            const response=await route.fetch(),body=await response.text();
+            const {needle,replacement}=options.uncachedProjectionControl;
+            if(body.split(needle).length!==2)throw new Error('Unmatched projection control');
+            projectionControlApplied++;
             await route.fulfill({response,body:body.replace(needle,replacement)});
         });
         await context.addCookies([
@@ -76,7 +84,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         const prose=Array.from({length:50},(_,i)=>`Paragraph ${i}: **Both conversations are streaming** while one reader stays in settled history. `+'More words keep the response growing. '.repeat(3)+'\n\n').join('');
         const rich=Array.from({length:12},(_,i)=>`### Example ${i}\n\nA TypeScript sample and inline math $x^2 + y^2$.\n\n\`\`\`ts\nexport function calculate${i}(values: number[]): number {\n  return values.map(value => value * 2).reduce((sum, value) => sum + value, 0);\n}\n\`\`\`\n\n$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n`).join('');
         const responses=Object.fromEntries(['left','right'].map(side=>[side,(options.rich?rich:prose)+`CONCURRENT-${side.toUpperCase()}-END`]));
-        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit})=>{
+        await p.evaluate(({responses,dbCounts,synchronized,observeRich,shellAudit,tailAudit,scrollControlAudit})=>{
             const roots=[...document.querySelectorAll('.pane-container > [role="tabpanel"]')];
             const scroll=roots[0].querySelector('.chat-message-list');
             const states={left:{produced:0},right:{produced:0}};
@@ -98,11 +106,25 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                         // render effect to diagnostic-only accesses in this hook.
                         const raw=vm.props?.__v_raw??vm.props??{};
                         let previous={...raw},previousVNode={...vm.vnode.props};
+                        const messageSnapshot=()=>({...((raw.message?.__v_raw??raw.message)??{})});
+                        let previousMessage=tailAudit&&name==='ChatMessage'?messageSnapshot():undefined;
                         const row={uid:vm.uid,name,pane:paneFor(vm.vnode.el),inner:name==='AsyncComponentWrapper'?vm.subTree?.type?.name||vm.subTree?.type?.__name:undefined,
                             messageId:vm.vnode.props?.message?.id,streaming:0,afterTransport:0,noChangedProps:0,props:{},vnodeProps:{}};
+                        if(previousMessage)row.messageAudit={sameFields:{streaming:0,afterTransport:0},fields:{},samples:[]};
                         instances.push(row);
                         const update=()=>{
                             row[phase()]++;
+                            if(row.messageAudit){
+                                const next=messageSnapshot();
+                                const keys=[...new Set([...Object.keys(previousMessage),...Object.keys(next)])]
+                                    .filter(key=>!Object.is(previousMessage[key],next[key])||Object.hasOwn(previousMessage,key)!==Object.hasOwn(next,key));
+                                if(!keys.length)row.messageAudit.sameFields[phase()]++;
+                                for(const key of keys)row.messageAudit.fields[key]=(row.messageAudit.fields[key]??0)+1;
+                                if(row.messageAudit.samples.length<12)row.messageAudit.samples.push({phase:phase(),keys,
+                                    beforeTextLength:previousMessage.text?.length,afterTextLength:next.text?.length,
+                                    beforeReasoningLength:previousMessage.reasoning_text?.length??0,afterReasoningLength:next.reasoning_text?.length??0});
+                                previousMessage=next;
+                            }
                             let changed=false;
                             for(const key of new Set([...Object.keys(previous),...Object.keys(raw)]))if(!Object.is(previous[key],raw[key])){row.props[key]=(row.props[key]??0)+1;changed=true;}
                             if(!changed)row.noChangedProps++;
@@ -138,7 +160,8 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 return ()=>{
                     cleanups.forEach(fn=>fn());
                     const grouped={};for(const row of instances){const group=grouped[row.name]??={instances:0,streaming:0,afterTransport:0,noChangedProps:0,props:{},vnodeProps:{}};group.instances++;group.streaming+=row.streaming;group.afterTransport+=row.afterTransport;group.noChangedProps+=row.noChangedProps;for(const field of ['props','vnodeProps'])for(const [key,n]of Object.entries(row[field]))group[field][key]=(group[field][key]??0)+n;}
-                    return {initialInstances:instances.length,grouped,instances:instances.filter(row=>row.streaming||row.afterTransport).sort((a,b)=>b.streaming-a.streaming).slice(0,60),dom,editors};
+                    return {initialInstances:instances.length,grouped,instances:instances.filter(row=>row.streaming||row.afterTransport).sort((a,b)=>b.streaming-a.streaming).slice(0,60),dom,editors,
+                        ...(tailAudit?{messageAudit:instances.filter(row=>row.messageAudit).map(row=>({id:row.messageId,pane:row.pane,streaming:row.streaming,afterTransport:row.afterTransport,...row.messageAudit}))}:{} )};
                 };
             };
             const originalFetch=window.fetch;
@@ -170,9 +193,33 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 const anchorState=()=>({scrollTop:scroll.scrollTop,id:anchor.getAttribute('data-msg-id'),connected:anchor.isConnected,offset:anchor.getBoundingClientRect().top-scroll.getBoundingClientRect().top});
                 const metrics={reads:{},settledMutations:0,mutationExamples:[],visibleIds:visible.map(el=>el.getAttribute('data-msg-id')),gaps:[],longTasks:[],start:performance.now(),before:anchorState(),producedAtStart:structuredClone(states)};
                 const finishShell=shellAudit?observeShell():undefined;
+                const scrollControls=scrollControlAudit?roots.map(root=>root.querySelector('.chat-scroll-to-bottom')?.parentElement):[];
+                if(scrollControls.some(el=>!el))throw new Error('Missing scroll control');
+                const scrollApis=[];
+                if(scrollControlAudit){
+                    const targets=roots.map(root=>root.querySelector('.chat-message-list')),seen=new Set();
+                    const visit=vnode=>{if(!vnode||typeof vnode!=='object'||seen.has(vnode))return;seen.add(vnode);
+                        if(vnode.component){const vm=vnode.component,index=targets.indexOf(vm.vnode.el);if(index>=0&&vm.exposed?.isAtBottom)scrollApis[index]=vm.exposed.isAtBottom;visit(vm.subTree);}
+                        if(vnode.suspense)visit(vnode.suspense.activeBranch);if(Array.isArray(vnode.children))vnode.children.forEach(visit);};
+                    visit(document.querySelector('#__nuxt')?._vnode);
+                    if(targets.some((_,index)=>!scrollApis[index]))throw new Error('Missing scroll API');
+                }
+                const scrollObservers=scrollControls.map((element)=>{
+                    const record={frames:0,visibleFrames:0,maxOpacity:0,styles:[],visibleSamples:[]};
+                    (metrics.scrollControls??=[]).push(record);
+                    const observer=new MutationObserver(records=>{for(const mutation of records)if(record.styles.length<100)record.styles.push({time:performance.now(),before:mutation.oldValue,after:element.getAttribute('style')});});
+                    observer.observe(element,{attributes:true,attributeFilter:['style'],attributeOldValue:true});
+                    return observer;
+                });
                 const richNodes=[];let richObserver;
                 let frame,previous;
                 const tick=t=>{if(previous!==undefined)metrics.gaps.push(t-previous);previous=t;
+                    scrollControls.forEach((element,index)=>{
+                        const style=getComputedStyle(element),record=metrics.scrollControls[index];
+                        const opacity=style.display==='none'?0:Number(style.opacity);
+                        record.frames++;record.maxOpacity=Math.max(record.maxOpacity,opacity);
+                        if(opacity>0.001){record.visibleFrames++;if(record.visibleSamples.length<12)record.visibleSamples.push({time:t,opacity,inline:element.getAttribute('style'),atBottom:scrollApis[index].value});}
+                    });
                     if(observeRich&&!richObserver&&states.right.produced>=512){
                         const rich=roots[1].querySelector('h3')?.closest('.streamdown-vue');
                         if(rich){richNodes.push(...['h3','pre','.katex'].map(selector=>rich.querySelector(selector)).filter(Boolean));metrics.richMutations={count:0,examples:[]};richObserver=new MutationObserver(records=>{metrics.richMutations.count+=records.length;for(const record of records){if(metrics.richMutations.examples.length<10)metrics.richMutations.examples.push({type:record.type,attribute:record.attributeName,target:record.target.nodeName,afterTransportDone:Boolean(states.right.done)});}});for(const el of richNodes)richObserver.observe(el,{subtree:true,attributes:true,childList:true,characterData:true});}
@@ -193,6 +240,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 }
                 window.__finishConcurrent=()=>{
                     cancelAnimationFrame(frame);tasks.disconnect();observer.disconnect();window.fetch=originalFetch;
+                    scrollObservers.forEach(observer=>observer.disconnect());
                     richObserver?.disconnect();if(richObserver)metrics.richNodesRetained=richNodes.map(el=>({tag:el.tagName,connected:el.isConnected}));
                     if(finishShell)metrics.shell=finishShell();
                     for(const [method,original] of Object.entries(originals))IDBIndex.prototype[method]=original;
@@ -202,7 +250,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 };
                 releaseStreams?.();
             };
-        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit??false});
+        },{responses,dbCounts:options.dbCounts??true,synchronized:options.synchronized??false,observeRich:options.rich??false,shellAudit:options.shellAudit||options.tailAudit||false,tailAudit:options.tailAudit??false,scrollControlAudit:options.scrollControlAudit??false});
         cdp=await context.newCDPSession(p);await cdp.send('Emulation.setCPUThrottlingRate',{rate:options.cpuRate??4});
         await panes.nth(1).getByRole('textbox',{name:'Message input'}).fill('Measure concurrent right.');
         await panes.nth(1).getByRole('button',{name:'Send message',exact:true}).click();
@@ -260,6 +308,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         await panes.first().getByText('CONCURRENT-LEFT-END',{exact:false}).waitFor();
         result.leftRevealed=true;
         result.highlightControlApplied=highlightControlApplied;
+        result.projectionControlApplied=projectionControlApplied;
         result.highlightingWorkers=p.workers().filter(worker=>worker.url().includes('markdown-highlight.worker')).length;
         if(options.screenshot)await p.screenshot({path:options.screenshot,animations:'disabled'});
         return result;

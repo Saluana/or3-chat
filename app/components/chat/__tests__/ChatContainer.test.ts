@@ -435,6 +435,19 @@ describe('ChatContainer', () => {
         let buttonContainer = wrapper.find('.absolute.bottom-full');
         expect(buttonContainer.isVisible()).toBe(false);
 
+        // Measured DOM height can briefly lead the virtual height during a
+        // growing response. Honor the scroller's bottom state instead of flashing.
+        scroller.vm.$emit('scroll', {
+            scrollTop: 994,
+            scrollHeight: 1800,
+            clientHeight: 800,
+            isAtBottom: true,
+        });
+        await nextTick();
+        buttonContainer = wrapper.find('.absolute.bottom-full');
+        expect((buttonContainer.element as HTMLElement).style.display).toBe('none');
+        expect((buttonContainer.element as HTMLElement).style.opacity).toBe('0');
+
         // Case: Not scrollable (scrollHeight <= clientHeight)
         scroller.vm.$emit('scroll', {
             scrollTop: 0,
@@ -573,6 +586,11 @@ describe('ChatContainer', () => {
             const revisionBefore = scroller.props('rowContentRevision') as number;
 
             for (const text of ['Hel', 'Hello', 'Hello world']) {
+                // Intake updates the persistence snapshot before the display
+                // accumulator publishes its batched frame. Render each text once.
+                instance.tailAssistant.value!.text = text;
+                await nextTick();
+                await nextTick();
                 instance.streamState.text = text;
                 await nextTick();
                 await nextTick();
@@ -669,9 +687,10 @@ describe('ChatContainer', () => {
             const itemsBefore = toRaw(scroller.props('items') as unknown[]);
             const rowElement = rowFor(wrapper, 'tail-1').element;
 
-            instance.tailAssistant.value!.toolCalls = [
+            const toolCalls = reactive([
                 { name: 'search', status: 'loading' },
-            ];
+            ]);
+            instance.tailAssistant.value!.toolCalls = toolCalls;
             await nextTick();
             await nextTick();
             expect(rowFor(wrapper, 'tail-1').find('.test-tools').text()).toBe(
@@ -684,6 +703,16 @@ describe('ChatContainer', () => {
             expect(rowFor(wrapper, 'tail-1').find('.test-hashes').text()).toBe(
                 'hash-a'
             );
+
+            // Reusing a projection must preserve its nested reactive metadata,
+            // and removing metadata must not retain the prior snapshot's field.
+            toolCalls[0]!.status = 'complete';
+            await nextTick();
+            expect(rowFor(wrapper, 'tail-1').find('.test-tools').text()).toBe('search:complete');
+            delete instance.tailAssistant.value!.toolCalls;
+            await nextTick();
+            await nextTick();
+            expect(rowFor(wrapper, 'tail-1').find('.test-tools').text()).toBe('');
 
             expect(toRaw(scroller.props('items') as unknown[])).toBe(
                 itemsBefore
