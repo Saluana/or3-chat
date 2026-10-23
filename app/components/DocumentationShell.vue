@@ -206,6 +206,7 @@
 
                             <StreamMarkdown
                                 :content="displayContent"
+                                :components="streamMarkdownComponents"
                                 class="prose prose-pre:font-mono or3-prose docs-prose max-w-none"
                                 :allowed-link-prefixes="[
                                     'https://',
@@ -300,7 +301,7 @@ import {
     h,
 } from 'vue';
 import type { PropType } from 'vue';
-import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
+import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import {
     useNuxtApp,
     useRoute,
@@ -658,7 +659,6 @@ const docsSearchShortcut = ref('⌘K');
 
 onMounted(async () => {
     docsSearchShortcut.value = formatShortcut('k');
-    useShikiHighlighter();
 
     if (!docmapData.value) {
         try {

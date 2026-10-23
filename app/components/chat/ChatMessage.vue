@@ -306,6 +306,7 @@
                         >
                             <StreamMarkdown
                                 v-if="part.type === 'text'"
+                                :components="streamMarkdownComponents"
                                 :content="processAssistantMarkdown(part.text)"
                                 :shiki-theme="currentShikiTheme"
                                 :class="[
@@ -334,6 +335,7 @@
                     <StreamMarkdown
                         :key="props.message.id"
                         v-else
+                        :components="streamMarkdownComponents"
                         :content="processedAssistantMarkdown"
                         :shiki-theme="currentShikiTheme"
                         :class="[streamMdClasses, 'cm-markdown-assistant']"
@@ -608,7 +610,7 @@ import type {
     UiChatMessagePart,
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
-import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
+import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -1130,10 +1132,6 @@ const hasMathContent = computed(() => {
     // The renderer also typesets `\[…\]` display math (normalized to `$$`).
     return /\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\[[\s\S]*?\\\]/.test(text);
 });
-const hasCodeContent = computed(() => {
-    const text = props.message.text || '';
-    return /```[\s\S]*?```|`[^`\n]+`/.test(text);
-});
 
 // Load KaTeX CSS during idle time only if message has math
 const loadKaTeXOnIdle = () => {
@@ -1153,30 +1151,9 @@ const loadKaTeXOnIdle = () => {
     });
 };
 
-// Load Shiki highlighter during idle time only if message has code
-const loadShikiOnIdle = () => {
-    if (props.message.role !== 'assistant' || !hasCodeContent.value) return;
-    const idleLoader = (callback: () => void) => {
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(callback, { timeout: 2000 });
-        } else {
-            setTimeout(callback, 0);
-        }
-    };
-    idleLoader(() => {
-        try {
-            useShikiHighlighter();
-        } catch (e: unknown) {
-            if (import.meta.dev)
-                console.warn('[ChatMessage] Shiki load error:', e);
-        }
-    });
-};
-
 onMounted(() => {
     rafHydrate.resume();
     loadKaTeXOnIdle();
-    loadShikiOnIdle();
 });
 // Streamed replies mount empty; load KaTeX once math actually arrives.
 watch(hasMathContent, (hasMath) => {

@@ -91,7 +91,8 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [retained project buttons and full-list endpoints](PROJECT-ROW-HANDLERS.md), and
 [per-conversation history observers and concurrent panes](PANE-HISTORY.md), and
 [completed math DOM stability](RICH-MATH-CLASSES.md), and
-[mobile More stacking and stream style scope](MORE-SHEET-STYLE.md), with separate raw production
+[mobile More stacking and stream style scope](MORE-SHEET-STYLE.md), and
+[owned syntax highlighting workers](COLD-HIGHLIGHTING.md), with separate raw production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own

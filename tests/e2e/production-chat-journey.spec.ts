@@ -2406,6 +2406,9 @@ test.describe('production chat journey', () => {
                 await openChat(page);
                 await send(page, 'journey:responsive');
                 await expect(page.getByText('End of layout sample.')).toBeVisible();
+                await expect(page.locator('.cm-markdown-assistant pre.shiki')).toHaveCount(1);
+                const highlightingWorkers = () => page.workers().filter(worker => worker.url().includes('markdown-highlight.worker'));
+                await expect.poll(() => highlightingWorkers().length).toBe(1);
                 await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
                 await page.mouse.move(0, 0);
                 for (const button of await page.getByRole('button', {
@@ -2421,7 +2424,9 @@ test.describe('production chat journey', () => {
                 await edit.click();
                 const draft = page.locator('.cm-editor-assistant [contenteditable="true"]');
                 await expect(draft).toBeVisible();
+                await expect.poll(() => highlightingWorkers().length).toBe(0);
                 await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+                await expect(page.locator('.cm-markdown-assistant pre.shiki')).toHaveCount(1);
                 for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 1920, height: 1080 }]) {
                     await page.setViewportSize(viewport);
                     expect(await page.evaluate(() => document.documentElement.scrollWidth))
@@ -2438,12 +2443,82 @@ test.describe('production chat journey', () => {
                 expect(await page.evaluate(() => (window as unknown as { __responsiveErrors: string[] }).__responsiveErrors)).toEqual([]);
                 await page.reload();
                 await expect(page.getByText('End of layout sample.')).toBeVisible();
+                await expect(page.locator('.cm-markdown-assistant pre.shiki')).toHaveCount(1);
                 expect(await page.evaluate(() => (window as unknown as { __responsiveErrors: string[] }).__responsiveErrors)).toEqual([]);
             } finally {
                 await context.close();
             }
         });
     }
+
+    test('syntax worker preserves language fallbacks and code actions', async ({ page, browserName }, info) => {
+        let remoteGrammars = 0;
+        // Playwright WebKit does not route this worker's dynamic module fetch.
+        // Exercise remote loading only where its response can be controlled;
+        // every browser still covers local aliases, escaping and code actions.
+        const includeRemote = browserName === 'chromium';
+        await openChat(page);
+        if (includeRemote) await page.context().route('https://esm.sh/@shikijs/langs@4.4.3/es2022/cpp.mjs', route => {
+            remoteGrammars++;
+            return route.fulfill({ contentType: 'application/javascript', body: 'export default [{name:"cpp",scopeName:"source.cpp",patterns:[{name:"keyword.control.cpp",match:"return"}]}];' });
+        });
+        const response = [
+            '```ts\nconst answer = 42;\n```',
+            '```py\nprint("answer")\n```',
+            ...(includeRemote ? ['```cpp\nreturn 42;\n```'] : []),
+            '```unknown-language\n<script>literal</script>\n```',
+        ].join('\n\n');
+        await page.evaluate((content) => {
+            const original = window.fetch;
+            window.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (!url.includes('/api/__or3-e2e/chat/completions')) return original(input, init);
+                return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: null }] })}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+            };
+            // Capture the clipboard boundary without changing the user's clipboard.
+            Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+                writeText: async (text: string) => { Object.assign(window, { __copiedCode: text }); },
+            } });
+        }, response);
+        await send(page, 'Mixed syntax sample');
+        const blocks = page.locator('.cm-markdown-assistant [data-streamdown="code-block"]');
+        await expect(blocks).toHaveCount(includeRemote ? 4 : 3);
+        await expect(page.locator('.cm-markdown-assistant pre.shiki')).toHaveCount(includeRemote ? 3 : 2);
+        expect(remoteGrammars).toBe(includeRemote ? 1 : 0);
+        await expect(blocks.nth(1).locator('pre code')).toContainText('print("answer")');
+        if (includeRemote) await expect(blocks.nth(2).locator('pre code')).toContainText('return 42;');
+        await expect(blocks.last().locator('pre code')).toContainText('<script>literal</script>');
+        await expect(blocks.last().locator('script')).toHaveCount(0);
+        await blocks.first().getByRole('button', { name: 'Copy', exact: true }).click();
+        await expect.poll(() => page.evaluate(() => (Reflect.get(window, '__copiedCode') as string | undefined)?.trimEnd())).toBe('const answer = 42;');
+        await expect(blocks.first().getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+        await waitForDurableReply(page, response);
+        await info.attach('mixed-syntax', { contentType: 'application/json', body: JSON.stringify({ highlighted: includeRemote ? 3 : 2, plain: 1, remoteGrammars, remoteCovered: includeRemote, copied: 'const answer = 42;' }) });
+    });
+
+    test('unavailable syntax worker keeps code readable and downloadable', async ({ page }, info) => {
+        let blockedWorkers = 0;
+        await page.route('**/*markdown-highlight.worker*.js', route => {
+            blockedWorkers++;
+            return route.abort('blockedbyclient');
+        });
+        await openChat(page);
+        await send(page, 'journey:responsive');
+        await expect(page.getByText('End of layout sample.')).toBeVisible();
+        await expect.poll(() => blockedWorkers).toBe(1);
+        const block = page.locator('.cm-markdown-assistant [data-streamdown="code-block"]');
+        await expect(block.locator('pre.shiki')).toHaveCount(0);
+        const expected = 'const longLine = "' + 'long-code-value'.repeat(30) + '";';
+        await expect(block.locator('[data-streamdown="code"]')).toContainText(expected);
+        const download = page.waitForEvent('download');
+        await block.getByRole('button', { name: 'Download', exact: true }).click();
+        const received = await download;
+        const path = info.outputPath('unhighlighted-code.ts');
+        await received.saveAs(path);
+        const fs = await import('node:fs/promises');
+        expect((await fs.readFile(path, 'utf8')).trimEnd()).toBe(expected);
+        await info.attach('unhighlighted-code', { path, contentType: 'text/plain' });
+    });
 
     test('can stop a continuation without losing the existing partial reply', async ({ page }) => {
         await openChat(page);

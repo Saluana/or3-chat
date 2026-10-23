@@ -105,6 +105,7 @@
                             </div>
                             <StreamMarkdown
                                 v-else-if="msg.content"
+                                :components="streamMarkdownComponents"
                                 :content="msg.content"
                                 :shiki-theme="currentShikiTheme"
                                 :class="[
@@ -193,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { StreamMarkdown } from '~/utils/stream-markdown';
+import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';

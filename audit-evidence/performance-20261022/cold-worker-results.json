@@ -1,0 +1,1011 @@
+{
+  "method": "Alternate fresh local-only Chromium contexts, same production build, two rich streams with 120 history messages per pane. Main-thread control overrides only the built WorkerCodeBlock highlight prop to undefined, activating the original renderer's path. CDP rate 4 affects main thread; worker CPU is not throttled. No test runners/builds/typechecks active.",
+  "control": {
+    "bundle": "BhvBRYfE.js",
+    "needle": "highlight:i}",
+    "replacement": "highlight:void 0}"
+  },
+  "baselineCommit": "09095004",
+  "fourX": [
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          66,
+          206,
+          55,
+          51,
+          60
+        ],
+        "start": 2859.4000000953674,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2693.100000143051
+          },
+          "right": {
+            "produced": 0,
+            "start": 2326.7000000476837
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2530.5,
+        "p95": 26.700000000000273,
+        "max": 267.5,
+        "frames": 178,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2693.100000143051,
+            "firstChunk": 2859.600000143051,
+            "end": 4575.300000190735,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2326.7000000476837,
+            "firstChunk": 2859.600000143051,
+            "end": 4574.600000143051,
+            "done": true
+          }
+        },
+        "overlapMs": 1715,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 1,
+        "highlightingWorkers": 0
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          53,
+          63,
+          57
+        ],
+        "start": 2914.100000143051,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2749.600000143051
+          },
+          "right": {
+            "produced": 0,
+            "start": 2340.2000000476837
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2509.7999999523163,
+        "p95": 34.69999999999982,
+        "max": 76.5,
+        "frames": 187,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2749.600000143051,
+            "firstChunk": 2914.2000000476837,
+            "end": 4550.299999952316,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2340.2000000476837,
+            "firstChunk": 2914.100000143051,
+            "end": 4533.400000095367,
+            "done": true
+          }
+        },
+        "overlapMs": 1619.2000000476837,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 0,
+        "highlightingWorkers": 1
+      }
+    },
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          214,
+          59,
+          59,
+          65
+        ],
+        "start": 2870.5999999046326,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2700.7999999523163
+          },
+          "right": {
+            "produced": 0,
+            "start": 2308.5999999046326
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2600.2000000476837,
+        "p95": 32.5,
+        "max": 216.0999999999999,
+        "frames": 182,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2700.7999999523163,
+            "firstChunk": 2871.2000000476837,
+            "end": 4607.099999904633,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2308.5999999046326,
+            "firstChunk": 2871,
+            "end": 4592.700000047684,
+            "done": true
+          }
+        },
+        "overlapMs": 1721.5,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 1,
+        "highlightingWorkers": 0
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          61,
+          51,
+          51,
+          68
+        ],
+        "start": 2833.5,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2669.699999809265
+          },
+          "right": {
+            "produced": 0,
+            "start": 2318.7999999523163
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2493.7999999523163,
+        "p95": 32.5,
+        "max": 141.5,
+        "frames": 184,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2669.699999809265,
+            "firstChunk": 2834.2999999523163,
+            "end": 4484.099999904633,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2318.7999999523163,
+            "firstChunk": 2834.2999999523163,
+            "end": 4468.799999952316,
+            "done": true
+          }
+        },
+        "overlapMs": 1634.5,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 0,
+        "highlightingWorkers": 1
+      }
+    },
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          69,
+          204,
+          54,
+          52,
+          69
+        ],
+        "start": 2820.7000000476837,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2653.5
+          },
+          "right": {
+            "produced": 0,
+            "start": 2283.899999856949
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2599,
+        "p95": 32.20000000000027,
+        "max": 208.70000000000027,
+        "frames": 174,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2653.5,
+            "firstChunk": 2821.0999999046326,
+            "end": 4576.799999952316,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2283.899999856949,
+            "firstChunk": 2820.7000000476837,
+            "end": 4575.899999856949,
+            "done": true
+          }
+        },
+        "overlapMs": 1754.7999999523163,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 1,
+        "highlightingWorkers": 0
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          61,
+          51,
+          61
+        ],
+        "start": 2845.4000000953674,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2679.2999999523163
+          },
+          "right": {
+            "produced": 0,
+            "start": 2323.7999999523163
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2513,
+        "p95": 32.19999999999982,
+        "max": 65.80000000000018,
+        "frames": 191,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2679.2999999523163,
+            "firstChunk": 2846.2000000476837,
+            "end": 4505.200000047684,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2323.7999999523163,
+            "firstChunk": 2845.5,
+            "end": 4467.299999952316,
+            "done": true
+          }
+        },
+        "overlapMs": 1621.0999999046326,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightHighlightedBlocks": 12,
+        "rightCodeBlocks": 12,
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true,
+        "highlightControlApplied": 0,
+        "highlightingWorkers": 1
+      }
+    }
+  ],
+  "normal": {
+    "baseline": {
+      "reads": {},
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        50
+      ],
+      "start": 2152.100000143051,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 1988.7000000476837
+        },
+        "right": {
+          "produced": 0,
+          "start": 1898.1000001430511
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 1418.0999999046326,
+      "p95": 9.700000000000273,
+      "max": 51.5,
+      "frames": 162,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 1988.7000000476837,
+          "firstChunk": 2152.2000000476837,
+          "end": 3028.600000143051,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 1898.1000001430511,
+          "firstChunk": 2152.2000000476837,
+          "end": 2997.2000000476837,
+          "done": true
+        }
+      },
+      "overlapMs": 845,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 1,
+      "highlightingWorkers": 0
+    },
+    "after": {
+      "reads": {},
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-75093203=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [],
+      "start": 2138,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 1976.2999999523163
+        },
+        "right": {
+          "produced": 0,
+          "start": 1888.1999998092651
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 1405.0999999046326,
+      "p95": 9.400000000000091,
+      "max": 16.59999999999991,
+      "frames": 166,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 1976.2999999523163,
+          "firstChunk": 2138.0999999046326,
+          "end": 2938.199999809265,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 1888.1999998092651,
+          "firstChunk": 2138.0999999046326,
+          "end": 2937.899999856949,
+          "done": true
+        }
+      },
+      "overlapMs": 799.7999999523163,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightHighlightedBlocks": 12,
+      "rightCodeBlocks": 12,
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true,
+      "highlightControlApplied": 0,
+      "highlightingWorkers": 1
+    }
+  }
+}
