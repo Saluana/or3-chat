@@ -11,6 +11,7 @@ import { handleRestartRequest } from '../server/restarts/http';
 import { probeDevelopmentReadiness } from './readiness';
 
 type Options = {
+    signal?: AbortSignal;
     root: string; runtime: string; args: string[]; origin: string; envFile: string;
     environment(): Promise<NodeJS.ProcessEnv>;
     prerequisites?(): void;
@@ -85,8 +86,10 @@ async function superviseOwnedDevelopment(options: Options, socketDirectory: stri
         child = null;
     }
     async function launch() {
+        options.signal?.throwIfAborted();
         if (stopping) throw new RestartError('supervisor_stopping');
         const environment = await options.environment();
+        options.signal?.throwIfAborted();
         const args = [...options.args];
         // Nuxt must not independently watch/reload the authoritative file.
         const dotenv = args.indexOf('--dotenv');
@@ -146,9 +149,14 @@ async function superviseOwnedDevelopment(options: Options, socketDirectory: stri
     const shutdown = () => {
         if (stopping) return;
         stopping = true;
-        void stopChild().finally(() => finish(0));
+        void stopChild().then(() => finish(0), error => {
+            console.error('[shutdown] Unable to stop development child:', error);
+            finish(1);
+        });
     };
-    process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
+    options.signal?.addEventListener('abort', shutdown);
+    if (options.signal?.aborted) shutdown();
     try {
         await launch();
         watcher = watch(dirname(options.envFile), (_event, name) => {
@@ -165,6 +173,7 @@ async function superviseOwnedDevelopment(options: Options, socketDirectory: stri
         return await finished;
     } finally {
         stopping = true; clearInterval(probe); clearTimeout(debounce); watcher?.close(); controller.dispose();
+        options.signal?.removeEventListener('abort', shutdown);
         process.off('SIGINT', shutdown); process.off('SIGTERM', shutdown);
         await stopChild();
         server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
