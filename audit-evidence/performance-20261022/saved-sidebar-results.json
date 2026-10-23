@@ -1,0 +1,899 @@
+{
+  "baselineCommit": "1134d8b4",
+  "environment": {
+    "runtime": "production",
+    "browser": "Chromium",
+    "cpuRate": 1,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "dpr": 1,
+    "externalRequests": "blocked",
+    "appScripts": "held until first geometry capture"
+  },
+  "results": [
+    {
+      "theme": "blank",
+      "prefs": {
+        "name": "default"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 720,
+          "top": 0,
+          "right": 288,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 288,
+          "y": 0,
+          "width": 992,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 288
+        },
+        "zoom": "0.9"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 720,
+          "top": 0,
+          "right": 288,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 288,
+          "y": 0,
+          "width": 992,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 288
+        },
+        "zoom": "0.9"
+      },
+      "frames": [
+        {
+          "time": 46.39999985694885,
+          "width": 288,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 457.89999985694885,
+          "duration": 0,
+          "navigationId": 8573,
+          "value": 0.0002181098759174347,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 0,
+                "y": 658.8046875,
+                "width": 57.09375,
+                "height": 61.1953125,
+                "top": 658.8046875,
+                "right": 57.09375,
+                "bottom": 720,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 615.609375,
+                "width": 57.09375,
+                "height": 104.390625,
+                "top": 615.609375,
+                "right": 57.09375,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 504.59999990463257,
+          "duration": 0,
+          "navigationId": 8573,
+          "value": 0.0032568912506103515,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 288,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 359.984375,
+                "bottom": 33.9453125,
+                "left": 288
+              },
+              "currentRect": {
+                "x": 1208.015625,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 1280,
+                "bottom": 33.9453125,
+                "left": 1208.015625
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "blank",
+      "prefs": {
+        "name": "wide",
+        "width": "480"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 432,
+          "height": 720,
+          "top": 0,
+          "right": 432,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 432,
+          "y": 0,
+          "width": 848,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 432
+        },
+        "zoom": "0.9"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 432,
+          "height": 720,
+          "top": 0,
+          "right": 432,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 432,
+          "y": 0,
+          "width": 848,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 432
+        },
+        "zoom": "0.9"
+      },
+      "frames": [
+        {
+          "time": 45.39999985694885,
+          "width": 432,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 451.7000000476837,
+          "duration": 0,
+          "navigationId": 9009,
+          "value": 0.0002181098759174347,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 0,
+                "y": 658.8046875,
+                "width": 57.09375,
+                "height": 61.1953125,
+                "top": 658.8046875,
+                "right": 57.09375,
+                "bottom": 720,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 615.609375,
+                "width": 57.09375,
+                "height": 104.390625,
+                "top": 615.609375,
+                "right": 57.09375,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 499.7999999523163,
+          "duration": 0,
+          "navigationId": 9009,
+          "value": 0.0027471256256103513,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 432,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 503.984375,
+                "bottom": 33.9453125,
+                "left": 432
+              },
+              "currentRect": {
+                "x": 1208.015625,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 1280,
+                "bottom": 33.9453125,
+                "left": 1208.015625
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "blank",
+      "prefs": {
+        "name": "collapsed",
+        "width": "400",
+        "collapsed": "true"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 57.59375,
+          "height": 720,
+          "top": 0,
+          "right": 57.59375,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 57.59375,
+          "y": 0,
+          "width": 1222.40625,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 57.59375
+        },
+        "zoom": "0.9"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 57.59375,
+          "height": 720,
+          "top": 0,
+          "right": 57.59375,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 57.59375,
+          "y": 0,
+          "width": 1222.40625,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 57.59375
+        },
+        "zoom": "0.9"
+      },
+      "frames": [
+        {
+          "time": 40.5,
+          "width": 57.59375,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 452.7000000476837,
+          "duration": 0,
+          "navigationId": 2313,
+          "value": 0.00016453902920087176,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 6.953125,
+                "y": 658.8046875,
+                "width": 43.1875,
+                "height": 61.1953125,
+                "top": 658.8046875,
+                "right": 50.140625,
+                "bottom": 720,
+                "left": 6.953125
+              },
+              "currentRect": {
+                "x": 6.953125,
+                "y": 615.609375,
+                "width": 43.1875,
+                "height": 104.390625,
+                "top": 615.609375,
+                "right": 50.140625,
+                "bottom": 720,
+                "left": 6.953125
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 508.2000000476837,
+          "duration": 0,
+          "navigationId": 2313,
+          "value": 0.004072538375854492,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 57.59375,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 129.578125,
+                "bottom": 33.9453125,
+                "left": 57.59375
+              },
+              "currentRect": {
+                "x": 1208.015625,
+                "y": 5.1484375,
+                "width": 71.984375,
+                "height": 28.796875,
+                "top": 5.1484375,
+                "right": 1280,
+                "bottom": 33.9453125,
+                "left": 1208.015625
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "retro",
+      "prefs": {
+        "name": "default"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 720,
+          "top": 0,
+          "right": 320,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 320,
+          "y": 0,
+          "width": 960,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 320
+        },
+        "zoom": "1"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 720,
+          "top": 0,
+          "right": 320,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 320,
+          "y": 0,
+          "width": 960,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 320
+        },
+        "zoom": "1"
+      },
+      "frames": [
+        {
+          "time": 51.60000014305115,
+          "width": 320,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 448.90000009536743,
+          "duration": 0,
+          "navigationId": 1540,
+          "value": 0.0002652723524305556,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 0,
+                "y": 652,
+                "width": 63.5,
+                "height": 68,
+                "top": 652,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 608,
+                "width": 63.5,
+                "height": 112,
+                "top": 608,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 499.60000014305115,
+          "duration": 0,
+          "navigationId": 1540,
+          "value": 0.0021874999999999998,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 320,
+                "y": 48,
+                "width": 960,
+                "height": 672,
+                "top": 48,
+                "right": 1280,
+                "bottom": 720,
+                "left": 320
+              },
+              "currentRect": {
+                "x": 320,
+                "y": 52,
+                "width": 960,
+                "height": 668,
+                "top": 52,
+                "right": 1280,
+                "bottom": 720,
+                "left": 320
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 514.5,
+          "duration": 0,
+          "navigationId": 1540,
+          "value": 0.004638414171006944,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 320,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 402,
+                "bottom": 44,
+                "left": 320
+              },
+              "currentRect": {
+                "x": 1198,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 1280,
+                "bottom": 44,
+                "left": 1198
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "retro",
+      "prefs": {
+        "name": "wide",
+        "width": "480"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 480,
+          "height": 720,
+          "top": 0,
+          "right": 480,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 480,
+          "y": 0,
+          "width": 800,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 480
+        },
+        "zoom": "1"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 480,
+          "height": 720,
+          "top": 0,
+          "right": 480,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 480,
+          "y": 0,
+          "width": 800,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 480
+        },
+        "zoom": "1"
+      },
+      "frames": [
+        {
+          "time": 42.69999980926514,
+          "width": 480,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 441.59999990463257,
+          "duration": 0,
+          "navigationId": 9974,
+          "value": 0.0002652723524305556,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 0,
+                "y": 652,
+                "width": 63.5,
+                "height": 68,
+                "top": 652,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 608,
+                "width": 63.5,
+                "height": 112,
+                "top": 608,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 460.89999985694885,
+          "duration": 0,
+          "navigationId": 9974,
+          "value": 0.001822916666666667,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 480,
+                "y": 48,
+                "width": 800,
+                "height": 672,
+                "top": 48,
+                "right": 1280,
+                "bottom": 720,
+                "left": 480
+              },
+              "currentRect": {
+                "x": 480,
+                "y": 52,
+                "width": 800,
+                "height": 668,
+                "top": 52,
+                "right": 1280,
+                "bottom": 720,
+                "left": 480
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 488.19999980926514,
+          "duration": 0,
+          "navigationId": 9974,
+          "value": 0.0037931450737847218,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 480,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 562,
+                "bottom": 44,
+                "left": 480
+              },
+              "currentRect": {
+                "x": 1198,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 1280,
+                "bottom": 44,
+                "left": 1198
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "retro",
+      "prefs": {
+        "name": "collapsed",
+        "width": "400",
+        "collapsed": "true"
+      },
+      "initial": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 720,
+          "top": 0,
+          "right": 64,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 64,
+          "y": 0,
+          "width": 1216,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 64
+        },
+        "zoom": "1"
+      },
+      "after": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 720,
+          "top": 0,
+          "right": 64,
+          "bottom": 720,
+          "left": 0
+        },
+        "main": {
+          "x": 64,
+          "y": 0,
+          "width": 1216,
+          "height": 720,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "left": 64
+        },
+        "zoom": "1"
+      },
+      "frames": [
+        {
+          "time": 46.10000014305115,
+          "width": 64,
+          "ready": false
+        }
+      ],
+      "shifts": [
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 440.90000009536743,
+          "duration": 0,
+          "navigationId": 8558,
+          "value": 0.0002652723524305556,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 0,
+                "y": 652,
+                "width": 63.5,
+                "height": 68,
+                "top": 652,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 608,
+                "width": 63.5,
+                "height": 112,
+                "top": 608,
+                "right": 63.5,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 491.60000014305115,
+          "duration": 0,
+          "navigationId": 8558,
+          "value": 0.0027708333333333335,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 64,
+                "y": 48,
+                "width": 1216,
+                "height": 672,
+                "top": 48,
+                "right": 1280,
+                "bottom": 720,
+                "left": 64
+              },
+              "currentRect": {
+                "x": 64,
+                "y": 52,
+                "width": 1216,
+                "height": 668,
+                "top": 52,
+                "right": 1280,
+                "bottom": 720,
+                "left": 64
+              }
+            }
+          ]
+        },
+        {
+          "name": "",
+          "entryType": "layout-shift",
+          "startTime": 507,
+          "duration": 0,
+          "navigationId": 8558,
+          "value": 0.0059908447265625,
+          "hadRecentInput": false,
+          "lastInputTime": 0,
+          "sources": [
+            {
+              "previousRect": {
+                "x": 64,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 146,
+                "bottom": 44,
+                "left": 64
+              },
+              "currentRect": {
+                "x": 1198,
+                "y": 6,
+                "width": 82,
+                "height": 38,
+                "top": 6,
+                "right": 1280,
+                "bottom": 44,
+                "left": 1198
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
