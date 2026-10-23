@@ -6,6 +6,9 @@ defineProps<{ name: string; disabled?: boolean }>();
 const emit = defineEmits<{ rename: []; delete: [] }>();
 // Close the menu when an action opens its dialog so it doesn't linger behind it.
 const menuOpen = ref(false);
+// Recycled project rows should initialize their popover only when first used.
+// Keep it afterward so Reka owns closing and focus restoration.
+const menuMounted = ref(false);
 const moreIcon = useIcon('ui.more');
 const editIcon = useIcon('ui.edit');
 const trashIcon = useIcon('ui.trash');
@@ -20,7 +23,21 @@ const deleteButtonProps = useSidebarProjectActionButtonProps({
 </script>
 
 <template>
-    <UPopover v-model:open="menuOpen" :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+    <UButton
+        v-if="!menuMounted"
+        :icon="moreIcon"
+        class="project-more-btn"
+        :aria-label="`Project actions for ${name}`"
+        aria-haspopup="dialog"
+        :aria-expanded="false"
+        :disabled="disabled"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        square
+        @click.stop="menuMounted = true; menuOpen = true"
+    />
+    <UPopover v-else v-model:open="menuOpen" :content="{ side: 'right', align: 'start', sideOffset: 6 }">
         <UButton
             :icon="moreIcon"
             class="project-more-btn"
