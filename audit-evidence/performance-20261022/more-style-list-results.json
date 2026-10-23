@@ -1,0 +1,205 @@
+{
+  "method": "Post-change spot check, full endpoint traversal and return, 600 synthetic projects/models, one 4x CPU run per surface. Compare section 10 only as historical context, not a paired baseline.",
+  "result": {
+    "seededProjects": 600,
+    "seededModels": 600,
+    "cpuThrottle": 4,
+    "fullTraverse": true,
+    "wheelDelta": 600,
+    "results": [
+      {
+        "surface": "projects",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 28573,
+          "mounted": 30
+        },
+        "endpoints": [
+          {
+            "direction": 1,
+            "steps": 39,
+            "reached": true,
+            "scrollTop": 21940,
+            "track": 22492,
+            "height": 552,
+            "rows": [
+              "Audit project 029",
+              "Audit project 028",
+              "Audit project 027A project description with enough text to exercise truncation",
+              "Audit project 026",
+              "Audit project 025",
+              "Audit project 024A project description with enough text to exercise truncation",
+              "Audit project 023",
+              "Audit project 022",
+              "Audit project 021A project description with enough text to exercise truncation",
+              "Audit project 020",
+              "Audit project 019",
+              "Audit project 018A project description with enough text to exercise truncation",
+              "Audit project 017",
+              "Audit project 016",
+              "Audit project 015A project description with enough text to exercise truncation",
+              "Audit project 014",
+              "Audit project 013",
+              "Audit project 012A project description with enough text to exercise truncation",
+              "Audit project 011",
+              "Audit project 010",
+              "Audit project 009A project description with enough text to exercise truncation",
+              "Audit project 008",
+              "Audit project 007",
+              "Audit project 006A project description with enough text to exercise truncation",
+              "Audit project 005",
+              "Audit project 004",
+              "Audit project 003A project description with enough text to exercise truncation",
+              "Audit project 002",
+              "Audit project 001",
+              "Audit project 000A project description with enough text to exercise truncation",
+              "Workspace fixture projectSynthetic project evidence"
+            ]
+          },
+          {
+            "direction": -1,
+            "steps": 39,
+            "reached": true,
+            "scrollTop": 0,
+            "track": 22492,
+            "height": 552,
+            "rows": [
+              "RecentAudit project 599",
+              "Audit project 598",
+              "Audit project 597A project description with enough text to exercise truncation",
+              "Audit project 596",
+              "Audit project 595",
+              "Audit project 594A project description with enough text to exercise truncation",
+              "Audit project 593",
+              "Audit project 592",
+              "Audit project 591A project description with enough text to exercise truncation",
+              "Audit project 590",
+              "Audit project 589",
+              "Audit project 588A project description with enough text to exercise truncation",
+              "Audit project 587",
+              "Audit project 586",
+              "Audit project 585A project description with enough text to exercise truncation",
+              "Audit project 584",
+              "Audit project 583",
+              "Audit project 582A project description with enough text to exercise truncation",
+              "Audit project 581",
+              "Audit project 580",
+              "Audit project 579A project description with enough text to exercise truncation",
+              "Audit project 578",
+              "Audit project 577",
+              "Audit project 576A project description with enough text to exercise truncation",
+              "Audit project 575",
+              "Audit project 574",
+              "Audit project 573A project description with enough text to exercise truncation",
+              "Audit project 572",
+              "Audit project 571",
+              "Audit project 570A project description with enough text to exercise truncation"
+            ]
+          }
+        ],
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 32.5,
+          "max": 101.89999999999964,
+          "frames": 673,
+          "longTasks": [
+            105
+          ],
+          "scrollTop": 0,
+          "track": 22492,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "models",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 43100,
+          "mounted": 15
+        },
+        "endpoints": [
+          {
+            "direction": 1,
+            "steps": 66,
+            "reached": true,
+            "scrollTop": 38005,
+            "track": 38420,
+            "height": 415,
+            "rows": [
+              "Audit model 585Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 586Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 587Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 588Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 589Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 590Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 591Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 592Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 593Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 594Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 595Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 596Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 597Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 598Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 599Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out"
+            ]
+          },
+          {
+            "direction": -1,
+            "steps": 66,
+            "reached": true,
+            "scrollTop": 0,
+            "track": 38420,
+            "height": 415,
+            "rows": [
+              "Audit model 000Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 001Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 002Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 003Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 004Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 005Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 006Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 007Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 008Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 009Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 010Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 011Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 012Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 013Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out",
+              "Audit model 014Long contextOpenAI · 128K context $2.00 / 1M input· $6.00 / 1M output$2.00 / 1M in$6.00 / 1M out"
+            ]
+          }
+        ],
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 18.200000000000728,
+          "max": 49.599999999998545,
+          "frames": 1323,
+          "longTasks": [],
+          "scrollTop": 0,
+          "track": 38420,
+          "mounted": 15
+        }
+      }
+    ]
+  }
+}

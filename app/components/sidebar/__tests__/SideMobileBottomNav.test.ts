@@ -103,6 +103,7 @@ vi.mock('#imports', async (importOriginal) => {
             },
         }),
         useRuntimeConfig: () => testConfig,
+        useHead: vi.fn(),
         useToast: () => ({
             add: mockToastAdd,
         }),

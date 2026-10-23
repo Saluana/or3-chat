@@ -40,6 +40,17 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         await p.waitForTimeout(500);
         await panes.first().locator('.chat-message-list').evaluate(el=>{el.scrollTop=el.scrollHeight*.45;});
         await p.waitForTimeout(300);
+        if(options.restoreMoreSelector)await p.evaluate(()=>{
+            let changed=0;
+            const visit=rules=>{for(const rule of rules){
+                if(rule.selectorText?.includes('body[data-or3-more-open]')){
+                    changed+=rule.selectorText.split('body[data-or3-more-open]').length-1;
+                    rule.selectorText=rule.selectorText.replaceAll('body[data-or3-more-open]','body:has(.more-sheet-root)');
+                }
+                if(rule.cssRules)visit(rule.cssRules);
+            }};for(const sheet of document.styleSheets)visit(sheet.cssRules);
+            if(changed!==2)throw new Error('Unmatched More selector control '+changed);
+        });
         if(options.containment){
             await p.addStyleTag({content:(options.containment==='rows'?'.chat-message-list .or3-scroll-item':'.chat-message-list')+' { contain: layout style; }'});
             await p.waitForTimeout(100);

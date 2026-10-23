@@ -1,0 +1,960 @@
+{
+  "baselineCommit": "baee676f",
+  "environment": {
+    "browser": "Chromium",
+    "cpuRate": 4,
+    "production": true,
+    "theme": "blank",
+    "scale": 0.9,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "externalRequests": "blocked"
+  },
+  "controls": {
+    "tabsControl": {
+      "reads": {
+        "pane-audit-right": 10,
+        "pane-audit-left": 9
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        137,
+        81,
+        209,
+        60,
+        53,
+        52,
+        52,
+        50,
+        57,
+        61,
+        64,
+        50,
+        54,
+        55,
+        52,
+        51,
+        53,
+        50,
+        53,
+        51,
+        71
+      ],
+      "start": 3268.9000000953674,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 3100.5
+        },
+        "right": {
+          "produced": 0,
+          "start": 2583.7999999523163
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 3861.5999999046326,
+      "p95": 59.69999999999982,
+      "max": 224.89999999999964,
+      "frames": 180,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 3100.5,
+          "firstChunk": 3269.7999999523163,
+          "end": 6242.900000095367,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2583.7999999523163,
+          "firstChunk": 3269.7000000476837,
+          "end": 6241.700000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 2971.9000000953674,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "allHasControl": {
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        66,
+        205,
+        50,
+        50,
+        70
+      ],
+      "start": 2995.2000000476837,
+      "before": {
+        "scrollTop": 14325.5,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -114.90625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2830.5
+        },
+        "right": {
+          "produced": 0,
+          "start": 2449.5999999046326
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14325.5,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -114.90625
+      },
+      "elapsed": 2514.899999856949,
+      "p95": 26.900000000000546,
+      "max": 250.20000000000027,
+      "frames": 172,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2830.5,
+          "firstChunk": 2995.5999999046326,
+          "end": 4663.099999904633,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2449.5999999046326,
+          "firstChunk": 2995.5,
+          "end": 4626.099999904633,
+          "done": true
+        }
+      },
+      "overlapMs": 1630.5,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        16648.5,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "hasGroupstartup": {
+      "reads": {
+        "pane-audit-right": 9,
+        "pane-audit-left": 8
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        77,
+        80,
+        213,
+        70,
+        78,
+        60,
+        55,
+        57,
+        59,
+        55,
+        55,
+        51,
+        52,
+        50,
+        52,
+        57,
+        50,
+        52,
+        51,
+        65
+      ],
+      "start": 3313.899999856949,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 3151.7000000476837
+        },
+        "right": {
+          "produced": 0,
+          "start": 2652.2000000476837
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 3817,
+      "p95": 58.100000000000364,
+      "max": 290.6999999999998,
+      "frames": 177,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 3151.7000000476837,
+          "firstChunk": 3314.899999856949,
+          "end": 6256.200000047684,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2652.2000000476837,
+          "firstChunk": 3314.899999856949,
+          "end": 6256.200000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 2941.300000190735,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "hasGrouptheme": {
+      "reads": {
+        "pane-audit-right": 10,
+        "pane-audit-left": 9
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        76,
+        83,
+        207,
+        64,
+        56,
+        57,
+        51,
+        53,
+        53,
+        52,
+        59,
+        51,
+        60,
+        50,
+        66,
+        49,
+        54,
+        54,
+        54,
+        50,
+        50,
+        53,
+        53,
+        52,
+        64
+      ],
+      "start": 3431.2000000476837,
+      "before": {
+        "scrollTop": 14325.5,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -114.90625
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 3268.600000143051
+        },
+        "right": {
+          "produced": 0,
+          "start": 2742.800000190735
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14325.5,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -114.90625
+      },
+      "elapsed": 3937.600000143051,
+      "p95": 58.899999999999636,
+      "max": 223.5999999999999,
+      "frames": 176,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 3268.600000143051,
+          "firstChunk": 3431.800000190735,
+          "end": 6484.900000095367,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2742.800000190735,
+          "firstChunk": 3431.300000190735,
+          "end": 6484.400000095367,
+          "done": true
+        }
+      },
+      "overlapMs": 3052.5999999046326,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        16648.5,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "hasGroupshell": {
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        70,
+        202,
+        58,
+        66
+      ],
+      "start": 2952,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2779.2999999523163
+        },
+        "right": {
+          "produced": 0,
+          "start": 2388.2999999523163
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 2617.7999999523163,
+      "p95": 26.599999999999454,
+      "max": 266.1999999999998,
+      "frames": 182,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2779.2999999523163,
+          "firstChunk": 2953.0999999046326,
+          "end": 4703.299999952316,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2388.2999999523163,
+          "firstChunk": 2953.0999999046326,
+          "end": 4685.299999952316,
+          "done": true
+        }
+      },
+      "overlapMs": 1732.2000000476837,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "hasGroupmore": {
+      "reads": {
+        "pane-audit-right": 8,
+        "pane-audit-left": 7
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        68,
+        203,
+        53,
+        53,
+        60
+      ],
+      "start": 2928.899999856949,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2765
+        },
+        "right": {
+          "produced": 0,
+          "start": 2379.0999999046326
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 2557.600000143051,
+      "p95": 26.09999999999991,
+      "max": 258.0999999999999,
+      "frames": 174,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2765,
+          "firstChunk": 2929,
+          "end": 4678.099999904633,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2379.0999999046326,
+          "firstChunk": 2929,
+          "end": 4677.399999856949,
+          "done": true
+        }
+      },
+      "overlapMs": 1748.3999998569489,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "hasGroupaccount": {
+      "reads": {
+        "pane-audit-right": 10,
+        "pane-audit-left": 9
+      },
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        134,
+        206,
+        84,
+        70,
+        50,
+        55,
+        57,
+        59,
+        53,
+        52,
+        51,
+        54,
+        51,
+        52,
+        50,
+        54,
+        54,
+        60
+      ],
+      "start": 3287.2000000476837,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 3124.100000143051
+        },
+        "right": {
+          "produced": 0,
+          "start": 2652.2999999523163
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 3920.2999999523163,
+      "p95": 58.599999999999454,
+      "max": 300.0999999999999,
+      "frames": 178,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 3124.100000143051,
+          "firstChunk": 3287.9000000953674,
+          "end": 6226.700000047684,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 2652.2999999523163,
+          "firstChunk": 3287.600000143051,
+          "end": 6226.700000047684,
+          "done": true
+        }
+      },
+      "overlapMs": 2938.7999999523163,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    }
+  },
+  "notes": [
+    "Disposable CSSOM diagnostic controls; removing rules can change appearance, so these isolate the selector family rather than establish a shippable repair.",
+    "Only removing the More-sheet body selectors reproduces the broad relational-selector improvement. The installed runtime was rechecked at the beginning of this section.",
+    "The production regression independently records 429 More-selector invalidations from 12 DOM replacement frames before the fix."
+  ]
+}

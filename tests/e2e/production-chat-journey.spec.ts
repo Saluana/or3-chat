@@ -2028,6 +2028,55 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    test('mobile More keeps nested confirmations above the sheet and releases their stacking after close and unmount', async ({ page }, info) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.context().addCookies([
+            { name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' },
+            { name: 'or3_workspace_profile_v1', value: encodeURIComponent(JSON.stringify({ version: 1, workspaceId: 'local', profileId: 'standard-or3' })), domain: '127.0.0.1', path: '/' },
+        ]);
+        await openChat(page);
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+        const settingsLevel = async () => {
+            await page.getByRole('button', { name: 'Settings', exact: true }).click();
+            const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+            await expect(settings).toBeVisible();
+            const level = await settings.evaluate(element => Number(getComputedStyle(element).zIndex));
+            await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+            await expect(settings).toBeHidden();
+            return level;
+        };
+        const baselineLevel = await settingsLevel();
+        const openMore = async () => {
+            await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+            await page.getByRole('button', { name: 'More options', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'More', exact: true })).toBeVisible();
+        };
+        await openMore();
+        await page.getByRole('button', { name: 'Disconnect from OpenRouter', exact: true }).click();
+        const confirmation = page.getByRole('dialog', { name: 'Disconnect OpenRouter?', exact: true });
+        await expect(confirmation).toBeVisible();
+        const sheetLevel = await page.locator('.more-sheet-root').evaluate(element => Number(getComputedStyle(element).zIndex));
+        expect(await confirmation.evaluate(element => Number(getComputedStyle(element).zIndex))).toBeGreaterThan(sheetLevel);
+        const overlays = page.locator('body > [data-slot="overlay"]');
+        await expect(overlays).toHaveCount(1);
+        expect(await overlays.evaluateAll((elements, level) => elements.every(element => Number(getComputedStyle(element).zIndex) > level), sheetLevel)).toBe(true);
+        // A normal click proves the nested portal is above the sheet's backdrop.
+        await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(confirmation).toBeHidden();
+        await expect(page.getByRole('dialog', { name: 'More', exact: true })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog', { name: 'More', exact: true })).toBeHidden();
+        await page.keyboard.press('Escape');
+        expect(await settingsLevel()).toBe(baselineLevel);
+        await openMore();
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await expect(page.locator('#mobile-bottom-nav')).toHaveCount(0);
+        await expect(page.getByRole('dialog', { name: 'More', exact: true })).toHaveCount(0);
+        expect(await settingsLevel()).toBe(baselineLevel);
+        await info.attach('more-stacking-lifecycle', { contentType: 'application/json', body: JSON.stringify({ baselineLevel, sheetLevel, checks: ['nested Cancel receives click', 'close restores stacking', 'unmount restores stacking'] }) });
+    });
+
     test('model name and identifier searches keep the exact model visible in a large catalog', async ({ page }, info) => {
         const models = [
             { id: 'openai/gpt-4.1-mini', name: 'OpenAI: GPT-4.1 Mini', context_length: 1_000_000 },
