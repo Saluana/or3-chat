@@ -181,6 +181,7 @@ try {
     const promptEnv = join(root, '.env-interrupt');
     const promptConfiguration = 'SSR_AUTH_ENABLED=false\nNUXT_SECRETS_PROVIDER=or3-secrets\n';
     await writeFile(promptEnv, promptConfiguration);
+    owner = await prepareSourceSecrets(root, configured);
     let promptLog = '';
     const prompting = Bun.spawn(['node', '--import', 'tsx', resolve('scripts/cli/dev.ts'), '--dotenv', promptEnv,
         '--host=127.0.0.1', '--port', String(port)], { cwd: root,
@@ -192,12 +193,16 @@ try {
             assert.equal(prompting.exitCode, null, promptLog);
             return promptLog.includes('Choose 1, 2 or 3');
         }, 'interactive dev setup prompt');
+        const promptAttachment = await prepareSourceSecrets(root, configured, { signal: AbortSignal.timeout(2_000) });
+        await promptAttachment.close();
+        await client.status();
+        await owner.close(); owner = undefined;
         prompting.kill('SIGTERM');
         await until(async () => prompting.exitCode !== null, 'interrupted setup prompt exits', 5_000);
         assert.equal(await prompting.exited, 0, promptLog);
         assert.equal(await readFile(promptEnv, 'utf8'), promptConfiguration);
         assert.equal(await hash(), initialHash);
-        passed.push('interrupting the setup prompt exits cleanly without changing configuration or custody');
+        passed.push('setup prompts do not block another launcher or vault shutdown; interruption exits without changing configuration/custody');
     } finally {
         if (prompting.exitCode === null) prompting.kill('SIGKILL');
         await prompting.exited;

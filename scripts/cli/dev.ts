@@ -323,6 +323,7 @@ async function runNuxtDev(argv: string[]): Promise<number> {
         controller.signal.throwIfAborted();
         secrets = await prepareSourceSecrets(process.cwd(), nuxtDevEnvironment(), {
             envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
+            signal: controller.signal,
         });
         controller.signal.throwIfAborted();
         const startupEnv = await prepareConvexBackend(process.cwd(), secrets.env, localProviders, { loadEnv: false });

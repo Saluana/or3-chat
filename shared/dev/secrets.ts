@@ -90,34 +90,45 @@ async function recoverStaleSocket(socketPath: string): Promise<void> {
 export async function prepareSourceSecrets(
     projectRoot: string,
     environment: NodeJS.ProcessEnv,
-    options: { envFile?: string; mode?: Mode } = {},
+    options: { envFile?: string; mode?: Mode; signal?: AbortSignal } = {},
 ): Promise<Owner> {
-    const selected = environment.NUXT_SECRETS_PROVIDER ?? (environment.SSR_AUTH_ENABLED === 'true' ? 'or3-secrets' : '');
-    if ((!options.mode && selected !== 'or3-secrets') || options.mode === 'manual' || options.mode === 'disable'
-        || process.getuid?.() === undefined) return prepareSourceSecretsLocked(projectRoot, environment, options);
-    const root = await realpath(projectRoot);
-    const socketDirectory = join(await realpath(tmpdir()), `or3-vault-${process.getuid()}-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
-    await privateDirectory(socketDirectory);
-    // Reuse the process-owned repository lock: a live owner is never displaced
-    // by age, and a dead launcher's lease can be recovered on the next launch.
-    const lock = new AdvisoryPluginOperationLock(socketDirectory, undefined, true);
-    const acquire = () => lock.acquire('launcher', { requireDeadOwner: true });
-    const lease = await acquire();
     try {
-        const owner = await prepareSourceSecretsLocked(root, environment, options);
-        let closing: Promise<void> | undefined;
-        return { env: owner.env, close: () => closing ??= (async () => {
-            const shutdownLease = await acquire();
-            try { await owner.close(); } finally { await shutdownLease.release(); }
-        })() };
-    } finally { await lease.release(); }
+        options.signal?.throwIfAborted();
+        const selected = environment.NUXT_SECRETS_PROVIDER ?? (environment.SSR_AUTH_ENABLED === 'true' ? 'or3-secrets' : '');
+        if ((!options.mode && selected !== 'or3-secrets') || options.mode === 'manual' || options.mode === 'disable'
+            || (!options.mode && fields.some(field => !environment[prefix + field]))
+            || process.getuid?.() === undefined) return await prepareSourceSecretsLocked(projectRoot, environment, options);
+        const root = await realpath(projectRoot);
+        const socketDirectory = join(await realpath(tmpdir()), `or3-vault-${process.getuid()}-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
+        await privateDirectory(socketDirectory);
+        // Reuse the process-owned repository lock: a live owner is never displaced
+        // by age, and a dead launcher's lease can be recovered on the next launch.
+        const lock = new AdvisoryPluginOperationLock(socketDirectory, undefined, true);
+        const acquire = (signal?: AbortSignal) => lock.acquire('launcher', { requireDeadOwner: true, signal });
+        const lease = await acquire(options.signal);
+        try {
+            const owner = await prepareSourceSecretsLocked(root, environment, options);
+            if (owner.close === noop) return owner;
+            let closing: Promise<void> | undefined;
+            return { env: owner.env, close: () => closing ??= (async () => {
+                const shutdownLease = await acquire();
+                try { await owner.close(); } finally { await shutdownLease.release(); }
+            })() };
+        } finally { await lease.release(); }
+    } catch (error) {
+        // readline and the lock report their own abort errors; preserve the
+        // caller's reason so an intentional launcher interruption exits cleanly.
+        options.signal?.throwIfAborted();
+        throw error;
+    }
 }
 
 async function prepareSourceSecretsLocked(
     projectRoot: string,
     environment: NodeJS.ProcessEnv,
-    options: { envFile?: string; mode?: Mode },
+    options: { envFile?: string; mode?: Mode; signal?: AbortSignal },
 ): Promise<Owner> {
+    options.signal?.throwIfAborted();
     const env = { ...environment };
     const selected = env.NUXT_SECRETS_PROVIDER ?? (env.SSR_AUTH_ENABLED === 'true' ? 'or3-secrets' : '');
     if (!options.mode && selected !== 'or3-secrets') return { env, close: noop };
@@ -135,10 +146,12 @@ async function prepareSourceSecretsLocked(
             console.log('1. Automatically create/use a local development vault (same OS user)');
             console.log('2. Manually attach an existing vault service');
             console.log('3. Instance billing only (personal keys, OAuth and remembered plugin secrets unavailable)');
-            const answer = (await prompt.question('Choose 1, 2 or 3; Enter cancels: ')).trim();
+            const answer = (await prompt.question('Choose 1, 2 or 3; Enter cancels: ', { signal: options.signal })).trim();
             mode = new Map<string, Mode>([['1', 'auto'], ['2', 'manual'], ['3', 'disable']]).get(answer);
             if (!mode) throw new Error(setupRequired);
         } finally { prompt.close(); }
+        // Do not hold the launch/shutdown lock while waiting for a human choice.
+        return prepareSourceSecrets(root, environment, { ...options, mode });
     }
     const persist = async (value: Settings | { PROVIDER: string }) => {
         const updates = environmentSettings(value);
@@ -159,7 +172,7 @@ async function prepareSourceSecretsLocked(
         const prompt = createInterface({ input: process.stdin, output: process.stdout });
         try {
             for (const field of fields) {
-                const answer = (await prompt.question(`${prefix + field}${config[field] ? ` [${config[field]}]` : ''}: `)).trim();
+                const answer = (await prompt.question(`${prefix + field}${config[field] ? ` [${config[field]}]` : ''}: `, { signal: options.signal })).trim();
                 config[field] = answer || config[field];
             }
         } finally { prompt.close(); }
