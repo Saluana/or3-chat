@@ -25,6 +25,22 @@ The real installed resolver regression is `tests/unit/nuxt-icon-resolution.test.
 Production measurements and limits are in
 `audit-evidence/performance-20261022/ICON-RESOLUTION.md`.
 
+## streamdown-vue 1.0.35
+
+The ESM renderer passed HAST `className` arrays directly to Vue's native DOM
+property path. Rebuilding virtual nodes for a completed math block therefore
+assigned identical classes again on every later token, invalidating style and
+layout. The patch maps HAST `className` to Vue's `class` prop, whose normalization
+produces comparable strings. Other attributes, parsed trees, security filtering,
+component overrides, and actual formula edits retain their existing paths.
+
+This targets the ESM renderer used by Nuxt, including all host Markdown surfaces.
+The CommonJS entry is unused by this application and is unchanged. The existing
+install, Docker, and generated-project patch steps apply this pinned patch.
+Remove it after qualifying the same behavior in an upstream release with the
+real-renderer `StreamMarkdownXmlRender.test.ts` regression and concurrent rich
+stream probes in `audit-evidence/performance-20261022/`.
+
 ## or3-scroll 0.1.3
 
 The ESM entry used by Nuxt committed row heights in a microtask inside

@@ -85,8 +85,10 @@ left transport finishes; their content does not change.
 
 Prose output is approximately 10.5 KB per pane. Its measurement starts after both
 sends and the browsing gesture, excluding earlier admission/output. Code/math
-output is approximately 3 KB per pane, with 12 TypeScript fences, 12 inline
-expressions, and 12 display expressions. Its synthetic transports wait until
+output is approximately 3 KB per pane, with 12 TypeScript fences and 12 standalone
+double-dollar math expressions. Its 12 single-dollar inline examples render as
+literal text under the current host processing; they are not additional rendered
+formulas. Its synthetic transports wait until
 both sends are admitted and the left pane is scrolled up, then begin together.
 This includes cold rich rendering. An initial ungated rich diagnostic could not
 establish stream overlap and was rejected by the probe; it is not a qualifying
