@@ -71,12 +71,15 @@ export async function pruneRetiredFamilyPreference(db: Or3DB, rootId: string): P
     }
     await tombstoneKvByName(name, db);
 }
+function readThreadBatch(db: Or3DB, before?: [number, number, string]) {
+    const query = before ? db.threads.where('[updated_at+created_at+id]').below(before)
+        : db.threads.orderBy('[updated_at+created_at+id]');
+    return query.reverse().limit(100).toArray();
+}
 async function* threadPages(db: Or3DB) {
     let before: [number, number, string] | undefined;
     for (;;) {
-        const query = before ? db.threads.where('[updated_at+created_at+id]').below(before)
-            : db.threads.orderBy('[updated_at+created_at+id]');
-        const page = await query.reverse().limit(100).toArray();
+        const page = await readThreadBatch(db, before);
         if (!page.length) return;
         yield page;
         const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
@@ -113,15 +116,27 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
     const resolver = rootResolver(db); const roots = new Set<string>();
     const legacy = await legacyProjectMembers(db, options.filter.projectId);
     const families: Array<{ member: Thread; root: Root }> = [];
-    if (options.type !== 'document') for await (const page of activityThreadPages(db, options.filter, legacy)) {
+    let before: [number, number, string] | undefined;
+    // Keep the live-query traversal in one async scope, including exhaustion
+    // of the final batch. Other metadata consumers can still stream batches.
+    while (options.type !== 'document') {
+        const page = options.filter.projectId === undefined ? await readThreadBatch(db, before)
+            : await projectThreadRows(db, options.filter.projectId, legacy);
+        if (!page.length) break;
         resolver.seed(page);
         for (const member of page) {
             if (!allowed(member, options.filter, legacy)) continue;
-            const root = await resolver.resolve(member); if (roots.has(root.id)) continue;
+            // Standalone roots need no ancestry I/O. Avoid one asynchronous
+            // resolver turn per row in the common, unbranched sidebar page.
+            const root: Root = member.parent_thread_id ? await resolver.resolve(member)
+                : { id: member.id, original: member };
+            if (roots.has(root.id)) continue;
             roots.add(root.id); families.push({ member, root });
             if (families.length > options.limit) break;
         }
-        if (families.length > options.limit) break;
+        if (families.length > options.limit || options.filter.projectId !== undefined || page.length < 100) break;
+        const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
+        await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));
     }
     const documents: Post[] = [];
     if (options.type !== 'thread' && options.filter.pinned !== true) {
