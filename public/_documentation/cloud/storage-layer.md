@@ -35,6 +35,11 @@ All files are identified by their SHA-256 hash. This leads to several benefits:
 *   **Binary Data**: Small originals stage in `db.file_blobs` until upload commits. Large selected files upload directly from the disk File. Downloaded originals are cached only within the current policy.
 *   **Transfers**: Managed by `FileTransferQueue` (upload/download).
 
+After this workspace's file settings have loaded in the current app session,
+small originals can be saved locally while offline using those verified
+settings. Connect once first if settings have not loaded. Reconnecting refreshes
+the policy; the server enforces current upload limits before accepting bytes.
+
 `file_meta.ref_count` is derived locally from reference edges in messages/posts;
 it is never synced (sanitized out of sync payloads) and cannot be set remotely.
 

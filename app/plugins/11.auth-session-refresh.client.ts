@@ -10,6 +10,7 @@ import {
 import { useWorkspaceManagerSession } from '~/composables/workspace/useWorkspaceManagerSession';
 
 const AUTH_SESSION_STORAGE_KEY = 'or3:auth-session-changed';
+const AUTH_SESSION_ERROR_TOAST_ID = 'auth-session-refresh-failed';
 
 export default defineNuxtPlugin(() => {
     if (import.meta.server) return;
@@ -18,6 +19,7 @@ export default defineNuxtPlugin(() => {
     if (!runtimeConfig.public.ssrAuthEnabled) return;
 
     const sessionContext = useSessionContext();
+    const toast = useToast();
     const { refreshSessionForActiveWorkspaceRevision } =
         useWorkspaceManagerSession(sessionContext);
 
@@ -29,6 +31,7 @@ export default defineNuxtPlugin(() => {
                 sessionContext.data.value?.session?.authenticated ?? false;
 
             await sessionContext.refresh();
+            toast.remove(AUTH_SESSION_ERROR_TOAST_ID);
 
             const nextWorkspaceId =
                 sessionContext.data.value?.session?.workspace?.id ?? null;
@@ -53,6 +56,18 @@ export default defineNuxtPlugin(() => {
             reloadNuxtApp({ ttl: 500 });
         } catch (error) {
             console.warn('[auth-session-refresh] Failed to refresh auth session:', error);
+            toast.add({
+                id: AUTH_SESSION_ERROR_TOAST_ID,
+                title: 'Unable to load your account',
+                description: "We couldn't load your workspace session. Please try again.",
+                color: 'error',
+                duration: 0,
+                actions: [{
+                    label: 'Retry',
+                    closeOnClick: false,
+                    onClick: () => { void handleAuthSessionChanged(); },
+                }],
+            });
         }
     };
 
