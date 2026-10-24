@@ -1,0 +1,18 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "executablePath": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "headless": true
+    },
+    "contextOptions": {
+      "viewport": { "width": 440, "height": 956 },
+      "screen": { "width": 440, "height": 956 },
+      "deviceScaleFactor": 3,
+      "isMobile": true,
+      "hasTouch": true,
+      "colorScheme": "light",
+      "serviceWorkers": "block"
+    }
+  }
+}

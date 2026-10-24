@@ -11,6 +11,19 @@ with 1,000/10,000-chat browser qualification at normal and slower CPU settings.
 Total index memory, long sessions and the measured legacy sidebar family scan
 remain open; that report is the current evidence for this selected scale path.
 
+The subsequent [Brave mobile investigation](../performance-20261024/BRAVE-MOBILE.md)
+groups each theme's definition and optional icons to remove one serial activation
+boundary and two page requests. After macOS locked, the user-authorized Playwright
+fallback completed three cold runs per matched build in installed Brave at
+440 × 956, Slow 4G and 4× CPU. Median LCP improves from **13.392 to 12.776 s**;
+all six screenshots are byte-identical, with matching control geometry.
+Production builds, 112 theme tests and six mobile startup controls pass. The
+existing complete-JavaScript/precache budgets still fail on baseline and
+candidate. The owned headless browser and preview are stopped; the original
+visible tab's DevTools preferences still need restoration after unlocking the
+Mac. Startup graph size, late artwork, font build reproducibility, deployed HTML
+compression and physical-device/provider qualification remain open in that report.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the

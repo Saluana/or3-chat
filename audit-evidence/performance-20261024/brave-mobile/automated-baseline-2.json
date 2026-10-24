@@ -1,0 +1,922 @@
+{
+  "startedAt": "2026-10-24T17:12:13.887Z",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/155.0.8059.40",
+    "revision": "@b01cdf43be4b4d5559bf7e58229e666e24454f5",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "jsVersion": "15.5.35.20"
+  },
+  "profile": {
+    "cpuSlowdown": 4,
+    "network": {
+      "offline": false,
+      "latency": 562.5,
+      "downloadThroughput": 180000,
+      "uploadThroughput": 84375,
+      "connectionType": "cellular4g"
+    },
+    "cacheDisabled": true,
+    "bypassServiceWorker": true,
+    "contextServiceWorkers": "block",
+    "isolatedProfile": true,
+    "headless": true
+  },
+  "viewport": {
+    "width": 440,
+    "height": 956,
+    "dpr": 3,
+    "touch": 1
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+  "theme": "blank",
+  "dark": false,
+  "proof": {
+    "paints": [
+      {
+        "name": "first-paint",
+        "startTime": 1788
+      },
+      {
+        "name": "first-contentful-paint",
+        "startTime": 1788
+      }
+    ],
+    "lcp": [
+      {
+        "startTime": 1788,
+        "size": 3038,
+        "tag": "SPAN",
+        "className": "chat-empty-action-description",
+        "url": ""
+      },
+      {
+        "startTime": 11132,
+        "size": 3318,
+        "tag": "SPAN",
+        "className": "chat-empty-action-description",
+        "url": ""
+      },
+      {
+        "startTime": 13492,
+        "size": 398468,
+        "tag": "DIV",
+        "className": "chat-empty-background",
+        "url": "http://127.0.0.1:3152/blank-chat-background.webp"
+      }
+    ],
+    "shifts": [
+      {
+        "value": 0.05431452530592952,
+        "startTime": 11124.200000047684
+      }
+    ],
+    "longTasks": [
+      {
+        "startTime": 6784.100000143051,
+        "duration": 87
+      },
+      {
+        "startTime": 10357.700000047684,
+        "duration": 89
+      },
+      {
+        "startTime": 11039.299999952316,
+        "duration": 63
+      }
+    ],
+    "readyAt": 13300.799999952316
+  },
+  "navigation": {
+    "name": "http://127.0.0.1:3152/chat",
+    "entryType": "navigation",
+    "startTime": 0,
+    "duration": 8202,
+    "navigationId": 5561,
+    "initiatorType": "navigation",
+    "deliveryType": "",
+    "nextHopProtocol": "http/1.1",
+    "renderBlockingStatus": "non-blocking",
+    "contentType": "text/html",
+    "contentEncoding": "",
+    "workerStart": 0,
+    "workerRouterEvaluationStart": 0,
+    "workerCacheLookupStart": 0,
+    "workerMatchedSourceType": "",
+    "workerFinalSourceType": "",
+    "redirectStart": 0,
+    "redirectEnd": 0,
+    "fetchStart": 3.4000000953674316,
+    "domainLookupStart": 4.1000001430511475,
+    "domainLookupEnd": 4.1000001430511475,
+    "connectStart": 4.1000001430511475,
+    "secureConnectionStart": 0,
+    "connectEnd": 4.299999952316284,
+    "requestStart": 4.400000095367432,
+    "responseStart": 15.5,
+    "firstInterimResponseStart": 0,
+    "finalResponseHeadersStart": 15.5,
+    "responseEnd": 1174.6000001430511,
+    "transferSize": 107136,
+    "encodedBodySize": 106836,
+    "decodedBodySize": 106836,
+    "responseStatus": 200,
+    "serverTiming": [],
+    "unloadEventStart": 614.1000001430511,
+    "unloadEventEnd": 614.1000001430511,
+    "domInteractive": 1781.2000000476837,
+    "domContentLoadedEventStart": 6871,
+    "domContentLoadedEventEnd": 6871,
+    "domComplete": 8202,
+    "loadEventStart": 8202,
+    "loadEventEnd": 8202,
+    "type": "navigate",
+    "redirectCount": 0,
+    "activationStart": 0,
+    "criticalCHRestart": 0,
+    "notRestoredReasons": null,
+    "confidence": {
+      "randomizedTriggerRate": 0.4994798,
+      "value": "high"
+    }
+  },
+  "resources": [
+    {
+      "path": "/themes/blank.css",
+      "startMs": 650.2999999523163,
+      "endMs": 1249.6000001430511,
+      "durationMs": 599.3000001907349,
+      "transferSize": 2953,
+      "encodedBodySize": 2653,
+      "decodedBodySize": 20744,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/styles.ecVrasWO.css",
+      "startMs": 650.7000000476837,
+      "endMs": 1299.6000001430511,
+      "durationMs": 648.9000000953674,
+      "transferSize": 10249,
+      "encodedBodySize": 9949,
+      "decodedBodySize": 81454,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/startup.x1XGuNl0.css",
+      "startMs": 888.2999999523163,
+      "endMs": 1462.6000001430511,
+      "durationMs": 574.3000001907349,
+      "transferSize": 301,
+      "encodedBodySize": 1,
+      "decodedBodySize": 1,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/startup.Be1ykXt4.css",
+      "startMs": 888.4000000953674,
+      "endMs": 1720.9000000953674,
+      "durationMs": 832.5,
+      "transferSize": 41511,
+      "encodedBodySize": 41211,
+      "decodedBodySize": 393089,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/chat-shell.eqqznHAT.css",
+      "startMs": 889.4000000953674,
+      "endMs": 1504.2000000476837,
+      "durationMs": 614.7999999523163,
+      "transferSize": 3809,
+      "encodedBodySize": 3509,
+      "decodedBodySize": 21156,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/chat-shell.BvpwCJ2m.css",
+      "startMs": 889.5,
+      "endMs": 1746,
+      "durationMs": 856.5,
+      "transferSize": 850,
+      "encodedBodySize": 550,
+      "decodedBodySize": 550,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/DYB0Dpoh.js",
+      "startMs": 942.6000001430511,
+      "endMs": 1833,
+      "durationMs": 890.3999998569489,
+      "transferSize": 382,
+      "encodedBodySize": 82,
+      "decodedBodySize": 82,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/press-start-2p-latin.ClsvrIBJ.woff2",
+      "startMs": 942.7999999523163,
+      "endMs": 2099.5,
+      "durationMs": 1156.7000000476837,
+      "transferSize": 5004,
+      "encodedBodySize": 4704,
+      "decodedBodySize": 4704,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/ibm-plex-sans-latin.BD64o3ke.woff2",
+      "startMs": 942.7999999523163,
+      "endMs": 2182.9000000953674,
+      "durationMs": 1240.1000001430511,
+      "transferSize": 40540,
+      "encodedBodySize": 40240,
+      "decodedBodySize": 40240,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/vt323-latin.EhPR265H.woff2",
+      "startMs": 943.5,
+      "endMs": 2166.2000000476837,
+      "durationMs": 1222.7000000476837,
+      "transferSize": 7492,
+      "encodedBodySize": 7192,
+      "decodedBodySize": 7192,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/C5SbtHFa.js",
+      "startMs": 943.6000001430511,
+      "endMs": 2307.9000000953674,
+      "durationMs": 1364.2999999523163,
+      "transferSize": 2003,
+      "encodedBodySize": 1703,
+      "decodedBodySize": 4310,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BbzqZ3r5.js",
+      "startMs": 943.6000001430511,
+      "endMs": 2312.600000143051,
+      "durationMs": 1369,
+      "transferSize": 1117,
+      "encodedBodySize": 817,
+      "decodedBodySize": 817,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CMo2lcqF.js",
+      "startMs": 943.7000000476837,
+      "endMs": 2632.9000000953674,
+      "durationMs": 1689.2000000476837,
+      "transferSize": 39380,
+      "encodedBodySize": 39080,
+      "decodedBodySize": 114627,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CVY9q5cb.js",
+      "startMs": 943.7000000476837,
+      "endMs": 2849.5,
+      "durationMs": 1905.7999999523163,
+      "transferSize": 16798,
+      "encodedBodySize": 16498,
+      "decodedBodySize": 47719,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BzritqgS.js",
+      "startMs": 944.5,
+      "endMs": 3382.9000000953674,
+      "durationMs": 2438.4000000953674,
+      "transferSize": 38386,
+      "encodedBodySize": 38086,
+      "decodedBodySize": 132808,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BwplgE0s.js",
+      "startMs": 946.4000000953674,
+      "endMs": 3112.600000143051,
+      "durationMs": 2166.2000000476837,
+      "transferSize": 18904,
+      "encodedBodySize": 18604,
+      "decodedBodySize": 58937,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CF-n_dd_.js",
+      "startMs": 946.5,
+      "endMs": 3404.2000000476837,
+      "durationMs": 2457.7000000476837,
+      "transferSize": 32476,
+      "encodedBodySize": 32176,
+      "decodedBodySize": 158597,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BsP2s6hS.js",
+      "startMs": 947.1000001430511,
+      "endMs": 3216.2000000476837,
+      "durationMs": 2269.0999999046326,
+      "transferSize": 15995,
+      "encodedBodySize": 15695,
+      "decodedBodySize": 56424,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/YWUO72PY.js",
+      "startMs": 947.2999999523163,
+      "endMs": 3299.5,
+      "durationMs": 2352.2000000476837,
+      "transferSize": 5736,
+      "encodedBodySize": 5436,
+      "decodedBodySize": 15074,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CgEWgC8x.js",
+      "startMs": 947.2999999523163,
+      "endMs": 3582.7999999523163,
+      "durationMs": 2635.5,
+      "transferSize": 28599,
+      "encodedBodySize": 28299,
+      "decodedBodySize": 98642,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BzPtlnGm.js",
+      "startMs": 947.4000000953674,
+      "endMs": 4066.2000000476837,
+      "durationMs": 3118.7999999523163,
+      "transferSize": 34761,
+      "encodedBodySize": 34461,
+      "decodedBodySize": 131988,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/B-hqgN-U.js",
+      "startMs": 947.4000000953674,
+      "endMs": 4399.600000143051,
+      "durationMs": 3452.2000000476837,
+      "transferSize": 25581,
+      "encodedBodySize": 25281,
+      "decodedBodySize": 102226,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BMT5OFaY.js",
+      "startMs": 947.4000000953674,
+      "endMs": 4420.799999952316,
+      "durationMs": 3473.399999856949,
+      "transferSize": 34471,
+      "encodedBodySize": 34171,
+      "decodedBodySize": 122280,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/D45oWxD6.js",
+      "startMs": 948.2000000476837,
+      "endMs": 3970.9000000953674,
+      "durationMs": 3022.7000000476837,
+      "transferSize": 939,
+      "encodedBodySize": 639,
+      "decodedBodySize": 2547,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BOZZ2r7y.js",
+      "startMs": 948.2000000476837,
+      "endMs": 4724.5,
+      "durationMs": 3776.2999999523163,
+      "transferSize": 52052,
+      "encodedBodySize": 51752,
+      "decodedBodySize": 204397,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CUItg41C.js",
+      "startMs": 948.2999999523163,
+      "endMs": 4532.799999952316,
+      "durationMs": 3584.5,
+      "transferSize": 21202,
+      "encodedBodySize": 20902,
+      "decodedBodySize": 89698,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BCjvfx6t.js",
+      "startMs": 948.2999999523163,
+      "endMs": 4582.799999952316,
+      "durationMs": 3634.5,
+      "transferSize": 3030,
+      "encodedBodySize": 2730,
+      "decodedBodySize": 6891,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/DzUB-YDF.js",
+      "startMs": 949,
+      "endMs": 4704.200000047684,
+      "durationMs": 3755.2000000476837,
+      "transferSize": 6542,
+      "encodedBodySize": 6242,
+      "decodedBodySize": 16537,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/fEP27rcL.js",
+      "startMs": 949,
+      "endMs": 5447.600000143051,
+      "durationMs": 4498.600000143051,
+      "transferSize": 33099,
+      "encodedBodySize": 32799,
+      "decodedBodySize": 120380,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/Cx97zBE_.js",
+      "startMs": 949.1000001430511,
+      "endMs": 5204.200000047684,
+      "durationMs": 4255.099999904633,
+      "transferSize": 17065,
+      "encodedBodySize": 16765,
+      "decodedBodySize": 59036,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/DfuDOC3k.js",
+      "startMs": 949.2000000476837,
+      "endMs": 5114.299999952316,
+      "durationMs": 4165.099999904633,
+      "transferSize": 846,
+      "encodedBodySize": 546,
+      "decodedBodySize": 1508,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/Ey81DlQl.js",
+      "startMs": 949.2000000476837,
+      "endMs": 5389.600000143051,
+      "durationMs": 4440.400000095367,
+      "transferSize": 5662,
+      "encodedBodySize": 5362,
+      "decodedBodySize": 16980,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CJl29FEw.js",
+      "startMs": 949.2000000476837,
+      "endMs": 5580.799999952316,
+      "durationMs": 4631.599999904633,
+      "transferSize": 35488,
+      "encodedBodySize": 35188,
+      "decodedBodySize": 128430,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CxcVW9sX.js",
+      "startMs": 950.1000001430511,
+      "endMs": 5514.100000143051,
+      "durationMs": 4564,
+      "transferSize": 12533,
+      "encodedBodySize": 12233,
+      "decodedBodySize": 45378,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/KE6QOJEQ.js",
+      "startMs": 950.1000001430511,
+      "endMs": 5699.5,
+      "durationMs": 4749.399999856949,
+      "transferSize": 1861,
+      "encodedBodySize": 1561,
+      "decodedBodySize": 6919,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CS2vW1I3.js",
+      "startMs": 958.7000000476837,
+      "endMs": 5898.200000047684,
+      "durationMs": 4939.5,
+      "transferSize": 21300,
+      "encodedBodySize": 21000,
+      "decodedBodySize": 75752,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CrlB8wnd.js",
+      "startMs": 959.2999999523163,
+      "endMs": 5962.200000047684,
+      "durationMs": 5002.900000095367,
+      "transferSize": 1242,
+      "encodedBodySize": 942,
+      "decodedBodySize": 1882,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/C4RYnPHl.js",
+      "startMs": 959.6000001430511,
+      "endMs": 6554.200000047684,
+      "durationMs": 5594.599999904633,
+      "transferSize": 36796,
+      "encodedBodySize": 36496,
+      "decodedBodySize": 125003,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/fdeyZe2F.js",
+      "startMs": 959.9000000953674,
+      "endMs": 6780.5,
+      "durationMs": 5820.599999904633,
+      "transferSize": 35303,
+      "encodedBodySize": 35003,
+      "decodedBodySize": 129571,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BMK05bgA.js",
+      "startMs": 960.2000000476837,
+      "endMs": 6830.400000095367,
+      "durationMs": 5870.200000047684,
+      "transferSize": 30808,
+      "encodedBodySize": 30508,
+      "decodedBodySize": 123622,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/7IA_RtiR.js",
+      "startMs": 960.2000000476837,
+      "endMs": 6887.600000143051,
+      "durationMs": 5927.400000095367,
+      "transferSize": 31770,
+      "encodedBodySize": 31470,
+      "decodedBodySize": 120839,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BGEhLeAf.js",
+      "startMs": 960.2999999523163,
+      "endMs": 6631.799999952316,
+      "durationMs": 5671.5,
+      "transferSize": 4499,
+      "encodedBodySize": 4199,
+      "decodedBodySize": 17861,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/DaN2lPtd.js",
+      "startMs": 960.7000000476837,
+      "endMs": 6837.5,
+      "durationMs": 5876.799999952316,
+      "transferSize": 13263,
+      "encodedBodySize": 12963,
+      "decodedBodySize": 41536,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/DgqHGIA9.js",
+      "startMs": 960.7999999523163,
+      "endMs": 7187.5,
+      "durationMs": 6226.700000047684,
+      "transferSize": 11578,
+      "encodedBodySize": 11278,
+      "decodedBodySize": 39980,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CpM0PcFl.js",
+      "startMs": 960.9000000953674,
+      "endMs": 7248.5,
+      "durationMs": 6287.599999904633,
+      "transferSize": 7937,
+      "encodedBodySize": 7637,
+      "decodedBodySize": 27217,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/Bumga99e.js",
+      "startMs": 961.2999999523163,
+      "endMs": 7354.299999952316,
+      "durationMs": 6393,
+      "transferSize": 468,
+      "encodedBodySize": 168,
+      "decodedBodySize": 168,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/h-jawtkn.js",
+      "startMs": 961.2999999523163,
+      "endMs": 7404.200000047684,
+      "durationMs": 6442.900000095367,
+      "transferSize": 478,
+      "encodedBodySize": 178,
+      "decodedBodySize": 178,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/DqZIfvyl.js",
+      "startMs": 961.4000000953674,
+      "endMs": 7414.700000047684,
+      "durationMs": 6453.299999952316,
+      "transferSize": 1331,
+      "encodedBodySize": 1031,
+      "decodedBodySize": 2652,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CHOohuCE.js",
+      "startMs": 961.4000000953674,
+      "endMs": 7762.600000143051,
+      "durationMs": 6801.200000047684,
+      "transferSize": 954,
+      "encodedBodySize": 654,
+      "decodedBodySize": 1476,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/logos/logo-svg.svg",
+      "startMs": 979.7999999523163,
+      "endMs": 8196.900000095367,
+      "durationMs": 7217.100000143051,
+      "transferSize": 35448,
+      "encodedBodySize": 35148,
+      "decodedBodySize": 51431,
+      "initiatorType": "img"
+    },
+    {
+      "path": "/_nuxt/CGakhq-P.js",
+      "startMs": 6869.799999952316,
+      "endMs": 8522.900000095367,
+      "durationMs": 1653.1000001430511,
+      "transferSize": 47570,
+      "encodedBodySize": 47270,
+      "decodedBodySize": 174156,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CPNn3e9G.js",
+      "startMs": 6870.400000095367,
+      "endMs": 8531.400000095367,
+      "durationMs": 1661,
+      "transferSize": 42394,
+      "encodedBodySize": 42094,
+      "decodedBodySize": 182554,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/chat-shell.DE8wC3pP.css",
+      "startMs": 6870.900000095367,
+      "endMs": 7487.5,
+      "durationMs": 616.5999999046326,
+      "transferSize": 4670,
+      "encodedBodySize": 4370,
+      "decodedBodySize": 24304,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 8203.5,
+      "endMs": 8798.400000095367,
+      "durationMs": 594.9000000953674,
+      "transferSize": 4454,
+      "encodedBodySize": 4154,
+      "decodedBodySize": 4154,
+      "initiatorType": "other"
+    },
+    {
+      "path": "/_nuxt/BTdWUdjC.js",
+      "startMs": 8555.400000095367,
+      "endMs": 9180.900000095367,
+      "durationMs": 625.5,
+      "transferSize": 7898,
+      "encodedBodySize": 7598,
+      "decodedBodySize": 45046,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CV7mOVFx.js",
+      "startMs": 8555.799999952316,
+      "endMs": 9129.5,
+      "durationMs": 573.7000000476837,
+      "transferSize": 528,
+      "encodedBodySize": 228,
+      "decodedBodySize": 228,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/eklOY9Sf.js",
+      "startMs": 9184,
+      "endMs": 9770.900000095367,
+      "durationMs": 586.9000000953674,
+      "transferSize": 2457,
+      "encodedBodySize": 2157,
+      "decodedBodySize": 12517,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/D2aCOiaB.js",
+      "startMs": 9774.700000047684,
+      "endMs": 10354.700000047684,
+      "durationMs": 580,
+      "transferSize": 456,
+      "encodedBodySize": 156,
+      "decodedBodySize": 156,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/D4Him7rU.js",
+      "startMs": 10371.600000143051,
+      "endMs": 10957.799999952316,
+      "durationMs": 586.1999998092651,
+      "transferSize": 2297,
+      "encodedBodySize": 1997,
+      "decodedBodySize": 5688,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/ChatEmptyState.DXKINS8A.css",
+      "startMs": 10432.600000143051,
+      "endMs": 11014.5,
+      "durationMs": 581.8999998569489,
+      "transferSize": 1153,
+      "encodedBodySize": 853,
+      "decodedBodySize": 3798,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/ChatInput.C40fO-TX.css",
+      "startMs": 10438,
+      "endMs": 11031.400000095367,
+      "durationMs": 593.4000000953674,
+      "transferSize": 1962,
+      "encodedBodySize": 1662,
+      "decodedBodySize": 10225,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/_nuxt/B-QzgHc0.js",
+      "startMs": 11051.5,
+      "endMs": 11754.200000047684,
+      "durationMs": 702.7000000476837,
+      "transferSize": 4685,
+      "encodedBodySize": 4385,
+      "decodedBodySize": 12725,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/xvMdU3YY.js",
+      "startMs": 11051.700000047684,
+      "endMs": 11720.900000095367,
+      "durationMs": 669.2000000476837,
+      "transferSize": 3075,
+      "encodedBodySize": 2775,
+      "decodedBodySize": 9419,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CXbQT7uV.js",
+      "startMs": 11052.799999952316,
+      "endMs": 11748.200000047684,
+      "durationMs": 695.4000000953674,
+      "transferSize": 3435,
+      "encodedBodySize": 3135,
+      "decodedBodySize": 8795,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/suggestions.D1ChPnYQ.css",
+      "startMs": 11054,
+      "endMs": 11704.200000047684,
+      "durationMs": 650.2000000476837,
+      "transferSize": 1604,
+      "encodedBodySize": 1304,
+      "decodedBodySize": 6346,
+      "initiatorType": "link"
+    },
+    {
+      "path": "/blank-chat-background.webp",
+      "startMs": 11080.600000143051,
+      "endMs": 13465.299999952316,
+      "durationMs": 2384.699999809265,
+      "transferSize": 135624,
+      "encodedBodySize": 135324,
+      "decodedBodySize": 135324,
+      "initiatorType": "img"
+    },
+    {
+      "path": "/bird-on-cloud.webp",
+      "startMs": 11080.700000047684,
+      "endMs": 13898.200000047684,
+      "durationMs": 2817.5,
+      "transferSize": 212166,
+      "encodedBodySize": 211866,
+      "decodedBodySize": 211866,
+      "initiatorType": "img"
+    },
+    {
+      "path": "/_nuxt/CRWc74fD.js",
+      "startMs": 11146.700000047684,
+      "endMs": 12414.900000095367,
+      "durationMs": 1268.2000000476837,
+      "transferSize": 5436,
+      "encodedBodySize": 5136,
+      "decodedBodySize": 17774,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BpEuRCHZ.js",
+      "startMs": 11147.5,
+      "endMs": 12348.299999952316,
+      "durationMs": 1200.7999999523163,
+      "transferSize": 420,
+      "encodedBodySize": 120,
+      "decodedBodySize": 120,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/BDr8cn2k.js",
+      "startMs": 11147.5,
+      "endMs": 12397.400000095367,
+      "durationMs": 1249.9000000953674,
+      "transferSize": 3181,
+      "encodedBodySize": 2881,
+      "decodedBodySize": 10037,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/UpzSqc4Q.js",
+      "startMs": 11149.5,
+      "endMs": 12464.799999952316,
+      "durationMs": 1315.2999999523163,
+      "transferSize": 4994,
+      "encodedBodySize": 4694,
+      "decodedBodySize": 15732,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/CYsJsn1x.js",
+      "startMs": 11442.600000143051,
+      "endMs": 13287.5,
+      "durationMs": 1844.8999998569489,
+      "transferSize": 21809,
+      "encodedBodySize": 21509,
+      "decodedBodySize": 78894,
+      "initiatorType": "script"
+    },
+    {
+      "path": "/_nuxt/builds/meta/78e2f6c3-6f22-4c12-aa12-22814782057a.json",
+      "startMs": 12152,
+      "endMs": 12987.5,
+      "durationMs": 835.5,
+      "transferSize": 388,
+      "encodedBodySize": 88,
+      "decodedBodySize": 88,
+      "initiatorType": "fetch"
+    }
+  ],
+  "requestCount": 74,
+  "transferredBytes": 1450584,
+  "geometry": {
+    "composer": {
+      "x": 22.78125,
+      "y": 881.84375,
+      "width": 394.4375,
+      "height": 47.5625,
+      "top": 881.84375,
+      "right": 417.21875,
+      "bottom": 929.40625,
+      "left": 22.78125
+    },
+    "input": {
+      "x": 103.578125,
+      "y": 895.609375,
+      "width": 267.046875,
+      "height": 20,
+      "top": 895.609375,
+      "right": 370.625,
+      "bottom": 915.609375,
+      "left": 103.578125
+    },
+    "navigation": {
+      "x": 1.890625,
+      "y": 3.796875,
+      "width": 41.78125,
+      "height": 38,
+      "top": 3.796875,
+      "right": 43.671875,
+      "bottom": 41.796875,
+      "left": 1.890625
+    },
+    "settings": {
+      "x": 65.5625,
+      "y": 890.40625,
+      "width": 30.390625,
+      "height": 30.390625,
+      "top": 890.40625,
+      "right": 95.953125,
+      "bottom": 920.796875,
+      "left": 65.5625
+    }
+  },
+  "errors": [],
+  "rawTraceSha256": "235060b577ad643e8ae7a51dbb712b8c2f8d36dab76b84765f10085c900be8e3",
+  "screenshotSha256": "6a28b080a62e52280c055b1901790192696a062c385d5d392845e907a81576de"
+}

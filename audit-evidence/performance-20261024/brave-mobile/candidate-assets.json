@@ -1,0 +1,51 @@
+{
+  "javascript": {
+    "files": 392,
+    "rawBytes": 13814988,
+    "gzipBytes": 4409114,
+    "largest": {
+      "path": "public/_nuxt/main-UfddMIVy.js",
+      "rawBytes": 1650954,
+      "gzipBytes": 952498
+    }
+  },
+  "css": {
+    "files": 39,
+    "rawBytes": 932277,
+    "gzipBytes": 146073,
+    "largest": {
+      "path": "public/_nuxt/startup.DYhNVibg.css",
+      "rawBytes": 393089,
+      "gzipBytes": 52642
+    }
+  },
+  "precache": {
+    "present": true,
+    "files": 467,
+    "rawBytes": 19378576,
+    "gzipBytes": 9328274,
+    "missing": []
+  },
+  "rootHtml": {
+    "present": true,
+    "modulepreload": {
+      "files": 27,
+      "rawBytes": 1819623,
+      "gzipBytes": 572302,
+      "missing": []
+    },
+    "prefetch": {
+      "files": 0,
+      "rawBytes": 0,
+      "gzipBytes": 0,
+      "missing": []
+    }
+  },
+  "compression": {
+    "eligibleFiles": 345,
+    "gzipFiles": 345,
+    "brotliFiles": 345,
+    "missingGzip": [],
+    "missingBrotli": []
+  }
+}
