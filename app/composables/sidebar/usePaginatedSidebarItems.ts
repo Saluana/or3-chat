@@ -1,5 +1,5 @@
 import { ref, shallowRef, type Ref, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue';
-import Dexie, { liveQuery, type Subscription } from 'dexie';
+import { liveQuery, type Subscription } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
@@ -27,9 +27,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             const thread = await db.threads.get(id);
             if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
-        // Family paging crosses native async-generator and timer boundaries.
-        // Keep Dexie's live-query context through the complete page read.
-        const page = await Dexie.waitFor(readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter }));
+        const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
         const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db, currentFilter);
         for (const item of page.items) {
             if (!item.family) { rows.push(item); continue; }

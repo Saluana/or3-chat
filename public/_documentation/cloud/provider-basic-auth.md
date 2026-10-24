@@ -18,6 +18,13 @@ the compact Account/Login tile; the mobile More sheet requests
 `layout="more-sheet"` and receives a full-width row matching Connect and the
 System actions. The signed-in Account row still opens the provider menu.
 
+After sign-in or registration, the host loads the canonical workspace session.
+If that service is unavailable, a persistent **Unable to load your account**
+notification offers **Retry**. Retry keeps the accepted credentials and loads
+the session again; when the service recovers, the account and workspace open
+without creating another account or submitting the password again. For local
+Convex development, keep the local Convex backend running alongside the app.
+
 ## Lock page
 
 With `OR3_AUTH_LOCK_PAGE_ENABLED=true`, `/welcome` shows the branded lock page.
