@@ -1,0 +1,99 @@
+[
+  {
+    "mode": "chromium-private",
+    "browser": "153.0.8010.12",
+    "cases": [
+      {
+        "name": "Blob",
+        "storedType": "Blob",
+        "content": "hello"
+      },
+      {
+        "name": "File",
+        "storedType": "File",
+        "content": "hello"
+      },
+      {
+        "name": "Uint8Array",
+        "storedType": "Uint8Array",
+        "content": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "webkit-private",
+    "browser": "26.6",
+    "cases": [
+      {
+        "name": "Blob",
+        "error": "UnknownError",
+        "message": "Error preparing Blob/File data to be stored in object store"
+      },
+      {
+        "name": "File",
+        "error": "UnknownError",
+        "message": "Error preparing Blob/File data to be stored in object store"
+      },
+      {
+        "name": "Uint8Array",
+        "storedType": "Uint8Array",
+        "content": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "webkit-persistent",
+    "browser": "26.6",
+    "cases": [
+      {
+        "name": "Blob",
+        "storedType": "Blob",
+        "content": "hello"
+      },
+      {
+        "name": "File",
+        "storedType": "File",
+        "content": "hello"
+      },
+      {
+        "name": "Uint8Array",
+        "storedType": "Uint8Array",
+        "content": [
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "routeControls": [
+      {
+        "allowLocalBlob": false,
+        "error": "EncodingError: Loading error."
+      },
+      {
+        "allowLocalBlob": true,
+        "width": 64
+      }
+    ],
+    "fixtures": [
+      {
+        "path": "/__or3-chat-journey-test?model=plain&imagehistory=1",
+        "ready": true,
+        "errors": []
+      },
+      {
+        "path": "/__or3-scroll-test",
+        "ready": true,
+        "errors": []
+      }
+    ]
+  }
+]

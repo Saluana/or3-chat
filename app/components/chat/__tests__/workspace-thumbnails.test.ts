@@ -5,6 +5,7 @@ import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
 import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import MessageAttachmentsGallery from '../MessageAttachmentsGallery.vue';
+import ChatMessage from '../ChatMessage.vue';
 import PaletteImageThumb from '../../search/PaletteImageThumb.vue';
 
 const files = vi.hoisted(() => ({ meta: vi.fn(), blob: vi.fn() }));
@@ -45,6 +46,30 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    it('hydrates a streaming inline image when its thumbnail becomes ready during a quiet throttle window', async () => {
+        vi.useFakeTimers();
+        let ready!: (meta: typeof originMeta) => void;
+        files.meta.mockImplementationOnce(() => new Promise(resolve => { ready = resolve; }));
+        try {
+            const wrapper = mount(ChatMessage, {
+                props: { message: { id: 'quiet-image', role: 'assistant', pending: true,
+                    text: `![file-hash:${hash}](data:image/gif;base64,R0lGODlhAQABAAAAACw=)`, file_hashes: [hash] } },
+                global: { stubs: { ThreadChildLinks: true, ProjectMessageContext: true } },
+            });
+            wrappers.push(wrapper);
+            await flushPromises();
+            await vi.advanceTimersByTimeAsync(30);
+            ready(originMeta);
+            await flushPromises();
+            await vi.advanceTimersByTimeAsync(300);
+            const image = wrapper.get('img[alt^="file-hash:"]');
+            expect(image.attributes('src')).toBe('blob:consumer-origin');
+            expect(image.attributes('data-hydrated')).toBe('true');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     // Streaming replaces the message projection on every text frame. A slow
     // metadata read must not be reissued for unchanged attachment contents.
     it('keeps pending attachment reads stable across text updates and loads later hashes', async () => {

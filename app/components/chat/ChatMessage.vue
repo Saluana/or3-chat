@@ -349,7 +349,7 @@
                     <!-- legacy rendered html path removed -->
                 </div>
                 <ChatToolCardsEnd
-                    v-if="props.message.role === 'assistant'"
+                    v-if="props.message.role === 'assistant' && props.message.toolCalls?.length"
                     :message="props.message"
                     @resize="emit('content-resize')"
                 />
@@ -597,6 +597,7 @@ import {
     watch,
     nextTick,
     onMounted,
+    onBeforeUnmount,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -1104,6 +1105,14 @@ const rafHydrate = useRafFn(
 // Throttle hydration checks to avoid excessive re-renders during streaming
 let lastHydrateCheck = 0;
 const HYDRATE_THROTTLE_MS = 200; // Only check every 200ms during streaming
+let hydrateTimer: ReturnType<typeof setTimeout> | undefined;
+function resumeInlineHydration() {
+    clearTimeout(hydrateTimer);
+    hydrateTimer = undefined;
+    lastHydrateCheck = Date.now();
+    rafHydrate.resume();
+}
+onBeforeUnmount(() => clearTimeout(hydrateTimer));
 
 watch(
     [
@@ -1117,11 +1126,14 @@ watch(
 
         const now = Date.now();
         const isPending = props.message.pending === true;
-        if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
+        const remaining = HYDRATE_THROTTLE_MS - (now - lastHydrateCheck);
+        if (isPending && remaining > 0) {
+            // Retain a trailing check: thumbnail readiness or the last image
+            // placeholder may arrive while the provider is otherwise quiet.
+            hydrateTimer ??= setTimeout(resumeInlineHydration, remaining);
             return;
         }
-        lastHydrateCheck = now;
-        rafHydrate.resume();
+        resumeInlineHydration();
     },
     { immediate: true }
 );

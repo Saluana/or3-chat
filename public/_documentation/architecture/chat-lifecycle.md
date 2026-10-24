@@ -34,6 +34,13 @@ replace the presentation row; nested reactive metadata keeps its existing behavi
 
 ## Streaming, stopping, and teardown
 
+Generated-image placeholders enter the same live text accumulator as provider
+text, including during Continue, so later text retains their order and visibility.
+Inline thumbnail hydration retains a bounded trailing check when readiness
+arrives during a quiet stream; unmount cancels that check. Delayed continuation
+image intake rechecks request ownership before publishing content after Stop or
+navigation.
+
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
