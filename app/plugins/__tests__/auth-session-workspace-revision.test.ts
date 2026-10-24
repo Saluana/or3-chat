@@ -43,6 +43,7 @@ describe('auth session cross-tab workspace refresh', () => {
         scope.stop();
         for (const [target, type, listener] of listeners) target.removeEventListener(type, listener);
         vi.restoreAllMocks();
+        vi.unstubAllGlobals();
         vi.useRealTimers();
     });
     beforeEach(() => {
@@ -80,6 +81,7 @@ describe('auth session cross-tab workspace refresh', () => {
             public: { ssrAuthEnabled: true },
         });
         (globalThis as any).reloadNuxtApp = reloadNuxtAppMock;
+        vi.stubGlobal('useToast', () => ({ add: vi.fn(), remove: vi.fn() }));
     });
 
     it('applies a newer storage revision and ignores an older one', async () => {
