@@ -65,20 +65,27 @@ export async function pruneRetiredFamilyPreference(db: Or3DB, rootId: string): P
     const name = familyExpansionPreferenceName(rootId); const preference = await getKvByName(name, db);
     if (!preference || preference.deleted) return;
     const resolver = rootResolver(db);
-    for await (const page of threadPages(db)) {
+    let retained = false;
+    await visitThreadPages(db, async (page) => {
         resolver.seed(page);
-        for (const row of page) if (!row.deleted && (await resolver.resolve(row)).id === rootId) return;
-    }
-    await tombstoneKvByName(name, db);
+        for (const row of page) if (!row.deleted && (await resolver.resolve(row)).id === rootId) {
+            retained = true; return false;
+        }
+        return true;
+    });
+    if (!retained) await tombstoneKvByName(name, db);
 }
-async function* threadPages(db: Or3DB) {
+// Native async-generator iteration can stall when repeated live queries replace
+// one another. Keep the same bounded batches and yields in ordinary async calls.
+type ThreadPageVisitor = (page: Thread[]) => Promise<boolean>;
+async function visitThreadPages(db: Or3DB, visit: ThreadPageVisitor) {
     let before: [number, number, string] | undefined;
     for (;;) {
         const query = before ? db.threads.where('[updated_at+created_at+id]').below(before)
             : db.threads.orderBy('[updated_at+created_at+id]');
         const page = await query.reverse().limit(100).toArray();
         if (!page.length) return;
-        yield page;
+        if (!await visit(page)) return;
         const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
         if (page.length < 100) return;
         await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));
@@ -104,16 +111,16 @@ async function projectThreadRows(db: Or3DB, projectId: string, legacy: ReadonlyS
         .map(row => [row.id, row])).values()].sort(compare);
 }
 
-async function* activityThreadPages(db: Or3DB, filter: FamilyFilter, legacy: ReadonlySet<string>) {
-    if (filter.projectId === undefined) yield* threadPages(db);
-    else yield await projectThreadRows(db, filter.projectId, legacy);
+async function visitActivityThreadPages(db: Or3DB, filter: FamilyFilter, legacy: ReadonlySet<string>, visit: ThreadPageVisitor) {
+    if (filter.projectId === undefined) await visitThreadPages(db, visit);
+    else await visit(await projectThreadRows(db, filter.projectId, legacy));
 }
 
 export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 'all' | 'thread' | 'document'; filter: FamilyFilter }) {
     const resolver = rootResolver(db); const roots = new Set<string>();
     const legacy = await legacyProjectMembers(db, options.filter.projectId);
     const families: Array<{ member: Thread; root: Root }> = [];
-    if (options.type !== 'document') for await (const page of activityThreadPages(db, options.filter, legacy)) {
+    if (options.type !== 'document') await visitActivityThreadPages(db, options.filter, legacy, async (page) => {
         resolver.seed(page);
         for (const member of page) {
             if (!allowed(member, options.filter, legacy)) continue;
@@ -121,8 +128,8 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             roots.add(root.id); families.push({ member, root });
             if (families.length > options.limit) break;
         }
-        if (families.length > options.limit) break;
-    }
+        return families.length <= options.limit;
+    });
     const documents: Post[] = [];
     if (options.type !== 'thread' && options.filter.pinned !== true) {
         const project = options.filter.projectId === undefined ? undefined : await db.projects.get(options.filter.projectId);
@@ -181,7 +188,7 @@ export function createFamilyFallback(db: Or3DB, filter: FamilyFilter = {}) {
     return () => snapshot ??= (async () => {
         const rows: Thread[] = []; const resolver = rootResolver(db);
         const legacy = await legacyProjectMembers(db, filter.projectId);
-        for await (const page of activityThreadPages(db, filter, legacy)) { rows.push(...page); resolver.seed(page); }
+        await visitActivityThreadPages(db, filter, legacy, async (page) => { rows.push(...page); resolver.seed(page); return true; });
         const families = new Map<string, Thread[]>();
         for (const row of rows) {
             const rootId = (await resolver.resolve(row)).id;
