@@ -201,6 +201,7 @@ export async function forkThread({
         project_id: projectId,
         id: forkId,
         title: titleOverride || `${src.title || 'Branch'} - fork`,
+        title_source: 'manual',
         parent_thread_id: sourceThreadId,
         anchor_message_id: anchorMessageId,
         anchor_index: anchor.index,

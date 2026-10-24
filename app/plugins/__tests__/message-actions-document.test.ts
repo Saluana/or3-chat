@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
         | undefined,
     addToast: vi.fn(),
     createDocument: vi.fn(),
+    generateTitle: vi.fn(),
     convert: vi.fn(),
     addPane: vi.fn(),
     panes: {
@@ -26,6 +27,8 @@ const mocks = vi.hoisted(() => ({
     canAddPane: { value: true },
     isMobile: { value: false },
 }));
+
+vi.mock('~/utils/titles/generate', () => ({ generateAutomaticTitle: mocks.generateTitle }));
 
 vi.mock('#imports', () => ({
     useToast: () => ({ add: mocks.addToast }),
@@ -131,4 +134,33 @@ describe('Create document message action', () => {
             })
         );
     });
+    it('opens before title inference settles and retains the original document content', async () => {
+        mocks.generateTitle.mockReturnValue(new Promise(() => {}));
+        mocks.convert.mockReturnValue({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original content' }] }] });
+        await mocks.action?.handler({ message: { text: 'Original content without a heading' } });
+        expect(mocks.panes.value[0]?.documentId).toBe('doc-1');
+        await vi.waitFor(() => expect(mocks.generateTitle).toHaveBeenCalledTimes(1));
+        expect(mocks.createDocument.mock.calls[0]![0]).toMatchObject({ title_source: 'temporary',
+            content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original content' }] }] } });
+    });
+
+    it('reuses a suitable Markdown heading and never requests inference', async () => {
+        await mocks.action?.handler({ message: { text: '# OR3 Plugin Architecture\nOriginal body' } });
+        expect(mocks.createDocument).toHaveBeenCalledWith(expect.objectContaining({ title: 'OR3 Plugin Architecture', title_source: 'heading' }));
+        expect(mocks.generateTitle).not.toHaveBeenCalled();
+    });
+
+    it('coalesces concurrent duplicate clicks before opening another document or starting another title job', async () => {
+        let resolve!: () => void;
+        const conversion = new Promise<void>(done => { resolve = done; });
+        mocks.createDocument.mockImplementation(async () => { await conversion; return { id: 'doc-1' }; });
+        const context = { message: { text: 'Same message content' } };
+        const first = mocks.action!.handler(context);
+        const duplicate = mocks.action!.handler(context);
+        resolve();
+        await Promise.all([first, duplicate]);
+        expect(mocks.createDocument).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(mocks.generateTitle).toHaveBeenCalledTimes(1));
+    });
+
 });
