@@ -34,7 +34,6 @@ import SidebarFamilyItem from '../SidebarFamilyItem.vue';
 import SidebarTimeGroupedList from '../SidebarTimeGroupedList.vue';
 import SidebarProjectsSection from '../SidebarProjectsSection.vue';
 import { readFamilyPage } from '~/utils/sidebar/thread-families';
-import * as familyQueries from '~/utils/sidebar/thread-families';
 
 const Content = defineComponent({
     name: 'SidebarContentFixture',
@@ -76,30 +75,23 @@ describe('mounted sidebar workspace isolation', () => {
             deleted: false, pinned: false, forked: false, clock: 1,
             created_at: 1000 - index, updated_at: 1000 - index,
         })));
-        const pages = vi.spyOn(familyQueries, 'readFamilyPage');
         wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
             global: { stubs: { SidebarUnifiedItem: true } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
         const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
-        // Each page resolves real IndexedDB family/child queries. Shared CI
-        // runners can take longer than waitFor's one-second default while the
-        // full core suite and type-check run together; keep the exact page
-        // assertions, but give the observable database result time to arrive.
-        const waitForRows = (count: number) => vi.waitFor(() => expect(rowCount()).toBe(count), { timeout: 5000 });
-        try {
-            await waitForRows(50);
-            for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
-            await waitForRows(100);
-            scroller().vm.$emit('reachBottom');
-            await waitForRows(150);
-        } catch (error) {
-            const results = await Promise.all(pages.mock.results.map(async result => {
-                try { const page = await result.value; return { count: page.items.length, hasMore: page.hasMore }; }
-                catch (failure) { return { error: String(failure) }; }
-            }));
-            throw new Error(`Sidebar pagination queries: ${JSON.stringify(results)}`, { cause: error });
-        } finally { pages.mockRestore(); }
-    }, 20_000);
+        // Page reads use real IndexedDB and the result still needs a Vue
+        // render. Wait for both instead of sampling during a pending flush;
+        // shared CI runners also need a bounded allowance for these I/O reads.
+        const waitForRows = (count: number) => vi.waitFor(async () => {
+            await nextTick();
+            expect(rowCount()).toBe(count);
+        }, { timeout: 15_000 });
+        await waitForRows(50);
+        for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
+        await waitForRows(100);
+        scroller().vm.$emit('reachBottom');
+        await waitForRows(150);
+    }, 50_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
