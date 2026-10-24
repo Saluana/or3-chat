@@ -85,7 +85,8 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [project/model list mount work](CATALOG-PROJECTS.md), and
 [rich streaming style invalidation](RICH-STREAMING.md), and
 [on-demand syntax grammars](HIGHLIGHTING.md), and
-[icon setup during virtual recycling](ICON-RESOLUTION.md), with separate raw production
+[icon setup during virtual recycling](ICON-RESOLUTION.md), and
+[scaled sidebar pointer tracking](SIDEBAR-DRAG.md), with separate raw production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
