@@ -338,7 +338,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect or paste a personal key, disconnect, recover from callback errors, and prepare a real OpenRouter preview."
+                    "summary": "Connect or paste a personal key, disconnect, understand quiet startup checks and migration errors, diagnose Cloud callback failures with credential-safe stages, and prepare a real OpenRouter preview."
                 },
                 {
                     "name": "reference.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, branded sign-in and registration dialogs, short invitation codes, session-preserving registration refusals, preflight and retries, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, branded sign-in and registration dialogs, visible workspace-session failures with retry, short invitation codes, session-preserving registration refusals, and provider-isolated status and recovery adapters."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits, background admission recovery and restart drain accounting, retained metadata, and atomic signup invitations with short codes. Host-controlled enrollment and receipt-bound native object ownership prevent direct-token enrollment and cross-workspace storage aliases."
+                    "summary": "Convex setup, synchronized title sources, background message ordering and admission recovery, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits and restart drain accounting, retained metadata, and atomic signup invitations with short codes. Host-controlled enrollment and receipt-bound native object ownership prevent direct-token enrollment and cross-workspace storage aliases."
                 },
                 {
                     "name": "provider-s3.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Configure upload and retained storage quotas, indexed browser cache budgeting, verified redundancy proofs, bounded thumbnail loading, authorized transfers and retained-original backup reads."
+                    "summary": "Configure upload and retained storage quotas, offline intake with verified workspace settings, indexed browser cache budgeting, verified redundancy proofs, bounded thumbnail loading, authorized transfers and retained-original backup reads."
                 },
                 {
                     "name": "plugin-access-gating.md",
