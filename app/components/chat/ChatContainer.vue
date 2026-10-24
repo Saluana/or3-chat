@@ -20,7 +20,7 @@
             <Or3Scroll
                 ref="scroller"
                 :items="allMessages"
-                :item-key="(m) => m.id || m.stream_id || ''"
+                :item-key="messageKey"
                 :estimate-height="80"
                 :overscan="5500"
                 :prefetch-overscan="5500"
@@ -45,8 +45,8 @@
                         :data-msg-id="item.id"
                         :data-stream-id="item.stream_id"
                     >
-                        <component
-                            :is="
+                        <ChatMessageHost
+                            :renderer="
                                 resolveCoreChatComponent(
                                     $theme.activeComponents.value[
                                         'chat-message'
@@ -64,16 +64,11 @@
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
-                            @view-compaction-source="
-                                onViewCompactionSource(item, $event)
-                            "
-                            @view-related-thread="
-                                onViewRelatedThread(item, $event)
-                            "
+                            :on-view-compaction-source="onViewCompactionSource"
+                            :on-view-related-thread="onViewRelatedThread"
                             @edited="onEdited"
-                            @begin-edit="onBeginEdit(item.id)"
-                            @cancel-edit="onEndEdit(item.id)"
-                            @save-edit="onEndEdit(item.id)"
+                            :on-begin-edit="onBeginEdit"
+                            :on-end-edit="onEndEdit"
                         />
                     </div>
                 </template>
@@ -221,6 +216,7 @@ import type {
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatMessageHost from '~/components/chat/ChatMessageHost.vue';
 import ChatEmptyStateMedia from './ChatEmptyStateMedia.vue';
 import { resolveChatEmptyState, type EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 import { useEmptyChatActionHost } from '~/composables/chat/useEmptyChatActions';
@@ -725,6 +721,9 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+function messageKey(message: UiChatMessage) {
+    return message.id || message.stream_id || '';
+}
 const compactionPreferences = useAiSettings();
 const compactionModels = useModelStore();
 const historyRegistry = useToolRegistry();
