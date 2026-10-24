@@ -1,5 +1,5 @@
 import { ref, shallowRef, type Ref, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue';
-import Dexie, { liveQuery, type Subscription } from 'dexie';
+import { liveQuery, type Subscription } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
@@ -27,9 +27,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             const thread = await db.threads.get(id);
             if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
-        // Family paging crosses native async-generator and timer boundaries.
-        // Keep Dexie's live-query context through the complete page read.
-        const page = await Dexie.waitFor(readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter }));
+        const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
         const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db, currentFilter);
         for (const item of page.items) {
             if (!item.family) { rows.push(item); continue; }
@@ -52,21 +50,18 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             if (memberPage.hasMore) rows.push({ ...item, family: { ...item.family, kind: 'load-more-members', key: 'more-members:' + rootId } });
         }
         if (getDb() !== db || getWorkspaceGeneration() !== generation) throw new Error('Sidebar workspace changed.');
-        console.warn('PAGING fetched', rows.length, getWorkspaceGeneration());
         return { rows, hasMore: page.hasMore, activeRoots };
     }
     function startSubscription() {
         if (!mounted) return;
         const token = ++subscriptionToken; const db = getDb(); const generation = getWorkspaceGeneration();
-        console.warn('PAGING start', token, targetCount.value, generation);
         pageRequestPending = true;
         loading.value = items.value.length === 0; subscription?.unsubscribe();
         subscription = liveQuery(fetchItems).subscribe({ next: (result) => {
-            console.warn('PAGING next', token, subscriptionToken, result.rows.length, getDb() === db, generation, getWorkspaceGeneration());
             if (token !== subscriptionToken || getDb() !== db || generation !== getWorkspaceGeneration()) return;
             pageRequestPending = false;
             items.value = result.rows; activeFamilyIds.value = result.activeRoots; hasMore.value = result.hasMore; loading.value = false;
-        }, error: (error) => { console.warn('PAGING error', token, String(error)); if (token === subscriptionToken) { pageRequestPending = false; loading.value = false; } } });
+        }, error: () => { if (token === subscriptionToken) { pageRequestPending = false; loading.value = false; } } });
     }
     function loadMore() { if (pageRequestPending || loading.value || !hasMore.value) return; targetCount.value += FAMILY_PAGE_SIZE; startSubscription(); }
     function reset() { targetCount.value = FAMILY_PAGE_SIZE; memberLimits.clear(); hasMore.value = true; startSubscription(); }
