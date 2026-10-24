@@ -1,4 +1,3 @@
-import { Session } from 'node:inspector';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, computed, h, ref, KeepAlive, nextTick } from 'vue';
 import { mount, shallowMount, type VueWrapper } from '@vue/test-utils';
@@ -68,11 +67,6 @@ describe('mounted sidebar workspace isolation', () => {
     // One journey crosses both database batch boundaries, exact UI pages,
     // and the partial final page while checking repeated-event admission.
     it('admits one pending page and reaches the final thread across database batches', async () => {
-        const profiler = new Session();
-        profiler.connect();
-        await new Promise<void>((resolve) => profiler.post('Profiler.enable', () => resolve()));
-        await new Promise<void>((resolve) => profiler.post('Profiler.start', () => resolve()));
-        try {
         const threadCount = 201;
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
@@ -85,9 +79,11 @@ describe('mounted sidebar workspace isolation', () => {
             created_at: 1000 - index, updated_at: 1000 - index,
         })));
         wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
-            global: { stubs: { SidebarUnifiedItem: true } } });
+            global: { stubs: { SidebarUnifiedItem: { template: '<div data-sidebar-page-row />' } } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
-        const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
+        // Repeated component-wrapper construction registers native listeners
+        // in Vue Test Utils. Observe the rendered fixture DOM directly.
+        const rowCount = () => wrapper!.element.querySelectorAll('[data-sidebar-page-row]').length;
         // Native scroll events begin a new event-loop task, outside the
         // promise scope of the preceding IndexedDB subscription result.
         const reachBottom = (burst = 1) => new Promise<void>(resolve => {
@@ -99,7 +95,7 @@ describe('mounted sidebar workspace isolation', () => {
         // Poll rendered rows synchronously; Vue flushes between attempts.
         const waitForRows = (count: number) => vi.waitFor(() => {
             expect(rowCount()).toBe(count);
-        }, { timeout: 15_000 });
+        }, { timeout: 5000 });
         await waitForRows(50);
         await reachBottom(3);
         await waitForRows(100);
@@ -107,17 +103,7 @@ describe('mounted sidebar workspace isolation', () => {
             await reachBottom();
             await waitForRows(Math.min(count, threadCount));
         }
-        } finally {
-            await new Promise<void>((resolve) => profiler.post('Profiler.stop', (_error, result) => {
-                console.warn('SIDEBAR CPU PROFILE', JSON.stringify(result?.profile.nodes
-                    .sort((a, b) => (b.hitCount ?? 0) - (a.hitCount ?? 0)).slice(0, 30)
-                    .map(node => ({ fn: node.callFrame.functionName, url: node.callFrame.url,
-                        line: node.callFrame.lineNumber, hits: node.hitCount }))));
-                profiler.disconnect();
-                resolve();
-            }));
-        }
-    }, 60_000);
+    }, 30_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
