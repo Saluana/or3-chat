@@ -246,3 +246,53 @@ physical database and check fresh ownership inside each write, including deleted
 superseded and tracker-takeover states. They never replay a provider or tool.
 Preparation effects run once; completion effects run once following the durable
 write. Canonical/tracker failures remain with their existing recovery owners.
+
+## Automatic titles
+
+A new chat saves a short first-message title immediately. Its first descriptive
+user turn starts one auxiliary title request after message persistence, without
+awaiting it in the streaming path. Short greetings wait for a descriptive user
+turn. Later messages, retries and branches do not regenerate titles; use Rename.
+
+Chats and message-created documents share `/api/openrouter/title`. Inference runs
+on the backend through the existing OpenRouter credential policy, including
+server-stored BYOK versus instance billing. The default is
+`deepseek/deepseek-v4.1-flash:nitro`; the complete routing ID reaches OpenRouter.
+Workspace owners can select a supported text model and routing in Dashboard → AI
+Settings → Title Generation Model. Managed settings live in the private
+`WorkspaceSettingsStore`; ordinary editors cannot change them or override the
+model in requests. Source/local mode uses existing AI settings KV persistence.
+A changed model affects future requests only.
+
+Optional `title_source` on threads/posts distinguishes temporary, generating,
+generated, heading, manual and failed titles. One local transaction claims the
+request; completion conditionally updates the still-automatic title. Renames,
+deletions, edits to the originating user message, workspace/account changes and staged document renames prevent stale
+updates. Existing rows are not backfilled. No indexes or Dexie migration are
+needed, and title writes use the existing transactional outbox capture.
+
+Inference sends at most 2,400 source characters and requests at most 48 output
+tokens, without streaming, tools, web search or reasoning. The provider deadline
+is eight seconds (client transport: ten seconds), with zero automatic retries.
+Failures retain the fallback. Reloading does not restart pending work, and static
+hosts without a backend retain their fallback titles. Diagnostics record only
+kind, outcome and duration, never content or credentials.
+
+A successful chat title adds one browser POST, one provider POST, two thread-row
+reads, one originating-message read and two writes (claim and completion). Local mode also reads the AI settings
+KV once (one KV lookup and one tombstone lookup); managed inference reads the private model setting once. These writes
+participate in normal outbox coalescing/sync; no separate sync requests or polling
+are scheduled. Later descriptive turns are excluded using already-loaded history.
+Documents with headings add no inference requests or title-state writes. An
+AI-named document uses three post-row reads and two writes beyond creation.
+Message-action idempotency uses three post lookups on first creation; replay uses
+one lookup and preserves existing edits. Opening AI Settings in managed mode adds
+one model-setting GET; saving adds one admin POST and one catalog lookup.
+These counts cover direct feature operations; existing auth/credential-store
+reads and IndexedDB observers depend on the provider and open views. Project
+shortcuts read canonical native titles through their existing observer, without
+additional project writes.
+
+Admission is atomic across tabs sharing the workspace IndexedDB. Disconnected
+profiles/devices still reconcile through OR3's existing clock/HLC LWW policy;
+this feature does not introduce cross-device locks or change that sync contract.
