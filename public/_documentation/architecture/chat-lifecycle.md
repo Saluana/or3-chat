@@ -62,6 +62,13 @@ their existing main-thread behavior; custom renderers keep their own lifecycle.
 
 Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
 
+The container reuses an active display projection when all of its fields are
+unchanged. Immediate updates to the persistence snapshot must not republish the
+same displayed text before the accumulator's next frame. Metadata remains
+reactive, and finalization returns the controller's terminal message directly.
+The scroll-to-bottom control respects the scroller's bottom state: a temporary
+pixel gap while content grows must not make it appear during bottom following.
+
 `createStreamAccumulator()` in `app/composables/chat/useStreamAccumulator.ts`
 buffers text and reasoning separately and batches reactive flushes with animation
 frames, with a microtask fallback when frames are unavailable. `finalize()`

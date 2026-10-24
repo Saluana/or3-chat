@@ -94,7 +94,8 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [mobile More stacking and stream style scope](MORE-SHEET-STYLE.md), and
 [owned syntax highlighting workers](COLD-HIGHLIGHTING.md), and
 [painted virtual-scroll coverage and large-jump controls](SCROLL-PAINT.md), and
-[stable lazy message handlers and shell update scope](SHELL-WRAPPERS.md), with separate raw production
+[stable lazy message handlers and shell update scope](SHELL-WRAPPERS.md), and
+[stable stream projections and bottom controls](STREAM-PROJECTIONS.md), with separate raw production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own

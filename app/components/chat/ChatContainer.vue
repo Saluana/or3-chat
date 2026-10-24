@@ -127,7 +127,7 @@
                 <div
                     class="absolute bottom-full left-0 right-0 mb-2 flex justify-center pointer-events-none transition-opacity duration-200"
                     :style="{ opacity: scrollToBottomOpacity }"
-                    v-show="isScrollable && distanceFromBottom > 1"
+                    v-show="!atBottom && isScrollable && distanceFromBottom > 1"
                 >
                     <UButton
                         v-bind="scrollToBottomButtonProps"
@@ -613,14 +613,14 @@ provideChatProjectOwner(() => props.threadId ?? currentThreadId.value);
 // Tail active means stream not finalized
 const streamActive = computed(() => !(streamState.value?.finalized ?? false));
 // Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
-const streamingMessage = computed<UiChatMessage | null>(() => {
+const streamingMessage = computed<UiChatMessage | null>((previous) => {
     const base = tailAssistant.value;
     if (!base) return null;
     const active = streamActive.value && streamId.value;
     if (!active) return base; // finalized: use original object so edits persist
     const text = tailDisplay.value || base.text;
     const reasoning = streamReasoning.value || base.reasoning_text || null;
-    return {
+    const projected: UiChatMessage = {
         ...base,
         text,
         reasoning_text: reasoning,
@@ -629,6 +629,16 @@ const streamingMessage = computed<UiChatMessage | null>(() => {
         pending: true,
         stream_id: streamId.value, // Ensure stream_id is present for keying
     };
+    // Intake also updates the persistence snapshot before the accumulator's
+    // frame. Keep every dependency above, but do not publish an identical
+    // display snapshot twice. Metadata changes still produce a fresh row.
+    const keys = Reflect.ownKeys(projected);
+    if (previous && keys.length === Reflect.ownKeys(previous).length &&
+        keys.every((key) => Object.hasOwn(previous, key) &&
+            Object.is(Reflect.get(previous, key), Reflect.get(projected, key)))) {
+        return previous;
+    }
+    return projected;
 });
 
 // All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
@@ -969,8 +979,10 @@ const scrollToBottomButtonProps = computed(() => ({
 }));
 
 const scrollToBottomOpacity = computed(() => {
-    // Transition into view as we scroll up
-    return Math.min(1, distanceFromBottom.value / 150);
+    // DOM height can grow before the virtualizer's measurement catches up.
+    // Its bottom state remains authoritative while following that growth.
+    if (atBottom.value) return 0;
+    return Math.min(1, Math.max(0, distanceFromBottom.value) / 150);
 });
 
 function scrollToBottom() {
