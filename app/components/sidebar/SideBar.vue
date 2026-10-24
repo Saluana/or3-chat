@@ -655,6 +655,7 @@ async function saveRename() {
         if (!t) return;
         await upsert.thread({
             ...t,
+            title_source: 'manual',
             title,
             updated_at: now,
         });
@@ -899,6 +900,7 @@ async function handleRenameEntry(payload: {
             if (t && t.title !== name) {
                 await upsert.thread({
                     ...t,
+                    title_source: 'manual',
                     title: name,
                     updated_at: nowSec(),
                 });

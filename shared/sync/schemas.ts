@@ -1,3 +1,4 @@
+import { TitleSourceSchema } from '../titles/title';
 import { WORKSPACE_ITEM_CAPABILITY } from "../posts/workspace-item-capability";
 /**
  * Zod Schemas for Sync Types
@@ -151,6 +152,7 @@ export const SyncChangesSchema = z.array(SyncChangeSchema);
  */
 
 export const ThreadPayloadSchema = createTablePayloadSchema('threads', {
+        title_source: TitleSourceSchema.optional(),
         branch_mode: z.enum(['reference', 'copy', 'compacted']).nullable().optional(),
         root_thread_id: z.string().nullable().optional(),
         summary_message_id: z.string().nullable().optional(),
@@ -188,6 +190,7 @@ export const ProjectPayloadSchema = createTablePayloadSchema('projects', {
     });
 
 export const PostPayloadSchema = createTablePayloadSchema('posts', {
+        title_source: TitleSourceSchema.optional(),
         id: z.string(),
         title: z.string(),
         content: z.string(),

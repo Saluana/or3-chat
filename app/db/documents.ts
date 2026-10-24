@@ -286,6 +286,7 @@ function rowToRecord(row: DocumentRow): DocumentRecord {
  * - Does not accept markdown or other formats.
  */
 export interface CreateDocumentInput {
+    title_source?: Post['title_source'];
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
 }
@@ -364,6 +365,7 @@ export async function prepareDocumentCreate(input: CreateDocumentInput, id = new
     // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
+        title_source: input.title_source,
         title: persistedRow.title,
         content: persistedRow.content,
         postType: persistedRow.postType,
@@ -677,6 +679,7 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
     // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         ...existing,
+        title_source: patch.title !== undefined ? 'manual' : existing.title_source,
         id: persistedRow.id,
         title: persistedRow.title,
         content: persistedRow.content,
