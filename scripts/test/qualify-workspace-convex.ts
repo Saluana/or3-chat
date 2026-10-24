@@ -10,10 +10,27 @@ if (new URL(config.url).hostname !== '127.0.0.1')
 const privateKey = await crypto.subtle.importKey('jwk', await Bun.file(sandboxRoot + '/signing-key.json').json(), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
 const base = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
 async function client(subject: string) { const header = base({ alg: 'RS256', kid: 'sandbox', typ: 'JWT' }); const body = base({ iss: 'https://sandbox.or3.test/auth/clerk', aud: 'convex', sub: subject, exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000), email: subject + '@example.test' }); const message = header + '.' + body; const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, new TextEncoder().encode(message)); const c = new ConvexHttpClient(config.url); c.setAuth(message + '.' + Buffer.from(signature).toString('base64url')); return c; }
-const c = await client('direct-owner-' + crypto.randomUUID());
-const workspace = await c.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: (await c.query(anyApi.users.me, {})).tokenIdentifier.split('|').at(-1) });
+function hostClient(subject: string) {
+    const host = new ConvexHttpClient(config.url);
+    (host as any).setAdminAuth(config.adminKey, {
+        issuer: 'https://clerk.or3.ai', subject, or3_server: true,
+    });
+    return host;
+}
+async function admittedClient(subject: string) {
+    const direct = await client(subject);
+    const enrollment = { provider: 'clerk', provider_user_id: subject };
+    await assert.rejects(direct.mutation(anyApi.workspaces.ensure, enrollment), /Host admission is required/);
+    const host = hostClient(subject);
+    await host.mutation(anyApi.workspaces.ensure, enrollment);
+    return direct;
+}
+const ownerSubject = 'direct-owner-' + crypto.randomUUID();
+const c = await admittedClient(ownerSubject);
+const storageHost = hostClient(ownerSubject);
+const workspace = await c.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: ownerSubject });
 const workspace_id = workspace.id;
-const receipts: string[] = ['JWT authenticated direct workspace provision'];
+const receipts: string[] = ['Direct enrollment denied; host admission enables JWT authenticated workspace access'];
 let clock = 1;
 function op(table_name: string, pk: string, payload: unknown) { return { op_id: crypto.randomUUID(), table_name, operation: 'put', pk, payload, clock: clock++, hlc: Date.now() + ':0:local-direct', device_id: 'local-direct' }; }
 const metadata = { 'plugin-key': 'preserved', 'or3.workspace-item': { version: 1, trashed_at: null, text: { coverage: 'full', indexed_bytes: 7 } } };
@@ -38,37 +55,43 @@ receipts.push('Old direct readers rejected');
 await assert.rejects(c.mutation(anyApi.sync.push, { workspace_id, ops: [op('posts', post.id, { ...post, post_type: 'doc', meta: '' })] }), /OR3_WORKSPACE_ITEM_UPDATE_REQUIRED/);
 await assert.rejects(c.mutation(anyApi.sync.push, { workspace_id, ops: [op('projects', 'live-project', { id: 'live-project', name: 'Old writer', data: [], deleted: false, created_at: 1, updated_at: 2, clock: 2 })] }), /OR3_WORKSPACE_ITEM_UPDATE_REQUIRED/);
 receipts.push('Old direct writers cannot erase catalog or membership semantics');
-const stranger = await client('stranger');
-await stranger.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: 'stranger' });
+await assert.rejects(c.mutation(anyApi.storage.generateUploadUrl, {
+    workspace_id, hash: 'a'.repeat(64), mime_type: 'text/plain', size_bytes: 1,
+}), /internal|public|Could not find/i);
+receipts.push('Direct client cannot invoke server-only storage');
+const strangerSubject = 'stranger-' + crypto.randomUUID();
+const stranger = await admittedClient(strangerSubject);
+const strangerHost = hostClient(strangerSubject);
+await stranger.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: strangerSubject });
 await assert.rejects(stranger.query(anyApi.sync.pull, { workspace_id, workspace_item_capability: 'v1', cursor: 0, limit: 100 }), /Forbidden/);
 receipts.push('Other workspace subject denied');
 const admin = new ConvexHttpClient(config.url);
 (admin as any).setAdminAuth(config.adminKey, { issuer: 'or3-admin', subject: 'sandbox-admin' });
-await admin.mutation(anyApi.admin.upsertWorkspaceMember, { workspace_id, email_or_provider_id: 'stranger', provider: 'clerk', role: 'viewer' });
+await admin.mutation(anyApi.admin.upsertWorkspaceMember, { workspace_id, email_or_provider_id: strangerSubject, provider: 'clerk', role: 'viewer' });
 await assert.rejects(stranger.mutation(anyApi.sync.push, { workspace_id, workspace_item_capability: 'v1', ops: [op('posts', 'viewer-write', post)] }), /Forbidden/);
-await assert.rejects(stranger.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash: 'a'.repeat(64), mime_type: 'text/plain', size_bytes: 1 }), /Forbidden/);
+await assert.rejects(strangerHost.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash: 'a'.repeat(64), mime_type: 'text/plain', size_bytes: 1 }), /Forbidden/);
 receipts.push('Viewer cannot reserve upload or mutate catalog');
 const bytes = new TextEncoder().encode('Original Saffron bytes');
 const digest = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
 const hash = 'sha256:' + digest;
-const upload = await c.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
+const upload = await storageHost.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
 const uploaded = await fetch(upload.uploadUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: bytes });
 assert(uploaded.ok);
 const { storageId } = await uploaded.json();
-await c.mutation(anyApi.storage.commitUpload, { workspace_id, intent_id: upload.intentId, hash, storage_id: storageId, storage_provider_id: 'convex', mime_type: 'text/plain', size_bytes: bytes.length, name: 'original.txt', kind: 'file' });
+await storageHost.mutation(anyApi.storage.commitUpload, { workspace_id, intent_id: upload.intentId, hash, storage_id: storageId, storage_provider_id: 'convex', mime_type: 'text/plain', size_bytes: bytes.length, name: 'original.txt', kind: 'file' });
 const retained = { ...post, id: 'physical-catalog', file_hashes: JSON.stringify([hash]), meta: JSON.stringify({ ...metadata, 'or3.workspace-item': { version: 1, trashed_at: 1, text: { coverage: 'full', indexed_bytes: bytes.length } } }) };
 assert((await c.mutation(anyApi.sync.push, { workspace_id, workspace_item_capability: 'v1', ops: [op('posts', retained.id, retained)] })).results.every((r: any) => r.success));
-await assert.rejects(c.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId }), /Cannot delete a referenced file/);
-await c.mutation(anyApi.storage.gcDeletedFiles, { workspace_id, retention_seconds: 0, limit: 10 });
-const original = await c.query(anyApi.storage.getFileUrl, { workspace_id, hash });
+await assert.rejects(storageHost.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId }), /Cannot delete a referenced file/);
+await storageHost.mutation(anyApi.storage.gcDeletedFiles, { workspace_id, retention_seconds: 0, limit: 10 });
+const original = await storageHost.query(anyApi.storage.getFileUrl, { workspace_id, hash });
 assert(original?.url);
 assert.deepEqual(new Uint8Array(await (await fetch(original.url)).arrayBuffer()), bytes);
 receipts.push('Physical original survives trashed catalog, deletion and GC');
-const viewerOriginal = await stranger.query(anyApi.storage.getFileUrl, { workspace_id, hash });
+const viewerOriginal = await strangerHost.query(anyApi.storage.getFileUrl, { workspace_id, hash });
 assert(viewerOriginal?.url);
 receipts.push('Viewer retains authorized original read access');
-await admin.mutation(anyApi.admin.removeWorkspaceMember, { workspace_id, user_id: (await stranger.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: 'stranger' })).user_id });
-await assert.rejects(stranger.query(anyApi.storage.getFileUrl, { workspace_id, hash }), /Forbidden/);
+await admin.mutation(anyApi.admin.removeWorkspaceMember, { workspace_id, user_id: (await stranger.mutation(anyApi.workspaces.ensure, { provider: 'clerk', provider_user_id: strangerSubject })).user_id });
+await assert.rejects(strangerHost.query(anyApi.storage.getFileUrl, { workspace_id, hash }), /Forbidden/);
 receipts.push('Revoked subject cannot download');
 // Real deployed auxiliary stores: public callers cannot reach internal
 // persistence even with an authenticated subject. Server admin calls below
@@ -101,9 +124,9 @@ receipts.push('Notification persistence');
 // Exercise the deployed wire schema for the ordinary app records as well.
 const common = { created_at: 1, updated_at: 1, clock: 1, deleted: false };
 const native = [
-    ['threads', 'native-thread', { ...common, id: 'native-thread', title: 'Synthetic native chat', status: 'active', pinned: false, forked: false }],
+    ['threads', 'native-thread', { ...common, id: 'native-thread', title: 'Synthetic native chat', title_source: 'manual', status: 'active', pinned: false, forked: false }],
     ['messages', 'native-message', { ...common, id: 'native-message', thread_id: 'native-thread', role: 'user', index: 0, order_key: '1:0:direct', data: { type: 'text', content: 'Native message marker' }, file_hashes: JSON.stringify([hash]) }],
-    ['posts', 'native-document', { ...common, id: 'native-document', title: 'Synthetic native document', post_type: 'doc', content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Native document marker' }] }] }), file_hashes: JSON.stringify([hash]) }],
+    ['posts', 'native-document', { ...common, id: 'native-document', title: 'Synthetic native document', title_source: 'manual', post_type: 'doc', content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Native document marker' }] }] }), file_hashes: JSON.stringify([hash]) }],
     ['kv', 'native-preference', { ...common, id: 'native-preference', name: 'sandbox-pref', value: 'Native preference marker' }],
     ['notifications', 'native-notice', { ...common, id: 'native-notice', user_id: workspace.user_id, type: 'system', title: 'Native notification marker' }],
 ] as const;
@@ -134,12 +157,12 @@ assert.deepEqual(await c.query(anyApi.storage.deletionCapability, { workspace_id
 for (let attempt = 0; attempt < 5; attempt++) {
     const bytes = new TextEncoder().encode('Deletion race ' + crypto.randomUUID());
     const hash = 'sha256:' + Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
-    const upload = await c.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
+    const upload = await storageHost.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
     const response = await fetch(upload.uploadUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: bytes });
     assert(response.ok); const { storageId } = await response.json();
-    const commit = (id: string, intent: string) => c.mutation(anyApi.storage.commitUpload, { workspace_id, intent_id: intent, hash, storage_id: id, storage_provider_id: 'convex', mime_type: 'text/plain', size_bytes: bytes.length, name: 'race.txt', kind: 'file' });
+    const commit = (id: string, intent: string) => storageHost.mutation(anyApi.storage.commitUpload, { workspace_id, intent_id: intent, hash, storage_id: id, storage_provider_id: 'convex', mime_type: 'text/plain', size_bytes: bytes.length, name: 'race.txt', kind: 'file' });
     await commit(storageId, upload.intentId);
-    const originalUrl = (await c.query(anyApi.storage.getFileUrl, { workspace_id, hash }))?.url;
+    const originalUrl = (await storageHost.query(anyApi.storage.getFileUrl, { workspace_id, hash }))?.url;
     assert(originalUrl);
     clock = 2_000_000_000 + attempt * 100;
     const metadata = { hash, name: 'race.txt', mime_type: 'text/plain', size_bytes: bytes.length, kind: 'file', storage_id: storageId, storage_provider_id: 'convex', ref_count: 0, deleted: true, created_at: 1, updated_at: 1 };
@@ -148,7 +171,7 @@ for (let attempt = 0; attempt < 5; attempt++) {
     const row = { ...post, id: 'race-reference-' + attempt, file_hashes: JSON.stringify([hash]) };
     const [admitted, deleted] = await Promise.allSettled([
         c.mutation(anyApi.sync.push, { workspace_id, workspace_item_capability: 'v1', ops: [op('posts', row.id, row)] }),
-        c.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId }),
+        storageHost.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId }),
     ]);
     const referenceWon = admitted.status === 'fulfilled' && admitted.value.results.every((result: any) => result.success);
     if (referenceWon) {
@@ -156,13 +179,13 @@ for (let attempt = 0; attempt < 5; attempt++) {
         const original = await fetch(originalUrl);
         assert(original.ok); assert.deepEqual(new Uint8Array(await original.arrayBuffer()), bytes);
         assert((await c.mutation(anyApi.sync.push, { workspace_id, workspace_item_capability: 'v1', ops: [op('posts', row.id, { ...row, deleted: true })] })).results.every((result: any) => result.success));
-        await c.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId });
+        await storageHost.mutation(anyApi.storage.deleteObject, { workspace_id, hash, storage_id: storageId });
     } else {
         assert.equal(deleted.status, 'fulfilled'); assert(deleted.value.deleted);
     }
     const stale = await c.mutation(anyApi.sync.push, { workspace_id, workspace_item_capability: 'v1', ops: [op('posts', row.id, row), op('file_meta', hash, { ...metadata, deleted: false })] });
     assert(stale.results.every((result: any) => !result.success), JSON.stringify(stale));
-    const replacement = await c.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
+    const replacement = await storageHost.mutation(anyApi.storage.generateUploadUrl, { workspace_id, hash, mime_type: 'text/plain', size_bytes: bytes.length });
     const replaced = await fetch(replacement.uploadUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: bytes });
     assert(replaced.ok); const replacementId = (await replaced.json()).storageId;
     await commit(replacementId, replacement.intentId);
