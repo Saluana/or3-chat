@@ -1518,7 +1518,15 @@ test('project review fixes keep drafts and expose management for every project',
     }
     await openAllProjects(page);
     const first = projects.getByRole('listitem').filter({ hasText: 'Review project 0' });
-    await first.getByRole('button', { name: 'Project actions for Review project 0' }).click();
+    const actions = first.getByRole('button', { name: 'Project actions for Review project 0' });
+    await actions.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Rename project', exact: true })).toBeVisible();
+    await expect(actions).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Rename project', exact: true })).toBeHidden();
+    await expect(actions).toBeFocused();
+    await page.keyboard.press('Space');
     await page.getByRole('button', { name: 'Rename project', exact: true }).click();
     const rename = page.getByRole('dialog', { name: 'Rename project', exact: true });
     await rename.getByPlaceholder('Project name').fill('Reviewed project');

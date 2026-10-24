@@ -1,0 +1,501 @@
+{
+  "baselineCommit": "3d90841d",
+  "description": "Blank/light, 4x CPU, same fresh-context probe with currency-constructor instrumentation; first pass measures new rows, later passes revisit measured heights.",
+  "before": {
+    "seededProjects": 600,
+    "seededModels": 600,
+    "cpuThrottle": 4,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "results": [
+      {
+        "surface": "projects",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 28573,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 83.40000000000009,
+          "max": 101.60000000000036,
+          "frames": 99,
+          "longTasks": [
+            78,
+            53,
+            83,
+            57,
+            97,
+            53,
+            85,
+            61,
+            86,
+            80,
+            86,
+            101,
+            84,
+            99,
+            74,
+            84,
+            80,
+            75,
+            74,
+            78,
+            77,
+            79,
+            76
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 75,
+          "max": 76.69999999999982,
+          "frames": 91,
+          "longTasks": [
+            72,
+            78,
+            73,
+            79,
+            79,
+            76,
+            78,
+            78,
+            79,
+            78,
+            81,
+            77,
+            77,
+            77,
+            75,
+            75,
+            73,
+            73,
+            74
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 76.40000000000055,
+          "max": 84.39999999999964,
+          "frames": 95,
+          "longTasks": [
+            79,
+            80,
+            72,
+            76,
+            76,
+            77,
+            75,
+            74,
+            74,
+            75,
+            77,
+            86,
+            81,
+            76,
+            77,
+            80,
+            84,
+            85,
+            84
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "models",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 43100,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 716,
+          "p95": 58.399999999999636,
+          "max": 65.29999999999927,
+          "frames": 139,
+          "longTasks": [
+            52,
+            50,
+            50
+          ],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 716,
+          "p95": 56.80000000000109,
+          "max": 60.29999999999927,
+          "frames": 161,
+          "longTasks": [
+            53,
+            52,
+            50,
+            50
+          ],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 716,
+          "p95": 56.80000000000291,
+          "max": 66.70000000000073,
+          "frames": 165,
+          "longTasks": [
+            50,
+            55
+          ],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      }
+    ]
+  },
+  "after": {
+    "seededProjects": 600,
+    "seededModels": 600,
+    "cpuThrottle": 4,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "results": [
+      {
+        "surface": "projects",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 28573,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 74.90000000000009,
+          "max": 116.40000000000009,
+          "frames": 110,
+          "longTasks": [
+            66,
+            71,
+            50,
+            68,
+            67,
+            89,
+            50,
+            50,
+            79,
+            81,
+            111,
+            74,
+            90,
+            66,
+            71,
+            70,
+            69,
+            69,
+            67,
+            68,
+            69,
+            67
+          ],
+          "scrollTop": 2.5,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 73.5,
+          "max": 76.5,
+          "frames": 106,
+          "longTasks": [
+            64,
+            70,
+            64,
+            71,
+            70,
+            78,
+            77,
+            76,
+            76,
+            76,
+            75,
+            64,
+            70,
+            69,
+            66,
+            67,
+            67,
+            65,
+            65
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 66.89999999999964,
+          "max": 68.09999999999945,
+          "frames": 114,
+          "longTasks": [
+            69,
+            70,
+            64,
+            70,
+            67,
+            67,
+            67,
+            68,
+            68,
+            69,
+            65,
+            68,
+            66,
+            65,
+            67,
+            66,
+            66,
+            67,
+            62
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "models",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 43100,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 57.80000000000109,
+          "max": 58.69999999999891,
+          "frames": 140,
+          "longTasks": [],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 50.69999999999891,
+          "max": 59.399999999999636,
+          "frames": 164,
+          "longTasks": [
+            53
+          ],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 50.79999999999927,
+          "max": 83.39999999999782,
+          "frames": 170,
+          "longTasks": [
+            51
+          ],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      }
+    ]
+  }
+}

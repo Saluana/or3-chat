@@ -558,6 +558,10 @@ export function countByProvider(models: OpenRouterModel[]): ProviderCount[] {
 // Formatting
 // ---------------------------------------------------------------------------
 
+// The catalog uses USD for every visible card. Reuse its immutable formatter
+// across recycled rows without retaining an unbounded cache of currency inputs.
+let usdPriceFormatter: Intl.NumberFormat | undefined;
+
 /**
  * Format a per-token price into a "per 1M tokens" currency string.
  * Accepts numbers or numeric strings. Defaults to USD.
@@ -568,11 +572,15 @@ export function formatPerMillion(raw: unknown, currency = 'USD'): string {
     const perMillion = perToken * 1_000_000;
     if (!Number.isFinite(perMillion)) return '—';
     try {
-        return new Intl.NumberFormat('en-US', {
+        const options: Intl.NumberFormatOptions = {
             style: 'currency',
             currency,
             maximumFractionDigits: 2,
-        }).format(perMillion);
+        };
+        const formatter = currency === 'USD'
+            ? usdPriceFormatter ??= new Intl.NumberFormat('en-US', options)
+            : new Intl.NumberFormat('en-US', options);
+        return formatter.format(perMillion);
     } catch {
         return `$${perMillion.toFixed(2)}`;
     }

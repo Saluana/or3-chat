@@ -80,9 +80,10 @@ not an application API or a production instrumentation hook.
 
 ### Remaining audit sections
 
-Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md)
-and [sidebar mount work and pagination](SIDEBAR-WORK.md), with separate raw
-production receipts and explicit limits.
+Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
+[sidebar mount work and pagination](SIDEBAR-WORK.md), and
+[project/model list mount work](CATALOG-PROJECTS.md), with separate raw production
+receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
 measurements and validation; this section does not qualify the entire app.
