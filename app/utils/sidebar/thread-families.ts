@@ -117,7 +117,11 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         resolver.seed(page);
         for (const member of page) {
             if (!allowed(member, options.filter, legacy)) continue;
-            const root = await resolver.resolve(member); if (roots.has(root.id)) continue;
+            // Standalone roots need no ancestry I/O. Avoid one asynchronous
+            // resolver turn per row in the common, unbranched sidebar page.
+            const root: Root = member.parent_thread_id ? await resolver.resolve(member)
+                : { id: member.id, original: member };
+            if (roots.has(root.id)) continue;
             roots.add(root.id); families.push({ member, root });
             if (families.length > options.limit) break;
         }
