@@ -1,0 +1,1591 @@
+{
+  "baselineCommit": "9feacea5",
+  "environment": {
+    "runtime": "Production preview on http://127.0.0.1:3147",
+    "externalRequests": "blocked",
+    "browser": "Chromium through Playwright",
+    "stream": {
+      "viewport": {
+        "width": 1200,
+        "height": 800
+      },
+      "deviceScaleFactor": 1,
+      "theme": "blank",
+      "zoom": "1",
+      "cpuThrottle": [
+        1,
+        4
+      ],
+      "bytesRich": 9924,
+      "chunkChars": 64,
+      "delayMs": 16
+    },
+    "lists": {
+      "viewport": {
+        "width": 1200,
+        "height": 689
+      },
+      "deviceScaleFactor": 2,
+      "theme": "blank",
+      "colorMode": "light",
+      "zoom": "0.9",
+      "cpuThrottle": 4
+    }
+  },
+  "final": {
+    "results": [
+      {
+        "cpu": 1,
+        "kind": "prose",
+        "bytes": 9767,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 429.5,
+        "longTasks": [],
+        "mutations": 161,
+        "stableMutations": 130,
+        "stableObserved": true,
+        "produced": 9767,
+        "elapsed": 2972.2999999523163,
+        "p95": 9.300000000000182,
+        "max": 10.300000000000068,
+        "savedExact": true,
+        "complete": true,
+        "math": 0,
+        "code": 0,
+        "nodes": 66,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "cpu": 1,
+        "kind": "rich",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 443.30000019073486,
+        "longTasks": [
+          {
+            "start": 514,
+            "duration": 73
+          }
+        ],
+        "mutations": 368,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 3141.2999999523163,
+        "p95": 9.700000000000045,
+        "max": 76.10000000000002,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "cpu": 4,
+        "kind": "prose",
+        "bytes": 9767,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 778.8000001907349,
+        "longTasks": [],
+        "mutations": 161,
+        "stableMutations": 130,
+        "stableObserved": true,
+        "produced": 9767,
+        "elapsed": 3025.199999809265,
+        "p95": 10.099999999999909,
+        "max": 59,
+        "savedExact": true,
+        "complete": true,
+        "math": 0,
+        "code": 0,
+        "nodes": 66,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "cpu": 4,
+        "kind": "rich",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 817.5999999046326,
+        "longTasks": [
+          {
+            "start": 1042.7999999523163,
+            "duration": 302
+          },
+          {
+            "start": 4225.700000047684,
+            "duration": 50
+          },
+          {
+            "start": 4622.5,
+            "duration": 52
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 4279.5,
+        "p95": 18.300000000000182,
+        "max": 375.1,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      }
+    ]
+  },
+  "pairedRich": {
+    "results": [
+      {
+        "repeat": 0,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "original",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 809.8999998569489,
+        "longTasks": [
+          {
+            "start": 1063.0999999046326,
+            "duration": 317
+          },
+          {
+            "start": 4804.899999856949,
+            "duration": 50
+          },
+          {
+            "start": 5446.399999856949,
+            "duration": 51
+          },
+          {
+            "start": 6135.899999856949,
+            "duration": 52
+          },
+          {
+            "start": 6194.799999952316,
+            "duration": 52
+          },
+          {
+            "start": 6254.099999904633,
+            "duration": 51
+          },
+          {
+            "start": 6311.700000047684,
+            "duration": 52
+          },
+          {
+            "start": 6370.799999952316,
+            "duration": 58
+          },
+          {
+            "start": 6435.299999952316,
+            "duration": 52
+          },
+          {
+            "start": 6548,
+            "duration": 50
+          },
+          {
+            "start": 6604.700000047684,
+            "duration": 52
+          },
+          {
+            "start": 6723.899999856949,
+            "duration": 50
+          },
+          {
+            "start": 6779.799999952316,
+            "duration": 50
+          },
+          {
+            "start": 6836.200000047684,
+            "duration": 51
+          },
+          {
+            "start": 6894.599999904633,
+            "duration": 55
+          },
+          {
+            "start": 6955.299999952316,
+            "duration": 50
+          },
+          {
+            "start": 7121.799999952316,
+            "duration": 53
+          },
+          {
+            "start": 7185.599999904633,
+            "duration": 51
+          },
+          {
+            "start": 7244.200000047684,
+            "duration": 55
+          },
+          {
+            "start": 7307.200000047684,
+            "duration": 59
+          },
+          {
+            "start": 7372.799999952316,
+            "duration": 58
+          },
+          {
+            "start": 7436.899999856949,
+            "duration": 59
+          },
+          {
+            "start": 7502.5,
+            "duration": 61
+          },
+          {
+            "start": 7569.899999856949,
+            "duration": 59
+          },
+          {
+            "start": 7636.599999904633,
+            "duration": 60
+          },
+          {
+            "start": 7711.899999856949,
+            "duration": 70
+          },
+          {
+            "start": 7789.399999856949,
+            "duration": 61
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 7610.600000143051,
+        "p95": 50.899999999999636,
+        "max": 340.6999999999998,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "repeat": 0,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "production",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 810.0999999046326,
+        "longTasks": [
+          {
+            "start": 1031.9000000953674,
+            "duration": 298
+          },
+          {
+            "start": 4245.200000047684,
+            "duration": 50
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 4288.100000143051,
+        "p95": 18.199999999999818,
+        "max": 376.5,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "repeat": 1,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "original",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 793,
+        "longTasks": [
+          {
+            "start": 1029.1000001430511,
+            "duration": 302
+          },
+          {
+            "start": 5195.900000095367,
+            "duration": 50
+          },
+          {
+            "start": 5887.5,
+            "duration": 53
+          },
+          {
+            "start": 6263,
+            "duration": 50
+          },
+          {
+            "start": 6373.700000047684,
+            "duration": 51
+          },
+          {
+            "start": 6429.700000047684,
+            "duration": 50
+          },
+          {
+            "start": 6488,
+            "duration": 51
+          },
+          {
+            "start": 6546.5,
+            "duration": 51
+          },
+          {
+            "start": 6604.800000190735,
+            "duration": 56
+          },
+          {
+            "start": 6668.100000143051,
+            "duration": 50
+          },
+          {
+            "start": 6725.200000047684,
+            "duration": 52
+          },
+          {
+            "start": 6837.600000143051,
+            "duration": 51
+          },
+          {
+            "start": 6895.400000095367,
+            "duration": 51
+          },
+          {
+            "start": 6953,
+            "duration": 51
+          },
+          {
+            "start": 7011.700000047684,
+            "duration": 51
+          },
+          {
+            "start": 7069.5,
+            "duration": 52
+          },
+          {
+            "start": 7136.300000190735,
+            "duration": 52
+          },
+          {
+            "start": 7196.5,
+            "duration": 56
+          },
+          {
+            "start": 7258.600000143051,
+            "duration": 54
+          },
+          {
+            "start": 7320.100000143051,
+            "duration": 54
+          },
+          {
+            "start": 7379.600000143051,
+            "duration": 67
+          },
+          {
+            "start": 7454.300000190735,
+            "duration": 58
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 7286.600000143051,
+        "p95": 50,
+        "max": 366.6,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "repeat": 1,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "production",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 795,
+        "longTasks": [
+          {
+            "start": 1013.5999999046326,
+            "duration": 301
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 4324.200000047684,
+        "p95": 18.399999999999636,
+        "max": 375.60000000000014,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "repeat": 2,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "original",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 804.5,
+        "longTasks": [
+          {
+            "start": 1070.5999999046326,
+            "duration": 302
+          },
+          {
+            "start": 4572.299999952316,
+            "duration": 50
+          },
+          {
+            "start": 5666.899999856949,
+            "duration": 50
+          },
+          {
+            "start": 5723.599999904633,
+            "duration": 52
+          },
+          {
+            "start": 5782.299999952316,
+            "duration": 52
+          },
+          {
+            "start": 5842,
+            "duration": 55
+          },
+          {
+            "start": 5905.599999904633,
+            "duration": 60
+          },
+          {
+            "start": 5972.899999856949,
+            "duration": 54
+          },
+          {
+            "start": 6034,
+            "duration": 51
+          },
+          {
+            "start": 6091.299999952316,
+            "duration": 51
+          },
+          {
+            "start": 6154.299999952316,
+            "duration": 54
+          },
+          {
+            "start": 6446.299999952316,
+            "duration": 51
+          },
+          {
+            "start": 6560.200000047684,
+            "duration": 50
+          },
+          {
+            "start": 6617.299999952316,
+            "duration": 53
+          },
+          {
+            "start": 6680,
+            "duration": 56
+          },
+          {
+            "start": 6742.200000047684,
+            "duration": 50
+          },
+          {
+            "start": 6909,
+            "duration": 52
+          },
+          {
+            "start": 6966.299999952316,
+            "duration": 51
+          },
+          {
+            "start": 7023.099999904633,
+            "duration": 51
+          },
+          {
+            "start": 7080.899999856949,
+            "duration": 54
+          },
+          {
+            "start": 7141.200000047684,
+            "duration": 52
+          },
+          {
+            "start": 7205.899999856949,
+            "duration": 51
+          },
+          {
+            "start": 7263.200000047684,
+            "duration": 53
+          },
+          {
+            "start": 7321.799999952316,
+            "duration": 54
+          },
+          {
+            "start": 7381,
+            "duration": 54
+          },
+          {
+            "start": 7441.099999904633,
+            "duration": 66
+          },
+          {
+            "start": 7514.799999952316,
+            "duration": 58
+          },
+          {
+            "start": 7668.299999952316,
+            "duration": 51
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 7380.799999952316,
+        "p95": 49.899999999999636,
+        "max": 376.29999999999995,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      },
+      {
+        "repeat": 2,
+        "cpu": 4,
+        "kind": "rich",
+        "selector": "production",
+        "bytes": 9924,
+        "chunkChars": 64,
+        "delayMs": 16,
+        "start": 788.2000000476837,
+        "longTasks": [
+          {
+            "start": 1028.7000000476837,
+            "duration": 309
+          },
+          {
+            "start": 3925.5999999046326,
+            "duration": 53
+          },
+          {
+            "start": 4290.5,
+            "duration": 54
+          },
+          {
+            "start": 4752.399999856949,
+            "duration": 52
+          }
+        ],
+        "mutations": 367,
+        "stableMutations": 0,
+        "stableObserved": true,
+        "produced": 9924,
+        "elapsed": 4440.099999904633,
+        "p95": 23.700000000000045,
+        "max": 366.5000000000001,
+        "savedExact": true,
+        "complete": true,
+        "math": 12,
+        "code": 12,
+        "nodes": 2988,
+        "bottomDistance": 0,
+        "theme": "blank",
+        "zoom": "1"
+      }
+    ]
+  },
+  "sidebarAfter": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 153,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [],
+          "frameP95Ms": 51.20000000000027,
+          "maxFrameMs": 67.30000000000018,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1482.298
+          },
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1457.02
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 46.659
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 30.26
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "901",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 26.982
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 23.181
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 22.216
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 21.653
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 20.196
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 12.063
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.579
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 7.914
+          },
+          {
+            "frame": {
+              "functionName": "p.<computed>",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 24097
+            },
+            "selfMs": 7.691
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 6.485
+          },
+          {
+            "frame": {
+              "functionName": "",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 16705
+            },
+            "selfMs": 6.245
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 13572
+            },
+            "selfMs": 6.228
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18379
+            },
+            "selfMs": 5.976
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.734
+          },
+          {
+            "frame": {
+              "functionName": "Xa",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 12664
+            },
+            "selfMs": 5.301
+          },
+          {
+            "frame": {
+              "functionName": "Zc",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 2,
+              "columnNumber": 34025
+            },
+            "selfMs": 5.216
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 150,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            52,
+            57
+          ],
+          "frameP95Ms": 57.90000000000009,
+          "maxFrameMs": 67.79999999999973,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1503.675
+          },
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 889.743
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 52.121
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "901",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 27.444
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 27.202
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 26.215
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 25.322
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 19.959
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 14.488
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 9.865
+          },
+          {
+            "frame": {
+              "functionName": "removeChild",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 9.307
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 8.482
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 6.762
+          },
+          {
+            "frame": {
+              "functionName": "ownKeys",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 14401
+            },
+            "selfMs": 6.139
+          },
+          {
+            "frame": {
+              "functionName": "Ss",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 2,
+              "columnNumber": 5957
+            },
+            "selfMs": 4.935
+          },
+          {
+            "frame": {
+              "functionName": "H",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 88018
+            },
+            "selfMs": 4.908
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 4.879
+          },
+          {
+            "frame": {
+              "functionName": "",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 17840
+            },
+            "selfMs": 4.837
+          },
+          {
+            "frame": {
+              "functionName": "",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 14041
+            },
+            "selfMs": 4.315
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 13572
+            },
+            "selfMs": 3.919
+          }
+        ]
+      },
+      {
+        "initial": {
+          "theme": "blank",
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "timedOut": false,
+          "frames": 141,
+          "entranceAnimations": 0,
+          "dateFormats": 411,
+          "longTasks": [
+            52
+          ],
+          "frameP95Ms": 59.30000000000018,
+          "maxFrameMs": 68.19999999999982,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1440.231
+          },
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 1144.329
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 55.958
+          },
+          {
+            "frame": {
+              "functionName": "ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 90707
+            },
+            "selfMs": 50.323
+          },
+          {
+            "frame": {
+              "functionName": "Date.toLocaleTimeString",
+              "scriptId": "901",
+              "url": "",
+              "lineNumber": 8,
+              "columnNumber": 61
+            },
+            "selfMs": 29.012
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 25.566
+          },
+          {
+            "frame": {
+              "functionName": "Ze",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 91558
+            },
+            "selfMs": 25.507
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3080
+            },
+            "selfMs": 24.904
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 20.894
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 12.749
+          },
+          {
+            "frame": {
+              "functionName": "transaction",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 10.756
+          },
+          {
+            "frame": {
+              "functionName": "Yc",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 5,
+              "columnNumber": 19589
+            },
+            "selfMs": 9.597
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 7.105
+          },
+          {
+            "frame": {
+              "functionName": "Xa",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 12664
+            },
+            "selfMs": 5.443
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 5.248
+          },
+          {
+            "frame": {
+              "functionName": "Z",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 12192
+            },
+            "selfMs": 5.225
+          },
+          {
+            "frame": {
+              "functionName": "ve",
+              "scriptId": "12",
+              "url": "http://127.0.0.1:3147/_nuxt/BsP2s6hS.js",
+              "lineNumber": 0,
+              "columnNumber": 15565
+            },
+            "selfMs": 5.032
+          },
+          {
+            "frame": {
+              "functionName": "H",
+              "scriptId": "637",
+              "url": "http://127.0.0.1:3147/_nuxt/C_1rJLvs.js",
+              "lineNumber": 0,
+              "columnNumber": 88018
+            },
+            "selfMs": 4.891
+          },
+          {
+            "frame": {
+              "functionName": "",
+              "scriptId": "628",
+              "url": "http://127.0.0.1:3147/_nuxt/Bi_CgOFr.js",
+              "lineNumber": 10,
+              "columnNumber": 3294
+            },
+            "selfMs": 4.616
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "612",
+              "url": "http://127.0.0.1:3147/_nuxt/DfmhHHtk.js",
+              "lineNumber": 0,
+              "columnNumber": 18986
+            },
+            "selfMs": 4.373
+          }
+        ]
+      }
+    ]
+  },
+  "catalogProjectAfter": {
+    "seededProjects": 600,
+    "seededModels": 600,
+    "cpuThrottle": 4,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "results": [
+      {
+        "surface": "projects",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 28573,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 58.29999999999973,
+          "max": 60,
+          "frames": 128,
+          "longTasks": [
+            61,
+            62,
+            65,
+            60,
+            64,
+            59,
+            56,
+            62,
+            55,
+            55,
+            58,
+            64,
+            63,
+            61,
+            58,
+            60,
+            60,
+            61,
+            60
+          ],
+          "scrollTop": 1,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 58.900000000000546,
+          "max": 60.19999999999982,
+          "frames": 131,
+          "longTasks": [
+            58,
+            63,
+            58,
+            62,
+            61,
+            60,
+            62,
+            60,
+            62,
+            60,
+            62,
+            61,
+            63,
+            60,
+            61,
+            59,
+            59,
+            59,
+            56
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "projects",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 26846,
+          "mounted": 30
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 58,
+          "max": 59.900000000000546,
+          "frames": 131,
+          "longTasks": [
+            57,
+            63,
+            57,
+            60,
+            60,
+            60,
+            60,
+            65,
+            59,
+            60,
+            56,
+            63,
+            60,
+            60,
+            60,
+            58,
+            58,
+            59,
+            56
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        }
+      },
+      {
+        "surface": "models",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 43100,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 34.70000000000073,
+          "max": 43.599999999998545,
+          "frames": 176,
+          "longTasks": [],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 1,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 33.19999999999891,
+          "max": 42,
+          "frames": 186,
+          "longTasks": [],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      },
+      {
+        "surface": "models",
+        "run": 2,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 415,
+          "track": 42348,
+          "mounted": 15
+        },
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 33.29999999999927,
+          "max": 43,
+          "frames": 188,
+          "longTasks": [],
+          "scrollTop": 0,
+          "track": 42348,
+          "mounted": 15
+        }
+      }
+    ]
+  },
+  "controls": {
+    "paired": "Same built CSS; original restores only two old selectors in each fresh context, production leaves the built scoped selectors intact. Three alternating original/production runs.",
+    "sidebarBaseline": "sidebar-work-results.json final (3d90841d); 9feacea5 changes project/model owners, not the measured Chats rows",
+    "catalogProjectBaseline": "catalog-project-results.json after (9feacea5)"
+  }
+}
