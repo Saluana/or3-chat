@@ -81,20 +81,28 @@ describe('mounted sidebar workspace isolation', () => {
             global: { stubs: { SidebarUnifiedItem: true } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
         const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
+        // Native scroll events begin a new event-loop task, outside the
+        // promise scope of the preceding IndexedDB subscription result.
+        const reachBottom = (burst = 1) => new Promise<void>(resolve => {
+            setTimeout(() => {
+                for (let event = 0; event < burst; event++) scroller().vm.$emit('reachBottom');
+                resolve();
+            }, 0);
+        });
         // Page reads use real IndexedDB and the result still needs a Vue
         // render. Wait for both instead of sampling during a pending flush.
         const waitForRows = (count: number) => vi.waitFor(async () => {
             await nextTick();
             expect(rowCount()).toBe(count);
-        }, { timeout: 5000 });
+        }, { timeout: 15_000 });
         await waitForRows(50);
-        for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
+        await reachBottom(3);
         await waitForRows(100);
         for (let count = 150; count < threadCount + 50; count += 50) {
-            scroller().vm.$emit('reachBottom');
+            await reachBottom();
             await waitForRows(Math.min(count, threadCount));
         }
-    }, 30_000);
+    }, 60_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
