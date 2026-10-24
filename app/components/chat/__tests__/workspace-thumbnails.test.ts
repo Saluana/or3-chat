@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, nextTick, ref } from 'vue';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
 import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
@@ -45,6 +45,42 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    // Streaming replaces the message projection on every text frame. A slow
+    // metadata read must not be reissued for unchanged attachment contents.
+    it('keeps pending attachment reads stable across text updates and loads later hashes', async () => {
+        let finish!: (meta: typeof originMeta) => void;
+        files.meta.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const message = ref<{ role: string; text: string; file_hashes: unknown }>({
+            role: 'assistant', text: '', file_hashes: [hash],
+        });
+        let state!: ReturnType<typeof useMessageThumbnails>;
+        wrappers.push(mount(defineComponent({ setup() {
+            state = useMessageThumbnails(message);
+            return () => h('div');
+        } })));
+        for (let index = 0; index < 30; index++) {
+            message.value = { ...message.value, text: `Streamed text ${index}`,
+                file_hashes: index % 2 ? JSON.stringify([hash]) : [hash] };
+            await nextTick();
+        }
+        expect(files.meta).toHaveBeenCalledOnce();
+        finish(originMeta);
+        await vi.waitFor(() => expect(state.thumbnails[hash]?.status).toBe('ready'));
+
+        // Foreground streaming appends through its raw array, then projects a
+        // fresh message. Do not rely solely on reactive array mutation tracking.
+        const streamedHashes = [hash];
+        message.value.file_hashes = streamedHashes;
+        await nextTick();
+        const laterHash = `sha256:${'b'.repeat(64)}`;
+        files.meta.mockResolvedValue({ ...originMeta, hash: laterHash });
+        streamedHashes.push(laterHash);
+        message.value = { ...message.value, text: 'A later generated image' };
+        await vi.waitFor(() => expect(state.thumbnails[laterHash]?.status).toBe('ready'));
+        expect(files.meta.mock.calls.map(call => call[0])).toEqual([hash, laterHash]);
+        expect(files.blob.mock.calls.map(call => call[0])).toEqual([hash, laterHash]);
+    });
+
     // A collapsed message must not spend bandwidth decoding hidden originals.
     // Existing workspace cases exercise one image and cannot catch this fan-out.
     it('loads only the four displayed image originals in a collapsed message', async () => {

@@ -18,7 +18,17 @@ type MessageWithAttachments = {
 type LocalThumbState = ThumbState | { status: 'loading' };
 
 export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
-    const hashList = computed<string[]>(() => parseHashes(message.value.file_hashes));
+    // Streaming replaces the message projection on each displayed text frame.
+    // Preserve equal normalized lists so text changes do not restart loads.
+    // Read the hashes on every projection: the producer may have appended to
+    // its raw array without changing that array's identity.
+    const hashList = computed<string[]>((previous) => {
+        const next = parseHashes(message.value.file_hashes);
+        return previous?.length === next.length &&
+            next.every((hash, index) => hash === previous[index])
+            ? previous
+            : next;
+    });
     const thumbnails = reactive<Record<string, LocalThumbState>>({});
     const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
     const imageNames = reactive<Record<string, string>>({});
