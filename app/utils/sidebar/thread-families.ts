@@ -83,12 +83,19 @@ async function visitThreadPages(db: Or3DB, visit: ThreadPageVisitor) {
     for (;;) {
         const query = before ? db.threads.where('[updated_at+created_at+id]').below(before)
             : db.threads.orderBy('[updated_at+created_at+id]');
+        console.warn('SCAN read begin', performance.now());
         const page = await query.reverse().limit(100).toArray();
+        console.warn('SCAN read end', page.length, performance.now());
         if (!page.length) return;
-        if (!await visit(page)) return;
+        console.warn('SCAN visit begin', performance.now());
+        const more = await visit(page);
+        console.warn('SCAN visit end', more, performance.now());
+        if (!more) return;
         const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
         if (page.length < 100) return;
+        console.warn('SCAN yield begin', performance.now());
         await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));
+        console.warn('SCAN yield end', performance.now());
     }
 }
 
@@ -117,8 +124,10 @@ async function visitActivityThreadPages(db: Or3DB, filter: FamilyFilter, legacy:
 }
 
 export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 'all' | 'thread' | 'document'; filter: FamilyFilter }) {
+    console.warn('PAGE begin', options.limit, performance.now());
     const resolver = rootResolver(db); const roots = new Set<string>();
     const legacy = await legacyProjectMembers(db, options.filter.projectId);
+    console.warn('PAGE legacy done', options.limit, performance.now());
     const families: Array<{ member: Thread; root: Root }> = [];
     if (options.type !== 'document') await visitActivityThreadPages(db, options.filter, legacy, async (page) => {
         resolver.seed(page);
@@ -130,6 +139,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         }
         return families.length <= options.limit;
     });
+    console.warn('PAGE families', options.limit, families.length, performance.now());
     const documents: Post[] = [];
     if (options.type !== 'thread' && options.filter.pinned !== true) {
         const project = options.filter.projectId === undefined ? undefined : await db.projects.get(options.filter.projectId);
@@ -165,6 +175,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
     }
     const threads: Array<{ record: Thread; item: UnifiedSidebarItem }> = [];
     for (const { member, root } of families) {
+        if (threads.length % 10 === 0) console.warn('PAGE related', options.limit, threads.length, performance.now());
         const item = threadToSidebar(member);
         const related = member.parent_thread_id || member.forked || member.branch_mode === 'compacted'
             || await db.threads.where('parent_thread_id').equals(member.id).first();
@@ -179,6 +190,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
     }
     const top = [...threads,
         ...documents.map((record) => ({ record, item: documentToSidebar(record) }))].sort((a, b) => compare(a.record, b.record));
+    console.warn('PAGE done', options.limit, top.length, performance.now());
     return { items: top.slice(0, options.limit).map((row) => row.item), hasMore: top.length > options.limit };
 }
 

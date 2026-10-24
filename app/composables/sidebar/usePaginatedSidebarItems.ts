@@ -27,7 +27,9 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             const thread = await db.threads.get(id);
             if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
+        console.warn('OWNER read', targetCount.value, performance.now());
         const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
+        console.warn('OWNER got', page.items.length, performance.now());
         const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db, currentFilter);
         for (const item of page.items) {
             if (!item.family) { rows.push(item); continue; }

@@ -64,13 +64,15 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
-    it.each(Array.from({ length: 8 }, (_, index) => index))('admits one page for repeated bottom events while the current page is loading (%s)', async () => {
+    // Cross the database's 100-row batch boundary, an exact UI-page boundary,
+    // a partial final page, and a second database-batch boundary.
+    it.each([101, 150, 160, 201])('admits one pending page and reaches all %i threads', async (threadCount) => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
         const id = `sidebar-page-admission-${crypto.randomUUID()}`;
         const db = setActiveWorkspaceDb(id);
         workspaces.push({ id, name: db.name });
-        await db.threads.bulkPut(Array.from({ length: 160 }, (_, index) => ({
+        await db.threads.bulkPut(Array.from({ length: threadCount }, (_, index) => ({
             id: `page-${index}`, title: `Page row ${index}`, status: 'ready',
             deleted: false, pinned: false, forked: false, clock: 1,
             created_at: 1000 - index, updated_at: 1000 - index,
@@ -80,8 +82,7 @@ describe('mounted sidebar workspace isolation', () => {
         const scroller = () => wrapper!.findComponent(Or3Scroll);
         const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
         // Page reads use real IndexedDB and the result still needs a Vue
-        // render. Wait for both instead of sampling during a pending flush;
-        // shared CI runners also need a bounded allowance for these I/O reads.
+        // render. Wait for both instead of sampling during a pending flush.
         const waitForRows = (count: number) => vi.waitFor(async () => {
             await nextTick();
             expect(rowCount()).toBe(count);
@@ -89,9 +90,11 @@ describe('mounted sidebar workspace isolation', () => {
         await waitForRows(50);
         for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
         await waitForRows(100);
-        scroller().vm.$emit('reachBottom');
-        await waitForRows(150);
-    }, 20_000);
+        for (let count = 150; count < threadCount + 50; count += 50) {
+            scroller().vm.$emit('reachBottom');
+            await waitForRows(Math.min(count, threadCount));
+        }
+    }, 30_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
