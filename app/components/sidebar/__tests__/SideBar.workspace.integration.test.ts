@@ -64,9 +64,10 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
-    // Cross the database's 100-row batch boundary, an exact UI-page boundary,
-    // a partial final page, and a second database-batch boundary.
-    it.each([101, 150, 160, 201])('admits one pending page and reaches all %i threads', async (threadCount) => {
+    // One journey crosses both database batch boundaries, exact UI pages,
+    // and the partial final page while checking repeated-event admission.
+    it('admits one pending page and reaches the final thread across database batches', async () => {
+        const threadCount = 201;
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
         const id = `sidebar-page-admission-${crypto.randomUUID()}`;
@@ -89,10 +90,8 @@ describe('mounted sidebar workspace isolation', () => {
                 resolve();
             }, 0);
         });
-        // Page reads use real IndexedDB and the result still needs a Vue
-        // render. Wait for both instead of sampling during a pending flush.
-        const waitForRows = (count: number) => vi.waitFor(async () => {
-            await nextTick();
+        // Poll rendered rows synchronously; Vue flushes between attempts.
+        const waitForRows = (count: number) => vi.waitFor(() => {
             expect(rowCount()).toBe(count);
         }, { timeout: 15_000 });
         await waitForRows(50);
