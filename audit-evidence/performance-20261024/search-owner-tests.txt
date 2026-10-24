@@ -1,0 +1,34 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/core/search/command-palette/__tests__
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+··································································x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/core/search/command-palette/__tests__/sources.test.ts > palette source adapters > loads complete chat history in bounded reads and stops reading after cancellation
+AssertionError: expected 1205 to be 1201 // Object.is equality
+
+- Expected
++ Received
+
+- 1201
++ 1205
+
+ ❯ app/core/search/command-palette/__tests__/sources.test.ts:120:66
+    118|             // A transfer budget, independent of the implementation's …
+    119|             expect(Math.max(...reads)).toBeLessThanOrEqual(1000);
+    120|             expect(reads.reduce((sum, count) => sum + count, 0)).toBe(…
+       |                                                                  ^
+    121|             reads.length = 0;
+    122|             cancel = new AbortController();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 17 passed (18)
+      Tests  1 failed | 66 passed (82)
+   Start at  08:22:14
+   Duration  1.23s (transform 1.78s, setup 1.26s, import 2.28s, tests 600ms, environment 5.08s)
+
+error: script "test" exited with code 1

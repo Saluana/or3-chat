@@ -5,6 +5,12 @@ evaluations remain open below.** Work is limited to stability and speed while
 preserving appearance. This is not a claim that every application surface or
 physical device has been qualified.
 
+The subsequent [workspace-scale repair](../performance-20261024/WORKSPACE-SCALE.md)
+pages initial chat-search reads and removes the measured large preparation pause,
+with 1,000/10,000-chat browser qualification at normal and slower CPU settings.
+Total index memory, long sessions and the measured legacy sidebar family scan
+remain open; that report is the current evidence for this selected scale path.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the

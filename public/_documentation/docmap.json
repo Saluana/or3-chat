@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
+                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",

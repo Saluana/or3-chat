@@ -1,0 +1,22 @@
+$ tsx scripts/cli/nuxt-task.ts type-check
+node:net:2368
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/1d/hmmp5gtj3pd8bwyqgpzbh5d00000gn/T/tsx-501/47676.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:2368:21)
+    at listenInCluster (node:net:2499:12)
+    at Server.listen (node:net:2641:5)
+    at file:///Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/tsx/dist/cli.mjs:53:32174
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/tsx/dist/cli.mjs:53:32152)
+    at async file:///Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/tsx/dist/cli.mjs:55:542 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/1d/hmmp5gtj3pd8bwyqgpzbh5d00000gn/T/tsx-501/47676.pipe',
+  port: -1
+}
+
+Node.js v24.22.1
+error: script "type-check" exited with code 1

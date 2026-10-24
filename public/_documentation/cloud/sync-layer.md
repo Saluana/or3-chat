@@ -473,6 +473,16 @@ bounded and does not create large browser quota fixtures. CI also builds the
 production application and enforces total/largest compressed and uncompressed
 JavaScript and CSS budgets. The harnesses retain versioned JSON reports under `output/performance/` for regression review.
 
+`bun run test:e2e:workspace-scale` separately measures the real browser chat-search
+loader and index with 1,000/10,000 chats, a 5,000-message conversation, reference
+branches, legacy ordering-key omissions and unused tool payloads. It uses disposable
+IndexedDB databases without switching or modifying the active workspace. It checks
+complete result coverage, bounded row transfers, cancellation and a source heartbeat
+budget, and attaches timings and sidebar read counts under `test-results/workspace-scale`.
+Use `OR3_SCALE_CPU_RATE=4` for the slower-CPU profile; `OR3_SCALE_MAX_GAP_MS`
+overrides the 150 ms source heartbeat budget. These are development-server owner
+measurements, not production INP, storage-quota limits or long-session leak qualification.
+
 
 ## Related
 

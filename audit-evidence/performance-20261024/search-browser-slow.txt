@@ -1,0 +1,11 @@
+$ env OR3_E2E_PERFORMANCE=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3151 bunx playwright test tests/e2e/workspace-search-performance.e2e.ts --workers=1 --reporter=line --output=test-results/workspace-scale
+
+Running 2 tests using 1 worker
+
+(node:46794) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/2] [chromium] › tests/e2e/workspace-search-performance.e2e.ts:37:5 › 1000 chats retain complete search coverage with bounded browser work
+[2/2] [chromium] › tests/e2e/workspace-search-performance.e2e.ts:37:5 › 10000 chats retain complete search coverage with bounded browser work
+  2 passed (32.2s)

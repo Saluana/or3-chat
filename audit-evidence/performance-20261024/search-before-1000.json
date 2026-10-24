@@ -1,0 +1,378 @@
+{
+  "abort": {
+    "aborted": true,
+    "durationMs": 3.799999952316284
+  },
+  "runs": [
+    {
+      "approximateHeapBytes": 161368339,
+      "characters": 7109314,
+      "digest": 1839979504,
+      "expandedFamily": {
+        "durationMs": 6.099999904632568,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 11.200000047683716,
+        "maxRowsPerRead": 100,
+        "readCount": 12,
+        "readRows": 1001,
+        "rows": 2,
+        "ticks": 2
+      },
+      "fixture": {
+        "longConversationMessages": 5000,
+        "messages": 14990,
+        "seedMs": 750,
+        "threads": 1000
+      },
+      "index": {
+        "durationMs": 547.7999999523163,
+        "longTasks": [
+          61
+        ],
+        "maxHeartbeatGapMs": 69.20000004768372,
+        "maxRowsPerRead": 0,
+        "readCount": 0,
+        "readRows": 0,
+        "ticks": 39
+      },
+      "queries": [
+        {
+          "durationMs": 1.2000000476837158,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.2999999523162842,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.20000004768371585,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.10000014305114746,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0.20000004768371585,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        }
+      ],
+      "resources": 1000,
+      "sidebar": {
+        "durationMs": 5.400000095367432,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 11.5,
+        "maxRowsPerRead": 100,
+        "readCount": 52,
+        "readRows": 100,
+        "rows": 50,
+        "ticks": 2
+      },
+      "source": {
+        "durationMs": 162.5,
+        "longTasks": [
+          70
+        ],
+        "maxHeartbeatGapMs": 77.69999980926514,
+        "maxRowsPerRead": 14990,
+        "readCount": 2,
+        "readRows": 15990,
+        "ticks": 12
+      }
+    },
+    {
+      "approximateHeapBytes": 262866955,
+      "characters": 7109314,
+      "digest": 1839979504,
+      "expandedFamily": {
+        "durationMs": 5.5,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 11.5,
+        "maxRowsPerRead": 100,
+        "readCount": 12,
+        "readRows": 1001,
+        "rows": 2,
+        "ticks": 2
+      },
+      "fixture": {
+        "longConversationMessages": 5000,
+        "messages": 14990,
+        "seedMs": 750,
+        "threads": 1000
+      },
+      "index": {
+        "durationMs": 358.30000019073486,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 14.100000143051147,
+        "maxRowsPerRead": 0,
+        "readCount": 0,
+        "readRows": 0,
+        "ticks": 37
+      },
+      "queries": [
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.10000014305114746,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.10000014305114746,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        }
+      ],
+      "resources": 1000,
+      "sidebar": {
+        "durationMs": 4.699999809265137,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 11.699999809265137,
+        "maxRowsPerRead": 100,
+        "readCount": 52,
+        "readRows": 100,
+        "rows": 50,
+        "ticks": 2
+      },
+      "source": {
+        "durationMs": 126.5,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 37.79999995231629,
+        "maxRowsPerRead": 14990,
+        "readCount": 2,
+        "readRows": 15990,
+        "ticks": 12
+      }
+    },
+    {
+      "approximateHeapBytes": 345925266,
+      "characters": 7109314,
+      "digest": 1839979504,
+      "expandedFamily": {
+        "durationMs": 5.700000047683716,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 11.200000047683716,
+        "maxRowsPerRead": 100,
+        "readCount": 12,
+        "readRows": 1001,
+        "rows": 2,
+        "ticks": 2
+      },
+      "fixture": {
+        "longConversationMessages": 5000,
+        "messages": 14990,
+        "seedMs": 750,
+        "threads": 1000
+      },
+      "index": {
+        "durationMs": 352.2000000476837,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 13.700000047683716,
+        "maxRowsPerRead": 0,
+        "readCount": 0,
+        "readRows": 0,
+        "ticks": 37
+      },
+      "queries": [
+        {
+          "durationMs": 0.10000014305114746,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0.20000004768371585,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        },
+        {
+          "durationMs": 0,
+          "fallback": false,
+          "ids": [
+            "thread-000999"
+          ]
+        },
+        {
+          "durationMs": 0.09999990463256836,
+          "fallback": false,
+          "ids": [
+            "thread-000000"
+          ]
+        }
+      ],
+      "resources": 1000,
+      "sidebar": {
+        "durationMs": 4.6000001430511475,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 12.300000190734863,
+        "maxRowsPerRead": 100,
+        "readCount": 52,
+        "readRows": 100,
+        "rows": 50,
+        "ticks": 2
+      },
+      "source": {
+        "durationMs": 132.09999990463257,
+        "longTasks": [],
+        "maxHeartbeatGapMs": 32.799999952316284,
+        "maxRowsPerRead": 14990,
+        "readCount": 2,
+        "readRows": 15990,
+        "ticks": 13
+      }
+    }
+  ]
+}

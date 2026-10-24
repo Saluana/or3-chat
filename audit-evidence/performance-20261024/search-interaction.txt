@@ -1,0 +1,41 @@
+
+Running 4 tests using 1 worker
+
+(node:47718) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/4] [chromium] › tests/e2e/command-palette.spec.ts:35:1 › opens globally, traps one overlay, and restores focus on Escape
+[2/4] [chromium] › tests/e2e/command-palette.spec.ts:56:1 › requires two clicks and locks the first-click preview selection
+[3/4] [chromium] › tests/e2e/command-palette.spec.ts:77:1 › fits the mobile viewport without horizontal overflow
+  1) [chromium] › tests/e2e/command-palette.spec.ts:77:1 › fits the mobile viewport without horizontal overflow
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 390
+    Received:    408
+
+      86 |         (element) => element.scrollWidth
+      87 |     );
+    > 88 |     expect(scrollWidth).toBeLessThanOrEqual(390);
+         |                         ^
+      89 | });
+      90 |
+      91 | test('typing a new query cannot execute a stale result with Enter', async ({ page }, info) => {
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/command-palette.spec.ts:88:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/workspace-search-interaction/command-palette-fits-the-m-6e1e1-without-horizontal-overflow-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/workspace-search-interaction/command-palette-fits-the-m-6e1e1-without-horizontal-overflow-chromium/error-context.md
+
+
+(node:47878) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[4/4] [chromium] › tests/e2e/command-palette.spec.ts:91:1 › typing a new query cannot execute a stale result with Enter
+  1 failed
+    [chromium] › tests/e2e/command-palette.spec.ts:77:1 › fits the mobile viewport without horizontal overflow
+  3 passed (8.2s)

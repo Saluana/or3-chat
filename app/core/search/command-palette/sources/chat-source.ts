@@ -1,5 +1,8 @@
 import type { Or3DB } from '~/db/client';
+import type { Table } from 'dexie';
 import type { Message, Thread } from '~/db/schema';
+import { yieldToMain } from '~/core/search/orama';
+import { isSupersededMessage } from '~/utils/chat/transcript';
 import { normalizeMessageContent } from '../normalize';
 import { projectWorkspaceConversation } from '~/utils/chat/workspace-conversation';
 import {
@@ -14,6 +17,66 @@ function category() {
     return CORE_PALETTE_CATEGORIES.find((c) => c.id === 'chat')!;
 }
 
+/** Primary-key pages include legacy messages without a compound order key. */
+async function* readPages<T extends { id: string }>(
+    table: Table<T, string>,
+    signal?: AbortSignal
+) {
+    let after: string | undefined;
+    for (;;) {
+        signal?.throwIfAborted();
+        const query =
+            after === undefined
+                ? table.orderBy('id')
+                : table.where('id').above(after);
+        const page = await query.limit(500).toArray();
+        signal?.throwIfAborted();
+        if (!page.length) return;
+        yield page;
+        if (page.length < 500) return;
+        after = page.at(-1)!.id;
+        // The next IndexedDB request yields to the browser without a timer per page.
+    }
+}
+
+/** Retain searchable text and anchor coordinates, not tool/reasoning payloads. */
+function searchMessageSnapshot(message: Message): Message {
+    const {
+        id,
+        thread_id,
+        role,
+        index,
+        order_key,
+        created_at,
+        updated_at,
+        clock,
+    } = message;
+    const superseded = isSupersededMessage(message);
+    return {
+        id,
+        thread_id,
+        role,
+        index,
+        order_key,
+        created_at,
+        updated_at,
+        clock,
+        deleted: false,
+        data: {
+            content:
+                !superseded && (role === 'user' || role === 'assistant')
+                    ? normalizeMessageContent(message)
+                    : '',
+            ...(superseded
+                ? {
+                      superseded_by: (message.data as Record<string, unknown>)
+                          .superseded_by,
+                  }
+                : {}),
+        },
+    };
+}
+
 export function createChatPaletteSource(): PaletteSearchSource {
     return {
         id: 'chat',
@@ -23,15 +86,35 @@ export function createChatPaletteSource(): PaletteSearchSource {
         async load(context) {
             context.signal?.throwIfAborted();
             const db = (await context.getDb()) as Or3DB;
-            const threads = (await db.threads.toArray()).filter(
-                (t) => !t.deleted
-            );
+            const threads = new Map<string, Thread>();
+            for await (const page of readPages(db.threads, context.signal)) {
+                for (const thread of page)
+                    if (!thread.deleted) threads.set(thread.id, thread);
+            }
+            const messages = new Map<string, Message[]>();
+            for await (const page of readPages(db.messages, context.signal)) {
+                for (const message of page) {
+                    if (message.deleted || !threads.has(message.thread_id))
+                        continue;
+                    const rows = messages.get(message.thread_id) ?? [];
+                    rows.push(searchMessageSnapshot(message));
+                    messages.set(message.thread_id, rows);
+                }
+            }
+            const resources: PaletteResource[] = [];
+            let yieldedAt = performance.now();
+            for (const thread of threads.values()) {
+                context.signal?.throwIfAborted();
+                resources.push(
+                    buildChatResource(thread, threads, messages, context)
+                );
+                if (performance.now() - yieldedAt >= 8) {
+                    await yieldToMain();
+                    yieldedAt = performance.now();
+                }
+            }
             context.signal?.throwIfAborted();
-            const messages = (await db.messages.toArray()).filter(
-                (m) => !m.deleted
-            );
-            context.signal?.throwIfAborted();
-            return buildChatResources(threads, messages, context);
+            return resources;
         },
         async loadRecords(context, recordIds) {
             const db = await context.getDb() as Or3DB;
@@ -83,7 +166,7 @@ export function buildChatResources(
     threads: readonly Thread[],
     messages: readonly Message[],
     context: PaletteLoadContext,
-    resourceIds?: ReadonlySet<string>,
+    resourceIds?: ReadonlySet<string>
 ): PaletteResource[] {
     const byThread = new Map<string, Message[]>();
     for (const message of messages) {
@@ -98,33 +181,51 @@ export function buildChatResources(
     const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
     for (const thread of threads) {
         context.signal?.throwIfAborted();
-        if (thread.deleted || resourceIds && !resourceIds.has(thread.id)) continue;
-        let threadMessages: Message[];
-        let incomplete = false;
-        try { threadMessages = projectWorkspaceConversation(thread.id, threadMap, byThread); }
-        catch { threadMessages = []; incomplete = true; }
-        const body = threadMessages
-            .map((message) => normalizeMessageContent(message))
-            .filter(Boolean)
-            .join('\n');
-        const actions = chatActions(thread.id, context);
-        resources.push({
-            key: `chat:${thread.id}`,
-            sourceId: 'chat',
-            categoryId: 'chat',
-            recordId: thread.id,
-            title: thread.title?.trim() || 'Untitled chat',
-            content: body,
-            updatedAt: thread.updated_at,
-            revision: `${thread.updated_at}:${threadMessages.length}:${body.length}`,
-            icon: 'i-lucide-message-square',
-            primaryAction: actions.primary,
-            secondaryActions: actions.secondary,
-            metadata: {
-                messageCount: threadMessages.length,
-                incomplete,
-            },
-        });
+        if (thread.deleted || (resourceIds && !resourceIds.has(thread.id)))
+            continue;
+        resources.push(buildChatResource(thread, threadMap, byThread, context));
     }
     return resources;
+}
+
+function buildChatResource(
+    thread: Thread,
+    threads: ReadonlyMap<string, Thread>,
+    messages: ReadonlyMap<string, readonly Message[]>,
+    context: PaletteLoadContext
+): PaletteResource {
+    let threadMessages: Message[];
+    let incomplete = false;
+    try {
+        threadMessages = projectWorkspaceConversation(
+            thread.id,
+            threads,
+            messages
+        );
+    } catch {
+        threadMessages = [];
+        incomplete = true;
+    }
+    const body = threadMessages
+        .map((message) => normalizeMessageContent(message))
+        .filter(Boolean)
+        .join('\n');
+    const actions = chatActions(thread.id, context);
+    return {
+        key: `chat:${thread.id}`,
+        sourceId: 'chat',
+        categoryId: 'chat',
+        recordId: thread.id,
+        title: thread.title?.trim() || 'Untitled chat',
+        content: body,
+        updatedAt: thread.updated_at,
+        revision: `${thread.updated_at}:${threadMessages.length}:${body.length}`,
+        icon: 'i-lucide-message-square',
+        primaryAction: actions.primary,
+        secondaryActions: actions.secondary,
+        metadata: {
+            messageCount: threadMessages.length,
+            incomplete,
+        },
+    };
 }
