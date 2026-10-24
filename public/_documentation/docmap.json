@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, live incoming history, tabs and quiet draft autosave, with stream-safe refresh guards, on-demand syntax grammars, draft restoration at recovery capacity, isolated journal failures, unchanged-draft save suppression, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
+                    "summary": "Preserve durable sends, native admission, tool policy, live incoming history scoped to each open conversation, tabs and quiet draft autosave, with stream-safe refresh guards, on-demand syntax grammars, draft restoration at recovery capacity, isolated journal failures, unchanged-draft save suppression, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
                 },
                 {
                     "name": "ai-preferences.md",

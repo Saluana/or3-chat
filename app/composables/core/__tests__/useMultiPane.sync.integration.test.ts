@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { effectScope, nextTick, type EffectScope } from 'vue';
+import { effectScope, nextTick, watch, type EffectScope } from 'vue';
 import Dexie from 'dexie';
 import { evictWorkspaceDb, setActiveWorkspaceDb } from '~/db/client';
 import { useMultiPane } from '../useMultiPane';
@@ -24,6 +24,45 @@ afterEach(async () => {
 });
 
 describe('open workspace views receiving synced rows', () => {
+    it('keeps unrelated histories idle while shared conversation views update and detach', async () => {
+        const workspaceId = `pane-observers-${crypto.randomUUID()}`;
+        workspaces.push(workspaceId);
+        const db = setActiveWorkspaceDb(workspaceId);
+        const row = { created_at: 1, updated_at: 1, deleted: false, clock: 1, role: 'assistant', index: 0 };
+        await db.messages.bulkPut([
+            { ...row, id: 'idle-row', thread_id: 'idle-thread', data: { content: 'Keep reading' } },
+            { ...row, id: 'active-row', thread_id: 'active-thread', data: { content: 'Initial reply' } },
+        ]);
+        scope = effectScope();
+        const pane = scope.run(() => useMultiPane())!;
+        await pane.setPaneThread(0, 'idle-thread');
+        pane.addPane();
+        await pane.setPaneThread(1, 'active-thread');
+        pane.addPane();
+        await pane.setPaneThread(2, 'active-thread');
+        // Let the initial live-query deliveries settle before measuring updates.
+        await new Promise(resolve => setTimeout(resolve, 80));
+        const idleUpdates = vi.fn();
+        scope.run(() => watch(() => pane.panes.value[0]!.messages, idleUpdates, { flush: 'sync' }));
+
+        await db.messages.update('active-row', { data: { content: 'Updated reply' }, clock: 2 });
+        await vi.waitFor(() => expect(pane.panes.value.slice(1).map(p => p.messages[0]?.content)).toEqual(['Updated reply', 'Updated reply']));
+        expect(idleUpdates, 'a neighboring write must not replace the idle pane history').not.toHaveBeenCalled();
+
+        await pane.closePane(1);
+        await db.messages.update('active-row', { data: { content: 'Still observed' }, clock: 3 });
+        await vi.waitFor(() => expect(pane.panes.value[1]!.messages[0]?.content).toBe('Still observed'));
+        expect(idleUpdates).not.toHaveBeenCalled();
+
+        await pane.setPaneThread(1, 'replacement-thread');
+        await db.messages.put({ ...row, id: 'replacement-row', thread_id: 'replacement-thread', data: { content: 'Replacement history' } });
+        await vi.waitFor(() => expect(pane.panes.value[1]!.messages[0]?.content).toBe('Replacement history'));
+        await db.messages.update('active-row', { data: { content: 'Detached write' }, clock: 4 });
+        await new Promise(resolve => setTimeout(resolve, 80));
+        expect(pane.panes.value[1]!.messages[0]?.content).toBe('Replacement history');
+        expect(idleUpdates).not.toHaveBeenCalled();
+    });
+
     it('refreshes an open conversation from user/assistant writes, edits and deletes, then releases the old workspace and scope', async () => {
         const idA = `chat-sync-a-${crypto.randomUUID()}`;
         const idB = `chat-sync-b-${crypto.randomUUID()}`;

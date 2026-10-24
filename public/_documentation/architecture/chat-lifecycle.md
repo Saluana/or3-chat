@@ -16,8 +16,10 @@ the server. Server rendering must never start IndexedDB reads or stream recovery
 
 Open chat panes observe their indexed conversation rows in the active workspace's
 Dexie database. Incoming user turns, completed replies, edits, and deletes update
-the open view without reopening it or adding network polls. Observers release on
-pane/thread changes, workspace switches, and disposal. Active foreground streams
+the open view without reopening it or adding network polls. Each distinct open
+conversation has one observer shared by its panes; writes in another conversation
+do not reread or replace an idle pane's history. An observer releases when its last
+pane leaves that conversation, on workspace switches, and on disposal. Active foreground streams
 retain their in-memory reply; a saved terminal history received during streaming
 can apply after it settles only when it includes that completed reply from the
 same stream generation, including replies held in the separate foreground tail.
