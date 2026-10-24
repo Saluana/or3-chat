@@ -1,0 +1,362 @@
+{
+  "note": "Exploratory development runs. DOM coverage sampling and Vue development tracing can force layout; confirm production costs before attributing frame stalls to application code.",
+  "before": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 200,
+          "trackHeight": 5067,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 139,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 134.80000000000018,
+          "maxFrameMs": 542.8000000000002,
+          "items": 151,
+          "trackHeight": 12119,
+          "scrollTop": 0
+        }
+      },
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 200,
+          "trackHeight": 5067,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 135,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 143.40000000000055,
+          "maxFrameMs": 465.89999999999964,
+          "items": 151,
+          "trackHeight": 12119,
+          "scrollTop": 0
+        }
+      },
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 200,
+          "trackHeight": 5067,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 134,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 132.09999999999945,
+          "maxFrameMs": 456.6999999999998,
+          "items": 151,
+          "trackHeight": 12119,
+          "scrollTop": 0
+        }
+      }
+    ]
+  },
+  "estimate40": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 40,
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 122,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 132.80000000000018,
+          "maxFrameMs": 509.89999999999964,
+          "items": 162,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        }
+      },
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 40,
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 122,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 133.40000000000055,
+          "maxFrameMs": 474.90000000000055,
+          "items": 162,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        }
+      },
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 40,
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 126,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 133.39999999999964,
+          "maxFrameMs": 476.39999999999964,
+          "items": 162,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        }
+      }
+    ]
+  },
+  "profile": {
+    "cpuThrottle": 4,
+    "seededThreads": 160,
+    "wheelEvents": 20,
+    "wheelDelta": 600,
+    "runs": [
+      {
+        "initial": {
+          "items": 51,
+          "estimate": 40,
+          "trackHeight": 1867,
+          "viewportHeight": 552,
+          "mountedRows": 31
+        },
+        "scroll": {
+          "frames": 120,
+          "blankFrames": 0,
+          "maxBlankMs": 0,
+          "frameP95Ms": 151.90000000000055,
+          "maxFrameMs": 535.3000000000002,
+          "items": 162,
+          "trackHeight": 5521,
+          "scrollTop": 0
+        },
+        "topFrames": [
+          {
+            "frame": {
+              "functionName": "(program)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 2312.914
+          },
+          {
+            "frame": {
+              "functionName": "(idle)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 875.453
+          },
+          {
+            "frame": {
+              "functionName": "getBoundingClientRect",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 583.325
+          },
+          {
+            "frame": {
+              "functionName": "formatTimeDisplay",
+              "scriptId": "8371",
+              "url": "http://127.0.0.1:3147/_nuxt/utils/sidebar/sidebarTimeUtils.ts",
+              "lineNumber": 76,
+              "columnNumber": 33
+            },
+            "selfMs": 121.083
+          },
+          {
+            "frame": {
+              "functionName": "(garbage collector)",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 67.503
+          },
+          {
+            "frame": {
+              "functionName": "getBoundingClientRect",
+              "scriptId": "0",
+              "url": "",
+              "lineNumber": -1,
+              "columnNumber": -1
+            },
+            "selfMs": 57.029
+          },
+          {
+            "frame": {
+              "functionName": "formatTimeDisplay",
+              "scriptId": "8371",
+              "url": "http://127.0.0.1:3147/_nuxt/utils/sidebar/sidebarTimeUtils.ts",
+              "lineNumber": 76,
+              "columnNumber": 33
+            },
+            "selfMs": 23.411
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "607",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/icon/dist/runtime/components/index.js?v=91a977fe",
+              "lineNumber": 30,
+              "columnNumber": 7
+            },
+            "selfMs": 22.72
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "196",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@vue/reactivity/dist/reactivity.esm-bundler.js?v=91a977fe",
+              "lineNumber": 1017,
+              "columnNumber": 4
+            },
+            "selfMs": 19.262
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "607",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/icon/dist/runtime/components/index.js?v=91a977fe",
+              "lineNumber": 30,
+              "columnNumber": 7
+            },
+            "selfMs": 19.004
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "607",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/icon/dist/runtime/components/index.js?v=91a977fe",
+              "lineNumber": 30,
+              "columnNumber": 7
+            },
+            "selfMs": 18.009
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "607",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/icon/dist/runtime/components/index.js?v=91a977fe",
+              "lineNumber": 30,
+              "columnNumber": 7
+            },
+            "selfMs": 15.024
+          },
+          {
+            "frame": {
+              "functionName": "set",
+              "scriptId": "196",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@vue/reactivity/dist/reactivity.esm-bundler.js?v=91a977fe",
+              "lineNumber": 1017,
+              "columnNumber": 4
+            },
+            "selfMs": 14.976
+          },
+          {
+            "frame": {
+              "functionName": "sample",
+              "scriptId": "12982",
+              "url": "",
+              "lineNumber": 4,
+              "columnNumber": 31
+            },
+            "selfMs": 14.355
+          },
+          {
+            "frame": {
+              "functionName": "pickLinkProps",
+              "scriptId": "542",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/ui/dist/runtime/utils/link.js?v=91a977fe",
+              "lineNumber": 4,
+              "columnNumber": 29
+            },
+            "selfMs": 13.646
+          },
+          {
+            "frame": {
+              "functionName": "MutationObserver.observe.childList",
+              "scriptId": "69",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/nuxt/dist/app/plugins/island-link-navigation.client.js?v=91a977fe",
+              "lineNumber": 68,
+              "columnNumber": 24
+            },
+            "selfMs": 11.954
+          },
+          {
+            "frame": {
+              "functionName": "recordPosition",
+              "scriptId": "283",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/vite-plugin-vue-tracer/dist/client/record.mjs?v=91a977fe",
+              "lineNumber": 19,
+              "columnNumber": 23
+            },
+            "selfMs": 11.674
+          },
+          {
+            "frame": {
+              "functionName": "get",
+              "scriptId": "535",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/ui/dist/runtime/composables/useComponentProps.js?v=91a977fe",
+              "lineNumber": 29,
+              "columnNumber": 7
+            },
+            "selfMs": 10.922
+          },
+          {
+            "frame": {
+              "functionName": "setup",
+              "scriptId": "607",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@nuxt/icon/dist/runtime/components/index.js?v=91a977fe",
+              "lineNumber": 30,
+              "columnNumber": 7
+            },
+            "selfMs": 10.78
+          },
+          {
+            "frame": {
+              "functionName": "ObjectRefImpl",
+              "scriptId": "196",
+              "url": "http://127.0.0.1:3147/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/@vue/reactivity/dist/reactivity.esm-bundler.js?v=91a977fe",
+              "lineNumber": 1502,
+              "columnNumber": 12
+            },
+            "selfMs": 10.209
+          }
+        ]
+      }
+    ]
+  }
+}

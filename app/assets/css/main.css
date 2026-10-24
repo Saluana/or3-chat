@@ -376,6 +376,12 @@ html {
 		var(--app-motion-easing-standard, ease-out) both;
 }
 
+/* Virtual rows mount again as the window moves. They must already be visible
+   when scrolling reveals them, rather than replaying their entry fade. */
+.sidebar-scroll .animate-sidebar-item-enter:not(.is-exiting) {
+	animation: none;
+}
+
 /* Sidebar item exit animation (for collapse) */
 @keyframes sidebar-item-exit {
 	from {

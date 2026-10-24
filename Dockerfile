@@ -74,6 +74,9 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --ignore-scripts --no-audit --no-fund
 
 COPY . .
+# npm ci deliberately skips lifecycle scripts; apply the same checked-in
+# dependency fixes as the contributor postinstall before compiling the app.
+RUN node node_modules/patch-package/index.js --error-on-fail
 RUN node scripts/docker/prepare-backup-inspection.mjs
 # Restore the real release version while retaining the fixed production
 # provider graph used for dependency installation.

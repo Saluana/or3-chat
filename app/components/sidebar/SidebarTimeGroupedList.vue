@@ -5,7 +5,7 @@
                 ref="scroller"
                 :items="groupedItemsList"
                 :item-key="(item) => item.key"
-                :estimate-height="200"
+                :estimate-height="40"
                 :overscan="512"
                 mutation-mode="arbitrary"
                 :maintain-bottom="false"
@@ -39,9 +39,7 @@
                         :active="item.item.family?.kind === 'group-header'
                             ? activeFamilyIds.has(item.item.family.rootId)
                             : activeIds.includes(item.item.id)"
-                        :time-display="
-                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
-                        "
+                        :time-display="item.timeDisplay"
                         :class="[
                             'mb-0.5',
                             collapsingGroups.has(item.groupKey) && 'is-exiting'
@@ -190,7 +188,7 @@ const groupedItemsList = computed(() => {
     const result: Array<
         | { key: string; type: 'header' | 'status' }
         | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
-        | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup }
+        | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup; timeDisplay: string }
     > = [];
     if (slots.header) {
         result.push({ key: 'header', type: 'header' });
@@ -221,6 +219,8 @@ const groupedItemsList = computed(() => {
                     type: 'time-group-item' as const,
                     item,
                     groupKey,
+                    // Formatting belongs to data changes, not each scroll render.
+                    timeDisplay: formatTimeDisplay(item.updatedAt, groupKey),
                 });
             }
         }
