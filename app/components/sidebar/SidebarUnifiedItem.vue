@@ -55,7 +55,17 @@
         <div
             class="absolute right-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
         >
+            <UButton
+                v-if="!actionsMounted"
+                v-bind="actionTriggerProps"
+                :aria-label="`Actions for ${item.title || 'Untitled'}`"
+                aria-haspopup="dialog"
+                :aria-expanded="false"
+                @click.stop="actionsMounted = true; actionsOpen = true"
+                @keydown="handlePopoverTriggerKey"
+            />
             <UPopover
+                v-else
                 v-model:open="actionsOpen"
                 :content="{ side: 'right', align: 'start', sideOffset: 6 }"
             >
@@ -321,6 +331,9 @@ const extraActions = computed<readonly ExtraAction[]>(() =>
 );
 
 const actionsOpen = ref(false);
+// Virtual rows frequently remount. Create the menu only when it is first used;
+// retain it afterward so Reka still owns dismissal, transitions and focus.
+const actionsMounted = ref(false);
 const inspectedReasons = shallowRef<Record<string, string | undefined>>({});
 let availabilitySubscription: Subscription | undefined;
 let availabilityRevision = 0;

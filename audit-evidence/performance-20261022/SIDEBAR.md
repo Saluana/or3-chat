@@ -30,11 +30,16 @@ Nuxt uses the patched ESM entry. See `patches/README.md` for removal criteria.
 ## Production browser evidence
 
 `sidebar-scroll-probe.js` runs against the local journey fixture in a production
-build: 160 synthetic threads, retro theme, 552 px sidebar viewport, Chromium
+build: 160 synthetic threads, 552 px sidebar viewport, Chromium
 with 4× CPU throttling, ten +600 px wheel events followed by ten -600 px events,
 80 ms between events, three page reloads per variant. External requests are
 blocked. Date-method instrumentation, animation listeners, frame sampling,
 long-task observation and CDP CPU profiling are removed after each run.
+
+Correction during section 3: these historical receipts did not capture theme
+metadata, so the original "retro theme" attribution was unverified. The same
+browser was subsequently observed using Blank at 90% scale. Treat these as
+single-profile measurements, not evidence for Retro or cross-theme coverage.
 
 | Per-run measurement | Baseline | Final tracked patch and app changes |
 | --- | --- | --- |

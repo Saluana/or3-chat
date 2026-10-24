@@ -874,11 +874,14 @@ test('sidebar chat and document switching keeps the workspace mounted without a 
     expect(serverRenderErrors).toEqual([]);
 });
 
-test('virtual sidebar rows appear immediately and reuse time labels while scrolling', async ({ context, page }, info) => {
+for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light', 'dark']) test(`virtual sidebar rows appear immediately and reuse time labels while scrolling (${theme} ${mode})`, async ({ context, page }, info) => {
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+    await context.addCookies([{ name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' }]);
+    await page.addInitScript(({ theme, mode }) => { localStorage.setItem('activeTheme', theme); localStorage.setItem('theme', mode); }, { theme, mode });
     await page.goto(`${chatPage}?workspace=1`);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expect(page.locator('#nav-scroll-area')).toBeVisible({ timeout: 30_000 });
     await page.evaluate(async () => {
         const name = (await indexedDB.databases()).find(entry => entry.name?.startsWith('or3-db'))?.name;
@@ -902,13 +905,34 @@ test('virtual sidebar rows appear immediately and reuse time labels while scroll
             });
         } finally { db.close(); }
     });
-    await page.reload();
+    // The fixture seeds data; exercise the real route so Home cannot replace
+    // the fixture's entire PageShell during the first menu interaction.
+    await page.goto('/chat');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect.poll(() => page.locator('html').evaluate(element => element.classList.contains('dark'))).toBe(mode === 'dark');
     for (const surface of ['Home', 'Chats']) {
-        await page.getByRole('button', { name: 'Home', exact: true }).first().click();
         if (surface === 'Chats') await page.getByRole('button', { name: 'Chats', exact: true }).click();
         const scroller = page.locator('.sidebar-scroll');
         const first = scroller.locator('.unified-sb-item').filter({ has: page.getByRole('button', { name: 'Open Scroll time 0', exact: true }) });
         await expect(first).toHaveCSS('opacity', '1');
+        // First activation replaces the lightweight trigger with Reka's trigger.
+        // Keyboard opening, Escape restoration, and outside-click focus must
+        // behave the same before and after that first activation.
+        const actions = first.getByRole('button', { name: 'Actions for Scroll time 0', exact: true });
+        const rename = page.getByRole('button', { name: 'Rename', exact: true });
+        await actions.focus();
+        await page.keyboard.press('Enter');
+        await expect(rename).toBeVisible();
+        await expect(actions).toHaveAttribute('aria-expanded', 'true');
+        await page.keyboard.press('Escape');
+        await expect(rename).toBeHidden();
+        await expect(actions).toBeFocused();
+        await page.keyboard.press('Space');
+        await expect(rename).toBeVisible();
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.click();
+        await expect(rename).toBeHidden();
+        await expect(input).toBeFocused();
         // Wait for measured row heights to settle before starting observations.
         await page.waitForTimeout(300);
         await scroller.evaluate(element => {
@@ -931,10 +955,16 @@ test('virtual sidebar rows appear immediately and reuse time labels while scroll
         });
         const box = (await scroller.boundingBox())!;
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        await page.mouse.wheel(0, 4000);
-        await expect(scroller.getByRole('button', { name: 'Open Scroll time 39', exact: true })).toBeVisible();
+        // Newly measured rows can extend the estimated track after a gesture.
+        // Continue native wheel input until the actual end, with a fixed bound.
+        for (let gesture = 0; gesture < 4; gesture++) {
+            await page.mouse.wheel(0, 4000);
+            await page.waitForTimeout(100);
+            if (await scroller.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop < 2)) break;
+        }
+        await expect(scroller.getByRole('button', { name: 'Open Scroll time 39', exact: true })).toBeInViewport();
         await page.mouse.wheel(0, -4000);
-        await expect(first).toBeVisible();
+        await expect(first).toBeInViewport();
         const receipt = await page.evaluate(() => (window as unknown as {
             __finishSidebarObservation: () => { formats: number; mountedOpacities: number[] };
         }).__finishSidebarObservation());

@@ -16,6 +16,9 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     const activeFamilyIds = shallowRef(new Set<string>());
     const targetCount = ref(FAMILY_PAGE_SIZE); const memberLimits = new Map<string, number>();
     let subscription: Subscription | undefined; let subscriptionToken = 0; let mounted = false;
+    // `loading` controls the empty-view overlay. Existing rows stay visible
+    // while paging, but bottom events must still wait for that page to settle.
+    let pageRequestPending = false;
     const filter = (): FamilyFilter => ({ query: options.query?.value.trim(), projectId: options.projectId?.value, pinned: options.pinned?.value });
     async function fetchItems() {
         const db = getDb(); const generation = getWorkspaceGeneration(); const currentFilter = filter();
@@ -52,13 +55,15 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     function startSubscription() {
         if (!mounted) return;
         const token = ++subscriptionToken; const db = getDb(); const generation = getWorkspaceGeneration();
+        pageRequestPending = true;
         loading.value = items.value.length === 0; subscription?.unsubscribe();
         subscription = liveQuery(fetchItems).subscribe({ next: (result) => {
             if (token !== subscriptionToken || getDb() !== db || generation !== getWorkspaceGeneration()) return;
+            pageRequestPending = false;
             items.value = result.rows; activeFamilyIds.value = result.activeRoots; hasMore.value = result.hasMore; loading.value = false;
-        }, error: () => { if (token === subscriptionToken) loading.value = false; } });
+        }, error: () => { if (token === subscriptionToken) { pageRequestPending = false; loading.value = false; } } });
     }
-    function loadMore() { if (loading.value || !hasMore.value) return; targetCount.value += FAMILY_PAGE_SIZE; startSubscription(); }
+    function loadMore() { if (pageRequestPending || loading.value || !hasMore.value) return; targetCount.value += FAMILY_PAGE_SIZE; startSubscription(); }
     function reset() { targetCount.value = FAMILY_PAGE_SIZE; memberLimits.clear(); hasMore.value = true; startSubscription(); }
     async function toggleFamily(rootId: string) {
         const db = getDb(); const generation = getWorkspaceGeneration();
@@ -77,7 +82,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     watch(() => options.activeIds?.value, startSubscription, { deep: true });
     onMounted(() => { mounted = true; startSubscription(); });
     onActivated(() => { if (!mounted) { mounted = true; startSubscription(); } });
-    onDeactivated(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); loading.value = false; });
-    onUnmounted(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); stopWorkspace(); });
+    onDeactivated(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); pageRequestPending = false; loading.value = false; });
+    onUnmounted(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); pageRequestPending = false; stopWorkspace(); });
     return { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction };
 }

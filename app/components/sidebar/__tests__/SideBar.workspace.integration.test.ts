@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, computed, h, ref, KeepAlive, nextTick } from 'vue';
 import { mount, shallowMount, type VueWrapper } from '@vue/test-utils';
 import Dexie from 'dexie';
+import { Or3Scroll } from 'or3-scroll';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -63,6 +64,47 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
+    // One journey crosses both database batch boundaries, exact UI pages,
+    // and the partial final page while checking repeated-event admission.
+    it('admits one pending page and reaches the final thread across database batches', async () => {
+        const threadCount = 201;
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
+        const id = `sidebar-page-admission-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        workspaces.push({ id, name: db.name });
+        await db.threads.bulkPut(Array.from({ length: threadCount }, (_, index) => ({
+            id: `page-${index}`, title: `Page row ${index}`, status: 'ready',
+            deleted: false, pinned: false, forked: false, clock: 1,
+            created_at: 1000 - index, updated_at: 1000 - index,
+        })));
+        wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
+            global: { stubs: { SidebarUnifiedItem: { template: '<div data-sidebar-page-row />' } } } });
+        const scroller = () => wrapper!.findComponent(Or3Scroll);
+        // Repeated component-wrapper construction registers native listeners
+        // in Vue Test Utils. Observe the rendered fixture DOM directly.
+        const rowCount = () => wrapper!.element.querySelectorAll('[data-sidebar-page-row]').length;
+        // Native scroll events begin a new event-loop task, outside the
+        // promise scope of the preceding IndexedDB subscription result.
+        const reachBottom = (burst = 1) => new Promise<void>(resolve => {
+            setTimeout(() => {
+                for (let event = 0; event < burst; event++) scroller().vm.$emit('reachBottom');
+                resolve();
+            }, 0);
+        });
+        // Poll rendered rows synchronously; Vue flushes between attempts.
+        const waitForRows = (count: number) => vi.waitFor(() => {
+            expect(rowCount()).toBe(count);
+        }, { timeout: 5000 });
+        await waitForRows(50);
+        await reachBottom(3);
+        await waitForRows(100);
+        for (let count = 150; count < threadCount + 50; count += 50) {
+            await reachBottom();
+            await waitForRows(Math.min(count, threadCount));
+        }
+    }, 30_000);
+
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
     // The live activity projection and project-filtered pagination must agree
