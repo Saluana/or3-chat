@@ -4099,12 +4099,25 @@ export function useChat(
 
     /** Atomically replaces both provider and presentation history projections. */
     function replaceCanonicalHistory(nextMessages: ChatMessage[]) {
+        const previousById = new Map(messages.value.map((message) => [message.id, message]));
         const nextRaw = nextMessages.map((message) => ({ ...message }));
         const nextUi = nextRaw
             .filter((message) => message.role !== 'tool')
             .map((message) => ensureUiMessage(message));
         rawMessages.value = nextRaw;
-        messages.value = associateUiToolResultMessages(nextUi, nextRaw);
+        messages.value = associateUiToolResultMessages(nextUi, nextRaw).map((message) => {
+            // A canonical refresh can change storage/provider fields without
+            // changing this row's presentation. Keep those mounted rows idle;
+            // new metadata references and removed fields still replace the row.
+            const previous = previousById.get(message.id);
+            const keys = Reflect.ownKeys(message);
+            if (previous && keys.length === Reflect.ownKeys(previous).length &&
+                keys.every((key) => Object.hasOwn(previous, key) &&
+                    Object.is(Reflect.get(previous, key), Reflect.get(message, key)))) {
+                return previous;
+            }
+            return message;
+        });
     }
 
     // Recovery reads browser-local storage. Direct chat routes also create this
