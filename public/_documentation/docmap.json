@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery."
+                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery. Immediate message document creation with heading reuse, asynchronous titles and idempotent message snapshots."
                 },
                 {
                     "name": "prompts.md",
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, live incoming history, tabs and quiet draft autosave, with stream-safe refresh guards, draft restoration at recovery capacity, isolated journal failures, unchanged-draft save suppression, and tab-scoped storage notices and retries."
+                    "summary": "Preserve durable sends, native admission, tool policy, live incoming history, tabs and quiet draft autosave, with stream-safe refresh guards, draft restoration at recovery capacity, isolated journal failures, unchanged-draft save suppression, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
                 },
                 {
                     "name": "ai-preferences.md",
