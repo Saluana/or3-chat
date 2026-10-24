@@ -45,7 +45,11 @@ refresh the data used by the container's existing source and workspace guards.
 Other renderer events pass through with their original listeners and payloads.
 
 Host Markdown surfaces share `app/utils/stream-markdown.ts` and pass its stable
-`streamMarkdownComponents` map to Streamdown. Code highlighting runs in one
+`streamMarkdownComponents` map to Streamdown. Math styles load with this lazy
+renderer module, before it mounts, so the first streamed formula does not wait
+for an idle callback and change layout when its stylesheet arrives. Opening a
+Markdown surface loads these styles even if that content has no math; empty
+chat keeps the renderer and its styles lazy. Code highlighting runs in one
 browser worker shared by mounted host code blocks. The existing Streamdown
 registry loads local grammars on first use, with aliases and plain-text fallback.
 The renderer retains its toolbar, line numbers, escaping and theme handling;

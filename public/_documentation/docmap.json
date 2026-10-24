@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, stable lazy row handlers, unchanged display projections and bottom-follow controls, owned syntax workers and bounded highlighting fallback, shared lazy grammar configuration, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
+                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, stable lazy row handlers, unchanged display projections and bottom-follow controls, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
                 },
                 {
                     "name": "ai-preferences.md",

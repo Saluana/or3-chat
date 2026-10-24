@@ -2706,6 +2706,67 @@ test.describe('production chat journey', () => {
         ).toBeVisible();
     });
 
+    test('first math reply has its styles before any visible formula frame', async ({ page }, info) => {
+        let delayedStyles = 0;
+        await page.route('**/_nuxt/*.css', async route => {
+            const response = await route.fetch();
+            const body = await response.text();
+            if (body.includes('.katex-mathml')) {
+                delayedStyles++;
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            await route.fulfill({ response, body });
+        });
+        await page.addInitScript(() => {
+            const observation = { frames: 0, unstyled: 0, frame: 0, heights: [] as number[] };
+            Object.assign(window, { __mathStyleFrames: observation });
+            const sample = () => {
+                const formula = document.querySelector('.cm-assistant .katex');
+                const semantic = formula?.querySelector('.katex-mathml');
+                if (formula && semantic && formula.getClientRects().length) {
+                    observation.frames++;
+                    if (getComputedStyle(semantic).position !== 'absolute') observation.unstyled++;
+                    if (observation.heights.length < 20) observation.heights.push(formula.getBoundingClientRect().height);
+                }
+                observation.frame = requestAnimationFrame(sample);
+            };
+            observation.frame = requestAnimationFrame(sample);
+        });
+        const reply = '$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\nMath reply complete.';
+        await openChat(page);
+        expect(delayedStyles, 'empty chat keeps the Markdown styles lazy').toBe(0);
+        await page.evaluate(content => {
+            const original = window.fetch;
+            window.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (!url.includes('/api/__or3-e2e/chat/completions')) return original(input, init);
+                return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: null }] })}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+            };
+        }, reply);
+        await send(page, 'Show a formula first.');
+        try {
+            await expect(page.getByText('Math reply complete.', { exact: true })).toBeVisible();
+            await expect(page.locator('.cm-assistant .katex-mathml')).toHaveCSS('position', 'absolute');
+            await expect.poll(() => page.evaluate(() => (window as unknown as {
+                __mathStyleFrames: { frames: number };
+            }).__mathStyleFrames.frames)).toBeGreaterThan(1);
+            await waitForDurableReply(page, reply);
+            const observation = await page.evaluate(() => (window as unknown as {
+                __mathStyleFrames: { frames: number; unstyled: number; heights: number[] };
+            }).__mathStyleFrames);
+            const receipt = info.outputPath('first-math-frames.json');
+            await writeFile(receipt, JSON.stringify({ delayedStyles, ...observation }, null, 2));
+            await info.attach('first-math-frames', { path: receipt, contentType: 'application/json' });
+            expect(delayedStyles).toBeGreaterThan(0);
+            expect(observation.unstyled).toBe(0);
+            await page.screenshot({ path: info.outputPath('first-math-styled.png'), animations: 'disabled' });
+        } finally {
+            await page.evaluate(() => cancelAnimationFrame((window as unknown as {
+                __mathStyleFrames: { frame: number };
+            }).__mathStyleFrames.frame));
+        }
+    });
+
     test('streams a response and restores its durable thread after reload', async ({
         page,
     }) => {
