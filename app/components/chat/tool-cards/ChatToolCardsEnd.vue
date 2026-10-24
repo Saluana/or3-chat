@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { resolveToolCard, toolCardBindingKey } from '~/composables/chat/tool-cards';
-import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import type { ToolCallInfo } from '~/utils/chat/uiMessages';
+import type { ToolCardMessage } from '~/utils/chat/tool-card-context';
 import ToolCardSlot from './ToolCardSlot.vue';
-const props = defineProps<{ message: UiChatMessage }>();
+const props = defineProps<{ message: ToolCardMessage; toolCalls?: ToolCallInfo[] }>();
 const emit = defineEmits<{ resize: [] }>();
 const cards = computed(() =>
-    (props.message.toolCalls ?? []).flatMap((call) => {
+    (props.toolCalls ?? []).flatMap((call) => {
         const binding = resolveToolCard(call.name);
         return binding?.placement === 'end' &&
             (binding.renderWhile === 'always' || call.status === 'complete')

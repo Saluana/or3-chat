@@ -1,0 +1,49 @@
+
+Running 3 tests using 1 worker
+
+(node:47772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chromium] › tests/e2e/tool-cards.spec.ts:292:1 › legacy placement, crashing card fallback and timer sends stay isolated
+[2/3] [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+  1) [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('group', { name: 'Trusted weather', exact: true })
+    Expected substring: "Paris, France"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" getByRole('group', { name: 'Trusted weather', exact: true }) with timeout 5000ms
+      - waiting for getByRole('group', { name: 'Trusted weather', exact: true })
+
+
+      335 |   await expect(
+      336 |     page.getByRole("group", { name: "Trusted weather", exact: true }),
+    > 337 |   ).toContainText("Paris, France");
+          |     ^
+      338 |   await expect(
+      339 |     page.getByRole("button", { name: "Trusted kit answer", exact: true }),
+      340 |   ).toBeVisible();
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:337:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/card-notify-lifecycle/tool-cards-trusted-Vue-car-0f555-oved-on-activation-teardown-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/card-notify-lifecycle/tool-cards-trusted-Vue-car-0f555-oved-on-activation-teardown-chromium/error-context.md
+
+    Error Context: test-results/card-notify-lifecycle/tool-cards-trusted-Vue-car-0f555-oved-on-activation-teardown-chromium/error-context.md
+
+
+(node:47951) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/3] [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+  1 failed
+    [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+  2 passed (17.9s)

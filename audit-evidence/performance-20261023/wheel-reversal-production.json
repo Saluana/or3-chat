@@ -1,0 +1,410 @@
+{
+  "config": {
+    "argv": [
+      "/Users/brendon/.vite-plus/js_runtime/node/24.22.1/bin/node",
+      "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.bin/playwright",
+      "test",
+      "tests/e2e/or3-scroll-canary.spec.ts",
+      "tests/e2e/production-chat-journey.spec.ts",
+      "--grep",
+      "keeps browsing when native scrolling overtakes|virtual sidebar rows appear",
+      "--workers=1",
+      "--reporter=json",
+      "--output",
+      "test-results/reversal-production"
+    ],
+    "configFile": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/playwright.config.ts",
+    "rootDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/test-results/reversal-production",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts",
+          "**/*.e2e.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "or3-scroll-canary.spec.ts",
+      "file": "or3-scroll-canary.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps browsing when native scrolling overtakes an instant bottom-follow write",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1814,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:28.152Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "overtaken-write",
+                      "contentType": "application/json",
+                      "body": "eyJpbW1lZGlhdGUiOnsicmVuZGVyZWRSb3dzIjo0OCwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTE3MTYsInNjcm9sbEhlaWdodCI6MTI3NzAsInRyYWNrSGVpZ2h0IjoxMjc3MCwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS05MSIsImFuY2hvck9mZnNldCI6LTQ2LCJib3R0b21EaXN0YW5jZSI6NDAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJicm93c2luZyI6eyJyZW5kZXJlZFJvd3MiOjUyLCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMTcxNiwic2Nyb2xsSGVpZ2h0IjoxMjc3MCwidHJhY2tIZWlnaHQiOjEyNzcwLCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTkxIiwiYW5jaG9yT2Zmc2V0IjotNDYsImJvdHRvbURpc3RhbmNlIjo0MDAsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    },
+                    {
+                      "name": "browsing-overtaken-bottom-write",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo1MiwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTE3MTYsInNjcm9sbEhlaWdodCI6MTI3NzAsInRyYWNrSGVpZ2h0IjoxMjc3MCwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS05MSIsImFuY2hvck9mZnNldCI6LTQ2LCJib3R0b21EaXN0YW5jZSI6NDAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjUzLCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMTcxNiwic2Nyb2xsSGVpZ2h0IjoxMjg0NiwidHJhY2tIZWlnaHQiOjEyODQ2LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTkxIiwiYW5jaG9yT2Zmc2V0IjotNDYsImJvdHRvbURpc3RhbmNlIjo0NzYsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-067bef3a169d10240bd0",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 223,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "production-chat-journey.spec.ts",
+      "file": "production-chat-journey.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (blank light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4021,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:30.164Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-d32e0cdb8142808a69c5",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        },
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (blank dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3786,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:34.190Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-0e73663308f8761528c4",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        },
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (retro light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3935,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:37.980Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxXX0="
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-189a3030935973b211ff",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        },
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (retro dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3816,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:41.920Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxXX0="
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-ccc0a93e543232ba2506",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        },
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (cyberpunk light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3954,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:45.741Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-b4c2ac9ba15b629eb2da",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        },
+        {
+          "title": "virtual sidebar rows appear immediately and reuse time labels while scrolling (cyberpunk dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4023,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T08:35:49.701Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "sidebar-home-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    },
+                    {
+                      "name": "sidebar-chats-recycling",
+                      "contentType": "application/json",
+                      "body": "eyJmb3JtYXRzIjowLCJtb3VudGVkT3BhY2l0aWVzIjpbMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMSwxLDEsMV19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1e151d8a811419b87ae4-712d16928766ba1686ea",
+          "file": "production-chat-journey.spec.ts",
+          "line": 877,
+          "column": 92
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T08:35:27.954Z",
+    "duration": 25797.943,
+    "expected": 7,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

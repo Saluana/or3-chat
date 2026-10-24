@@ -1,0 +1,43 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/db/__tests__/messages-transactions.test.ts -t "stops failed-card work"
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+------·xstderr | app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > stops failed-card work after a renderer fails during update while healthy cards stay live
+[tool-card] source failed_card mount-error
+Failed to resolve directive: theme { toolCalls: [Getter/Setter] } at <ToolCallIndicator>
+at <ToolCardSlot>
+at <Anonymous>
+at <VTUROOT>
+
+----------------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > stops failed-card work after a renderer fails during update while healthy cards stay live
+AssertionError: aborting a card must stop the rest of its notification batch: expected [ 1 ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   1,
++ ]
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:333:102
+    331|             await new Promise(resolve => setTimeout(resolve, 100));
+    332|             expect(failedCard.signal.aborted).toBe(true);
+    333|             expect(postAbortUpdates, 'aborting a card must stop the re…
+       |                                                                                                      ^
+    334|             expect(failedCleanup).toBe(phase === 'update' ? 1 : 0);
+    335|             const readKeys: unknown[] = reads.mock.calls.map(([id]) =>…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 22 skipped (24)
+   Start at  00:47:25
+   Duration  1.89s (transform 447ms, setup 51ms, import 536ms, tests 1.09s, environment 143ms)
+
+error: script "test" exited with code 1

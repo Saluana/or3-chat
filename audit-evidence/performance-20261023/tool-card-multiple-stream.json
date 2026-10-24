@@ -1,0 +1,32 @@
+{
+  "browser": "153.0.8010.12",
+  "harness": "development",
+  "cardCount": 3,
+  "reloadVerified": true,
+  "errors": [],
+  "updates": {},
+  "notifications": [],
+  "mutations": 0,
+  "chunks": 120,
+  "reads": 49,
+  "aborted": false,
+  "connected": true,
+  "question": true,
+  "cards": [
+    {
+      "callId": "quiz-live-0",
+      "question": "Question 1: Capital of France?",
+      "status": "complete"
+    },
+    {
+      "callId": "quiz-live-1",
+      "question": "Question 2: Capital of France?",
+      "status": "complete"
+    },
+    {
+      "callId": "quiz-live-2",
+      "question": "Question 3: Capital of France?",
+      "status": "complete"
+    }
+  ]
+}

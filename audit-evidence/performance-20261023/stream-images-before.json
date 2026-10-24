@@ -1,0 +1,59 @@
+{
+  "options": {
+    "mode": "image",
+    "cpuRate": 4,
+    "secondImage": true
+  },
+  "browser": "153.0.8010.12",
+  "instrumentationApplied": 1,
+  "errors": [],
+  "active": false,
+  "syncs": 1,
+  "gets": {
+    "file_meta": 4,
+    "file_blobs": 1
+  },
+  "decodeStarted": 2,
+  "decoded": 2,
+  "decodeErrors": [],
+  "instances": {
+    "ChatMessage": 2,
+    "ChatToolCardsEnd": 1
+  },
+  "updates": {
+    "ChatMessage": 160,
+    "ChatToolCardsEnd": 160
+  },
+  "imageMutations": 0,
+  "toolMutations": 0,
+  "chunks": 160,
+  "longTasks": [],
+  "transportReady": true,
+  "initialImage": null,
+  "toolRoots": 0,
+  "transportDone": true,
+  "toolRootsConnected": true,
+  "frames": 249,
+  "p95": 16.700000000000273,
+  "max": 16.800000000000182,
+  "images": [],
+  "finalImages": [
+    {
+      "src": "blob:http://127.0.0.1:3147/c5741205-d59e-4b57-955e-1c0ce1606d87",
+      "hydrated": "true",
+      "width": 64
+    },
+    {
+      "src": "blob:http://127.0.0.1:3147/d53fa78b-a1f3-4b5d-a6c6-b3fb3f1906fd",
+      "hydrated": "true",
+      "width": 64
+    }
+  ],
+  "persisted": {
+    "exactTail": false,
+    "textChunks": 160,
+    "endsWithMarker": true,
+    "fileHashes": 2,
+    "toolNames": []
+  }
+}

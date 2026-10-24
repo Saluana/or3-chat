@@ -44,6 +44,52 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
+    it.each(['stored', 'url'] as const)('keeps %s images in live text between provider text deltas', async (mode) => {
+        const { createStreamAccumulator } = await import('~/composables/chat/useStreamAccumulator');
+        const { createOrRefFile } = await import('~/db/files');
+        const { dataUrlToBlob } = await import('~/utils/chat/files');
+        const { TRANSPARENT_PIXEL_GIF_DATA_URI } = await import('~/utils/chat/imagePlaceholders');
+        const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
+        const accumulator = createStreamAccumulator();
+        vi.mocked(dataUrlToBlob).mockReturnValue(mode === 'stored' ? new Blob(['image']) : null);
+        vi.mocked(createOrRefFile).mockResolvedValueOnce({ hash: 'first' } as any)
+            .mockResolvedValueOnce({ hash: 'second' } as any);
+        const first = mode === 'stored'
+            ? `![file-hash:first](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
+            : '![generated image](data:image/png;base64,AQ==)';
+        const second = mode === 'stored'
+            ? `![file-hash:second](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
+            : '![generated image](data:image/png;base64,Ag==)';
+        openRouterStreamMock.mockImplementation(async function* () {
+            yield { type: 'image', url: 'data:image/png;base64,AQ==' };
+            yield { type: 'text', text: '\n\nBetween images.' };
+            await vi.waitFor(() => expect(accumulator.state.text).toBe(first + '\n\nBetween images.'));
+            expect(accumulator.state.finalized).toBe(false);
+            yield { type: 'image', url: 'data:image/png;base64,Ag==' };
+            yield { type: 'text', text: '\n\nAfter images.' };
+        });
+        const persistAssistant = vi.fn(async (_patch: Record<string, unknown>) => null);
+        const ctx = {
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            modalities: ['text', 'image'], abortSignal: new AbortController().signal,
+            assistantId: 'assistant-images', streamId: 'stream-images', threadId: 'thread-1',
+            streamAcc: accumulator, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn() }, persistAssistant,
+            assistantFileHashes: [] as string[], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+        };
+        try {
+            await runForegroundStreamLoop(ctx);
+            const expected = first + '\n\nBetween images.\n\n' + second + '\n\nAfter images.';
+            await vi.waitFor(() => expect(accumulator.state.text).toBe(expected));
+            expect(ctx.tailAssistant.value.text).toBe(expected);
+            expect(persistAssistant).toHaveBeenLastCalledWith(expect.objectContaining({ content: expected }));
+        } finally {
+            accumulator.finalize();
+        }
+    });
+
     it.each([true, false])('requires a durable execution receipt before invoking a handler (acknowledged=%s)', async acknowledged => {
         let iteration = 0;
         openRouterStreamMock.mockImplementation(async function* () {

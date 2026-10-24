@@ -1,0 +1,109 @@
+{
+  "commit": "a996424a965abbf6251071a7a248aa3e56939a04",
+  "dirty": true,
+  "command": "PW_SKIP_WEB_SERVER=true PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --grep 'legacy placement, crashing card fallback|trusted Vue card uses|lazy cards mount' --workers=1 --reporter=line --output test-results/card-notify-lifecycle-selected",
+  "timestamp": "2026-10-24T07:54:02.462Z",
+  "cases": [
+    {
+      "case": "legacy placement, crashing card fallback and timer sends stay isolated",
+      "status": "passed",
+      "durationMs": 9399,
+      "mounts": [
+        {
+          "tool": "fixture_guards",
+          "durationMs": 0.2
+        },
+        {
+          "tool": "fixture_end",
+          "durationMs": 0.1
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "trusted Vue card uses the SDK adapter and is removed on activation teardown",
+      "status": "passed",
+      "durationMs": 1018,
+      "mounts": [],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "30-card scroll",
+      "durationMs": 304.23362499999894,
+      "initialMounted": 20,
+      "finalMounted": 27
+    },
+    {
+      "case": "lazy cards mount during scrolling without rerunning their tools",
+      "status": "passed",
+      "durationMs": 1728,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.7
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        }
+      ],
+      "browser": "153.0.8010.12"
+    }
+  ],
+  "harness": {
+    "OR3_TOOL_CARDS_TEST_HARNESS": true,
+    "OR3_PLUGIN_CONTRIBUTION_V2_SURFACES": "chat-tool-cards",
+    "cloudServices": "disabled"
+  },
+  "notes": [
+    "Three entries have test status; the additional 30-card scroll entry is a diagnostic from the lazy-card journey, not a fourth passing test or speedup proof."
+  ]
+}

@@ -6,6 +6,15 @@ async function concurrentPaneStreamProbe(page, options = {}) {
     let highlightControlApplied=0;
     let projectionControlApplied=0;
     let bundleControlApplied=0;
+    let fontControl;
+    const readFonts=()=>p.evaluate(()=>({
+        now:performance.now(),status:document.fonts.status,
+        faces:[...document.fonts].filter(face=>face.family.includes('KaTeX')).map(face=>({
+            family:face.family,style:face.style,weight:face.weight,status:face.status,
+        })),
+        resources:performance.getEntriesByType('resource').filter(entry=>/\.(woff2?|ttf|otf)(\?|$)/i.test(entry.name))
+            .map(entry=>({url:entry.name,start:entry.startTime,duration:entry.duration,transferSize:entry.transferSize})),
+    }));
     const traceEvents=[];
     try {
         await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
@@ -96,6 +105,23 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             for(const sheet of document.styleSheets)visit(sheet.cssRules);
             if(changed!==2||getComputedStyle(document.body).zoom!==before)throw new Error('Layout selector control did not preserve scale');
         });
+
+        if(options.fontAudit||options.warmFonts){
+            fontControl={before:await readFonts()};
+            if(options.warmFonts){
+                await p.evaluate(async requested=>{
+                    const faces=[...document.fonts];
+                    await Promise.all(requested.map(spec=>{
+                        const face=faces.find(face=>face.family===spec.family&&face.style===spec.style&&face.weight===spec.weight);
+                        if(!face)throw new Error('Unmatched font warm control '+JSON.stringify(spec));
+                        return face.load();
+                    }));
+                    await document.fonts.ready;
+                    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                },options.warmFonts);
+                fontControl.afterWarm=await readFonts();
+            }
+        }
 
         const prose=Array.from({length:50},(_,i)=>`Paragraph ${i}: **Both conversations are streaming** while one reader stays in settled history. `+'More words keep the response growing. '.repeat(3)+'\n\n').join('');
         const rich=Array.from({length:12},(_,i)=>`### Example ${i}\n\nA TypeScript sample and inline math $x^2 + y^2$.\n\n\`\`\`ts\nexport function calculate${i}(values: number[]): number {\n  return values.map(value => value * 2).reduce((sum, value) => sum + value, 0);\n}\n\`\`\`\n\n$$\\int_0^1 x^2 dx = \\frac{1}{3}$$\n\n`).join('');
@@ -371,6 +397,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
                 bottoms:roots.map(root=>{const s=root.querySelector('.chat-message-list');return s.scrollHeight-s.clientHeight-s.scrollTop;}),
                 theme:document.documentElement.dataset.theme,zoom:getComputedStyle(document.body).zoom};
         });
+        if(fontControl)result.fonts={...fontControl,after:await readFonts()};
         if(options.profile){
             const {profile}=await cdp.send('Profiler.stop');
             const byId=new Map(profile.nodes.map(node=>[node.id,node]));

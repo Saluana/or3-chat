@@ -1,0 +1,9 @@
+{
+  "artifact": ".output/public/_nuxt/kzepq425.js",
+  "size": 123622,
+  "sha256": "bba5e25b5f05bcb2b7294d8d5f3a5aaa25fb40341762b1e41a9cb0dd1a6b8737",
+  "wheelOwner": "=null,P=null,fe++,C.value||(M=`userBrowsing`),rt(),ze()},He=()=>{r?.(),r=void 0;let e=p.value;e&&(e.addEventListener(`wheel`,K,{passive:!i.maintainBottom}),r=()=>e.removeEventListener(`wheel`,K))},Ue=()=>{re=!0,K()},We=()=>{re&&(re=!1,(I||N===`jump`)&&ze())},Ge=e=>{[`ArrowUp`,`ArrowDown`,`PageUp`,`PageDown`,`Home`,`End`,` `].includes(e.key)&&K()},Ke=()=>{re||I&",
+  "buildSeconds": 56.5,
+  "deployed": false,
+  "harness": true
+}

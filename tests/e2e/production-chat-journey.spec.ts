@@ -2953,11 +2953,21 @@ test.describe('production chat journey', () => {
 // are the installed production path under qualification.
 test('PageShell compaction summary reload and original landmark navigation', async ({ page }, info) => {
     test.setTimeout(120_000);
+    const componentErrors: string[] = [];
+    page.on('pageerror', error => componentErrors.push(error.message));
+    page.on('console', message => {
+        if (message.type() === 'error' && message.text().includes('[production-chat-journey] captured component error')) {
+            componentErrors.push(message.text());
+        }
+    });
     await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1`);
     await expect(page.getByTestId('fixture-compact')).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+    // The composer can appear before the async tab bar. Warm reload must wait
+    // for that chrome, otherwise WebKit cancels its loader in the old document.
+    await expect(page.getByRole('tab', { name: 'Compaction original evidence', exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByTestId('fixture-compact')).toBeVisible();
     const source = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-source'));
@@ -3060,6 +3070,7 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('tab', { selected: true })).not.toHaveText('Compaction original evidence — compacted');
     const afterNew = await readRows(); expect(afterNew.sourceRows).toEqual(saved.sourceRows); expect(afterNew.children).toEqual(saved.children); expect(afterNew.summaries).toEqual(saved.summaries);
+    expect(componentErrors, 'Unexpected component/module errors during the compaction journey').toEqual([]);
     });
 
 

@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, stable lazy row handlers, unchanged display projections and bottom-follow controls, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
+                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, generated images retained in live text, trailing inline hydration and owned continuation intake, stable lazy row handlers, unchanged display projections and bottom-follow controls that respect overtaking native movement, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs. Owned wheel handling acknowledges native input before layout following when maintainBottom is enabled, keeps other lists passive, preserves default scrolling and avoids an extra follow frame; busy-main-thread wheel latency remains a qualification limit."
                 },
                 {
                     "name": "ai-preferences.md",
@@ -991,7 +991,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch."
+                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch. Unchanged text projections and persisted card state do not notify card subscribers. Disposed cards stop their pending notification batch. Workspace changes immediately retire old card subscriptions, observers and snapshots. Lazy mounting validates current card geometry against the existing preload range."
                 }
             ]
         }
