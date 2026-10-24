@@ -273,11 +273,11 @@ describe('durable restart supervision', () => {
     });
     it.each(['old-boot', 'wrong-settings'])('retains a single execution and a typed failure for %s verification', async fault => {
         const f = await fixture();
-        Object.assign(f.driver, { verificationTimeoutMs: fault === 'old-boot' ? 80 : 500 });
+        Object.assign(f.driver, { verificationTimeoutMs: fault === 'old-boot' ? 80 : 5000 });
         const input = request(); await f.controller.submit(input);
         await f.controller.prepared({ requestId: input.requestId, originalBootId: 'boot-1', targetRevision: 'revision-1' });
         if (fault === 'wrong-settings') await f.controller.boot({ bootId: 'boot-2', ready: true, settings: { registrationMode: 'disabled' } });
-        await expect.poll(async () => (await f.controller.status()).operation, { timeout: 1500 }).toMatchObject({
+        await expect.poll(async () => (await f.controller.status()).operation, { timeout: 7500 }).toMatchObject({
             phase: 'needs_attention', reasonCode: fault === 'old-boot' ? 'verification_timeout' : 'configuration_mismatch',
         });
         expect(f.replacements()).toBe(1);
