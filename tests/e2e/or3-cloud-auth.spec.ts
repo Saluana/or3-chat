@@ -107,6 +107,75 @@ test.describe('OR3 Cloud Auth Integration', () => {
 });
 
 if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
+    for (const flow of ['sign-in', 'registration'] as const) {
+        test(`workspace cloud profile reports and retries ${flow} session failures`, async ({ page }, info) => {
+            test.setTimeout(90_000);
+            await page.setViewportSize({ width: 1600, height: 1000 });
+            await page.goto('/');
+            const welcome = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
+            if (await welcome.isVisible()) await welcome.click();
+            await page.getByRole('button', { name: 'Login', exact: true }).click();
+            if (flow === 'registration') {
+                await page.getByRole('button', { name: 'Create account', exact: true }).click();
+            }
+            const dialog = page.getByRole('dialog').filter({
+                has: page.getByRole('heading', {
+                    name: flow === 'registration' ? 'Create your account' : 'Welcome back', exact: true,
+                }),
+            });
+            const email = flow === 'registration'
+                ? `session-recovery-${randomUUID()}@example.test`
+                : process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL!;
+            const password = flow === 'registration'
+                ? 'DisposableSessionRecovery!123'
+                : process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD!;
+            await dialog.getByLabel('Email', { exact: true }).fill(email);
+            await dialog.getByLabel('Password', { exact: true }).fill(password);
+            if (flow === 'registration') {
+                await dialog.getByLabel('Confirm password', { exact: true }).fill(password);
+            }
+            // Credentials succeed, but canonical workspace hydration is unavailable.
+            // Exercise the real provider UI and host event without replacing either.
+            await page.route('**/api/auth/session', route => route.fulfill({
+                status: 503,
+                contentType: 'application/json',
+                body: JSON.stringify({ statusCode: 503, statusMessage: 'Auth backend unavailable' }),
+            }));
+            const credentialsAccepted = page.waitForResponse(response =>
+                response.url().endsWith(`/api/basic-auth/${flow === 'registration' ? 'register' : 'sign-in'}`)
+                && response.request().method() === 'POST');
+            await dialog.getByRole('button', {
+                name: flow === 'registration' ? 'Create account' : 'Sign in', exact: true,
+            }).click();
+            expect((await credentialsAccepted).ok()).toBe(true);
+            const failure = page.getByText('Unable to load your account', { exact: true });
+            await expect(failure).toBeVisible({ timeout: 10_000 });
+            const unavailableRetry = page.waitForResponse(response => response.url().endsWith('/api/auth/session'));
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+            expect((await unavailableRetry).status()).toBe(503);
+            await expect(failure).toBeVisible();
+            await info.attach('session-unavailable', { body: await page.screenshot(), contentType: 'image/png' });
+
+            await page.unroute('**/api/auth/session');
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+            await expect(page.getByRole('button', { name: 'Account menu', exact: true })).toBeVisible({ timeout: 30_000 });
+            await expect(failure).toBeHidden();
+            const recovered = await page.request.get('/api/auth/session');
+            expect(recovered.ok()).toBe(true);
+            const payload = await recovered.json();
+            expect(payload.appAccessAllowed).toBe(true);
+            expect(payload.session.authenticated).toBe(true);
+            expect(payload.session.user.email).toBe(email);
+            expect(payload.session.workspace.id).toBeTruthy();
+            await info.attach('session-recovered', { body: await page.screenshot(), contentType: 'image/png' });
+            await info.attach('session-recovery-receipt', {
+                body: JSON.stringify({ flow, credentialsAccepted: true, outageStatus: 503,
+                    appAccessAllowed: payload.appAccessAllowed, workspaceId: payload.session.workspace.id }),
+                contentType: 'application/json',
+            });
+        });
+    }
+
     test('workspace cloud profile distinguishes queued local files from synced originals', async ({ page }, info) => {
         test.setTimeout(120_000);
         await page.setViewportSize({ width: 1600, height: 1000 });

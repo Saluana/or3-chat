@@ -3,6 +3,8 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 // Failure inventory: account mismatch imports a key; failed import deletes the
 // source; hydration restores it; a second device reconnects unnecessarily;
 // disconnect permits stale re-import; credentials leak in status/session state.
+// Startup failures must not create pre-hydration toasts or cover the connection
+// dialog; explicit connect/migration failures must still explain the failure.
 test.setTimeout(120_000);
 const canary = 'sk-or-synthetic-cloud-migration-fixture';
 async function signIn(context: BrowserContext, origin: string) {
@@ -18,6 +20,66 @@ async function metadata(page: Page, origin: string, operation = 'status') {
     const text = await response.text(); expect(text).not.toContain(canary);
     return JSON.parse(text);
 }
+test('refresh stays quiet during a credential outage while explicit connection failures remain visible', async ({ page, context, baseURL }, info) => {
+    expect(process.env.OR3_CREDENTIAL_E2E).toBe('true');
+    await signIn(context, baseURL!);
+    const hydration: string[] = [];
+    const startupToasts: string[] = [];
+    let checks = 0;
+    page.on('console', message => {
+        if (/hydration.*mismatch/i.test(message.text())) hydration.push(message.text());
+    });
+    await page.addInitScript(() => {
+        // Record short-lived notifications too, rather than passing once a toast expires.
+        (window as any).__startupToastSeen = false;
+        new MutationObserver(() => {
+            if (document.body?.textContent?.includes('OpenRouter connection unavailable')) {
+                (window as any).__startupToastSeen = true;
+            }
+        }).observe(document, { childList: true, subtree: true });
+    });
+    await page.route('**/api/openrouter/credentials', async route => {
+        checks++;
+        await route.fulfill({ status: 503, json: { message: 'Synthetic credential outage' } });
+    });
+    await page.route('**/api/openrouter/oauth', route => route.fulfill({ status: 503, json: { message: 'Synthetic connection outage' } }));
+    for (let refresh = 0; refresh < 2; refresh++) {
+        if (refresh === 0) await page.goto('/chat?welcome=1');
+        else await page.reload();
+        await expect.poll(() => checks, { timeout: 30_000 }).toBeGreaterThan(refresh);
+        await expect(page.getByRole('button', { name: 'Connect with OpenRouter', exact: true })).toBeVisible({ timeout: 30_000 });
+        if (await page.evaluate(() => (window as any).__startupToastSeen)) startupToasts.push('OpenRouter connection unavailable');
+        expect.soft(startupToasts, 'passive startup checks do not notify over the welcome dialog').toEqual([]);
+        expect.soft(hydration, 'SSR refresh hydrates without mismatches').toEqual([]);
+    }
+    await page.screenshot({ path: info.outputPath('quiet-refresh.png') });
+    await info.attach('refresh-receipt', { contentType: 'application/json', body: JSON.stringify({ refreshes: 2, checks, startupToasts, hydration }) });
+    await page.getByRole('button', { name: 'Connect with OpenRouter', exact: true }).click();
+    await expect(page.getByText('OpenRouter connection unavailable', { exact: true })).toBeVisible();
+    await expect(page.getByText('Refresh your session and try again, or contact the administrator.', { exact: true })).toBeVisible();
+});
+
+test('failed legacy migration retains the browser key and reports the requested save failure after hydration', async ({ page, context, baseURL }, info) => {
+    expect(process.env.OR3_CREDENTIAL_E2E).toBe('true');
+    await signIn(context, baseURL!);
+    const session = await (await page.request.get('/api/auth/session')).json();
+    const owner = JSON.stringify([session.session.provider, session.session.user.id]);
+    await page.addInitScript(({ owner, canary }) => localStorage.setItem('openrouter_api_key', JSON.stringify({ owner, key: canary })), { owner, canary });
+    const hydration: string[] = [];
+    page.on('console', message => {
+        if (/hydration.*mismatch/i.test(message.text())) hydration.push(message.text());
+    });
+    page.on('dialog', dialog => dialog.accept());
+    await page.route('**/api/openrouter/credentials', route => route.request().postDataJSON().operation === 'status'
+        ? route.fulfill({ json: { connected: false, persisted: false } })
+        : route.fulfill({ status: 503, json: { message: 'Synthetic migration outage' } }));
+    await page.goto('/chat?welcome=1');
+    await expect(page.getByText('OpenRouter key migration failed', { exact: true })).toBeVisible({ timeout: 30_000 });
+    expect(await page.evaluate(() => localStorage.getItem('openrouter_api_key'))).toBe(JSON.stringify({ owner, key: canary }));
+    expect(hydration).toEqual([]);
+    await info.attach('migration-failure-receipt', { contentType: 'application/json', body: JSON.stringify({ sourceRetained: true, hydration }) });
+});
+
 test('Cloud migration and cross-device deletion use only server connection metadata', async ({ page, context, browser, baseURL }, info) => {
     expect(process.env.OR3_CREDENTIAL_E2E).toBe('true');
     const origin = baseURL!;
