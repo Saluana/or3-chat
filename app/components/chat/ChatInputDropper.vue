@@ -25,7 +25,7 @@
                 <div class="flex flex-wrap gap-2">
                     <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
-                    <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="props.loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
+                    <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
                 </div>
                 <details v-if="lossyPreview" open>
                     <summary class="cursor-pointer py-2">Omit {{ lossyPreview.omitted_turn_count }} old turns ({{ lossyPreview.omitted_message_count }} messages) for this request</summary>
@@ -35,7 +35,7 @@
                         <li v-for="row in lossyPreview.omitted_messages" :key="row.position">{{ row.position + 1 }} · {{ row.role }} · {{ row.excerpt }}</li>
                     </ul>
                     <div class="flex gap-2">
-                        <UButton size="xs" variant="soft" color="warning" :disabled="props.loading" @click.stop="handleSend({ lossyConfirmation: lossyPreview })">Send with these omissions</UButton>
+                        <UButton size="xs" variant="soft" color="warning" :disabled="loading" @click.stop="handleSend({ lossyConfirmation: lossyPreview })">Send with these omissions</UButton>
                         <UButton size="xs" variant="ghost" color="neutral" @click.stop="lossyPreview = undefined">Cancel</UButton>
                     </div>
                 </details>
@@ -118,7 +118,7 @@
                                     <ChatSettingsPopover
                                         :container-width="containerWidth"
                                         :loading="loading"
-                                        :streaming="props.streaming"
+                                        :streaming="streaming"
                                         :thinking-supported="modelSupportsThinking"
                                         :reasoning-efforts="
                                             modelReasoningEfforts
@@ -218,7 +218,7 @@
                 <div class="chat-input-bottom-controls-right">
                     <UButton
                         class="chat-input-send-btn"
-                        v-if="!props.streaming"
+                        v-if="!streaming"
                         v-bind="sendButtonProps"
                         @click="handleSendClick"
                         :disabled="
@@ -516,6 +516,13 @@ const props = defineProps<{
     compactionBlockedReason?: string;
     compactionState?: import('~/composables/chat/useThreadCompaction').ThreadCompactionState;
 }>();
+
+// Background recovery can finish before this async input hydrates. Start with
+// the same idle controls as SSR, then show the recovered state after our mount.
+const composerMounted = ref(false);
+const loading = computed(() => composerMounted.value && props.loading);
+const streaming = computed(() => composerMounted.value && props.streaming);
+onMounted(() => { composerMounted.value = true; });
 
 const iconLoading = useIcon('ui.loading');
 const iconAttach = useIcon('chat.attach');
