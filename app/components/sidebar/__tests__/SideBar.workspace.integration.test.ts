@@ -85,13 +85,13 @@ describe('mounted sidebar workspace isolation', () => {
         const waitForRows = (count: number) => vi.waitFor(async () => {
             await nextTick();
             expect(rowCount()).toBe(count);
-        }, { timeout: 15_000 });
+        }, { timeout: 5000 });
         await waitForRows(50);
         for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
         await waitForRows(100);
         scroller().vm.$emit('reachBottom');
         await waitForRows(150);
-    }, 50_000);
+    }, 20_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
