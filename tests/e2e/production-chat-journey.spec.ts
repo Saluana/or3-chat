@@ -874,6 +874,90 @@ test('sidebar chat and document switching keeps the workspace mounted without a 
     expect(serverRenderErrors).toEqual([]);
 });
 
+test('virtual sidebar rows appear immediately and reuse time labels while scrolling', async ({ context, page }, info) => {
+    await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+        ? route.continue() : route.abort('blockedbyclient'));
+    await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+    await page.goto(`${chatPage}?workspace=1`);
+    await expect(page.locator('#nav-scroll-area')).toBeVisible({ timeout: 30_000 });
+    await page.evaluate(async () => {
+        const name = (await indexedDB.databases()).find(entry => entry.name?.startsWith('or3-db'))?.name;
+        if (!name) throw new Error('Missing fixture database');
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open(name);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const transaction = db.transaction('threads', 'readwrite');
+                for (let index = 0; index < 40; index++) transaction.objectStore('threads').put({
+                    id: `scroll-time-${index}`, title: `Scroll time ${index}`, status: 'ready',
+                    deleted: false, pinned: false, forked: false, clock: 1,
+                    created_at: Math.floor(Date.now() / 1000) - index,
+                    updated_at: Math.floor(Date.now() / 1000) - index,
+                });
+                transaction.oncomplete = () => resolve();
+                transaction.onabort = () => reject(transaction.error);
+            });
+        } finally { db.close(); }
+    });
+    await page.reload();
+    for (const surface of ['Home', 'Chats']) {
+        await page.getByRole('button', { name: 'Home', exact: true }).first().click();
+        if (surface === 'Chats') await page.getByRole('button', { name: 'Chats', exact: true }).click();
+        const scroller = page.locator('.sidebar-scroll');
+        const first = scroller.locator('.unified-sb-item').filter({ has: page.getByRole('button', { name: 'Open Scroll time 0', exact: true }) });
+        await expect(first).toHaveCSS('opacity', '1');
+        // Wait for measured row heights to settle before starting observations.
+        await page.waitForTimeout(300);
+        await scroller.evaluate(element => {
+            const original = Date.prototype.toLocaleTimeString;
+            let formats = 0;
+            const mountedOpacities: number[] = [];
+            Date.prototype.toLocaleTimeString = function (...args) { formats++; return original.apply(this, args); };
+            const observer = new MutationObserver(records => {
+                for (const record of records) for (const node of record.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    const rows = [...(node.matches('.unified-sb-item') ? [node] : []), ...node.querySelectorAll('.unified-sb-item')];
+                    mountedOpacities.push(...rows.map(row => Number(getComputedStyle(row).opacity)));
+                }
+            });
+            observer.observe(element, { childList: true, subtree: true });
+            Object.assign(window, { __finishSidebarObservation: () => {
+                observer.disconnect(); Date.prototype.toLocaleTimeString = original;
+                return { formats, mountedOpacities };
+            } });
+        });
+        const box = (await scroller.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.wheel(0, 4000);
+        await expect(scroller.getByRole('button', { name: 'Open Scroll time 39', exact: true })).toBeVisible();
+        await page.mouse.wheel(0, -4000);
+        await expect(first).toBeVisible();
+        const receipt = await page.evaluate(() => (window as unknown as {
+            __finishSidebarObservation: () => { formats: number; mountedOpacities: number[] };
+        }).__finishSidebarObservation());
+        await info.attach(`sidebar-${surface.toLowerCase()}-recycling`, { contentType: 'application/json', body: JSON.stringify(receipt) });
+        expect(receipt.mountedOpacities.length).toBeGreaterThan(0);
+        expect(receipt.mountedOpacities.every(opacity => opacity === 1)).toBe(true);
+        expect(receipt.formats).toBe(0);
+
+        // Suppressing recycled-row entry fades must preserve intentional exits.
+        await scroller.evaluate(element => {
+            Object.assign(window, { __sidebarExitAnimation: '' });
+            element.addEventListener('animationstart', event => {
+                Object.assign(window, { __sidebarExitAnimation: (event as AnimationEvent).animationName });
+            }, { once: true });
+        });
+        await scroller.getByRole('button', { name: 'Today', exact: true }).click();
+        await expect(first).toHaveCount(0);
+        expect(await page.evaluate(() => (window as unknown as { __sidebarExitAnimation: string }).__sidebarExitAnimation)).toBe('sidebar-item-exit');
+        await scroller.getByRole('button', { name: 'Today', exact: true }).click();
+        await expect(first).toHaveCSS('opacity', '1');
+    }
+});
+
 test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ context, page }, info) => {
     test.setTimeout(120_000);
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'

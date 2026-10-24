@@ -20,6 +20,11 @@ bun run dev
 
 Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect OpenRouter through the app when you want to generate a response.
 
+Installation applies the checked-in dependency fixes in `patches/` before
+preparing Nuxt. If you deliberately install with `--ignore-scripts`, run
+`bunx patch-package --error-on-fail` before starting or building the app. The
+Cloud Docker build applies these patches explicitly after its scripted install.
+
 The readiness probe tolerates oversized startup/error pages as a not-ready
 response and retries without terminating the launcher or its local vault.
 
