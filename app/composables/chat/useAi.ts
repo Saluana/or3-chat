@@ -1,7 +1,8 @@
+import { isMeaningfulTitleInput } from '~~/shared/titles/title';
 import { presentError, errorDiagnostics } from '~~/shared/errors';
 import { deriveThreadTitle } from '~/utils/chat/thread-title';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
-import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { resolveThreadProjection, requestHistoryFingerprint } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, recoverySourceFingerprint, recoveryProjectFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript, associateUiToolResultMessages } from '~/utils/chat/transcript';
@@ -2211,7 +2212,7 @@ export function useChat(
         if (preparationThreadId) {
             try {
                 const projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
-                sourceFingerprint = JSON.stringify(projection);
+                sourceFingerprint = requestHistoryFingerprint(projection);
                 for (const row of [...projection.messages].reverse()) {
                     if (row.role !== 'assistant') continue;
                     if (row.data && typeof row.data === 'object' && !Array.isArray(row.data)) {
@@ -2324,7 +2325,7 @@ export function useChat(
         } else if (!prepared.delegation) await prepareOpenRouterRequest(providerPreparation);
         if (requestScope.threadId && await resolveChatProject(requestScope.originDb, requestScope.threadId) !== initialProjectId)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'This chat changed projects during preparation. Retry the request.' };
-        if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
+        if (sourceFingerprint && requestHistoryFingerprint(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
@@ -2340,6 +2341,7 @@ export function useChat(
                 {
                     id: admissionThreadId,
                     title: deriveThreadTitle(content),
+                    title_source: 'temporary',
                     last_message_at: nowSec(),
                     parent_thread_id: null,
                     system_prompt_id: newPromptSelection || null,
@@ -2406,6 +2408,11 @@ export function useChat(
             }
             throw error;
         });
+        if (isMeaningfulTitleInput(persistedUserText) && !rawMessages.value.some(message => message.role === 'user'
+            && isMeaningfulTitleInput(typeof message.content === 'string' ? message.content
+                : message.content.filter(part => part.type === 'text').map(part => part.text ?? '').join(' ')))) void import('~/utils/titles/generate')
+            .then(({ generateAutomaticTitle }) => generateAutomaticTitle(requestScope.originDb, { type: 'chat', id: requestThreadId, content: persistedUserText, sourceMessage: { id: userDbMsg.id, clock: userDbMsg.clock } }))
+            .catch(() => { /* Auxiliary naming cannot reject the primary send. */ });
         requestScope.userMessageId = userDbMsg.id;
         // Show the durable turn even if attachment intake is subsequently stopped.
         const rawUser: ChatMessage = {

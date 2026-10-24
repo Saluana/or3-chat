@@ -1,3 +1,4 @@
+import { DEFAULT_TITLE_MODEL, TitleModelSchema } from '~~/shared/titles/title';
 /**
  * @module composables/chat/useAiSettings
  *
@@ -65,6 +66,7 @@ import {
 // Settings schema
 export interface AiSettingsV1 {
     version: 1;
+    titleGenerationModel: string;
     masterSystemPrompt: string;
     defaultModelMode: 'lastSelected' | 'fixed';
     fixedModelId: string | null;
@@ -91,6 +93,7 @@ export const AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY;
 
 export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     version: 1,
+    titleGenerationModel: DEFAULT_TITLE_MODEL,
     masterSystemPrompt: '',
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
@@ -142,6 +145,7 @@ export function sanitizeAiSettings(
 
     return {
         version: 1,
+        titleGenerationModel: TitleModelSchema.safeParse(inObj.titleGenerationModel).data ?? defaults.titleGenerationModel,
         masterSystemPrompt,
         defaultModelMode,
         fixedModelId: fixedModelId ?? defaults.fixedModelId,
