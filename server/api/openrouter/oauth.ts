@@ -42,6 +42,7 @@ export default defineEventHandler(async event => {
     const cookie = getCookie(event, name);
     deleteCookie(event, name, options);
     let connected = false;
+    let stage = 'callback-validation';
     try {
         const transaction: unknown = JSON.parse(cookie ?? 'null');
         const query = getQuery(event);
@@ -55,18 +56,32 @@ export default defineEventHandler(async event => {
             || Buffer.byteLength(query.state) !== Buffer.byteLength(transaction.state)
             || !timingSafeEqual(Buffer.from(query.state), Buffer.from(transaction.state))) throw new Error('Invalid transaction');
         requireCan(session, 'workspace.write', { kind: 'workspace', id: session.workspace.id });
+        stage = 'code-exchange';
         const response = await fetchWithResponseDeadline('https://openrouter.ai/api/v1/auth/keys', {
             method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ code: query.code, code_verifier: transaction.verifier, code_challenge_method: 'S256' }),
         }, { timeoutMs: 15_000 });
-        if (!response.ok) throw new Error('Exchange refused');
+        if (!response.ok) {
+            stage = `code-exchange-http-${response.status}`;
+            throw new Error('Exchange refused');
+        }
+        stage = 'exchange-response';
         const { readBoundedBody } = await import('../../utils/plugins/connections/bounded-body');
         const body = await readBoundedBody(response, { maxBytes: 2048 });
         if (!body.ok) throw new Error('Invalid response');
         const payload: unknown = JSON.parse(body.text);
         if (!payload || typeof payload !== 'object' || !('key' in payload) || typeof payload.key !== 'string') throw new Error('Invalid response');
+        stage = 'credential-storage';
         const result = await openRouterCredentialOperation(session, { operation: 'save', key: payload.key });
         connected = result.connected;
-    } catch { /* Fixed redirect only: provider errors and credentials never reach the browser. */ }
+    } catch {
+        // Fixed diagnostics only; never log authorization codes, cookies, keys or upstream error bodies.
+        console.warn('[openrouter-oauth] Connection failed', {
+            stage,
+            authenticated: session.authenticated,
+            hasWorkspace: Boolean(session.workspace?.id),
+            hasTransactionCookie: Boolean(cookie),
+        });
+    }
     return sendRedirect(event, `/openrouter-callback?connection=${connected ? 'connected' : 'failed'}`, 302);
 });
