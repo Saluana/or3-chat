@@ -2469,6 +2469,7 @@ export declare function useSidebarThreads(): Ref<{
     pinned: boolean;
     clock: number;
     forked: boolean;
+    title_source?: "temporary" | "generating" | "generated" | "heading" | "manual" | "failed" | undefined;
     title?: string | null | undefined;
     last_message_at?: number | null | undefined;
     parent_thread_id?: string | null | undefined;
@@ -2491,6 +2492,7 @@ export declare function useSidebarThreads(): Ref<{
     pinned: boolean;
     clock: number;
     forked: boolean;
+    title_source?: "temporary" | "generating" | "generated" | "heading" | "manual" | "failed" | undefined;
     title?: string | null | undefined;
     last_message_at?: number | null | undefined;
     parent_thread_id?: string | null | undefined;
@@ -2529,6 +2531,7 @@ export declare function useSidebarDocuments(): Ref<{
     updated_at: number;
     deleted: boolean;
     clock: number;
+    title_source?: "temporary" | "generating" | "generated" | "heading" | "manual" | "failed" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     meta?: string | {
@@ -2549,6 +2552,7 @@ export declare function useSidebarDocuments(): Ref<{
     updated_at: number;
     deleted: boolean;
     clock: number;
+    title_source?: "temporary" | "generating" | "generated" | "heading" | "manual" | "failed" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     meta?: string | {

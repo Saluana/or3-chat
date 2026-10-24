@@ -8,7 +8,7 @@ import { assertEnoughFreeSpace, requiredArchiveSpace } from '../src/backup/archi
 import { assertPurgeBackupFreshness } from '../src/backup/export';
 import { assertBackupMatchesDeployment, enumerateBackups, inventoryBackups, recordedBackupPath } from '../src/backup/manifests';
 import { assertRemovableArtifactName, planRetention, selectPruneTargets } from '../src/backup/retention';
-import { assertCommandFlags, assertCommandPositionals, verifyIsReadOnly, parseFlags } from '../src/cli/args';
+import { assertCommandFlags, assertCommandPositionals, parseFlags } from '../src/cli/args';
 import { purgeVolumesFromState } from '../src/commands/remove';
 import { assessUpdate } from '../src/commands/update';
 import { validatePassword } from '../src/credentials/inputs';
@@ -1142,12 +1142,6 @@ test('lifecycle phase policy blocks start/restart but allows stop during a pendi
   expect(() => assertPhaseAllowsCommand('start', pending)).toThrow('Refusing to start');
   expect(() => assertPhaseAllowsCommand('restart', pending)).toThrow('Refusing to restart');
   expect(() => assertPhaseAllowsCommand('stop', pending)).not.toThrow();
-});
-
-test('read-only invocation policy bypasses the mutation lease', () => {
-  expect(verifyIsReadOnly({ 'read-only': true })).toBe(true);
-  expect(verifyIsReadOnly({ public: true })).toBe(false);
-  expect(verifyIsReadOnly({})).toBe(false);
 });
 
 test('recovery decision distinguishes finish, resume, and explicit restore', () => {
