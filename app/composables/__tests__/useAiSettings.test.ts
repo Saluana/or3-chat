@@ -59,6 +59,16 @@ describe('useAiSettings', () => {
         }
     });
 
+    it('defaults to Nitro and preserves complete title model IDs through durable reload', async () => {
+        const settings = useAiSettings();
+        await settings.ensureLoaded();
+        expect(settings.settings.value.titleGenerationModel).toBe('deepseek/deepseek-v4.1-flash:nitro');
+        await settings.set({ titleGenerationModel: 'other/model:nitro' });
+        const row = await getKvByName('ai_settings');
+        expect(sanitizeAiSettings(JSON.parse(row!.value!)).titleGenerationModel).toBe('other/model:nitro');
+        expect(sanitizeAiSettings({ titleGenerationModel: 'other/model:online' }).titleGenerationModel).toBe('deepseek/deepseek-v4.1-flash:nitro');
+    });
+
     it('persists and loads settings', async () => {
         const { set, load, settings, ensureLoaded } = useAiSettings();
         await ensureLoaded();
