@@ -22,6 +22,20 @@ async function catalogProjectScrollProbe(page, options = {}) {
             localStorage.setItem('activeTheme', 'blank'); localStorage.setItem('theme', 'light');
         }, models);
         await context.addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+        // Optional diagnostic only. Supply the actual profiled bundle/helper;
+        // fail if it changed, and never mix these counts into clean timings.
+        if (options.pinProps) await p.route(`**/_nuxt/${options.pinProps.bundle}`, async route => {
+            const response = await route.fetch();
+            const body = await response.text();
+            const needle = `function ${options.pinProps.helper}(e){let t={};`;
+            if (!body.includes(needle)) throw new Error('Unmatched profiled link-prop helper');
+            const replacement = `function ${options.pinProps.helper}(e){
+                if(e.class==='relative z-10'){
+                    const d=window.__pinPropAudit||(window.__pinPropAudit={seen:new Set(),calls:0,oldCalls:0,newCalls:0,measuring:false});
+                    if(d.measuring){d.calls++;if(d.seen.has(e))d.oldCalls++;else d.newCalls++;}else d.seen.add(e);
+                }let t={};`;
+            await route.fulfill({ response, body: body.replace(needle, replacement) });
+        });
         await p.goto('http://127.0.0.1:3147/__or3-chat-journey-test?workspace=1');
         await p.locator('#nav-scroll-area').waitFor();
         await p.evaluate(async () => {
@@ -55,7 +69,7 @@ async function catalogProjectScrollProbe(page, options = {}) {
             const scroller = p.locator(surface === 'projects' ? '.sidebar-projects-page .or3-scroll' : '.model-catalog-list__rows');
             await scroller.waitFor();
             const box = await scroller.boundingBox();
-            for (let run = 0; run < 3; run++) {
+            for (let run = 0; run < (options.runs ?? 3); run++) {
                 await scroller.evaluate(el => { el.scrollTop = 0; });
                 await p.waitForTimeout(500);
                 const initial = await scroller.evaluate(el => ({
@@ -63,6 +77,11 @@ async function catalogProjectScrollProbe(page, options = {}) {
                     zoom: getComputedStyle(document.body).zoom, viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
                     height: el.clientHeight, track: el.scrollHeight, mounted: el.querySelectorAll('.or3-scroll-item').length,
                 }));
+                if (options.pinProps) await p.evaluate(() => {
+                    const d=window.__pinPropAudit;
+                    if(!d) throw new Error('No pin prop instrumentation');
+                    d.calls=0;d.oldCalls=0;d.newCalls=0;d.measuring=true;
+                });
                 const sampling = scroller.evaluate(el => new Promise(resolve => {
                     const gaps = [], longTasks = []; let previous, frame, timer, numberFormats = 0;
                     const original = Intl.NumberFormat;
@@ -80,17 +99,36 @@ async function catalogProjectScrollProbe(page, options = {}) {
                     };
                     const tick = t => { if (previous !== undefined) gaps.push(t-previous); previous=t;
                         if (window.__listAuditStop) finish(false); else frame=requestAnimationFrame(tick); };
-                    timer=setTimeout(()=>finish(true),20000); frame=requestAnimationFrame(tick);
+                    timer=setTimeout(()=>finish(true),60000); frame=requestAnimationFrame(tick);
                 }));
                 await p.mouse.move(box.x+box.width/2,box.y+box.height/2);
-                for (const direction of [1,-1]) for (let wheel=0;wheel<10;wheel++) {
-                    await p.mouse.wheel(0,direction*600);await p.waitForTimeout(80);
+                const endpoints=[];
+                for (const direction of [1,-1]) {
+                    let reached=0, steps=0;
+                    for (;steps<(options.fullTraverse?150:10);steps++) {
+                        await p.mouse.wheel(0,direction*600);await p.waitForTimeout(80);
+                        if(options.fullTraverse){
+                            const distance=await scroller.evaluate((el,direction)=>direction===1?el.scrollHeight-el.clientHeight-el.scrollTop:el.scrollTop,direction);
+                            reached=distance<=1?reached+1:0;
+                            if(reached===3){steps++;break;}
+                        }
+                    }
+                    endpoints.push(await scroller.evaluate((el,{direction,steps,reached})=>({
+                        direction,steps,reached:reached===3,scrollTop:el.scrollTop,track:el.scrollHeight,height:el.clientHeight,
+                        rows:[...el.querySelectorAll('.or3-scroll-item')].map(row=>row.textContent.trim()),
+                    }),{direction,steps,reached}));
                 }
                 await p.waitForTimeout(300);await p.evaluate(()=>{window.__listAuditStop=true;});
-                results.push({surface,run,initial,scroll:await sampling});
+                const scroll=await sampling;
+                const pinProps=options.pinProps?await p.evaluate(()=>{
+                    const d=window.__pinPropAudit;
+                    d.measuring=false;
+                    return {initialInstances:d.seen.size,calls:d.calls,oldCalls:d.oldCalls,newCalls:d.newCalls};
+                }):undefined;
+                results.push({surface,run,initial,endpoints,scroll,pinProps});
             }
         }
-        return { seededProjects:600,seededModels:600,cpuThrottle:options.cpuRate??4,wheelEvents:20,wheelDelta:600,results };
+        return { seededProjects:600,seededModels:600,cpuThrottle:options.cpuRate??4,fullTraverse:options.fullTraverse??false,pinPropInstrumentation:options.pinProps,wheelDelta:600,results };
     } finally {
         if (cdp) { await cdp.send('Emulation.setCPUThrottlingRate',{rate:1}).catch(()=>{});await cdp.detach(); }
         await context.close();

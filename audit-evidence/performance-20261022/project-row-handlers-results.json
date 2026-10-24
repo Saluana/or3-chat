@@ -1,0 +1,406 @@
+{
+  "baselineCommit": "07b23e45",
+  "production": {
+    "fullTraverse4x": {
+      "seededProjects": 600,
+      "seededModels": 600,
+      "cpuThrottle": 4,
+      "fullTraverse": true,
+      "wheelDelta": 600,
+      "results": [
+        {
+          "surface": "projects",
+          "run": 0,
+          "initial": {
+            "theme": "blank",
+            "dark": false,
+            "zoom": "0.9",
+            "viewport": {
+              "width": 1200,
+              "height": 689,
+              "dpr": 2
+            },
+            "height": 552,
+            "track": 28573,
+            "mounted": 30
+          },
+          "endpoints": [
+            {
+              "direction": 1,
+              "steps": 39,
+              "reached": true,
+              "scrollTop": 21940,
+              "track": 22492,
+              "height": 552,
+              "rows": [
+                "Audit project 029",
+                "Audit project 028",
+                "Audit project 027A project description with enough text to exercise truncation",
+                "Audit project 026",
+                "Audit project 025",
+                "Audit project 024A project description with enough text to exercise truncation",
+                "Audit project 023",
+                "Audit project 022",
+                "Audit project 021A project description with enough text to exercise truncation",
+                "Audit project 020",
+                "Audit project 019",
+                "Audit project 018A project description with enough text to exercise truncation",
+                "Audit project 017",
+                "Audit project 016",
+                "Audit project 015A project description with enough text to exercise truncation",
+                "Audit project 014",
+                "Audit project 013",
+                "Audit project 012A project description with enough text to exercise truncation",
+                "Audit project 011",
+                "Audit project 010",
+                "Audit project 009A project description with enough text to exercise truncation",
+                "Audit project 008",
+                "Audit project 007",
+                "Audit project 006A project description with enough text to exercise truncation",
+                "Audit project 005",
+                "Audit project 004",
+                "Audit project 003A project description with enough text to exercise truncation",
+                "Audit project 002",
+                "Audit project 001",
+                "Audit project 000A project description with enough text to exercise truncation",
+                "Workspace fixture projectSynthetic project evidence"
+              ]
+            },
+            {
+              "direction": -1,
+              "steps": 39,
+              "reached": true,
+              "scrollTop": 0,
+              "track": 22492,
+              "height": 552,
+              "rows": [
+                "RecentAudit project 599",
+                "Audit project 598",
+                "Audit project 597A project description with enough text to exercise truncation",
+                "Audit project 596",
+                "Audit project 595",
+                "Audit project 594A project description with enough text to exercise truncation",
+                "Audit project 593",
+                "Audit project 592",
+                "Audit project 591A project description with enough text to exercise truncation",
+                "Audit project 590",
+                "Audit project 589",
+                "Audit project 588A project description with enough text to exercise truncation",
+                "Audit project 587",
+                "Audit project 586",
+                "Audit project 585A project description with enough text to exercise truncation",
+                "Audit project 584",
+                "Audit project 583",
+                "Audit project 582A project description with enough text to exercise truncation",
+                "Audit project 581",
+                "Audit project 580",
+                "Audit project 579A project description with enough text to exercise truncation",
+                "Audit project 578",
+                "Audit project 577",
+                "Audit project 576A project description with enough text to exercise truncation",
+                "Audit project 575",
+                "Audit project 574",
+                "Audit project 573A project description with enough text to exercise truncation",
+                "Audit project 572",
+                "Audit project 571",
+                "Audit project 570A project description with enough text to exercise truncation"
+              ]
+            }
+          ],
+          "scroll": {
+            "timedOut": false,
+            "numberFormats": 0,
+            "p95": 35,
+            "max": 48.69999999999982,
+            "frames": 598,
+            "longTasks": [
+              51
+            ],
+            "scrollTop": 0,
+            "track": 22492,
+            "mounted": 30
+          }
+        }
+      ]
+    },
+    "fullTraverse1x": {
+      "seededProjects": 600,
+      "seededModels": 600,
+      "cpuThrottle": 1,
+      "fullTraverse": true,
+      "wheelDelta": 600,
+      "results": [
+        {
+          "surface": "projects",
+          "run": 0,
+          "initial": {
+            "theme": "blank",
+            "dark": false,
+            "zoom": "0.9",
+            "viewport": {
+              "width": 1200,
+              "height": 689,
+              "dpr": 2
+            },
+            "height": 552,
+            "track": 28573,
+            "mounted": 30
+          },
+          "endpoints": [
+            {
+              "direction": 1,
+              "steps": 39,
+              "reached": true,
+              "scrollTop": 21940,
+              "track": 22492,
+              "height": 552,
+              "rows": [
+                "Audit project 029",
+                "Audit project 028",
+                "Audit project 027A project description with enough text to exercise truncation",
+                "Audit project 026",
+                "Audit project 025",
+                "Audit project 024A project description with enough text to exercise truncation",
+                "Audit project 023",
+                "Audit project 022",
+                "Audit project 021A project description with enough text to exercise truncation",
+                "Audit project 020",
+                "Audit project 019",
+                "Audit project 018A project description with enough text to exercise truncation",
+                "Audit project 017",
+                "Audit project 016",
+                "Audit project 015A project description with enough text to exercise truncation",
+                "Audit project 014",
+                "Audit project 013",
+                "Audit project 012A project description with enough text to exercise truncation",
+                "Audit project 011",
+                "Audit project 010",
+                "Audit project 009A project description with enough text to exercise truncation",
+                "Audit project 008",
+                "Audit project 007",
+                "Audit project 006A project description with enough text to exercise truncation",
+                "Audit project 005",
+                "Audit project 004",
+                "Audit project 003A project description with enough text to exercise truncation",
+                "Audit project 002",
+                "Audit project 001",
+                "Audit project 000A project description with enough text to exercise truncation",
+                "Workspace fixture projectSynthetic project evidence"
+              ]
+            },
+            {
+              "direction": -1,
+              "steps": 39,
+              "reached": true,
+              "scrollTop": 0,
+              "track": 22492,
+              "height": 552,
+              "rows": [
+                "RecentAudit project 599",
+                "Audit project 598",
+                "Audit project 597A project description with enough text to exercise truncation",
+                "Audit project 596",
+                "Audit project 595",
+                "Audit project 594A project description with enough text to exercise truncation",
+                "Audit project 593",
+                "Audit project 592",
+                "Audit project 591A project description with enough text to exercise truncation",
+                "Audit project 590",
+                "Audit project 589",
+                "Audit project 588A project description with enough text to exercise truncation",
+                "Audit project 587",
+                "Audit project 586",
+                "Audit project 585A project description with enough text to exercise truncation",
+                "Audit project 584",
+                "Audit project 583",
+                "Audit project 582A project description with enough text to exercise truncation",
+                "Audit project 581",
+                "Audit project 580",
+                "Audit project 579A project description with enough text to exercise truncation",
+                "Audit project 578",
+                "Audit project 577",
+                "Audit project 576A project description with enough text to exercise truncation",
+                "Audit project 575",
+                "Audit project 574",
+                "Audit project 573A project description with enough text to exercise truncation",
+                "Audit project 572",
+                "Audit project 571",
+                "Audit project 570A project description with enough text to exercise truncation"
+              ]
+            }
+          ],
+          "scroll": {
+            "timedOut": false,
+            "numberFormats": 0,
+            "p95": 9.300000000000182,
+            "max": 16.800000000000182,
+            "frames": 876,
+            "longTasks": [],
+            "scrollTop": 0,
+            "track": 22492,
+            "mounted": 30
+          }
+        }
+      ]
+    }
+  },
+  "diagnostic": {
+    "seededProjects": 600,
+    "seededModels": 600,
+    "cpuThrottle": 4,
+    "fullTraverse": false,
+    "pinPropInstrumentation": {
+      "bundle": "DVf7XaQA.js",
+      "helper": "Yc"
+    },
+    "wheelDelta": 600,
+    "results": [
+      {
+        "surface": "projects",
+        "run": 0,
+        "initial": {
+          "theme": "blank",
+          "dark": false,
+          "zoom": "0.9",
+          "viewport": {
+            "width": 1200,
+            "height": 689,
+            "dpr": 2
+          },
+          "height": 552,
+          "track": 28573,
+          "mounted": 30
+        },
+        "endpoints": [
+          {
+            "direction": 1,
+            "steps": 10,
+            "reached": false,
+            "scrollTop": 6000,
+            "track": 26846,
+            "height": 552,
+            "rows": [
+              "Audit project 456A project description with enough text to exercise truncation",
+              "Audit project 455",
+              "Audit project 454",
+              "Audit project 453A project description with enough text to exercise truncation",
+              "Audit project 452",
+              "Audit project 451",
+              "Audit project 450A project description with enough text to exercise truncation",
+              "Audit project 449",
+              "Audit project 448",
+              "Audit project 447A project description with enough text to exercise truncation",
+              "Audit project 446",
+              "Audit project 445",
+              "Audit project 444A project description with enough text to exercise truncation",
+              "Audit project 443",
+              "Audit project 442",
+              "Audit project 441A project description with enough text to exercise truncation",
+              "Audit project 440",
+              "Audit project 439",
+              "Audit project 438A project description with enough text to exercise truncation",
+              "Audit project 437",
+              "Audit project 436",
+              "Audit project 435A project description with enough text to exercise truncation",
+              "Audit project 434",
+              "Audit project 433",
+              "Audit project 432A project description with enough text to exercise truncation",
+              "Audit project 431",
+              "Audit project 430",
+              "Audit project 429A project description with enough text to exercise truncation",
+              "Audit project 428",
+              "Audit project 427",
+              "Audit project 426A project description with enough text to exercise truncation",
+              "Audit project 425",
+              "Audit project 424",
+              "Audit project 423A project description with enough text to exercise truncation",
+              "Audit project 422",
+              "Audit project 421",
+              "Audit project 420A project description with enough text to exercise truncation",
+              "Audit project 419",
+              "Audit project 418",
+              "Audit project 417A project description with enough text to exercise truncation",
+              "Audit project 416",
+              "Audit project 415",
+              "Audit project 414A project description with enough text to exercise truncation",
+              "Audit project 413",
+              "Audit project 412",
+              "Audit project 411A project description with enough text to exercise truncation",
+              "Audit project 410",
+              "Audit project 409"
+            ]
+          },
+          {
+            "direction": -1,
+            "steps": 10,
+            "reached": false,
+            "scrollTop": 0,
+            "track": 26846,
+            "height": 552,
+            "rows": [
+              "RecentAudit project 599",
+              "Audit project 598",
+              "Audit project 597A project description with enough text to exercise truncation",
+              "Audit project 596",
+              "Audit project 595",
+              "Audit project 594A project description with enough text to exercise truncation",
+              "Audit project 593",
+              "Audit project 592",
+              "Audit project 591A project description with enough text to exercise truncation",
+              "Audit project 590",
+              "Audit project 589",
+              "Audit project 588A project description with enough text to exercise truncation",
+              "Audit project 587",
+              "Audit project 586",
+              "Audit project 585A project description with enough text to exercise truncation",
+              "Audit project 584",
+              "Audit project 583",
+              "Audit project 582A project description with enough text to exercise truncation",
+              "Audit project 581",
+              "Audit project 580",
+              "Audit project 579A project description with enough text to exercise truncation",
+              "Audit project 578",
+              "Audit project 577",
+              "Audit project 576A project description with enough text to exercise truncation",
+              "Audit project 575",
+              "Audit project 574",
+              "Audit project 573A project description with enough text to exercise truncation",
+              "Audit project 572",
+              "Audit project 571",
+              "Audit project 570A project description with enough text to exercise truncation"
+            ]
+          }
+        ],
+        "scroll": {
+          "timedOut": false,
+          "numberFormats": 0,
+          "p95": 41.899999999999636,
+          "max": 51.90000000000009,
+          "frames": 155,
+          "longTasks": [
+            51,
+            52
+          ],
+          "scrollTop": 0,
+          "track": 26846,
+          "mounted": 30
+        },
+        "pinProps": {
+          "initialInstances": 31,
+          "calls": 304,
+          "oldCalls": 0,
+          "newCalls": 304
+        }
+      }
+    ]
+  },
+  "recycledPin": {
+    "description": "After a complete down/up traversal, scroll back to the final seeded project, click its Pin project button, return to the top and observe its own Unpin project button.",
+    "row": "PINNED\n\nAudit project 000\nA project description with enough text to exercise truncation"
+  },
+  "validation": {
+    "productionBrowserChecks": 8,
+    "build": "passed",
+    "typecheck": "passed"
+  }
+}

@@ -404,6 +404,9 @@ const filtered = computed(() =>
 const projectListItems = computed(() =>
     filtered.value.map((entry, index, entries) => ({
         ...entry,
+        // The virtual slot runs as its window moves. Keep the UButton callback
+        // stable so retained rows do not recompute forwarded link props.
+        onPin: () => run(() => pin(entry.project.id)),
         heading:
             index === 0 || entries[index - 1]?.pinned !== entry.pinned
                 ? entry.pinned
@@ -1095,7 +1098,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         ? 'i-lucide-pin-off'
                                         : 'i-lucide-pin'
                                 "
-                                @click="run(() => pin(entry.project.id))"
+                                @click="entry.onPin"
                             />
                             <SidebarProjectActions
                                 :name="entry.project.name"
