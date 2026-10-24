@@ -156,15 +156,11 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             }
         }
     }
-    // Read distinct parent keys in one indexed query. This stays bounded by the
-    // requested families even when a parent has thousands of child records.
-    const parentsWithChildren = new Set(await db.threads.where('parent_thread_id')
-        .anyOf(families.map(({ member }) => member.id)).uniqueKeys());
     const threads: Array<{ record: Thread; item: UnifiedSidebarItem }> = [];
     for (const { member, root } of families) {
         const item = threadToSidebar(member);
         const related = member.parent_thread_id || member.forked || member.branch_mode === 'compacted'
-            || parentsWithChildren.has(member.id);
+            || await db.threads.where('parent_thread_id').equals(member.id).first();
         if (related) {
             const original = root.original && allowed(root.original, { projectId: options.filter.projectId }, legacy)
                 ? root.original : undefined;

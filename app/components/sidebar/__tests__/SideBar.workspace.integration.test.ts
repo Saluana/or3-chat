@@ -64,9 +64,10 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
-    // Cross the database's 100-row batch boundary, an exact UI-page boundary,
-    // a partial final page, and a second database-batch boundary.
-    it.each([101, 150, 160, 201])('admits one pending page and reaches all %i threads', async (threadCount) => {
+    // One journey crosses both database batch boundaries, exact UI pages,
+    // and the partial final page while checking repeated-event admission.
+    it('admits one pending page and reaches the final thread across database batches', async () => {
+        const threadCount = 201;
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
         const id = `sidebar-page-admission-${crypto.randomUUID()}`;
@@ -78,9 +79,11 @@ describe('mounted sidebar workspace isolation', () => {
             created_at: 1000 - index, updated_at: 1000 - index,
         })));
         wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
-            global: { stubs: { SidebarUnifiedItem: true } } });
+            global: { stubs: { SidebarUnifiedItem: { template: '<div data-sidebar-page-row />' } } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
-        const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
+        // Repeated component-wrapper construction registers native listeners
+        // in Vue Test Utils. Observe the rendered fixture DOM directly.
+        const rowCount = () => wrapper!.element.querySelectorAll('[data-sidebar-page-row]').length;
         // Native scroll events begin a new event-loop task, outside the
         // promise scope of the preceding IndexedDB subscription result.
         const reachBottom = (burst = 1) => new Promise<void>(resolve => {
@@ -89,12 +92,10 @@ describe('mounted sidebar workspace isolation', () => {
                 resolve();
             }, 0);
         });
-        // Page reads use real IndexedDB and the result still needs a Vue
-        // render. Wait for both instead of sampling during a pending flush.
-        const waitForRows = (count: number) => vi.waitFor(async () => {
-            await nextTick();
+        // Poll rendered rows synchronously; Vue flushes between attempts.
+        const waitForRows = (count: number) => vi.waitFor(() => {
             expect(rowCount()).toBe(count);
-        }, { timeout: 15_000 });
+        }, { timeout: 5000 });
         await waitForRows(50);
         await reachBottom(3);
         await waitForRows(100);
@@ -102,7 +103,7 @@ describe('mounted sidebar workspace isolation', () => {
             await reachBottom();
             await waitForRows(Math.min(count, threadCount));
         }
-    }, 60_000);
+    }, 30_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
