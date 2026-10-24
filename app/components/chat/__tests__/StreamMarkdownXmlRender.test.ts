@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { h } from 'vue';
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
 
 // NOTE: Current observed behavior: StreamMarkdown (and underlying parser) STRIPS unknown
 // custom elements written inline in raw HTML within markdown content (they do not appear
@@ -11,6 +11,36 @@ import { StreamMarkdown } from 'streamdown-vue';
 const SAMPLE_MD = `Here is some text before\n\n<or3-image hash="abc123def4567890abc123def4567890" alt="first"></or3-image>\n\nAnd another one: <or3-image hash="ffffffffffffffffffffffffffffffff" alt="second" data-extra="1"></or3-image>\n\nRegular **bold** markdown still works.`;
 
 describe('StreamMarkdown XML / custom element handling', () => {
+    it('loads syntax grammars on first use while retaining alias highlighting and plain fallback', async () => {
+        const highlighter = await useShikiHighlighter();
+        // Warming the renderer must not initialize grammars for unseen fences.
+        expect(highlighter.getLoadedLanguages()).toHaveLength(0);
+        const wrapper = mount(StreamMarkdown, {
+            props: {
+                content: '```ts\nconst answer = 42;\n```',
+                parseIncompleteMarkdown: false,
+                shikiTheme: { light: 'github-light', dark: 'github-dark' },
+            },
+        });
+        try {
+            await expect.poll(() => wrapper.find('pre.shiki').exists()).toBe(true);
+            expect(wrapper.find('pre code').text()).toBe('const answer = 42;');
+            expect(highlighter.getLoadedLanguages()).toContain('typescript');
+            expect(highlighter.getLoadedLanguages()).not.toContain('python');
+
+            await wrapper.setProps({ content: '```py\nprint("answer")\n```' });
+            await expect.poll(() => highlighter.getLoadedLanguages().includes('python')).toBe(true);
+            await expect.poll(() => wrapper.find('pre.shiki code').text()).toBe('print("answer")');
+
+            await wrapper.setProps({ content: '```unknown-language\n<script>literal</script>\n```' });
+            await expect.poll(() => wrapper.find('pre code').text()).toBe('<script>literal</script>');
+            expect(wrapper.find('pre.shiki').exists()).toBe(false);
+            expect(wrapper.find('script').exists()).toBe(false);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('renders inline and block math with the shared KaTeX renderer', async () => {
         const wrapper = mount(StreamMarkdown, {
             props: { content: 'Inline $$x^2$$.\n\n$$\n\\frac{1}{2}\n$$', parseIncompleteMarkdown: false },

@@ -85,6 +85,8 @@ async function richStreamProbe(page, options = {}) {
                 return { ...metrics, savedExact:rows.some(row=>row.role==='assistant'&&row.data?.content===window.__richExpected),
                     complete:document.body.textContent.includes('PERFORMANCE-END'),math:document.querySelectorAll('.katex').length,
                     code:document.querySelectorAll('.cm-markdown-assistant pre').length,
+                    highlightedCode:document.querySelectorAll('.cm-markdown-assistant pre.shiki').length,
+                    scriptResources:performance.getEntriesByType('resource').filter(entry=>entry.name.endsWith('.js')).map(entry=>({url:entry.name,bytes:entry.encodedBodySize,start:entry.startTime})),
                     nodes:document.querySelector('.chat-container-root').querySelectorAll('*').length,
                     bottomDistance:scroller.scrollHeight-scroller.clientHeight-scroller.scrollTop,
                     theme:document.documentElement.dataset.theme,zoom:getComputedStyle(document.body).zoom };

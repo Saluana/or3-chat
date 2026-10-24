@@ -193,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown } from '~/utils/stream-markdown';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';

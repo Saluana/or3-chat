@@ -300,7 +300,7 @@ import {
     h,
 } from 'vue';
 import type { PropType } from 'vue';
-import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
 import {
     useNuxtApp,
     useRoute,

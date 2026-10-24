@@ -12,6 +12,7 @@
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@or3/secrets": "0.1.2",
         "@orama/orama": "^3.1.16",
+        "@shikijs/langs": "4.5.0",
         "@tiptap/core": "^3.32.0",
         "@tiptap/extension-image": "^3.32.0",
         "@tiptap/extension-list": "^3.32.0",
