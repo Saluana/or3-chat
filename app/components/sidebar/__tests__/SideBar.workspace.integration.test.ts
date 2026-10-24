@@ -1,3 +1,4 @@
+import { Session } from 'node:inspector';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, computed, h, ref, KeepAlive, nextTick } from 'vue';
 import { mount, shallowMount, type VueWrapper } from '@vue/test-utils';
@@ -67,6 +68,11 @@ describe('mounted sidebar workspace isolation', () => {
     // One journey crosses both database batch boundaries, exact UI pages,
     // and the partial final page while checking repeated-event admission.
     it('admits one pending page and reaches the final thread across database batches', async () => {
+        const profiler = new Session();
+        profiler.connect();
+        await new Promise<void>((resolve) => profiler.post('Profiler.enable', () => resolve()));
+        await new Promise<void>((resolve) => profiler.post('Profiler.start', () => resolve()));
+        try {
         const threadCount = 201;
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
@@ -100,6 +106,16 @@ describe('mounted sidebar workspace isolation', () => {
         for (let count = 150; count < threadCount + 50; count += 50) {
             await reachBottom();
             await waitForRows(Math.min(count, threadCount));
+        }
+        } finally {
+            await new Promise<void>((resolve) => profiler.post('Profiler.stop', (_error, result) => {
+                console.warn('SIDEBAR CPU PROFILE', JSON.stringify(result?.profile.nodes
+                    .sort((a, b) => (b.hitCount ?? 0) - (a.hitCount ?? 0)).slice(0, 30)
+                    .map(node => ({ fn: node.callFrame.functionName, url: node.callFrame.url,
+                        line: node.callFrame.lineNumber, hits: node.hitCount }))));
+                profiler.disconnect();
+                resolve();
+            }));
         }
     }, 60_000);
 
