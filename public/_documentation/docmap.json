@@ -500,7 +500,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Use Theme studio and understand how appearance preferences are saved."
+                    "summary": "Use Theme studio, apply immediate CSS state changes with reduced motion, and understand how appearance preferences are saved."
                 },
                 {
                     "name": "first-theme.md",

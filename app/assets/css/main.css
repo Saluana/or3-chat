@@ -671,28 +671,32 @@ html [class~='duration-1000'] {
 	}
 }
 
-/* Reduced motion uses a short state transition and freezes decorative loops.
-   Busy/progress controls remain visibly present, so their status is still
-   communicated without a looping animation. */
-html[data-motion-resolved='reduced'] *,
-html[data-motion-resolved='reduced'] *::before,
-html[data-motion-resolved='reduced'] *::after {
-	animation-duration: 1ms !important;
-	animation-iteration-count: 1 !important;
-	transition-duration: var(--app-motion-duration-fast, 100ms) !important;
-	transition-delay: 0ms !important;
-	scroll-behavior: auto !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	html:not([data-motion]) *,
-	html:not([data-motion]) *::before,
-	html:not([data-motion]) *::after {
+/* Apply reduced-motion states immediately. A nonzero universal duration also
+   creates transitions on normally static elements (whose default property is
+   `all`), cascading inherited font/layout changes through their descendants.
+   Layered important rules take precedence over unlayered theme overrides.
+   Busy/progress controls remain visible and decorative loops finish once. */
+@layer base {
+	html[data-motion-resolved='reduced'] *,
+	html[data-motion-resolved='reduced'] *::before,
+	html[data-motion-resolved='reduced'] *::after {
 		animation-duration: 1ms !important;
 		animation-iteration-count: 1 !important;
-		transition-duration: 100ms !important;
+		transition-duration: 0ms !important;
 		transition-delay: 0ms !important;
 		scroll-behavior: auto !important;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		html:not([data-motion]) *,
+		html:not([data-motion]) *::before,
+		html:not([data-motion]) *::after {
+			animation-duration: 1ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0ms !important;
+			transition-delay: 0ms !important;
+			scroll-behavior: auto !important;
+		}
 	}
 }
 

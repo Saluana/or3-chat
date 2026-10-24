@@ -98,7 +98,8 @@ Completed follow-up work is recorded in [virtual sidebar recycling](SIDEBAR.md),
 [stable stream projections and bottom controls](STREAM-PROJECTIONS.md), and
 [unchanged rows during canonical history settlement](HISTORY-SETTLEMENT.md), and
 [styles before the first math reply](FIRST-MATH-STYLES.md), and
-[composited generating-loader motion](LOADER-MOTION.md), with separate raw production
+[composited generating-loader motion](LOADER-MOTION.md), and
+[reduced motion without cascading transitions](REDUCED-MOTION.md), with separate production
 receipts and explicit limits.
 
 The full frontend audit remains open. Section PRs should carry their own
