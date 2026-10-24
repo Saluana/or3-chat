@@ -73,7 +73,9 @@ const containerProps = useThemeOverrides({
 }
 .rl-scan {
     position: absolute;
-    inset: 0;
+    /* Two extra stripe periods keep the clipped loader covered while the
+       compositor moves this layer, without repainting its background. */
+    inset: -8px 0 0;
     background: repeating-linear-gradient(
         0deg,
         rgba(0, 0, 0, 0.08) 0 2px,
@@ -166,10 +168,10 @@ const containerProps = useThemeOverrides({
 }
 @keyframes rl-scan {
     0% {
-        background-position-y: 0;
+        transform: translateY(0);
     }
     100% {
-        background-position-y: 8px;
+        transform: translateY(8px);
     }
 }
 @keyframes rl-glow {
