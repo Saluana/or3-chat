@@ -65,37 +65,23 @@ export async function pruneRetiredFamilyPreference(db: Or3DB, rootId: string): P
     const name = familyExpansionPreferenceName(rootId); const preference = await getKvByName(name, db);
     if (!preference || preference.deleted) return;
     const resolver = rootResolver(db);
-    let retained = false;
-    await visitThreadPages(db, async (page) => {
+    for await (const page of threadPages(db)) {
         resolver.seed(page);
-        for (const row of page) if (!row.deleted && (await resolver.resolve(row)).id === rootId) {
-            retained = true; return false;
-        }
-        return true;
-    });
-    if (!retained) await tombstoneKvByName(name, db);
+        for (const row of page) if (!row.deleted && (await resolver.resolve(row)).id === rootId) return;
+    }
+    await tombstoneKvByName(name, db);
 }
-// Native async-generator iteration can stall when repeated live queries replace
-// one another. Keep the same bounded batches and yields in ordinary async calls.
-type ThreadPageVisitor = (page: Thread[]) => Promise<boolean>;
-async function visitThreadPages(db: Or3DB, visit: ThreadPageVisitor) {
+async function* threadPages(db: Or3DB) {
     let before: [number, number, string] | undefined;
     for (;;) {
         const query = before ? db.threads.where('[updated_at+created_at+id]').below(before)
             : db.threads.orderBy('[updated_at+created_at+id]');
-        console.warn('SCAN read begin', performance.now());
         const page = await query.reverse().limit(100).toArray();
-        console.warn('SCAN read end', page.length, performance.now());
         if (!page.length) return;
-        console.warn('SCAN visit begin', performance.now());
-        const more = await visit(page);
-        console.warn('SCAN visit end', more, performance.now());
-        if (!more) return;
+        yield page;
         const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
         if (page.length < 100) return;
-        console.warn('SCAN yield begin', performance.now());
         await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));
-        console.warn('SCAN yield end', performance.now());
     }
 }
 
@@ -118,18 +104,16 @@ async function projectThreadRows(db: Or3DB, projectId: string, legacy: ReadonlyS
         .map(row => [row.id, row])).values()].sort(compare);
 }
 
-async function visitActivityThreadPages(db: Or3DB, filter: FamilyFilter, legacy: ReadonlySet<string>, visit: ThreadPageVisitor) {
-    if (filter.projectId === undefined) await visitThreadPages(db, visit);
-    else await visit(await projectThreadRows(db, filter.projectId, legacy));
+async function* activityThreadPages(db: Or3DB, filter: FamilyFilter, legacy: ReadonlySet<string>) {
+    if (filter.projectId === undefined) yield* threadPages(db);
+    else yield await projectThreadRows(db, filter.projectId, legacy);
 }
 
 export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 'all' | 'thread' | 'document'; filter: FamilyFilter }) {
-    console.warn('PAGE begin', options.limit, performance.now());
     const resolver = rootResolver(db); const roots = new Set<string>();
     const legacy = await legacyProjectMembers(db, options.filter.projectId);
-    console.warn('PAGE legacy done', options.limit, performance.now());
     const families: Array<{ member: Thread; root: Root }> = [];
-    if (options.type !== 'document') await visitActivityThreadPages(db, options.filter, legacy, async (page) => {
+    if (options.type !== 'document') for await (const page of activityThreadPages(db, options.filter, legacy)) {
         resolver.seed(page);
         for (const member of page) {
             if (!allowed(member, options.filter, legacy)) continue;
@@ -137,9 +121,8 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             roots.add(root.id); families.push({ member, root });
             if (families.length > options.limit) break;
         }
-        return families.length <= options.limit;
-    });
-    console.warn('PAGE families', options.limit, families.length, performance.now());
+        if (families.length > options.limit) break;
+    }
     const documents: Post[] = [];
     if (options.type !== 'thread' && options.filter.pinned !== true) {
         const project = options.filter.projectId === undefined ? undefined : await db.projects.get(options.filter.projectId);
@@ -173,12 +156,15 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             }
         }
     }
+    // Read distinct parent keys in one indexed query. This stays bounded by the
+    // requested families even when a parent has thousands of child records.
+    const parentsWithChildren = new Set(await db.threads.where('parent_thread_id')
+        .anyOf(families.map(({ member }) => member.id)).uniqueKeys());
     const threads: Array<{ record: Thread; item: UnifiedSidebarItem }> = [];
     for (const { member, root } of families) {
-        if (threads.length % 10 === 0) console.warn('PAGE related', options.limit, threads.length, performance.now());
         const item = threadToSidebar(member);
         const related = member.parent_thread_id || member.forked || member.branch_mode === 'compacted'
-            || await db.threads.where('parent_thread_id').equals(member.id).first();
+            || parentsWithChildren.has(member.id);
         if (related) {
             const original = root.original && allowed(root.original, { projectId: options.filter.projectId }, legacy)
                 ? root.original : undefined;
@@ -190,7 +176,6 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
     }
     const top = [...threads,
         ...documents.map((record) => ({ record, item: documentToSidebar(record) }))].sort((a, b) => compare(a.record, b.record));
-    console.warn('PAGE done', options.limit, top.length, performance.now());
     return { items: top.slice(0, options.limit).map((row) => row.item), hasMore: top.length > options.limit };
 }
 
@@ -200,7 +185,7 @@ export function createFamilyFallback(db: Or3DB, filter: FamilyFilter = {}) {
     return () => snapshot ??= (async () => {
         const rows: Thread[] = []; const resolver = rootResolver(db);
         const legacy = await legacyProjectMembers(db, filter.projectId);
-        await visitActivityThreadPages(db, filter, legacy, async (page) => { rows.push(...page); resolver.seed(page); return true; });
+        for await (const page of activityThreadPages(db, filter, legacy)) { rows.push(...page); resolver.seed(page); }
         const families = new Map<string, Thread[]>();
         for (const row of rows) {
             const rootId = (await resolver.resolve(row)).id;
