@@ -3,9 +3,19 @@ async function concurrentPaneStreamProbe(page, options = {}) {
     const context=await page.context().browser().newContext({viewport:{width:1440,height:900},deviceScaleFactor:1});
     const p=await context.newPage();p.setDefaultTimeout(20000);
     let cdp;
+    let highlightControlApplied=0;
     const traceEvents=[];
     try {
         await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+        // Same-build control: bypass only the host's asynchronous adapter prop.
+        // The library then uses its original main-thread highlighter and UI.
+        if(options.mainThreadHighlightControl)await p.route(`**/_nuxt/${options.mainThreadHighlightControl.bundle}`,async route=>{
+            const response=await route.fetch(),body=await response.text();
+            const {needle,replacement}=options.mainThreadHighlightControl;
+            if(body.split(needle).length!==2)throw new Error('Unmatched highlighting adapter control');
+            highlightControlApplied++;
+            await route.fulfill({response,body:body.replace(needle,replacement)});
+        });
         await context.addCookies([
             {name:'or3_active_theme',value:'blank',domain:'127.0.0.1',path:'/'},
             {name:'or3_workspace_profile_v1',value:encodeURIComponent(JSON.stringify({version:1,workspaceId:'local',profileId:'standard-or3'})),domain:'127.0.0.1',path:'/'},
@@ -161,6 +171,7 @@ async function concurrentPaneStreamProbe(page, options = {}) {
             const rows=await new Promise(resolve=>{const r=db.transaction('messages').objectStore('messages').getAll();r.onsuccess=()=>resolve(r.result);});db.close();
             const roots=[...document.querySelectorAll('.pane-container > [role="tabpanel"]')];
             return {...metrics,savedExact:Object.fromEntries(['left','right'].map(side=>[side,rows.some(row=>row.thread_id==='pane-audit-'+side&&row.role==='assistant'&&row.data?.content===window.__concurrentExpected[side])])),
+                rightHighlightedBlocks:roots[1].querySelectorAll('pre.shiki').length,rightCodeBlocks:roots[1].querySelectorAll('[data-streamdown="code-block"]').length,
                 rightComplete:roots[1].textContent.includes('CONCURRENT-RIGHT-END'),leftEndInitiallyOffscreen:!roots[0].textContent.includes('CONCURRENT-LEFT-END'),
                 bottoms:roots.map(root=>{const s=root.querySelector('.chat-message-list');return s.scrollHeight-s.clientHeight-s.scrollTop;}),
                 theme:document.documentElement.dataset.theme,zoom:getComputedStyle(document.body).zoom};
@@ -190,6 +201,8 @@ async function concurrentPaneStreamProbe(page, options = {}) {
         await panes.first().locator('.chat-scroll-to-bottom').click();
         await panes.first().getByText('CONCURRENT-LEFT-END',{exact:false}).waitFor();
         result.leftRevealed=true;
+        result.highlightControlApplied=highlightControlApplied;
+        result.highlightingWorkers=p.workers().filter(worker=>worker.url().includes('markdown-highlight.worker')).length;
         if(options.screenshot)await p.screenshot({path:options.screenshot,animations:'disabled'});
         return result;
     } finally {

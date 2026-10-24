@@ -1,8 +1,308 @@
 diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js b/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
 --- a/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
 +++ b/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js
-@@ -1178,7 +1178,9 @@
- 		let v = (e, n, r) => typeof e == "string" ? r && r.length ? t(e, n, r) : t(e, n) : !r || Array.isArray(r) && r.length === 0 ? t(e, n) : t(e, n, { default: Array.isArray(r) ? () => r : () => [r] }), y = (n, r) => {
+@@ -1,3 +1,4 @@
++import { registerShikiLanguages as ne, registerDefaultShikiLanguages as de, registerShikiLanguage as te, isLazyShikiLanguage as P, excludeShikiLanguages as ie, loadRegisteredShikiLanguage as Ae, clearRegisteredShikiLanguages as ce, useShikiHighlighter as je, unregisterShikiLanguage as re } from "./shiki.es.js";
+ import { defineComponent as e, h as t, inject as n, nextTick as r, onBeforeUnmount as i, onMounted as a, provide as o, ref as s, watch as c } from "vue";
+ import { unified as l } from "unified";
+ import u from "remark-parse";
+@@ -5,237 +6,7 @@
+ import f from "remark-math";
+ import p from "remark-rehype";
+ import m from "rehype-katex";
+-import { createHighlighterCore as h } from "shiki/core";
+-import { createJavaScriptRegexEngine as g } from "shiki/engine/javascript";
+-import _ from "@shikijs/themes/github-light";
+-import v from "@shikijs/themes/github-dark";
+ import { Lexer as y, Tokenizer as b } from "marked";
+-var x = "https://esm.sh/@shikijs/langs@4.4.3/es2022/";
+-`${x}`;
+-var S = Symbol.for("streamdown.vue.shikiRemote"), C = (e) => (typeof e == "function" && (e[S] = !0), e), w = (e) => typeof e == "function" && !!e?.[S], T = (e) => {
+-	let t = () => import(
+-		/* @vite-ignore */
+-		`@shikijs/langs/${e}`
+-), n = () => import(
+-		/* webpackIgnore: true */
+-		/* @vite-ignore */
+-		`${x}${e}.mjs`
+-);
+-	return C(async () => {
+-		if (typeof window > "u") return t();
+-		try {
+-			return await n();
+-		} catch {
+-			return t();
+-		}
+-	});
+-}, E = {
+-	py: "python",
+-	python3: "python",
+-	shellscript: "shell",
+-	shellsession: "shell",
+-	sh: "shell",
+-	zsh: "shell",
+-	bash: "bash",
+-	"markdown-vue": "vue",
+-	"vue-directives": "vue",
+-	"vue-interpolations": "vue",
+-	"vue-sfc-style-variable-injection": "vue",
+-	md: "markdown",
+-	"html-derivative": "html",
+-	ts: "typescript",
+-	js: "javascript",
+-	yml: "yaml"
+-}, D = (e) => e.trim().toLowerCase().replace(/^language-/, ""), O = (e) => {
+-	let t = D(e);
+-	return t && (E[t] ?? t);
+-}, k = /* @__PURE__ */ new Map(), A = /* @__PURE__ */ new Map(), j = /* @__PURE__ */ new Set(), M = (e, t) => {
+-	let n = O(e);
+-	n && A.set(n, t);
+-}, N = (e) => {
+-	let t = O(e);
+-	if (!t) return;
+-	if (k.has(t)) return t;
+-	let n = A.get(t);
+-	if (n && k.has(n)) return n;
+-}, ee = (e) => {
+-	for (let [t, n] of Array.from(A.entries())) (n === e || t === e) && A.delete(t);
+-};
+-function te(e) {
+-	let t = O(e.id);
+-	t && (k.set(t, e.loader), e.lazy ? j.add(t) : j.delete(t), M(t, t), (e.aliases ?? []).forEach((e) => M(e, t)));
+-}
+-function ne(e) {
+-	e.forEach(te);
+-}
+-function re(e) {
+-	let t = N(e);
+-	if (!t) {
+-		let t = O(e);
+-		t && A.delete(t);
+-		return;
+-	}
+-	k.delete(t), j.delete(t), ee(t);
+-}
+-function ie(e) {
+-	e.forEach(re);
+-}
+-function ae(e) {
+-	let t = /* @__PURE__ */ new Set(), n = [], r = [], i = [];
+-	return e.forEach((e) => {
+-		let a = N(e);
+-		if (!a) {
+-			r.push(O(e) || e);
+-			return;
+-		}
+-		if (t.has(a)) return;
+-		let o = k.get(a);
+-		if (!o) {
+-			r.push(a);
+-			return;
+-		}
+-		t.add(a), i.push(a), n.push(o);
+-	}), {
+-		inputs: n,
+-		missing: r,
+-		resolved: i
+-	};
+-}
+-function oe() {
+-	return Array.from(k.keys()).sort();
+-}
+-function se() {
+-	return k.size > 0;
+-}
+-function P(e) {
+-	let t = N(e);
+-	return t ? j.has(t) : !1;
+-}
+-function ce() {
+-	k.clear(), A.clear(), j.clear();
+-}
+-//#endregion
+-//#region src/shiki/register-default-languages.ts
+-var le = [
+-	{
+-		id: "cpp",
+-		aliases: ["c++"],
+-		loader: T("cpp")
+-	},
+-	{
+-		id: "java",
+-		aliases: ["java"],
+-		loader: T("java")
+-	},
+-	{
+-		id: "c",
+-		loader: T("c")
+-	},
+-	{
+-		id: "csharp",
+-		aliases: ["cs", "c#"],
+-		loader: T("csharp")
+-	},
+-	{
+-		id: "php",
+-		loader: T("php")
+-	},
+-	{
+-		id: "ruby",
+-		loader: T("ruby")
+-	},
+-	{
+-		id: "kotlin",
+-		loader: T("kotlin")
+-	},
+-	{
+-		id: "swift",
+-		loader: T("swift")
+-	},
+-	{
+-		id: "sql",
+-		loader: T("sql")
+-	},
+-	{
+-		id: "typescript",
+-		aliases: ["ts"],
+-		loader: () => import("@shikijs/langs/typescript")
+-	},
+-	{
+-		id: "tsx",
+-		loader: () => import("@shikijs/langs/tsx")
+-	},
+-	{
+-		id: "javascript",
+-		aliases: ["js"],
+-		loader: () => import("@shikijs/langs/javascript")
+-	},
+-	{
+-		id: "jsx",
+-		loader: () => import("@shikijs/langs/jsx")
+-	},
+-	{
+-		id: "json",
+-		loader: () => import("@shikijs/langs/json")
+-	},
+-	{
+-		id: "bash",
+-		loader: () => import("@shikijs/langs/bash")
+-	},
+-	{
+-		id: "shell",
+-		aliases: [
+-			"shellscript",
+-			"shellsession",
+-			"sh",
+-			"zsh"
+-		],
+-		loader: () => import("@shikijs/langs/shellscript")
+-	},
+-	{
+-		id: "python",
+-		aliases: ["py"],
+-		loader: () => import("@shikijs/langs/python")
+-	},
+-	{
+-		id: "diff",
+-		loader: () => import("@shikijs/langs/diff")
+-	},
+-	{
+-		id: "markdown",
+-		aliases: ["md"],
+-		loader: () => import("@shikijs/langs/markdown")
+-	},
+-	{
+-		id: "vue",
+-		loader: () => import("@shikijs/langs/vue")
+-	},
+-	{
+-		id: "html",
+-		loader: () => import("@shikijs/langs/html")
+-	},
+-	{
+-		id: "css",
+-		loader: () => import("@shikijs/langs/css")
+-	},
+-	{
+-		id: "go",
+-		loader: () => import("@shikijs/langs/go")
+-	},
+-	{
+-		id: "rust",
+-		loader: () => import("@shikijs/langs/rust")
+-	},
+-	{
+-		id: "yaml",
+-		aliases: ["yml"],
+-		loader: () => import("@shikijs/langs/yaml")
+-	}
+-], ue = !1;
+-function de() {
+-	ue || (ue = !0, ne(le.slice()));
+-}
+-//#endregion
+ //#region node_modules/@lucide/vue/dist/esm/shared/src/build/defaultAttributes.mjs
+ var F = {
+ 	xmlns: "http://www.w3.org/2000/svg",
+@@ -467,28 +238,7 @@
+ 			title: "Download code"
+ 		}, [t(xe, { class: "h-4 w-4" }), t("span", { class: "sr-only" }, "Download")]);
+ 	}
+-}), V = null, H = null, De = [_, v], U = null, Oe = () => (U ||= g(), U), ke = () => {
+-	if (!se()) return console.warn("[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting."), [];
+-	let { inputs: e, missing: t, resolved: n } = ae(oe());
+-	return t.length && console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(", ")}`), e.filter((e, t) => !w(e) && !P(n[t]));
+-};
+-async function Ae(e) {
+-	if (!V) return !1;
+-	let { inputs: t } = ae([e]);
+-	return t.length ? (await V.loadLanguage(...t), !0) : !1;
+-}
+-async function je() {
+-	if (!H) {
+-		let e = ke();
+-		H = h({
+-			themes: De,
+-			langs: e,
+-			engine: Oe()
+-		}).then((e) => (V = e, e));
+-	}
+-	return await H;
+-}
+-//#endregion
++});
+ //#region src/components/CodeBlock.ts
+ var W = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"), G = (e, t, n, r) => {
+ 	let i = W(t), a = i ? `language-${i}` : "", o = [a];
+@@ -498,6 +248,7 @@
+ }, K = e({
+ 	name: "CodeBlock",
+ 	props: {
++		highlight: { type: Function, default: void 0 },
+ 		code: {
+ 			type: String,
+ 			required: !0
+@@ -572,6 +323,11 @@
+ 		}, C = async () => {
+ 			let t = ++h;
+ 			try {
++				if (e.highlight) {
++					let n = await e.highlight({ code: e.code, language: e.language || "txt", theme: e.theme || (p?.matches ? "github-dark" : "github-light") });
++					t === h && (d.value = y(n));
++					return;
++				}
+ 				let n = await je(), r = e.language || "txt", i = "";
+ 				r && !n.getLoadedLanguages().includes(r) && t === h && (d.value = G(e.code, e.language, e.showLineNumbers, e.selectable));
+ 				try {
+@@ -597,6 +353,7 @@
+ 		], () => {
+ 			r(() => m());
+ 		}), i(() => {
++			h++;
+ 			p && p.removeEventListener("change", m);
+ 		}), () => t("div", {
+ 			class: "group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden",
+@@ -1175,7 +932,9 @@
  			if (!n) return null;
  			if (n.type === "text") return n.value;
  			if (n.type !== "element") return null;
@@ -12,3 +312,301 @@ diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-BSujXBpd.js b/node_
 +			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e === "className" ? "class" : e, Array.isArray(t) ? [...t] : t])), o = g(i.children || [], i.tagName), s = i.tagName;
  			if (s === "a") {
  				let e = yt(String(a.href || ""), c);
+ 				if (!e) return o;
+diff --git a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
+--- a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
++++ b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
+@@ -2,6 +2,7 @@
+ import type { ShikiThemeConfig } from '../types';
+ import { type CodeBlockAction } from './codeblock-context';
+ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropTypes<{
++    highlight: { type: PropType<(input: { code: string; language: string; theme: ShikiThemeConfig }) => Promise<string>>; default: undefined; };
+     code: {
+         type: StringConstructor;
+         required: true;
+@@ -37,6 +38,7 @@
+ }>, () => import("vue").VNode<import("vue").RendererNode, import("vue").RendererElement, {
+     [key: string]: any;
+ }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
++    highlight: { type: PropType<(input: { code: string; language: string; theme: ShikiThemeConfig }) => Promise<string>>; default: undefined; };
+     code: {
+         type: StringConstructor;
+         required: true;
+diff --git a/node_modules/streamdown-vue/package.json b/node_modules/streamdown-vue/package.json
+--- a/node_modules/streamdown-vue/package.json
++++ b/node_modules/streamdown-vue/package.json
+@@ -17,6 +17,7 @@
+             "import": "./dist/core.es.js",
+             "require": "./dist/core.cjs"
+         },
++        "./shiki": { "types": "./dist/shiki.d.ts", "import": "./dist/shiki.es.js" },
+         "./style.css": "./dist/style.css"
+     },
+     "scripts": {
+diff --git a/node_modules/streamdown-vue/dist/shiki.es.js b/node_modules/streamdown-vue/dist/shiki.es.js
+new file mode 100644
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/shiki.es.js
+@@ -0,0 +1,254 @@
++import { createHighlighterCore as h } from "shiki/core";
++import { createJavaScriptRegexEngine as g } from "shiki/engine/javascript";
++import _ from "@shikijs/themes/github-light";
++import v from "@shikijs/themes/github-dark";
++var x = "https://esm.sh/@shikijs/langs@4.4.3/es2022/";
++`${x}`;
++var S = Symbol.for("streamdown.vue.shikiRemote"), C = (e) => (typeof e == "function" && (e[S] = !0), e), w = (e) => typeof e == "function" && !!e?.[S], T = (e) => {
++	let t = () => import(
++		/* @vite-ignore */
++		`@shikijs/langs/${e}`
++), n = () => import(
++		/* webpackIgnore: true */
++		/* @vite-ignore */
++		`${x}${e}.mjs`
++);
++	return C(async () => {
++		if (typeof window > "u" && typeof WorkerGlobalScope > "u") return t();
++		try {
++			return await n();
++		} catch {
++			return t();
++		}
++	});
++}, E = {
++	py: "python",
++	python3: "python",
++	shellscript: "shell",
++	shellsession: "shell",
++	sh: "shell",
++	zsh: "shell",
++	bash: "bash",
++	"markdown-vue": "vue",
++	"vue-directives": "vue",
++	"vue-interpolations": "vue",
++	"vue-sfc-style-variable-injection": "vue",
++	md: "markdown",
++	"html-derivative": "html",
++	ts: "typescript",
++	js: "javascript",
++	yml: "yaml"
++}, D = (e) => e.trim().toLowerCase().replace(/^language-/, ""), O = (e) => {
++	let t = D(e);
++	return t && (E[t] ?? t);
++}, k = /* @__PURE__ */ new Map(), A = /* @__PURE__ */ new Map(), j = /* @__PURE__ */ new Set(), M = (e, t) => {
++	let n = O(e);
++	n && A.set(n, t);
++}, N = (e) => {
++	let t = O(e);
++	if (!t) return;
++	if (k.has(t)) return t;
++	let n = A.get(t);
++	if (n && k.has(n)) return n;
++}, ee = (e) => {
++	for (let [t, n] of Array.from(A.entries())) (n === e || t === e) && A.delete(t);
++};
++function te(e) {
++	let t = O(e.id);
++	t && (k.set(t, e.loader), e.lazy ? j.add(t) : j.delete(t), M(t, t), (e.aliases ?? []).forEach((e) => M(e, t)));
++}
++function ne(e) {
++	e.forEach(te);
++}
++function re(e) {
++	let t = N(e);
++	if (!t) {
++		let t = O(e);
++		t && A.delete(t);
++		return;
++	}
++	k.delete(t), j.delete(t), ee(t);
++}
++function ie(e) {
++	e.forEach(re);
++}
++function ae(e) {
++	let t = /* @__PURE__ */ new Set(), n = [], r = [], i = [];
++	return e.forEach((e) => {
++		let a = N(e);
++		if (!a) {
++			r.push(O(e) || e);
++			return;
++		}
++		if (t.has(a)) return;
++		let o = k.get(a);
++		if (!o) {
++			r.push(a);
++			return;
++		}
++		t.add(a), i.push(a), n.push(o);
++	}), {
++		inputs: n,
++		missing: r,
++		resolved: i
++	};
++}
++function oe() {
++	return Array.from(k.keys()).sort();
++}
++function se() {
++	return k.size > 0;
++}
++function P(e) {
++	let t = N(e);
++	return t ? j.has(t) : !1;
++}
++function ce() {
++	k.clear(), A.clear(), j.clear();
++}
++//#endregion
++//#region src/shiki/register-default-languages.ts
++var le = [
++	{
++		id: "cpp",
++		aliases: ["c++"],
++		loader: T("cpp")
++	},
++	{
++		id: "java",
++		aliases: ["java"],
++		loader: T("java")
++	},
++	{
++		id: "c",
++		loader: T("c")
++	},
++	{
++		id: "csharp",
++		aliases: ["cs", "c#"],
++		loader: T("csharp")
++	},
++	{
++		id: "php",
++		loader: T("php")
++	},
++	{
++		id: "ruby",
++		loader: T("ruby")
++	},
++	{
++		id: "kotlin",
++		loader: T("kotlin")
++	},
++	{
++		id: "swift",
++		loader: T("swift")
++	},
++	{
++		id: "sql",
++		loader: T("sql")
++	},
++	{
++		id: "typescript",
++		aliases: ["ts"],
++		loader: () => import("@shikijs/langs/typescript")
++	},
++	{
++		id: "tsx",
++		loader: () => import("@shikijs/langs/tsx")
++	},
++	{
++		id: "javascript",
++		aliases: ["js"],
++		loader: () => import("@shikijs/langs/javascript")
++	},
++	{
++		id: "jsx",
++		loader: () => import("@shikijs/langs/jsx")
++	},
++	{
++		id: "json",
++		loader: () => import("@shikijs/langs/json")
++	},
++	{
++		id: "bash",
++		loader: () => import("@shikijs/langs/bash")
++	},
++	{
++		id: "shell",
++		aliases: [
++			"shellscript",
++			"shellsession",
++			"sh",
++			"zsh"
++		],
++		loader: () => import("@shikijs/langs/shellscript")
++	},
++	{
++		id: "python",
++		aliases: ["py"],
++		loader: () => import("@shikijs/langs/python")
++	},
++	{
++		id: "diff",
++		loader: () => import("@shikijs/langs/diff")
++	},
++	{
++		id: "markdown",
++		aliases: ["md"],
++		loader: () => import("@shikijs/langs/markdown")
++	},
++	{
++		id: "vue",
++		loader: () => import("@shikijs/langs/vue")
++	},
++	{
++		id: "html",
++		loader: () => import("@shikijs/langs/html")
++	},
++	{
++		id: "css",
++		loader: () => import("@shikijs/langs/css")
++	},
++	{
++		id: "go",
++		loader: () => import("@shikijs/langs/go")
++	},
++	{
++		id: "rust",
++		loader: () => import("@shikijs/langs/rust")
++	},
++	{
++		id: "yaml",
++		aliases: ["yml"],
++		loader: () => import("@shikijs/langs/yaml")
++	}
++], ue = !1;
++function de() {
++	ue || (ue = !0, ne(le.slice()));
++}
++//#endregion
++var V = null, H = null, De = [_, v], U = null, Oe = () => (U ||= g(), U), ke = () => {
++	if (!se()) return console.warn("[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting."), [];
++	let { inputs: e, missing: t, resolved: n } = ae(oe());
++	return t.length && console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(", ")}`), e.filter((e, t) => !w(e) && !P(n[t]));
++};
++async function Ae(e) {
++	if (!V) return !1;
++	let { inputs: t } = ae([e]);
++	return t.length ? (await V.loadLanguage(...t), !0) : !1;
++}
++async function je() {
++	if (!H) {
++		let e = ke();
++		H = h({
++			themes: De,
++			langs: e,
++			engine: Oe()
++		}).then((e) => (V = e, e));
++	}
++	return await H;
++}
++//#endregion
++
++export { ne as registerShikiLanguages, de as registerDefaultShikiLanguages, te as registerShikiLanguage, P as isLazyShikiLanguage, ie as excludeShikiLanguages, Ae as loadRegisteredShikiLanguage, ce as clearRegisteredShikiLanguages, je as useShikiHighlighter, re as unregisterShikiLanguage };
+diff --git a/node_modules/streamdown-vue/dist/shiki.d.ts b/node_modules/streamdown-vue/dist/shiki.d.ts
+new file mode 100644
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/shiki.d.ts
+@@ -0,0 +1,3 @@
++export { useShikiHighlighter, loadRegisteredShikiLanguage } from "./src/use-shiki-highlighter";
++export { registerShikiLanguage, registerShikiLanguages, unregisterShikiLanguage, excludeShikiLanguages, clearRegisteredShikiLanguages, isLazyShikiLanguage, type ShikiLanguageConfig } from "./src/shiki/registry";
++export { registerDefaultShikiLanguages } from "./src/shiki/register-default-languages";

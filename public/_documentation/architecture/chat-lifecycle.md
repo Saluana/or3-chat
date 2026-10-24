@@ -32,12 +32,27 @@ The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
 
-Host Markdown surfaces share `app/utils/stream-markdown.ts`. Its existing
-Streamdown language registry loads local syntax grammars when a code fence first
-uses them, rather than initializing every grammar on the first block. Code stays
-readable while its grammar loads; language aliases and unknown-language plain
-text fallback are retained. Keep this module behind the renderer's lazy boundary
-when adding another host Markdown surface.
+Host Markdown surfaces share `app/utils/stream-markdown.ts` and pass its stable
+`streamMarkdownComponents` map to Streamdown. Code highlighting runs in one
+browser worker shared by mounted host code blocks. The existing Streamdown
+registry loads local grammars on first use, with aliases and plain-text fallback.
+The renderer retains its toolbar, line numbers, escaping and theme handling;
+an older asynchronous result cannot overwrite newer code.
+
+Each block owns a worker lease. Its queued snapshot is replaced by newer input;
+there is one in-flight job and at most 64 queued jobs. The last unmount and HMR
+release the worker. Worker failure, a 20-second job timeout, queue overflow, or
+a block over 250,000 characters leaves readable plain code. Highlighting never
+changes the source text saved or copied. A failed worker is not repeatedly
+restarted while its existing owners remain mounted.
+
+Keep this module behind the renderer's lazy boundary when adding a host surface.
+Host grammar registrations belong in `app/utils/stream-markdown-languages.ts`,
+which runs in both realms; registering a grammar only on the UI thread does not
+configure the worker. The pinned dependency's `streamdown-vue/shiki` ESM entry
+shares its original registry without importing DOM-dependent Markdown code.
+The trusted plugin UI kit's raw `StreamMarkdown` and `highlighter()` APIs retain
+their existing main-thread behavior; custom renderers keep their own lifecycle.
 
 Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
 

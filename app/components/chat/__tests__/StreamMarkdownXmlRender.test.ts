@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { h } from 'vue';
+import { CodeBlock } from 'streamdown-vue';
 import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
 
 // NOTE: Current observed behavior: StreamMarkdown (and underlying parser) STRIPS unknown
@@ -11,6 +12,39 @@ import { StreamMarkdown, useShikiHighlighter } from '~/utils/stream-markdown';
 const SAMPLE_MD = `Here is some text before\n\n<or3-image hash="abc123def4567890abc123def4567890" alt="first"></or3-image>\n\nAnd another one: <or3-image hash="ffffffffffffffffffffffffffffffff" alt="second" data-extra="1"></or3-image>\n\nRegular **bold** markdown still works.`;
 
 describe('StreamMarkdown XML / custom element handling', () => {
+    it('keeps code controls and rejects stale asynchronous highlighting results', async () => {
+        const jobs: Array<{ code: string; resolve: (html: string) => void; reject: () => void }> = [];
+        const wrapper = mount(CodeBlock, {
+            props: {
+                code: 'first', language: 'ts', showLineNumbers: true,
+                theme: { light: 'github-light', dark: 'github-dark' },
+                highlight: ({ code }: { code: string }) => new Promise<string>((resolve, reject) => {
+                    jobs.push({ code, resolve, reject: () => reject(new Error('Unavailable')) });
+                }),
+            },
+        });
+        try {
+            await expect.poll(() => jobs.length).toBe(1);
+            expect(wrapper.find('[data-streamdown="code"]').text()).toBe('1first');
+            await wrapper.setProps({ code: 'second' });
+            await expect.poll(() => jobs.length).toBe(2);
+            jobs[1]!.resolve('<pre class="shiki"><code><span class="line">second</span></code></pre>');
+            await expect.poll(() => wrapper.find('pre.shiki code').text()).toBe('1second');
+            jobs[0]!.resolve('<pre class="shiki"><code><span class="line">first</span></code></pre>');
+            await Promise.resolve();
+            expect(wrapper.find('pre.shiki code').text()).toBe('1second');
+            expect(wrapper.find('[data-streamdown="copy-button"]').exists()).toBe(true);
+            expect(wrapper.find('[data-streamdown="download-button"]').exists()).toBe(true);
+            await wrapper.setProps({ code: '<script>literal</script>' });
+            await expect.poll(() => jobs.length).toBe(3);
+            jobs[2]!.reject();
+            await expect.poll(() => wrapper.find('[data-streamdown="code"]').text()).toBe('1<script>literal</script>');
+            expect(wrapper.find('script').exists()).toBe(false);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('loads syntax grammars on first use while retaining alias highlighting and plain fallback', async () => {
         const highlighter = await useShikiHighlighter();
         // Warming the renderer must not initialize grammars for unseen fences.

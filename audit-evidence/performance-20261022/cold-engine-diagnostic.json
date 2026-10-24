@@ -1,0 +1,2753 @@
+{
+  "baselineCommit": "09095004",
+  "method": "Isolated Bun-bundled installed Shiki 4.5.0, TypeScript grammar, GitHub light/dark; fresh local-only Chromium contexts, 4x CPU; identical 3-line code, first and repeated codeToHtml. Source fixture retained locally in .playwright-mcp/cold-engine-fixture.js. Diagnostic only, not integrated application timing.",
+  "profile": {
+    "reads": {},
+    "settledMutations": 4,
+    "mutationExamples": [
+      {
+        "type": "attributes",
+        "attribute": "disabled",
+        "message": "pane-audit-left-57",
+        "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+        "afterTransportDone": true
+      },
+      {
+        "type": "attributes",
+        "attribute": "disabled",
+        "message": "pane-audit-left-56",
+        "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+        "afterTransportDone": true
+      },
+      {
+        "type": "attributes",
+        "attribute": "disabled",
+        "message": "pane-audit-left-55",
+        "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+        "afterTransportDone": true
+      },
+      {
+        "type": "attributes",
+        "attribute": "disabled",
+        "message": "pane-audit-left-54",
+        "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+        "afterTransportDone": true
+      }
+    ],
+    "visibleIds": [
+      "pane-audit-left-54",
+      "pane-audit-left-55",
+      "pane-audit-left-56",
+      "pane-audit-left-57"
+    ],
+    "longTasks": [
+      64,
+      230,
+      58,
+      59
+    ],
+    "start": 4141.5,
+    "before": {
+      "scrollTop": 14674,
+      "id": "pane-audit-left-54",
+      "connected": true,
+      "offset": -126.25
+    },
+    "producedAtStart": {
+      "left": {
+        "produced": 0,
+        "start": 2740.9000000953674
+      },
+      "right": {
+        "produced": 0,
+        "start": 2387.4000000953674
+      }
+    },
+    "richMutations": {
+      "count": 0,
+      "examples": []
+    },
+    "richNodesRetained": [
+      {
+        "tag": "H3",
+        "connected": true
+      },
+      {
+        "tag": "PRE",
+        "connected": true
+      },
+      {
+        "tag": "SPAN",
+        "connected": true
+      }
+    ],
+    "after": {
+      "scrollTop": 14674,
+      "id": "pane-audit-left-54",
+      "connected": true,
+      "offset": -126.25
+    },
+    "elapsed": 2740.5,
+    "p95": 33.69999999999982,
+    "max": 260.09999999999945,
+    "frames": 175,
+    "states": {
+      "left": {
+        "produced": 2999,
+        "start": 2740.9000000953674,
+        "firstChunk": 4142.099999904633,
+        "end": 6029.299999952316,
+        "done": true
+      },
+      "right": {
+        "produced": 3000,
+        "start": 2387.4000000953674,
+        "firstChunk": 4142.099999904633,
+        "end": 6028.5,
+        "done": true
+      }
+    },
+    "overlapMs": 1886.4000000953674,
+    "savedExact": {
+      "left": true,
+      "right": true
+    },
+    "rightComplete": true,
+    "leftEndInitiallyOffscreen": true,
+    "bottoms": [
+      17075,
+      0
+    ],
+    "theme": "blank",
+    "zoom": "0.9",
+    "profile": {
+      "durationMs": 3981.665,
+      "topFrames": [
+        {
+          "name": "(program)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "selfMs": 2104.962,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "(idle)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "selfMs": 503.787,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "findNextMatchSync",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 44,
+          "column": 5987,
+          "selfMs": 63.098,
+          "ancestors": [
+            {
+              "name": "findNextMatchSync",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 20
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5538
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5510
+            },
+            {
+              "name": "f",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5493
+            },
+            {
+              "name": "__",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 4573
+            },
+            {
+              "name": "_tokenize",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 3778
+            },
+            {
+              "name": "tokenizeLine2",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 3608
+            },
+            {
+              "name": "B_",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 35,
+              "column": 12487
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 35,
+              "column": 12364
+            },
+            {
+              "name": "z_",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 35,
+              "column": 11822
+            }
+          ]
+        },
+        {
+          "name": "#a",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 184,
+          "column": 11683,
+          "selfMs": 34.445,
+          "ancestors": [
+            {
+              "name": "exec",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 184,
+              "column": 11178
+            },
+            {
+              "name": "findNextMatchSync",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 44,
+              "column": 5987
+            },
+            {
+              "name": "findNextMatchSync",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 20
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5538
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5510
+            },
+            {
+              "name": "f",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 5493
+            },
+            {
+              "name": "__",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 4573
+            },
+            {
+              "name": "_tokenize",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 3778
+            },
+            {
+              "name": "tokenizeLine2",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 3608
+            },
+            {
+              "name": "B_",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 35,
+              "column": 12487
+            }
+          ]
+        },
+        {
+          "name": "Yc",
+          "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+          "line": 5,
+          "column": 19589,
+          "selfMs": 26.496,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 16166
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "get value",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 21665
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 17102
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            }
+          ]
+        },
+        {
+          "name": "get",
+          "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+          "line": 2,
+          "column": 64595,
+          "selfMs": 23.174,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 26036
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 23348
+            },
+            {
+              "name": "t",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 44242
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "(garbage collector)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "selfMs": 16.901,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "ic",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 12449,
+          "selfMs": 11.851,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18546
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "El",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 55870,
+          "selfMs": 11.295,
+          "ancestors": [
+            {
+              "name": "bi",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 61639
+            },
+            {
+              "name": "C",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17558
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "k",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 21495
+            },
+            {
+              "name": "oe",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20977
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "Pe",
+          "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+          "line": 0,
+          "column": 89883,
+          "selfMs": 10.349,
+          "ancestors": [
+            {
+              "name": "Ze",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 91558
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 20353,
+          "selfMs": 9.695,
+          "ancestors": [
+            {
+              "name": "D",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20279
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            }
+          ]
+        },
+        {
+          "name": "zc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 31077,
+          "selfMs": 9.66,
+          "ancestors": [
+            {
+              "name": "Rc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 30672
+            },
+            {
+              "name": "il",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 37149
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BRL_AX_G.js",
+              "line": 2,
+              "column": 915
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 18546,
+          "selfMs": 9.483,
+          "ancestors": [
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            }
+          ]
+        },
+        {
+          "name": "ox",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 91,
+          "column": 5773,
+          "selfMs": 9.462,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 246,
+              "column": 7797
+            },
+            {
+              "name": "t.regexConstructor",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 246,
+              "column": 7786
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 44,
+              "column": 5615
+            },
+            {
+              "name": "ef",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 44,
+              "column": 5444
+            },
+            {
+              "name": "createScanner",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 246,
+              "column": 8007
+            },
+            {
+              "name": "createOnigScanner",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 35,
+              "column": 18611
+            },
+            {
+              "name": "createOnigScanner",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 34,
+              "column": 2377
+            },
+            {
+              "name": "zu",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 29778
+            },
+            {
+              "name": "_resolveAnchors",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 29660
+            },
+            {
+              "name": "compileAG",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 33,
+              "column": 29171
+            }
+          ]
+        },
+        {
+          "name": "Ze",
+          "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+          "line": 0,
+          "column": 91558,
+          "selfMs": 9.46,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "get",
+          "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+          "line": 5,
+          "column": 13572,
+          "selfMs": 9.365,
+          "ancestors": [
+            {
+              "name": "Yc",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 5,
+              "column": 19589
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 16166
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "get value",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 21665
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 17102
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            }
+          ]
+        },
+        {
+          "name": "query",
+          "url": "",
+          "line": 5809,
+          "column": 20,
+          "selfMs": 9.05,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "",
+              "line": 5807,
+              "column": 112
+            },
+            {
+              "name": "_cached",
+              "url": "",
+              "line": 5590,
+              "column": 9
+            },
+            {
+              "name": "_queryCSS",
+              "url": "",
+              "line": 5806,
+              "column": 11
+            },
+            {
+              "name": "_querySimple",
+              "url": "",
+              "line": 5685,
+              "column": 14
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 5628,
+              "column": 116
+            },
+            {
+              "name": "_cached",
+              "url": "",
+              "line": 5590,
+              "column": 9
+            },
+            {
+              "name": "query",
+              "url": "",
+              "line": 5624,
+              "column": 7
+            },
+            {
+              "name": "query",
+              "url": "",
+              "line": 5837,
+              "column": 7
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 5799,
+              "column": 125
+            },
+            {
+              "name": "_cached",
+              "url": "",
+              "line": 5590,
+              "column": 9
+            }
+          ]
+        },
+        {
+          "name": "D",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 20279,
+          "selfMs": 8.856,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "ze",
+          "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+          "line": 0,
+          "column": 90707,
+          "selfMs": 8.306,
+          "ancestors": [
+            {
+              "name": "oo",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 22006
+            },
+            {
+              "name": "so",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 22072
+            },
+            {
+              "name": "n",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 62633
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "te",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 17778,
+          "selfMs": 7.855,
+          "ancestors": [
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "k",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 21495
+            },
+            {
+              "name": "oe",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20977
+            },
+            {
+              "name": "te",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17778
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 275,
+          "column": 3744,
+          "selfMs": 7.181,
+          "ancestors": [
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            }
+          ]
+        },
+        {
+          "name": "Rt",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 0,
+          "column": 15577,
+          "selfMs": 6.987,
+          "ancestors": [
+            {
+              "name": "Lt",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 0,
+              "column": 15509
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 12332
+            },
+            {
+              "name": "ta",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 2523
+            },
+            {
+              "name": "t.parser",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 14078
+            },
+            {
+              "name": "parse",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 0,
+              "column": 12175
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 275,
+              "column": 3744
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            }
+          ]
+        },
+        {
+          "name": "Bc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 31129,
+          "selfMs": 6.616,
+          "ancestors": [
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "ee",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17399
+            },
+            {
+              "name": "S",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16554
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            }
+          ]
+        },
+        {
+          "name": "sc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 12930,
+          "selfMs": 6.527,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20353
+            },
+            {
+              "name": "D",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20279
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            }
+          ]
+        },
+        {
+          "name": "Ss",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 5957,
+          "selfMs": 6.263,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 97119
+            },
+            {
+              "name": "bs",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 5186
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 96558
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "ownKeys",
+          "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+          "line": 5,
+          "column": 14401,
+          "selfMs": 6.256,
+          "ancestors": [
+            {
+              "name": "Yc",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 5,
+              "column": 19589
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 16166
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "la",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 6075
+            },
+            {
+              "name": "get value",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 21665
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/qVis9eJT.js",
+              "line": 10,
+              "column": 17102
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BVCvZtB9.js",
+          "line": 3,
+          "column": 8897,
+          "selfMs": 6.253,
+          "ancestors": [
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            }
+          ]
+        },
+        {
+          "name": "continue",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "selfMs": 6.194,
+          "ancestors": [
+            {
+              "name": "n",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 23365
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 23348
+            },
+            {
+              "name": "t",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 44242
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 20353,
+          "selfMs": 6.021,
+          "ancestors": [
+            {
+              "name": "D",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20279
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            }
+          ]
+        },
+        {
+          "name": "D",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 20279,
+          "selfMs": 5.732,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "runIfDirty",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15675
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/Du8Yp2yS.js",
+          "line": 3,
+          "column": 47323,
+          "selfMs": 5.522,
+          "ancestors": [
+            {
+              "name": "Ss",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 5957
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 97119
+            },
+            {
+              "name": "bs",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 5186
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 96558
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            }
+          ]
+        },
+        {
+          "name": "sc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 12930,
+          "selfMs": 5.329,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20353
+            },
+            {
+              "name": "D",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20279
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "k",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 21495
+            },
+            {
+              "name": "oe",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20977
+            }
+          ]
+        },
+        {
+          "name": "querySelectorAll",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "selfMs": 5.246,
+          "ancestors": [
+            {
+              "name": "query",
+              "url": "",
+              "line": 5809,
+              "column": 20
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 5807,
+              "column": 112
+            },
+            {
+              "name": "_cached",
+              "url": "",
+              "line": 5590,
+              "column": 9
+            },
+            {
+              "name": "_queryCSS",
+              "url": "",
+              "line": 5806,
+              "column": 11
+            },
+            {
+              "name": "_querySimple",
+              "url": "",
+              "line": 5685,
+              "column": 14
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 5628,
+              "column": 116
+            },
+            {
+              "name": "_cached",
+              "url": "",
+              "line": 5590,
+              "column": 9
+            },
+            {
+              "name": "query",
+              "url": "",
+              "line": 5624,
+              "column": 7
+            },
+            {
+              "name": "query",
+              "url": "",
+              "line": 5837,
+              "column": 7
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 5799,
+              "column": 125
+            }
+          ]
+        },
+        {
+          "name": "item-key",
+          "url": "http://127.0.0.1:3147/_nuxt/Du8Yp2yS.js",
+          "line": 3,
+          "column": 46861,
+          "selfMs": 5.179,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 97119
+            },
+            {
+              "name": "bs",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 5186
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 96558
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 282,
+          "column": 1328,
+          "selfMs": 4.746,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "_",
+          "url": "http://127.0.0.1:3147/_nuxt/BBOdS4hT.js",
+          "line": 0,
+          "column": 68816,
+          "selfMs": 4.693,
+          "ancestors": [
+            {
+              "name": "ni",
+              "url": "http://127.0.0.1:3147/_nuxt/BBOdS4hT.js",
+              "line": 0,
+              "column": 68374
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "getTextAlternativeInternal",
+          "url": "",
+          "line": 3822,
+          "column": 35,
+          "selfMs": 4.583,
+          "ancestors": [
+            {
+              "name": "computeAccessibleNameComposite",
+              "url": "",
+              "line": 3698,
+              "column": 39
+            },
+            {
+              "name": "getElementAccessibleNameText",
+              "url": "",
+              "line": 3726,
+              "column": 37
+            },
+            {
+              "name": "match",
+              "url": "",
+              "line": 5463,
+              "column": 16
+            },
+            {
+              "name": "query",
+              "url": "",
+              "line": 5503,
+              "column": 16
+            },
+            {
+              "name": "queryRole",
+              "url": "",
+              "line": 5461,
+              "column": 18
+            },
+            {
+              "name": "queryAll",
+              "url": "",
+              "line": 5519,
+              "column": 14
+            },
+            {
+              "name": "_queryEngineAll",
+              "url": "",
+              "line": 7231,
+              "column": 17
+            },
+            {
+              "name": "querySelectorAll",
+              "url": "",
+              "line": 7183,
+              "column": 18
+            },
+            {
+              "name": "",
+              "url": "",
+              "line": 0,
+              "column": 0
+            },
+            {
+              "name": "evaluate",
+              "url": "",
+              "line": 361,
+              "column": 10
+            }
+          ]
+        },
+        {
+          "name": "Wc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 32096,
+          "selfMs": 4.575,
+          "ancestors": [
+            {
+              "name": "x",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16443
+            },
+            {
+              "name": "y",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15699
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "x",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16443
+            },
+            {
+              "name": "y",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15699
+            },
+            {
+              "name": "v",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15483
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "x",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 16443
+            },
+            {
+              "name": "y",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 15699
+            }
+          ]
+        },
+        {
+          "name": "Bc",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 2,
+          "column": 31129,
+          "selfMs": 4.536,
+          "ancestors": [
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "k",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 21495
+            },
+            {
+              "name": "oe",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20977
+            },
+            {
+              "name": "te",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 17778
+            }
+          ]
+        },
+        {
+          "name": "Fc",
+          "url": "http://127.0.0.1:3147/_nuxt/CajQ8PtB.js",
+          "line": 4,
+          "column": 28437,
+          "selfMs": 4.514,
+          "ancestors": [
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "set",
+          "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+          "line": 0,
+          "column": 18986,
+          "selfMs": 4.395,
+          "ancestors": [
+            {
+              "name": "sc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 12930
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20353
+            },
+            {
+              "name": "D",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 20279
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            },
+            {
+              "name": "run",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 15271
+            },
+            {
+              "name": "ae",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18495
+            },
+            {
+              "name": "w",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 18158
+            },
+            {
+              "name": "m",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 14575
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            }
+          ]
+        },
+        {
+          "name": "Ee",
+          "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+          "line": 0,
+          "column": 87801,
+          "selfMs": 4.368,
+          "ancestors": [
+            {
+              "name": "nt",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 92834
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/27r-nKrD.js",
+              "line": 0,
+              "column": 89352
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "V",
+          "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+          "line": 2,
+          "column": 8380,
+          "selfMs": 4.364,
+          "ancestors": [
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 4980
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 23348
+            },
+            {
+              "name": "t",
+              "url": "http://127.0.0.1:3147/_nuxt/BzritqgS.js",
+              "line": 2,
+              "column": 44242
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "",
+          "url": "http://127.0.0.1:3147/_nuxt/BbzqZ3r5.js",
+          "line": 0,
+          "column": 176,
+          "selfMs": 4.288,
+          "ancestors": [
+            {
+              "name": "Qr",
+              "url": "http://127.0.0.1:3147/_nuxt/BbTchFK0.js",
+              "line": 0,
+              "column": 820
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 282,
+              "column": 1328
+            },
+            {
+              "name": "(root)",
+              "url": "",
+              "line": -1,
+              "column": -1
+            }
+          ]
+        },
+        {
+          "name": "ia",
+          "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+          "line": 2,
+          "column": 13381,
+          "selfMs": 4.285,
+          "ancestors": [
+            {
+              "name": "ra",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 13290
+            },
+            {
+              "name": "ra",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 13290
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 2584
+            },
+            {
+              "name": "ta",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 2523
+            },
+            {
+              "name": "t.parser",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 2,
+              "column": 14078
+            },
+            {
+              "name": "parse",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 0,
+              "column": 12175
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BYLosAiq.js",
+              "line": 275,
+              "column": 3744
+            },
+            {
+              "name": "nc",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 11667
+            },
+            {
+              "name": "",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 2,
+              "column": 19140
+            },
+            {
+              "name": "_a",
+              "url": "http://127.0.0.1:3147/_nuxt/BkoQwElI.js",
+              "line": 0,
+              "column": 7262
+            }
+          ]
+        }
+      ]
+    },
+    "leftRevealed": true
+  },
+  "engines": [
+    {
+      "kind": "js",
+      "initializeMs": 9.800000190734863,
+      "firstHighlightMs": 202.29999995231628,
+      "warmHighlightMs": 3.200000047683716,
+      "totalMs": 215.30000019073486,
+      "loadMs": 18.5,
+      "tasks": [
+        {
+          "start": 44.09999990463257,
+          "duration": 212
+        }
+      ],
+      "resources": [
+        {
+          "name": "favicon.ico",
+          "bytes": 0,
+          "duration": 1.2000000476837158
+        },
+        {
+          "name": "cold-engine-fixture.js",
+          "bytes": 311850,
+          "duration": 4.3999998569488525
+        },
+        {
+          "name": "cold-engine-fixture-vfjvdp87.js",
+          "bytes": 449,
+          "duration": 1.1000001430511475
+        },
+        {
+          "name": "engine-javascript-dwqr5dpw.js",
+          "bytes": 58875,
+          "duration": 1
+        }
+      ],
+      "htmlLength": 2295,
+      "htmlMatchesFirst": true
+    },
+    {
+      "kind": "wasm",
+      "initializeMs": 75.29999995231628,
+      "firstHighlightMs": 207.40000009536743,
+      "warmHighlightMs": 5,
+      "totalMs": 287.7000000476837,
+      "loadMs": 18.100000143051147,
+      "tasks": [
+        {
+          "start": 43.90000009536743,
+          "duration": 56
+        }
+      ],
+      "resources": [
+        {
+          "name": "favicon.ico",
+          "bytes": 0,
+          "duration": 1.2000000476837158
+        },
+        {
+          "name": "cold-engine-fixture.js",
+          "bytes": 311850,
+          "duration": 4
+        },
+        {
+          "name": "cold-engine-fixture-vfjvdp87.js",
+          "bytes": 449,
+          "duration": 1.2999999523162842
+        },
+        {
+          "name": "engine-oniguruma-mtapbrjz.js",
+          "bytes": 7692,
+          "duration": 2.299999952316284
+        },
+        {
+          "name": "wasm-e86e70yh.js",
+          "bytes": 622386,
+          "duration": 3.9000000953674316
+        }
+      ],
+      "htmlLength": 2295,
+      "htmlMatchesFirst": true
+    },
+    {
+      "kind": "js",
+      "initializeMs": 11.599999904632568,
+      "firstHighlightMs": 216.29999995231628,
+      "warmHighlightMs": 3.700000047683716,
+      "totalMs": 231.59999990463257,
+      "loadMs": 17.200000047683716,
+      "tasks": [
+        {
+          "start": 37.40000009536743,
+          "duration": 228
+        }
+      ],
+      "resources": [
+        {
+          "name": "favicon.ico",
+          "bytes": 0,
+          "duration": 1.5
+        },
+        {
+          "name": "cold-engine-fixture.js",
+          "bytes": 311850,
+          "duration": 1.7000000476837158
+        },
+        {
+          "name": "cold-engine-fixture-vfjvdp87.js",
+          "bytes": 449,
+          "duration": 1.7000000476837158
+        },
+        {
+          "name": "engine-javascript-dwqr5dpw.js",
+          "bytes": 58875,
+          "duration": 2.0999999046325684
+        }
+      ],
+      "htmlLength": 2295,
+      "htmlMatchesFirst": true
+    },
+    {
+      "kind": "wasm",
+      "initializeMs": 69.5,
+      "firstHighlightMs": 215.80000019073486,
+      "warmHighlightMs": 3.799999952316284,
+      "totalMs": 289.10000014305115,
+      "loadMs": 23.299999952316284,
+      "tasks": [
+        {
+          "start": 48.700000047683716,
+          "duration": 54
+        }
+      ],
+      "resources": [
+        {
+          "name": "favicon.ico",
+          "bytes": 0,
+          "duration": 0.7000000476837158
+        },
+        {
+          "name": "cold-engine-fixture.js",
+          "bytes": 311850,
+          "duration": 7.5
+        },
+        {
+          "name": "cold-engine-fixture-vfjvdp87.js",
+          "bytes": 449,
+          "duration": 2.299999952316284
+        },
+        {
+          "name": "engine-oniguruma-mtapbrjz.js",
+          "bytes": 7692,
+          "duration": 1.4000000953674316
+        },
+        {
+          "name": "wasm-e86e70yh.js",
+          "bytes": 622386,
+          "duration": 2.799999952316284
+        }
+      ],
+      "htmlLength": 2295,
+      "htmlMatchesFirst": true
+    }
+  ],
+  "decision": "Do not adopt the WebAssembly engine: first-highlight wall time remains about 200ms, initialization increases and the engine/wasm payload is about 630KB versus 59KB for the JS engine. Output is identical for this sample. Worker offloading is the next candidate.",
+  "reference": "https://shiki.style/guide/regex-engines"
+}

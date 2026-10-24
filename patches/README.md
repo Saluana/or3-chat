@@ -34,11 +34,24 @@ layout. The patch maps HAST `className` to Vue's `class` prop, whose normalizati
 produces comparable strings. Other attributes, parsed trees, security filtering,
 component overrides, and actual formula edits retain their existing paths.
 
+The patch also exposes the existing Shiki implementation as a DOM-free
+`streamdown-vue/shiki` ESM entry. The renderer imports that same registry and
+highlighter rather than creating a second copy. Remote grammar resolution
+recognizes browser workers as browser environments. This avoids pulling the
+Markdown parser's browser-only character decoder into a worker.
+
+`CodeBlock` gains an optional asynchronous `highlight({ code, language, theme })`
+prop. Its output passes through the existing line-number/theme/selection path;
+rejection uses the existing escaped plain-code fallback. The normal path remains
+when the prop is absent, and unmount invalidates pending results. Host components
+use this hook through Streamdown's existing `components.codeblock` override;
+the trusted plugin UI kit retains its raw renderer/highlighter APIs.
+
 This targets the ESM renderer used by Nuxt, including all host Markdown surfaces.
-The CommonJS entry is unused by this application and is unchanged. The existing
+The new Shiki subpath is ESM-only. The CommonJS renderer is unused by this application and is unchanged. The existing
 install, Docker, and generated-project patch steps apply this pinned patch.
 Remove it after qualifying the same behavior in an upstream release with the
-real-renderer `StreamMarkdownXmlRender.test.ts` regression and concurrent rich
+real-renderer `StreamMarkdownXmlRender.test.ts` regression, worker ownership and browser fallback tests, and concurrent rich
 stream probes in `audit-evidence/performance-20261022/`.
 
 ## or3-scroll 0.1.3
