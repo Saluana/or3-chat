@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "ebd2cfdb00ca9c2e5b6d000001cbbbca3f7bf3d9b165b0201b02ae435e8d62db",
+      "apiSha256": "328361d8259ffebf654b4ee1bb0414d59a349e620024c67f48ae7a8f388c9f45",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2935,7 +2935,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 90,
+              "line": 92,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2949,9 +2949,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 66,
+              "line": 67,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    titleGenerationModel: string;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
             }
           ]
         },
@@ -3003,7 +3003,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 80,
+              "line": 82,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CapturedContextPreference {\n    readonly db: Or3DB;\n    readonly workspaceGeneration: number;\n    readonly maxContextTokens: number | null;\n}"
             }
@@ -3277,9 +3277,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 92,
+              "line": 94,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    titleGenerationModel: DEFAULT_TITLE_MODEL,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
             }
           ]
         },
@@ -4141,7 +4141,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 88,
+              "line": 90,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5735,7 +5735,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 127,
+                "line": 130,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5744,7 +5744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 127,
+              "line": 130,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6631,7 +6631,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 288,
+                "line": 292,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6640,7 +6640,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 288,
+              "line": 292,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6683,7 +6683,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 216,
+                "line": 217,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6692,7 +6692,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 216,
+              "line": 217,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
