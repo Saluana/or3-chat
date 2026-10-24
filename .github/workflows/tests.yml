@@ -152,11 +152,12 @@ jobs:
       - name: Install Chromium for deterministic chat tool tests
         run: bunx playwright install --with-deps chromium
       - name: Verify chat tool lifecycle and recovery
+        id: chat_tools
         run: bun run test:e2e:chat-tools
       - name: Verify authenticated Cloud tools and claim settlement
         run: bun run test:e2e:chat-tools:cloud
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && (steps.chat_tools.outcome == 'success' || steps.chat_tools.outcome == 'failure')
         with:
           name: chat-tool-reliability
           path: |
