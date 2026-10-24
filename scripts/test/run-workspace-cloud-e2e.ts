@@ -64,7 +64,7 @@ try {
     await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider, providers }));
     const watch = process.argv.includes('--watch');
     const command = watch ? ['bun', 'run', 'dev', '--host', '127.0.0.1', '--port', String(port)]
-        : ['bunx', 'playwright', 'test', 'tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile', '--workers=1', '--reporter=line', '--trace=on'];
+        : ['bunx', 'playwright', 'test', 'tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile', '--workers=1', '--reporter=line', '--trace=on', '--output', join(root, 'test-results')];
     if (watch) console.log(`Disposable cloud Chrome profile: http://127.0.0.1:${port}/`);
     const child = Bun.spawn(command, {
         cwd: root, stdout: 'inherit', stderr: 'inherit', env: {
