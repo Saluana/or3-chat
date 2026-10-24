@@ -18,6 +18,12 @@ History delivery and cleanup batches are bounded by bytes as well as rows, so
 large retained snapshots do not prevent recovery. Source scaffolds require
 Convex SDK 1.31.7 or newer for the size-accounting helper.
 
+Provider **0.0.24** and its matching backend derive missing message ordering
+keys during background admission. Earlier backends can reject pending assistant
+messages with `Object is missing the required field order_key`, leaving the
+reply loading while title generation succeeds. Update the provider and deploy
+its backend templates together; existing message ordering keys are preserved.
+
 - Convex sync provider (direct mode)
 - Consistent materialized snapshot pages pinned to one server high-watermark
 - Convex storage provider
@@ -30,6 +36,11 @@ Convex SDK 1.31.7 or newer for the size-accounting helper.
 - Private workspace host settings with atomic compare-and-set (plugin
   enablement, consent, access policy, setup revisions, AI spend ledger)
 - Private plugin connection credentials and revision-bound test evidence
+
+With `or3-provider-convex@0.0.23` or newer, chat and document titles preserve
+their optional `title_source` across sync, including manual names and generated
+title states. Update the provider and its backend templates together; an older
+schema can reject otherwise valid edits.
 
 ## Install
 
