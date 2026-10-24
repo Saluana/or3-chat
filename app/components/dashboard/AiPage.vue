@@ -3,8 +3,8 @@
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
         <p class="dashboard-page-description">
-            Defaults for new chats. You can override them in each chat. Changes
-            save automatically.
+            AI preferences save automatically. Chat model defaults can be
+            overridden in each chat.
         </p>
 
         <section
@@ -212,6 +212,8 @@
             </div>
         </section>
 
+        <TitleModelSetting />
+
         <!-- Native generations capture this workspace preference at admission. -->
         <section
             id="dashboard-ai-context-section"
@@ -295,6 +297,7 @@ import { sanitizeModelVariant } from '~~/shared/openrouter/model-variants';impor
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import AiSaveStatus from './AiSaveStatus.vue';
+import TitleModelSetting from './TitleModelSetting.vue';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 
 const liveStatus = ref<HTMLElement | null>(null);

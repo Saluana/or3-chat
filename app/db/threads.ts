@@ -103,6 +103,7 @@ export async function createThreadInDb(
     // Validate against full schema so required defaults (status/pinned/etc.) are present
     const value = parseOrThrow(ThreadSchema, {
         ...prepared,
+        title_source: prepared.title_source ?? (!prepared.parent_thread_id && (!prepared.title || /^(?:New Thread|New Chat)$/i.test(prepared.title)) ? 'temporary' : undefined),
         clock: nextClock(prepared.clock),
         hlc: prepared.hlc ?? generateHLC(),
     });
@@ -164,6 +165,7 @@ export async function upsertThread(value: Thread): Promise<void> {
         });
         const next = {
             ...validated,
+            title_source: existing && validated.title !== existing.title ? 'manual' as const : validated.title_source,
             clock: nextClock(existing?.clock ?? validated.clock),
             hlc: validated.hlc ?? generateHLC(),
         };
