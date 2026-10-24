@@ -29,6 +29,12 @@ Use the sidebar's **Disconnect** control to clear the personal key from OR3's pe
 
 ## Troubleshooting
 
+Cloud checks saved connection metadata after the page mounts and when it comes
+back online or becomes visible. A failed background check does not show a toast
+on each load or over the connection dialog. Errors from **Connect**, saving a
+key, or an approved legacy-key migration remain visible. A failed migration
+keeps the browser copy so you can retry the connection safely.
+
 | Symptom | Recovery |
 | --- | --- |
 | OR3 asks you to sign in | The Cloud instance requires an authenticated session before linking OpenRouter. |
@@ -40,6 +46,16 @@ Use the sidebar's **Disconnect** control to clear the personal key from OR3's pe
 | Connection vanishes after reload | Stay on the same browser profile and origin. Check that storage is available and saving the key succeeded. |
 
 Localhost is suitable for source development. Public deployments should use HTTPS so browser cryptography and redirects work reliably. If the app reports a network or content-security-policy error, fix that cause before beginning another authorization flow; repeatedly reusing a failed code will not repair it.
+
+In Cloud mode, the server validates an account-bound, ten-minute HttpOnly
+transaction cookie and exchanges the code before saving the key in the account's
+secret vault. A failed callback logs `[openrouter-oauth] Connection failed` with
+the stage: `callback-validation`, `code-exchange` (or its HTTP status),
+`exchange-response`, or `credential-storage`. It also reports whether the session,
+workspace, and transaction cookie were present. Codes, cookie values, API keys,
+and upstream response bodies are excluded. Check these server diagnostics and
+deep provider health to distinguish a rejected callback from an exchange or
+credential-storage outage.
 
 The failure page offers **Try again** and **Back to OR3**. **Continue** appears only after a successful connection. Source developers preparing a manual preview must build with `OR3_PRODUCTION_JOURNEY_TEST_HARNESS=false`; that harness replaces OpenRouter with a local test endpoint for automated journeys and is unsuitable for real account connections. If network requests go to `/api/__or3-e2e`, rebuild with the harness disabled and reload the preview.
 
