@@ -25,7 +25,7 @@ test.skip(
     'Performance budgets require OR3_E2E_PERFORMANCE=true'
 );
 
-test('streaming DOM changes keep unrelated focus groups out of document-wide style invalidation', async ({ page, context }, info) => {
+test('streaming DOM changes keep inactive UI out of document-wide style invalidation', async ({ page, context }, info) => {
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     await page.goto('/chat');
@@ -75,10 +75,14 @@ test('streaming DOM changes keep unrelated focus groups out of document-wide sty
             && event.args?.data?.nodeName?.startsWith('HTML')
             && event.args.data.reason === 'Invalidation set invalidates subtree'
             && event.args.data.selectors?.some(rule => rule.selector.includes('group-has-focus-visible')));
+        const moreInvalidations = events.filter(event => event.name === 'StyleInvalidatorInvalidationTracking'
+            && event.args?.data?.selectors?.some(rule => rule.selector.includes('.more-sheet-root')));
         await info.attach('stream-style-scope', { contentType: 'application/json', body: JSON.stringify({
             mutationFrames: 12, styleUpdates, globalInvalidations: globalInvalidations.map(event => event.args!.data),
+            moreInvalidations: moreInvalidations.map(event => event.args!.data),
         }) });
         expect(globalInvalidations).toHaveLength(0);
+        expect(moreInvalidations, 'the closed mobile sheet must not restyle unrelated controls').toHaveLength(0);
     } finally {
         if (tracing) await cdp.send('Tracing.end').catch(() => {});
         await cdp.detach();

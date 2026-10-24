@@ -491,7 +491,7 @@
 import { computed, provide, ref, watch } from 'vue';
 import { useBottomSheetDrag } from '~/composables/ui/useBottomSheetDrag';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
-import { navigateTo, useRuntimeConfig, useToast } from '#imports';
+import { navigateTo, useHead, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
@@ -623,6 +623,12 @@ const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
 
 const createOpen = ref(false);
 const moreOpen = ref(false);
+// Publish the sheet state once per open/close. A body :has() query otherwise
+// invalidates unrelated portaled controls on every streaming DOM insertion.
+// Nuxt releases this owned entry when the mobile navigation unmounts.
+useHead(() => ({
+    bodyAttrs: { 'data-or3-more-open': moreOpen.value ? '' : undefined },
+}));
 const moreDialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const infoOpen = ref(false);
 const sheetPanelRef = ref<HTMLElement | null>(null);
@@ -1405,8 +1411,8 @@ const createItemProps = computed(() => {
 
 /* Any modal launched from More is a body-level Reka portal. Lift both its
    scrim and dialog above the sheet while the sheet remains mounted. */
-body:has(.more-sheet-root) > [data-slot='overlay'],
-body:has(.more-sheet-root) > [data-slot='content'][role='dialog'] {
+body[data-or3-more-open] > [data-slot='overlay'],
+body[data-or3-more-open] > [data-slot='content'][role='dialog'] {
     z-index: 100 !important;
 }
 </style>

@@ -1,0 +1,1024 @@
+{
+  "method": "Same production build; alternate fresh disposable contexts; baseline restores only the two original body:has(.more-sheet-root) selector conditions through CSSOM; 4x CPU, Blank 90%, two synchronized ~3KB TypeScript/math responses, 120 history messages in each pane. No tracing or DB instrumentation.",
+  "fourX": [
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          81,
+          89,
+          211,
+          57,
+          52,
+          51,
+          50,
+          57,
+          59,
+          50,
+          62,
+          50,
+          52,
+          51,
+          54,
+          50,
+          52,
+          52,
+          51,
+          61
+        ],
+        "start": 3152.5,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2980.7000000476837
+          },
+          "right": {
+            "produced": 0,
+            "start": 2510.2999999523163
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 3868.7000000476837,
+        "p95": 58.399999999999636,
+        "max": 233.5999999999999,
+        "frames": 180,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2980.7000000476837,
+            "firstChunk": 3153.100000143051,
+            "end": 6143.299999952316,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2510.2999999523163,
+            "firstChunk": 3152.7000000476837,
+            "end": 6142.5,
+            "done": true
+          }
+        },
+        "overlapMs": 2989.399999856949,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          56,
+          207,
+          60,
+          68
+        ],
+        "start": 2867.399999856949,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2703.2000000476837
+          },
+          "right": {
+            "produced": 0,
+            "start": 2299.2000000476837
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2691.5,
+        "p95": 33.40000000000009,
+        "max": 256.9000000000001,
+        "frames": 182,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2703.2000000476837,
+            "firstChunk": 2868,
+            "end": 4690.299999952316,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2299.2000000476837,
+            "firstChunk": 2867.7999999523163,
+            "end": 4675.899999856949,
+            "done": true
+          }
+        },
+        "overlapMs": 1807.8999998569489,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      }
+    },
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          75,
+          84,
+          212,
+          58,
+          54,
+          50,
+          51,
+          51,
+          56,
+          50,
+          61,
+          64,
+          54,
+          55,
+          51,
+          50,
+          54,
+          54,
+          51,
+          67
+        ],
+        "start": 3213.0999999046326,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 3050.0999999046326
+          },
+          "right": {
+            "produced": 0,
+            "start": 2576.5
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 3876.5999999046326,
+        "p95": 58.5,
+        "max": 225.30000000000018,
+        "frames": 180,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 3050.0999999046326,
+            "firstChunk": 3213.5999999046326,
+            "end": 6191.099999904633,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2576.5,
+            "firstChunk": 3213.5999999046326,
+            "end": 6190.299999952316,
+            "done": true
+          }
+        },
+        "overlapMs": 2976.7000000476837,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          68,
+          204,
+          53,
+          50,
+          59
+        ],
+        "start": 2839,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2675.9000000953674
+          },
+          "right": {
+            "produced": 0,
+            "start": 2316
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2535.7999999523163,
+        "p95": 33.30000000000018,
+        "max": 201.79999999999973,
+        "frames": 180,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2675.9000000953674,
+            "firstChunk": 2839.7000000476837,
+            "end": 4559.100000143051,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2316,
+            "firstChunk": 2839.100000143051,
+            "end": 4544,
+            "done": true
+          }
+        },
+        "overlapMs": 1704.2999999523163,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      }
+    },
+    {
+      "baseline": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          74,
+          83,
+          210,
+          58,
+          52,
+          51,
+          58,
+          50,
+          60,
+          63,
+          50,
+          54,
+          53,
+          51,
+          50,
+          52,
+          51,
+          54,
+          51,
+          63
+        ],
+        "start": 3177.4000000953674,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 3012.2999999523163
+          },
+          "right": {
+            "produced": 0,
+            "start": 2533.7000000476837
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 3920.899999856949,
+        "p95": 58.5,
+        "max": 226.4000000000001,
+        "frames": 179,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 3012.2999999523163,
+            "firstChunk": 3178,
+            "end": 6192.5,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2533.7000000476837,
+            "firstChunk": 3177.9000000953674,
+            "end": 6191.799999952316,
+            "done": true
+          }
+        },
+        "overlapMs": 3013.7999999523163,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      },
+      "after": {
+        "reads": {},
+        "settledMutations": 4,
+        "mutationExamples": [
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-57",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-56",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-55",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          },
+          {
+            "type": "attributes",
+            "attribute": "disabled",
+            "message": "pane-audit-left-54",
+            "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+            "afterTransportDone": true
+          }
+        ],
+        "visibleIds": [
+          "pane-audit-left-54",
+          "pane-audit-left-55",
+          "pane-audit-left-56",
+          "pane-audit-left-57"
+        ],
+        "longTasks": [
+          68,
+          209,
+          54,
+          51,
+          61
+        ],
+        "start": 2827.899999856949,
+        "before": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "producedAtStart": {
+          "left": {
+            "produced": 0,
+            "start": 2656.899999856949
+          },
+          "right": {
+            "produced": 0,
+            "start": 2293.2000000476837
+          }
+        },
+        "richMutations": {
+          "count": 0,
+          "examples": []
+        },
+        "richNodesRetained": [
+          {
+            "tag": "H3",
+            "connected": true
+          },
+          {
+            "tag": "PRE",
+            "connected": true
+          },
+          {
+            "tag": "SPAN",
+            "connected": true
+          }
+        ],
+        "after": {
+          "scrollTop": 14674,
+          "id": "pane-audit-left-54",
+          "connected": true,
+          "offset": -126.25
+        },
+        "elapsed": 2583.2000000476837,
+        "p95": 33.399999999999636,
+        "max": 273.0999999999999,
+        "frames": 171,
+        "states": {
+          "left": {
+            "produced": 2999,
+            "start": 2656.899999856949,
+            "firstChunk": 2828.7000000476837,
+            "end": 4573.200000047684,
+            "done": true
+          },
+          "right": {
+            "produced": 3000,
+            "start": 2293.2000000476837,
+            "firstChunk": 2828,
+            "end": 4572.299999952316,
+            "done": true
+          }
+        },
+        "overlapMs": 1743.5999999046326,
+        "savedExact": {
+          "left": true,
+          "right": true
+        },
+        "rightComplete": true,
+        "leftEndInitiallyOffscreen": true,
+        "bottoms": [
+          17075,
+          0
+        ],
+        "theme": "blank",
+        "zoom": "0.9",
+        "leftRevealed": true
+      }
+    }
+  ],
+  "normalCPU": {
+    "after": {
+      "reads": {},
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [
+        50
+      ],
+      "start": 2149.5,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 1985.7000000476837
+        },
+        "right": {
+          "produced": 0,
+          "start": 1894.5999999046326
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 1424.5,
+      "p95": 9.800000000000182,
+      "max": 48.600000000000364,
+      "frames": 162,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 1985.7000000476837,
+          "firstChunk": 2149.7000000476837,
+          "end": 3026.7999999523163,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 1894.5999999046326,
+          "firstChunk": 2149.5999999046326,
+          "end": 2995.5,
+          "done": true
+        }
+      },
+      "overlapMs": 845.7999999523163,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    },
+    "baseline": {
+      "reads": {},
+      "settledMutations": 4,
+      "mutationExamples": [
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-57",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-56",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-55",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        },
+        {
+          "type": "attributes",
+          "attribute": "disabled",
+          "message": "pane-audit-left-54",
+          "target": "<button data-v-90b33de1=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+          "afterTransportDone": true
+        }
+      ],
+      "visibleIds": [
+        "pane-audit-left-54",
+        "pane-audit-left-55",
+        "pane-audit-left-56",
+        "pane-audit-left-57"
+      ],
+      "longTasks": [],
+      "start": 2244.9000000953674,
+      "before": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "producedAtStart": {
+        "left": {
+          "produced": 0,
+          "start": 2084.5
+        },
+        "right": {
+          "produced": 0,
+          "start": 1958.5999999046326
+        }
+      },
+      "richMutations": {
+        "count": 0,
+        "examples": []
+      },
+      "richNodesRetained": [
+        {
+          "tag": "H3",
+          "connected": true
+        },
+        {
+          "tag": "PRE",
+          "connected": true
+        },
+        {
+          "tag": "SPAN",
+          "connected": true
+        }
+      ],
+      "after": {
+        "scrollTop": 14674,
+        "id": "pane-audit-left-54",
+        "connected": true,
+        "offset": -126.25
+      },
+      "elapsed": 1531.8999998569489,
+      "p95": 16.59999999999991,
+      "max": 65.09999999999991,
+      "frames": 168,
+      "states": {
+        "left": {
+          "produced": 2999,
+          "start": 2084.5,
+          "firstChunk": 2245.0999999046326,
+          "end": 3171.2999999523163,
+          "done": true
+        },
+        "right": {
+          "produced": 3000,
+          "start": 1958.5999999046326,
+          "firstChunk": 2245,
+          "end": 3171.0999999046326,
+          "done": true
+        }
+      },
+      "overlapMs": 926,
+      "savedExact": {
+        "left": true,
+        "right": true
+      },
+      "rightComplete": true,
+      "leftEndInitiallyOffscreen": true,
+      "bottoms": [
+        17075,
+        0
+      ],
+      "theme": "blank",
+      "zoom": "0.9",
+      "leftRevealed": true
+    }
+  },
+  "limits": "Local Chromium only. rAF gaps do not prove every frame painted. Four settled-row mutations occur when retry controls re-enable after stream completion; zero during transport. Initial rich rendering pause remains."
+}
