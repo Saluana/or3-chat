@@ -52,18 +52,21 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             if (memberPage.hasMore) rows.push({ ...item, family: { ...item.family, kind: 'load-more-members', key: 'more-members:' + rootId } });
         }
         if (getDb() !== db || getWorkspaceGeneration() !== generation) throw new Error('Sidebar workspace changed.');
+        console.warn('PAGING fetched', rows.length, getWorkspaceGeneration());
         return { rows, hasMore: page.hasMore, activeRoots };
     }
     function startSubscription() {
         if (!mounted) return;
         const token = ++subscriptionToken; const db = getDb(); const generation = getWorkspaceGeneration();
+        console.warn('PAGING start', token, targetCount.value, generation);
         pageRequestPending = true;
         loading.value = items.value.length === 0; subscription?.unsubscribe();
         subscription = liveQuery(fetchItems).subscribe({ next: (result) => {
+            console.warn('PAGING next', token, subscriptionToken, result.rows.length, getDb() === db, generation, getWorkspaceGeneration());
             if (token !== subscriptionToken || getDb() !== db || generation !== getWorkspaceGeneration()) return;
             pageRequestPending = false;
             items.value = result.rows; activeFamilyIds.value = result.activeRoots; hasMore.value = result.hasMore; loading.value = false;
-        }, error: () => { if (token === subscriptionToken) { pageRequestPending = false; loading.value = false; } } });
+        }, error: (error) => { console.warn('PAGING error', token, String(error)); if (token === subscriptionToken) { pageRequestPending = false; loading.value = false; } } });
     }
     function loadMore() { if (pageRequestPending || loading.value || !hasMore.value) return; targetCount.value += FAMILY_PAGE_SIZE; startSubscription(); }
     function reset() { targetCount.value = FAMILY_PAGE_SIZE; memberLimits.clear(); hasMore.value = true; startSubscription(); }

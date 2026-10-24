@@ -64,7 +64,7 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
-    it('admits one page for repeated bottom events while the current page is loading', async () => {
+    it.each(Array.from({ length: 8 }, (_, index) => index))('admits one page for repeated bottom events while the current page is loading (%s)', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
         const id = `sidebar-page-admission-${crypto.randomUUID()}`;
