@@ -79,12 +79,17 @@ describe('mounted sidebar workspace isolation', () => {
             global: { stubs: { SidebarUnifiedItem: true } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
         const rowCount = () => wrapper!.findAllComponents({ name: 'SidebarUnifiedItem' }).length;
-        await vi.waitFor(() => expect(rowCount()).toBe(50));
+        // Each page resolves real IndexedDB family/child queries. Shared CI
+        // runners can take longer than waitFor's one-second default while the
+        // full core suite and type-check run together; keep the exact page
+        // assertions, but give the observable database result time to arrive.
+        const waitForRows = (count: number) => vi.waitFor(() => expect(rowCount()).toBe(count), { timeout: 5000 });
+        await waitForRows(50);
         for (let event = 0; event < 3; event++) scroller().vm.$emit('reachBottom');
-        await vi.waitFor(() => expect(rowCount()).toBe(100));
+        await waitForRows(100);
         scroller().vm.$emit('reachBottom');
-        await vi.waitFor(() => expect(rowCount()).toBe(150));
-    });
+        await waitForRows(150);
+    }, 20_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
     // project catalog before slicing, or bounded shortcuts break project search.
