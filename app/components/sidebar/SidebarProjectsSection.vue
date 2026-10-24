@@ -193,7 +193,9 @@ function bindChildren() {
                 }
                 entries.push({
                     ...entry,
-                    name: entry.name ?? row.title ?? undefined,
+                    name: entry.kind === 'file'
+                        ? entry.name ?? row.title ?? undefined
+                        : row.title ?? entry.name ?? undefined,
                 });
             }
             result[project.id] = entries;
