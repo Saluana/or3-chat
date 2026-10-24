@@ -24,6 +24,7 @@ const Input = defineComponent({
     props: ['modelValue'], emits: ['update:modelValue'],
     template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
+const TitleSelect = defineComponent({ props: ['modelValue', 'items'], emits: ['update:modelValue'], template: '<select />' });
 let wrapper: VueWrapper | undefined;
 let workspace: string;
 let dispose: (() => void) | undefined;
@@ -38,6 +39,8 @@ async function savedPrompt() {
 }
 async function openPage() {
     wrapper = mount(AiPage, { global: { stubs: {
+        USelectMenu: TitleSelect,
+        USelect: TitleSelect,
         UInput: Input, UTextarea: { template: '<textarea />' },
         ChatModelVariantSelect: { template: '<select />' },
     } } });
@@ -252,6 +255,19 @@ describe('Dashboard context maximum through real KV', () => {
         await wrapper!.get('#ai-prompt-status button').trigger('click');
         await vi.waitFor(async () => expect(await savedPrompt()).toBe('keep me'));
         await vi.waitFor(() => expect(wrapper!.get('#ai-prompt-status').text()).toContain('Saved'));
+    });
+
+    it('changes the title model and Nitro routing through AI Settings and restores them on remount', async () => {
+        await openPage();
+        await vi.waitFor(() => expect(wrapper!.find('#dashboard-title-model').exists()).toBe(true));
+        expect(wrapper!.text()).toContain('deepseek/deepseek-v4.1-flash:nitro');
+        wrapper!.getComponent<typeof TitleSelect>('#dashboard-title-model').vm.$emit('update:modelValue', 'other/model');
+        await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:nitro'));
+        wrapper!.unmount(); wrapper = undefined;
+        await openPage();
+        await vi.waitFor(() => expect(wrapper!.text()).toContain('other/model:nitro'));
+        wrapper!.getComponent<typeof TitleSelect>('#dashboard-title-routing').vm.$emit('update:modelValue', 'floor');
+        await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:floor'));
     });
 
     it('saves a model default immediately and reports it', async () => {
