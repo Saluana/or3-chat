@@ -360,7 +360,14 @@ async function runNuxtDev(argv: string[]): Promise<number> {
         return 0;
     } finally {
         try { await secrets?.close(); }
-        finally { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); }
+        finally {
+            // The CLI may still be exiting when another queued signal arrives.
+            // Keep its handlers until process exit; imported callers release theirs.
+            if (!isDirectRun) {
+                process.off('SIGINT', interrupt);
+                process.off('SIGTERM', interrupt);
+            }
+        }
     }
 }
 
