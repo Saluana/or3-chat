@@ -61,6 +61,7 @@
             <div
                 id="sidebar-container-outer"
                 class="resizable-sidebar-container h-full flex flex-col"
+                :class="{ 'sidebar-pending-preferences': !hydrated && storageKey === 'sidebar:width' }"
             >
                 <SidebarHeader
                     ref="sidebarHeaderRef"
@@ -301,9 +302,8 @@ const open = computed({
     },
 });
 
-// collapsed toggle remembers last expanded width
-const collapsed = ref(false);
-const lastExpandedWidth = ref(props.defaultWidth);
+// Collapse changes the rendered width; the expanded width remains intact.
+const collapsed = ref(props.initialCollapsed);
 
 // width state with persistence (clamp to avoid SSR/client mismatch if default < minWidth)
 const width = ref<number>(
@@ -313,10 +313,12 @@ const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
 
-// Emit the same width on server and client; CSS chooses the responsive layout
-// before hydration so desktop content already has its reserved space.
+// The early head script supplies only geometry. Vue's SSR/client markup stays
+// identical until mount restores the same preferences into reactive state.
 const sidebarStyle = computed(() => ({
-    '--sidebar-width': `${computedWidth.value}px`,
+    '--sidebar-width': !hydrated.value && props.storageKey === 'sidebar:width'
+        ? `var(--or3-sidebar-boot-width, ${computedWidth.value}px)`
+        : `${computedWidth.value}px`,
     '--sidebar-rep-size': `${props.sidebarPatternSize}px`,
     '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
 }));
@@ -335,6 +337,34 @@ const initialized = ref(false);
 const hydrated = ref(false);
 const sidebarElement = ref<HTMLElement | null>(null);
 const mainElement = ref<HTMLElement | null>(null);
+
+// A saved desktop width must reserve space before application bundles download.
+// Keep this bootstrap local to the default app shell; custom storage keys retain
+// their existing mount-time restoration. No preference is sent to the server.
+if (import.meta.server && props.storageKey === 'sidebar:width') {
+    const defaults = JSON.stringify({
+        width: width.value,
+        min: props.minWidth,
+        max: props.maxWidth,
+        collapsed: props.initialCollapsed,
+        collapsedWidth: props.collapsedWidth,
+    });
+    useHead({ script: [{
+        key: 'or3-sidebar-layout',
+        tagPriority: -20,
+        innerHTML: `(()=>{try{
+            const d=${defaults};
+            const saved=parseInt(localStorage.getItem('sidebar:width')||'',10);
+            const width=Number.isFinite(saved)?Math.min(d.max,Math.max(d.min,saved)):d.width;
+            const choice=localStorage.getItem('sidebar:width:collapsed');
+            const collapsed=choice===null?d.collapsed:choice==='true';
+            const style=document.documentElement.style;
+            style.setProperty('--or3-sidebar-boot-width',(collapsed?d.collapsedWidth:width)+'px');
+            if(collapsed!==d.collapsed)style.setProperty('--or3-sidebar-boot-visibility','hidden');
+        }catch{}})();`,
+    }] });
+}
+
 const mobileDrawerOpen = computed(() => hydrated.value && !isDesktop.value && open.value);
 let drawerTrigger: HTMLElement | null = null;
 
@@ -436,6 +466,12 @@ onMounted(() => {
         const savedWidth = saved ? parseInt(saved, 10) : NaN;
         if (Number.isFinite(savedWidth)) width.value = clamp(savedWidth);
     } catch {}
+    // Reactive styles take over in the same patch as the restored content.
+    // Remove the document-owned bootstrap variables only after that patch.
+    if (props.storageKey === 'sidebar:width') void nextTick(() => {
+        document.documentElement.style.removeProperty('--or3-sidebar-boot-width');
+        document.documentElement.style.removeProperty('--or3-sidebar-boot-visibility');
+    });
     // Enable transitions after a delay to allow initial layout to settle
     // Use double rAF to ensure layout is fully painted before transitions activate
     requestAnimationFrame(() => {
@@ -468,13 +504,7 @@ function toggleCollapse() {
         open.value = false;
         return;
     }
-    if (!collapsed.value) {
-        lastExpandedWidth.value = width.value;
-        collapsed.value = true;
-    } else {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
+    collapsed.value = !collapsed.value;
 }
 
 // Resize logic (desktop only)
@@ -617,10 +647,7 @@ function openSidebar() {
 function expand() {
     // Ensure sidebar is open (mobile) and uncollapsed (desktop)
     open.value = true;
-    if (collapsed.value) {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
+    collapsed.value = false;
 }
 defineExpose({
     toggle,
@@ -656,6 +683,10 @@ const toggleAria = computed(() =>
 </script>
 
 <style scoped>
+.sidebar-pending-preferences {
+    visibility: var(--or3-sidebar-boot-visibility, visible);
+}
+
 .resizable-sidebar {
     width: 100%;
     max-width: calc(100dvw / var(--app-ui-zoom, 1));

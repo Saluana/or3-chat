@@ -168,6 +168,82 @@ for (const [name, viewport] of [
     });
 }
 
+for (const theme of ['blank', 'retro']) for (const preference of [
+    { name: 'wide', width: '480', collapsed: false, expected: 480 },
+    { name: 'collapsed', width: '400', collapsed: true, expected: 64 },
+    { name: 'oversized', width: '999999', collapsed: false, expected: 480 },
+    { name: 'invalid', width: 'not-a-width', collapsed: false, expected: 320 },
+]) {
+    test(`${theme} ${preference.name} saved sidebar geometry stays stable through hydration`, async ({ page, context }, testInfo) => {
+        await page.setViewportSize({ width: 1280, height: 720 });
+        await context.addCookies([{ name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' }]);
+        await page.addInitScript(({ theme, preference }) => {
+            localStorage.setItem('activeTheme', theme);
+            localStorage.setItem('theme', 'light');
+            localStorage.setItem('sidebar:width', preference.width);
+            localStorage.setItem('sidebar:width:collapsed', String(preference.collapsed));
+        }, { theme, preference });
+        let resumeScripts!: () => void;
+        const scriptsReady = new Promise<void>(resolve => { resumeScripts = resolve; });
+        await context.route('**/*', async route => {
+            const url = new URL(route.request().url());
+            if (url.hostname !== '127.0.0.1') return route.abort();
+            if (/\/_nuxt\/.*\.js$/.test(url.pathname)) await scriptsReady;
+            return route.continue();
+        });
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        page.on('console', message => { if (/hydration/i.test(message.text())) errors.push(message.text()); });
+        const geometry = () => page.getByTestId('sidebar').evaluate(element => ({
+            sidebar: element.getBoundingClientRect().toJSON(),
+            main: document.getElementById('main-content')!.getBoundingClientRect().toJSON(),
+        }));
+        try {
+            await page.goto('/chat?welcome=1', { waitUntil: 'commit' });
+            await expect(page.locator('.chat-input-main').first()).toBeVisible();
+            const initial = await geometry();
+            // Observe real paints across hydration, not just matching endpoints.
+            await page.evaluate(() => {
+                const widths: number[] = [];
+                Object.assign(window, { __sidebarStartupWidths: widths, __sidebarStartupStop: false });
+                const sample = () => {
+                    widths.push(document.getElementById('sidebar')!.getBoundingClientRect().width);
+                    if (!(window as typeof window & { __sidebarStartupStop: boolean }).__sidebarStartupStop) requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
+            resumeScripts();
+            await page.waitForFunction(() => (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true);
+            await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+            const ready = await geometry();
+            const widths = await page.evaluate(() => {
+                const target = window as typeof window & { __sidebarStartupStop: boolean; __sidebarStartupWidths: number[] };
+                target.__sidebarStartupStop = true;
+                return target.__sidebarStartupWidths;
+            });
+            const report = { theme, preference, initial, ready, widths, errors };
+            writeFileSync(testInfo.outputPath('saved-sidebar-geometry.json'), JSON.stringify(report, null, 2));
+            await testInfo.attach('saved-sidebar-geometry', { contentType: 'application/json', body: JSON.stringify(report) });
+            const expected = preference.expected * (theme === 'blank' ? 0.9 : 1);
+            expect(initial.sidebar.width, 'saved geometry applies before application bundles load').toBeCloseTo(expected, 0);
+            expect(widths.length).toBeGreaterThan(0);
+            expect(Math.max(...widths.map(width => Math.abs(width - expected))), 'hydration never paints the default width over the saved choice').toBeLessThanOrEqual(1);
+            expect(ready.sidebar.width).toBeCloseTo(expected, 0);
+            expect(ready.main.x).toBeCloseTo(initial.main.x, 0);
+            expect(ready.main.width).toBeCloseTo(initial.main.width, 0);
+            expect(errors).toEqual([]);
+            if (preference.collapsed) {
+                await waitForFunctionalChat(page);
+                await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click();
+                await expect.poll(async () => (await geometry()).sidebar.width).toBeCloseTo(400 * (theme === 'blank' ? 0.9 : 1), 0);
+                expect(await page.evaluate(() => localStorage.getItem('sidebar:width'))).toBe('400');
+            }
+        } finally {
+            resumeScripts();
+        }
+    });
+}
+
 for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light', 'dark'] as const) {
     test(`${theme} ${mode} mobile startup keeps the composer and navigation stable while JavaScript loads`, async ({ page, context }, testInfo) => {
         await page.setViewportSize({ width: 390, height: 844 });
@@ -344,8 +420,10 @@ for (const scale of [80, 90, 100, 120]) for (const motion of ['no-preference', '
         const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
         const before = (await sidebar.boundingBox())!;
         const box = (await handle.boundingBox())!;
-        const x = box.x + box.width / 2;
-        const y = box.y + box.height / 2;
+        // WebKit quantizes native pointer coordinates. Use integers for both
+        // native movement and the same-task synthetic release below.
+        const x = Math.round(box.x + box.width / 2);
+        const y = Math.round(box.y + box.height / 2);
         await page.mouse.move(x, y);
         await page.mouse.down();
         const errors: number[] = [];

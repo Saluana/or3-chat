@@ -17,7 +17,7 @@ async function sidebarDragProbe(page, options = {}) {
             const handle=p.getByRole('separator',{name:'Resize sidebar',exact:true});
             await handle.waitFor();await p.waitForTimeout(300);
             const read=()=>p.locator('#sidebar').evaluate(el=>({width:el.getBoundingClientRect().width,cssWidth:parseFloat(getComputedStyle(el).width),transition:getComputedStyle(el).transitionProperty,duration:getComputedStyle(el).transitionDuration,zoom:getComputedStyle(document.body).zoom,stored:localStorage.getItem('sidebar:width')}));
-            const before=await read();const box=await handle.boundingBox();const startX=box.x+box.width/2,y=box.y+box.height/2;
+            const before=await read();const box=await handle.boundingBox();const startX=Math.round(box.x+box.width/2),y=Math.round(box.y+box.height/2);
             await p.mouse.move(startX,y);await p.mouse.down();
             const samples=[];
             for(let step=1;step<=8;step++){

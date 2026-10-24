@@ -229,7 +229,14 @@ The first-run welcome starts its key and dismissal reads together, shares an
 in-flight key read with other startup consumers, and remains hidden until mount
 and the existing authentication checks complete. Credentials stay in Dexie.
 Desktop sidebar width stays bounded during loading; malformed persisted widths
-are ignored in favor of the normal default. The desktop rail footer uses initial
+are ignored in favor of the normal default. The default app shell reads its saved
+width and collapse preference in a small inline head script, reserving the final
+desktop geometry before application bundles load. It only supplies temporary CSS
+values; Vue restores the same preferences at mount and removes those values after
+its first update. If the saved collapse choice differs from the server default,
+sidebar controls wait for that update instead of briefly showing the wrong layout.
+The expanded width remains saved while collapsed, including across reloads.
+Custom layout storage keys retain mount-time restoration. The desktop rail footer uses initial
 component CSS to stay anchored while its client-only controls mount; the search
 header reserves its normal minimum height while allowing taller theme controls.
 The document head declares Tailwind's cascade layer order before theme and icon
