@@ -1,3 +1,4 @@
+import { TitleSourceSchema } from '~~/shared/titles/title';
 /**
  * @module app/db/schema
  *
@@ -111,6 +112,7 @@ export type Project = z.infer<typeof ProjectSchema>;
  * - Does not enforce parent thread existence.
  */
 export const ThreadSchema = z.object({
+    title_source: TitleSourceSchema.optional(),
     id: z.string(),
     title: z.string().nullable().optional(),
     created_at: z.number().int(),
@@ -279,6 +281,7 @@ export type Message = z.infer<typeof MessageSchema>;
  * - Does not interpret content format.
  */
 export const PostSchema = z.object({
+    title_source: TitleSourceSchema.optional(),
     id: z.string(),
     // Title must be non-empty after trimming
     title: z

@@ -334,10 +334,17 @@ describe('durable workspace tab drafts', () => {
         const input = { account: 'local', tab: 'explicit-discard-race', writer: 'synthetic-foreign-writer', sequence: 4,
             draft: { version: 1 as const, text: 'explicitly discarded alternative', attachments: [], largeTextBlocks: [], updatedAt: 1 } };
         await recovery.commitDraftVersion(db, input);
-        await recovery.removeDraftVersion(db, 'local', (await recovery.listDraftVersions(db, 'local'))[0]!);
+        const unrelated = { ...input, tab: 'newer-unrelated-draft', draft: { ...input.draft, text: 'Keep this draft', updatedAt: 2 } };
+        await recovery.commitDraftVersion(db, unrelated);
+        const displayed = (await recovery.listDraftVersions(db, 'local'))
+            .find(row => row.id === recovery.draftVersionId('local', input.tab, input.writer))!;
+        await recovery.removeDraftVersion(db, 'local', displayed);
         expect((await recovery.commitDraftVersion(db, { ...input, sequence: 3 })).superseded).toBe(true);
         expect(await db.workspace_tab_drafts.get('local\u0000explicit-discard-race')).toBeUndefined();
-        expect(await recovery.listDraftVersions(db, 'local')).toEqual([]);
+        const versions = await recovery.listDraftVersions(db, 'local');
+        expect(versions.some(row => row.tab_id === input.tab)).toBe(false);
+        expect(versions).toContainEqual(expect.objectContaining({ tab_id: unrelated.tab, draft: unrelated.draft }));
+        expect((await db.workspace_tab_drafts.get(recovery.draftCanonicalId('local', unrelated.tab)))?.draft).toEqual(unrelated.draft);
         expect((await db.workspace_draft_versions.get(recovery.draftVersionId('local', input.tab, input.writer)))?.draft).toBeNull();
     });
 

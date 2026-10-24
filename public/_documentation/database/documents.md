@@ -152,3 +152,17 @@ Optional editor autocomplete does not start inference requests for guests withou
 Document image node views capture their database, workspace generation and account when mounted. A delayed blob read cannot create or replace a preview after node removal, workspace/account changes, or a newer image request. Owned preview URLs are revoked on teardown or scope invalidation; read failures show the existing unavailable-image placeholder.
 
 Image intake uses the file API ownership callback bound to the mounted editor, document, database, account and workspace generation. An upload paused before commit is canceled if its editor closes or changes scope. A local storage rejection shows a persistent "Image could not be added" banner and leaves the document intact; selecting the file again retries intake. The file API and its transaction contracts are unchanged.
+
+## Titles for documents created from messages
+
+Create Document saves the original converted message and opens it immediately.
+A suitable Markdown heading outside code fences supplies its title without an AI
+call. Otherwise a short temporary title appears while the shared backend title
+service names the document. Failures keep the temporary title. Typing a manual
+name, including an unflushed editor rename, prevents a late generated overwrite.
+
+Repeated actions for the same message and content open the same document, keeping
+its existing content and manual name. Edited message content creates a distinct
+snapshot. A soft-deleted message document must be restored from Trash before the
+action can reopen it. See [automatic titles](/documentation/architecture/chat-lifecycle#automatic-titles)
+for model configuration, bounds, persistence and request costs.
