@@ -35,6 +35,7 @@ import SidebarTimeGroupedList from '../SidebarTimeGroupedList.vue';
 import SidebarProjectsSection from '../SidebarProjectsSection.vue';
 import { readFamilyPage } from '~/utils/sidebar/thread-families';
 import * as familyQueries from '~/utils/sidebar/thread-families';
+import * as pagination from '~/composables/sidebar/usePaginatedSidebarItems';
 
 const Content = defineComponent({
     name: 'SidebarContentFixture',
@@ -77,6 +78,11 @@ describe('mounted sidebar workspace isolation', () => {
             created_at: 1000 - index, updated_at: 1000 - index,
         })));
         const pages = vi.spyOn(familyQueries, 'readFamilyPage');
+        let state!: ReturnType<typeof pagination.usePaginatedSidebarItems>;
+        const originalPagination = pagination.usePaginatedSidebarItems;
+        const paginationSpy = vi.spyOn(pagination, 'usePaginatedSidebarItems').mockImplementation(options => {
+            state = originalPagination(options); return state;
+        });
         wrapper = mount(SidebarTimeGroupedList, { props: { type: 'thread', query: '', activeIds: [] },
             global: { stubs: { SidebarUnifiedItem: true } } });
         const scroller = () => wrapper!.findComponent(Or3Scroll);
@@ -97,8 +103,8 @@ describe('mounted sidebar workspace isolation', () => {
                 try { const page = await result.value; return { count: page.items.length, hasMore: page.hasMore }; }
                 catch (failure) { return { error: String(failure) }; }
             }));
-            throw new Error(`Sidebar pagination queries: ${JSON.stringify(results)}`, { cause: error });
-        } finally { pages.mockRestore(); }
+            throw new Error(`Sidebar pagination queries: ${JSON.stringify(results)}; state=${JSON.stringify({ count: state.items.value.length, loading: state.loading.value, hasMore: state.hasMore.value })}`, { cause: error });
+        } finally { pages.mockRestore(); paginationSpy.mockRestore(); }
     }, 20_000);
 
     // Failures: hidden KeepAlive views retain live queries; Home reads the full
